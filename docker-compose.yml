@@ -1,0 +1,83 @@
+services:
+  db:
+    build: ./db
+    container_name: db
+    environment:
+      POSTGRES_USER: aura_root
+      POSTGRES_PASSWORD: aura_password
+      POSTGRES_DB: aura_db
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+  
+  auth_db:
+    image: postgres:17
+    container_name: auth_db
+    environment:
+      POSTGRES_USER: aura_root
+      POSTGRES_PASSWORD: aura_password
+      POSTGRES_DB: auth_db
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+  
+  storage:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    container_name: storage
+    command: server --console-address ":9001" /data
+    environment:
+      MINIO_ROOT_USER: aura_root
+      MINIO_ROOT_PASSWORD: aura_password
+    volumes:
+      - storage_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+  
+  memory_db:
+    image: redis:8.2
+    container_name: memory_db
+    ports:
+      - "6379:6379"
+    volumes:
+      - memory_db_data:/data
+
+  queue:
+    image: rabbitmq:4.1-management
+    container_name: queue
+    environment:
+      RABBITMQ_DEFAULT_USER: aura_root
+      RABBITMQ_DEFAULT_PASS: aura_password
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - queue_data:/var/lib/rabbitmq
+
+  llm:
+    build: ./llm
+    container_name: llm
+    ports:
+      - "11434:11434"
+    volumes:
+      - llm_data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      OLLAMA_GPU_OVERHEAD: 0
+    
+volumes:
+  db_data:
+  auth_db_data:
+  storage_data:
+  memory_db_data:
+  queue_data:
+  llm_data:
