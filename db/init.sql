@@ -142,7 +142,6 @@ CREATE TABLE group_chat_membership (
     updated_at TIMESTAMP,
     deleted_by BIGINT,
     deleted_at TIMESTAMP,
-    CONSTRAINT fk_group_chat_membership_member_id FOREIGN KEY (member_id) REFERENCES "user"(id),
     CONSTRAINT fk_group_chat_membership_group_chat_id FOREIGN KEY (group_chat_id) REFERENCES "group_chat"(id),
     CONSTRAINT group_chat_membership_index_0 UNIQUE (member_id, group_chat_id)
 );
@@ -180,6 +179,5 @@ CREATE TABLE user_in_document_collection (
     deleted_by BIGINT,
     deleted_at TIMESTAMP,
     CONSTRAINT fk_user_in_document_collection_document_collection_id FOREIGN KEY (document_collection_id) REFERENCES "document_collection"(id),
-    CONSTRAINT fk_user_in_document_collection_user_id FOREIGN KEY (user_id) REFERENCES "user"(id),
     CONSTRAINT duser_in_document_collection_index_0 UNIQUE (document_collection_id, user_id)
 );
