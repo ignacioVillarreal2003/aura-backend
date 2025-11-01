@@ -12,7 +12,7 @@ services:
       - "5432:5432"
   
   auth_db:
-    image: postgres:17
+    build: ./auth-db
     container_name: auth_db
     environment:
       POSTGRES_USER: aura_root
