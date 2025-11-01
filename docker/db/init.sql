@@ -125,14 +125,12 @@ CREATE TABLE group_chat_message (
     CONSTRAINT fk_group_chat_message_group_chat_id FOREIGN KEY (group_chat_id) REFERENCES "group_chat"(id)
 );
 
-CREATE TYPE group_chat_membership_role AS ENUM ('owner', 'guest');
-CREATE TYPE group_chat_membership_status AS ENUM ("active", "inactive", "pending");
+CREATE TYPE group_chat_membership_status AS ENUM ('active', 'inactive', 'pending');
 
 CREATE TABLE group_chat_membership (
     id SERIAL PRIMARY KEY,
     member_id BIGINT NOT NULL,
     group_chat_id BIGINT NOT NULL,
-    role group_chat_membership_role NOT NULL,
     status group_chat_membership_status NOT NULL,
     joined_at TIMESTAMP,
     left_at TIMESTAMP,

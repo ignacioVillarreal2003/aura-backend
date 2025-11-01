@@ -1,6 +1,6 @@
 CREATE TYPE user_status AS ENUM ('active', 'inactive');
 
-CREATE TABLE user (
+CREATE TABLE auth_user (
     id SERIAL PRIMARY KEY,
     username VARCHAR(255) NOT NULL UNIQUE,
     email VARCHAR(255) NOT NULL UNIQUE,
@@ -21,9 +21,9 @@ CREATE TABLE user (
     updated_at TIMESTAMP,
     deleted_by BIGINT,
     deleted_at TIMESTAMP,
-    CONSTRAINT fk_user_created_by FOREIGN KEY (created_by) REFERENCES "user"(id),
-    CONSTRAINT fk_user_updated_by FOREIGN KEY (updated_by) REFERENCES "user"(id),
-    CONSTRAINT fk_user_deleted_by FOREIGN KEY (deleted_by) REFERENCES "user"(id)
+    CONSTRAINT fk_auth_user_created_by FOREIGN KEY (created_by) REFERENCES "auth_user"(id),
+    CONSTRAINT fk_auth_user_updated_by FOREIGN KEY (updated_by) REFERENCES "auth_user"(id),
+    CONSTRAINT fk_auth_user_deleted_by FOREIGN KEY (deleted_by) REFERENCES "auth_user"(id)
 );
 
 CREATE TABLE role (
@@ -32,16 +32,16 @@ CREATE TABLE role (
     description VARCHAR(255) NOT NULL
 );
 
-CREATE TABLE user_in_role (
+CREATE TABLE auth_user_in_role (
     id SERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL,
+    auth_user_id BIGINT NOT NULL,
     role_id BIGINT NOT NULL,
     created_by BIGINT NOT NULL,
     created_at DATE NOT NULL,
     deleted_by BIGINT,
     deleted_at TIMESTAMP,
-    CONSTRAINT fk_user_in_role_created_by FOREIGN KEY (created_by) REFERENCES "user"(id),
-    CONSTRAINT fk_user_in_role_deleted_by FOREIGN KEY (deleted_by) REFERENCES "user"(id)
+    CONSTRAINT fk_auth_user_in_role_created_by FOREIGN KEY (created_by) REFERENCES "auth_user"(id),
+    CONSTRAINT fk_auth_user_in_role_deleted_by FOREIGN KEY (deleted_by) REFERENCES "auth_user"(id)
 );
 
 CREATE TABLE permission (

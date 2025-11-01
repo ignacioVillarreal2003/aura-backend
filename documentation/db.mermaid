@@ -1,0 +1,170 @@
+erDiagram
+
+    DOCUMENT {
+        bigint id PK
+        varchar file_name
+        document_type type
+        document_status status
+        varchar path
+        bigint created_by
+        timestamp created_at
+        bigint updated_by
+        timestamp updated_at
+        bigint deleted_by
+        timestamp deleted_at
+    }
+
+    FRAGMENT {
+        bigint id PK
+        bigint document_id FK
+        vector vector
+        text content
+        int fragment_index
+        varchar embedding_model
+        int chunk_size
+        bigint created_by
+        timestamp created_at
+        bigint updated_by
+        timestamp updated_at
+        bigint deleted_by
+        timestamp deleted_at
+    }
+
+    NOTIFICATION {
+        bigint id PK
+        varchar message
+        notification_type type
+        timestamp read_date
+        bigint receiver_id
+        bigint created_by
+        timestamp created_at
+        bigint deleted_by
+        timestamp deleted_at
+    }
+
+    INDIVIDUAL_CHAT {
+        bigint id PK
+        varchar name
+        varchar purpose
+        bigint created_by
+        timestamp created_at
+        bigint updated_by
+        timestamp updated_at
+        bigint deleted_by
+        timestamp deleted_at
+    }
+
+    DOCUMENT_IN_INDIVIDUAL_CHAT {
+        bigint id PK
+        bigint document_id FK
+        bigint individual_chat_id FK
+        bigint created_by
+        timestamp created_at
+        bigint deleted_by
+        timestamp deleted_at
+    }
+
+    INDIVIDUAL_CHAT_MESSAGE {
+        bigint id PK
+        bigint individual_chat_id FK
+        text message
+        individual_chat_message_sender_type sender_type
+        bigint created_by
+        timestamp created_at
+        bigint deleted_by
+        timestamp deleted_at
+    }
+
+    GROUP_CHAT {
+        bigint id PK
+        varchar name
+        varchar purpose
+        bigint created_by
+        timestamp created_at
+        bigint updated_by
+        timestamp updated_at
+        bigint deleted_by
+        timestamp deleted_at
+    }
+
+    DOCUMENT_IN_GROUP_CHAT {
+        bigint id PK
+        bigint document_id FK
+        bigint group_chat_id FK
+        bigint created_by
+        timestamp created_at
+        bigint deleted_by
+        timestamp deleted_at
+    }
+
+    GROUP_CHAT_MESSAGE {
+        bigint id PK
+        bigint group_chat_id FK
+        text message
+        group_chat_message_sender_type sender_type
+        bigint created_by
+        timestamp created_at
+        bigint deleted_by
+        timestamp deleted_at
+    }
+
+    GROUP_CHAT_MEMBERSHIP {
+        bigint id PK
+        bigint member_id
+        bigint group_chat_id FK
+        group_chat_membership_status status
+        timestamp joined_at
+        timestamp left_at
+        bigint created_by
+        timestamp created_at
+        bigint updated_by
+        timestamp updated_at
+        bigint deleted_by
+        timestamp deleted_at
+    }
+
+    DOCUMENT_COLLECTION {
+        bigint id PK
+        varchar name
+        bigint created_by
+        timestamp created_at
+        bigint updated_by
+        timestamp updated_at
+        bigint deleted_by
+        timestamp deleted_at
+    }
+
+    DOCUMENT_IN_DOCUMENT_COLLECTION {
+        bigint id PK
+        bigint document_collection_id FK
+        bigint document_id FK
+        bigint created_by
+        timestamp created_at
+        bigint deleted_by
+        timestamp deleted_at
+    }
+
+    USER_IN_DOCUMENT_COLLECTION {
+        bigint id PK
+        bigint document_collection_id FK
+        bigint user_id
+        bigint created_by
+        timestamp created_at
+        bigint deleted_by
+        timestamp deleted_at
+    }
+
+    DOCUMENT ||--o{ FRAGMENT : "has fragments"
+    DOCUMENT ||--o{ DOCUMENT_IN_INDIVIDUAL_CHAT : "shared in"
+    DOCUMENT ||--o{ DOCUMENT_IN_GROUP_CHAT : "shared in"
+    DOCUMENT ||--o{ DOCUMENT_IN_DOCUMENT_COLLECTION : "belongs to collection"
+
+    INDIVIDUAL_CHAT ||--o{ INDIVIDUAL_CHAT_MESSAGE : "has messages"
+    INDIVIDUAL_CHAT ||--o{ DOCUMENT_IN_INDIVIDUAL_CHAT : "has documents"
+
+    GROUP_CHAT ||--o{ GROUP_CHAT_MESSAGE : "has messages"
+    GROUP_CHAT ||--o{ DOCUMENT_IN_GROUP_CHAT : "has documents"
+    GROUP_CHAT ||--o{ GROUP_CHAT_MEMBERSHIP : "has members"
+
+    DOCUMENT_COLLECTION ||--o{ DOCUMENT_IN_DOCUMENT_COLLECTION : "contains documents"
+    DOCUMENT_COLLECTION ||--o{ USER_IN_DOCUMENT_COLLECTION : "shared with users"
