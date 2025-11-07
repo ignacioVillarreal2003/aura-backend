@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Dict
 import logging
 
@@ -8,13 +9,47 @@ from app.application.exceptions.exceptions import UnsupportedFileTypeError, Vali
 from app.domain.models.document import Document
 from app.domain.schemas.document_request_schema import DocumentRequestSchema
 from app.domain.schemas.document_response_schema import DocumentResponseSchema
-from app.persistence.repositories.document_repository import DocumentRepository
+from app.infrastructure.messaging.publisher import document_publisher
+from app.infrastructure.persistence.repositories.document_repository import DocumentRepository
 
 
 logger = logging.getLogger(__name__)
 
-
 async def create_document(request: DocumentRequestSchema, file, db) -> DocumentResponseSchema:
+    document_type = document_type_validation(file)
+
+    document_size_validation(file)
+
+    try:
+        logger.info("Uploading file to storage")
+        path = await minio_service.upload_document(file)
+        logger.info("File uploaded to storage", extra={"path": path})
+    except StorageError:
+        raise
+
+    document = Document(
+        file_name=file.filename,
+        type=document_type,
+        path=path,
+        created_by=1,
+        created_at=datetime.now(),
+    )
+
+    try:
+        logger.info("Persisting document to database")
+        db_document = DocumentRepository.create(db, document)
+        logger.info("Document persisted", extra={"document_id": db_document.id})
+        document_publisher.publish_document(db_document.id)
+    except DatabaseError:
+        raise
+
+    return DocumentResponseSchema(
+        id=db_document.id,
+        file_name=db_document.file_name,
+        status=db_document.status
+    )
+
+def document_type_validation(file) -> DocumentType:
     content_type_to_doc_type: Dict[str, DocumentType] = {
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document": DocumentType.docx,
         "application/pdf": DocumentType.pdf,
@@ -28,6 +63,9 @@ async def create_document(request: DocumentRequestSchema, file, db) -> DocumentR
         logger.warning("Unsupported content type", extra={"content_type": file.content_type})
         raise UnsupportedFileTypeError("Only PDF and DOCX files are supported")
 
+    return content_type_to_doc_type[file.content_type]
+
+def document_size_validation(file) -> None:
     max_bytes = environment_variables.max_file_size_mb * 1024 * 1024
     if hasattr(file, "size") and file.size is not None and file.size > max_bytes:
         logger.warning("File exceeds max size", extra={
@@ -35,31 +73,3 @@ async def create_document(request: DocumentRequestSchema, file, db) -> DocumentR
             "max_bytes": max_bytes
         })
         raise ValidationError(f"File exceeds maximum size of {environment_variables.max_file_size_mb} MB")
-
-    try:
-        logger.info("Uploading file to storage")
-        path = await minio_service.upload_document(file)
-        logger.info("File uploaded to storage", extra={"path": path})
-    except StorageError:
-        raise
-
-    document = Document(
-        title=file.filename,
-        type=content_type_to_doc_type[file.content_type],
-        path=path,
-        size=getattr(file, "size", None),
-        created_by=1,
-    )
-
-    try:
-        logger.info("Persisting document to database")
-        db_document = DocumentRepository.create(db, document)
-        logger.info("Document persisted", extra={"document_id": db_document.id})
-    except DatabaseError:
-        raise
-
-    return DocumentResponseSchema(
-        id=db_document.id,
-        title=db_document.title,
-        status=db_document.status
-    )

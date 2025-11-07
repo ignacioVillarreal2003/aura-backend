@@ -17,7 +17,6 @@ minio_client = Minio(
     secure=environment_variables.minio_secure
 )
 
-
 async def upload_document(file) -> str:
     file_key = f"{uuid.uuid4()}{Path(file.filename).suffix}"
 

@@ -5,5 +5,5 @@ from app.domain.constants.document_status import DocumentStatus
 
 class DocumentResponseSchema(BaseModel):
     id: int = Field(...)
-    title: str = Field(...)
+    file_name: str = Field(...)
     status: DocumentStatus = Field(...)

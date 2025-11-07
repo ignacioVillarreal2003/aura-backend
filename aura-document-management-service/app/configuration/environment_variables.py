@@ -15,6 +15,13 @@ class EnvironmentVariables(BaseSettings):
     minio_bucket: str
     minio_secure: bool = False
 
+    rabbitmq_host: str
+    rabbitmq_port: int
+    rabbitmq_user: str
+    rabbitmq_password: str
+    exchange: str
+    queue: str
+
     max_file_size_mb: int = 50
 
     environment: str = "development"
