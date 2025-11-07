@@ -1,28 +1,26 @@
-from pydantic import BaseModel, Field
-from typing import Optional
-from datetime import datetime
+from sqlalchemy import Column, Integer, String, Enum, DateTime
+from sqlalchemy.sql import func
+from sqlalchemy.ext.declarative import declarative_base
 
 from app.domain.constants.document_status import DocumentStatus
 from app.domain.constants.document_type import DocumentType
-from app.domain.constants.embedding_status import EmbeddingStatus
 
 
-class Document(BaseModel):
-    id: Optional[int] = Field(None)
-    title: str = Field(..., max_length=255)
-    type: DocumentType = Field(...)
-    status: DocumentStatus = Field(DocumentStatus.pending)
-    path: Optional[str] = Field(None, max_length=255)
+Base = declarative_base()
 
-    size: Optional[int] = Field(None)
+class Document(Base):
+    __tablename__ = "document"
 
-    created_by: int = Field(...)
-    created_date: datetime = Field(default_factory=datetime.now)
-    updated_by: Optional[int] = Field(None)
-    updated_date: Optional[datetime] = Field(None)
-    deleted_by: Optional[int] = Field(None)
-    deleted_date: Optional[datetime] = Field(None)
+    id = Column(Integer, primary_key=True, index=True)
 
-    embedding_status: EmbeddingStatus = Field(EmbeddingStatus.pending)
-    vector_count: Optional[int] = Field(None)
-    hash: Optional[str] = Field(None)
+    file_name = Column(String(255), nullable=False)
+    type = Column(Enum(DocumentType), nullable=False)
+    status = Column(Enum(DocumentStatus), default=DocumentStatus.pending)
+    path = Column(String(255), nullable=True)
+
+    created_by = Column(Integer, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_by = Column(Integer, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+    deleted_by = Column(Integer, nullable=True)
+    deleted_at = Column(DateTime, nullable=True)

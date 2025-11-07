@@ -1,7 +1,8 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from app.configuration.environment_variables import environment_variables
 import logging
+
+from app.configuration.environment_variables import environment_variables
 
 
 DATABASE_URL = (

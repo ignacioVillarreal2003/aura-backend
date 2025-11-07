@@ -27,7 +27,7 @@ async def create_document(request: DocumentRequestSchema = Depends(DocumentReque
     except AppError as e:
         logger.warning("Application error while creating document", extra={
             "error": e.code,
-            "message": e.message
+            "error_message": e.message
         })
         raise HTTPException(
             status_code=e.status_code,
