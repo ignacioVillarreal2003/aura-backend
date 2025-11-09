@@ -2,6 +2,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from app.configuration.environment_variables import environment_variables
 import logging
+from contextlib import contextmanager
 
 
 DATABASE_URL = (
@@ -12,12 +13,25 @@ DATABASE_URL = (
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+logger = logging.getLogger(__name__)
+
+# ✅ Versión para FastAPI (usada con Depends)
 def get_db_session():
-    logger = logging.getLogger(__name__)
     db = SessionLocal()
-    logger.debug("DB session created")
+    logger.debug("DB session created (FastAPI context)")
     try:
         yield db
     finally:
         db.close()
-        logger.debug("DB session closed")
+        logger.debug("DB session closed (FastAPI context)")
+
+
+@contextmanager
+def get_sync_db():
+    db = SessionLocal()
+    logger.debug("DB session created (sync context)")
+    try:
+        yield db
+    finally:
+        db.close()
+        logger.debug("DB session closed (sync context)")

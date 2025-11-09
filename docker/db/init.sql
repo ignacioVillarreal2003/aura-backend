@@ -21,10 +21,10 @@ CREATE TABLE document (
 CREATE TABLE fragment (
     id SERIAL PRIMARY KEY,
     document_id BIGINT NOT NULL,
-    vector VECTOR NOT NULL,
+    vector VECTOR,
+    embedding_model VARCHAR(255),
     content TEXT NOT NULL,
     fragment_index INT NOT NULL,
-    embedding_model VARCHAR(255) NOT NULL,
     chunk_size INT NOT NULL,
     created_by BIGINT NOT NULL,
     created_at TIMESTAMP NOT NULL,

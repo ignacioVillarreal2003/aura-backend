@@ -1,20 +1,40 @@
 from fastapi import FastAPI
+from contextlib import asynccontextmanager
+import threading
+import logging
 from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
-import logging
 
+from app.infrastructure.messaging.listener.document_listener import RabbitMQConsumer
 from app.configuration.logging_configuration import configure_logging
 from app.application.exceptions.exceptions import AppError
 
-
 configure_logging(level=logging.INFO)
+
+logger = logging.getLogger(__name__)
+
+consumer = RabbitMQConsumer()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    thread = threading.Thread(target=consumer.start_consuming, daemon=True)
+    thread.start()
+    logger.info("🐇 RabbitMQ consumer started in background thread")
+
+    yield
+
+    consumer.close()
+    logger.info("🧹 RabbitMQ consumer closed")
+
 
 app = FastAPI(
     title="Aura Document Processing Service",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
-    openapi_url="/openapi.json"
+    openapi_url="/openapi.json",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -25,6 +45,7 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
@@ -32,10 +53,19 @@ async def root():
 
 @app.exception_handler(AppError)
 async def app_error_handler(_, exc: AppError):
-    return JSONResponse(status_code=exc.status_code, content={"error": exc.code, "message": exc.message})
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": exc.code, "message": exc.message}
+    )
 
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(_, exc: Exception):
     logging.exception("Unhandled server error")
-    return JSONResponse(status_code=500, content={"error": "InternalServerError", "message": "An unexpected error occurred"})
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "InternalServerError",
+            "message": "An unexpected error occurred"
+        }
+    )

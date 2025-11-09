@@ -20,7 +20,8 @@ Notes:
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_huggingface import HuggingFaceEmbeddings
 from typing import Literal, List
-from .interfaces.text_splitter_interface import TextSplitterInterface
+
+from app.application.processors.text_splitters.interfaces.text_splitter_interface import TextSplitterInterface
 
 
 class SemanticBasedTextSplitter(TextSplitterInterface):

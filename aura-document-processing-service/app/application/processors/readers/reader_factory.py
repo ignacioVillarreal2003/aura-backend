@@ -1,10 +1,12 @@
 from pathlib import Path
 from typing import List
-from .interfaces.document_reader_interface import DocumentReaderInterface
-from .pdf_digital_reader import PDFReaderDigital
-from .pdf_scanned_reader import PDFReaderScanned
-from .docx_reader import DOCXReader
-from .txt_reader import TXTReader
+
+from app.application.processors.readers.docx_reader import DOCXReader
+from app.application.processors.readers.interfaces.document_reader_interface import DocumentReaderInterface
+from app.application.processors.readers.pdf_reader_digital import PDFReaderDigital
+from app.application.processors.readers.pdf_scanned_reader import PDFReaderScanned
+from app.application.processors.readers.txt_reader import TXTReader
+
 
 class ReaderFactory:
     def __init__(self):

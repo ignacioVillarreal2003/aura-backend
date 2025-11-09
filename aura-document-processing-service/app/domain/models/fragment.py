@@ -1,20 +1,26 @@
-from pydantic import BaseModel, Field
-from typing import Optional
-from datetime import datetime
+from pgvector.sqlalchemy import VECTOR
+from sqlalchemy.sql import func
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey
+
+from app.domain.models.base import Base
 
 
-class Fragment(BaseModel):
-    id: Optional[int] = Field(None)
-    source_document_id: int = Field(...)
-    vector: Optional[list[float]] = Field(None)
-    content: str = Field(...)
-    fragment_index: int = Field(...)
-    embedding_model: Optional[str] = Field(None, max_length=255)
-    chunk_size: int = Field(...)
+class Fragment(Base):
+    __tablename__ = "fragment"
 
-    created_by: int = Field(...)
-    created_date: datetime = Field(default_factory=datetime.now)
-    updated_by: Optional[int] = Field(None)
-    updated_date: Optional[datetime] = Field(None)
-    deleted_by: Optional[int] = Field(None)
-    deleted_date: Optional[datetime] = Field(None)
+    id = Column(Integer, primary_key=True, index=True)
+
+    document_id = Column(Integer, ForeignKey("document.id", ondelete="CASCADE"), nullable=False)
+
+    vector = Column(VECTOR(dim=1536), nullable=True)
+    embedding_model = Column(String(255), nullable=True)
+    content = Column(Text, nullable=False)
+    fragment_index = Column(Integer, nullable=False)
+    chunk_size = Column(Integer, nullable=False)
+
+    created_by = Column(Integer, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_by = Column(Integer, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+    deleted_by = Column(Integer, nullable=True)
+    deleted_at = Column(DateTime, nullable=True)

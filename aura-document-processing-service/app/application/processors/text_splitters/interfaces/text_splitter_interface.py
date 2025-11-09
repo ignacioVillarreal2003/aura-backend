@@ -11,6 +11,7 @@ Uso principal:
 from abc import ABC, abstractmethod
 from typing import List
 
+
 class TextSplitterInterface(ABC):
     """
     Interfaz abstracta para divisores de texto.

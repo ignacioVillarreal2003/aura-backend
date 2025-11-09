@@ -1,6 +1,6 @@
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
-
 from sqlalchemy.orm import Session
 
 from app.application.processors.readers.reader_factory import ReaderFactory
@@ -8,31 +8,31 @@ from app.application.processors.text_cleaners.text_cleaner_factory import TextCl
 from app.application.processors.text_splitters.text_splitter_factory import TextSplitterFactory
 from app.application.services.minio_service import download_document
 from app.application.exceptions.exceptions import NotFoundError, DatabaseError
-from app.domain.models.document_orm import DocumentORM
+from app.domain.models.document import Document
 from app.domain.models.fragment import Fragment
-from app.persistence.repositories.fragment_repository import FragmentRepository
-from app.persistence.repositories.document_repository import DocumentRepository
+from app.infrastructure.persistence.repositories.fragment_repository import FragmentRepository
+from app.infrastructure.persistence.repositories.document_repository import DocumentRepository
 
 
 class IngestionService:
-    def __init__(self, db_url: str):
+    def __init__(self, db):
+        self.db = db
         self.reader_factory = ReaderFactory()
         self.cleaner_factory = TextCleanerFactory()
         self.splitter_factory = TextSplitterFactory()
 
     def process_document(
         self,
-        db: Session,
         document_id: int,
         *,
         cleaner_type: str = "basic",
-        splitter_type: str = "char",
+        splitter_type: str = "recursive",
         chunk_size: int = 500,
         overlap: int = 50,
         download_dir: Optional[Path] = None
-    ) -> int:
+    ):
         # 1) Fetch document metadata
-        document: Optional[DocumentORM] = DocumentRepository.get_by_id(db, document_id)
+        document: Optional[Document] = DocumentRepository.get_by_id(self.db, document_id)
         if document is None:
             raise NotFoundError("Document not found")
         if not document.path:
@@ -53,18 +53,15 @@ class IngestionService:
         splitter = self.splitter_factory.get_splitter(splitter_type)
         chunks = splitter.split_text(clean_text, size=chunk_size, overlap=overlap)
 
+
         # 6) Persist fragments
-        created_count = 0
         for idx, content in enumerate(chunks):
             fragment = Fragment(
-                source_document_id=document.id,
-                vector=None,
+                document_id=document.id,
                 content=content,
                 fragment_index=idx,
                 chunk_size=chunk_size,
-                created_by=document.created_by
+                created_by=document.created_by,
+                created_at=datetime.now()
             )
-            FragmentRepository.create(db, fragment)
-            created_count += 1
-
-        return created_count
+            FragmentRepository.create(self.db, fragment)
