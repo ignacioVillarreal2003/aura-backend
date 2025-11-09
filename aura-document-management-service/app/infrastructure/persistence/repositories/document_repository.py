@@ -3,15 +3,17 @@ import logging
 
 from app.domain.models.document import Document
 from app.application.exceptions.exceptions import DatabaseError
+from app.infrastructure.persistence.repositories.interfaces.document_repository_interface import DocumentRepositoryInterface
 
 
 logger = logging.getLogger(__name__)
 
 
-class DocumentRepository:
+class DocumentRepository(DocumentRepositoryInterface):
 
-    @staticmethod
-    def create(db: Session, document: Document) -> Document:
+    def create(self,
+               document: Document,
+               db: Session) -> Document:
         try:
             logger.debug("Committing document to database")
             db.add(document)

@@ -1,6 +1,8 @@
 from typing import Dict
-from .interfaces.text_cleaner_interface import TextCleanerInterface
-from .basic_text_cleaner import BasicTextCleaner
+
+from app.application.processors.text_cleaners.basic_text_cleaner import BasicTextCleaner
+from app.application.processors.text_cleaners.interfaces.text_cleaner_interface import TextCleanerInterface
+
 
 class TextCleanerFactory:
     def __init__(self):

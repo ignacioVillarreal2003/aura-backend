@@ -2,29 +2,22 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 import logging
-from app.configuration.logging_configuration import configure_logging
 
+from app.configuration.logging_configuration import configure_logging
 from app.api.controllers import router
 from app.application.exceptions.exceptions import AppError
 
 
 configure_logging(level=logging.INFO)
 
-app = FastAPI(
-    title="Aura Document Management Service",
-    version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json"
-)
+app = FastAPI(title="Aura Document Management Service",
+              version="1.0.0")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
-)
+app.add_middleware(CORSMiddleware,
+                   allow_origins=["*"],
+                   allow_credentials=True,
+                   allow_methods=["*"],
+                   allow_headers=["*"])
 
 app.include_router(router, prefix="/api")
 

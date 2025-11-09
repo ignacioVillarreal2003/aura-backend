@@ -1,5 +1,7 @@
 from pathlib import Path
-from .interfaces.document_reader_interface import DocumentReaderInterface
+
+from app.application.processors.readers.interfaces.document_reader_interface import DocumentReaderInterface
+
 
 class TXTReader(DocumentReaderInterface):
     def can_handle(self, file_path: Path) -> bool:

@@ -1,6 +1,8 @@
 from pathlib import Path
 import pypdf
-from .interfaces.document_reader_interface import DocumentReaderInterface
+
+from app.application.processors.readers.interfaces.document_reader_interface import DocumentReaderInterface
+
 
 class PDFReaderDigital(DocumentReaderInterface):
     def can_handle(self, file_path: Path) -> bool:

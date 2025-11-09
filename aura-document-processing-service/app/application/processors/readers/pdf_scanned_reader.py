@@ -2,7 +2,9 @@ import os
 from pathlib import Path
 from pdf2image import convert_from_path
 import pytesseract
-from .interfaces.document_reader_interface import DocumentReaderInterface
+
+from app.application.processors.readers.interfaces.document_reader_interface import DocumentReaderInterface
+
 
 class PDFReaderScanned(DocumentReaderInterface):
     def __init__(self, tesseract_path=None, poppler_path=None):

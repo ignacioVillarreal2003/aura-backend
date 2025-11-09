@@ -16,7 +16,8 @@ Notes:
 from langchain_text_splitters import CharacterTextSplitter
 from transformers import GPT2TokenizerFast
 from typing import List
-from .interfaces.text_splitter_interface import TextSplitterInterface
+
+from app.application.processors.text_splitters.interfaces.text_splitter_interface import TextSplitterInterface
 
 
 class HuggingfaceBasedTextSplitter(TextSplitterInterface):

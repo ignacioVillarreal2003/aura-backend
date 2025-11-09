@@ -8,6 +8,7 @@ from app.domain.constants.document_type import DocumentType
 
 Base = declarative_base()
 
+
 class Document(Base):
     __tablename__ = "document"
 

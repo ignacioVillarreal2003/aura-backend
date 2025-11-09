@@ -14,7 +14,8 @@ Notes:
 
 from langchain_text_splitters import TokenTextSplitter
 from typing import List
-from .interfaces.text_splitter_interface import TextSplitterInterface
+
+from app.application.processors.text_splitters.interfaces.text_splitter_interface import TextSplitterInterface
 
 
 class TokenBasedTextSplitter(TextSplitterInterface):
