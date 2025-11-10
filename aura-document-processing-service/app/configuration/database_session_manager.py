@@ -1,6 +1,7 @@
 import logging
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session
+from contextlib import contextmanager
 
 from app.configuration.environment_variables import environment_variables
 
@@ -17,8 +18,9 @@ class DatabaseSessionManager:
         )
         self.engine = create_engine(database_url, pool_pre_ping=True)
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
-        
-    def get_db_session(self):
+
+    @contextmanager
+    def get_session(self) -> Session:
         db = self.SessionLocal()
         logger.debug("DB session created")
         try:

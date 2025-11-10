@@ -10,7 +10,6 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentRepository(DocumentRepositoryInterface):
-
     def create(self,
                document: Document,
                db: Session) -> Document:

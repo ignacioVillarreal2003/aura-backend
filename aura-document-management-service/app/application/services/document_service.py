@@ -5,7 +5,6 @@ from fastapi import UploadFile
 from sqlalchemy.orm import Session
 
 from app.application.services.interfaces.document_service_interface import DocumentServiceInterface
-from app.application.services.interfaces.storage_service_interface import StorageServiceInterface
 from app.configuration.environment_variables import environment_variables
 from app.domain.constants.document_type import DocumentType
 from app.application.exceptions.exceptions import UnsupportedFileTypeError, ValidationError, StorageError, DatabaseError
@@ -14,6 +13,7 @@ from app.domain.models.document import Document
 from app.domain.dtos.document_response import DocumentResponseSchema
 from app.infrastructure.messaging.publisher.interfaces.document_publisher_interface import DocumentPublisherInterface
 from app.infrastructure.persistence.repositories.interfaces.document_repository_interface import DocumentRepositoryInterface
+from app.infrastructure.persistence.storages.interfaces.document_storage_service_interface import DocumentStorageServiceInterface
 
 
 logger = logging.getLogger(__name__)
@@ -23,10 +23,10 @@ class DocumentService(DocumentServiceInterface):
     def __init__(self,
                  document_repository: DocumentRepositoryInterface,
                  document_publisher: DocumentPublisherInterface,
-                 storage_service: StorageServiceInterface):
+                 document_storage_service: DocumentStorageServiceInterface):
         self.document_repository = document_repository
         self.document_publisher = document_publisher
-        self.storage_service = storage_service
+        self.document_storage_service = document_storage_service
 
     async def create_document(self,
                               request: DocumentRequest,
@@ -37,7 +37,7 @@ class DocumentService(DocumentServiceInterface):
 
         try:
             logger.info("Uploading file to storage")
-            path = await self.storage_service.upload_document(file)
+            path = await self.document_storage_service.upload_document(file)
             logger.info("File uploaded to storage", extra={"path": path})
         except StorageError:
             raise
