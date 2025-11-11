@@ -1,11 +1,11 @@
 from typing import Protocol
 from sqlalchemy.orm import Session
 
-from app.domain.models.document import Document
+from app.domain.models.fragment import Fragment
 
 
-class DocumentRepositoryInterface(Protocol):
-    def get_by_id(self,
-               document_id: int,
-               db: Session) -> Document:
+class FragmentRepositoryInterface(Protocol):
+    def create(self,
+               fragment: Fragment,
+               db: Session) -> Fragment:
         ...

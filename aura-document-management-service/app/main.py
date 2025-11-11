@@ -8,6 +8,7 @@ from app.configuration.logging_configuration import configure_logging
 from app.api.controllers import router
 from app.application.exceptions.exceptions import AppError
 from app.infrastructure.messaging.rabbitmq_client import RabbitmqClient
+from app.infrastructure.persistence.repositories.database_client import DatabaseClient
 from app.infrastructure.persistence.storages.minio_client import MinioClient
 
 
@@ -18,15 +19,28 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("Starting application...")
+
+    db_client = DatabaseClient()
+    if not db_client.health_check():
+        logger.error("Database health check failed!")
+        raise Exception("Cannot start application: Database is not available")
+
     rabbitmq = RabbitmqClient()
+
     minio = MinioClient()
+    minio.ensure_bucket_exists()
+
     logger.info("Application startup complete")
 
     yield
 
-    rabbitmq.close()
-    logger.info("Application shutdown complete")
+    logger.info("Shutting down application...")
 
+    rabbitmq.close()
+    db_client.close()
+
+    logger.info("Application shutdown complete")
 
 app = FastAPI(
     title="Aura Document Management Service",

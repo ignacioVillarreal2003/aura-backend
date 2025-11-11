@@ -4,18 +4,12 @@ import logging
 
 from app.application.exceptions.exceptions import AppError
 from app.application.services.document_service import DocumentService
-from app.configuration.database_session_manager import DatabaseSessionManager
-from app.configuration.dependencies import get_document_publisher, get_document_storage_service
+from app.configuration.dependencies import get_document_service, get_db_session
 from app.domain.dtos.document_response import DocumentResponseSchema
-from app.infrastructure.messaging.publisher.interfaces.document_publisher_interface import DocumentPublisherInterface
 from app.domain.dtos.document_request import DocumentRequest
-from app.infrastructure.persistence.repositories.document_repository import DocumentRepository
-from app.infrastructure.persistence.storages.interfaces.document_storage_service_interface import \
-    DocumentStorageServiceInterface
+
 
 logger = logging.getLogger(__name__)
-
-db_session_manager = DatabaseSessionManager()
 
 router = APIRouter()
 
@@ -25,15 +19,9 @@ class DocumentController:
     async def create_document(self,
                               request: DocumentRequest = Depends(DocumentRequest.as_form),
                               file: UploadFile = File(...),
-                              document_publisher: DocumentPublisherInterface = Depends(get_document_publisher),
-                              document_storage_service: DocumentStorageServiceInterface = Depends(get_document_storage_service),
-                              db: Session = Depends(db_session_manager.get_db_session)) -> DocumentResponseSchema:
+                              service: DocumentService = Depends(get_document_service),
+                              db: Session = Depends(get_db_session)) -> DocumentResponseSchema:
         try:
-            service = DocumentService(
-                document_repository=DocumentRepository(),
-                document_publisher=document_publisher,
-                document_storage_service=document_storage_service,
-            )
             logger.info("Create document request received", extra={
                 "uploaded_filename": getattr(file, "filename", None),
                 "uploaded_content_type": getattr(file, "content_type", None)

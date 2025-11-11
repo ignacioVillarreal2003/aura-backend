@@ -12,7 +12,7 @@ from app.application.exceptions.exceptions import StorageError
 logger = logging.getLogger(__name__)
 
 
-class MinioDownloadService(StorageServiceInterface):
+class MinioStorageService(StorageServiceInterface):
     def __init__(self,
                  endpoint: str = environment_variables.minio_endpoint,
                  access_key: str = environment_variables.minio_access_key,
@@ -27,11 +27,11 @@ class MinioDownloadService(StorageServiceInterface):
             secure=secure,
         )
 
-    async def download_document(self,
-                                object_name: str,
-                                destination_dir: Path | None = None) -> Path:
+    def download_document(self,
+                          object_name: str,
+                          destination_dir: Path | None = None) -> Path:
         try:
-            await self._ensure_bucket_exists()
+            self._ensure_bucket_exists()
 
             if destination_dir is None:
                 destination_dir = Path(tempfile.gettempdir())
@@ -64,7 +64,7 @@ class MinioDownloadService(StorageServiceInterface):
             logger.exception("Failed to download file from MinIO")
             raise StorageError("Failed to download file from storage") from e
 
-    async def _ensure_bucket_exists(self) -> None:
+    def _ensure_bucket_exists(self) -> None:
         try:
             logger.debug("Checking if MinIO bucket exists", extra={"bucket": self.bucket_name})
             if not self.client.bucket_exists(self.bucket_name):
