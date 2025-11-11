@@ -1,42 +1,68 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-import threading
 import logging
 from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 
-from app.configuration.database_session_manager import DatabaseSessionManager
+from app.application.services.ingestion_service import IngestionService
 from app.configuration.logging_configuration import configure_logging
 from app.application.exceptions.exceptions import AppError
-from app.infrastructure.messaging.listener.rabbitmq_document_listener import RabbitMQDocumentListener
+from app.infrastructure.messaging.listener.document_listener import DocumentListener
+from app.infrastructure.messaging.rabbitmq_client import RabbitmqClient
+from app.infrastructure.persistence.repositories.database_client import DatabaseClient
+from app.infrastructure.persistence.repositories.document_repository import DocumentRepository
+from app.infrastructure.persistence.repositories.fragment_repository import FragmentRepository
+from app.infrastructure.persistence.storages.document_storage_service import DocumentStorageService
+from app.infrastructure.persistence.storages.minio_client import MinioClient
 
 
 configure_logging(level=logging.INFO)
 
 logger = logging.getLogger(__name__)
 
-consumer = RabbitMQDocumentListener(db_session_manager=DatabaseSessionManager())
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    thread = threading.Thread(target=consumer.start_consuming, daemon=True)
-    thread.start()
-    logger.info("RabbitMQ consumer started in background thread")
+    logger.info("Starting application...")
+
+    db_client = DatabaseClient()
+    rabbitmq = RabbitmqClient()
+    minio = MinioClient()
+    minio.ensure_bucket_exists()
+
+    consumer = DocumentListener(rabbitmq)
+
+    def process_message(message: dict):
+        document_id = message.get("document_id")
+        if document_id:
+            with next(db_client.get_session()) as db:
+                service = IngestionService(
+                    document_repository=DocumentRepository(),
+                    fragment_repository=FragmentRepository(),
+                    document_storage_service=DocumentStorageService(minio),
+                )
+                service.process_document(document_id, db)
+
+    consumer.start_consuming_background(
+        callback=process_message,
+        prefetch_count=1
+    )
+
+    logger.info("Application startup complete")
 
     yield
 
-    consumer.close()
-    logger.info("RabbitMQ consumer closed")
+    logger.info("Shutting down application...")
+    consumer.stop_consuming()
+    rabbitmq.close()
+    db_client.close()
+    logger.info("Application shutdown complete")
 
 
 app = FastAPI(
     title="Aura Document Processing Service",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
-    lifespan=lifespan,
+    lifespan=lifespan
 )
 
 app.add_middleware(
