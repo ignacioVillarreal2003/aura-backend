@@ -22,7 +22,7 @@ class EnvironmentVariables(BaseSettings):
     exchange: str
     queue: str
 
-    max_file_size_mb: int = 50
+    max_file_size_mb: int = 10
 
     environment: str = "development"
 

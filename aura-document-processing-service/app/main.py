@@ -5,27 +5,29 @@ import logging
 from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 
-from app.infrastructure.messaging.listener.document_listener import RabbitMQConsumer
+from app.configuration.database_session_manager import DatabaseSessionManager
 from app.configuration.logging_configuration import configure_logging
 from app.application.exceptions.exceptions import AppError
+from app.infrastructure.messaging.listener.rabbitmq_document_listener import RabbitMQDocumentListener
+
 
 configure_logging(level=logging.INFO)
 
 logger = logging.getLogger(__name__)
 
-consumer = RabbitMQConsumer()
+consumer = RabbitMQDocumentListener(db_session_manager=DatabaseSessionManager())
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     thread = threading.Thread(target=consumer.start_consuming, daemon=True)
     thread.start()
-    logger.info("🐇 RabbitMQ consumer started in background thread")
+    logger.info("RabbitMQ consumer started in background thread")
 
     yield
 
     consumer.close()
-    logger.info("🧹 RabbitMQ consumer closed")
+    logger.info("RabbitMQ consumer closed")
 
 
 app = FastAPI(

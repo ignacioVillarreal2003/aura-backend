@@ -1,12 +1,9 @@
 from sqlalchemy import Column, Integer, String, Enum, DateTime
 from sqlalchemy.sql import func
-from sqlalchemy.ext.declarative import declarative_base
 
 from app.domain.constants.document_status import DocumentStatus
 from app.domain.constants.document_type import DocumentType
-
-
-Base = declarative_base()
+from app.domain.models.base import Base
 
 
 class Document(Base):
