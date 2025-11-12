@@ -4,16 +4,10 @@ import logging
 from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 
-from app.application.services.ingestion_service import IngestionService
+from app.api import router
 from app.configuration.logging_configuration import configure_logging
 from app.application.exceptions.exceptions import AppError
-from app.infrastructure.messaging.listener.document_listener import DocumentListener
-from app.infrastructure.messaging.rabbitmq_client import RabbitmqClient
 from app.infrastructure.persistence.repositories.database_client import DatabaseClient
-from app.infrastructure.persistence.repositories.document_repository import DocumentRepository
-from app.infrastructure.persistence.repositories.fragment_repository import FragmentRepository
-from app.infrastructure.persistence.storages.document_storage_service import DocumentStorageService
-from app.infrastructure.persistence.storages.minio_client import MinioClient
 
 
 configure_logging(level=logging.INFO)
@@ -26,36 +20,18 @@ async def lifespan(app: FastAPI):
     logger.info("Starting application...")
 
     db_client = DatabaseClient()
-    rabbitmq = RabbitmqClient()
-    minio = MinioClient()
-    minio.ensure_bucket_exists()
-
-    consumer = DocumentListener(rabbitmq)
-
-    def process_message(message: dict):
-        document_id = message.get("document_id")
-        if document_id:
-            with next(db_client.get_session()) as db:
-                service = IngestionService(
-                    document_repository=DocumentRepository(),
-                    fragment_repository=FragmentRepository(),
-                    document_storage_service=DocumentStorageService(minio),
-                )
-                service.process_document(document_id, db)
-
-    consumer.start_consuming_background(
-        callback=process_message,
-        prefetch_count=1
-    )
+    if not db_client.health_check():
+        logger.error("Database health check failed!")
+        raise Exception("Cannot start application: Database is not available")
 
     logger.info("Application startup complete")
 
     yield
 
     logger.info("Shutting down application...")
-    consumer.stop_consuming()
-    rabbitmq.close()
+
     db_client.close()
+
     logger.info("Application shutdown complete")
 
 
@@ -73,6 +49,7 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+app.include_router(router, prefix="/api")
 
 @app.get("/")
 async def root():

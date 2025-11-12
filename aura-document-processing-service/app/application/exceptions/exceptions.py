@@ -25,10 +25,6 @@ class StorageError(AppError):
     def __init__(self, message: str = "Storage operation failed", *, code: str | None = None):
         super().__init__(message, status_code=502, code=code)
 
-class MessagingError(AppError):
-    def __init__(self, message: str = "Messaging operation failed", *, code: str | None = None):
-        super().__init__(message, status_code=502, code=code)
-
 class DatabaseError(AppError):
     def __init__(self, message: str = "Database operation failed", *, code: str | None = None):
         super().__init__(message, status_code=500, code=code)

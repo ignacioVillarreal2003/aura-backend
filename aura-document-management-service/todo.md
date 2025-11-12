@@ -1,3 +1,0 @@
-- Verificacion token usuario
-- Agregar a chat de usuario, verificando que ese usuario tenga el chat
-- Swagger mejorado
