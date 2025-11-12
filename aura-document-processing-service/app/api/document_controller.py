@@ -1,10 +1,10 @@
-from fastapi import APIRouter, File, UploadFile, Depends, HTTPException, status
+from fastapi import APIRouter, File, UploadFile, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 import logging
 
 from app.application.exceptions.exceptions import AppError
 from app.application.services.document_service import DocumentService
-from app.configuration.dependencies import get_document_service, get_db_session
+from app.configuration.dependencies import get_db_session, get_document_service
 from app.domain.dtos.document_response import DocumentResponseSchema
 from app.domain.dtos.document_request import DocumentRequest
 
@@ -15,18 +15,18 @@ router = APIRouter()
 
 
 class DocumentController:
-
-    async def create_document(self,
+    async def create(self,
+                              background_tasks: BackgroundTasks,
                               request: DocumentRequest = Depends(DocumentRequest.as_form),
                               file: UploadFile = File(...),
-                              service: DocumentService = Depends(get_document_service),
+                              document_service: DocumentService = Depends(get_document_service),
                               db: Session = Depends(get_db_session)) -> DocumentResponseSchema:
         try:
             logger.info("Create document request received", extra={
                 "uploaded_filename": getattr(file, "filename", None),
                 "uploaded_content_type": getattr(file, "content_type", None)
             })
-            document = await service.create_document(request, file, db)
+            document = await document_service.create(request, file, db, background_tasks)
             logger.info("Create document succeeded", extra={"document_id": getattr(document, "id", None)})
             return document
 
@@ -49,6 +49,5 @@ class DocumentController:
                 },
             )
 
-
 controller = DocumentController()
-router.post("", response_model=DocumentResponseSchema)(controller.create_document)
+router.post("", response_model=DocumentResponseSchema)(controller.create)

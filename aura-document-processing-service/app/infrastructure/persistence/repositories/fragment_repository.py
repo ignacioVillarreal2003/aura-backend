@@ -4,13 +4,12 @@ import logging
 
 from app.domain.models.fragment import Fragment
 from app.application.exceptions.exceptions import DatabaseError
-from app.infrastructure.persistence.repositories.interfaces.fragment_repository_interface import FragmentRepositoryInterface
 
 
 logger = logging.getLogger(__name__)
 
 
-class FragmentRepository(FragmentRepositoryInterface):
+class FragmentRepository:
     def create(self, fragment: Fragment, db: Session) -> Fragment:
         try:
             logger.debug("Creating fragment in database", extra={"document_id": fragment.document_id})

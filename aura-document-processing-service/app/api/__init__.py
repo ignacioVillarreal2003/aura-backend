@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.controllers import document_controller
+from app.api import document_controller
 
 
 router = APIRouter()
