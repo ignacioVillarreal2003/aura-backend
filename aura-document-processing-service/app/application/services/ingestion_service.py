@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from sqlalchemy.orm import Session
 
+from app.application.processors.embeddings.embeddings_factory import EmbeddingsFactory
 from app.application.processors.readers.reader_factory import ReaderFactory
 from app.application.processors.text_cleaners.text_cleaner_factory import TextCleanerFactory
 from app.application.processors.text_splitters.text_splitter_factory import TextSplitterFactory
@@ -25,6 +26,7 @@ class IngestionService:
         self.reader_factory = ReaderFactory()
         self.cleaner_factory = TextCleanerFactory()
         self.splitter_factory = TextSplitterFactory()
+        self.embedding_factory = EmbeddingsFactory()
 
     def process_document(
         self,
@@ -33,6 +35,7 @@ class IngestionService:
         local_file_path: Path,
         cleaner_type: str = "basic",
         splitter_type: str = "recursive",
+        embedding_type: str = "huggingface",
         split_size: int = 500,
         split_overlap: int = 50,
     ) -> None:
@@ -47,10 +50,15 @@ class IngestionService:
             splitter = self.splitter_factory.get_splitter(splitter_type)
             splits = splitter.split_text(clean_text, size=split_size, overlap=split_overlap)
 
-            for idx, content in enumerate(splits):
+            embedding = self.embedding_factory.get_embedding(embedding_type)
+            vectors = embedding.embed_documents(splits)
+
+            for idx in range(len(splits)):
                 fragment = Fragment(
                     document_id=document.id,
-                    content=content,
+                    vector=vectors[idx],
+                    embedding_model=embedding_type,
+                    content=splits[idx],
                     fragment_index=idx,
                     chunk_size=split_size,
                     created_by=document.created_by,

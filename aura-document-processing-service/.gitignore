@@ -13,9 +13,7 @@ build/
 
 # --- Virtual env ---
 venv/
-env/
 .venv/
-.env/
 
 # --- FastAPI / Uvicorn ---
 *.log

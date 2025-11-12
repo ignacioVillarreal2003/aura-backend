@@ -1,11 +1,11 @@
 services:
-  aura-document-management-service:
-    build: ../aura-document-management-service
-    container_name: aura-document-management-service
+  aura-document-processing-service:
+    build: ../aura-document-processing-service
+    container_name: aura-document-processing-service
     ports:
       - "8000:8000"
     env_file:
-      - ../aura-document-management-service/.env.docker
+      - ../aura-document-processing-service/.env.docker
     depends_on:
       db:
         condition: service_healthy

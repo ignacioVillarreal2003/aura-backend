@@ -12,7 +12,7 @@ class Fragment(Base):
 
     document_id = Column(Integer, ForeignKey("document.id", ondelete="CASCADE"), nullable=False)
 
-    vector = Column(VECTOR(dim=1536), nullable=True)
+    vector = Column(VECTOR(dim=384), nullable=True)
     embedding_model = Column(String(255), nullable=True)
     content = Column(Text, nullable=False)
     fragment_index = Column(Integer, nullable=False)
