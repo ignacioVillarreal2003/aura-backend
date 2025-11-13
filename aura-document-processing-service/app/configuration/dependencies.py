@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.application.services.document_service import DocumentService
 from app.application.services.ingestion_service import IngestionService
+from app.application.services.retrival_service import RetrievalService
 from app.infrastructure.persistence.repositories.database_client import DatabaseClient
 from app.infrastructure.persistence.repositories.document_repository import DocumentRepository
 from app.infrastructure.persistence.repositories.fragment_repository import FragmentRepository
@@ -43,7 +44,7 @@ def get_ingestion_service(
 ) -> IngestionService:
     return IngestionService(document_repository, fragment_repository)
 
-
+@lru_cache()
 def get_document_service(
     document_repository: DocumentRepository = Depends(get_document_repository),
     file_storage_repository: FileStorageRepository = Depends(get_file_storage_repository),
@@ -54,3 +55,9 @@ def get_document_service(
         file_storage_repository=file_storage_repository,
         ingestion_service=ingestion_service
     )
+
+@lru_cache()
+def get_retrieval_service(
+    fragment_repository: FragmentRepository = Depends(get_fragment_repository)
+) -> RetrievalService:
+    return RetrievalService(fragment_repository)
