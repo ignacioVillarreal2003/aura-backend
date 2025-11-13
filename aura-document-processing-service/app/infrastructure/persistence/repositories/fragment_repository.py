@@ -1,3 +1,4 @@
+from sqlalchemy import text, select
 from sqlalchemy.orm import Session
 from typing import Optional, List, Any
 import logging
@@ -57,6 +58,46 @@ class FragmentRepository:
         except Exception as e:
             logger.exception("Failed to fetch fragments by document ID")
             raise DatabaseError("Failed to fetch fragments by document ID") from e
+
+    def get_most_similar(
+            self,
+            query_vector: list[float],
+            k: int,
+            db: Session
+    ) -> List[Fragment]:
+        try:
+            logger.debug("Ejecutando búsqueda vectorial", extra={"k": k})
+
+            query_vector_str = "[" + ",".join(map(str, query_vector)) + "]"
+
+            sql = text(f"""
+               SELECT id,
+                      document_id,
+                      content,
+                      1 - (vector <=> '{query_vector_str}') AS cosine_similarity
+               FROM fragment
+               WHERE vector IS NOT NULL
+               ORDER BY cosine_similarity DESC LIMIT :k
+            """)
+
+            results = db.execute(sql, {"k": k}).fetchall()
+
+            logger.info("Búsqueda vectorial completada", extra={"count": len(results)})
+
+            fragments = [
+                Fragment(
+                    id=row.id,
+                    document_id=row.document_id,
+                    content=row.content
+                )
+                for row in results
+            ]
+
+            return fragments
+
+        except Exception as e:
+            logger.exception("Error durante la búsqueda vectorial")
+            raise DatabaseError("Error al ejecutar búsqueda vectorial en pgvector") from e
 
     def update(self, fragment: Fragment, db: Session) -> Fragment:
         try:
