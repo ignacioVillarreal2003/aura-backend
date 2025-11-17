@@ -1,0 +1,72 @@
+GET http://127.0.0.1:11434
+
+###
+
+GET http://127.0.0.1:11434/api/tags
+
+###
+
+POST http://127.0.0.1:8000/api/questions
+Accept: application/json
+Content-Type: application/json
+
+{
+  "question": "¿Cuál es la misión principal de la Fuerza Aérea de Uruguay?",
+  "stream": false
+}
+
+###
+
+POST http://127.0.0.1:8000/api/questions
+Accept: application/json
+Content-Type: application/json
+
+{
+  "question": "¿Qué avión se menciona en el texto?",
+  "context": "El Escuadrón Aéreo Nº3 (Transporte) utiliza aviones C-212 Aviocar para misiones logísticas.",
+  "stream": false
+}
+
+###
+
+POST http://127.0.0.1:8000/api/questions
+Accept: application/json
+Content-Type: application/json
+
+{
+  "question": "¿Qué funciones cumple el Escuadrón mencionado previamente?",
+  "context": "Los escuadrones cumplen misiones específicas como transporte, búsqueda y rescate, y vigilancia.",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Cuál es el rol del Escuadrón Aéreo Nº5?"
+    },
+    {
+      "role": "assistant",
+      "content": "El Escuadrón Aéreo Nº5 (Helicópteros) realiza misiones SAR, evacuación médica y apoyo a operaciones especiales."
+    }
+  ],
+  "stream": false
+}
+
+###
+
+POST http://127.0.0.1:8000/api/summaries
+Accept: application/json
+Content-Type: application/json
+
+{
+  "document_id": 1,
+  "chunks": [
+    "Chunk 21: Esta sección examina cómo los sistemas distribuidos pueden mejorar la resiliencia operativa mediante la descentralización de tareas críticas. Se estudian ejemplos de arquitecturas en las que la redundancia funcional reduce la probabilidad de fallos catastróficos, permitiendo que los procesos continúen incluso ante interrupciones inesperadas en nodos específicos.",
+    "Chunk 22: Aquí se analiza la importancia de diseñar flujos de trabajo que integren retroalimentación continua entre los equipos técnicos y administrativos. Se argumenta que la retroalimentación inmediata disminuye la brecha entre la planificación estratégica y la ejecución real, potenciando la capacidad de aprendizaje y ajuste rápido dentro de entornos altamente variables.",
+    "Chunk 23: El contenido profundiza en las diferencias entre modelos operativos secuenciales y paralelos, comparando su eficiencia en contextos de alta demanda. Se presentan estudios que demuestran que las arquitecturas paralelas permiten una respuesta más ágil, siempre que exista una coordinación efectiva que evite conflictos en el acceso a recursos compartidos.",
+    "Chunk 24: Esta sección se centra en la gestión del riesgo y la necesidad de mecanismos de monitoreo continuo. Se discuten herramientas analíticas que permiten detectar patrones anómalos con anticipación, reduciendo la exposición a incidentes que puedan comprometer la integridad de los sistemas o la calidad del servicio ofrecido por la organización.",
+    "Chunk 25: Se desarrolla un análisis sobre la toma de decisiones basada en datos, explicando cómo los algoritmos de inferencia pueden apoyar la identificación de prioridades operativas. Asimismo, se detalla cómo la calidad de los datos recolectados influye directamente en la precisión de las predicciones y en la fiabilidad de las conclusiones estratégicas.",
+    "Chunk 26: El documento describe la manera en que la colaboración interdisciplinaria incrementa la capacidad de resolver problemas complejos. Se incluyen ejemplos donde la combinación de perspectivas técnicas, sociales y económicas permite abordar desafíos que, de manera aislada, resultarían demasiado difíciles o costosos de gestionar con eficacia.",
+    "Chunk 27: Esta parte explora la relevancia de establecer políticas internas claras para la gestión del conocimiento institucional. Se explica que dicho conocimiento, almacenado y accesible adecuadamente, facilita la continuidad operativa ante rotación de personal y contribuye a mantener prácticas eficientes y consistentes a lo largo del tiempo.",
+    "Chunk 28: Se introduce un análisis del impacto de la automatización en la reducción de tareas repetitivas y propensas a errores humanos. Sin embargo, también se examinan sus límites y los riesgos asociados, como la dependencia excesiva de sistemas automatizados que, en caso de fallar, pueden generar interrupciones significativas en actividades críticas.",
+    "Chunk 29: Este fragmento aborda el papel de la ética organizacional en la construcción de confianza interna y externa. Se argumenta que, cuando las instituciones adoptan estándares éticos sólidos, se fortalecen las relaciones entre equipos, se reducen conflictos y aumenta la credibilidad percibida por actores externos involucrados en los procesos de decisión.",
+    "Chunk 30: En esta sección se analizan modelos de gobernanza diseñados para equilibrar eficiencia con transparencia. Se explica cómo las estructuras de supervisión adecuadas previenen abusos, mejoran la alineación de objetivos y permiten que la institución mantenga una visión estratégica coherente mientras promueve prácticas responsables y verificables."
+  ]
+}
