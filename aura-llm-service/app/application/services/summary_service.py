@@ -63,12 +63,35 @@ Resumen final (máximo {max_tokens} tokens):
         chunks = request.chunks
         logger.info(f"Resumiendo documento con {len(chunks)} chunks")
 
+        semaphore = asyncio.Semaphore(2)
+        
+        async def summarize_with_limit(chunk: str):
+            async with semaphore:
+                # Agregar retry logic
+                for attempt in range(3):
+                    try:
+                        return await self._summarize_chunk(chunk)
+                    except Exception as e:
+                        if attempt == 2:
+                            raise
+                        await asyncio.sleep(2)
+        
         summaries = await asyncio.gather(
-            *[self._summarize_chunk(ch) for ch in chunks]
+            *[summarize_with_limit(ch) for ch in chunks],
+            return_exceptions=True
         )
+        
+        successful_summaries = []
+        for i, summary in enumerate(summaries):
+            if isinstance(summary, Exception):
+                logger.warning(f"Error resumiendo chunk {i}: {summary}")
+                successful_summaries.append(f"[Resumen fallido: {chunks[i][:100]}...]")
+            else:
+                successful_summaries.append(summary)
 
         final_summary = await self._reduce_summaries(
-            summaries, max_tokens=request.target_length
+            successful_summaries, max_tokens=request.target_length
         )
 
-        return SummaryResponse(summary=final_summary)
+
+        return SummaryResponse(document_id=request.document_id, summary=final_summary)
