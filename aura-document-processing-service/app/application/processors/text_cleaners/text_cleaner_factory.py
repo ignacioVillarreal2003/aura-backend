@@ -10,7 +10,8 @@ class TextCleanerFactory:
             "basic": BasicTextCleaner()
         }
 
-    def get_cleaner(self, method: str) -> TextCleanerInterface:
+    def get_text_cleaner(self,
+                    method: str) -> TextCleanerInterface:
         if method not in self._cleaners:
             raise ValueError(f"Método de limpieza no soportado: {method}")
         return self._cleaners[method]

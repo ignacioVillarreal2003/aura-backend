@@ -9,9 +9,7 @@ from app.configuration.logging_configuration import configure_logging
 from app.application.exceptions.exceptions import AppError
 from app.infrastructure.persistence.repositories.database_client import DatabaseClient
 
-
 configure_logging(level=logging.INFO)
-
 logger = logging.getLogger(__name__)
 
 
@@ -40,7 +38,6 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -48,8 +45,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"]
 )
-
 app.include_router(router, prefix="/api")
+
 
 @app.get("/")
 async def root():

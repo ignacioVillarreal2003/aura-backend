@@ -1,6 +1,5 @@
 import logging
 import asyncio
-from typing import List
 
 from app.application.exceptions.api_exceptions import LLMError
 from app.application.services.interfaces.summary_service_interface import SummaryServiceInterface
@@ -45,7 +44,7 @@ class SummaryService(SummaryServiceInterface):
         """
         return await self._ask_llm(prompt)
 
-    async def _reduce_summaries(self, partial_summaries: List[str], max_tokens: int) -> str:
+    async def _reduce_summaries(self, partial_summaries: list[str], max_tokens: int) -> str:
         joined = "\n---\n".join(partial_summaries)
 
         prompt = f"""

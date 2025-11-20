@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
 
-class Question(BaseModel):
+class Message(BaseModel):
     role: str = Field(...)
     content: str = Field(...)

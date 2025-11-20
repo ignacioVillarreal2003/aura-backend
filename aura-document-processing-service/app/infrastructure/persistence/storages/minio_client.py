@@ -7,7 +7,6 @@ from minio.error import S3Error
 from app.configuration.environment_variables import environment_variables
 from app.application.exceptions.exceptions import StorageError
 
-
 logger = logging.getLogger(__name__)
 
 

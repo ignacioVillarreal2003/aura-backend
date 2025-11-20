@@ -5,7 +5,8 @@ from app.application.processors.readers.interfaces.document_reader_interface imp
 
 
 class DOCXReader(DocumentReaderInterface):
-    def can_handle(self, file_path: Path) -> bool:
+    def can_handle(self,
+                   file_path: Path) -> bool:
         return file_path.suffix.lower() == ".docx"
 
     def read(self, file_path: Path) -> str:

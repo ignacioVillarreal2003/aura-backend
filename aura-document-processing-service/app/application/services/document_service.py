@@ -7,33 +7,34 @@ from typing import Dict
 from fastapi import UploadFile, BackgroundTasks
 from sqlalchemy.orm import Session
 
-from app.application.services.ingestion_service import IngestionService
+from app.application.services.interfaces.document_service_interface import DocumentServiceInterface
+from app.application.services.interfaces.ingestion_service_interface import IngestionServiceInterface
 from app.configuration.environment_variables import environment_variables
 from app.domain.constants.document_type import DocumentType
 from app.application.exceptions.exceptions import UnsupportedFileTypeError, ValidationError, StorageError, DatabaseError
 from app.domain.dtos.document_request import DocumentRequest
 from app.domain.models.document import Document
 from app.domain.dtos.document_response import DocumentResponseSchema
-from app.infrastructure.persistence.repositories.document_repository import DocumentRepository
-from app.infrastructure.persistence.storages.file_storage_repository import FileStorageRepository
-
+from app.infrastructure.persistence.repositories.interfaces.document_repository_interface import \
+    DocumentRepositoryInterface
+from app.infrastructure.persistence.storages.interfaces.file_storage_interface import FileStorageInterface
 
 logger = logging.getLogger(__name__)
 
 
-class DocumentService:
+class DocumentService(DocumentServiceInterface):
     def __init__(self,
-                 document_repository: DocumentRepository,
-                 file_storage_repository: FileStorageRepository,
-                 ingestion_service: IngestionService):
+                 document_repository: DocumentRepositoryInterface,
+                 file_storage: FileStorageInterface,
+                 ingestion_service: IngestionServiceInterface):
         self.ingestion_service = ingestion_service
         self.document_repository = document_repository
-        self.file_storage_repository = file_storage_repository
+        self.file_storage = file_storage
 
     async def create(self,
-                              request: DocumentRequest,
-                              file: UploadFile,
-                              db: Session,
+                     request: DocumentRequest,
+                     file: UploadFile,
+                     db: Session,
                      background_tasks: BackgroundTasks) -> DocumentResponseSchema:
         document_type = self._validate_type(file)
         self._validate_size(file)
@@ -49,7 +50,7 @@ class DocumentService:
 
         try:
             logger.info("Uploading file to storage")
-            path = self.file_storage_repository.upload(file, temp_path)
+            path = self.file_storage.upload(file)
             logger.info("File uploaded to storage", extra={"path": path})
         except StorageError:
             raise
@@ -69,13 +70,10 @@ class DocumentService:
         except DatabaseError:
             raise
 
-        background_tasks.add_task(
-            self.ingestion_service.process_document,
-            db_document,
-            db,
-            temp_path
-        )
-        logger.info(f"Proceso de ingesta lanzado en background para documento {db_document.id}")
+        background_tasks.add_task(self.ingestion_service.process_document,
+                                  db_document,
+                                  db,
+                                  temp_path)
 
         return DocumentResponseSchema(
             id=db_document.id,

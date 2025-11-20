@@ -7,7 +7,6 @@ from sqlalchemy.orm import sessionmaker, Session
 from app.configuration.environment_variables import environment_variables
 from app.application.exceptions.exceptions import DatabaseError
 
-
 logger = logging.getLogger(__name__)
 
 

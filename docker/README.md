@@ -13,14 +13,19 @@ Si querés usar aceleración por GPU, entonces usá:
 docker compose -f docker-compose.gpu.yml up -d
 ```
 
-## 🧱 Descripción de servicios
+## Descripción de servicios
 
-### 🔹 aura-llm-service
+### aura-document-processing-service
+
+- Nombre del contenedor: `aura-document-processing-service`
+- Puerto expuesto: `8001`
+
+### aura-llm-service
 
 - Nombre del contenedor: `aura-llm-service`
 - Puerto expuesto: `8000`
 
-### 🔹 db (PostgreSQL principal)
+### db (PostgreSQL principal)
 
 - Nombre: `db`
 - Puerto: `5432`
@@ -28,7 +33,7 @@ docker compose -f docker-compose.gpu.yml up -d
 - Contraseña: `aura_password`
 - Base: `aura_db`
 
-### 🔹 auth_db (PostgreSQL para autenticación)
+### auth_db (PostgreSQL para autenticación)
 
 - Nombre: `auth_db`
 - Puerto: `5433` → dentro del contenedor es `5432`
@@ -36,7 +41,7 @@ docker compose -f docker-compose.gpu.yml up -d
 - Contraseña: `aura_password`
 - Base: `auth_db`
 
-### 🔹 storage (MinIO — S3 compatible)
+### storage (MinIO — S3 compatible)
 
 - Nombre: `storage`
 - Puertos:
@@ -45,12 +50,12 @@ docker compose -f docker-compose.gpu.yml up -d
 - Usuario: `aura_root`
 - Contraseña: `aura_password`
 
-### 🔹 memory_db (Redis)
+### memory_db (Redis)
 
 - Nombre: `memory_db`
 - Puerto: `6379`
 
-### 🔹 queue (RabbitMQ + Management UI)
+### queue (RabbitMQ + Management UI)
 
 - Nombre: `queue`
 - Puertos:
@@ -59,7 +64,7 @@ docker compose -f docker-compose.gpu.yml up -d
 - Usuario: `aura_root`
 - Contraseña: `aura_password`
 
-### 🔹 llm (Ollama)
+### llm (Ollama)
 
 - Nombre: `llm`
 - Puerto: `11434`
