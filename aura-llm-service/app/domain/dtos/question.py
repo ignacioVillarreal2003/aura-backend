@@ -1,6 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class Question(BaseModel):
-    role: str
-    content: str
+    role: str = Field(...)
+    content: str = Field(...)

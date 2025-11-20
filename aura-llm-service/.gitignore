@@ -11,7 +11,7 @@ build/
 .eggs/
 *.sqlite3
 
-# --- Virtual env ---
+# --- Virtual .env ---
 venv/
 .venv/
 

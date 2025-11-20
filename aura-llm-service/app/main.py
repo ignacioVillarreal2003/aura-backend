@@ -7,24 +7,17 @@ from app.api.controllers import router
 from app.configuration.logging_configuration import configure_logging
 from app.application.exceptions.api_exceptions import AppError
 
-
 configure_logging(level=logging.INFO)
-
 logger = logging.getLogger(__name__)
-
-
 app = FastAPI(title="Aura Document Processing Service",
               version="1.0.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
-)
-
+app.add_middleware(CORSMiddleware,
+                   allow_origins=["*"],
+                   allow_credentials=True,
+                   allow_methods=["*"],
+                   allow_headers=["*"])
 app.include_router(router, prefix="/api")
+
 
 @app.get("/")
 async def root():

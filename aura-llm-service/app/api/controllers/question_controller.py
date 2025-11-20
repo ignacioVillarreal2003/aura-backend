@@ -1,21 +1,20 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 import logging
 
+from app.api.controllers.interfaces.question_controller_interface import QuestionControllerInterface
 from app.application.exceptions.api_exceptions import AppError
 from app.application.services.question_service import QuestionService
 from app.configuration.dependencies import get_question_service
 from app.domain.dtos.question_request import QuestionRequest
 from app.domain.dtos.question_response import QuestionResponse
 
-
 logger = logging.getLogger(__name__)
-
 router = APIRouter()
 
 
-class QuestionController:
+class QuestionController(QuestionControllerInterface):
     async def generate_response(self,
-                     request: QuestionRequest,
+                                request: QuestionRequest,
                                 question_service: QuestionService = Depends(get_question_service)) -> QuestionResponse:
         try:
             return await question_service.generate_response(request)
@@ -37,6 +36,7 @@ class QuestionController:
                     "message": "Unexpected error while uploading the document",
                 },
             )
+
 
 controller = QuestionController()
 router.post("", response_model=QuestionResponse)(controller.generate_response)

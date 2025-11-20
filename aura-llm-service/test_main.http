@@ -11,8 +11,7 @@ Accept: application/json
 Content-Type: application/json
 
 {
-  "question": "¿Cuál es la misión principal de la Fuerza Aérea de Uruguay?",
-  "stream": false
+  "question": "¿Cuál es la misión principal de la Fuerza Aérea de Uruguay?"
 }
 
 ###
@@ -23,8 +22,7 @@ Content-Type: application/json
 
 {
   "question": "¿Qué avión se menciona en el texto?",
-  "context": "El Escuadrón Aéreo Nº3 (Transporte) utiliza aviones C-212 Aviocar para misiones logísticas.",
-  "stream": false
+  "context": "El Escuadrón Aéreo Nº3 (Transporte) utiliza aviones C-212 Aviocar para misiones logísticas."
 }
 
 ###
@@ -45,8 +43,40 @@ Content-Type: application/json
       "role": "assistant",
       "content": "El Escuadrón Aéreo Nº5 (Helicópteros) realiza misiones SAR, evacuación médica y apoyo a operaciones especiales."
     }
-  ],
-  "stream": false
+  ]
+}
+
+###
+
+POST http://127.0.0.1:8000/api/questions
+Accept: application/json
+Content-Type: application/json
+
+{
+  "question": "Quisiera que me expliques de manera extensa y detallada todo lo relacionado con el primer viaje de un animal al espacio: desde la preparación, selección del animal, los experimentos realizados, cómo fue el lanzamiento, las condiciones a bordo, la reentrada y recuperación, hasta el impacto científico y social que tuvo. Por favor, incluye cualquier detalle interesante sobre las observaciones médicas, el entrenamiento previo, el equipo científico involucrado y los retos enfrentados durante toda la misión.",
+  "context": "El programa espacial de principios de la era espacial incluyó experimentos con animales para estudiar los efectos de la ingravidez y la radiación cósmica. Se seleccionaron diversos animales como monos, perros y ratones, se entrenaron y prepararon con simuladores de vuelo y cápsulas especiales. Las misiones permitieron recoger datos sobre fisiología, comportamiento y adaptación al entorno de microgravedad, y los resultados ayudaron a diseñar futuras misiones humanas con mayor seguridad.",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Cuéntame sobre los primeros experimentos espaciales con animales antes de enviar humanos."
+    },
+    {
+      "role": "assistant",
+      "content": "Los primeros experimentos involucraron principalmente ratones y monos, enviados en cohetes suborbitales para estudiar efectos fisiológicos y de ingravidez. Esto permitió obtener datos sobre ritmo cardíaco, respiración y respuesta al estrés en condiciones de vuelo."
+    },
+    {
+      "role": "user",
+      "content": "¿Qué animales fueron más importantes en estas pruebas y por qué?"
+    },
+    {
+      "role": "assistant",
+      "content": "Perros, como Laika, y monos fueron los más importantes. Los perros se eligieron por su temperamento y tamaño, mientras que los monos fueron valiosos por su similitud fisiológica con los humanos, ayudando a predecir cómo responderíamos en el espacio."
+    },
+    {
+      "role": "user",
+      "content": "Incluye también detalles sobre el entrenamiento y los procedimientos médicos previos al vuelo."
+    }
+  ]
 }
 
 ###
@@ -56,8 +86,7 @@ Accept: application/json
 Content-Type: application/json
 
 {
-  "document_id": 1,
-  "chunks": [
+  "fragments": [
     "El concepto de Inteligencia Artificial (IA) ha evolucionado desde una mera idea en la ciencia ficción hasta una fuerza transformadora que redefine los cimientos de nuestra sociedad. Su historia moderna suele fecharse en el taller de Dartmouth de 1956, donde el término fue acuñado formalmente, dando inicio a décadas de ciclos de exuberantes invenciones y 'inviernos de la IA' donde el progreso y la financiación se estancaban. Los primeros sistemas eran simbólicos y se basaban en reglas lógicas, intentando capturar el conocimiento humano en enormes bases de datos. Sin embargo, el verdadero punto de inflexión llegó con el auge del 'machine learning' y, posteriormente, del 'deep learning'. En lugar de programar reglas explícitas, estos sistemas aprenden patrones a partir de cantidades masivas de datos. Utilizando arquitecturas inspiradas vagamente en el cerebro humano, como las redes neuronales convolucionales para el procesamiento de imágenes o las redes recurrentes para el lenguaje, la IA comenzó a superar a los humanos en tareas específicas como el reconocimiento facial, la traducción automática y juegos de estrategia complejos como el Go.",
     "El aprendizaje profundo o 'deep learning' es el motor detrás de la mayoría de los avances recientes en Inteligencia Artificial. Se basa en redes neuronales artificiales con muchas capas de procesamiento (de ahí el término 'profundo'). Cada capa aprende a reconocer características de diferente nivel de abstracción a partir de los datos de entrada. Por ejemplo, en una red neuronal que analiza imágenes, las primeras capas podrían detectar bordes y esquinas, las capas intermedias combinarían estos elementos para identificar formas como narices u ojos, y las capas finales reconocerían objetos complejos como rostros o coches. Este proceso de extracción de características jerárquicas se entrena mediante un algoritmo llamado 'backpropagation', que ajusta automáticamente los millones de parámetros de la red para minimizar el error entre su predicción y la respuesta correcta. La disponibilidad de 'Big Data' y el poder de computación de unidades de procesamiento gráfico (GPUs) han sido esenciales para entrenar estas redes masivas, permitiendo logros que hace una década parecían ciencia ficción.",
     "Una de las aplicaciones más visibles y controvertidas de la IA se da en el ámbito laboral y la automatización. Los sistemas de IA son cada vez más capaces de realizar no solo tareas manuales y repetitivas en fábricas, sino también labores cognitivas que antes se consideraban exclusivas de los humanos, como el análisis de documentos legales, el diagnóstico médico preliminar o la atención al cliente. Esto ha generado un intenso debate sobre el futuro del trabajo. Por un lado, existe el temor a un desplazamiento masivo de puestos de trabajo, exacerbando la desigualdad económica. Por otro lado, los optimistas argumentan que, como en revoluciones tecnológicas pasadas, la IA eliminará algunos empleos pero creará otros nuevos, muchos de los cuales ni siquiera podemos imaginar hoy. El desafío crucial para sociedades y gobiernos será gestionar esta transición, mediante la reconversión profesional de la fuerza laboral y la potencial implementación de mecanismos de seguridad social como la renta básica universal.",
