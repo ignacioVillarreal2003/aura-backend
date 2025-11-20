@@ -3,7 +3,6 @@ import sys
 import time
 from typing import Any, Dict
 
-
 STANDARD_ATTRS = {
     'name', 'msg', 'args', 'levelname', 'levelno', 'pathname', 'filename', 'module', 'exc_info',
     'exc_text', 'stack_info', 'lineno', 'funcName', 'created', 'msecs', 'relativeCreated', 'thread',

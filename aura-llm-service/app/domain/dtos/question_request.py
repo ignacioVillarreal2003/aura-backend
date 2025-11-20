@@ -8,4 +8,3 @@ class QuestionRequest(BaseModel):
     question: str = Field(...)
     context: Optional[str] = None
     messages: Optional[List[Question]] = None
-    stream: bool = False

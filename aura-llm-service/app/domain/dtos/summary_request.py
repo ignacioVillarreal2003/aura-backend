@@ -1,8 +1,6 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List
 
 
 class SummaryRequest(BaseModel):
-    document_id: int = Field(...)
-    chunks: List[str] = Field(...)
-    target_length: int = 800
+    fragments: List[str] = Field(...)

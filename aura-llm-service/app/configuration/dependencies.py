@@ -9,9 +9,11 @@ from app.application.services.summary_service import SummaryService
 def get_question_service() -> QuestionService:
     return QuestionService(get_llm_service())
 
+
 @lru_cache()
 def get_summary_service():
     return SummaryService(get_llm_service())
+
 
 @lru_cache()
 def get_llm_service():
