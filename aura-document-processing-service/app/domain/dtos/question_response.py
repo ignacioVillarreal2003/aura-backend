@@ -1,10 +1,10 @@
-from typing import List
+from typing import Optional
 from pydantic import BaseModel, Field
-from app.domain.dtos.fragment_response import FragmentResponse
+
+from app.domain.dtos.message import Message
+
 
 class QuestionResponse(BaseModel):
-    fragments: List[FragmentResponse] = Field(...)
-
-    model_config = {
-        "from_attributes": True
-    }
+    question: str = Field(...)
+    context: Optional[str] = None
+    messages: Optional[list[Message]] = None

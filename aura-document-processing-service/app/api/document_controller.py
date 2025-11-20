@@ -8,19 +8,17 @@ from app.configuration.dependencies import get_db_session, get_document_service
 from app.domain.dtos.document_response import DocumentResponseSchema
 from app.domain.dtos.document_request import DocumentRequest
 
-
 logger = logging.getLogger(__name__)
-
 router = APIRouter()
 
 
 class DocumentController:
     async def create(self,
-                              background_tasks: BackgroundTasks,
-                              request: DocumentRequest = Depends(DocumentRequest.as_form),
-                              file: UploadFile = File(...),
-                              document_service: DocumentService = Depends(get_document_service),
-                              db: Session = Depends(get_db_session)) -> DocumentResponseSchema:
+                     background_tasks: BackgroundTasks,
+                     request: DocumentRequest = Depends(DocumentRequest.as_form),
+                     file: UploadFile = File(...),
+                     document_service: DocumentService = Depends(get_document_service),
+                     db: Session = Depends(get_db_session)) -> DocumentResponseSchema:
         try:
             logger.info("Create document request received", extra={
                 "uploaded_filename": getattr(file, "filename", None),
@@ -48,6 +46,7 @@ class DocumentController:
                     "message": "Unexpected error while uploading the document",
                 },
             )
+
 
 controller = DocumentController()
 router.post("", response_model=DocumentResponseSchema)(controller.create)

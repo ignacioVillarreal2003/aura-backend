@@ -1,62 +1,31 @@
-"""
-Este módulo define una fábrica para instanciar diferentes divisores de texto (text splitters) 
-según el método especificado. Facilita la selección y uso de distintos algoritmos de segmentación 
-de texto de manera centralizada y extensible.
-
-Uso principal:
-    - Selección dinámica de la estrategia de división de texto en función de la configuración o el caso de uso.
-    - Simplifica la integración de nuevos splitters en el sistema.
-"""
-
 from typing import Dict
 
 from app.application.processors.text_splitters.interfaces.text_splitter_interface import TextSplitterInterface
-from app.application.processors.text_splitters.token_based_text_splitter import TokenBasedTextSplitter
-from app.application.processors.text_splitters.spacy_based_text_splitter import SpacyBasedTextSplitter
-from app.application.processors.text_splitters.sentence_transformer_based_text_splitter import SentenceTransformerBasedTextSplitter
-from app.application.processors.text_splitters.semantic_based_text_splitter import SemanticBasedTextSplitter
-from app.application.processors.text_splitters.recursive_based_text_splitter import RecursiveBasedTextSplitter
-from app.application.processors.text_splitters.huggingface_based_text_splitter import HuggingfaceBasedTextSplitter
-from app.application.processors.text_splitters.char_tiktoken_based_text_splitter import CharTiktokenBasedTextSplitter
-from app.application.processors.text_splitters.char_based_text_splitter import CharBasedTextSplitter
+from app.application.processors.text_splitters.token_text_splitter import TokenTextSplitter
+from app.application.processors.text_splitters.spacy_text_splitter import SpacyTextSplitter
+from app.application.processors.text_splitters.sentence_transformer_text_splitter import SentenceTransformerTextSplitter
+from app.application.processors.text_splitters.semantic_text_splitter import SemanticTextSplitter
+from app.application.processors.text_splitters.recursive_text_splitter import RecursiveTextSplitter
+from app.application.processors.text_splitters.huggingface_text_splitter import HuggingfaceTextSplitter
+from app.application.processors.text_splitters.char_tiktoken_text_splitter import CharTiktokenTextSplitter
+from app.application.processors.text_splitters.char_text_splitter import CharTextSplitter
 
 
 class TextSplitterFactory:
-    """
-    Fábrica para obtener instancias de divisores de texto según el método solicitado.
-
-    Métodos:
-        get_splitter(method: str) -> TextSplitterInterface:
-            Devuelve una instancia del divisor de texto correspondiente al método especificado.
-
-    Raises:
-        ValueError: Si el método solicitado no está soportado.
-    """
     def __init__(self):
         self._splitters: Dict[str, TextSplitterInterface] = {
-            "token": TokenBasedTextSplitter(),
-            "spacy": SpacyBasedTextSplitter(),
-            "sentence_transformer": SentenceTransformerBasedTextSplitter(),
-            "semantic": SemanticBasedTextSplitter(),
-            "recursive": RecursiveBasedTextSplitter(),
-            "huggingface": HuggingfaceBasedTextSplitter(),
-            "char_tiktoken": CharTiktokenBasedTextSplitter(),
-            "char": CharBasedTextSplitter()
+            "token": TokenTextSplitter(),
+            "spacy": SpacyTextSplitter(),
+            "sentence_transformer": SentenceTransformerTextSplitter(),
+            "semantic": SemanticTextSplitter(),
+            "recursive": RecursiveTextSplitter(),
+            "huggingface": HuggingfaceTextSplitter(),
+            "char_tiktoken": CharTiktokenTextSplitter(),
+            "char": CharTextSplitter()
         }
 
-    def get_splitter(self, method: str) -> TextSplitterInterface:
-        """
-        Obtiene el divisor de texto correspondiente al método especificado.
-
-        Args:
-            method (str): Nombre del método de división de texto.
-
-        Returns:
-            TextSplitterInterface: Instancia del divisor de texto.
-
-        Raises:
-            ValueError: Si el método no está soportado.
-        """
+    def get_text_splitter(self,
+                     method: str) -> TextSplitterInterface:
         if method not in self._splitters:
             raise ValueError(f"Método de chunking no soportado: {method}")
         return self._splitters[method]

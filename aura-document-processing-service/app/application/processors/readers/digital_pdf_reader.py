@@ -4,11 +4,13 @@ import pypdf
 from app.application.processors.readers.interfaces.document_reader_interface import DocumentReaderInterface
 
 
-class PDFReaderDigital(DocumentReaderInterface):
-    def can_handle(self, file_path: Path) -> bool:
+class DigitalPDFReader(DocumentReaderInterface):
+    def can_handle(self,
+                   file_path: Path) -> bool:
         return file_path.suffix.lower() == ".pdf"
 
-    def read(self, file_path: Path) -> str:
+    def read(self,
+             file_path: Path) -> str:
         if not file_path.exists():
             raise FileNotFoundError(f"El archivo no existe: {file_path}")
 

@@ -1,17 +1,20 @@
-from sqlalchemy import text, select
+from sqlalchemy import text
 from sqlalchemy.orm import Session
-from typing import Optional, List, Any
+from typing import Optional, List
 import logging
 
 from app.domain.models.fragment import Fragment
 from app.application.exceptions.exceptions import DatabaseError
-
+from app.infrastructure.persistence.repositories.interfaces.fragment_repository_interface import \
+    FragmentRepositoryInterface
 
 logger = logging.getLogger(__name__)
 
 
-class FragmentRepository:
-    def create(self, fragment: Fragment, db: Session) -> Fragment:
+class FragmentRepository(FragmentRepositoryInterface):
+    def create(self,
+               fragment: Fragment,
+               db: Session) -> Fragment:
         try:
             logger.debug("Creating fragment in database", extra={"document_id": fragment.document_id})
             db.add(fragment)
@@ -24,7 +27,9 @@ class FragmentRepository:
             logger.exception("Failed to create fragment in database")
             raise DatabaseError("Failed to create fragment in database") from e
 
-    def get_by_id(self, fragment_id: int, db: Session) -> Optional[Fragment]:
+    def get_by_id(self,
+                  fragment_id: int,
+                  db: Session) -> Optional[Fragment]:
         try:
             logger.debug("Fetching fragment by ID", extra={"fragment_id": fragment_id})
             fragment = db.query(Fragment).filter(Fragment.id == fragment_id).first()
@@ -39,7 +44,10 @@ class FragmentRepository:
             logger.exception("Failed to fetch fragment by ID")
             raise DatabaseError("Failed to fetch fragment from database") from e
 
-    def get_all(self, db: Session, skip: int = 0, limit: int = 100) -> list[type[Fragment]]:
+    def get_all(self,
+                db: Session,
+                skip: int = 0,
+                limit: int = 100) -> list[Fragment]:
         try:
             logger.debug("Fetching fragments", extra={"skip": skip, "limit": limit})
             fragments = db.query(Fragment).offset(skip).limit(limit).all()
@@ -49,7 +57,9 @@ class FragmentRepository:
             logger.exception("Failed to fetch fragments")
             raise DatabaseError("Failed to fetch fragments from database") from e
 
-    def get_by_document_id(self, document_id: int, db: Session) -> list[type[Fragment]]:
+    def get_by_document_id(self,
+                           document_id: int,
+                           db: Session) -> list[Fragment]:
         try:
             logger.debug("Fetching fragments by document ID", extra={"document_id": document_id})
             fragments = db.query(Fragment).filter(Fragment.document_id == document_id).all()
@@ -59,39 +69,39 @@ class FragmentRepository:
             logger.exception("Failed to fetch fragments by document ID")
             raise DatabaseError("Failed to fetch fragments by document ID") from e
 
-    def get_most_similar(
-            self,
-            query_vector: list[float],
-            k: int,
-            db: Session
-    ) -> List[Fragment]:
+    def get_most_similar(self,
+                         query_vector: list[float],
+                         db: Session,
+                         k: int = 3,
+                         threshold: float = 0.3) -> List[Fragment]:
         try:
             logger.debug("Ejecutando búsqueda vectorial", extra={"k": k})
 
             query_vector_str = "[" + ",".join(map(str, query_vector)) + "]"
 
             sql = text(f"""
-               SELECT id,
-                      document_id,
-                      content,
-                      1 - (vector <=> '{query_vector_str}') AS cosine_similarity
-               FROM fragment
-               WHERE vector IS NOT NULL
-               ORDER BY cosine_similarity DESC LIMIT :k
+                       SELECT id,
+                              document_id,
+                              content,
+                              1 - (vector <=> '{query_vector_str}') AS cosine_similarity
+                       FROM fragment
+                       WHERE vector IS NOT NULL
+                         AND 1 - (vector <=> '{query_vector_str}') >= :threshold
+                       ORDER BY cosine_similarity DESC
+                       LIMIT :k
             """)
 
-            results = db.execute(sql, {"k": k}).fetchall()
+            results = db.execute(sql, {"k": k, "threshold": threshold}).fetchall()
 
             logger.info("Búsqueda vectorial completada", extra={"count": len(results)})
 
-            fragments = [
-                Fragment(
+            fragments = []
+            for row in results:
+                fragments.append(Fragment(
                     id=row.id,
                     document_id=row.document_id,
                     content=row.content
-                )
-                for row in results
-            ]
+                ))
 
             return fragments
 
@@ -99,7 +109,9 @@ class FragmentRepository:
             logger.exception("Error durante la búsqueda vectorial")
             raise DatabaseError("Error al ejecutar búsqueda vectorial en pgvector") from e
 
-    def update(self, fragment: Fragment, db: Session) -> Fragment:
+    def update(self,
+               fragment: Fragment,
+               db: Session) -> Fragment:
         try:
             logger.debug("Updating fragment in database", extra={"fragment_id": fragment.id})
             db.merge(fragment)
@@ -112,7 +124,9 @@ class FragmentRepository:
             logger.exception("Failed to update fragment in database")
             raise DatabaseError("Failed to update fragment in database") from e
 
-    def delete(self, fragment_id: int, db: Session) -> bool:
+    def delete(self,
+               fragment_id: int,
+               db: Session) -> bool:
         try:
             logger.debug("Deleting fragment from database", extra={"fragment_id": fragment_id})
             fragment = db.query(Fragment).filter(Fragment.id == fragment_id).first()
@@ -130,7 +144,9 @@ class FragmentRepository:
             logger.exception("Failed to delete fragment from database")
             raise DatabaseError("Failed to delete fragment from database") from e
 
-    def exists(self, fragment_id: int, db: Session) -> bool:
+    def exists(self,
+               fragment_id: int,
+               db: Session) -> bool:
         try:
             exists = db.query(Fragment.id).filter(Fragment.id == fragment_id).first() is not None
             logger.debug("Fragment existence check", extra={"fragment_id": fragment_id, "exists": exists})

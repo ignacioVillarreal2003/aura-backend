@@ -4,12 +4,13 @@ import logging
 
 from app.domain.models.document import Document
 from app.application.exceptions.exceptions import DatabaseError
-
+from app.infrastructure.persistence.repositories.interfaces.document_repository_interface import \
+    DocumentRepositoryInterface
 
 logger = logging.getLogger(__name__)
 
 
-class DocumentRepository:
+class DocumentRepository(DocumentRepositoryInterface):
     def create(self,
                document: Document,
                db: Session) -> Document:
@@ -59,7 +60,7 @@ class DocumentRepository:
     def get_all(self,
                 db: Session,
                 skip: int = 0,
-                limit: int = 100) -> list[type[Document]]:
+                limit: int = 100) -> list[Document]:
         try:
             logger.debug(
                 "Fetching documents",

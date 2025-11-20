@@ -14,6 +14,13 @@ class EnvironmentVariables(BaseSettings):
     minio_secret_key: str
     minio_secure: bool = False
 
+    cleaner_type: str = "basic"
+    splitter_type: str = "recursive"
+    embedder_type: str = "huggingface"
+    vector_dimension: int = 384
+    split_size: int = 600,
+    split_overlap: int = 60
+
     max_file_size_mb: int = 20
     environment: str = "development"
 

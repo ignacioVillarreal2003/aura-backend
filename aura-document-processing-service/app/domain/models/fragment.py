@@ -2,6 +2,7 @@ from pgvector.sqlalchemy import VECTOR
 from sqlalchemy.sql import func
 from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey
 
+from app.configuration.environment_variables import environment_variables
 from app.domain.models.base import Base
 
 
@@ -12,7 +13,7 @@ class Fragment(Base):
 
     document_id = Column(Integer, ForeignKey("document.id", ondelete="CASCADE"), nullable=False)
 
-    vector = Column(VECTOR(dim=384), nullable=True)
+    vector = Column(VECTOR(dim=environment_variables.vector_dimension), nullable=True)
     embedding_model = Column(String(255), nullable=True)
     content = Column(Text, nullable=False)
     fragment_index = Column(Integer, nullable=False)

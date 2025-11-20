@@ -1,20 +1,18 @@
 from pathlib import Path
 from typing import List
 
+from app.application.processors.readers.digital_pdf_reader import DigitalPDFReader
 from app.application.processors.readers.docx_reader import DOCXReader
 from app.application.processors.readers.interfaces.document_reader_interface import DocumentReaderInterface
-from app.application.processors.readers.pdf_reader_digital import PDFReaderDigital
-from app.application.processors.readers.pdf_scanned_reader import PDFReaderScanned
-from app.application.processors.readers.txt_reader import TXTReader
+from app.application.processors.readers.scanned_pdf_reader import ScannedPDFReader
 
 
 class ReaderFactory:
     def __init__(self):
         self._readers: List[DocumentReaderInterface] = [
-            PDFReaderDigital(),
-            PDFReaderScanned(),
-            DOCXReader(),
-            TXTReader()
+            DigitalPDFReader(),
+            ScannedPDFReader(),
+            DOCXReader()
         ]
 
     def get_reader(self, file_path: Path) -> DocumentReaderInterface:
