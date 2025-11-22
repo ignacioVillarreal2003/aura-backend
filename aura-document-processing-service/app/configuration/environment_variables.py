@@ -21,6 +21,13 @@ class EnvironmentVariables(BaseSettings):
     split_size: int = 600,
     split_overlap: int = 60
 
+    rabbitmq_host: str
+    rabbitmq_port: int
+    rabbitmq_user: str
+    rabbitmq_password: str
+    exchange: str
+    question_queue: str
+
     max_file_size_mb: int = 20
     environment: str = "development"
 

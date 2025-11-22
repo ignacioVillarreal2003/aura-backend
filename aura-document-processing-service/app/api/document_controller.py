@@ -2,7 +2,8 @@ from fastapi import APIRouter, File, UploadFile, Depends, HTTPException, status,
 from sqlalchemy.orm import Session
 import logging
 
-from app.application.exceptions.exceptions import AppError
+from app.api.interfaces.document_controller_interface import DocumentControllerInterface
+from app.application.exceptions.api_exceptions import AppError
 from app.application.services.document_service import DocumentService
 from app.configuration.dependencies import get_db_session, get_document_service
 from app.domain.dtos.document_response import DocumentResponseSchema
@@ -12,7 +13,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-class DocumentController:
+class DocumentController(DocumentControllerInterface):
     async def create(self,
                      background_tasks: BackgroundTasks,
                      request: DocumentRequest = Depends(DocumentRequest.as_form),
@@ -43,7 +44,7 @@ class DocumentController:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail={
                     "error": "InternalServerError",
-                    "message": "Unexpected error while uploading the document",
+                    "message": "Ha ocurrido un error inesperado al subir el documento",
                 },
             )
 

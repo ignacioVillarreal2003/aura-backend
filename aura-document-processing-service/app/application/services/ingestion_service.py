@@ -8,7 +8,7 @@ from app.application.processors.embedders.embedder_factory import EmbedderFactor
 from app.application.processors.readers.reader_factory import ReaderFactory
 from app.application.processors.text_cleaners.text_cleaner_factory import TextCleanerFactory
 from app.application.processors.text_splitters.text_splitter_factory import TextSplitterFactory
-from app.application.exceptions.exceptions import DatabaseError
+from app.application.exceptions.api_exceptions import DatabaseError
 from app.configuration.environment_variables import environment_variables
 from app.domain.models.document import Document
 from app.domain.models.fragment import Fragment
@@ -23,13 +23,17 @@ logger = logging.getLogger(__name__)
 class IngestionService:
     def __init__(self,
                  document_repository: DocumentRepositoryInterface,
-                 fragment_repository: FragmentRepositoryInterface):
+                 fragment_repository: FragmentRepositoryInterface,
+                 reader_factory: ReaderFactory,
+                 text_cleaner_factory: TextCleanerFactory,
+                 text_splitter_factory: TextSplitterFactory,
+                 embedder_factory: EmbedderFactory):
         self.document_repository = document_repository
         self.fragment_repository = fragment_repository
-        self.reader_factory = ReaderFactory()
-        self.cleaner_factory = TextCleanerFactory()
-        self.splitter_factory = TextSplitterFactory()
-        self.embedder_factory = EmbedderFactory()
+        self.reader_factory = reader_factory
+        self.cleaner_factory = text_cleaner_factory
+        self.splitter_factory = text_splitter_factory
+        self.embedder_factory = embedder_factory
 
     def process_document(self,
                          document: Document,
@@ -69,13 +73,13 @@ class IngestionService:
                 self.fragment_repository.create(fragment, db)
 
         except Exception as e:
-            logger.exception(f"Error procesando documento {document.id}")
+            logger.exception("Error processing document", extra={"document_id": document.id})
             raise DatabaseError("Error en la ingesta del documento") from e
 
         finally:
             try:
                 if os.path.exists(local_file_path):
                     os.remove(local_file_path)
-                    logger.info(f"Archivo temporal eliminado: {local_file_path}")
+                    logger.info("Temporary file deleted", extra={"path": str(local_file_path)})
             except Exception as e:
-                logger.warning(f"No se pudo eliminar el archivo temporal {local_file_path}: {e}")
+                logger.warning("Could not delete temporary file", extra={"path": str(local_file_path), "error": str(e)})

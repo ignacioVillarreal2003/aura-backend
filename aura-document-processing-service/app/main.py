@@ -6,7 +6,8 @@ from starlette.middleware.cors import CORSMiddleware
 
 from app.api import router
 from app.configuration.logging_configuration import configure_logging
-from app.application.exceptions.exceptions import AppError
+from app.application.exceptions.api_exceptions import AppError
+from app.infrastructure.messaging.rabbitmq_client import RabbitmqClient
 from app.infrastructure.persistence.repositories.database_client import DatabaseClient
 
 configure_logging(level=logging.INFO)
@@ -21,6 +22,8 @@ async def lifespan(app: FastAPI):
     if not db_client.health_check():
         logger.error("Database health check failed!")
         raise Exception("Cannot start application: Database is not available")
+
+    rabbitmq = RabbitmqClient()
 
     logger.info("Application startup complete")
 
@@ -68,6 +71,6 @@ async def unhandled_exception_handler(_, exc: Exception):
         status_code=500,
         content={
             "error": "InternalServerError",
-            "message": "An unexpected error occurred"
+            "message": "Ha ocurrido un error inesperado"
         }
     )
