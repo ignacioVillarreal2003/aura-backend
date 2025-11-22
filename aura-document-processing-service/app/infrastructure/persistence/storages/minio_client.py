@@ -5,7 +5,7 @@ from minio import Minio
 from minio.error import S3Error
 
 from app.configuration.environment_variables import environment_variables
-from app.application.exceptions.exceptions import StorageError
+from app.application.exceptions.api_exceptions import StorageError
 
 logger = logging.getLogger(__name__)
 
@@ -39,13 +39,14 @@ class MinioClient:
             self._initialized = True
         except Exception as e:
             logger.exception("Failed to initialize MinIO client")
-            raise StorageError("Failed to initialize MinIO connection") from e
+            raise StorageError("Error al inicializar conexión con MinIO") from e
 
-    def ensure_bucket(self, bucket_name: str):
+    def ensure_bucket(self,
+                      bucket_name: str):
         try:
             if not self.client.bucket_exists(bucket_name):
                 self.client.make_bucket(bucket_name)
-                logger.info(f"Bucket created: {bucket_name}")
+                logger.info("Bucket created", extra={"bucket_name": bucket_name})
         except S3Error as e:
-            logger.exception(f"Failed ensuring bucket: {bucket_name}")
-            raise StorageError(f"Failed to ensure bucket {bucket_name}") from e
+            logger.exception("Failed ensuring bucket", extra={"bucket_name": bucket_name})
+            raise StorageError(f"Error al asegurar bucket {bucket_name}") from e

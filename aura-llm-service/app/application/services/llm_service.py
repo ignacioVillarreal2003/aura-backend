@@ -15,7 +15,10 @@ class LLMService(LLMServiceInterface):
 
     async def call(self,
                    messages: list[dict]) -> dict:
-        logger.info(f"Sending request to LLM model '{self.model_name}' with {len(messages)} messages.")
+        logger.info(f"Sending request to LLM model '{self.model_name}'", extra={
+            "model": self.model_name,
+            "message_count": len(messages)
+        })
 
         try:
             payload = {
@@ -32,11 +35,14 @@ class LLMService(LLMServiceInterface):
 
                 if response.status_code != 200:
                     logger.error(
-                        f"Ollama returned a non-200 status code: {response.status_code}. "
-                        f"Response: {response.text}"
+                        f"Ollama returned a non-200 status code: {response.status_code}",
+                        extra={
+                            "status_code": response.status_code,
+                            "response_text": response.text
+                        }
                     )
                     raise LLMError(
-                        f"Ollama API returned an error: {response.text}",
+                        f"La API de Ollama devolvió un error: {response.text}",
                         code="OLLAMA_API_ERROR"
                     )
 
@@ -46,21 +52,21 @@ class LLMService(LLMServiceInterface):
         except httpx.TimeoutException:
             logger.error("Timeout while waiting for Ollama response.")
             raise LLMError(
-                "The model took too long to respond.",
+                "El modelo tardó demasiado en responder.",
                 code="OLLAMA_TIMEOUT"
             )
 
         except httpx.ConnectError:
-            logger.error(f"Connection to Ollama failed at URL: {self.ollama_url}")
+            logger.error("Connection to Ollama failed", extra={"url": self.ollama_url})
             raise LLMError(
-                f"Could not connect to Ollama at: {self.ollama_url}",
+                f"No se pudo conectar a Ollama en: {self.ollama_url}",
                 code="OLLAMA_CONNECTION_ERROR"
             )
 
         except httpx.HTTPError as e:
-            logger.error(f"HTTP error communicating with Ollama: {str(e)}")
+            logger.error(f"HTTP error communicating with Ollama: {str(e)}", extra={"error": str(e)})
             raise LLMError(
-                f"HTTP communication error with Ollama: {str(e)}",
+                f"Error de comunicación HTTP con Ollama: {str(e)}",
                 code="OLLAMA_HTTP_ERROR"
             )
 
@@ -68,8 +74,8 @@ class LLMService(LLMServiceInterface):
             raise
 
         except Exception as e:
-            logger.exception(f"Unexpected error calling the LLM: {str(e)}")
+            logger.exception(f"Unexpected error calling the LLM: {str(e)}", extra={"error": str(e)})
             raise LLMError(
-                f"Unexpected error while communicating with the model: {str(e)}",
+                f"Error inesperado al comunicarse con el modelo: {str(e)}",
                 code="OLLAMA_UNKNOWN_ERROR"
             )

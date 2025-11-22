@@ -3,7 +3,7 @@ from typing import Optional
 import logging
 
 from app.domain.models.document import Document
-from app.application.exceptions.exceptions import DatabaseError
+from app.application.exceptions.api_exceptions import DatabaseError
 from app.infrastructure.persistence.repositories.interfaces.document_repository_interface import \
     DocumentRepositoryInterface
 
@@ -30,7 +30,7 @@ class DocumentRepository(DocumentRepositoryInterface):
         except Exception as e:
             db.rollback()
             logger.exception("Failed to create document in database")
-            raise DatabaseError("Failed to create document in database") from e
+            raise DatabaseError("Error al crear documento en la base de datos") from e
 
     def get_by_id(self,
                   document_id: int,
@@ -55,7 +55,7 @@ class DocumentRepository(DocumentRepositoryInterface):
 
         except Exception as e:
             logger.exception("Failed to fetch document by ID")
-            raise DatabaseError("Failed to fetch document from database") from e
+            raise DatabaseError("Error al obtener documento de la base de datos") from e
 
     def get_all(self,
                 db: Session,
@@ -78,7 +78,7 @@ class DocumentRepository(DocumentRepositoryInterface):
 
         except Exception as e:
             logger.exception("Failed to fetch documents")
-            raise DatabaseError("Failed to fetch documents from database") from e
+            raise DatabaseError("Error al obtener documentos de la base de datos") from e
 
     def update(self, document: Document, db: Session) -> Document:
         try:
@@ -101,7 +101,7 @@ class DocumentRepository(DocumentRepositoryInterface):
         except Exception as e:
             db.rollback()
             logger.exception("Failed to update document")
-            raise DatabaseError("Failed to update document in database") from e
+            raise DatabaseError("Error al actualizar documento en la base de datos") from e
 
     def delete(self, document_id: int, db: Session) -> bool:
         try:
@@ -132,7 +132,7 @@ class DocumentRepository(DocumentRepositoryInterface):
         except Exception as e:
             db.rollback()
             logger.exception("Failed to delete document")
-            raise DatabaseError("Failed to delete document from database") from e
+            raise DatabaseError("Error al eliminar documento de la base de datos") from e
 
     def exists(self, document_id: int, db: Session) -> bool:
         try:
@@ -145,4 +145,4 @@ class DocumentRepository(DocumentRepositoryInterface):
 
         except Exception as e:
             logger.exception("Failed to check document existence")
-            raise DatabaseError("Failed to check document existence") from e
+            raise DatabaseError("Error al verificar existencia del documento") from e

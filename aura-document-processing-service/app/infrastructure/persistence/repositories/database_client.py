@@ -5,7 +5,7 @@ from sqlalchemy import create_engine, Engine, text
 from sqlalchemy.orm import sessionmaker, Session
 
 from app.configuration.environment_variables import environment_variables
-from app.application.exceptions.exceptions import DatabaseError
+from app.application.exceptions.api_exceptions import DatabaseError
 
 logger = logging.getLogger(__name__)
 
@@ -69,11 +69,11 @@ class DatabaseClient:
 
         except Exception as e:
             logger.exception("Failed to initialize database connection")
-            raise DatabaseError("Failed to initialize database connection") from e
+            raise DatabaseError("Error al inicializar conexión a la base de datos") from e
 
     def get_session(self) -> Generator[Session, None, None]:
         if self.SessionLocal is None:
-            raise DatabaseError("Database client not initialized")
+            raise DatabaseError("Cliente de base de datos no inicializado")
 
         db = self.SessionLocal()
         logger.debug("Database session created")

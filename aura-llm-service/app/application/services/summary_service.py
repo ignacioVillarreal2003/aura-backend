@@ -27,7 +27,7 @@ class SummaryService(SummaryServiceInterface):
             return response["message"]["content"]
 
         except Exception as e:
-            logger.error(f"Error al llamar al LLM para resumen: {str(e)}")
+            logger.error(f"Error calling LLM for summary: {str(e)}", extra={"error": str(e)})
             raise LLMError(f"Error generando resumen: {str(e)}", code="SUMMARY_LLM_ERROR")
 
     async def _summarize_chunk(self, chunk: str, max_tokens: int = 150) -> str:
@@ -61,7 +61,7 @@ class SummaryService(SummaryServiceInterface):
 
     async def summarize(self, request: SummaryRequest) -> SummaryResponse:
         chunks = request.chunks
-        logger.info(f"Resumiendo documento con {len(chunks)} chunks")
+        logger.info(f"Summarizing document with {len(chunks)} chunks", extra={"chunk_count": len(chunks)})
 
         semaphore = asyncio.Semaphore(2)
 
@@ -83,8 +83,8 @@ class SummaryService(SummaryServiceInterface):
         successful_summaries = []
         for i, summary in enumerate(summaries):
             if isinstance(summary, Exception):
-                logger.warning(f"Error resumiendo chunk {i}: {summary}")
-                successful_summaries.append(f"[Resumen fallido: {chunks[i][:100]}...]")
+                logger.warning(f"Error summarizing chunk {i}: {summary}", extra={"chunk_index": i, "error": str(summary)})
+                successful_summaries.append(f"[Summary failed: {chunks[i][:100]}...]")
             else:
                 successful_summaries.append(summary)
 

@@ -4,7 +4,7 @@ from typing import Optional, List
 import logging
 
 from app.domain.models.fragment import Fragment
-from app.application.exceptions.exceptions import DatabaseError
+from app.application.exceptions.api_exceptions import DatabaseError
 from app.infrastructure.persistence.repositories.interfaces.fragment_repository_interface import \
     FragmentRepositoryInterface
 
@@ -25,7 +25,7 @@ class FragmentRepository(FragmentRepositoryInterface):
         except Exception as e:
             db.rollback()
             logger.exception("Failed to create fragment in database")
-            raise DatabaseError("Failed to create fragment in database") from e
+            raise DatabaseError("Error al crear fragmento en la base de datos") from e
 
     def get_by_id(self,
                   fragment_id: int,
@@ -42,7 +42,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             return fragment
         except Exception as e:
             logger.exception("Failed to fetch fragment by ID")
-            raise DatabaseError("Failed to fetch fragment from database") from e
+            raise DatabaseError("Error al obtener fragmento de la base de datos") from e
 
     def get_all(self,
                 db: Session,
@@ -55,7 +55,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             return fragments
         except Exception as e:
             logger.exception("Failed to fetch fragments")
-            raise DatabaseError("Failed to fetch fragments from database") from e
+            raise DatabaseError("Error al obtener fragmentos de la base de datos") from e
 
     def get_by_document_id(self,
                            document_id: int,
@@ -67,7 +67,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             return fragments
         except Exception as e:
             logger.exception("Failed to fetch fragments by document ID")
-            raise DatabaseError("Failed to fetch fragments by document ID") from e
+            raise DatabaseError("Error al obtener fragmentos por ID de documento") from e
 
     def get_most_similar(self,
                          query_vector: list[float],
@@ -75,7 +75,7 @@ class FragmentRepository(FragmentRepositoryInterface):
                          k: int = 3,
                          threshold: float = 0.3) -> List[Fragment]:
         try:
-            logger.debug("Ejecutando búsqueda vectorial", extra={"k": k})
+            logger.debug("Executing vector search", extra={"k": k})
 
             query_vector_str = "[" + ",".join(map(str, query_vector)) + "]"
 
@@ -93,7 +93,7 @@ class FragmentRepository(FragmentRepositoryInterface):
 
             results = db.execute(sql, {"k": k, "threshold": threshold}).fetchall()
 
-            logger.info("Búsqueda vectorial completada", extra={"count": len(results)})
+            logger.info("Vector search completed", extra={"count": len(results)})
 
             fragments = []
             for row in results:
@@ -106,7 +106,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             return fragments
 
         except Exception as e:
-            logger.exception("Error durante la búsqueda vectorial")
+            logger.exception("Error during vector search")
             raise DatabaseError("Error al ejecutar búsqueda vectorial en pgvector") from e
 
     def update(self,
@@ -122,7 +122,7 @@ class FragmentRepository(FragmentRepositoryInterface):
         except Exception as e:
             db.rollback()
             logger.exception("Failed to update fragment in database")
-            raise DatabaseError("Failed to update fragment in database") from e
+            raise DatabaseError("Error al actualizar fragmento en la base de datos") from e
 
     def delete(self,
                fragment_id: int,
@@ -142,7 +142,7 @@ class FragmentRepository(FragmentRepositoryInterface):
         except Exception as e:
             db.rollback()
             logger.exception("Failed to delete fragment from database")
-            raise DatabaseError("Failed to delete fragment from database") from e
+            raise DatabaseError("Error al eliminar fragmento de la base de datos") from e
 
     def exists(self,
                fragment_id: int,
@@ -153,4 +153,4 @@ class FragmentRepository(FragmentRepositoryInterface):
             return exists
         except Exception as e:
             logger.exception("Failed to check fragment existence")
-            raise DatabaseError("Failed to check fragment existence in database") from e
+            raise DatabaseError("Error al verificar existencia del fragmento en la base de datos") from e

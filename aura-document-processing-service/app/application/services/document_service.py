@@ -11,7 +11,7 @@ from app.application.services.interfaces.document_service_interface import Docum
 from app.application.services.interfaces.ingestion_service_interface import IngestionServiceInterface
 from app.configuration.environment_variables import environment_variables
 from app.domain.constants.document_type import DocumentType
-from app.application.exceptions.exceptions import UnsupportedFileTypeError, ValidationError, StorageError, DatabaseError
+from app.application.exceptions.api_exceptions import UnsupportedFileTypeError, ValidationError, StorageError, DatabaseError
 from app.domain.dtos.document_request import DocumentRequest
 from app.domain.models.document import Document
 from app.domain.dtos.document_response import DocumentResponseSchema
@@ -46,7 +46,7 @@ class DocumentService(DocumentServiceInterface):
         with temp_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        logger.info(f"Archivo temporal guardado en: {temp_path}")
+        logger.info("Temporary file saved", extra={"path": str(temp_path)})
 
         try:
             logger.info("Uploading file to storage")
@@ -88,10 +88,10 @@ class DocumentService(DocumentServiceInterface):
         }
         if file is None:
             logger.warning("No file provided in request")
-            raise ValidationError("No file provided")
+            raise ValidationError("No se proporcionó ningún archivo")
         if file.content_type not in mapping:
             logger.warning("Unsupported content type", extra={"content_type": file.content_type})
-            raise UnsupportedFileTypeError("Only PDF and DOCX files are supported")
+            raise UnsupportedFileTypeError("Solo se admiten archivos PDF y DOCX")
         return mapping[file.content_type]
 
     def _validate_size(self, file):
@@ -101,4 +101,4 @@ class DocumentService(DocumentServiceInterface):
                 "size": getattr(file, "size", None),
                 "max_bytes": max_bytes
             })
-            raise ValidationError(f"File exceeds max size ({environment_variables.max_file_size_mb} MB)")
+            raise ValidationError(f"El archivo excede el tamaño máximo ({environment_variables.max_file_size_mb} MB)")

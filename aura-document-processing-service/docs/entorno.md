@@ -1,8 +1,6 @@
-# Aura Document Processing Service
+# Entorno
 
-## Variables de Entorno
-
-### Entorno local
+## Entorno local
 
 Crear un archivo `.env` en la raíz del proyecto con todas las variables:
 
@@ -22,10 +20,10 @@ MINIO_SECRET_KEY=aura_password
 MINIO_SECURE=false
 
 # Generales
-CLEANER_TYPE=basic
-SPLITTER_TYPE=recursive
-EMBEDDER_TYPE=huggingface
-VECTOR_DIMENSION=384
+CLEANER_TYPE=full
+SPLITTER_TYPE=semantic
+EMBEDDER_TYPE=spacy
+VECTOR_DIMENSION=96
 SPLIT_SIZE=400
 SPLIT_OVERLAP=50
 
@@ -33,7 +31,7 @@ MAX_FILE_SIZE_MB=20
 ENVIRONMENT=development
 ```
 
-### Entorno Docker
+## Entorno Docker
 
 Crear un archivo `.env.docker` con las variables adaptadas a los servicios de Docker:
 
@@ -53,10 +51,10 @@ MINIO_SECRET_KEY=aura_password
 MINIO_SECURE=false
 
 # Generales
-CLEANER_TYPE=basic
-SPLITTER_TYPE=recursive
-EMBEDDER_TYPE=huggingface
-VECTOR_DIMENSION=384
+CLEANER_TYPE=full
+SPLITTER_TYPE=semantic
+EMBEDDER_TYPE=spacy
+VECTOR_DIMENSION=96
 SPLIT_SIZE=400
 SPLIT_OVERLAP=50
 

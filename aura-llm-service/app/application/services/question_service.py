@@ -16,7 +16,7 @@ class QuestionService(QuestionServiceInterface):
 
     def _build_message(self,
                        request: QuestionRequest) -> list[dict]:
-        logger.debug("Building messages for LLM request.")
+        logger.debug("Building messages for LLM request")
 
         system_prompt = (
             "Eres un asistente útil que responde únicamente basándose en el contexto proporcionado. "
@@ -29,7 +29,7 @@ class QuestionService(QuestionServiceInterface):
         )
 
         if request.context:
-            logger.debug("Adding context to LLM system prompt.")
+            logger.debug("Adding context to LLM system prompt")
             system_prompt += (
                 f"\n\nContexto relevante:\n{request.context}\n\n"
                 "Responde basándote principalmente en este contexto."
@@ -38,7 +38,7 @@ class QuestionService(QuestionServiceInterface):
         messages = [{"role": "system", "content": system_prompt}]
 
         if request.messages:
-            logger.debug(f"Adding {len(request.messages)} previous messages to LLM input.")
+            logger.debug(f"Adding {len(request.messages)} previous messages to LLM input", extra={"message_count": len(request.messages)})
             for message in request.messages:
                 messages.append({
                     "role": message.role,
@@ -51,31 +51,31 @@ class QuestionService(QuestionServiceInterface):
 
         messages.append({"role": "user", "content": question_prompt})
 
-        logger.debug("LLM messages successfully built.")
+        logger.debug("LLM messages successfully built")
         return messages
 
     async def generate_response(self,
                                 request: QuestionRequest) -> QuestionResponse:
-        logger.info("Generating LLM response for incoming QuestionRequest.")
+        logger.info("Generating LLM response for incoming QuestionRequest")
 
         try:
             messages = self._build_message(request)
-            logger.debug(f"Sending {len(messages)} messages to LLM.")
+            logger.debug(f"Sending {len(messages)} messages to LLM", extra={"message_count": len(messages)})
 
             result = await self.llm_client.call(messages)
 
             content = result["message"]["content"]
-            logger.info("LLM response successfully generated.")
+            logger.info("LLM response successfully generated")
 
             return QuestionResponse(answer=content)
 
         except LLMError as e:
-            logger.error(f"LLMError occurred while generating response: {e.message} (code={e.code})")
+            logger.error(f"LLMError occurred while generating response: {e.message}", extra={"error_code": e.code, "error_message": e.message})
             raise
 
         except Exception as e:
             logger.exception("Unexpected error in generate_response.")
             raise LLMError(
-                f"Error generating response: {str(e)}",
+                f"Error generando respuesta: {str(e)}",
                 code="GENERATE_RESPONSE_ERROR"
             )

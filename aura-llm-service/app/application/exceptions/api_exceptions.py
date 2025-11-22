@@ -6,9 +6,13 @@ class AppError(Exception):
         self.code = code or self.__class__.__name__
 
 class LLMError(AppError):
-    def __init__(self, message: str = "LLM operation failed", *, code: str | None = None):
+    def __init__(self, message: str = "Error en la operación del LLM", *, code: str | None = None):
         super().__init__(message, status_code=500, code=code)
 
 class ConfigError(AppError):
-    def __init__(self, message: str = "Invalid configuration", *, code: str | None = None):
+    def __init__(self, message: str = "Error de configuración", *, code: str | None = None):
         super().__init__(message, status_code=500, code=code)
+
+class MessagingError(AppError):
+    def __init__(self, message: str = "Error en las colas", *, code: str | None = None):
+        super().__init__(message, status_code=502, code=code)

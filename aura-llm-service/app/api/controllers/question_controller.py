@@ -19,7 +19,7 @@ class QuestionController(QuestionControllerInterface):
         try:
             return await question_service.generate_response(request)
         except AppError as e:
-            logger.warning("Application error while creating document", extra={
+            logger.warning("Application error while generating response", extra={
                 "error": e.code,
                 "error_message": e.message
             })
@@ -28,12 +28,12 @@ class QuestionController(QuestionControllerInterface):
                 detail={"error": e.code, "message": e.message},
             )
         except Exception:
-            logger.exception("Unexpected error while creating document")
+            logger.exception("Unexpected error while generating response")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail={
                     "error": "InternalServerError",
-                    "message": "Unexpected error while uploading the document",
+                    "message": "Ha ocurrido un error inesperado al generar la respuesta",
                 },
             )
 

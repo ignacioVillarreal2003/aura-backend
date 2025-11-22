@@ -19,7 +19,7 @@ class SummaryController(SummaryControllerInterface):
         try:
             return await summary_service.summarize(request)
         except AppError as e:
-            logger.warning("Error en summarization", extra={
+            logger.warning("Error during summarization", extra={
                 "error": e.code,
                 "error_message": e.message
             })
@@ -33,7 +33,7 @@ class SummaryController(SummaryControllerInterface):
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail={
                     "error": "InternalServerError",
-                    "message": "Unexpected error while summarizing the document"
+                    "message": "Ha ocurrido un error inesperado al resumir el documento"
                 },
             )
 
