@@ -1,34 +1,49 @@
-from functools import lru_cache
-
-from fastapi import Depends
-
-from app.application.services.interfaces.question_service_interface import QuestionServiceInterface
-from app.application.services.llm_service import LLMService
-from app.application.services.question_service import QuestionService
-from app.application.services.summary_service import SummaryService
-from app.infrastructure.messaging.interfaces.question_listener_interface import QuestionListenerInterface
-from app.infrastructure.messaging.question_listener import QuestionListener
-from app.infrastructure.messaging.rabbitmq_client import RabbitmqClient
+from app.application.services.document_question_service import DocumentQuestionService
+from app.application.services.fragment_retrieval_service import FragmentRetrievalService
+from app.application.tools.rag_tool import RAGTool
+from app.infrastructure.http.http_client import HttpClient
+from app.application.ollama_configurator.ollama_configurator import (
+    OllamaConfigurator,
+    get_global_ollama_configurator
+)
+from app.configuration.environment_variables import environment_variables
 
 
-def get_question_service() -> QuestionService:
-    return QuestionService(get_llm_service())
+def get_http_client() -> HttpClient:
+    return HttpClient()
 
 
-def get_summary_service() -> SummaryService:
-    return SummaryService(get_llm_service())
+def get_ollama_configurator() -> OllamaConfigurator:
+    return get_global_ollama_configurator(
+        ollama_model_name=environment_variables.ollama_model_name,
+        ollama_base_url=environment_variables.ollama_base_url,
+        tool_factories=[get_rag_tool]
+    )
 
 
-def get_llm_service() -> LLMService:
-    return LLMService()
+def get_fragment_retrieval_service() -> FragmentRetrievalService:
+    http_client = get_http_client()
+    return FragmentRetrievalService(
+        http_client=http_client,
+        fragment_retrieval_url=environment_variables.fragment_retrieve_url
+    )
 
 
-@lru_cache
-def get_rabbitmq_client() -> RabbitmqClient:
-    return RabbitmqClient()
+def get_rag_tool() -> RAGTool:
+    fragment_retrieval_service = get_fragment_retrieval_service()
+    return RAGTool(
+        fragment_retrieval_service=fragment_retrieval_service,
+        max_fragments=3
+    )
 
 
-def get_question_listener(rabbitmq_client: RabbitmqClient = Depends(get_rabbitmq_client),
-                          question_service: QuestionServiceInterface = Depends(get_question_service)) -> QuestionListenerInterface:
-    return QuestionListener(rabbitmq_client,
-                            question_service)
+def get_document_question_service() -> DocumentQuestionService:
+    http_client = get_http_client()
+    ollama_configurator = get_ollama_configurator()
+    fragment_retrieval_service = get_fragment_retrieval_service()
+    return DocumentQuestionService(
+        http_client=http_client,
+        ollama_configurator=ollama_configurator,
+        fragment_retrieval_service=fragment_retrieval_service,
+        max_fragments=3
+    )

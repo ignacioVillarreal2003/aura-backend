@@ -1,16 +1,15 @@
 import logging
 import asyncio
 
-from app.application.exceptions.api_exceptions import LLMError
-from app.application.services.interfaces.summary_service_interface import SummaryServiceInterface
-from app.domain.dtos.summary_request import SummaryRequest
-from app.domain.dtos.summary_response import SummaryResponse
+from app.application.exceptions.app_exceptions import LLMError
 from app.application.services.llm_service import LLMService
+from app.domain.dtos.document_summary_request import DocumentSummaryRequest
+from app.domain.dtos.document_summary_response import DocumentSummaryResponse
 
 logger = logging.getLogger(__name__)
 
 
-class SummaryService(SummaryServiceInterface):
+class SummaryService:
     def __init__(self,
                  llm_service: LLMService):
         self.llm_service = llm_service
@@ -57,10 +56,10 @@ class SummaryService(SummaryServiceInterface):
         
         Resumen final (máximo {max_tokens} tokens):
         """
-        return await self._ask_llm(prompt, max_tokens)
+        return await self._ask_llm(prompt)
 
-    async def summarize(self, request: SummaryRequest) -> SummaryResponse:
-        chunks = request.chunks
+    async def summarize(self, request: DocumentSummaryRequest) -> DocumentSummaryResponse:
+        chunks = request.fragments
         logger.info(f"Summarizing document with {len(chunks)} chunks", extra={"chunk_count": len(chunks)})
 
         semaphore = asyncio.Semaphore(2)
@@ -89,7 +88,7 @@ class SummaryService(SummaryServiceInterface):
                 successful_summaries.append(summary)
 
         final_summary = await self._reduce_summaries(
-            successful_summaries, max_tokens=request.target_length
+            successful_summaries, max_tokens=600
         )
 
-        return SummaryResponse(summary=final_summary)
+        return DocumentSummaryResponse(summary=final_summary)

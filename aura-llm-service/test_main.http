@@ -1,3 +1,13 @@
+POST http://127.0.0.1:8000/api/document/question
+Accept: application/json
+Content-Type: application/json
+
+{
+  "question": "¿Cuál es la misión principal de la Fuerza Aérea de Uruguay?"
+}
+
+###
+
 GET http://127.0.0.1:11434
 
 ###
@@ -6,7 +16,7 @@ GET http://127.0.0.1:11434/api/tags
 
 ###
 
-POST http://127.0.0.1:8000/api/questions
+POST http://127.0.0.1:8000/api/document/question
 Accept: application/json
 Content-Type: application/json
 

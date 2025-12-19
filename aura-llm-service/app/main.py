@@ -1,18 +1,15 @@
-from contextlib import asynccontextmanager
-
-from fastapi import FastAPI
 import logging
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 
 from app.api.controllers import router
-from app.application.services.interfaces.question_service_interface import QuestionServiceInterface
-from app.application.services.llm_service import LLMService
-from app.application.services.question_service import QuestionService
-from app.configuration.dependencies import get_question_listener
+from app.application.ollama_configurator.ollama_configurator import OllamaConfigurator
 from app.configuration.logging_configuration import configure_logging
-from app.application.exceptions.api_exceptions import AppError
-from app.infrastructure.messaging.rabbitmq_client import RabbitmqClient
+from app.application.exceptions.app_exceptions import AppError
+from app.infrastructure.http.http_client import HttpClient
+from app.application.services.document_question_service import DocumentQuestionService
 
 configure_logging(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,33 +19,37 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("Starting application...")
 
-    logger.info("Starting RabbitMQ consumer thread...")
-    rabbitmq_client = RabbitmqClient()
-    llm_service = LLMService()
-    question_service = QuestionService(llm_service)
+    http_client = HttpClient()
+    http_client.start()
+    app.state.http_client = http_client
 
-    listener = get_question_listener(rabbitmq_client, question_service)
-    listener.start_consuming_background()
+    ollama_configurator = OllamaConfigurator()
+    app.state.ollama_configurator = ollama_configurator
 
-    logger.info("RabbitMQ consumer started.")
+    app.state.document_question_service = DocumentQuestionService(http_client=app.state.http_client,
+                                                                  ollama_configurator=app.state.ollama_configurator)
 
     yield
 
     logger.info("Shutting down application...")
 
-    listener.stop_consuming()
-
-    logger.info("Application shutdown complete")
+    await http_client.stop()
 
 
-app = FastAPI(title="Aura Document Processing Service",
-              version="1.0.0",
-              lifespan=lifespan)
-app.add_middleware(CORSMiddleware,
-                   allow_origins=["*"],
-                   allow_credentials=True,
-                   allow_methods=["*"],
-                   allow_headers=["*"])
+app = FastAPI(
+    title="Aura Document Processing Service",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+
 app.include_router(router, prefix="/api")
 
 
@@ -61,13 +62,16 @@ async def root():
 async def app_error_handler(_, exc: AppError):
     return JSONResponse(
         status_code=exc.status_code,
-        content={"error": exc.code, "message": exc.message}
+        content={
+            "error": exc.code,
+            "message": exc.message
+        }
     )
 
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(_, exc: Exception):
-    logging.exception("Unhandled server error")
+    logger.exception("Unhandled server error")
     return JSONResponse(
         status_code=500,
         content={

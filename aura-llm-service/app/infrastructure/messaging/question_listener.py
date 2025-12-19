@@ -1,143 +1,76 @@
 import json
 import logging
-import threading
 import asyncio
+from typing import Optional
+from aio_pika import IncomingMessage, RobustChannel
 
-from app.application.exceptions.api_exceptions import MessagingError
-from app.application.services.interfaces.question_service_interface import QuestionServiceInterface
+from app.application.exceptions.app_exceptions import RabbitMQError
+from app.application.services.document_question_service import QuestionService
 from app.configuration.environment_variables import environment_variables
-from app.domain.dtos.question_request import QuestionRequest
-from app.infrastructure.messaging.interfaces.question_listener_interface import QuestionListenerInterface
+from app.domain.dtos.document_question_request import QuestionRequest
 from app.infrastructure.messaging.rabbitmq_client import RabbitmqClient
 
 logger = logging.getLogger(__name__)
 
 
-class QuestionListener(QuestionListenerInterface):
+class QuestionListener:
     def __init__(self,
                  rabbitmq_client: RabbitmqClient,
-                 question_service: QuestionServiceInterface):
-        self.rabbitmq_client = rabbitmq_client
-        self.question_service = question_service
+                 question_service: QuestionService) -> None:
+        self.rabbitmq_client: RabbitmqClient = rabbitmq_client
+        self.question_service: QuestionService = question_service
+        self.question_queue: str = environment_variables.question_queue
+        self.answer_queue: str = environment_variables.answer_queue
+        self.consumer_task: Optional[asyncio.Task] = None
 
-        self.queue = environment_variables.question_queue
-        self.exchange = environment_variables.exchange
-
-        self._consuming = False
-        self._consumer_thread = None
-        self._stop_event = threading.Event()
-
-    def _handle_message_sync(self, message_dict: dict):
+    async def start_consuming(self,
+                              prefetch_count: int = 1) -> None:
         try:
-            request = QuestionRequest(**message_dict)
+            await self.rabbitmq_client.connect()
+            channel: RobustChannel = await self.rabbitmq_client.get_channel()
+            queue = await channel.declare_queue(self.question_queue, durable=True)
 
-            logger.info("Processing QuestionRequest", extra={"request": request.model_dump()})
+            await queue.bind(self.rabbitmq_client.exchange, routing_key=self.question_queue)
+            await channel.set_qos(prefetch_count=prefetch_count)
+            await queue.consume(self._on_message, no_ack=False)
 
-            result = asyncio.run(self.question_service.generate_response(request))
+            logger.info("Consumer started")
 
-            logger.info("LLM answer generated successfully",
-                        extra={"answer": result.answer})
-
-        except Exception:
-            logger.exception("Error processing QuestionRequest")
-
-    def start_consuming(self,
-                        prefetch_count: int = 1) -> None:
-        try:
-            if self._consuming:
-                logger.warning("Consumer already running")
-                return
-
-            self.rabbitmq_client._ensure_connection()
-
-            self.rabbitmq_client.channel.basic_qos(prefetch_count=prefetch_count)
-
-            def wrapped_callback(ch, method, properties, body):
-                try:
-                    message = json.loads(body)
-
-                    logger.info("Message received", extra={
-                        "queue": self.queue,
-                        "delivery_tag": method.delivery_tag
-                    })
-
-                    self._handle_message_sync(message)
-
-                    ch.basic_ack(delivery_tag=method.delivery_tag)
-
-                except json.JSONDecodeError:
-                    logger.exception("Invalid JSON received")
-                    ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
-
-                except Exception:
-                    logger.exception("Unhandled error processing message")
-                    ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
-
-            self.rabbitmq_client.channel.basic_consume(
-                queue=self.queue,
-                on_message_callback=wrapped_callback,
-                auto_ack=False
-            )
-
-            self._consuming = True
-
-            logger.info("Started consuming", extra={
-                "queue": self.queue,
-                "prefetch": prefetch_count
-            })
-
-            self.rabbitmq_client.channel.start_consuming()
-
-        except KeyboardInterrupt:
-            self.stop_consuming()
+            self.consumer_task = asyncio.current_task()
 
         except Exception as e:
-            self._consuming = False
-            logger.exception("Error while consuming messages")
-            raise MessagingError("Error while consuming messages") from e
+            logger.exception("Failed to start consumer")
+            raise RabbitMQError("Failed to start consumer") from e
 
-    def start_consuming_background(self, prefetch_count: int = 1) -> None:
-        if self._consuming:
-            logger.warning("Consumer already running")
-            return
+    async def _on_message(self,
+                          message: IncomingMessage) -> None:
+        try:
+            payload = json.loads(message.body.decode())
+            request = QuestionRequest(**payload)
 
-        self._stop_event.clear()
+            logger.info("Processing message")
 
-        def consume():
-            try:
-                self.start_consuming(prefetch_count)
-            except Exception:
-                logger.exception("Error in consumer thread")
+            result = await self.question_service.generate_response(request)
 
-        self._consumer_thread = threading.Thread(
-            target=consume,
-            daemon=True,
-            name="RabbitMQ-Consumer"
-        )
-        self._consumer_thread.start()
+            response_payload = {"answer": result.answer}
+            await self.rabbitmq_client.publish(
+                response_payload,
+                routing_key=self.answer_queue,
+            )
 
-        logger.info("Consumer thread started")
+            logger.info("LLM response generated")
+            await message.ack()
+
+        except json.JSONDecodeError:
+            logger.error("Invalid JSON received")
+            await message.nack(requeue=False)
+
+        except Exception as e:
+            logger.exception("Error processing message")
+            await message.nack(requeue=False)
+            raise RabbitMQError("Error processing message") from e
 
     def stop_consuming(self) -> None:
-        if not self._consuming:
-            logger.warning("Consumer not running")
-            return
-
-        try:
-            logger.info("Stopping consumer...")
-
-            self._stop_event.set()
-
-            if self.rabbitmq_client.channel and not self.rabbitmq_client.channel.is_closed:
-                self.rabbitmq_client.channel.stop_consuming()
-
-            if self._consumer_thread and self._consumer_thread.is_alive():
-                self._consumer_thread.join(timeout=5)
-
-            self._consuming = False
-
-            logger.info("Consumer stopped")
-
-        except Exception:
-            logger.exception("Error stopping consumer")
-            self._consuming = False
+        if self.consumer_task:
+            self.consumer_task.cancel()
+            logger.info("Consumer task cancelled")
