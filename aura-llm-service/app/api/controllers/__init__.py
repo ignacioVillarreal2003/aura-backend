@@ -10,15 +10,18 @@ router = APIRouter()
 
 router.include_router(
     document_question_controller.router,
-    prefix="/document/question"
+    prefix="/document/question",
+    tags=["Document Question"]
 )
 
 router.include_router(
     document_summary_controller.router,
-    prefix="/document/summary"
+    prefix="/document/summary",
+    tags=["Document Summary"]
 )
 
 router.include_router(
     agent_controller.router,
-    prefix="/agent"
+    prefix="/agent",
+    tags=["Agent"]
 )
