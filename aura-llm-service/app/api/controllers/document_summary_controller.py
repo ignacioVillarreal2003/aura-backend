@@ -1,39 +1,42 @@
-from fastapi import APIRouter, Depends, HTTPException, status
 import logging
+from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.application.services.summary_service import SummaryService
+from app.application.exceptions.app_exceptions import AppError
+from app.application.services.document_summary_service import DocumentSummaryService
+from app.configuration.dependencies import get_document_summary_service
 from app.domain.dtos.document_summary_request import DocumentSummaryRequest
 from app.domain.dtos.document_summary_response import DocumentSummaryResponse
-from app.configuration.dependencies import get_summary_service
-from app.application.exceptions.app_exceptions import AppError
 
 logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
 class DocumentSummaryController:
     async def execute_document_summary(self,
-                                       request: DocumentSummaryRequest,
-                                       document_summary_service: SummaryService = Depends(
-                                           get_summary_service)) -> DocumentSummaryResponse:
+                                       request_body: DocumentSummaryRequest,
+                                       document_summary_service: DocumentSummaryService = Depends(
+                                           get_document_summary_service)) -> DocumentSummaryResponse:
         try:
-            return await document_summary_service.summarize(request)
+            response = await document_summary_service.execute_document_summary(request_body)
+            logger.info("Document summary request processed successfully")
+            return response
         except AppError as e:
-            logger.warning("Application error while generating response")
+            logger.warning(f"App error in controller: {e.message}")
             raise HTTPException(
                 status_code=e.status_code,
                 detail={
                     "error": e.code,
                     "message": e.message
-                },
+                }
             )
         except Exception:
-            logger.exception("Unexpected error while generating response")
+            logger.exception("Unexpected error")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail={
                     "error": "InternalServerError",
-                    "message": "Ha ocurrido un error inesperado al generar la respuesta",
+                    "message": "An unexpected error occurred while generating the response",
                 }
             )
 

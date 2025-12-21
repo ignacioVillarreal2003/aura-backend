@@ -8,17 +8,18 @@ from app.domain.dtos.document_question_request import DocumentQuestionRequest
 from app.domain.dtos.document_question_response import DocumentQuestionResponse
 
 logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
 class DocumentQuestionController:
     async def execute_document_question(self,
                                         request_body: DocumentQuestionRequest,
-                                        service: DocumentQuestionService = Depends(
+                                        document_question_service: DocumentQuestionService = Depends(
                                             get_document_question_service)) -> DocumentQuestionResponse:
         try:
-            response = await service.execute_document_question(request_body)
-            logger.info("Document question processed successfully")
+            response = await document_question_service.execute_document_question(request_body)
+            logger.info("Document question request processed successfully")
             return response
         except AppError as e:
             logger.warning(f"App error in controller: {e.message}")
@@ -27,7 +28,7 @@ class DocumentQuestionController:
                 detail={
                     "error": e.code,
                     "message": e.message
-                },
+                }
             )
         except Exception:
             logger.exception("Unexpected error")

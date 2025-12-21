@@ -45,3 +45,33 @@ class FragmentRetrievalService:
         except Exception as e:
             logger.error("Failed to retrieve RAG fragments")
             raise FragmentRetrievalServiceError("Error retrieving fragments") from e
+
+    async def get_fragments_by_document_id(self,
+                                           document_id: int) -> List[str]:
+        logger.debug(f"Retrieving fragments for document ID: {document_id}")
+
+        payload = {
+            "documentId": document_id,
+        }
+
+        try:
+            data = await self._http_client.post(
+                self._fragment_retrieval_url,
+                json=payload
+            )
+
+            if not data:
+                logger.warning("Document fragments retrieval returned empty response")
+                return []
+
+            fragments = data.get("fragments", [])
+
+            if not isinstance(fragments, list):
+                logger.warning("Invalid fragments format received")
+                return []
+
+            return fragments
+
+        except Exception as e:
+            logger.error(f"Failed to retrieve fragments for document ID {document_id}")
+            raise FragmentRetrievalServiceError("Error retrieving document fragments") from e

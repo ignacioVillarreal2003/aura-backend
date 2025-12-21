@@ -9,17 +9,17 @@ from app.application.services.fragment_retrieval_service import FragmentRetrieva
 logger = logging.getLogger(__name__)
 
 
-class RAGToolInput(BaseModel):
+class DocumentQuestionToolInput(BaseModel):
     question: str
 
 
-class RAGTool(BaseTool):
-    name: str = "execute_rag_tool"
+class DocumentQuestionTool(BaseTool):
+    name: str = "document_question_tool"
     description: str = (
         "Retrieves relevant information fragments related to the user's question "
         "from an external knowledge base. Use this to get context before answering."
     )
-    args_schema: Type[BaseModel] = RAGToolInput
+    args_schema: Type[BaseModel] = DocumentQuestionToolInput
 
     _fragment_retrieval_service: FragmentRetrievalService = PrivateAttr()
     _max_fragments: int = PrivateAttr(default=3)
@@ -31,37 +31,40 @@ class RAGTool(BaseTool):
         super().__init__(**kwargs)
         self._fragment_retrieval_service = fragment_retrieval_service
         self._max_fragments = max_fragments
-        logger.debug("RAGTool initialized")
+        logger.debug("DocumentQuestionTool initialized")
 
     def _run(self,
              question: str,
              run_manager: Optional[CallbackManagerForToolRun] = None) -> str:
-        raise NotImplementedError("RAGTool does not support synchronous execution. Use '_arun'.")
+        raise NotImplementedError("DocumentQuestionTool does not support synchronous execution")
 
     async def _arun(self,
                     question: str,
                     run_manager: Optional[AsyncCallbackManagerForToolRun] = None) -> str:
-        logger.debug("Executing async RAGTool")
+        logger.debug("Executing asynchronous DocumentQuestionTool")
 
         try:
             fragments = await self._fragment_retrieval_service.get_fragments(
                 question=question,
                 max_fragments=self._max_fragments
             )
+
+            if not fragments:
+                logger.info("No fragments found")
+                return "No relevant information was found for the given query."
+
+            formatted_fragments = ""
+            for fragment in fragments:
+                formatted_fragments += "\n".join(f"- {fragment}")
+
+            result = (
+                f"[CONTEXT]\n"
+                f"Query: {question}\n\n"
+                f"Relevant fragments:\n{formatted_fragments}"
+            )
+
+            return result
+
         except Exception as e:
-            logger.error(f"Error executing RAG retrieval: {e}")
-            return "An error occurred while retrieving contextual information from the database."
-
-        if not fragments:
-            logger.info("No fragments found")
-            return "No relevant information was found for the given query."
-
-        formatted_fragments = "\n".join(f"- {fragment}" for fragment in fragments)
-
-        result = (
-            f"[RAG CONTEXT]\n"
-            f"Query: {question}\n\n"
-            f"Relevant fragments:\n{formatted_fragments}"
-        )
-
-        return result
+            logger.error(f"Error executing DocumentQuestionTool: {e}")
+            return "An error occurred while retrieving contextual information."

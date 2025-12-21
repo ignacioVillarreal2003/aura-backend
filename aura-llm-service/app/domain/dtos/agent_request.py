@@ -5,6 +5,8 @@ from app.domain.dtos.message import Message
 
 
 class AgentRequest(BaseModel):
-    question: str = Field(...)
-    context: Optional[str] = None
-    messages: Optional[list[Message]] = None
+    message: str = Field(..., description="The user's message or question")
+    messages: Optional[list[Message]] = Field(
+        default=None,
+        description="Optional conversation history"
+    )
