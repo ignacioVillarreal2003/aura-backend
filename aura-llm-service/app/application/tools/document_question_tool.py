@@ -53,9 +53,7 @@ class DocumentQuestionTool(BaseTool):
                 logger.info("No fragments found")
                 return "No relevant information was found for the given query."
 
-            formatted_fragments = ""
-            for fragment in fragments:
-                formatted_fragments += "\n".join(f"- {fragment}")
+            formatted_fragments = "\n".join(f"- {fragment}" for fragment in fragments)
 
             result = (
                 f"[CONTEXT]\n"

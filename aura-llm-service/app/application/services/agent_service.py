@@ -15,12 +15,15 @@ logger = logging.getLogger(__name__)
 
 
 class AgentService:
+    # Constantes de configuración
+    MAX_AGENT_ITERATIONS: int = 5  # Máximo de iteraciones en el loop del agente
+
     SYSTEM_PROMPT: str = (
         "Eres un asistente inteligente que ayuda a los usuarios con documentos. "
         "Tienes acceso a herramientas que te permiten:\n"
-        "- Buscar información en documentos usando RAG (execute_rag_tool): Úsala cuando el usuario "
+        "- Buscar información en documentos usando RAG (document_question_tool): Úsala cuando el usuario "
         "haga preguntas sobre el contenido de documentos o necesite información específica.\n"
-        "- Generar resúmenes de documentos (execute_summary_tool): Úsala cuando el usuario pida "
+        "- Generar resúmenes de documentos (document_summary_tool): Úsala cuando el usuario pida "
         "un resumen, un overview, o quiera entender los puntos principales de un documento.\n\n"
         "Analiza la intención del usuario y decide qué herramienta usar, o si puedes responder "
         "directamente sin herramientas. Siempre proporciona respuestas útiles, claras y en formato Markdown. "
@@ -50,7 +53,10 @@ class AgentService:
             )
 
             # Ejecutar el loop de agente (puede invocar tools múltiples veces)
-            final_answer, tool_used = await self._agent_loop(messages, max_iterations=5)
+            final_answer, tool_used = await self._agent_loop(
+                messages,
+                max_iterations=self.MAX_AGENT_ITERATIONS
+            )
 
             logger.info(f"Agent request executed successfully. Tool used: {tool_used}")
 

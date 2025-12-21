@@ -1,5 +1,5 @@
 import logging
-from typing import List
+from typing import List, Optional
 
 from app.application.exceptions.fragment_retrieval_service_exception import FragmentRetrievalServiceError
 from app.infrastructure.http.http_client import HttpClient
@@ -10,9 +10,14 @@ logger = logging.getLogger(__name__)
 class FragmentRetrievalService:
     def __init__(self,
                  http_client: HttpClient,
-                 fragment_retrieval_url: str) -> None:
+                 fragment_retrieval_url: str,
+                 fragment_retrieval_url_by_document_id: Optional[str] = None) -> None:
         self._http_client = http_client
         self._fragment_retrieval_url = fragment_retrieval_url
+        # Si no se proporciona URL específica, usar la misma para ambos métodos
+        self._fragment_retrieval_url_by_document_id = (
+            fragment_retrieval_url_by_document_id or fragment_retrieval_url
+        )
 
     async def get_fragments(self,
                             question: str,
@@ -56,7 +61,7 @@ class FragmentRetrievalService:
 
         try:
             data = await self._http_client.post(
-                self._fragment_retrieval_url,
+                self._fragment_retrieval_url_by_document_id,
                 json=payload
             )
 

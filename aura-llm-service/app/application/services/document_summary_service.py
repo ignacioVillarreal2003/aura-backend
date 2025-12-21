@@ -10,6 +10,7 @@ from app.application.exceptions.summary_service_exceptions import (
     DocumentFragmentsRetrievalError,
     SummaryGenerationError
 )
+from app.application.exceptions.fragment_retrieval_service_exception import FragmentRetrievalServiceError
 from app.application.ollama_configurator.ollama_configurator import OllamaConfigurator
 from app.application.services.fragment_retrieval_service import FragmentRetrievalService
 from app.domain.dtos.document_summary_request import DocumentSummaryRequest
@@ -19,6 +20,12 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentSummaryService:
+    # Constantes de configuración
+    LARGE_DOCUMENT_THRESHOLD: int = 5  # Número de fragmentos para considerar documento grande
+    CHUNK_SIZE: int = 5  # Tamaño de chunks para procesamiento paralelo
+    MAX_CONCURRENT_CHUNKS: int = 3  # Máximo de chunks procesados en paralelo
+    MAX_RETRY_ATTEMPTS: int = 3  # Intentos máximos para resumir un chunk
+
     SYSTEM_PROMPT: str = (
         "Eres un asistente experto en crear resúmenes precisos y concisos de documentos. "
         "Tu tarea es analizar el contenido proporcionado y generar un resumen claro, "
@@ -53,7 +60,7 @@ class DocumentSummaryService:
             logger.info(f"Retrieved {len(fragments)} fragments for document ID: {request.documentId}")
 
             # Si hay muchos fragmentos, usar estrategia de resumen por chunks
-            if len(fragments) > 5:
+            if len(fragments) > self.LARGE_DOCUMENT_THRESHOLD:
                 summary = await self._summarize_large_document(fragments)
             else:
                 summary = await self._summarize_direct(fragments)
@@ -89,21 +96,25 @@ class DocumentSummaryService:
         logger.debug("Using map-reduce summarization strategy for large document")
 
         # Dividir fragmentos en chunks para procesamiento paralelo
-        chunk_size = 5
-        chunks = [fragments[i:i + chunk_size] for i in range(0, len(fragments), chunk_size)]
+        chunks = [
+            fragments[i:i + self.CHUNK_SIZE]
+            for i in range(0, len(fragments), self.CHUNK_SIZE)
+        ]
 
-        semaphore = asyncio.Semaphore(3)  # Limitar concurrencia
+        semaphore = asyncio.Semaphore(self.MAX_CONCURRENT_CHUNKS)
 
         async def summarize_chunk(chunk: List[str]) -> str:
             async with semaphore:
-                for attempt in range(3):
+                for attempt in range(self.MAX_RETRY_ATTEMPTS):
                     try:
                         llm_input = self._build_llm_input(chunk)
                         result = await self._invoke_llm(llm_input)
                         return self._extract_summary(result)
                     except Exception as e:
-                        if attempt == 2:
-                            logger.error(f"Failed to summarize chunk after 3 attempts: {e}")
+                        if attempt == self.MAX_RETRY_ATTEMPTS - 1:
+                            logger.error(
+                                f"Failed to summarize chunk after {self.MAX_RETRY_ATTEMPTS} attempts: {e}"
+                            )
                             return f"[Error al resumir fragmento: {str(e)[:100]}]"
                         await asyncio.sleep(1)
 

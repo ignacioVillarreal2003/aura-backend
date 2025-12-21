@@ -24,9 +24,18 @@ def get_http_client() -> HttpClient:
 
 def get_fragment_retrieval_service() -> FragmentRetrievalService:
     http_client = get_http_client()
+    base_url = environment_variables.document_processing_service_base_url
+    
+    # Construir URLs completas
+    fragments_url = f"{base_url}{environment_variables.fragment_retrieve_url_get_fragments}"
+    fragments_by_id_url = (
+        f"{base_url}{environment_variables.fragment_retrieve_url_get_fragments_by_document_id}"
+    )
+    
     return FragmentRetrievalService(
         http_client=http_client,
-        fragment_retrieval_url=environment_variables.fragment_retrieve_url
+        fragment_retrieval_url=fragments_url,
+        fragment_retrieval_url_by_document_id=fragments_by_id_url
     )
 
 
@@ -35,6 +44,15 @@ def get_rag_tool() -> DocumentQuestionTool:
     return DocumentQuestionTool(
         fragment_retrieval_service=fragment_retrieval_service,
         max_fragments=3
+    )
+
+
+def get_ollama_configurator_base() -> OllamaConfigurator:
+    """Obtiene un OllamaConfigurator sin tools para servicios que no los necesitan."""
+    return get_global_ollama_configurator(
+        ollama_model_name=environment_variables.ollama_model_name,
+        ollama_base_url=environment_variables.ollama_base_url,
+        tool_factories=None
     )
 
 
