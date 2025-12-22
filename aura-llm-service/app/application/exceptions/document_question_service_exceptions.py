@@ -3,19 +3,12 @@ from app.application.exceptions.app_exceptions import AppError
 
 class DocumentQuestionServiceError(AppError):
     def __init__(self,
-                 message: str = "Error en el servicio de preguntas sobre documentos",
+                 message: str = "Error in the document question service",
                  *,
+                 status_code: int = 500,
                  code: str | None = None):
         super().__init__(
-            message,
-            status_code=500,
+            message=message,
+            status_code=status_code,
             code=code,
         )
-
-
-class ContextRetrievalError(DocumentQuestionServiceError):
-    def __init__(self,
-                 message: str = "Error al recuperar el contexto del documento",
-                 *,
-                 code: str | None = None):
-        super().__init__(message, code=code)

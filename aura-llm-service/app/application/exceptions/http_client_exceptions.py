@@ -21,8 +21,7 @@ class HttpClientInitializationError(HttpClientError):
                  code: str | None = None):
         super().__init__(
             message=message,
-            status_code=500,
-            code=code,
+            code=code
         )
 
 
@@ -33,7 +32,6 @@ class HttpClientNotInitializedError(HttpClientError):
                  code: str | None = None):
         super().__init__(
             message=message,
-            status_code=500,
             code=code
         )
 

@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-from app.domain.constants.role import MessageRole
+from app.domain.constants.message_role import MessageRole
 
 
 class Message(BaseModel):

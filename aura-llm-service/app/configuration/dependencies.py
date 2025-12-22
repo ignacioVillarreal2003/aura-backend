@@ -1,13 +1,19 @@
 import logging
 from functools import lru_cache
 
-from app.application.agent_workflow.agent_workflow import AgentWorkflow, create_agent_workflow
+from app.application.agent_workflow.agent_workflow import (
+    AgentWorkflow,
+    create_agent_workflow
+)
 from app.application.services.document_question_service import DocumentQuestionService
 from app.application.services.document_summary_service import DocumentSummaryService
 from app.application.services.agent_service import AgentService
 from app.application.tools.document_question_tool import DocumentQuestionTool
 from app.application.tools.document_summary_tool import DocumentSummaryTool
-from app.infrastructure.http_client.http_client import HttpClient, get_global_http_client
+from app.infrastructure.http_client.http_client import (
+    HttpClient,
+    get_global_http_client
+)
 from app.application.ollama_configurator.ollama_configurator import (
     OllamaConfigurator,
     get_global_ollama_configurator
@@ -18,6 +24,7 @@ from app.infrastructure.providers.context_provider import ContextProvider
 logger = logging.getLogger(__name__)
 
 
+@lru_cache(maxsize=1)
 def get_http_client() -> HttpClient:
     return get_global_http_client()
 
@@ -28,6 +35,28 @@ def get_context_provider() -> ContextProvider:
         http_client=http_client,
         retrieve_fragments_by_question_url=environment_variables.retrieve_fragments_by_question_url,
         retrieve_fragments_by_document_url=environment_variables.retrieve_fragments_by_document_url
+    )
+
+
+@lru_cache(maxsize=1)
+def get_ollama_configurator() -> OllamaConfigurator:
+    tools_factories = [get_rag_tool, get_summary_tool]
+    return get_global_ollama_configurator(
+        ollama_model_name=environment_variables.ollama_model_name,
+        ollama_base_url=environment_variables.ollama_base_url,
+        tool_factories=tools_factories
+    )
+
+
+def get_document_question_service() -> DocumentQuestionService:
+    http_client = get_http_client()
+    ollama_configurator = get_ollama_configurator()
+    context_provider = get_context_provider()
+    return DocumentQuestionService(
+        http_client=http_client,
+        ollama_configurator=ollama_configurator,
+        context_provider=context_provider,
+        max_fragments=3
     )
 
 
@@ -67,6 +96,9 @@ async def shutdown_dependencies() -> None:
 
 
 
+
+
+
 def get_fragment_retrieval_service() -> FragmentRetrievalService:
     http_client = get_http_client()
     base_url = environment_variables.document_processing_service_base_url
@@ -92,13 +124,7 @@ def get_rag_tool() -> DocumentQuestionTool:
     )
 
 
-def get_ollama_configurator_base() -> OllamaConfigurator:
-    """Obtiene un OllamaConfigurator sin tools para servicios que no los necesitan."""
-    return get_global_ollama_configurator(
-        ollama_model_name=environment_variables.ollama_model_name,
-        ollama_base_url=environment_variables.ollama_base_url,
-        tool_factories=None
-    )
+
 
 
 def get_summary_tool() -> DocumentSummaryTool:
@@ -110,13 +136,6 @@ def get_summary_tool() -> DocumentSummaryTool:
     )
 
 
-@lru_cache(maxsize=1)
-def get_ollama_configurator() -> OllamaConfigurator:
-    return get_global_ollama_configurator(
-        ollama_model_name=environment_variables.ollama_model_name,
-        ollama_base_url=environment_variables.ollama_base_url,
-        tool_factories=[get_rag_tool, get_summary_tool]
-    )
 
 
 @lru_cache(maxsize=1)
@@ -132,16 +151,7 @@ def get_agent_workflow():
     return workflow
 
 
-def get_document_question_service() -> DocumentQuestionService:
-    http_client = get_http_client()
-    ollama_configurator = get_ollama_configurator()
-    fragment_retrieval_service = get_fragment_retrieval_service()
-    return DocumentQuestionService(
-        http_client=http_client,
-        ollama_configurator=ollama_configurator,
-        fragment_retrieval_service=fragment_retrieval_service,
-        max_fragments=3
-    )
+
 
 
 def get_document_summary_service() -> DocumentSummaryService:

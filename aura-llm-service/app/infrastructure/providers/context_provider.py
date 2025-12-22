@@ -1,9 +1,10 @@
 import logging
 from typing import List
 
+from app.application.exceptions.app_exceptions import ValidationError
 from app.application.exceptions.context_provider_exception import (
     ContextRetrievalByQuestionError,
-    ContextRetrievalByDocumentError,
+    ContextRetrievalByDocumentError
 )
 from app.infrastructure.http_client.http_client import HttpClient
 
@@ -11,7 +12,9 @@ logger = logging.getLogger(__name__)
 
 
 class ContextProvider:
-    DEFAULT_MAX_FRAGMENTS = 3
+    DEFAULT_MAX_FRAGMENTS: int = 3
+    MIN_MAX_FRAGMENTS: int = 1
+    MAX_MAX_FRAGMENTS: int = 6
 
     def __init__(self,
                  http_client: HttpClient,
@@ -23,15 +26,18 @@ class ContextProvider:
 
     async def retrieve_fragments_by_question(self,
                                              question: str,
-                                             max_fragments: int = 3) -> List[str]:
-        if max_fragments < 1:
+                                             max_fragments: int = DEFAULT_MAX_FRAGMENTS) -> List[str]:
+        if not (self.MIN_MAX_FRAGMENTS <= max_fragments <= self.MAX_MAX_FRAGMENTS):
             logger.warning(
-                "max_fragments must be greater than 0",
+                f"max_fragments must be between {self.MIN_MAX_FRAGMENTS} and {self.MAX_MAX_FRAGMENTS}",
                 extra={
                     "max_fragments": max_fragments
                 }
             )
-            max_fragments = self.DEFAULT_MAX_FRAGMENTS
+            raise ValidationError(
+                f"max_fragments must be between {self.MIN_MAX_FRAGMENTS} and {self.MAX_MAX_FRAGMENTS}",
+                status_code=500
+            )
 
         logger.debug(
             "Retrieving fragments by question",
