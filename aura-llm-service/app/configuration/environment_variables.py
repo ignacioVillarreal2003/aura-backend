@@ -61,19 +61,14 @@ class EnvironmentVariables(BaseSettings):
         description="Ollama service base URL"
     )
 
-    document_processing_service_base_url: str = Field(
-        default="http://localhost:8001",
-        description="Document processing service base URL"
+    retrieve_fragments_by_question_url: str = Field(
+        default="http://localhost:8001/api/fragments/by-question",
+        description="Endpoint URL used to retrieve relevant context fragments based on a question"
     )
 
-    fragment_retrieve_url_get_fragments: str = Field(
-        default="/api/retrieve",
-        description="Document retrieval endpoint path"
-    )
-
-    fragment_retrieve_url_get_fragments_by_document_id: str = Field(
-        default="/api/retrieve",
-        description="Document retrieval endpoint path"
+    retrieve_fragments_by_document_url: str = Field(
+        default="http://localhost:8001/api/fragments/by-document",
+        description="Endpoint URL used to retrieve relevant context fragments for a specific document"
     )
 
     @field_validator("log_level")
@@ -91,8 +86,8 @@ class EnvironmentVariables(BaseSettings):
     @field_validator("ollama_base_url", "document_processing_service_base_url")
     @classmethod
     def validate_url(cls, v: str) -> str:
-        if not v.startswith(("http://", "https://")):
-            raise ValueError(f"URL must start with http:// or https://, got: {v}")
+        if not v.startswith(("http_client://", "https://")):
+            raise ValueError(f"URL must start with http_client:// or https://, got: {v}")
 
         return v.rstrip("/")
 

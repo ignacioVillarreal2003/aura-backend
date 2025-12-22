@@ -4,7 +4,7 @@ from pydantic import BaseModel, PrivateAttr
 from langchain_core.tools import BaseTool
 from langchain_core.callbacks import AsyncCallbackManagerForToolRun, CallbackManagerForToolRun
 
-from app.application.services.fragment_retrieval_service import FragmentRetrievalService
+from app.infrastructure.providers.context_provider import FragmentRetrievalService
 
 logger = logging.getLogger(__name__)
 

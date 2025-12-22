@@ -82,7 +82,15 @@ router.post(
     "",
     response_model=AgentResponse,
     summary="Execute an agent request",
-    description="Processes a user message through an agent that can automatically decide the workflow",
-    response_description="Respond with an agent response",
+    description=(
+        "Processes a user request using an intelligent agent capable of dynamically "
+        "selecting and orchestrating multiple tools and workflows to fulfill complex tasks. "
+        "The agent can reason, retrieve information, perform actions, and generate responses "
+        "based on the user's intent."
+    ),
+    response_description=(
+        "Returns the agent's final response after executing the selected tools and workflows, "
+        "including the generated answer and any relevant metadata produced during the process."
+    ),
     status_code=status.HTTP_200_OK
 )(agent_controller.execute_agent)

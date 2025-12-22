@@ -78,7 +78,7 @@ def configure_cors(app: FastAPI) -> None:
 
 
 def add_middleware(app: FastAPI) -> None:
-    @app.middleware("http")
+    @app.middleware("http_client")
     async def log_requests(request: Request,
                            call_next):
         logger.info(f"Request: {request.method} {request.url.path}")

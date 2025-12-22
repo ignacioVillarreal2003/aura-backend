@@ -83,7 +83,14 @@ router.post(
     "",
     response_model=DocumentQuestionResponse,
     summary="Execute a document question request",
-    description="Processes a question about document content",
-    response_description="Respond with an document question response",
+    description=(
+        "Processes a user question by retrieving relevant information from indexed documents "
+        "and generating a contextualized answer using retrieval-augmented generation. "
+        "The response is grounded exclusively in the retrieved document content."
+    ),
+    response_description=(
+        "Returns a contextualized answer generated from the most relevant document fragments, "
+        "along with references or metadata related to the retrieved content."
+    ),
     status_code=status.HTTP_200_OK
 )(document_question_controller.execute_document_question)

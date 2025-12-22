@@ -4,22 +4,67 @@ from functools import lru_cache
 from app.application.agent_workflow.agent_workflow import AgentWorkflow, create_agent_workflow
 from app.application.services.document_question_service import DocumentQuestionService
 from app.application.services.document_summary_service import DocumentSummaryService
-from app.application.services.fragment_retrieval_service import FragmentRetrievalService
 from app.application.services.agent_service import AgentService
 from app.application.tools.document_question_tool import DocumentQuestionTool
 from app.application.tools.document_summary_tool import DocumentSummaryTool
-from app.infrastructure.http.http_client import HttpClient, get_global_http_client
+from app.infrastructure.http_client.http_client import HttpClient, get_global_http_client
 from app.application.ollama_configurator.ollama_configurator import (
     OllamaConfigurator,
     get_global_ollama_configurator
 )
 from app.configuration.environment_variables import environment_variables
+from app.infrastructure.providers.context_provider import ContextProvider
 
 logger = logging.getLogger(__name__)
 
 
 def get_http_client() -> HttpClient:
     return get_global_http_client()
+
+
+def get_context_provider() -> ContextProvider:
+    http_client = get_http_client()
+    return ContextProvider(
+        http_client=http_client,
+        retrieve_fragments_by_question_url=environment_variables.retrieve_fragments_by_question_url,
+        retrieve_fragments_by_document_url=environment_variables.retrieve_fragments_by_document_url
+    )
+
+
+async def startup_dependencies() -> None:
+    try:
+        logger.info("Starting up application dependencies")
+
+        http_client = get_http_client()
+        http_client.start()
+
+        logger.info("All dependencies started successfully")
+
+    except Exception:
+        logger.critical("Failed to start dependencies")
+        raise
+
+
+async def shutdown_dependencies() -> None:
+    try:
+        logger.info("Shutting down application dependencies")
+
+        http_client = get_http_client()
+        await http_client.stop()
+
+        logger.info("All dependencies shut down successfully")
+
+    except Exception:
+        logger.error("Error during dependency shutdown")
+
+
+
+
+
+
+
+
+
 
 
 def get_fragment_retrieval_service() -> FragmentRetrievalService:
@@ -114,32 +159,3 @@ def get_agent_service() -> AgentService:
         ollama_configurator=ollama_configurator
     )
 
-
-async def startup_dependencies() -> None:
-    try:
-        logger.info("Starting up application dependencies")
-
-        http_client = get_http_client()
-        http_client.start()
-
-        ollama_configurator = get_ollama_configurator()
-        ollama_configurator.initialize()
-
-        logger.info("All dependencies started successfully")
-
-    except Exception:
-        logger.critical("Failed to start dependencies")
-        raise
-
-
-async def shutdown_dependencies() -> None:
-    try:
-        logger.info("Shutting down application dependencies")
-
-        http_client = get_http_client()
-        await http_client.stop()
-
-        logger.info("All dependencies shut down successfully")
-
-    except Exception:
-        logger.error("Error during dependency shutdown")

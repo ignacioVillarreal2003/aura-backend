@@ -6,7 +6,7 @@ from langchain_core.runnables import Runnable
 
 from app.application.exceptions.document_question_service_exceptions import DocumentQuestionServiceError
 from app.application.ollama_configurator.ollama_configurator import OllamaConfigurator
-from app.application.services.fragment_retrieval_service import FragmentRetrievalService
+from app.infrastructure.providers.context_provider import FragmentRetrievalService
 from app.domain.dtos.document_question_request import DocumentQuestionRequest
 from app.domain.dtos.document_question_response import DocumentQuestionResponse
 from app.domain.dtos.message import Message

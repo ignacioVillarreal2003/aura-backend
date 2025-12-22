@@ -77,13 +77,20 @@ class DocumentSummaryController:
             )
 
 
-controller = DocumentSummaryController()
+document_summary_controller = DocumentSummaryController()
 
 router.post(
     "",
     response_model=DocumentSummaryResponse,
     summary="Execute a document summary request",
-    description="Generates a comprehensive summary of a document by its id",
-    response_description="Respond with an document summary response",
+    description=(
+        "Generates a structured and comprehensive summary for a specific document identified "
+        "by its ID. The summarization process analyzes the document content to extract and "
+        "condense the most relevant information."
+    ),
+    response_description=(
+        "Returns a coherent and concise summary of the requested document, capturing its main "
+        "ideas, key sections, and essential information."
+    ),
     status_code=status.HTTP_200_OK
-)(controller.execute_document_summary)
+)(document_summary_controller.execute_document_summary)

@@ -6,13 +6,12 @@ from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
 
 from app.application.exceptions.summary_service_exceptions import (
-    SummaryServiceError,
     DocumentFragmentsRetrievalError,
     SummaryGenerationError
 )
-from app.application.exceptions.fragment_retrieval_service_exception import FragmentRetrievalServiceError
+from app.application.exceptions.context_provider_exception import FragmentRetrievalServiceError
 from app.application.ollama_configurator.ollama_configurator import OllamaConfigurator
-from app.application.services.fragment_retrieval_service import FragmentRetrievalService
+from app.infrastructure.providers.context_provider import FragmentRetrievalService
 from app.domain.dtos.document_summary_request import DocumentSummaryRequest
 from app.domain.dtos.document_summary_response import DocumentSummaryResponse
 

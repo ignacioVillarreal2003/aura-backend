@@ -1,14 +1,14 @@
 import httpx
 import logging
-from typing import Optional, Any, Dict, Union
+from typing import Optional, Any, Dict
 from threading import Lock
 from contextlib import asynccontextmanager
 
 from app.application.exceptions.http_client_exceptions import (
-    HttpClientError,
-    ClientNotInitializedError,
-    ExternalServiceException,
-    NetworkException,
+    HttpClientNotInitializedError,
+    ExternalServiceError,
+    NetworkError,
+    HttpClientInitializationError
 )
 
 logger = logging.getLogger(__name__)
@@ -74,21 +74,21 @@ class HttpClient:
             logger.critical(f"Failed to initialize HttpClient: {e}")
             self._client = None
             self._is_started = False
-            raise HttpClientError(f"Failed to initialize HttpClient: {e}")
+            raise HttpClientInitializationError() from e
 
     async def stop(self) -> None:
         if not self._client:
-            logger.debug("HTTPClient is not running")
+            logger.debug("HttpClient is not running")
             return
 
-        logger.info("Closing HTTPClient connection pool")
+        logger.info("Closing HttpClient connection pool")
 
         try:
             await self._client.aclose()
-            logger.info("HTTPClient closed successfully")
+            logger.info("HttpClient closed successfully")
 
         except Exception as e:
-            logger.error(f"Error closing HTTPClient: {e}")
+            logger.error(f"Error closing HttpClient: {e}")
 
         finally:
             self._client = None
@@ -97,8 +97,8 @@ class HttpClient:
     @asynccontextmanager
     async def _ensure_client(self):
         if not self._client or not self._is_started:
-            logger.error("HTTPClient is not initialized.")
-            raise ClientNotInitializedError("HTTPClient is not initialized.")
+            logger.error("HttpClient is not initialized")
+            raise HttpClientNotInitializedError()
 
         yield self._client
 
@@ -106,14 +106,15 @@ class HttpClient:
                   url: str,
                   params: Optional[Dict[str, Any]] = None,
                   headers: Optional[Dict[str, str]] = None,
-                  **kwargs) -> Any:
+                  **kwargs: Any) -> Any:
         return await self._request("GET", url, params=params, headers=headers, **kwargs)
 
     async def post(self,
                    url: str,
                    json: Optional[Dict[str, Any]] = None,
                    data: Optional[Any] = None,
-                   headers: Optional[Dict[str, str]] = None) -> Any:
+                   headers: Optional[Dict[str, str]] = None,
+                   **kwargs: Any) -> Any:
         return await self._request("POST", url, json=json, data=data, headers=headers, **kwargs)
 
     async def put(self,
@@ -121,13 +122,13 @@ class HttpClient:
                   json: Optional[Dict[str, Any]] = None,
                   data: Optional[Any] = None,
                   headers: Optional[Dict[str, str]] = None,
-                  **kwargs) -> Any:
+                  **kwargs: Any) -> Any:
         return await self._request("PUT", url, json=json, data=data, headers=headers, **kwargs)
 
     async def delete(self,
                      url: str,
                      headers: Optional[Dict[str, str]] = None,
-                     **kwargs) -> Any:
+                     **kwargs: Any) -> Any:
         return await self._request("DELETE", url, headers=headers, **kwargs)
 
     async def _request(self,
@@ -138,7 +139,11 @@ class HttpClient:
             logger.debug(f"HTTP request: {method} {url}")
 
             try:
-                response = await client.request(method, url, **kwargs)
+                response = await client.request(
+                    method,
+                    url,
+                    **kwargs
+                )
                 logger.debug(f"HTTP response: {response.status_code}")
 
                 if response.is_error:
@@ -158,21 +163,22 @@ class HttpClient:
 
             except httpx.HTTPStatusError as e:
                 logger.error(f"HTTP status error: {e.response.status_code}")
-                raise ExternalServiceException(status_code=e.response.status_code,
-                                               message=e.response.text,
-                                               url=url)
+                raise ExternalServiceError(
+                    status_code=e.response.status_code,
+                    message=e.response.text
+                ) from e
 
-            except httpx.TimeoutException:
+            except httpx.TimeoutException as e:
                 logger.error(f"Request timeout: {url}")
-                raise NetworkException(f"Request timeout: {url}")
+                raise NetworkError() from e
 
-            except httpx.RequestError:
+            except httpx.RequestError as e:
                 logger.error(f"Network error: {url}")
-                raise NetworkException(f"Network error: {url}")
+                raise NetworkError() from e
 
-            except Exception:
-                logger.exception(f"Unexpected error in HTTPClient: {url}")
-                raise NetworkException(f"Unexpected error in HTTPClient: {url}")
+            except Exception as e:
+                logger.exception(f"Unexpected error in HttpClient: {url}")
+                raise NetworkError() from e
 
 
 _global_http_client: Optional[HttpClient] = None

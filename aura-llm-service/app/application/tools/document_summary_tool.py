@@ -3,10 +3,10 @@ from typing import Optional, Type
 from pydantic import BaseModel, PrivateAttr
 from langchain_core.tools import BaseTool
 from langchain_core.callbacks import AsyncCallbackManagerForToolRun, CallbackManagerForToolRun
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
 
-from app.application.services.fragment_retrieval_service import FragmentRetrievalService
+from app.infrastructure.providers.context_provider import FragmentRetrievalService
 from app.application.ollama_configurator.ollama_configurator import OllamaConfigurator
 
 logger = logging.getLogger(__name__)

@@ -3,43 +3,61 @@ from app.application.exceptions.app_exceptions import AppError
 
 class HttpClientError(AppError):
     def __init__(self,
-                 message: str = "HTTP client error",
+                 message: str = "HTTP client operation failed",
                  *,
-                 status_code: int = 502,
+                 status_code: int = 500,
                  code: str | None = None):
         super().__init__(
-            message,
+            message=message,
             status_code=status_code,
+            code=code
+        )
+
+
+class HttpClientInitializationError(HttpClientError):
+    def __init__(self,
+                 message: str = "Failed to initialize HTTP client",
+                 *,
+                 code: str | None = None):
+        super().__init__(
+            message=message,
+            status_code=500,
             code=code,
         )
 
 
-class ClientNotInitializedError(HttpClientError):
+class HttpClientNotInitializedError(HttpClientError):
     def __init__(self,
                  message: str = "HTTP client is not initialized",
                  *,
                  code: str | None = None):
-        super().__init__(message, code=code)
+        super().__init__(
+            message=message,
+            status_code=500,
+            code=code
+        )
 
 
-class NetworkException(HttpClientError):
-    def __init__(self,
-                 message: str = "Network error communicating with external service",
-                 *,
-                 code: str | None = None):
-        super().__init__(message, code=code)
-
-
-class ExternalServiceException(HttpClientError):
+class ExternalServiceError(HttpClientError):
     def __init__(self,
                  *,
                  status_code: int,
-                 message: str,
-                 url: str,
+                 message: str = "External service returned an error response",
                  code: str | None = None):
-        self.url = url
         super().__init__(
-            message=f"External service at {url} failed: {message}",
+            message=message,
             status_code=status_code,
-            code=code or "ExternalServiceError",
+            code=code
+        )
+
+
+class NetworkError(HttpClientError):
+    def __init__(self,
+                 message: str = "Network error occurred while performing HTTP request",
+                 *,
+                 code: str | None = None):
+        super().__init__(
+            message=message,
+            status_code=503,
+            code=code
         )
