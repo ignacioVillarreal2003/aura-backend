@@ -49,14 +49,21 @@ def get_ollama_configurator() -> OllamaConfigurator:
 
 
 def get_document_question_service() -> DocumentQuestionService:
-    http_client = get_http_client()
     ollama_configurator = get_ollama_configurator()
     context_provider = get_context_provider()
     return DocumentQuestionService(
-        http_client=http_client,
         ollama_configurator=ollama_configurator,
         context_provider=context_provider,
         max_fragments=3
+    )
+
+
+def get_document_summary_service() -> DocumentSummaryService:
+    ollama_configurator = get_ollama_configurator()
+    context_provider = get_context_provider()
+    return DocumentSummaryService(
+        ollama_configurator=ollama_configurator,
+        context_provider=context_provider
     )
 
 
@@ -99,32 +106,12 @@ async def shutdown_dependencies() -> None:
 
 
 
-def get_fragment_retrieval_service() -> FragmentRetrievalService:
-    http_client = get_http_client()
-    base_url = environment_variables.document_processing_service_base_url
-    
-    # Construir URLs completas
-    fragments_url = f"{base_url}{environment_variables.fragment_retrieve_url_get_fragments}"
-    fragments_by_id_url = (
-        f"{base_url}{environment_variables.fragment_retrieve_url_get_fragments_by_document_id}"
-    )
-    
-    return FragmentRetrievalService(
-        http_client=http_client,
-        fragment_retrieval_url=fragments_url,
-        fragment_retrieval_url_by_document_id=fragments_by_id_url
-    )
-
-
 def get_rag_tool() -> DocumentQuestionTool:
     fragment_retrieval_service = get_fragment_retrieval_service()
     return DocumentQuestionTool(
         fragment_retrieval_service=fragment_retrieval_service,
         max_fragments=3
     )
-
-
-
 
 
 def get_summary_tool() -> DocumentSummaryTool:
@@ -134,8 +121,6 @@ def get_summary_tool() -> DocumentSummaryTool:
         fragment_retrieval_service=fragment_retrieval_service,
         ollama_configurator=ollama_configurator
     )
-
-
 
 
 @lru_cache(maxsize=1)
@@ -151,21 +136,8 @@ def get_agent_workflow():
     return workflow
 
 
-
-
-
-def get_document_summary_service() -> DocumentSummaryService:
-    ollama_configurator = get_ollama_configurator()
-    fragment_retrieval_service = get_fragment_retrieval_service()
-    return DocumentSummaryService(
-        ollama_configurator=ollama_configurator,
-        fragment_retrieval_service=fragment_retrieval_service
-    )
-
-
 def get_agent_service() -> AgentService:
     ollama_configurator = get_ollama_configurator()
     return AgentService(
         ollama_configurator=ollama_configurator
     )
-

@@ -1,29 +1,26 @@
 import logging
 import asyncio
 from typing import List
-
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
 
-from app.application.exceptions.summary_service_exceptions import (
-    DocumentFragmentsRetrievalError,
-    SummaryGenerationError
-)
-from app.application.exceptions.context_provider_exception import FragmentRetrievalServiceError
+from app.application.exceptions.app_exceptions import ValidationError
+from app.application.exceptions.context_provider_exception import ContextRetrievalByDocumentError
+from app.application.exceptions.document_summary_service_exceptions import DocumentSummaryServiceError
+from app.application.exceptions.ollama_configurator_exceptions import LLMInvocationError
 from app.application.ollama_configurator.ollama_configurator import OllamaConfigurator
-from app.infrastructure.providers.context_provider import FragmentRetrievalService
 from app.domain.dtos.document_summary_request import DocumentSummaryRequest
 from app.domain.dtos.document_summary_response import DocumentSummaryResponse
+from app.infrastructure.providers.context_provider import ContextProvider
 
 logger = logging.getLogger(__name__)
 
 
 class DocumentSummaryService:
-    # Constantes de configuración
-    LARGE_DOCUMENT_THRESHOLD: int = 5  # Número de fragmentos para considerar documento grande
-    CHUNK_SIZE: int = 5  # Tamaño de chunks para procesamiento paralelo
-    MAX_CONCURRENT_CHUNKS: int = 3  # Máximo de chunks procesados en paralelo
-    MAX_RETRY_ATTEMPTS: int = 3  # Intentos máximos para resumir un chunk
+    LARGE_DOCUMENT_THRESHOLD: int = 5
+    CHUNK_SIZE: int = 5
+    MAX_CONCURRENT_CHUNKS: int = 3
+    MAX_RETRY_ATTEMPTS: int = 3
 
     SYSTEM_PROMPT: str = (
         "Eres un asistente experto en crear resúmenes precisos y concisos de documentos. "
@@ -35,66 +32,103 @@ class DocumentSummaryService:
 
     def __init__(self,
                  ollama_configurator: OllamaConfigurator,
-                 fragment_retrieval_service: FragmentRetrievalService) -> None:
-        self.ollama_configurator = ollama_configurator
-        self.fragment_retrieval_service = fragment_retrieval_service
-        self.llm: Runnable = self.ollama_configurator.get_llm_base()
+                 context_provider: ContextProvider) -> None:
+        self._ollama_configurator = ollama_configurator
+        self._context_provider = context_provider
+
+        self._llm: Runnable = self._ollama_configurator.get_llm_base()
+
+        logger.debug("DocumentSummaryService initialized")
 
     async def execute_document_summary(self,
-                       request: DocumentSummaryRequest) -> DocumentSummaryResponse:
-        logger.info(f"Starting summary generation for document ID: {request.documentId}")
+                                       document_summary_request: DocumentSummaryRequest) -> DocumentSummaryResponse:
+        self._validate_request(document_summary_request)
+
+        logger.info(
+            "Executing document summary",
+            extra={
+                "document_id": document_summary_request.document_id
+            }
+        )
 
         try:
-            # Obtener fragmentos del documento
-            fragments = await self.fragment_retrieval_service.get_fragments_by_document_id(
-                document_id=request.documentId
+            fragments = await self._context_provider.retrieve_fragments_by_document(
+                document_id=document_summary_request.document_id
             )
 
             if not fragments:
-                logger.warning(f"No fragments found for document ID: {request.documentId}")
+                logger.warning(
+                    "No fragments found for document",
+                    extra={
+                        "document_id": document_summary_request.document_id
+                    }
+                )
                 return DocumentSummaryResponse(
                     summary="No se encontraron fragmentos para generar el resumen."
                 )
 
-            logger.info(f"Retrieved {len(fragments)} fragments for document ID: {request.documentId}")
+            logger.info(
+                "Retrieved fragments for summary",
+                extra={
+                    "document_id": document_summary_request.document_id
+                }
+            )
 
-            # Si hay muchos fragmentos, usar estrategia de resumen por chunks
             if len(fragments) > self.LARGE_DOCUMENT_THRESHOLD:
                 summary = await self._summarize_large_document(fragments)
             else:
                 summary = await self._summarize_direct(fragments)
 
-            logger.info(f"Summary generated successfully for document ID: {request.documentId}")
+            logger.info(
+                "Document summary executed successfully",
+                extra={
+                    "document_id": document_summary_request.document_id
+                }
+            )
+
             return DocumentSummaryResponse(summary=summary)
 
-        except FragmentRetrievalServiceError as e:
-            logger.error(f"Error retrieving fragments: {e}")
-            raise DocumentFragmentsRetrievalError(
-                f"Error al recuperar los fragmentos del documento: {str(e)}"
-            ) from e
+        except (ValidationError,
+                ContextRetrievalByDocumentError,
+                LLMInvocationError,
+                DocumentSummaryServiceError):
+            raise
+
         except Exception as e:
-            logger.exception("Unexpected error during summary generation")
-            raise SummaryGenerationError(
-                f"Error inesperado al generar el resumen: {str(e)}"
-            ) from e
+            logger.exception(
+                "Unexpected error during document summary execution",
+                extra={
+                    "error_type": type(e).__name__,
+                    "document_id": document_summary_request.document_id
+                }
+            )
+            raise DocumentSummaryServiceError("Unexpected internal error executing document summary") from e
+
+    def _validate_request(self,
+                          request: DocumentSummaryRequest) -> None:
+        if request.document_id <= 0:
+            raise ValidationError(
+                "Document ID must be a positive integer",
+                status_code=400
+            )
 
     async def _summarize_direct(self,
                                 fragments: List[str]) -> str:
-        """Resume directamente todos los fragmentos en una sola llamada al LLM."""
         logger.debug("Using direct summarization strategy")
 
         llm_input = self._build_llm_input(fragments)
-        result = await self._invoke_llm(llm_input)
-        summary = self._extract_summary(result)
 
-        return summary
+        result = await self._ollama_configurator.call_llm(
+            llm=self._llm,
+            llm_input=llm_input
+        )
+
+        return result
 
     async def _summarize_large_document(self,
-                                       fragments: List[str]) -> str:
-        """Resume documentos grandes usando estrategia de map-reduce."""
+                                        fragments: List[str]) -> str:
         logger.debug("Using map-reduce summarization strategy for large document")
 
-        # Dividir fragmentos en chunks para procesamiento paralelo
         chunks = [
             fragments[i:i + self.CHUNK_SIZE]
             for i in range(0, len(fragments), self.CHUNK_SIZE)
@@ -107,44 +141,47 @@ class DocumentSummaryService:
                 for attempt in range(self.MAX_RETRY_ATTEMPTS):
                     try:
                         llm_input = self._build_llm_input(chunk)
-                        result = await self._invoke_llm(llm_input)
-                        return self._extract_summary(result)
+                        result = await self._ollama_configurator.call_llm(
+                            llm=self._llm,
+                            llm_input=llm_input
+                        )
+                        return result
                     except Exception as e:
                         if attempt == self.MAX_RETRY_ATTEMPTS - 1:
                             logger.error(
-                                f"Failed to summarize chunk after {self.MAX_RETRY_ATTEMPTS} attempts: {e}"
+                                f"Failed to summarize chunk after {self.MAX_RETRY_ATTEMPTS} attempts",
+                                extra={"error": str(e)}
                             )
                             return f"[Error al resumir fragmento: {str(e)[:100]}]"
                         await asyncio.sleep(1)
+                return "[Error desconocido]"
 
-        # Resumir chunks en paralelo
-        partial_summaries = await asyncio.gather(
+        partial_summaries_results = await asyncio.gather(
             *[summarize_chunk(chunk) for chunk in chunks],
             return_exceptions=True
         )
 
-        # Filtrar errores y mantener solo resúmenes exitosos
         successful_summaries: List[str] = []
-        for i, summary in enumerate(partial_summaries):
+        for i, summary in enumerate(partial_summaries_results):
             if isinstance(summary, Exception):
-                logger.warning(f"Error summarizing chunk {i}: {summary}")
+                logger.warning(
+                    f"Error summarizing chunk {i}",
+                    extra={"error": str(summary)}
+                )
             elif isinstance(summary, str):
                 successful_summaries.append(summary)
 
         if not successful_summaries:
-            raise SummaryGenerationError("No se pudo generar ningún resumen parcial")
+            raise DocumentSummaryServiceError("No partial summary could be generated")
 
-        # Si solo hay un resumen parcial, retornarlo directamente
         if len(successful_summaries) == 1:
             return successful_summaries[0]
 
-        # Combinar resúmenes parciales en un resumen final
         final_summary = await self._reduce_summaries(successful_summaries)
         return final_summary
 
     async def _reduce_summaries(self,
                                 partial_summaries: List[str]) -> str:
-        """Combina múltiples resúmenes parciales en un resumen final coherente."""
         logger.debug("Reducing partial summaries into final summary")
 
         joined_summaries = "\n\n---\n\n".join(partial_summaries)
@@ -158,16 +195,18 @@ class DocumentSummaryService:
         )
 
         llm_input = [
-            SystemMessage(content=self.SYSTEM_PROMPT),
+            self._build_system_message(),
             HumanMessage(content=prompt)
         ]
 
-        result = await self._invoke_llm(llm_input)
-        return self._extract_summary(result)
+        result = await self._ollama_configurator.call_llm(
+            llm=self._llm,
+            llm_input=llm_input
+        )
+        return result
 
     def _build_llm_input(self,
-                        fragments: List[str]) -> List[BaseMessage]:
-        """Construye el input para el LLM con los fragmentos del documento."""
+                         fragments: List[str]) -> List[BaseMessage]:
         fragments_joined = "\n\n---\n\n".join(fragments)
 
         prompt = (
@@ -178,35 +217,11 @@ class DocumentSummaryService:
         )
 
         return [
-            SystemMessage(content=self.SYSTEM_PROMPT),
+            self._build_system_message(),
             HumanMessage(content=prompt)
         ]
 
-    async def _invoke_llm(self,
-                         llm_input: List[BaseMessage]) -> BaseMessage:
-        """Invoca el LLM con el input proporcionado."""
-        logger.debug("Invoking LLM for summary generation")
-
-        try:
-            result: BaseMessage = await self.llm.ainvoke(llm_input)
-
-            if not isinstance(result, BaseMessage):
-                logger.error("LLM returned invalid type")
-                raise SummaryGenerationError("LLM retornó un tipo inválido")
-
-            return result
-
-        except Exception as e:
-            logger.error(f"LLM invocation failed: {e}")
-            raise SummaryGenerationError(f"Error al invocar el LLM: {str(e)}") from e
-
-    def _extract_summary(self,
-                        result: BaseMessage) -> str:
-        """Extrae el resumen del resultado del LLM."""
-        content = result.content
-
-        if isinstance(content, str):
-            return content
-
-        logger.warning("LLM returned non-string content")
-        return str(content)
+    def _build_system_message(self) -> SystemMessage:
+        return SystemMessage(
+            content=self.SYSTEM_PROMPT
+        )

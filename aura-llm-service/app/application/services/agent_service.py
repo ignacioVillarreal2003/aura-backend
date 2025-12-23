@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 
 
 class AgentService:
-    # Constantes de configuración
     MAX_AGENT_ITERATIONS: int = 5  # Máximo de iteraciones en el loop del agente
 
     SYSTEM_PROMPT: str = (
@@ -34,8 +33,6 @@ class AgentService:
                  ollama_configurator: OllamaConfigurator) -> None:
         self.ollama_configurator = ollama_configurator
         self.llm: Runnable = self.ollama_configurator.get_llm_with_tools()
-        # Obtener las tools para poder ejecutarlas
-        # Asegurarse de que el configurator esté inicializado
         self.ollama_configurator._ensure_initialized()
         self._tools: Dict[str, BaseTool] = {}
         if hasattr(self.ollama_configurator, '_tools') and self.ollama_configurator._tools:

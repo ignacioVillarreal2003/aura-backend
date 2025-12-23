@@ -1,9 +1,9 @@
 from app.application.exceptions.app_exceptions import AppError
 
 
-class DocumentQuestionServiceError(AppError):
+class DocumentSummaryServiceError(AppError):
     def __init__(self,
-                 message: str = "Error in the document question service",
+                 message: str = "Error in the document summary service",
                  *,
                  status_code: int = 500,
                  code: str | None = None):

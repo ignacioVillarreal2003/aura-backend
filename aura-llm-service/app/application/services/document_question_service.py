@@ -26,6 +26,7 @@ class DocumentQuestionService:
     MIN_HISTORY_COUNT: int = 1
     DEFAULT_MAX_HISTORY_COUNT: int = 3
     MAX_HISTORY_COUNT: int = 6
+
     SYSTEM_PROMPT: str = (
         "Eres un asistente útil que responde únicamente basándose en el contexto proporcionado. "
         "La respuesta debe estar en formato Markdown e incluir títulos (`#`), subtítulos (`##`), "
@@ -35,13 +36,11 @@ class DocumentQuestionService:
     )
 
     def __init__(self,
-                 http_client: HttpClient,
                  ollama_configurator: OllamaConfigurator,
                  context_provider: ContextProvider,
                  max_fragments: int = DEFAULT_MAX_FRAGMENTS,
                  max_question_length: int = DEFAULT_MAX_QUESTION_LENGTH,
                  max_history_count: int = DEFAULT_MAX_HISTORY_COUNT) -> None:
-        self._http_client = http_client
         self._ollama_configurator = ollama_configurator
         self._context_provider = context_provider
         self._max_fragments = max_fragments
@@ -94,7 +93,8 @@ class DocumentQuestionService:
 
         except (ValidationError,
                 ContextRetrievalByQuestionError,
-                LLMInvocationError):
+                LLMInvocationError,
+                DocumentQuestionServiceError):
             raise
 
         except Exception as e:
