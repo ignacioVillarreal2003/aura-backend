@@ -12,6 +12,11 @@ class HttpClientInterface(ABC):
         pass
 
     @abstractmethod
+    @property
+    def is_started(self) -> bool:
+        pass
+
+    @abstractmethod
     async def get(self,
                   url: str,
                   params: Optional[Dict[str, Any]] = None,

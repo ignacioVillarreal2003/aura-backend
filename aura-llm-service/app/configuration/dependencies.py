@@ -21,12 +21,12 @@ logger = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)
-def get_http_client() -> HttpClientInterface:
-    return get_global_http_client()
+async def get_http_client() -> HttpClientInterface:
+    return await get_global_http_client()
 
 
-def get_context_provider() -> ContextProviderInterface:
-    http_client = get_http_client()
+async def get_context_provider() -> ContextProviderInterface:
+    http_client = await get_http_client()
     return ContextProvider(
         http_client=http_client,
         retrieve_fragments_by_question_url=environment_variables.retrieve_fragments_by_question_url,
