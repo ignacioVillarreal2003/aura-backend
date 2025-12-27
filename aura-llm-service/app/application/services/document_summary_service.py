@@ -8,10 +8,10 @@ from app.application.exceptions.app_exceptions import ValidationError
 from app.application.exceptions.context_provider_exception import ContextRetrievalByDocumentError
 from app.application.exceptions.document_summary_service_exceptions import DocumentSummaryServiceError
 from app.application.exceptions.ollama_configurator_exceptions import LLMInvocationError
-from app.application.ollama_configurator.ollama_configurator import OllamaConfigurator
+from app.application.llm_configurator.interfaces.llm_configurator_interface import LLMConfiguratorInterface
 from app.domain.dtos.document_summary_request import DocumentSummaryRequest
 from app.domain.dtos.document_summary_response import DocumentSummaryResponse
-from app.infrastructure.providers.context_provider import ContextProvider
+from app.infrastructure.providers.interfaces.context_provider_interface import ContextProviderInterface
 
 logger = logging.getLogger(__name__)
 
@@ -31,12 +31,12 @@ class DocumentSummaryService:
     )
 
     def __init__(self,
-                 ollama_configurator: OllamaConfigurator,
-                 context_provider: ContextProvider) -> None:
-        self._ollama_configurator = ollama_configurator
+                 llm_configurator: LLMConfiguratorInterface,
+                 context_provider: ContextProviderInterface) -> None:
+        self._llm_configurator = llm_configurator
         self._context_provider = context_provider
 
-        self._llm: Runnable = self._ollama_configurator.get_llm_base()
+        self._llm: Runnable = self._llm_configurator.get_llm_base()
 
         logger.debug("DocumentSummaryService initialized")
 
@@ -118,7 +118,7 @@ class DocumentSummaryService:
 
         llm_input = self._build_llm_input(fragments)
 
-        result = await self._ollama_configurator.call_llm(
+        result = await self._llm_configurator.call_llm_text(
             llm=self._llm,
             llm_input=llm_input
         )
@@ -141,7 +141,7 @@ class DocumentSummaryService:
                 for attempt in range(self.MAX_RETRY_ATTEMPTS):
                     try:
                         llm_input = self._build_llm_input(chunk)
-                        result = await self._ollama_configurator.call_llm(
+                        result = await self._llm_configurator.call_llm_text(
                             llm=self._llm,
                             llm_input=llm_input
                         )
@@ -199,7 +199,7 @@ class DocumentSummaryService:
             HumanMessage(content=prompt)
         ]
 
-        result = await self._ollama_configurator.call_llm(
+        result = await self._llm_configurator.call_llm_text(
             llm=self._llm,
             llm_input=llm_input
         )

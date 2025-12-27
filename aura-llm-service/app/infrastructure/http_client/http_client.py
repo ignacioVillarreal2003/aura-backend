@@ -10,11 +10,12 @@ from app.application.exceptions.http_client_exceptions import (
     NetworkError,
     HttpClientInitializationError
 )
+from app.infrastructure.http_client.interfaces.http_client_interface import HttpClientInterface
 
 logger = logging.getLogger(__name__)
 
 
-class HttpClient:
+class HttpClient(HttpClientInterface):
     _instance: Optional['HttpClient'] = None
     _lock: Lock = Lock()
 
@@ -185,19 +186,6 @@ _global_http_client: Optional[HttpClient] = None
 _global_http_client_lock: Lock = Lock()
 
 
-def create_http_client(*,
-                       timeout: float = 10.0,
-                       max_keepalive: int = 5,
-                       max_connections: int = 10,
-                       verify_ssl: bool = True) -> HttpClient:
-    return HttpClient(
-        timeout=timeout,
-        max_keepalive=max_keepalive,
-        max_connections=max_connections,
-        verify_ssl=verify_ssl
-    )
-
-
 def get_global_http_client(*,
                            timeout: float = 10.0,
                            max_keepalive: int = 5,
@@ -216,7 +204,7 @@ def get_global_http_client(*,
 
         logger.debug("Creating global HttpClient singleton")
 
-        _global_http_client = create_http_client(
+        _global_http_client = HttpClient(
             timeout=timeout,
             max_keepalive=max_keepalive,
             max_connections=max_connections,

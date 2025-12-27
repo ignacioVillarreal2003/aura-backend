@@ -7,13 +7,13 @@ from app.application.exceptions.app_exceptions import ValidationError
 from app.application.exceptions.context_provider_exception import ContextRetrievalByQuestionError
 from app.application.exceptions.document_question_service_exceptions import DocumentQuestionServiceError
 from app.application.exceptions.ollama_configurator_exceptions import LLMInvocationError
-from app.application.ollama_configurator.ollama_configurator import OllamaConfigurator
+from app.application.llm_configurator.interfaces.llm_configurator_interface import LLMConfiguratorInterface
 from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.document_question_request import DocumentQuestionRequest
 from app.domain.dtos.document_question_response import DocumentQuestionResponse
 from app.domain.dtos.message import Message
-from app.infrastructure.http_client.http_client import HttpClient
 from app.infrastructure.providers.context_provider import ContextProvider
+from app.infrastructure.providers.interfaces.context_provider_interface import ContextProviderInterface
 
 logger = logging.getLogger(__name__)
 
@@ -36,12 +36,12 @@ class DocumentQuestionService:
     )
 
     def __init__(self,
-                 ollama_configurator: OllamaConfigurator,
-                 context_provider: ContextProvider,
+                 llm_configurator: LLMConfiguratorInterface,
+                 context_provider: ContextProviderInterface,
                  max_fragments: int = DEFAULT_MAX_FRAGMENTS,
                  max_question_length: int = DEFAULT_MAX_QUESTION_LENGTH,
                  max_history_count: int = DEFAULT_MAX_HISTORY_COUNT) -> None:
-        self._ollama_configurator = ollama_configurator
+        self._llm_configurator = llm_configurator
         self._context_provider = context_provider
         self._max_fragments = max_fragments
         self._max_question_length = max_question_length
@@ -49,7 +49,7 @@ class DocumentQuestionService:
 
         self._validate_configuration()
 
-        self._llm: Runnable = self._ollama_configurator.get_llm_base()
+        self._llm: Runnable = self._llm_configurator.get_llm_base()
 
         logger.debug("DocumentQuestionService initialized")
 
@@ -76,7 +76,7 @@ class DocumentQuestionService:
                 question=document_question_request.question
             )
 
-            answer = await self._ollama_configurator.call_llm(
+            answer = await self._llm_configurator.call_llm_text(
                 llm=self._llm,
                 llm_input=llm_input
             )

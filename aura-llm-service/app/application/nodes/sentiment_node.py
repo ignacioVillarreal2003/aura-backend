@@ -1,88 +1,57 @@
 import logging
 import re
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
 
-from app.application.ollama_configurator.ollama_configurator import OllamaConfigurator
-from app.application.graph.agent_state import AgentState
+from app.application.llm_configurator.interfaces.llm_configurator_interface import LLMConfiguratorInterface
+from app.application.nodes.interfaces.node_interface import NodeInterface
+from app.domain.agent_state.agent_state import AgentState
 from app.domain.constants.sentimient import Sentiment
 
 logger = logging.getLogger(__name__)
 
 
-class SentimentNodeConfig:
-    def __init__(self,
-                 use_system_prompt: bool = True,
-                 max_tokens: int = 10,
-                 temperature: float = 0.0,
-                 fallback_sentiment: Sentiment = Sentiment.neutral):
-        self.use_system_prompt = use_system_prompt
-        self.max_tokens = max_tokens
-        self.temperature = temperature
-        self.fallback_sentiment = fallback_sentiment
-
-
-class SentimentNode:
+class SentimentNode(NodeInterface):
     SYSTEM_PROMPT: str = (
         "Eres un experto clasificador de sentimientos. "
         "Tu tarea es analizar el mensaje del usuario y clasificar su sentimiento emocional. "
-        "Debes responder ÚNICAMENTE con una de estas tres palabras: POSITIVE, NEUTRAL, NEGATIVE. "
+        "Debes responder ÚNICAMENTE con una de estas tres palabras: positive, negative, neutral. "
         "No incluyas explicaciones, puntuación adicional ni texto extra."
     )
-
     USER_PROMPT_TEMPLATE: str = (
         "Analiza el siguiente mensaje y clasifica su sentimiento:\n\n"
-        '"{message}"\n\n'
-        "Responde solo con: POSITIVE, NEUTRAL o NEGATIVE"
+        '"{message}"'
     )
 
-    SENTIMENT_KEYWORDS: Dict[Sentiment, List[str]] = {
-        Sentiment.positive: ["positivo", "positive", "feliz", "contento", "alegre"],
-        Sentiment.negative: ["negativo", "negative", "enojado", "triste", "molesto"],
-        Sentiment.neutral: ["neutral", "normal", "ninguno"]
-    }
-
     def __init__(self,
-                 ollama_configurator: OllamaConfigurator,
-                 config: Optional[SentimentNodeConfig] = None):
-        self.ollama_configurator = ollama_configurator
-        self.config = config or SentimentNodeConfig()
+                 llm_configurator: LLMConfiguratorInterface) -> None:
+        self._llm_configurator = llm_configurator
+        self._llm: Runnable = self._llm_configurator.get_llm_base()
 
-        self.llm: Runnable = self.ollama_configurator.get_llm_base()
-
-        logger.info("SentimentNode initialized")
-
-    async def __call__(self, state: AgentState) -> Dict[str, Any]:
-        return await self.analyze(state)
-
-    async def analyze(self,
+    async def process(self,
                       state: AgentState) -> Dict[str, Any]:
-        logger.debug("Starting sentiment analysis")
+        logger.debug("Processing SentimentNode")
 
         last_message = self._extract_last_message(state)
-
-        message_preview = last_message.content[:50]
-        if len(last_message.content) > 50:
-            message_preview += "..."
-
-        logger.debug("Analyzing message")
-
         prompt = self._build_prompt(last_message.content)
+
+        logger.debug("Invoking LLM for sentiment classification")
 
         try:
             sentiment = await self._classify_sentiment(prompt)
 
-            logger.info("Sentiment classified successfully")
+            logger.info("SentimentNode processed successfully")
+            return {
+                "sentiment": sentiment
+            }
 
         except Exception:
-            logger.error("Sentiment classification failed")
-            sentiment = self.config.fallback_sentiment
+            logger.exception("LLM invocation failed for sentiment classification")
+            raise
 
-        return {"sentiment": sentiment.value}
-
-    def _extract_last_message(self,
-                              state: AgentState) -> BaseMessage:
+    @staticmethod
+    def _extract_last_message(state: AgentState) -> BaseMessage:
         messages = state.get("messages")
 
         if messages is None:
@@ -106,84 +75,49 @@ class SentimentNode:
         return last_message
 
     def _build_prompt(self,
-                      message_content: str) -> List[BaseMessage] | str:
-        if self.config.use_system_prompt:
-            return [
-                SystemMessage(content=self.SYSTEM_PROMPT),
-                HumanMessage(
-                    content=self.USER_PROMPT_TEMPLATE.format(
-                        message=message_content
-                    )
-                )
-            ]
-        else:
-            return self.USER_PROMPT_TEMPLATE.format(message=message_content)
+                      message: str) -> List[BaseMessage]:
+        return [
+            SystemMessage(content=self.SYSTEM_PROMPT),
+            HumanMessage(content=self.USER_PROMPT_TEMPLATE.format(message=message))
+        ]
 
     async def _classify_sentiment(self,
-                                  prompt: List[BaseMessage] | str) -> Sentiment:
-        logger.debug("Invoking LLM for sentiment classification")
-
+                                  prompt: List[BaseMessage]) -> Sentiment:
         try:
-            response = await self.llm.ainvoke(prompt)
+            response = await self._llm.ainvoke(prompt)
 
             if not isinstance(response, BaseMessage):
-                raise TypeError("LLM returned invalid type")
+                raise TypeError(f"LLM returned invalid type: {type(response)}")
 
             sentiment = self._parse_sentiment_response(response.content)
-
-            logger.debug("LLM classification successful")
-
+            logger.debug(f"Parsed sentiment: {sentiment}")
             return sentiment
 
         except Exception:
-            logger.error("LLM classification failed")
+            logger.exception("LLM classification failed")
             raise
 
-    def _parse_sentiment_response(self,
-                                  response: str) -> Sentiment:
-        cleaned = response.strip().upper()
+    @staticmethod
+    def _parse_sentiment_response(response: str) -> Sentiment:
+        cleaned = (response or "").strip()
+        logger.debug(f"Parsing sentiment from LLM response: {cleaned!r}")
 
-        logger.debug(f"Parsing sentiment from response")
+        normalized = cleaned.lower()
 
-        for sentiment in Sentiment:
-            if sentiment.value in cleaned:
-                return sentiment
+        for s in Sentiment:
+            if normalized == s.value.lower():
+                return s
 
-        for sentiment, keywords in self.SENTIMENT_KEYWORDS.items():
-            for keyword in keywords:
-                if keyword.upper() in cleaned:
-                    logger.debug(f"Matched sentiment via keyword: '{keyword}' -> {sentiment.value}")
-                    return sentiment
+        m = re.search(r'\b(positive|negative|neutral)\b', normalized, re.IGNORECASE)
+        if m:
+            word = m.group(1).lower()
+            for s in Sentiment:
+                if s.value.lower() == word:
+                    return s
 
-        match = re.search(
-            r'\b(positive|negative|neutral|positivo|negativo)\b',
-            cleaned,
-            re.IGNORECASE
-        )
-
-        if match:
-            word = match.group(1).upper()
-            if word == "positive":
-                return Sentiment.positive
-            elif word == "negative":
-                return Sentiment.negative
-            elif word in [s.value for s in Sentiment]:
-                return Sentiment(word)
-
-        logger.warning(
-            f"Could not parse sentiment from response: '{response}', "
-            f"using fallback: {self.config.fallback_sentiment.value}"
-        )
-
-        return self.config.fallback_sentiment
+        logger.warning(f"Could not parse sentiment from response: {response}")
+        return Sentiment.neutral
 
 
-def create_sentiment_node(ollama_configurator: OllamaConfigurator,
-                          config: Optional[SentimentNodeConfig] = None) -> SentimentNode:
-    return SentimentNode(ollama_configurator, config)
-
-
-async def sentiment_node(state: AgentState,
-                         ollama_configurator: OllamaConfigurator) -> Dict[str, Any]:
-    node = SentimentNode(ollama_configurator)
-    return await node(state)
+def create_sentiment_node(llm_configurator: LLMConfiguratorInterface) -> SentimentNode:
+    return SentimentNode(llm_configurator)

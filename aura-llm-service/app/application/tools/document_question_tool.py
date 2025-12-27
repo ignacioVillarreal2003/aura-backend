@@ -1,16 +1,19 @@
 import logging
-from typing import Optional, Type
-from pydantic import BaseModel, PrivateAttr
+from typing import Optional, Type, List
+from pydantic import BaseModel, Field, PrivateAttr
 from langchain_core.tools import BaseTool
-from langchain_core.callbacks import AsyncCallbackManagerForToolRun, CallbackManagerForToolRun
+from langchain_core.callbacks import (
+    AsyncCallbackManagerForToolRun,
+    CallbackManagerForToolRun
+)
 
-from app.infrastructure.providers.context_provider import FragmentRetrievalService
+from app.infrastructure.providers.interfaces.context_provider_interface import ContextProviderInterface
 
 logger = logging.getLogger(__name__)
 
 
 class DocumentQuestionToolInput(BaseModel):
-    question: str
+    question: str = Field(...)
 
 
 class DocumentQuestionTool(BaseTool):
@@ -21,17 +24,16 @@ class DocumentQuestionTool(BaseTool):
     )
     args_schema: Type[BaseModel] = DocumentQuestionToolInput
 
-    _fragment_retrieval_service: FragmentRetrievalService = PrivateAttr()
+    _context_provider: ContextProviderInterface = PrivateAttr()
     _max_fragments: int = PrivateAttr(default=3)
 
     def __init__(self,
-                 fragment_retrieval_service: FragmentRetrievalService,
+                 context_provider: ContextProviderInterface,
                  max_fragments: int = 3,
                  **kwargs):
         super().__init__(**kwargs)
-        self._fragment_retrieval_service = fragment_retrieval_service
+        self._context_provider = context_provider
         self._max_fragments = max_fragments
-        logger.debug("DocumentQuestionTool initialized")
 
     def _run(self,
              question: str,
@@ -41,28 +43,36 @@ class DocumentQuestionTool(BaseTool):
     async def _arun(self,
                     question: str,
                     run_manager: Optional[AsyncCallbackManagerForToolRun] = None) -> str:
-        logger.debug("Executing asynchronous DocumentQuestionTool")
+        logger.debug(
+            "Executing DocumentQuestionTool",
+            extra={
+                "question": question
+            }
+        )
 
         try:
-            fragments = await self._fragment_retrieval_service.get_fragments(
+            fragments: List[str] = await self._context_provider.retrieve_fragments_by_question(
                 question=question,
                 max_fragments=self._max_fragments
             )
 
             if not fragments:
-                logger.info("No fragments found")
-                return "No relevant information was found for the given query."
+                logger.info("No fragments found for query")
+                return "No relevant information was found for the given question."
 
             formatted_fragments = "\n".join(f"- {fragment}" for fragment in fragments)
 
             result = (
                 f"[CONTEXT]\n"
-                f"Query: {question}\n\n"
+                f"Question: {question}\n\n"
                 f"Relevant fragments:\n{formatted_fragments}"
             )
 
             return result
 
         except Exception as e:
-            logger.error(f"Error executing DocumentQuestionTool: {e}")
+            logger.error(
+                f"Error executing DocumentQuestionTool: {e}",
+                exc_info=True
+            )
             return "An error occurred while retrieving contextual information."
