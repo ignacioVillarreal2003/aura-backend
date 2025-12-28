@@ -5,7 +5,7 @@ from asyncio import Lock
 from enum import Enum
 import asyncio
 
-from app.application.exceptions.http_client_exceptions import (
+from app.infrastructure.http_client.exceptions.http_client_exceptions import (
     HttpClientNotInitializedError,
     ExternalServiceError,
     NetworkError,
@@ -14,7 +14,7 @@ from app.application.exceptions.http_client_exceptions import (
 )
 from app.infrastructure.http_client.circuit_breaker import CircuitBreaker, CircuitBreakerState
 from app.infrastructure.http_client.interfaces.http_client_interface import HttpClientInterface
-from app.infrastructure.http_client.retry_config import RetryConfig
+from app.infrastructure.http_client.retry_configuration import RetryConfiguration
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +37,7 @@ class HttpClient(HttpClientInterface):
                  max_keepalive: int = DEFAULT_MAX_KEEPALIVE,
                  max_connections: int = DEFAULT_MAX_CONNECTIONS,
                  verify_ssl: bool = True,
-                 retry_config: Optional[RetryConfig] = None,
-                 enable_circuit_breaker: bool = True,
-                 circuit_breaker_config: Optional[Dict[str, Any]] = None) -> None:
+                 enable_circuit_breaker: bool = True) -> None:
         self._timeout: float = timeout
         self._max_keepalive: int = max_keepalive
         self._max_connections: int = max_connections
@@ -48,12 +46,12 @@ class HttpClient(HttpClientInterface):
         self._client: Optional[httpx.AsyncClient] = None
         self._lock: Lock = Lock()
 
-        self._retry_config = retry_config or RetryConfig()
+        self._retry_configuration = RetryConfiguration()
 
         self._circuit_breaker: Optional[CircuitBreaker] = None
         if enable_circuit_breaker:
-            cb_config = circuit_breaker_config or {}
-            self._circuit_breaker = CircuitBreaker(**cb_config)
+            circuit_breaker_configuration = {}
+            self._circuit_breaker = CircuitBreaker(**circuit_breaker_configuration)
 
         logger.info(
             "HttpClient configured",
@@ -62,8 +60,6 @@ class HttpClient(HttpClientInterface):
                 "max_keepalive": max_keepalive,
                 "max_connections": max_connections,
                 "verify_ssl": verify_ssl,
-                "retry_enabled": retry_config is not None,
-                "circuit_breaker_enabled": enable_circuit_breaker
             }
         )
 
@@ -190,7 +186,11 @@ class HttpClient(HttpClientInterface):
                 **kwargs
             )
 
-        return await self._request_with_retry(method, url, **kwargs)
+        return await self._request_with_retry(
+            method,
+            url,
+            **kwargs
+        )
 
     async def _request_with_retry(self,
                                   method: HttpMethod,
@@ -198,14 +198,16 @@ class HttpClient(HttpClientInterface):
                                   **kwargs: Any) -> Any:
         last_error: Optional[Exception] = None
 
-        for attempt in range(self._retry_config.max_attempts):
+        for attempt in range(self._retry_configuration.max_attempts):
             try:
-                return await self._request(method, url, **kwargs)
+                return await self._request(method,
+                                           url,
+                                           **kwargs)
 
             except Exception as e:
                 last_error = e
 
-                if not self._retry_config.should_retry(e, attempt):
+                if not self._retry_configuration.should_retry(e, attempt):
                     logger.debug(
                         f"Not retrying after attempt {attempt + 1}",
                         extra={
@@ -214,11 +216,11 @@ class HttpClient(HttpClientInterface):
                     )
                     raise
 
-                if attempt < self._retry_config.max_attempts - 1:
-                    delay = self._retry_config.calculate_delay(attempt)
+                if attempt < self._retry_configuration.max_attempts - 1:
+                    delay = self._retry_configuration.calculate_delay(attempt)
 
                     logger.info(
-                        f"Retrying request after {delay:.2f}s (attempt {attempt + 1}/{self._retry_config.max_attempts})",
+                        f"Retrying request after {delay:.2f}s (attempt {attempt + 1}/{self._retry_configuration.max_attempts})",
                         extra={
                             "url": url,
                             "method": method.value,
@@ -230,7 +232,7 @@ class HttpClient(HttpClientInterface):
                     await asyncio.sleep(delay)
 
         logger.error(
-            f"All {self._retry_config.max_attempts} retry attempts exhausted",
+            f"All {self._retry_configuration.max_attempts} retry attempts exhausted",
             extra={
                 "url": url,
                 "method": method.value
@@ -410,7 +412,6 @@ async def get_global_http_client(*,
                                  max_connections: int = HttpClient.DEFAULT_MAX_CONNECTIONS,
                                  verify_ssl: bool = True,
                                  auto_start: bool = True,
-                                 retry_config: Optional[RetryConfig] = None,
                                  enable_circuit_breaker: bool = True) -> HttpClient:
     global _global_http_client
 
@@ -423,7 +424,6 @@ async def get_global_http_client(*,
                 max_keepalive=max_keepalive,
                 max_connections=max_connections,
                 verify_ssl=verify_ssl,
-                retry_config=retry_config,
                 enable_circuit_breaker=enable_circuit_breaker
             )
 

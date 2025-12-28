@@ -3,7 +3,7 @@ from asyncio import Lock
 from enum import Enum
 from typing import Optional, Callable
 
-from app.application.exceptions.http_client_exceptions import HttpClientError
+from app.infrastructure.http_client.exceptions.http_client_exceptions import HttpClientError
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +91,5 @@ class CircuitBreaker:
                 self._state = CircuitBreakerState.OPEN
 
             elif self._failure_count >= self._failure_threshold:
-                logger.warning(
-                    f"Circuit breaker transitioning to OPEN after {self._failure_count} failures"
-                )
+                logger.warning(f"Circuit breaker transitioning to OPEN after {self._failure_count} failures")
                 self._state = CircuitBreakerState.OPEN

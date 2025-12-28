@@ -2,7 +2,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.application.exceptions.app_exceptions import AppError
-from app.application.services.agent_service import AgentService
+from app.application.services.agent_service.agent_service import AgentService
 from app.configuration.dependencies import get_agent_service
 from app.domain.dtos.agent_request import AgentRequest
 from app.domain.dtos.agent_response import AgentResponse

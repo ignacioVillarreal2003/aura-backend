@@ -5,7 +5,7 @@ from typing import Optional
 from aio_pika import IncomingMessage, RobustChannel
 
 from app.application.exceptions.app_exceptions import RabbitMQError
-from app.application.services.document_question_service import QuestionService
+from app.application.services.document_question_service.document_question_service import QuestionService
 from app.configuration.environment_variables import environment_variables
 from app.domain.dtos.document_question_request import QuestionRequest
 from app.infrastructure.messaging.rabbitmq_client import RabbitmqClient

@@ -1,17 +1,20 @@
 import logging
 from functools import lru_cache
 
-from app.application.agent_workflow.agent_workflow import (
-    create_agent_workflow
+from app.application.services.agent_service.agent_workflow.agent_workflow import create_agent_workflow
+from app.application.llm_facade.interfaces.llm_facade_interface import LLMFacadeInterface
+from app.application.llm_facade.ollama_llm_facade import get_global_ollama_llm_facade
+from app.application.services.document_question_service.document_question_service import DocumentQuestionService
+from app.application.services.document_question_service.interfaces.document_question_service_interface import (
+    DocumentQuestionServiceInterface
 )
-from app.application.llm_configurator.interfaces.llm_configurator_interface import LLMConfiguratorInterface
-from app.application.services.document_question_service import DocumentQuestionService
-from app.application.services.document_summary_service import DocumentSummaryService
-from app.application.services.agent_service import AgentService
-from app.application.tools.document_question_tool import DocumentQuestionTool
-from app.application.tools.document_summary_tool import DocumentSummaryTool
+from app.application.services.document_summary_service.document_summary_service import DocumentSummaryService
+from app.application.services.agent_service.agent_service import AgentService
+from app.application.services.document_summary_service.interfaces.document_summary_service_interface import \
+    DocumentSummaryServiceInterface
+from app.application.services.agent_service.tools.document_question_tool import DocumentQuestionTool
+from app.application.services.agent_service.tools.document_summary_tool import DocumentSummaryTool
 from app.infrastructure.http_client.http_client import get_global_http_client
-from app.application.llm_configurator.ollama_llm_configurator import get_ollama_llm_configurator
 from app.configuration.environment_variables import environment_variables
 from app.infrastructure.http_client.interfaces.http_client_interface import HttpClientInterface
 from app.infrastructure.providers.context_provider import ContextProvider
@@ -35,32 +38,47 @@ async def get_context_provider() -> ContextProviderInterface:
 
 
 @lru_cache(maxsize=1)
-def get_llm_configurator() -> LLMConfiguratorInterface:
+async def get_llm_facade() -> LLMFacadeInterface:
     tools_factories = [get_document_question_tool, get_document_summary_tool]
-    return get_ollama_llm_configurator(
+    return await get_global_ollama_llm_facade(
         ollama_model_name=environment_variables.ollama_model_name,
         ollama_base_url=environment_variables.ollama_base_url,
         tool_factories=tools_factories
     )
 
 
-def get_document_question_service() -> DocumentQuestionService:
-    llm_configurator = get_llm_configurator()
-    context_provider = get_context_provider()
-    return DocumentQuestionService(
-        llm_configurator=llm_configurator,
-        context_provider=context_provider,
-        max_fragments=3
-    )
-
-
-def get_document_summary_service() -> DocumentSummaryService:
-    llm_configurator = get_llm_configurator()
-    context_provider = get_context_provider()
-    return DocumentSummaryService(
-        llm_configurator=llm_configurator,
+async def get_document_question_service() -> DocumentQuestionServiceInterface:
+    llm_facade = await get_llm_facade()
+    context_provider = await get_context_provider()
+    return DocumentQuestionService.with_defaults(
+        llm_facade=llm_facade,
         context_provider=context_provider
     )
+
+
+async def get_document_summary_service() -> DocumentSummaryServiceInterface:
+    llm_facade = await get_llm_facade()
+    context_provider = await get_context_provider()
+    return DocumentSummaryService.with_defaults(
+        llm_facade=llm_facade,
+        context_provider=context_provider
+    )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def get_document_question_tool() -> DocumentQuestionTool:

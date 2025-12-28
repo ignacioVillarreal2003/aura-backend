@@ -7,7 +7,7 @@ from langchain_core.callbacks import (
     CallbackManagerForToolRun
 )
 
-from app.application.services.document_summary_service import DocumentSummaryService
+from app.application.services.document_summary_service.document_summary_service import DocumentSummaryService
 from app.domain.dtos.document_summary_request import DocumentSummaryRequest
 
 logger = logging.getLogger(__name__)

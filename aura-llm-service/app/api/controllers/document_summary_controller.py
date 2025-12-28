@@ -2,7 +2,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.application.exceptions.app_exceptions import AppError
-from app.application.services.document_summary_service import DocumentSummaryService
+from app.application.services.document_summary_service.document_summary_service import DocumentSummaryService
 from app.configuration.dependencies import get_document_summary_service
 from app.domain.dtos.document_summary_request import DocumentSummaryRequest
 from app.domain.dtos.document_summary_response import DocumentSummaryResponse

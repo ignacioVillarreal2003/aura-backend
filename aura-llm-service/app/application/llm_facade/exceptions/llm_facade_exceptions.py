@@ -1,7 +1,7 @@
 from app.application.exceptions.app_exceptions import AppError
 
 
-class OllamaConfiguratorError(AppError):
+class LLMFacadeError(AppError):
     def __init__(self,
                  message: str = "Error en la operación del LLM",
                  *,
@@ -14,7 +14,7 @@ class OllamaConfiguratorError(AppError):
         )
 
 
-class LLMInitializationError(OllamaConfiguratorError):
+class LLMInitializationError(LLMFacadeError):
     def __init__(self,
                  message: str = "The LLM could not be initialized",
                  *,
@@ -36,7 +36,7 @@ class LLMNotConfiguredError(LLMInitializationError):
         )
 
 
-class ToolInitializationError(OllamaConfiguratorError):
+class ToolInitializationError(LLMFacadeError):
     def __init__(self,
                  message: str = "Failed to initialize tools",
                  *,
@@ -47,7 +47,7 @@ class ToolInitializationError(OllamaConfiguratorError):
         )
 
 
-class LLMInvocationError(OllamaConfiguratorError):
+class LLMInvocationError(LLMFacadeError):
     def __init__(self,
                  message: str = "Error invoking the LLM",
                  *,

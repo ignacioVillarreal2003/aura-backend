@@ -1,20 +1,13 @@
 from abc import ABC, abstractmethod
 from typing import Optional, List
-
 from langchain_core.messages import BaseMessage
 from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
 
 
-class LLMConfiguratorInterface(ABC):
+class LLMFacadeInterface(ABC):
     @abstractmethod
-    def initialize(self) -> None:
-        pass
-
-    @abstractmethod
-    async def call_llm(self,
-                       llm: Runnable,
-                       llm_input: List[BaseMessage]) -> BaseMessage:
+    async def initialize(self) -> None:
         pass
 
     @abstractmethod
@@ -24,11 +17,11 @@ class LLMConfiguratorInterface(ABC):
         pass
 
     @abstractmethod
-    def get_llm_base(self) -> Runnable:
+    async def get_llm_base(self) -> Runnable:
         pass
 
     @abstractmethod
-    def get_llm_with_tools(self) -> Runnable:
+    async def get_llm_with_tools(self) -> Runnable:
         pass
 
     @property

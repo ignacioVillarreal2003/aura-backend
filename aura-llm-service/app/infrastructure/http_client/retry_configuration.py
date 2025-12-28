@@ -1,9 +1,12 @@
 from typing import Optional
 
-from app.application.exceptions.http_client_exceptions import NetworkError, ExternalServiceError
+from app.infrastructure.http_client.exceptions.http_client_exceptions import (
+    NetworkError,
+    ExternalServiceError
+)
 
 
-class RetryConfig:
+class RetryConfiguration:
     def __init__(self,
                  max_attempts: int = 3,
                  base_delay: float = 1.0,

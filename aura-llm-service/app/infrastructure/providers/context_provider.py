@@ -2,11 +2,11 @@ import logging
 from typing import Any, List, Optional, Sequence
 
 from app.application.exceptions.app_exceptions import ValidationError
-from app.application.exceptions.context_provider_exception import (
+from app.infrastructure.providers.exceptions.context_provider_exception import (
     ContextRetrievalByQuestionError,
     ContextRetrievalByDocumentError
 )
-from app.application.exceptions.http_client_exceptions import HttpClientError
+from app.infrastructure.http_client.exceptions.http_client_exceptions import HttpClientError
 from app.infrastructure.http_client.interfaces.http_client_interface import HttpClientInterface
 from app.infrastructure.providers.interfaces.context_provider_interface import ContextProviderInterface
 
