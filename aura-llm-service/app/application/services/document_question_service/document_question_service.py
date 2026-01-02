@@ -18,13 +18,13 @@ from app.application.services.document_question_service.document_question_reques
 from app.application.services.document_question_service.interfaces.document_question_service_interface import (
     DocumentQuestionServiceInterface
 )
-from app.infrastructure.providers.exceptions.context_provider_exception import ContextRetrievalByQuestionError
 from app.application.services.document_question_service.exceptions.document_question_service_exceptions import \
     DocumentQuestionServiceError
 from app.domain.dtos.document_question_request import DocumentQuestionRequest
 from app.domain.dtos.document_question_response import DocumentQuestionResponse
 from app.domain.dtos.message import Message
-from app.infrastructure.providers.interfaces.context_provider_interface import ContextProviderInterface
+from app.infrastructure.context_provider.exceptions.context_provider_exception import ContextRetrievalByQuestionError
+from app.infrastructure.context_provider.interfaces.context_provider_interface import ContextProviderInterface
 
 logger = logging.getLogger(__name__)
 

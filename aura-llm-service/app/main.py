@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 import uvicorn
@@ -5,6 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.controllers import router
@@ -183,3 +185,25 @@ if __name__ == "__main__":
         reload=environment_variables.app_reload,
         log_level=environment_variables.log_level.lower()
     )
+
+
+
+
+class MockExternalApiRequest(BaseModel):
+    question: str
+    fragments_count: int
+
+@app.post("/mock/external-api")
+async def mock_external_api(
+    request: MockExternalApiRequest
+):
+    await asyncio.sleep(0.8)
+
+    return {
+        "fragments": [
+          "En una mañana gris junto al puerto, un perro curioso llamado Bruno olfateaba todo lo que encontraba. Nunca había visto el mar tan quieto, ni había imaginado que algo tan grande pudiera esconderse bajo esa superficie tranquila.",
+          "De pronto, una ballena joven asomó la cabeza cerca del muelle, expulsando un chorro de agua que asustó a todos. Bruno, más valiente que sensato, saltó al borde y, creyendo que era un juego, le mordió suavemente la aleta.",
+          "La ballena, sorprendida pero paciente, se alejó lentamente mar adentro, mientras Bruno ladraba orgulloso. Desde ese día, el perro del puerto aprendió que no todo lo enorme es peligroso, y que incluso un mordisco puede convertirse en una historia para recordar."
+        ]
+    }
+

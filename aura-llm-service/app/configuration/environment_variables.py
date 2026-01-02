@@ -1,14 +1,17 @@
 import logging
+from pathlib import Path
 from typing import List
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
+BASE_DIR = Path(__file__).resolve().parents[2]
+
 
 class EnvironmentVariables(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=BASE_DIR / ".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore"
@@ -83,11 +86,13 @@ class EnvironmentVariables(BaseSettings):
 
         return v_upper
 
-    @field_validator("ollama_base_url", "document_processing_service_base_url")
+    @field_validator("ollama_base_url",
+                     "retrieve_fragments_by_question_url",
+                     "retrieve_fragments_by_document_url")
     @classmethod
     def validate_url(cls, v: str) -> str:
-        if not v.startswith(("http_client://", "https://")):
-            raise ValueError(f"URL must start with http_client:// or https://, got: {v}")
+        if not v.startswith(("http://", "https://")):
+            raise ValueError(f"URL must start with http:// or https://, got: {v}")
 
         return v.rstrip("/")
 

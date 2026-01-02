@@ -1,3 +1,6 @@
+from enum import Enum
+
+
 class NodeName(str, Enum):
     """Node names in workflow."""
     SENTIMENT_ANALYZER = "sentiment_analyzer"

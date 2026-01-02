@@ -4,15 +4,15 @@ from typing import Optional, Dict, Any
 
 class HttpClientInterface(ABC):
     @abstractmethod
-    def start(self) -> None:
+    async def start(self) -> None:
         pass
 
     @abstractmethod
     async def stop(self) -> None:
         pass
 
-    @abstractmethod
     @property
+    @abstractmethod
     def is_started(self) -> bool:
         pass
 

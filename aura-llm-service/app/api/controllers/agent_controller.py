@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.application.exceptions.app_exceptions import AppError
 from app.application.services.agent_service.agent_service import AgentService
+from app.application.services.agent_service.interfaces.agent_service_interface import AgentServiceInterface
 from app.configuration.dependencies import get_agent_service
 from app.domain.dtos.agent_request import AgentRequest
 from app.domain.dtos.agent_response import AgentResponse
@@ -19,9 +20,9 @@ router = APIRouter(
 
 
 class AgentController:
-    async def execute_agent(self,
-                            request_body: AgentRequest,
-                            agent_service: AgentService = Depends(get_agent_service)) -> AgentResponse:
+    @staticmethod
+    async def execute_agent(request_body: AgentRequest,
+                            agent_service: AgentServiceInterface = Depends(get_agent_service)) -> AgentResponse:
         logger.info(
             "Processing agent request",
             extra={

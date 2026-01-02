@@ -2,7 +2,9 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.application.exceptions.app_exceptions import AppError
-from app.application.services.document_question_service.document_question_service import DocumentQuestionService
+from app.application.services.document_question_service.interfaces.document_question_service_interface import (
+    DocumentQuestionServiceInterface
+)
 from app.configuration.dependencies import get_document_question_service
 from app.domain.dtos.document_question_request import DocumentQuestionRequest
 from app.domain.dtos.document_question_response import DocumentQuestionResponse
@@ -19,9 +21,9 @@ router = APIRouter(
 
 
 class DocumentQuestionController:
-    async def execute_document_question(self,
-                                        request_body: DocumentQuestionRequest,
-                                        document_question_service: DocumentQuestionService = Depends(
+    @staticmethod
+    async def execute_document_question(request_body: DocumentQuestionRequest,
+                                        document_question_service: DocumentQuestionServiceInterface = Depends(
                                             get_document_question_service)) -> DocumentQuestionResponse:
         logger.info(
             "Processing document question request",
