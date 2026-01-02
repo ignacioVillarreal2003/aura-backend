@@ -2,7 +2,7 @@ import logging
 from typing import Callable, Optional, Iterable, List
 from langchain_core.tools import BaseTool
 
-from app.application.llm_facade.exceptions.llm_facade_exceptions import ToolInitializationError
+from app.infrastructure.llm_facade.exceptions.llm_facade_exceptions import ToolInitializationError
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +18,13 @@ class OllamaToolManager:
         self._tools: List[BaseTool] = []
         self._initialized = False
 
+        logger.debug(
+            "OllamaToolManager created",
+            extra={
+                "factories_count": len(self._factories)
+            }
+        )
+
     def initialize(self) -> None:
         if self._initialized:
             logger.debug("OllamaToolManager already initialized")
@@ -29,6 +36,13 @@ class OllamaToolManager:
             self._initialized = True
             return
 
+        logger.info(
+            "Initializing OllamaToolManager",
+            extra={
+                "factories_count": len(self._factories)
+            }
+        )
+
         created_tools: List[BaseTool] = []
         errors: List[tuple[int, Exception]] = []
 
@@ -37,10 +51,23 @@ class OllamaToolManager:
                 tool = self._create_and_validate_tool(factory, idx)
                 created_tools.append(tool)
 
+                logger.debug(
+                    "Tool created successfully",
+                    extra={
+                        "factory_index": idx,
+                        "tool_name": getattr(tool, "name", "unknown")
+                    }
+                )
+
             except Exception as e:
                 logger.warning(
-                    f"Tool factory {idx} failed",
-                    extra={"factory_index": idx, "error": str(e)}
+                    "Tool factory failed",
+                    extra={
+                        "factory_index": idx,
+                        "error_type": type(e).__name__,
+                        "error_message": str(e)
+                    },
+                    exc_info=True
                 )
                 errors.append((idx, e))
 
@@ -48,20 +75,37 @@ class OllamaToolManager:
             error_details = "; ".join(
                 f"Factory {idx}: {str(err)}" for idx, err in errors
             )
+            logger.error(
+                "All tool factories failed",
+                extra={
+                    "failed_factories": len(errors),
+                    "error_details": error_details
+                }
+            )
             raise ToolInitializationError(
                 f"All tool factories failed: {error_details}"
             )
 
         if errors:
             logger.warning(
-                f"{len(errors)} tool factories failed, {len(created_tools)} succeeded"
+                "Some tool factories failed",
+                extra={
+                    "failed_factories": len(errors),
+                    "succeeded_factories": len(created_tools),
+                    "total_factories": len(self._factories)
+                }
             )
 
         self._tools = created_tools
         self._initialized = True
 
         logger.info(
-            f"OllamaToolManager initialized with {len(created_tools)} tools"
+            "OllamaToolManager initialized successfully",
+            extra={
+                "tools_created": len(created_tools),
+                "tools_failed": len(errors),
+                "total_factories": len(self._factories)
+            }
         )
 
     @staticmethod
@@ -70,6 +114,14 @@ class OllamaToolManager:
         tool = factory()
 
         if not isinstance(tool, BaseTool):
+            logger.error(
+                "Factory produced invalid tool type",
+                extra={
+                    "factory_index": factory_index,
+                    "expected_type": "BaseTool",
+                    "received_type": type(tool).__name__
+                }
+            )
             raise TypeError(
                 f"Factory {factory_index} produced {type(tool).__name__}, "
                 f"expected BaseTool"
@@ -78,7 +130,7 @@ class OllamaToolManager:
         if not hasattr(tool, "args_schema"):
             tool_name = getattr(tool, "name", "unknown")
             logger.warning(
-                f"Tool '{tool_name}' missing args_schema",
+                "Tool missing args_schema",
                 extra={
                     "tool_name": tool_name,
                     "factory_index": factory_index

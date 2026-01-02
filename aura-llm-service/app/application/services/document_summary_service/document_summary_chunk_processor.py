@@ -4,7 +4,7 @@ from typing import List, Optional
 from langchain_core.runnables import Runnable
 
 from app.application.services.document_summary_service.exceptions.document_summary_service_exceptions import DocumentSummaryServiceError
-from app.application.llm_facade.interfaces.llm_facade_interface import LLMFacadeInterface
+from app.infrastructure.llm_facade.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 from app.application.services.document_summary_service.document_summary_configuration import \
     DocumentSummaryConfiguration
 from app.application.services.document_summary_service.document_summary_message_builder import \
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class DocumentSummaryChunkProcessor:
     def __init__(self,
                  configuration: DocumentSummaryConfiguration,
-                 llm_facade: LLMFacadeInterface,
+                 llm_facade: OllamaLLMFacadeInterface,
                  llm: Runnable):
         self._configuration = configuration
         self._llm_facade = llm_facade

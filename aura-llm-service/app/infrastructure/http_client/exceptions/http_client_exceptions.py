@@ -3,7 +3,7 @@ from app.application.exceptions.app_exceptions import AppError
 
 class HttpClientError(AppError):
     def __init__(self,
-                 message: str = "HTTP client operation failed",
+                 message: str = "La operación del cliente HTTP falló",
                  *,
                  status_code: int = 500,
                  code: str | None = None):
@@ -16,7 +16,7 @@ class HttpClientError(AppError):
 
 class HttpClientInitializationError(HttpClientError):
     def __init__(self,
-                 message: str = "Failed to initialize HTTP client",
+                 message: str = "Error al inicializar el cliente HTTP",
                  *,
                  code: str | None = None):
         super().__init__(
@@ -27,7 +27,7 @@ class HttpClientInitializationError(HttpClientError):
 
 class HttpClientNotInitializedError(HttpClientError):
     def __init__(self,
-                 message: str = "HTTP client is not initialized",
+                 message: str = "El cliente HTTP no está inicializado",
                  *,
                  code: str | None = None):
         super().__init__(
@@ -40,7 +40,7 @@ class ExternalServiceError(HttpClientError):
     def __init__(self,
                  *,
                  status_code: int,
-                 message: str = "External service returned an error response",
+                 message: str = "El servicio externo devolvió una respuesta de error",
                  code: str | None = None):
         super().__init__(
             message=message,
@@ -51,7 +51,7 @@ class ExternalServiceError(HttpClientError):
 
 class NetworkError(HttpClientError):
     def __init__(self,
-                 message: str = "Network error occurred while performing HTTP request",
+                 message: str = "Se produjo un error de red al realizar la solicitud HTTP",
                  *,
                  code: str | None = None):
         super().__init__(

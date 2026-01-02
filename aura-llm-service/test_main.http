@@ -21,7 +21,7 @@ Accept: application/json
 Content-Type: application/json
 
 {
-  "question": "Que me podes decir del perro"
+  "question": "Dame 3 caracteristicas de bruno y su significado"
 }
 
 ###

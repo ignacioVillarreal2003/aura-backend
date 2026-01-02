@@ -21,8 +21,8 @@ class DocumentQuestionRequestValidator:
         logger.debug(
             "Validating DocumentQuestionRequest",
             extra={
-                "question": request.question,
-                "messages": request.messages
+                "question_length": len(request.question) if request.question else 0,
+                "messages_count": len(request.messages) if request.messages else 0
             }
         )
 
@@ -36,14 +36,15 @@ class DocumentQuestionRequestValidator:
     def _validate_question(self,
                            question: str) -> None:
         if not question or not question.strip():
-            logger.error(
-                "Validation failed, empty question",
+            logger.warning(
+                "Question validation failed: empty or whitespace-only question",
                 extra={
-                    "question_present": bool(question)
+                    "question_present": bool(question),
+                    "question_length": len(question) if question else 0
                 }
             )
             raise ValidationError(
-                "Question cannot be empty",
+                "La pregunta no puede estar vacía. Por favor, proporcione una pregunta válida.",
                 status_code=400
             )
 
@@ -53,34 +54,34 @@ class DocumentQuestionRequestValidator:
             "Validating question length",
             extra={
                 "question_length": question_length,
-                "min_length": self._configuration.MIN_QUESTION_LENGTH,
-                "max_length": self._configuration.default_question_length,
+                "min_length": self._configuration.min_question_length,
+                "max_length": self._configuration.default_question_length
             }
         )
 
-        if question_length < self._configuration.MIN_QUESTION_LENGTH:
-            logger.error(
-                "Validation failed, question too short",
+        if question_length < self._configuration.min_question_length:
+            logger.warning(
+                "Question validation failed: question too short",
                 extra={
                     "question_length": question_length,
-                    "min_length": self._configuration.MIN_QUESTION_LENGTH
+                    "min_length": self._configuration.min_question_length
                 }
             )
             raise ValidationError(
-                f"Question is too short (minimum {self._configuration.MIN_QUESTION_LENGTH} character)",
+                f"La pregunta es demasiado corta (mínimo {self._configuration.min_question_length} caracteres)",
                 status_code=400
             )
 
         if question_length > self._configuration.default_question_length:
-            logger.error(
-                "Validation failed, question too long",
+            logger.warning(
+                "Question validation failed: question too long",
                 extra={
                     "question_length": question_length,
                     "max_length": self._configuration.default_question_length
                 }
             )
             raise ValidationError(
-                f"Question is too long (maximum {self._configuration.default_question_length} characters)",
+                f"La pregunta es demasiado larga (máximo {self._configuration.default_question_length} caracteres)",
                 status_code=400
             )
 
@@ -92,33 +93,33 @@ class DocumentQuestionRequestValidator:
             "Validating message history",
             extra={
                 "history_count": history_count,
-                "min_history": self._configuration.MIN_HISTORY_COUNT,
+                "min_history": self._configuration.min_history_count,
                 "max_history": self._configuration.default_history_count
             }
         )
 
-        if history_count < self._configuration.MIN_HISTORY_COUNT:
-            logger.error(
-                "Validation failed, message history too short",
+        if history_count < self._configuration.min_history_count:
+            logger.warning(
+                "History validation failed: message history too short",
                 extra={
                     "history_count": history_count,
-                    "min_history": self._configuration.MIN_HISTORY_COUNT
+                    "min_history": self._configuration.min_history_count
                 }
             )
             raise ValidationError(
-                f"Message history is too short (minimum {self._configuration.MIN_HISTORY_COUNT} message)",
+                f"El historial de mensajes es demasiado corto (mínimo {self._configuration.min_history_count} mensajes)",
                 status_code=400
             )
 
         if history_count > self._configuration.default_history_count:
-            logger.error(
-                "Validation failed, message history too long",
+            logger.warning(
+                "History validation failed: message history too long",
                 extra={
                     "history_count": history_count,
                     "max_history": self._configuration.default_history_count
                 }
             )
             raise ValidationError(
-                f"Message history is too long (maximum {self._configuration.default_history_count} messages)",
+                f"El historial de mensajes es demasiado largo (máximo {self._configuration.default_history_count} mensajes)",
                 status_code=400
             )

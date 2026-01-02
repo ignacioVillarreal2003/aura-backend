@@ -3,8 +3,8 @@ from typing import List, Optional
 from langchain_core.runnables import Runnable
 
 from app.application.exceptions.app_exceptions import ValidationError
-from app.application.llm_facade.exceptions.llm_facade_exceptions import LLMInvocationError
-from app.application.llm_facade.interfaces.llm_facade_interface import LLMFacadeInterface
+from app.infrastructure.llm_facade.exceptions.llm_facade_exceptions import LLMInvocationError
+from app.infrastructure.llm_facade.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 from app.application.services.document_summary_service.document_summary_configuration import \
     DocumentSummaryConfiguration
 from app.application.services.document_summary_service.document_summary_chunk_processor import \
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 class DocumentSummaryService(DocumentSummaryServiceInterface):
     def __init__(self,
-                 llm_facade: LLMFacadeInterface,
+                 llm_facade: OllamaLLMFacadeInterface,
                  context_provider: ContextProviderInterface,
                  configuration: Optional[DocumentSummaryConfiguration] = None) -> None:
         self._llm_facade = llm_facade
@@ -50,7 +50,7 @@ class DocumentSummaryService(DocumentSummaryServiceInterface):
 
     @classmethod
     def with_defaults(cls,
-                      llm_facade: LLMFacadeInterface,
+                      llm_facade: OllamaLLMFacadeInterface,
                       context_provider: ContextProviderInterface,
                       large_document_threshold: int = 5,
                       chunk_size: int = 5,

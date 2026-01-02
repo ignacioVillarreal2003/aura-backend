@@ -16,43 +16,43 @@ class LLMFacadeError(AppError):
 
 class LLMInitializationError(LLMFacadeError):
     def __init__(self,
-                 message: str = "The LLM could not be initialized",
+                 message: str = "El LLM no pudo ser inicializado",
                  *,
                  code: str | None = None):
         super().__init__(
             message=message,
-            code=code or "LLMInitializationError"
+            code=code
         )
 
 
 class LLMNotConfiguredError(LLMInitializationError):
     def __init__(self,
-                 message: str = "LLM is not configured or initialized",
+                 message: str = "El LLM no está configurado o inicializado",
                  *,
                  code: str | None = None):
         super().__init__(
             message=message,
-            code=code or "LLMNotConfiguredError"
+            code=code
         )
 
 
 class ToolInitializationError(LLMFacadeError):
     def __init__(self,
-                 message: str = "Failed to initialize tools",
+                 message: str = "Error al inicializar las herramientas",
                  *,
                  code: str | None = None):
         super().__init__(
             message=message,
-            code=code or "ToolInitializationError"
+            code=code
         )
 
 
 class LLMInvocationError(LLMFacadeError):
     def __init__(self,
-                 message: str = "Error invoking the LLM",
+                 message: str = "Error al invocar el LLM",
                  *,
                  code: str | None = None):
         super().__init__(
             message=message,
-            code=code or "LLMInvocationError"
+            code=code
         )

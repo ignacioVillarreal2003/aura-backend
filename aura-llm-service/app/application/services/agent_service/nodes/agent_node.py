@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Optional
 from langchain_core.messages import SystemMessage, BaseMessage
 from langchain_core.runnables import Runnable
 
-from app.application.llm_facade.interfaces.llm_facade_interface import LLMFacadeInterface
+from app.infrastructure.llm_facade.interfaces.ollama_llm_facade_interface import LLMFacadeInterface
 from app.application.services.agent_service.agent_node_configuration import AgentNodeConfig
 from app.domain.agent_state.agent_state import AgentState
 from app.domain.constants.sentimient import Sentiment

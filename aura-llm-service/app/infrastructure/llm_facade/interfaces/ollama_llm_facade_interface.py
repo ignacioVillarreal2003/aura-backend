@@ -5,7 +5,7 @@ from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
 
 
-class LLMFacadeInterface(ABC):
+class OllamaLLMFacadeInterface(ABC):
     @abstractmethod
     async def initialize(self) -> None:
         pass

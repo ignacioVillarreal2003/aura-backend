@@ -1,15 +1,16 @@
 import logging
 
-from app.application.llm_facade.interfaces.llm_facade_interface import LLMFacadeInterface
-from app.application.llm_facade.ollama_llm_facade import get_global_ollama_llm_facade
+from app.infrastructure.llm_facade.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
+from app.infrastructure.llm_facade.ollama_llm_facade_factory import get_global_ollama_llm_facade
 from app.application.services.agent_service.agent_service import AgentService
 from app.application.services.document_question_service.document_question_service import DocumentQuestionService
 from app.application.services.document_question_service.interfaces.document_question_service_interface import (
     DocumentQuestionServiceInterface
 )
 from app.application.services.document_summary_service.document_summary_service import DocumentSummaryService
-from app.application.services.document_summary_service.interfaces.document_summary_service_interface import \
+from app.application.services.document_summary_service.interfaces.document_summary_service_interface import (
     DocumentSummaryServiceInterface
+)
 from app.infrastructure.context_provider.context_provider import ContextProvider
 from app.infrastructure.context_provider.interfaces.context_provider_interface import ContextProviderInterface
 from app.infrastructure.http_client.http_client_factory import get_global_http_client
@@ -37,21 +38,9 @@ async def get_context_provider() -> ContextProviderInterface:
     )
 
 
+_llm_facade: OllamaLLMFacadeInterface | None = None
 
-
-
-
-
-
-
-
-
-
-
-
-_llm_facade: LLMFacadeInterface | None = None
-
-async def get_llm_facade() -> LLMFacadeInterface:
+async def get_llm_facade() -> OllamaLLMFacadeInterface:
     global _llm_facade
     if _llm_facade is None:
         tools_factories = []
@@ -61,6 +50,20 @@ async def get_llm_facade() -> LLMFacadeInterface:
             tool_factories=tools_factories
         )
     return _llm_facade
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 async def get_document_question_service() -> DocumentQuestionServiceInterface:
