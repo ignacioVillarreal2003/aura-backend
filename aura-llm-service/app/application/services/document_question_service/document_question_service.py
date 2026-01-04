@@ -1,246 +1,245 @@
 import logging
 from typing import List, Optional
+
 from langchain_core.messages import BaseMessage
 from langchain_core.runnables import Runnable
 
-from app.application.exceptions.app_exceptions import ValidationError
-from app.infrastructure.llm_facade.exceptions.llm_facade_exceptions import LLMInvocationError
-from app.infrastructure.llm_facade.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 from app.application.services.document_question_service.document_question_configuration import (
     DocumentQuestionConfiguration
 )
-from app.application.services.document_question_service.document_question_prompt_builder import (
+from app.application.services.document_question_service.document_question_prompt_builder import \
     DocumentQuestionPromptBuilder
-)
-from app.application.services.document_question_service.document_question_request_validator import (
+from app.application.services.document_question_service.document_question_request_validator import \
     DocumentQuestionRequestValidator
-)
+from app.application.services.document_question_service.exceptions.document_question_service_exceptions import \
+    DocumentQuestionServiceError
 from app.application.services.document_question_service.interfaces.document_question_service_interface import (
     DocumentQuestionServiceInterface
-)
-from app.application.services.document_question_service.exceptions.document_question_service_exceptions import (
-    DocumentQuestionServiceError
 )
 from app.domain.dtos.document_question_request import DocumentQuestionRequest
 from app.domain.dtos.document_question_response import DocumentQuestionResponse
 from app.domain.dtos.message import Message
 from app.infrastructure.context_provider.exceptions.context_provider_exception import ContextRetrievalByQuestionError
-from app.infrastructure.context_provider.interfaces.context_provider_interface import ContextProviderInterface
+from app.infrastructure.context_provider.interfaces.context_provider_interface import (
+    ContextProviderInterface
+)
+from app.infrastructure.llm_facade.exceptions.llm_facade_exceptions import LLMInvocationError
+from app.infrastructure.llm_facade.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 
 logger = logging.getLogger(__name__)
 
 
 class DocumentQuestionService(DocumentQuestionServiceInterface):
     def __init__(self,
-                 llm_facade: OllamaLLMFacadeInterface,
+                 ollama_llm_facade: OllamaLLMFacadeInterface,
                  context_provider: ContextProviderInterface,
                  configuration: Optional[DocumentQuestionConfiguration] = None) -> None:
-        self._llm_facade = llm_facade
+        self._ollama_llm_facade = ollama_llm_facade
         self._context_provider = context_provider
         self._configuration = configuration or DocumentQuestionConfiguration()
 
-        self._validator = DocumentQuestionRequestValidator(self._configuration)
+        self._request_validator = DocumentQuestionRequestValidator(self._configuration)
         self._prompt_builder = DocumentQuestionPromptBuilder()
 
         self._llm: Optional[Runnable] = None
 
-        logger.info(
-            "DocumentQuestionService initialized successfully",
-            extra={
-                "default_fragments_count": self._configuration.default_fragments_count,
-                "default_question_length": self._configuration.default_question_length,
-                "default_history_count": self._configuration.default_history_count
-            }
-        )
+        logger.info("DocumentQuestionService initialized")
 
     @classmethod
     def with_defaults(cls,
-                      llm_facade: OllamaLLMFacadeInterface,
+                      ollama_llm_facade: OllamaLLMFacadeInterface,
                       context_provider: ContextProviderInterface,
-                      fragments_count: int = 3,
-                      question_length: int = 1000,
-                      history_count: int = 3,
-                      system_prompt: Optional[str] = None) -> "DocumentQuestionService":
+                      fragments_count: Optional[int] = None,
+                      question_length: Optional[int] = None,
+                      history_count: Optional[int] = None,
+                      custom_system_prompt: Optional[str] = None) -> "DocumentQuestionService":
         configuration = DocumentQuestionConfiguration(
-            default_fragments_count=fragments_count,
-            default_question_length=question_length,
-            default_history_count=history_count,
-            default_system_prompt=system_prompt
+            fragments_count=fragments_count,
+            question_length=question_length,
+            history_count=history_count,
+            custom_system_prompt=custom_system_prompt
         )
 
         return cls(
-            llm_facade=llm_facade,
+            ollama_llm_facade=ollama_llm_facade,
             context_provider=context_provider,
             configuration=configuration
         )
 
     async def execute_document_question(self,
                                         request_body: DocumentQuestionRequest) -> DocumentQuestionResponse:
-        self._validator.validate_request(request_body)
-
         logger.info(
             "Executing document question",
             extra={
                 "question": request_body.question,
-                "messages_count": len(request_body.messages) if request_body.messages else 0
+                "messages_count": len(request_body.messages)
+            }
+        )
+
+        self._request_validator.validate_request(request_body)
+
+        fragments = await self.retrieve_fragments_by_question(request_body.question)
+
+        answer = await self.answer_question(
+            question=request_body.question,
+            messages=request_body.messages,
+            fragments=fragments
+        )
+
+        logger.info(
+            "Document question executed successfully",
+            extra={
+                "question": request_body.question,
+                "messages_count": len(request_body.messages)
+            }
+        )
+
+        return DocumentQuestionResponse(
+            answer=answer
+        )
+
+    async def answer_question(self,
+                              question: str,
+                              messages: Optional[list[Message]] = None,
+                              fragments: Optional[List[str]] = None) -> str:
+        logger.info(
+            "Answering document question",
+            extra={
+                "question": question,
+                "messages": messages,
+                "fragments": fragments
             }
         )
 
         try:
-            await self._ensure_llm_initialized()
+            await self._ensure_llm_ready()
 
-            fragments = await self._retrieve_context(request_body.question)
-
-            llm_input = self._build_llm_prompt(
+            prompt = self._build_prompt(
+                question=question,
                 fragments=fragments,
-                messages=request_body.messages or [],
-                question=request_body.question
+                history=messages or []
             )
 
-            answer = await self._invoke_llm(llm_input)
+            answer = await self._invoke_llm(prompt)
 
             logger.info(
-                "Document question executed successfully",
+                "Question answered successfully",
                 extra={
-                    "question": request_body.question,
+                    "question_length": len(question),
                     "answer_length": len(answer),
                     "fragments_used": len(fragments)
                 }
             )
 
-            return DocumentQuestionResponse(answer=answer)
+            return answer
 
-        except (ValidationError, ContextRetrievalByQuestionError, LLMInvocationError):
+        except (ContextRetrievalByQuestionError, LLMInvocationError):
             raise
-
         except Exception as e:
             logger.exception(
-                "Unexpected error during document question execution",
+                "Unexpected error answering question",
                 extra={
                     "error_type": type(e).__name__,
-                    "error_message": str(e),
-                    "question": request_body.question
+                    "question_length": len(question)
                 }
             )
-            raise DocumentQuestionServiceError(
-                "Error inesperado al ejecutar la pregunta sobre el documento"
-            ) from e
+            raise DocumentQuestionServiceError("Error inesperado al generar la respuesta") from e
 
     async def retrieve_fragments_by_question(self,
                                              question: str,
                                              fragments_count: Optional[int] = None) -> List[str]:
-        count = fragments_count or self._configuration.default_fragments_count
-        
         logger.info(
-            "Retrieving context fragments by question",
+            "Retrieving fragments by question",
             extra={
                 "question": question,
-                "fragments_count": count
+                "fragments_count": fragments_count
             }
         )
 
         try:
             fragments = await self._context_provider.retrieve_fragments_by_question(
                 question=question,
-                fragments_count=count
+                fragments_count=fragments_count
             )
 
             logger.info(
-                "Context fragments retrieved successfully",
+                "Fragments retrieved successfully",
                 extra={
+                    "fragments": fragments,
                     "question": question,
-                    "requested_fragments": count,
-                    "retrieved_fragments": len(fragments)
+                    "fragments_count": fragments_count
                 }
             )
 
             return fragments
 
         except ContextRetrievalByQuestionError:
-            raise
-
-        except Exception as e:
             logger.error(
-                "Error retrieving context fragments",
+                "Failed to retrieve context fragments",
                 extra={
                     "question": question,
-                    "fragments_count": count,
-                    "error_type": type(e).__name__,
-                    "error_message": str(e)
-                },
-                exc_info=True
+                    "fragments_count": fragments_count
+                }
             )
-            raise DocumentQuestionServiceError(
-                "Error al recuperar los fragmentos de contexto para la pregunta"
-            ) from e
+            raise
+        except Exception as e:
+            logger.exception(
+                "Unexpected error retrieving fragments by question",
+                extra={
+                    "error_type": type(e).__name__,
+                    "question": question,
+                    "fragments_count": fragments_count
+                }
+            )
+            raise DocumentQuestionServiceError("Error al recuperar fragmentos del documento") from e
 
-    async def _ensure_llm_initialized(self) -> None:
+    async def _ensure_llm_ready(self) -> None:
         if self._llm is not None:
             return
 
-        logger.debug("Initializing LLM for DocumentQuestionService")
+        logger.debug("Initializing LLM for DocumentQuestionUseCase")
 
         try:
-            self._llm = await self._llm_facade.get_llm_base()
-
-            logger.info("LLM initialized successfully for DocumentQuestionService")
-
+            self._llm = await self._ollama_llm_facade.get_llm_base()
+            logger.info("LLM initialized successfully")
         except Exception as e:
             logger.error(
                 "Failed to initialize LLM",
                 extra={
                     "error_type": type(e).__name__,
-                    "error_message": str(e)
+                    "error": str(e)
                 },
                 exc_info=True
             )
-            raise DocumentQuestionServiceError(
-                "Error al inicializar el LLM para preguntas sobre documentos"
-            ) from e
+            raise DocumentQuestionServiceError("Error al inicializar el modelo de lenguaje") from e
 
-    async def _retrieve_context(self,
-                                question: str) -> List[str]:
-        return await self.retrieve_fragments_by_question(
-            question=question,
-            fragments_count=self._configuration.default_fragments_count
-        )
-
-    def _build_llm_prompt(self,
-                          fragments: List[str],
-                          messages: List[Message],
-                          question: str) -> List[BaseMessage]:
-        logger.debug(
-            "Building LLM prompt",
-            extra={
-                "fragments_count": len(fragments),
-                "messages_count": len(messages),
-                "question_length": len(question)
-            }
-        )
-
+    def _build_prompt(self,
+                      question: str,
+                      fragments: List[str],
+                      history: List[Message]) -> List[BaseMessage]:
         return self._prompt_builder.build_complete_prompt(
-            system_prompt=self._configuration.get_system_prompt,
+            system_prompt=self._configuration.system_prompt,
             fragments=fragments,
-            messages=messages,
+            messages=history,
             question=question
         )
 
     async def _invoke_llm(self,
-                          llm_prompt: List[BaseMessage]) -> str:
+                          prompt: List[BaseMessage]) -> str:
         if self._llm is None:
-            raise DocumentQuestionServiceError("LLM not initialized, cannot invoke")
+            raise DocumentQuestionServiceError("LLM no inicializado, no se puede invocar")
 
         logger.debug(
             "Invoking LLM",
             extra={
-                "prompt_messages_count": len(llm_prompt)
+                "prompt": prompt
             }
         )
 
         try:
-            answer = await self._llm_facade.call_llm_text(
+            answer = await self._ollama_llm_facade.call_llm_text(
                 llm=self._llm,
-                llm_input=llm_prompt
+                llm_input=prompt
             )
 
             logger.debug(
@@ -253,18 +252,16 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
             return answer
 
         except LLMInvocationError:
+            logger.error("LLM invocation failed")
             raise
-
         except Exception as e:
-            logger.error(
-                "Error invoking LLM",
+            logger.exception(
+                "Unexpected error during LLM invocation",
                 extra={
-                    "error_type": type(e).__name__,
-                    "error_message": str(e)
-                },
-                exc_info=True
+                    "error_type": type(e).__name__
+                }
             )
-            raise DocumentQuestionServiceError("Error al invocar el LLM") from e
+            raise DocumentQuestionServiceError("Error al invocar el modelo de lenguaje") from e
 
     @property
     def configuration(self) -> DocumentQuestionConfiguration:

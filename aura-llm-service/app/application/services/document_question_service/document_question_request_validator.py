@@ -55,7 +55,7 @@ class DocumentQuestionRequestValidator:
             extra={
                 "question_length": question_length,
                 "min_length": self._configuration.min_question_length,
-                "max_length": self._configuration.default_question_length
+                "max_length": self._configuration.max_question_length
             }
         )
 
@@ -72,16 +72,16 @@ class DocumentQuestionRequestValidator:
                 status_code=400
             )
 
-        if question_length > self._configuration.default_question_length:
+        if question_length > self._configuration.question_length:
             logger.warning(
                 "Question validation failed: question too long",
                 extra={
                     "question_length": question_length,
-                    "max_length": self._configuration.default_question_length
+                    "max_length": self._configuration.question_length
                 }
             )
             raise ValidationError(
-                f"La pregunta es demasiado larga (máximo {self._configuration.default_question_length} caracteres)",
+                f"La pregunta es demasiado larga (máximo {self._configuration.question_length} caracteres)",
                 status_code=400
             )
 
