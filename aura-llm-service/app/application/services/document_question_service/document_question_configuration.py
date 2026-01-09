@@ -7,38 +7,20 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class DocumentQuestionConfiguration:
-    fragments_count: int = 3
-    question_length: int = 1000
-    history_count: int = 5
+    max_context_fragments_count: int = 3
+    CONFIG_MIN_MAX_CONTEXT_FRAGMENTS_COUNT: int = field(default=1, repr=False)
+    CONFIG_MAX_MAX_CONTEXT_FRAGMENTS_COUNT: int = field(default=6, repr=False)
+
+    min_question_length: int = 1
+    max_question_length: int = 1000
+    CONFIG_MIN_MAX_QUESTION_LENGTH: int = field(default=100, repr=False)
+    CONFIG_MAX_MAX_QUESTION_LENGTH: int = field(default=10000, repr=False)
+
+    max_history_messages_count: int = 3
+    CONFIG_MIN_MAX_HISTORY_MESSAGES_COUNT: int = field(default=0, repr=False)
+    CONFIG_MAX_MAX_HISTORY_MESSAGES_COUNT: int = field(default=6, repr=False)
+
     custom_system_prompt: Optional[str] = None
-
-    min_fragments_count: int = field(
-        default=1,
-        repr=False
-    )
-    max_fragments_count: int = field(
-        default=10,
-        repr=False
-    )
-
-    min_question_length: int = field(
-        default=1,
-        repr=False
-    )
-    max_question_length: int = field(
-        default=10000,
-        repr=False
-    )
-
-    min_history_count: int = field(
-        default=0,
-        repr=False
-    )
-    max_history_count: int = field(
-        default=10,
-        repr=False
-    )
-
     default_system_prompt: str = field(
         default=(
             "Eres un asistente especializado en responder preguntas basándote únicamente en el contexto proporcionado. "
@@ -56,37 +38,46 @@ class DocumentQuestionConfiguration:
         logger.info(
             "DocumentQuestionConfiguration initialized",
             extra={
-                "fragments_count": self.fragments_count,
-                "question_length": self.question_length,
-                "history_count": self.history_count,
-                "has_custom_prompt": self.custom_system_prompt is not None
+                "max_context_fragments": self.max_context_fragments_count,
+                "min_question_length": self.min_question_length,
+                "max_question_length": self.max_question_length,
+                "max_history_messages": self.max_history_messages_count,
+                "system_prompt": self.custom_system_prompt
+                if self.custom_system_prompt is not None
+                else self.default_system_prompt
             }
         )
 
     def _validate(self) -> None:
-        self._validate_fragments()
-        self._validate_question_length()
-        self._validate_history()
+        self._validate_max_context_fragments_count()
+        self._validate_max_question_length()
+        self._validate_max_history_messages_count()
 
-    def _validate_fragments(self) -> None:
-        if not self.min_fragments_count <= self.fragments_count <= self.max_fragments_count:
+    def _validate_max_context_fragments_count(self) -> None:
+        if not (self.CONFIG_MIN_MAX_CONTEXT_FRAGMENTS_COUNT
+                <= self.max_context_fragments_count
+                <= self.CONFIG_MAX_MAX_CONTEXT_FRAGMENTS_COUNT):
             raise ValueError(
-                "La cantidad de fragmentos no es válida. "
-                f"Debe estar entre {self.min_fragments_count} y {self.max_fragments_count}."
+                "La cantidad de fragmentos máxima no es válida."
+                f"Debe estar entre {self.CONFIG_MIN_MAX_CONTEXT_FRAGMENTS_COUNT} y {self.CONFIG_MAX_MAX_CONTEXT_FRAGMENTS_COUNT}."
             )
 
-    def _validate_question_length(self) -> None:
-        if not self.min_question_length <= self.question_length <= self.max_question_length:
+    def _validate_max_question_length(self) -> None:
+        if not (self.CONFIG_MIN_MAX_QUESTION_LENGTH
+                <= self.max_question_length
+                <= self.CONFIG_MAX_MAX_QUESTION_LENGTH):
             raise ValueError(
-                "La longitud de la pregunta no es válida. "
-                f"Debe estar entre {self.min_question_length} y {self.max_question_length} caracteres."
+                "La longitud máxima de la pregunta no es válida."
+                f"Debe estar entre {self.CONFIG_MIN_MAX_QUESTION_LENGTH} y {self.CONFIG_MAX_MAX_QUESTION_LENGTH} caracteres."
             )
 
-    def _validate_history(self) -> None:
-        if not self.min_history_count <= self.history_count <= self.max_history_count:
+    def _validate_max_history_messages_count(self) -> None:
+        if not (self.CONFIG_MIN_MAX_HISTORY_MESSAGES_COUNT
+                <= self.max_history_messages_count
+                <= self.CONFIG_MAX_MAX_HISTORY_MESSAGES_COUNT):
             raise ValueError(
-                "La cantidad de mensajes de historial no es válida. "
-                f"Debe estar entre {self.min_history_count} y {self.max_history_count}."
+                "La cantidad de mensajes de historial máxima no es válida."
+                f"Debe estar entre {self.CONFIG_MIN_MAX_HISTORY_MESSAGES_COUNT} y {self.CONFIG_MAX_MAX_HISTORY_MESSAGES_COUNT}."
             )
 
     @property

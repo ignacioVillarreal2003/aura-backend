@@ -2,15 +2,15 @@ import logging
 from typing import Any, List, Optional
 
 from app.application.exceptions.app_exceptions import ValidationError
-from app.infrastructure.context_provider.context_provider_configuration import ContextProviderConfiguration
-from app.infrastructure.context_provider.dtos.fragments_by_document_request import FragmentsByDocumentRequest
-from app.infrastructure.context_provider.dtos.fragments_by_question_request import FragmentsByQuestionRequest
-from app.infrastructure.context_provider.dtos.fragments_response import FragmentsResponse
-from app.infrastructure.context_provider.exceptions.context_provider_exception import (
+from app.infrastructure.document_context_provider.document_context_provider_configuration import ContextProviderConfiguration
+from app.infrastructure.document_context_provider.dtos.fragments_by_document_request import FragmentsByDocumentRequest
+from app.infrastructure.document_context_provider.dtos.fragments_by_question_request import FragmentsByQuestionRequest
+from app.infrastructure.document_context_provider.dtos.fragments_response import FragmentsResponse
+from app.infrastructure.document_context_provider.exceptions.context_provider_exception import (
     ContextRetrievalByQuestionError,
     ContextRetrievalByDocumentError
 )
-from app.infrastructure.context_provider.interfaces.context_provider_interface import ContextProviderInterface
+from app.infrastructure.document_context_provider.interfaces.document_context_provider_interface import ContextProviderInterface
 from app.infrastructure.http_client.exceptions.http_client_exceptions import HttpClientError
 from app.infrastructure.http_client.interfaces.http_client_interface import HttpClientInterface
 

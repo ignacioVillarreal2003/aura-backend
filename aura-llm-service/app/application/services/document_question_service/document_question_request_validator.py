@@ -21,15 +21,15 @@ class DocumentQuestionRequestValidator:
         logger.debug(
             "Validating DocumentQuestionRequest",
             extra={
-                "question_length": len(request.question) if request.question else 0,
-                "messages_count": len(request.messages) if request.messages else 0
+                "question": request.question,
+                "history_messages": request.history_messages
             }
         )
 
         self._validate_question(request.question)
 
-        if request.messages is not None:
-            self._validate_history(request.messages)
+        if request.history_messages is not None:
+            self._validate_history_messages(request.history_messages)
 
         logger.debug("DocumentQuestionRequest validation successful")
 
@@ -54,8 +54,8 @@ class DocumentQuestionRequestValidator:
             "Validating question length",
             extra={
                 "question_length": question_length,
-                "min_length": self._configuration.min_question_length,
-                "max_length": self._configuration.max_question_length
+                "min_question_length": self._configuration.min_question_length,
+                "max_question_length": self._configuration.max_question_length
             }
         )
 
@@ -64,7 +64,7 @@ class DocumentQuestionRequestValidator:
                 "Question validation failed: question too short",
                 extra={
                     "question_length": question_length,
-                    "min_length": self._configuration.min_question_length
+                    "min_question_length": self._configuration.min_question_length
                 }
             )
             raise ValidationError(
@@ -72,54 +72,40 @@ class DocumentQuestionRequestValidator:
                 status_code=400
             )
 
-        if question_length > self._configuration.question_length:
+        if question_length > self._configuration.max_question_length:
             logger.warning(
                 "Question validation failed: question too long",
                 extra={
                     "question_length": question_length,
-                    "max_length": self._configuration.question_length
+                    "max_question_length": self._configuration.max_question_length
                 }
             )
             raise ValidationError(
-                f"La pregunta es demasiado larga (máximo {self._configuration.question_length} caracteres)",
+                f"La pregunta es demasiado larga (máximo {self._configuration.max_question_length} caracteres)",
                 status_code=400
             )
 
-    def _validate_history(self,
-                          messages: List[Message]) -> None:
-        history_count = len(messages)
+    def _validate_history_messages(self,
+                                   history_messages: List[Message]) -> None:
+        history_messages_count = len(history_messages)
 
         logger.debug(
             "Validating message history",
             extra={
-                "history_count": history_count,
-                "min_history": self._configuration.min_history_count,
-                "max_history": self._configuration.default_history_count
+                "history_messages_count": history_messages_count,
+                "max_history_messages_count": self._configuration.max_history_messages_count
             }
         )
 
-        if history_count < self._configuration.min_history_count:
-            logger.warning(
-                "History validation failed: message history too short",
-                extra={
-                    "history_count": history_count,
-                    "min_history": self._configuration.min_history_count
-                }
-            )
-            raise ValidationError(
-                f"El historial de mensajes es demasiado corto (mínimo {self._configuration.min_history_count} mensajes)",
-                status_code=400
-            )
-
-        if history_count > self._configuration.default_history_count:
+        if history_messages_count > self._configuration.max_history_messages_count:
             logger.warning(
                 "History validation failed: message history too long",
                 extra={
-                    "history_count": history_count,
-                    "max_history": self._configuration.default_history_count
+                    "history_messages_count": history_messages_count,
+                    "max_history_messages_count": self._configuration.max_history_messages_count
                 }
             )
             raise ValidationError(
-                f"El historial de mensajes es demasiado largo (máximo {self._configuration.default_history_count} mensajes)",
+                f"El historial de mensajes es demasiado largo (máximo {self._configuration.max_history_messages_count} mensajes)",
                 status_code=400
             )

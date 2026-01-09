@@ -19,8 +19,8 @@ from app.application.services.document_summary_service.interfaces.document_summa
 from app.application.services.document_summary_service.exceptions.document_summary_service_exceptions import DocumentSummaryServiceError
 from app.domain.dtos.document_summary_request import DocumentSummaryRequest
 from app.domain.dtos.document_summary_response import DocumentSummaryResponse
-from app.infrastructure.context_provider.exceptions.context_provider_exception import ContextRetrievalByDocumentError
-from app.infrastructure.context_provider.interfaces.context_provider_interface import ContextProviderInterface
+from app.infrastructure.document_context_provider.exceptions.context_provider_exception import ContextRetrievalByDocumentError
+from app.infrastructure.document_context_provider.interfaces.document_context_provider_interface import ContextProviderInterface
 
 logger = logging.getLogger(__name__)
 

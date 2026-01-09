@@ -6,4 +6,4 @@ from app.domain.dtos.message import Message
 
 class DocumentQuestionRequest(BaseModel):
     question: str = Field(...)
-    messages: Optional[list[Message]] = None
+    history_messages: Optional[list[Message]] = None

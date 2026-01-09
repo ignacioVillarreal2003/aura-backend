@@ -11,8 +11,8 @@ from app.application.services.document_summary_service.document_summary_service 
 from app.application.services.document_summary_service.interfaces.document_summary_service_interface import (
     DocumentSummaryServiceInterface
 )
-from app.infrastructure.context_provider.context_provider import ContextProvider
-from app.infrastructure.context_provider.interfaces.context_provider_interface import ContextProviderInterface
+from app.infrastructure.document_context_provider.document_context_provider import ContextProvider
+from app.infrastructure.document_context_provider.interfaces.document_context_provider_interface import ContextProviderInterface
 from app.infrastructure.http_client.http_client_factory import get_global_http_client
 from app.configuration.environment_variables import environment_variables
 from app.infrastructure.http_client.interfaces.http_client_interface import HttpClientInterface

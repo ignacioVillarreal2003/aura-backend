@@ -10,57 +10,62 @@ logger = logging.getLogger(__name__)
 
 class DocumentQuestionPromptBuilder:
     @staticmethod
-    def build_system_message(system_prompt: str) -> SystemMessage:
+    def build_system_prompt_message(system_prompt: str) -> SystemMessage:
+        logger.debug(
+            "Built system message",
+            extra={
+                "system_prompt": system_prompt
+            }
+        )
         return SystemMessage(content=system_prompt)
 
     @staticmethod
-    def build_context_message(fragments: List[str]) -> HumanMessage:
-        if not fragments:
+    def build_context_fragments_message(context_fragments: List[str]) -> HumanMessage:
+        if not context_fragments:
             logger.info("No context fragments provided, using empty context message")
             return HumanMessage(
                 content="[CONTEXTO]: No se encontró información relevante en los documentos."
             )
 
-        context_text = "\n\n---\n\n".join(
-            f"Fragmento {idx + 1}:\n{fragment}"
-            for idx, fragment in enumerate(fragments)
+        context = "\n\n---\n\n".join(
+            f"Fragmento de contexto {idx + 1}:\n{context_fragment}"
+            for idx, context_fragment in enumerate(context_fragments)
         )
 
         logger.debug(
-            "Built context message",
+            "Built context fragments message",
             extra={
-                "fragments_count": len(fragments),
-                "total_length": len(context_text)
+                "context_fragments": context_fragments
             }
         )
 
         return HumanMessage(
             content=(
-                f"[CONTEXTO RELEVANTE DE DOCUMENTOS]\n\n"
-                f"{context_text}\n\n"
+                f"[CONTEXTO]\n\n"
+                f"{context}\n\n"
                 f"[FIN DEL CONTEXTO]"
             )
         )
 
     @staticmethod
-    def build_history_messages(messages: List[Message]) -> List[BaseMessage]:
-        if not messages:
+    def build_history_messages_message(history_messages: List[Message]) -> List[BaseMessage]:
+        if not history_messages:
             return []
 
         history: List[BaseMessage] = []
 
-        for idx, message in enumerate(messages):
+        for idx, history_message in enumerate(history_messages):
             try:
-                if message.role == MessageRole.human:
-                    history.append(HumanMessage(content=message.content))
-                elif message.role == MessageRole.assistant:
-                    history.append(AIMessage(content=message.content))
+                if history_message.role == MessageRole.human:
+                    history.append(HumanMessage(content=history_message.content))
+                elif history_message.role == MessageRole.assistant:
+                    history.append(AIMessage(content=history_message.content))
                 else:
                     logger.warning(
                         "Skipping message with unknown role",
                         extra={
                             "index": idx,
-                            "role": str(message.role)
+                            "role": history_message.role
                         }
                     )
             except Exception as e:
@@ -74,10 +79,9 @@ class DocumentQuestionPromptBuilder:
                 continue
 
         logger.debug(
-            "Built history messages",
+            "Built history messages message",
             extra={
-                "input_count": len(messages),
-                "output_count": len(history)
+                "history_messages": history_messages
             }
         )
 
@@ -85,6 +89,12 @@ class DocumentQuestionPromptBuilder:
 
     @staticmethod
     def build_question_message(question: str) -> HumanMessage:
+        logger.debug(
+            "Built question message",
+            extra={
+                "question": question
+            }
+        )
         return HumanMessage(
             content=(
                 f"Basándote EXCLUSIVAMENTE en el contexto proporcionado arriba, "
@@ -94,21 +104,21 @@ class DocumentQuestionPromptBuilder:
 
     @staticmethod
     def build_complete_prompt(system_prompt: str,
-            fragments: List[str],
-            messages: List[Message],
-            question: str) -> List[BaseMessage]:
+                              context_fragments: List[str],
+                              history_messages: List[Message],
+                              question: str) -> List[BaseMessage]:
         prompt_messages: List[BaseMessage] = []
 
         prompt_messages.append(
-            DocumentQuestionPromptBuilder.build_system_message(system_prompt)
+            DocumentQuestionPromptBuilder.build_system_prompt_message(system_prompt)
         )
 
         prompt_messages.append(
-            DocumentQuestionPromptBuilder.build_context_message(fragments)
+            DocumentQuestionPromptBuilder.build_context_fragments_message(context_fragments)
         )
 
         prompt_messages.extend(
-            DocumentQuestionPromptBuilder.build_history_messages(messages)
+            DocumentQuestionPromptBuilder.build_history_messages_message(history_messages)
         )
 
         prompt_messages.append(
@@ -118,9 +128,7 @@ class DocumentQuestionPromptBuilder:
         logger.info(
             "Complete prompt built",
             extra={
-                "total_messages": len(prompt_messages),
-                "fragments_count": len(fragments),
-                "history_count": len(messages)
+                "prompt_messages": prompt_messages
             }
         )
 

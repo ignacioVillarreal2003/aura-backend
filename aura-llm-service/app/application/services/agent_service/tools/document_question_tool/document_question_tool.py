@@ -8,7 +8,7 @@ from app.application.services.agent_service.tools.document_question_tool.documen
     DocumentQuestionToolInput
 )
 from app.application.services.document_question_service.document_question_service import DocumentQuestionService
-from app.infrastructure.context_provider.interfaces.context_provider_interface import (
+from app.infrastructure.document_context_provider.interfaces.document_context_provider_interface import (
     ContextProviderInterface
 )
 from app.infrastructure.llm_facade.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
