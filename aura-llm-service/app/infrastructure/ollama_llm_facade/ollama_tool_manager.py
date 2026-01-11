@@ -2,7 +2,7 @@ import logging
 from typing import Callable, Optional, Iterable, List
 from langchain_core.tools import BaseTool
 
-from app.infrastructure.llm_facade.exceptions.llm_facade_exceptions import ToolInitializationError
+from app.infrastructure.ollama_llm_facade.exceptions.llm_facade_exceptions import ToolInitializationError
 
 logger = logging.getLogger(__name__)
 

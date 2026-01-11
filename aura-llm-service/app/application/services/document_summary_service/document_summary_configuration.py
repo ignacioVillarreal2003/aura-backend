@@ -1,81 +1,147 @@
+import logging
 from dataclasses import dataclass
-from enum import Enum
-from typing import Optional
+from typing import Optional, Final
 
-from app.application.exceptions.app_exceptions import ValidationError
+from app.application.services.document_summary_service.constants.summarization_strategy import SummarizationStrategy
 
-
-class SummarizationStrategy(str, Enum):
-    DIRECT = "direct"
-    MAP_REDUCE = "map_reduce"
+logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
+@dataclass(
+    frozen=True,
+    kw_only=True
+)
 class DocumentSummaryConfiguration:
-    large_document_threshold: int = 5
+    MIN_LARGE_DOCUMENT_THRESHOLD: Final[int] = 2
+    MAX_LARGE_DOCUMENT_THRESHOLD: Final[int] = 50
 
-    chunk_size: int = 5
-    max_concurrent_chunks: int = 3
-    max_retry_attempts: int = 3
-    retry_delay: float = 1.0
+    MIN_CHUNK_SIZE: Final[int] = 1
+    MAX_CHUNK_SIZE: Final[int] = 20
 
-    system_prompt: Optional[str] = None
+    MIN_CONCURRENT_CHUNKS: Final[int] = 1
+    MAX_CONCURRENT_CHUNKS: Final[int] = 10
 
-    MIN_DOCUMENT_ID: int = 1
+    MIN_RETRY_ATTEMPTS: Final[int] = 0
+    MAX_RETRY_ATTEMPTS: Final[int] = 10
 
-    MIN_LARGE_DOCUMENT_THRESHOLD: int = 2
-    MAX_LARGE_DOCUMENT_THRESHOLD: int = 50
+    MIN_RETRY_DELAY: Final[float] = 0.0
+    MAX_RETRY_DELAY: Final[float] = 60.0
 
-    MIN_CHUNK_SIZE: int = 1
-    MAX_CHUNK_SIZE: int = 20
+    DEFAULT_LARGE_DOCUMENT_THRESHOLD: Final[int] = 5
+    DEFAULT_CHUNK_SIZE: Final[int] = 5
+    DEFAULT_MAX_CONCURRENT_CHUNKS: Final[int] = 3
+    DEFAULT_MAX_RETRY_ATTEMPTS: Final[int] = 3
+    DEFAULT_RETRY_DELAY: Final[float] = 1.0
+    DEFAULT_MIN_DOCUMENT_ID: Final[int] = 1
+    DEFAULT_MAX_DOCUMENT_ID: Final[int] = 2_147_483_647
 
-    MIN_CONCURRENT_CHUNKS: int = 1
-    MAX_CONCURRENT_CHUNKS: int = 10
+    large_document_threshold: int = DEFAULT_LARGE_DOCUMENT_THRESHOLD
+    chunk_size: int = DEFAULT_CHUNK_SIZE
+    max_concurrent_chunks: int = DEFAULT_MAX_CONCURRENT_CHUNKS
+    max_retry_attempts: int = DEFAULT_MAX_RETRY_ATTEMPTS
+    retry_delay: float = DEFAULT_RETRY_DELAY
+    min_document_id: int = DEFAULT_MIN_DOCUMENT_ID
+    max_document_id: int = DEFAULT_MAX_DOCUMENT_ID
+    custom_system_prompt: Optional[str] = None
 
-    DEFAULT_SYSTEM_PROMPT: str = (
-        "Eres un asistente experto en crear resúmenes precisos y concisos de documentos. "
-        "Tu tarea es analizar el contenido proporcionado y generar un resumen claro, "
-        "estructurado y completo que capture los puntos principales sin perder información importante. "
-        "El resumen debe estar en formato Markdown e incluir títulos (`#`), subtítulos (`##`), "
-        "listas (`-`) y negritas (`**`) cuando sea apropiado."
-    )
+    def __post_init__(self) -> None:
+        try:
+            self._validate_all()
+            logger.info(
+                "DocumentSummaryConfiguration initialized successfully",
+                extra={
+                    "large_document_threshold": self.large_document_threshold,
+                    "chunk_size": self.chunk_size,
+                    "max_concurrent_chunks": self.max_concurrent_chunks,
+                    "max_retry_attempts": self.max_retry_attempts,
+                    "retry_delay": self.retry_delay,
+                    "min_document_id": self.min_document_id,
+                    "max_document_id": self.max_document_id,
+                    "uses_custom_system_prompt": self.custom_system_prompt is not None
+                }
+            )
+        except ValueError as e:
+            logger.error(
+                "Configuration validation failed",
+                extra={
+                    "error": str(e)
+                },
+                exc_info=True
+            )
+            raise
 
-    def __post_init__(self):
-        self._validate()
-
-    def _validate(self) -> None:
+    def _validate_all(self) -> None:
         self._validate_large_document_threshold()
         self._validate_chunk_size()
         self._validate_max_concurrent_chunks()
+        self._validate_retry_attempts_and_delay()
+        self._validate_min_document_id()
 
     def _validate_large_document_threshold(self) -> None:
-        if not (
-                self.MIN_LARGE_DOCUMENT_THRESHOLD <= self.large_document_threshold <= self.MAX_LARGE_DOCUMENT_THRESHOLD):
-            raise ValidationError(
-                f"large_document_threshold must be between {self.MIN_LARGE_DOCUMENT_THRESHOLD} and {self.MAX_LARGE_DOCUMENT_THRESHOLD}",
-                status_code=500
+        if not (self.MIN_LARGE_DOCUMENT_THRESHOLD
+                <= self.large_document_threshold
+                <= self.MAX_LARGE_DOCUMENT_THRESHOLD):
+            raise ValueError(
+                f"large_document_threshold debe estar entre {self.MIN_LARGE_DOCUMENT_THRESHOLD} y {self.MAX_LARGE_DOCUMENT_THRESHOLD}, "
+                f"se recibió: {self.large_document_threshold}"
             )
 
     def _validate_chunk_size(self) -> None:
-        if not (self.MIN_CHUNK_SIZE <= self.chunk_size <= self.MAX_CHUNK_SIZE):
-            raise ValidationError(
-                f"chunk_size must be between {self.MIN_CHUNK_SIZE} and {self.MAX_CHUNK_SIZE}",
-                status_code=500
+        if not (self.MIN_CHUNK_SIZE
+                <= self.chunk_size
+                <= self.MAX_CHUNK_SIZE):
+            raise ValueError(
+                f"chunk_size debe estar entre {self.MIN_CHUNK_SIZE} y {self.MAX_CHUNK_SIZE}, "
+                f"se recibió: {self.chunk_size}"
             )
 
     def _validate_max_concurrent_chunks(self) -> None:
-        if not (self.MIN_CONCURRENT_CHUNKS <= self.max_concurrent_chunks <= self.MAX_CONCURRENT_CHUNKS):
-            raise ValidationError(
-                f"max_concurrent_chunks must be between {self.MIN_CONCURRENT_CHUNKS} and {self.MAX_CONCURRENT_CHUNKS}",
-                status_code=500
+        if not (self.MIN_CONCURRENT_CHUNKS
+                <= self.max_concurrent_chunks
+                <= self.MAX_CONCURRENT_CHUNKS):
+            raise ValueError(
+                f"max_concurrent_chunks debe estar entre {self.MIN_CONCURRENT_CHUNKS} y {self.MAX_CONCURRENT_CHUNKS}, "
+                f"se recibió: {self.max_concurrent_chunks}"
             )
 
-    @property
-    def effective_system_prompt(self) -> str:
-        return self.system_prompt or self.DEFAULT_SYSTEM_PROMPT
+    def _validate_max_retry_attempts(self) -> None:
+        if not (self.MIN_RETRY_ATTEMPTS
+                <= self.max_retry_attempts
+                <= self.MAX_RETRY_ATTEMPTS):
+            raise ValueError(
+                f"max_retry_attempts debe estar entre {self.MIN_RETRY_ATTEMPTS} y {self.MAX_RETRY_ATTEMPTS}, "
+                f"se recibió: {self.max_retry_attempts}"
+            )
+
+    def _validate_retry_delay(self) -> None:
+        if not (self.MIN_RETRY_DELAY
+                <= self.retry_delay
+                <= self.MAX_RETRY_DELAY):
+            raise ValueError(
+                f"retry_delay debe estar entre {self.MIN_RETRY_DELAY} y {self.MAX_RETRY_DELAY}, "
+                f"se recibió: {self.retry_delay}"
+            )
 
     def select_strategy(self,
                         fragment_count: int) -> SummarizationStrategy:
         if fragment_count > self.large_document_threshold:
             return SummarizationStrategy.MAP_REDUCE
         return SummarizationStrategy.DIRECT
+
+    @property
+    def system_prompt(self) -> str:
+        return self.custom_system_prompt or self._get_default_system_prompt()
+
+    @staticmethod
+    def _get_default_system_prompt() -> str:
+        return (
+            "Eres un asistente experto en crear resúmenes precisos y concisos basados únicamente en el contenido proporcionado. "
+            "REGLAS ESTRICTAS:\n"
+            "1. Resume SOLO utilizando la información presente en el contenido provisto\n"
+            "2. No agregues, infieras ni asumas información que no esté explícitamente en el texto\n"
+            "3. Si una sección del contenido no aporta información relevante, omítela del resumen\n"
+            "4. Prioriza los puntos clave, conceptos principales y conclusiones importantes\n"
+            "5. Mantén el resumen claro, estructurado y fácil de leer\n"
+            "6. Usa formato Markdown: títulos (#), subtítulos (##), listas (-), negritas (**), tablas cuando corresponda\n"
+            "7. Sé conciso, pero sin perder información esencial\n"
+        )

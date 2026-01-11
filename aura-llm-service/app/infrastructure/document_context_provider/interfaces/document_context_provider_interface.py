@@ -6,7 +6,7 @@ class DocumentContextProviderInterface(ABC):
     @abstractmethod
     async def retrieve_context_fragments_by_question(self,
                                                      question: str,
-                                                     context_fragments_count: int) -> List[str]:
+                                                     max_context_fragments_count: int) -> List[str]:
         pass
 
     @abstractmethod

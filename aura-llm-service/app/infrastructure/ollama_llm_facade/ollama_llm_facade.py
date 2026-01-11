@@ -6,15 +6,15 @@ from langchain_core.tools import BaseTool
 from langchain_ollama import ChatOllama
 from langchain_core.runnables import Runnable
 
-from app.infrastructure.llm_facade.exceptions.llm_facade_exceptions import (
+from app.infrastructure.ollama_llm_facade.exceptions.llm_facade_exceptions import (
     LLMInitializationError,
     LLMNotConfiguredError,
     ToolInitializationError,
     LLMInvocationError
 )
-from app.infrastructure.llm_facade.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
-from app.infrastructure.llm_facade.ollama_llm_facade_configuration import OllamaLLMFacadeConfiguration
-from app.infrastructure.llm_facade.ollama_tool_manager import ToolFactory, OllamaToolManager
+from app.infrastructure.ollama_llm_facade.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
+from app.infrastructure.ollama_llm_facade.ollama_llm_facade_configuration import OllamaLLMFacadeConfiguration
+from app.infrastructure.ollama_llm_facade.ollama_tool_manager import ToolFactory, OllamaToolManager
 
 logger = logging.getLogger(__name__)
 

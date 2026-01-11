@@ -2,8 +2,8 @@ import logging
 from typing import Optional, List
 from asyncio import Lock
 
-from app.infrastructure.llm_facade.ollama_llm_facade import OllamaLLMFacade
-from app.infrastructure.llm_facade.ollama_tool_manager import ToolFactory
+from app.infrastructure.ollama_llm_facade.ollama_llm_facade import OllamaLLMFacade
+from app.infrastructure.ollama_llm_facade.ollama_tool_manager import ToolFactory
 
 logger = logging.getLogger(__name__)
 

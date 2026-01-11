@@ -2,40 +2,45 @@ import logging
 from typing import Any, List, Optional
 
 from app.application.exceptions.app_exceptions import ValidationError
-from app.infrastructure.document_context_provider.document_context_provider_configuration import ContextProviderConfiguration
-from app.infrastructure.document_context_provider.dtos.fragments_by_document_request import FragmentsByDocumentRequest
-from app.infrastructure.document_context_provider.dtos.fragments_by_question_request import FragmentsByQuestionRequest
+from app.infrastructure.document_context_provider.document_context_provider_configuration import (
+    ContextProviderConfiguration
+)
+from app.infrastructure.document_context_provider.dtos.context_fragments_by_document_request import (
+    ContextFragmentsByDocumentRequest
+)
+from app.infrastructure.document_context_provider.dtos.context_fragments_by_question_request import (
+    ContextFragmentsByQuestionRequest
+)
 from app.infrastructure.document_context_provider.dtos.fragments_response import FragmentsResponse
 from app.infrastructure.document_context_provider.exceptions.context_provider_exception import (
     ContextRetrievalByQuestionError,
     ContextRetrievalByDocumentError
 )
-from app.infrastructure.document_context_provider.interfaces.document_context_provider_interface import ContextProviderInterface
+from app.infrastructure.document_context_provider.interfaces.document_context_provider_interface import (
+    DocumentContextProviderInterface
+)
 from app.infrastructure.http_client.exceptions.http_client_exceptions import HttpClientError
 from app.infrastructure.http_client.interfaces.http_client_interface import HttpClientInterface
 
 logger = logging.getLogger(__name__)
 
 
-class ContextProvider(ContextProviderInterface):
+class DocumentContextProvider(DocumentContextProviderInterface):
     def __init__(self,
                  http_client: HttpClientInterface,
-                 retrieve_fragments_by_question_url: str,
-                 retrieve_fragments_by_document_url: str,
+                 retrieve_context_fragments_by_question_url: str,
+                 retrieve_context_fragments_by_document_url: str,
                  configuration: Optional[ContextProviderConfiguration] = None) -> None:
         self._http_client = http_client
-        self._retrieve_fragments_by_question_url = retrieve_fragments_by_question_url
-        self._retrieve_fragments_by_document_url = retrieve_fragments_by_document_url
+        self._retrieve_context_fragments_by_question_url = retrieve_context_fragments_by_question_url
+        self._retrieve_context_fragments_by_document_url = retrieve_context_fragments_by_document_url
         self._configuration = configuration or ContextProviderConfiguration()
 
         logger.info(
             "ContextProvider initialized successfully",
             extra={
-                "retrieve_fragments_by_question_url": retrieve_fragments_by_question_url,
-                "retrieve_fragments_by_document_url": retrieve_fragments_by_document_url,
-                "default_fragments_count": self._configuration.default_fragments_count,
-                "min_fragments_count": self._configuration.min_fragments_count,
-                "max_fragments_count": self._configuration.max_fragments_count,
+                "retrieve_context_fragments_by_question_url": retrieve_context_fragments_by_question_url,
+                "retrieve_context_fragments_by_document_url": retrieve_context_fragments_by_document_url,
                 "max_fragment_chars": self._configuration.max_fragment_chars,
                 "truncate_oversized_fragments": self._configuration.truncate_oversized_fragments,
                 "max_total_fragments_in_response": self._configuration.max_total_fragments_in_response,
@@ -46,19 +51,13 @@ class ContextProvider(ContextProviderInterface):
     @classmethod
     def with_defaults(cls,
                       http_client: HttpClientInterface,
-                      retrieve_fragments_by_question_url: str,
-                      retrieve_fragments_by_document_url: str,
-                      default_fragments_count: int = 3,
-                      min_fragments_count: int = 1,
-                      max_fragments_count: int = 6,
+                      retrieve_context_fragments_by_question_url: str,
+                      retrieve_context_fragments_by_document_url: str,
                       max_fragment_chars: int = 10000,
                       truncate_oversized_fragments: bool = False,
                       max_total_fragments_in_response: int = 100,
-                      max_response_size_chars: int = 500000) -> "ContextProvider":
+                      max_response_size_chars: int = 500000) -> "DocumentContextProvider":
         configuration = ContextProviderConfiguration(
-            default_fragments_count=default_fragments_count,
-            min_fragments_count=min_fragments_count,
-            max_fragments_count=max_fragments_count,
             max_fragment_chars=max_fragment_chars,
             truncate_oversized_fragments=truncate_oversized_fragments,
             max_total_fragments_in_response=max_total_fragments_in_response,
@@ -66,29 +65,26 @@ class ContextProvider(ContextProviderInterface):
         )
         return cls(
             http_client=http_client,
-            retrieve_fragments_by_question_url=retrieve_fragments_by_question_url,
-            retrieve_fragments_by_document_url=retrieve_fragments_by_document_url,
+            retrieve_context_fragments_by_question_url=retrieve_context_fragments_by_question_url,
+            retrieve_context_fragments_by_document_url=retrieve_context_fragments_by_document_url,
             configuration=configuration
         )
 
-    async def retrieve_fragments_by_question(self,
-                                             question: str,
-                                             fragments_count: Optional[int] = None) -> List[str]:
-        self._validate_question(question)
-        fragments_count = self._normalize_fragments_count(fragments_count)
-
+    async def retrieve_context_fragments_by_question(self,
+                                                     question: str,
+                                                     max_context_fragments_count: int) -> List[str]:
         logger.info(
             "Retrieving context fragments by question",
             extra={
                 "question": question,
-                "fragments_count": fragments_count
+                "max_context_fragments_count": max_context_fragments_count
             }
         )
 
         try:
-            request_model = FragmentsByQuestionRequest(
+            request_model = ContextFragmentsByQuestionRequest(
                 question=question,
-                fragments_count=fragments_count
+                max_context_fragments_count=max_context_fragments_count
             )
         except Exception as e:
             logger.error(
@@ -107,13 +103,13 @@ class ContextProvider(ContextProviderInterface):
 
         try:
             data = await self._http_client.post(
-                url=self._retrieve_fragments_by_question_url,
+                url=self._retrieve_context_fragments_by_question_url,
                 json=payload
             )
 
-            fragments = self._parse_and_validate_response(
+            context_fragments = self._parse_and_validate_response(
                 data=data,
-                fragments_count=fragments_count,
+                max_context_fragments_count=max_context_fragments_count,
                 error_class=ContextRetrievalByQuestionError
             )
 
@@ -121,19 +117,19 @@ class ContextProvider(ContextProviderInterface):
                 "Fragments retrieved successfully by question",
                 extra={
                     "question": question,
-                    "requested_fragments": fragments_count,
-                    "retrieved_fragments": len(fragments)
+                    "max_context_fragments_count": max_context_fragments_count,
+                    "retrieved_context_fragments": len(context_fragments)
                 }
             )
 
-            return fragments
+            return context_fragments
 
         except HttpClientError as e:
             logger.error(
                 "HTTP communication error during fragment retrieval by question",
                 extra={
                     "question": question,
-                    "fragments_count": fragments_count,
+                    "max_context_fragments_count": max_context_fragments_count,
                     "error_type": type(e).__name__,
                     "error_message": str(e)
                 },
@@ -144,10 +140,8 @@ class ContextProvider(ContextProviderInterface):
                 "Por favor, intente nuevamente más tarde."
             ) from e
 
-    async def retrieve_fragments_by_document(self,
-                                             document_id: int) -> List[str]:
-        self._validate_document_id(document_id)
-
+    async def retrieve_context_fragments_by_document(self,
+                                                     document_id: int) -> List[str]:
         logger.info(
             "Retrieving context fragments by document",
             extra={
@@ -156,7 +150,7 @@ class ContextProvider(ContextProviderInterface):
         )
 
         try:
-            request_model = FragmentsByDocumentRequest(
+            request_model = ContextFragmentsByDocumentRequest(
                 document_id=document_id
             )
         except Exception as e:
@@ -176,13 +170,13 @@ class ContextProvider(ContextProviderInterface):
 
         try:
             data = await self._http_client.post(
-                url=self._retrieve_fragments_by_document_url,
+                url=self._retrieve_context_fragments_by_document_url,
                 json=payload
             )
 
-            fragments = self._parse_and_validate_response(
+            context_fragments = self._parse_and_validate_response(
                 data=data,
-                fragments_count=None,
+                max_context_fragments_count=None,
                 error_class=ContextRetrievalByDocumentError
             )
 
@@ -190,13 +184,11 @@ class ContextProvider(ContextProviderInterface):
                 "Fragments retrieved successfully by document",
                 extra={
                     "document_id": document_id,
-                    "total_fragments": len(fragments),
-                    "total_chars": sum(len(f) for f in fragments),
-                    "avg_fragment_length": sum(len(f) for f in fragments) // len(fragments) if fragments else 0
+                    "total_context_fragments": len(context_fragments)
                 }
             )
 
-            return fragments
+            return context_fragments
 
         except HttpClientError as e:
             logger.error(
@@ -213,81 +205,18 @@ class ContextProvider(ContextProviderInterface):
                 f"Por favor, verifique que el documento exista e intente nuevamente."
             ) from e
 
-    @staticmethod
-    def _validate_question(question: str) -> None:
-        if not question or not question.strip():
-            logger.warning(
-                "Question validation failed: empty or whitespace-only question",
-                extra={
-                    "question_repr": repr(question),
-                    "question_length": len(question) if question else 0
-                }
-            )
-            raise ValidationError(
-                "La pregunta no puede estar vacía. Por favor, proporcione una pregunta válida.",
-                status_code=400
-            )
-
-    def _normalize_fragments_count(self,
-                                   fragments_count: Optional[int]) -> int:
-        if fragments_count is None:
-            logger.debug(
-                "Using default fragments count",
-                extra={
-                    "default_value": self._configuration.default_fragments_count
-                }
-            )
-            return self._configuration.default_fragments_count
-
-        self._validate_fragments_count(fragments_count)
-        return fragments_count
-
-    def _validate_fragments_count(self,
-                                  fragments_count: int) -> None:
-        if not (self._configuration.min_fragments_count <= fragments_count <= self._configuration.max_fragments_count):
-            logger.warning(
-                "Fragments count validation failed: out of range",
-                extra={
-                    "fragments_count": fragments_count,
-                    "min_fragments_count": self._configuration.min_fragments_count,
-                    "max_fragments_count": self._configuration.max_fragments_count
-                }
-            )
-            raise ValidationError(
-                f"La cantidad de fragmentos debe estar entre "
-                f"{self._configuration.min_fragments_count} y {self._configuration.max_fragments_count}. "
-                f"Valor proporcionado: {fragments_count}.",
-                status_code=400
-            )
-
-    @staticmethod
-    def _validate_document_id(document_id: int) -> None:
-        if document_id <= 0:
-            logger.warning(
-                "Document ID validation failed: non-positive integer",
-                extra={
-                    "document_id": document_id,
-                    "value_type": type(document_id).__name__
-                }
-            )
-            raise ValidationError(
-                f"El ID del documento debe ser un número entero positivo. "
-                f"Valor proporcionado: {document_id}.",
-                status_code=400
-            )
-
     def _parse_and_validate_response(self,
                                      data: Any,
-                                     fragments_count: Optional[int],
+                                     max_context_fragments_count: Optional[int],
                                      error_class: type[Exception]) -> List[str]:
         try:
             response_model = FragmentsResponse.model_validate(data)
-            raw_fragments = response_model.fragments
+            raw_context_fragments = response_model.context_fragments
 
             logger.debug(
                 "Response parsed successfully",
                 extra={
-                    "raw_fragments": raw_fragments
+                    "raw_context_fragments": raw_context_fragments
                 }
             )
 
@@ -306,50 +235,50 @@ class ContextProvider(ContextProviderInterface):
                 "No se pudo procesar la estructura de datos recibida."
             ) from e
 
-        validated_fragments = self._apply_security_limits(
-            fragments=raw_fragments,
-            fragments_count=fragments_count
+        validated_context_fragments = self._apply_security_limits(
+            context_fragments=raw_context_fragments,
+            max_context_fragments_count=max_context_fragments_count
         )
 
-        return validated_fragments
+        return validated_context_fragments
 
     def _apply_security_limits(self,
-                               fragments: List[str],
-                               fragments_count: Optional[int]) -> List[str]:
-        validated_fragments: List[str] = []
+                               context_fragments: List[str],
+                               max_context_fragments_count: Optional[int]) -> List[str]:
+        validated_context_fragments: List[str] = []
         total_chars = 0
         skipped_oversized = 0
         skipped_count_limit = 0
         truncated_count = 0
 
         max_to_process = min(
-            len(fragments),
+            len(context_fragments),
             self._configuration.max_total_fragments_in_response
         )
 
-        if len(fragments) > max_to_process:
+        if len(context_fragments) > max_to_process:
             logger.warning(
                 "Response exceeds maximum allowed fragments, truncating",
                 extra={
-                    "received_fragments": len(fragments),
+                    "received_fragments": len(context_fragments),
                     "max_allowed": self._configuration.max_total_fragments_in_response
                 }
             )
 
-        for idx, fragment in enumerate(fragments[:max_to_process]):
-            fragment_len = len(fragment)
+        for idx, context_fragment in enumerate(context_fragments[:max_to_process]):
+            context_fragment_len = len(context_fragment)
 
-            if fragment_len > self._configuration.max_fragment_chars:
+            if context_fragment_len > self._configuration.max_fragment_chars:
                 if self._configuration.truncate_oversized_fragments:
-                    fragment = fragment[:self._configuration.max_fragment_chars]
+                    context_fragment = context_fragment[:self._configuration.max_fragment_chars]
                     truncated_count += 1
 
                     logger.debug(
                         "Fragment truncated due to size limit",
                         extra={
                             "fragment_index": idx,
-                            "original_length": fragment_len,
-                            "truncated_length": len(fragment),
+                            "original_length": context_fragment_len,
+                            "truncated_length": len(context_fragment),
                             "max_allowed": self._configuration.max_fragment_chars
                         }
                     )
@@ -360,43 +289,43 @@ class ContextProvider(ContextProviderInterface):
                         "Fragment skipped due to excessive size",
                         extra={
                             "fragment_index": idx,
-                            "fragment_length": fragment_len,
+                            "fragment_length": context_fragment_len,
                             "max_allowed": self._configuration.max_fragment_chars,
                             "total_skipped": skipped_oversized
                         }
                     )
                     continue
 
-            if total_chars + len(fragment) > self._configuration.max_response_size_chars:
+            if total_chars + len(context_fragment) > self._configuration.max_response_size_chars:
                 logger.warning(
                     "Total response size limit reached, stopping collection",
                     extra={
-                        "fragments_collected": len(validated_fragments),
+                        "fragments_collected": len(validated_context_fragments),
                         "total_chars_collected": total_chars,
                         "max_allowed_chars": self._configuration.max_response_size_chars
                     }
                 )
                 break
 
-            if fragments_count is not None and len(validated_fragments) >= fragments_count:
-                skipped_count_limit = len(fragments) - idx
+            if max_context_fragments_count is not None and len(validated_context_fragments) >= max_context_fragments_count:
+                skipped_count_limit = len(context_fragments) - idx
                 logger.debug(
                     "Requested fragment count reached",
                     extra={
-                        "requested_count": fragments_count,
+                        "requested_count": max_context_fragments_count,
                         "fragments_remaining": skipped_count_limit
                     }
                 )
                 break
 
-            validated_fragments.append(fragment)
-            total_chars += len(fragment)
+            validated_context_fragments.append(context_fragment)
+            total_chars += len(context_fragment)
 
         logger.info(
             "Fragment security validation completed",
             extra={
-                "raw_fragments": len(fragments),
-                "validated_fragments": len(validated_fragments),
+                "raw_fragments": len(context_fragments),
+                "validated_fragments": len(validated_context_fragments),
                 "total_chars": total_chars,
                 "skipped_oversized": skipped_oversized,
                 "skipped_count_limit": skipped_count_limit,
@@ -404,7 +333,7 @@ class ContextProvider(ContextProviderInterface):
             }
         )
 
-        return validated_fragments
+        return validated_context_fragments
 
     @property
     def configuration(self) -> ContextProviderConfiguration:

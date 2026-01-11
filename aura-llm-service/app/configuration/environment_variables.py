@@ -64,12 +64,12 @@ class EnvironmentVariables(BaseSettings):
         description="Ollama service base URL"
     )
 
-    retrieve_fragments_by_question_url: str = Field(
+    retrieve_context_fragments_by_question_url: str = Field(
         default="http://localhost:8001/api/fragments/by-question",
         description="Endpoint URL used to retrieve relevant context fragments based on a question"
     )
 
-    retrieve_fragments_by_document_url: str = Field(
+    retrieve_context_fragments_by_document_url: str = Field(
         default="http://localhost:8001/api/fragments/by-document",
         description="Endpoint URL used to retrieve relevant context fragments for a specific document"
     )
