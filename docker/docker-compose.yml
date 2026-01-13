@@ -13,6 +13,22 @@ services:
         condition: service_healthy
     restart: on-failure
 
+  aura-chat-service:
+    build: ../aura-chat-service
+    container_name: aura-chat-service
+    ports:
+      - "8002:8000"
+    env_file:
+      - ../aura-chat-service/.env.docker
+    depends_on:
+      db:
+        condition: service_healthy
+      memory_db:
+        condition: service_healthy
+      aura-llm-service:
+        condition: service_started
+    restart: on-failure
+
   aura-llm-service:
     build: ../aura-llm-service
     container_name: aura-llm-service
