@@ -2,28 +2,29 @@ import logging
 from typing import Optional, List
 from asyncio import Lock
 
+from app.infrastructure.ollama_llm_facade.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 from app.infrastructure.ollama_llm_facade.ollama_llm_facade import OllamaLLMFacade
 from app.infrastructure.ollama_llm_facade.ollama_tool_manager import ToolFactory
 
 logger = logging.getLogger(__name__)
 
-_global_ollama_llm_facade: Optional[OllamaLLMFacade] = None
+_global_ollama_llm_facade: Optional[OllamaLLMFacadeInterface] = None
 _global_ollama_llm_facade_lock = Lock()
 
 
 async def get_global_ollama_llm_facade(*,
                                        ollama_model_name: str,
                                        ollama_base_url: str,
-                                       ollama_temperature: float = 0.0,
+                                       ollama_temperature: Optional[float] = None,
                                        tool_factories: Optional[List[ToolFactory]] = None,
-                                       auto_initialize: bool = True) -> OllamaLLMFacade:
+                                       auto_initialize: bool = True) -> OllamaLLMFacadeInterface:
     global _global_ollama_llm_facade
 
     async with _global_ollama_llm_facade_lock:
         if _global_ollama_llm_facade is None:
             logger.info("Creating global OllamaLLMFacade singleton")
 
-            _global_ollama_llm_facade = OllamaLLMFacade.with_defaults(
+            _global_ollama_llm_facade = OllamaLLMFacade.create(
                 ollama_model_name=ollama_model_name,
                 ollama_base_url=ollama_base_url,
                 ollama_temperature=ollama_temperature,

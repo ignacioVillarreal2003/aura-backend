@@ -33,7 +33,7 @@ async def get_http_client() -> HttpClientInterface:
 
 async def get_document_context_provider() -> DocumentContextProviderInterface:
     http_client = await get_http_client()
-    return DocumentContextProvider.with_defaults(
+    return DocumentContextProvider.create(
         http_client=http_client,
         retrieve_context_fragments_by_question_url=environment_variables.retrieve_context_fragments_by_question_url,
         retrieve_context_fragments_by_document_url=environment_variables.retrieve_context_fragments_by_document_url

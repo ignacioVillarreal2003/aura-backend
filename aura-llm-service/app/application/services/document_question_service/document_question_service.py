@@ -24,7 +24,7 @@ from app.domain.dtos.message import Message
 from app.infrastructure.document_context_provider.interfaces.document_context_provider_interface import (
     DocumentContextProviderInterface
 )
-from app.infrastructure.llm_facade.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
+from app.infrastructure.ollama_llm_facade.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 
 logger = logging.getLogger(__name__)
 

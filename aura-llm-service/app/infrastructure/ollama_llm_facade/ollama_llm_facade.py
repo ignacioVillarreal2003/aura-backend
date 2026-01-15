@@ -9,7 +9,6 @@ from langchain_core.runnables import Runnable
 from app.infrastructure.ollama_llm_facade.exceptions.llm_facade_exceptions import (
     LLMInitializationError,
     LLMNotConfiguredError,
-    ToolInitializationError,
     LLMInvocationError
 )
 from app.infrastructure.ollama_llm_facade.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
@@ -43,16 +42,22 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
         )
 
     @classmethod
-    def with_defaults(cls,
-                      ollama_model_name: str,
-                      ollama_base_url: str,
-                      ollama_temperature: float = 0.0,
-                      tool_factories: Optional[Iterable[ToolFactory]] = None) -> "OllamaLLMFacade":
-        configuration = OllamaLLMFacadeConfiguration(
-            ollama_model_name=ollama_model_name,
-            ollama_base_url=ollama_base_url,
-            ollama_temperature=ollama_temperature
-        )
+    def create(cls,
+               ollama_model_name: str,
+               ollama_base_url: str,
+               ollama_temperature: Optional[float] = None,
+               tool_factories: Optional[Iterable[ToolFactory]] = None) -> "OllamaLLMFacade":
+        config_kwargs = {}
+
+        if ollama_model_name is not None:
+            config_kwargs['ollama_model_name'] = ollama_model_name
+        if ollama_base_url is not None:
+            config_kwargs['ollama_base_url'] = ollama_base_url
+        if ollama_temperature is not None:
+            config_kwargs['ollama_temperature'] = ollama_temperature
+
+        configuration = OllamaLLMFacadeConfiguration(**config_kwargs)
+
         return cls(
             configuration=configuration,
             tool_factories=tool_factories
@@ -80,14 +85,6 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
                         "ollama_model_name": self._configuration.ollama_model_name
                     }
                 )
-
-            except (ToolInitializationError, LLMInitializationError):
-                logger.error(
-                    "Initialization failed with known error",
-                    exc_info=True
-                )
-                self._cleanup_on_failure()
-                raise
 
             except Exception as e:
                 logger.exception(
@@ -224,9 +221,7 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
                         "received_type": type(response).__name__
                     }
                 )
-                raise LLMInvocationError(
-                    f"Expected BaseMessage, received {type(response).__name__}"
-                )
+                raise LLMInvocationError(f"Expected BaseMessage, received {type(response).__name__}")
 
             logger.info(
                 "LLM invocation successful",
@@ -236,9 +231,6 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
                 }
             )
             return response
-
-        except LLMInvocationError:
-            raise
 
         except Exception as e:
             logger.exception(
@@ -322,11 +314,3 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
     @property
     def tool_instructions(self) -> Optional[str]:
         return self._ollama_tool_manager.generate_instructions()
-
-    @property
-    def is_initialized(self) -> bool:
-        return self._initialized
-
-    @property
-    def configuration(self) -> OllamaLLMFacadeConfiguration:
-        return self._configuration

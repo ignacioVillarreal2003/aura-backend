@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any
 
-from app.domain.agent_state.agent_state import AgentState
+from app.application.services.agent_service.agent_state.agent_state import AgentState
 
 
 class NodeInterface(ABC):

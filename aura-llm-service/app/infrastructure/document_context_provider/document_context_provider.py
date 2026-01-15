@@ -3,7 +3,7 @@ from typing import Any, List, Optional
 
 from app.application.exceptions.app_exceptions import ValidationError
 from app.infrastructure.document_context_provider.document_context_provider_configuration import (
-    ContextProviderConfiguration
+    DocumentContextProviderConfiguration
 )
 from app.infrastructure.document_context_provider.dtos.context_fragments_by_document_request import (
     ContextFragmentsByDocumentRequest
@@ -30,11 +30,11 @@ class DocumentContextProvider(DocumentContextProviderInterface):
                  http_client: HttpClientInterface,
                  retrieve_context_fragments_by_question_url: str,
                  retrieve_context_fragments_by_document_url: str,
-                 configuration: Optional[ContextProviderConfiguration] = None) -> None:
+                 configuration: Optional[DocumentContextProviderConfiguration] = None) -> None:
         self._http_client = http_client
         self._retrieve_context_fragments_by_question_url = retrieve_context_fragments_by_question_url
         self._retrieve_context_fragments_by_document_url = retrieve_context_fragments_by_document_url
-        self._configuration = configuration or ContextProviderConfiguration()
+        self._configuration = configuration or DocumentContextProviderConfiguration()
 
         logger.info(
             "ContextProvider initialized successfully",
@@ -49,20 +49,27 @@ class DocumentContextProvider(DocumentContextProviderInterface):
         )
 
     @classmethod
-    def with_defaults(cls,
-                      http_client: HttpClientInterface,
-                      retrieve_context_fragments_by_question_url: str,
-                      retrieve_context_fragments_by_document_url: str,
-                      max_fragment_chars: int = 10000,
-                      truncate_oversized_fragments: bool = False,
-                      max_total_fragments_in_response: int = 100,
-                      max_response_size_chars: int = 500000) -> "DocumentContextProvider":
-        configuration = ContextProviderConfiguration(
-            max_fragment_chars=max_fragment_chars,
-            truncate_oversized_fragments=truncate_oversized_fragments,
-            max_total_fragments_in_response=max_total_fragments_in_response,
-            max_response_size_chars=max_response_size_chars
-        )
+    def create(cls,
+               http_client: HttpClientInterface,
+               retrieve_context_fragments_by_question_url: str,
+               retrieve_context_fragments_by_document_url: str,
+               max_fragment_chars: Optional[int] = None,
+               truncate_oversized_fragments: Optional[bool] = None,
+               max_total_fragments_in_response: Optional[int] = None,
+               max_response_size_chars: Optional[int] = None) -> "DocumentContextProvider":
+        config_kwargs = {}
+
+        if max_fragment_chars is not None:
+            config_kwargs['max_fragment_chars'] = max_fragment_chars
+        if truncate_oversized_fragments is not None:
+            config_kwargs['truncate_oversized_fragments'] = truncate_oversized_fragments
+        if max_total_fragments_in_response is not None:
+            config_kwargs['max_total_fragments_in_response'] = max_total_fragments_in_response
+        if max_response_size_chars is not None:
+            config_kwargs['max_response_size_chars'] = max_response_size_chars
+
+        configuration = DocumentContextProviderConfiguration(**config_kwargs)
+
         return cls(
             http_client=http_client,
             retrieve_context_fragments_by_question_url=retrieve_context_fragments_by_question_url,
@@ -136,8 +143,7 @@ class DocumentContextProvider(DocumentContextProviderInterface):
                 exc_info=True
             )
             raise ContextRetrievalByQuestionError(
-                "No se pudieron recuperar los fragmentos del servicio externo. "
-                "Por favor, intente nuevamente más tarde."
+                "No se pudieron recuperar los fragmentos del servicio externo. Por favor, intente nuevamente más tarde."
             ) from e
 
     async def retrieve_context_fragments_by_document(self,
@@ -307,7 +313,8 @@ class DocumentContextProvider(DocumentContextProviderInterface):
                 )
                 break
 
-            if max_context_fragments_count is not None and len(validated_context_fragments) >= max_context_fragments_count:
+            if max_context_fragments_count is not None and len(
+                    validated_context_fragments) >= max_context_fragments_count:
                 skipped_count_limit = len(context_fragments) - idx
                 logger.debug(
                     "Requested fragment count reached",
@@ -334,7 +341,3 @@ class DocumentContextProvider(DocumentContextProviderInterface):
         )
 
         return validated_context_fragments
-
-    @property
-    def configuration(self) -> ContextProviderConfiguration:
-        return self._configuration

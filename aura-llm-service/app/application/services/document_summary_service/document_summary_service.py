@@ -217,6 +217,7 @@ class DocumentSummaryService(DocumentSummaryServiceInterface):
             self._chunk_processor = DocumentSummaryChunkProcessor(
                 configuration=self._configuration,
                 ollama_llm_facade=self._ollama_llm_facade,
+                document_summary_prompt_builder=self._prompt_builder,
                 llm=self._llm
             )
 

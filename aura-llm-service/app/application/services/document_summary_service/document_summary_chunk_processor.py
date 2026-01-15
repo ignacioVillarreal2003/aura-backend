@@ -1,17 +1,17 @@
 import asyncio
 import logging
-from typing import List, Optional, Final
+from typing import List, Optional
 from langchain_core.runnables import Runnable
 
 from app.application.services.document_summary_service.exceptions.document_summary_service_exceptions import (
     DocumentSummaryServiceError
 )
-from app.infrastructure.llm_facade.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
+from app.infrastructure.ollama_llm_facade.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 from app.application.services.document_summary_service.document_summary_configuration import (
     DocumentSummaryConfiguration
 )
 from app.application.services.document_summary_service.document_summary_prompt_builder import (
-    DocumentSummaryMessageBuilder
+    DocumentSummaryPromptBuilder
 )
 
 logger = logging.getLogger(__name__)
@@ -21,9 +21,11 @@ class DocumentSummaryChunkProcessor:
     def __init__(self,
                  configuration: DocumentSummaryConfiguration,
                  ollama_llm_facade: OllamaLLMFacadeInterface,
+                 document_summary_prompt_builder: DocumentSummaryPromptBuilder,
                  llm: Runnable) -> None:
         self._configuration = configuration
         self._ollama_llm_facade = ollama_llm_facade
+        self._document_summary_prompt_builder = document_summary_prompt_builder
         self._llm = llm
 
         self._semaphore = asyncio.Semaphore(configuration.max_concurrent_chunks)
@@ -171,7 +173,7 @@ class DocumentSummaryChunkProcessor:
             ) from last_error
 
     async def _process_chunk(self, chunk: List[str]) -> str:
-        llm_input = DocumentSummaryMessageBuilder.build_summarization_messages(
+        llm_input = self._document_summary_prompt_builder.build_summarization_messages(
             system_prompt=self._configuration.system_prompt,
             fragments=chunk
         )
