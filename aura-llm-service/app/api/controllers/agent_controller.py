@@ -24,7 +24,7 @@ class AgentController:
     async def execute_agent(request_body: AgentRequest,
                             agent_service: AgentServiceInterface = Depends(get_agent_service)) -> AgentResponse:
         logger.info(
-            "Processing agent request",
+            "Processing agent_node request",
             extra={
                 "message": request_body.message
             }
@@ -44,7 +44,7 @@ class AgentController:
 
         except AppError as e:
             logger.warning(
-                "Application error in agent controller",
+                "Application error in agent_node controller",
                 extra={
                     "error_code": e.code,
                     "error_message": e.message,
@@ -62,7 +62,7 @@ class AgentController:
 
         except Exception as e:
             logger.exception(
-                "Unexpected error in agent controller",
+                "Unexpected error in agent_node controller",
                 extra={
                     "error_type": type(e).__name__,
                     "message": request_body.message
@@ -72,7 +72,7 @@ class AgentController:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail={
                     "error": "InternalServerError",
-                    "message": "An unexpected error occurred while processing the agent request"
+                    "message": "An unexpected error occurred while processing the agent_node request"
                 }
             )
 
@@ -82,15 +82,15 @@ agent_controller = AgentController()
 router.post(
     "",
     response_model=AgentResponse,
-    summary="Execute an agent request",
+    summary="Execute an agent_node request",
     description=(
-        "Processes a user request using an intelligent agent capable of dynamically "
+        "Processes a user request using an intelligent agent_node capable of dynamically "
         "selecting and orchestrating multiple tools and workflows to fulfill complex tasks. "
-        "The agent can reason, retrieve information, perform actions, and generate responses "
+        "The agent_node can reason, retrieve information, perform actions, and generate responses "
         "based on the user's intent."
     ),
     response_description=(
-        "Returns the agent's final response after executing the selected tools and workflows, "
+        "Returns the agent_node's final response after executing the selected tools and workflows, "
         "including the generated answer and any relevant metadata produced during the process."
     ),
     status_code=status.HTTP_200_OK

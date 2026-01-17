@@ -1,5 +1,5 @@
 import logging
-from enum import Enum
+from typing import Final
 from langchain_core.messages import BaseMessage
 from langgraph.constants import END
 
@@ -8,28 +8,21 @@ from app.application.services.agent_service.agent_state.agent_state import Agent
 logger = logging.getLogger(__name__)
 
 
-class NodeName(str, Enum):
-    SENTIMENT_ANALYZER = "sentiment_analyzer"
-    AGENT = "agent"
-    TOOLS = "tools"
-
-
 class ToolCallRouter:
-    def __init__(self,
-                 max_iterations: int = 5) -> None:
-        self._max_iterations = max_iterations
+    DEFAULT_MAX_ITERATIONS: Final[int] = 5
+
+    max_iterations: int = DEFAULT_MAX_ITERATIONS
+
+    def __init__(self) -> None:
         self._iteration_count = 0
 
-        logger.debug(
-            "ToolCallRouter initialized",
-            extra={"max_iterations": max_iterations}
-        )
+        logger.debug("ToolCallRouter initialized")
 
     def should_continue(self,
-                        state: AgentState) -> str:
+                        agent_state: AgentState) -> str:
         logger.debug("Evaluating routing decision")
 
-        messages = state.get("messages", [])
+        messages = agent_state.get("messages", [])
 
         if not messages:
             logger.warning("No messages in state, routing to END")
@@ -47,12 +40,12 @@ class ToolCallRouter:
 
         self._iteration_count += 1
 
-        if self._iteration_count > self._max_iterations:
+        if self._iteration_count > self.max_iterations:
             logger.warning(
-                f"Max tool iterations ({self._max_iterations}) exceeded, routing to END",
+                f"Max tool iterations ({self.max_iterations}) exceeded, routing to END",
                 extra={
                     "iteration_count": self._iteration_count,
-                    "max_iterations": self._max_iterations
+                    "max_iterations": self.max_iterations
                 }
             )
             self._reset_counter()
@@ -61,8 +54,8 @@ class ToolCallRouter:
         logger.debug(
             f"Tool calls detected, routing to tools",
             extra={
-                "iteration": self._iteration_count,
-                "max_iterations": self._max_iterations
+                "iteration_count": self._iteration_count,
+                "max_iterations": self.max_iterations
             }
         )
 
@@ -70,7 +63,7 @@ class ToolCallRouter:
 
     def _reset_counter(self) -> None:
         if self._iteration_count > 0:
-            logger.debug(f"Resetting iteration counter (was at {self._iteration_count})")
+            logger.debug("Resetting iteration counter")
             self._iteration_count = 0
 
     @staticmethod

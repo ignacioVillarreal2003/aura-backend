@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 
 class AgentRequestValidator:
     def __init__(self,
-                 configuration: AgentConfiguration) -> None:
-        self._configuration = configuration
+                 agent_configuration: AgentConfiguration) -> None:
+        self._configuration = agent_configuration
         logger.debug("AgentRequestValidator initialized")
 
     def validate_request(self,
@@ -20,94 +20,33 @@ class AgentRequestValidator:
         logger.debug(
             "Starting request validation",
             extra={
-                "question": request.message,
-                "history_messages": request.history_messages if request.history_messages else None,
+                "messages": request.messages
             }
         )
 
-        self._validate_message(request.question)
-
-        if request.history_messages is not None:
-            self._validate_history_messages(request.history_messages)
+        self._validate_messages(request.messages)
 
         logger.debug("Request validation completed successfully")
 
-    def _validate_message(self,
-                          message: str) -> None:
-        if not message or not message.strip():
-            logger.warning(
-                "Question validation failed: empty or whitespace-only",
-                extra={
-                    "message_is_none": message is None,
-                    "message_length": len(message) if message else 0
-                }
-            )
-            raise ValidationError(
-                "La pregunta no puede estar vacía. Por favor, proporcione una pregunta válida.",
-                status_code=400
-            )
-
-        message_length = len(message.strip())
-
+    def _validate_messages(self,
+                           messages: List[Message]) -> None:
         logger.debug(
-            "Validating message length",
+            "Validating messages",
             extra={
-                "message_length": message_length,
-                "min_required": self._configuration.min_message_length,
-                "max_allowed": self._configuration.max_message_length
+                "messages": messages
             }
         )
 
-        if message_length < self._configuration.min_message_length:
+        if len(messages) > self._configuration.max_messages_count:
             logger.warning(
-                "Message validation failed: too short",
+                "Messages validation failed: too many messages",
                 extra={
-                    "message_length": message_length,
-                    "min_message_length": self._configuration.min_message_length
+                    "messages_count": len(messages),
+                    "max_messages_count": self._configuration.max_messages_count
                 }
             )
             raise ValidationError(
-                f"La pregunta es demasiado corta. "
-                f"Debe tener al menos {self._configuration.min_message_length} caracteres.",
-                status_code=400
-            )
-
-        if message_length > self._configuration.max_message_length:
-            logger.warning(
-                "Message validation failed: too long",
-                extra={
-                    "message_length": message_length,
-                    "max_message_length": self._configuration.max_message_length
-                }
-            )
-            raise ValidationError(
-                f"La pregunta es demasiado larga. "
-                f"No debe exceder {self._configuration.max_message_length} caracteres.",
-                status_code=400
-            )
-
-    def _validate_history_messages(self,
-                                   history_messages: List[Message]) -> None:
-        history_messages_count = len(history_messages)
-
-        logger.debug(
-            "Validating message history",
-            extra={
-                "history_messages_count": history_messages_count,
-                "max_history_messages_count": self._configuration.max_history_messages_count
-            }
-        )
-
-        if history_messages_count > self._configuration.max_history_messages_count:
-            logger.warning(
-                "History validation failed: too many messages",
-                extra={
-                    "history_messages_count": history_messages_count,
-                    "max_history_messages_count": self._configuration.max_history_messages_count
-                }
-            )
-            raise ValidationError(
-                f"El historial de mensajes es demasiado largo. "
-                f"Máximo permitido: {self._configuration.max_history_messages_count} mensajes.",
+                f"La cantidad de mensajes es demasiado grande. "
+                f"Máximo permitido: {self._configuration.max_messages_count} mensajes.",
                 status_code=400
             )

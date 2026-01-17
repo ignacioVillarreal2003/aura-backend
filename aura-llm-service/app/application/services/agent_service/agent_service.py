@@ -1,236 +1,147 @@
 import logging
-from typing import Optional
+from typing import Optional, Tuple
 
-from app.application.exceptions.app_exceptions import ValidationError, AppError
 from app.application.services.agent_service.agent_configuration import AgentConfiguration
-from app.application.services.agent_service.agent_node_configuration import AgentNodeConfiguration
-from app.application.services.agent_service.sentiment_configuration import SentimentConfiguration
+from app.application.services.agent_service.agent_node.agent_node_configuration import AgentNodeConfiguration
+from app.application.services.agent_service.agent_workflow import AgentWorkflow
+from app.application.services.agent_service.constants.sentimient import Sentiment
+from app.application.services.agent_service.exceptions.agent_service_exceptions import AgentServiceError
+from app.application.services.agent_service.sentiment_node.sentiment_node_configuration import (
+    SentimentNodeConfiguration
+)
 from app.application.services.agent_service.agent_request_validator import AgentRequestValidator
-from app.application.services.agent_service.state_builder import StateBuilder
-from app.application.services.agent_service.response_extractor import ResponseExtractor
+from app.application.services.agent_service.agent_state.agent_state_builder import AgentStateBuilder
 from app.domain.dtos.agent_request import AgentRequest
 from app.domain.dtos.agent_response import AgentResponse
-from app.infrastructure.llm_facade.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
+from app.infrastructure.ollama_llm_facade.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 
 logger = logging.getLogger(__name__)
 
 
 class AgentService:
-    """
-    Servicio principal para ejecutar workflows de agente con IA.
+    def __init__(self,
+                 ollama_llm_facade: OllamaLLMFacadeInterface,
+                 agent_configuration: Optional[AgentConfiguration] = None,
+                 sentiment_node_configuration: Optional[SentimentNodeConfiguration] = None,
+                 agent_node_configuration: Optional[AgentNodeConfiguration] = None) -> None:
+        self._ollama_llm_facade = ollama_llm_facade
+        self._agent_configuration = agent_configuration or AgentConfiguration()
+        self._sentiment_node_configuration = sentiment_node_configuration or SentimentNodeConfiguration()
+        self._agent_node_configuration = agent_node_configuration or AgentNodeConfiguration()
 
-    Flujo:
-    1. Valida el request
-    2. Construye el estado inicial
-    3. Ejecuta el workflow (sentiment -> agent -> tools -> respuesta)
-    4. Extrae y retorna la respuesta
-
-    El workflow soporta:
-    - Análisis de sentimiento opcional
-    - Uso de tools (RAG, resúmenes, etc.)
-    - Límite de iteraciones de tools
-    - Manejo de errores robusto
-
-    Thread-safe: El workflow se construye una vez y se reutiliza (inmutable).
-    """
-
-    def __init__(
-            self,
-            llm_facade: OllamaLLMFacadeInterface,
-            config: Optional[AgentConfiguration] = None,
-            sentiment_config: Optional[SentimentConfiguration] = None,
-            agent_config: Optional[AgentNodeConfiguration] = None
-    ) -> None:
-        """
-        Inicializa el servicio del agente.
-
-        Args:
-            llm_facade: Fachada del LLM con tools configurados
-            config: Configuración general del agente
-            sentiment_config: Configuración del análisis de sentimiento
-            agent_config: Configuración del comportamiento del agente
-        """
-        self._llm_facade = llm_facade
-        self._config = config or AgentConfiguration()
-        self._sentiment_config = sentiment_config
-        self._agent_config = agent_config
-
-        # Componentes auxiliares
-        self._validator = AgentRequestValidator()
-
-        # Workflow (inicializado lazy)
-        self._workflow = None
-        self._workflow_initialization_failed = False
-
-        logger.info(
-            "AgentService initialized",
-            extra={
-                "max_tool_iterations": self._config.max_tool_iterations,
-                "sentiment_enabled": self._config.enable_sentiment_analysis,
-                "default_sentiment": self._config.default_sentiment.value,
-                "tools_count": len(llm_facade.tools) if llm_facade.tools else 0
-            }
+        self._agent_request_validator = AgentRequestValidator(
+            agent_configuration=agent_configuration
         )
+
+        self._agent_workflow = AgentWorkflow(
+            ollama_llm_facade=self._ollama_llm_facade,
+            agent_configuration=self._agent_configuration,
+            sentiment_node_configuration=self._sentiment_node_configuration,
+            agent_node_configuration=self._agent_node_configuration
+        )
+        self._agent_workflow.build()
+
+        self._agent_state_builder = AgentStateBuilder()
+
+        logger.info("AgentService initialized")
 
     @classmethod
-    def create(
-            cls,
-            llm_facade: OllamaLLMFacadeInterface,
-            max_tool_iterations: Optional[int] = None,
-            enable_sentiment_analysis: Optional[bool] = None,
-            custom_base_prompt: Optional[str] = None,
-            custom_sentiment_prompt: Optional[str] = None
-    ) -> "AgentService":
-        """
-        Factory method para crear el servicio con parámetros individuales.
-
-        Args:
-            llm_facade: Fachada del LLM
-            max_tool_iterations: Máximo de iteraciones de tools
-            enable_sentiment_analysis: Habilitar análisis de sentimiento
-            custom_base_prompt: Prompt base personalizado del agente
-            custom_sentiment_prompt: Prompt personalizado para sentimiento
-
-        Returns:
-            Instancia configurada del servicio
-        """
-        # Construir configuración general
+    def create(cls,
+               ollama_llm_facade: OllamaLLMFacadeInterface,
+               message_length: Optional[Tuple[int, int]] = None,
+               max_messages_count: Optional[int] = None,
+               max_tool_iterations: Optional[int] = None,
+               sentiment: Optional[Sentiment] = None,
+               sentiment_custom_system_prompt: Optional[str] = None,
+               agent_custom_system_prompt: Optional[str] = None,
+               custom_sentiment_instructions: Optional[str] = None) -> "AgentService":
         config_kwargs = {}
+
+        if message_length is not None:
+            config_kwargs['message_length'] = message_length
+        if max_messages_count is not None:
+            config_kwargs['max_messages_count'] = max_messages_count
         if max_tool_iterations is not None:
             config_kwargs['max_tool_iterations'] = max_tool_iterations
-        if enable_sentiment_analysis is not None:
-            config_kwargs['enable_sentiment_analysis'] = enable_sentiment_analysis
+        if sentiment is not None:
+            config_kwargs['sentiment'] = sentiment
 
-        config = AgentConfiguration(**config_kwargs) if config_kwargs else None
+        agent_configuration = None
+        if config_kwargs is not None:
+            agent_configuration = AgentConfiguration(**config_kwargs)
 
-        # Construir configuración de agente
-        agent_config = None
-        if custom_base_prompt is not None:
-            agent_config = AgentNodeConfiguration(base_system_prompt=custom_base_prompt)
+        config_kwargs = {}
 
-        # Construir configuración de sentimiento
-        sentiment_config = None
-        if custom_sentiment_prompt is not None:
-            sentiment_config = SentimentConfiguration(system_prompt=custom_sentiment_prompt)
+        if sentiment_custom_system_prompt is not None:
+            config_kwargs['sentiment_custom_system_prompt'] = sentiment_custom_system_prompt
+
+        sentiment_node_configuration = None
+        if config_kwargs is not None:
+            sentiment_node_configuration = SentimentNodeConfiguration(**config_kwargs)
+
+        config_kwargs = {}
+
+        if agent_custom_system_prompt is not None:
+            config_kwargs['custom_system_prompt'] = agent_custom_system_prompt
+        if custom_sentiment_instructions is not None:
+            config_kwargs['custom_sentiment_instructions'] = custom_sentiment_instructions
+
+        agent_node_configuration = None
+        if config_kwargs is not None:
+            agent_node_configuration = AgentNodeConfiguration(**config_kwargs)
 
         return cls(
-            llm_facade=llm_facade,
-            config=config,
-            sentiment_config=sentiment_config,
-            agent_config=agent_config
+            ollama_llm_facade=ollama_llm_facade,
+            agent_configuration=agent_configuration,
+            sentiment_node_configuration=sentiment_node_configuration,
+            agent_node_configuration=agent_node_configuration
         )
 
-    async def execute_agent(self, request: AgentRequest) -> AgentResponse:
-        """
-        Ejecuta el workflow del agente con el request dado.
-
-        Args:
-            request: Request con mensaje del usuario e historial opcional
-
-        Returns:
-            Respuesta del agente con answer y tool usado (si aplica)
-
-        Raises:
-            ValidationError: Si el request es inválido
-            AppError: Si ocurre un error durante la ejecución
-        """
+    async def execute_agent(self,
+                            request: AgentRequest) -> AgentResponse:
         logger.info(
-            "Executing agent request",
+            "Executing agent_node request",
             extra={
-                "message_length": len(request.message),
-                "has_history": request.messages is not None,
-                "history_count": len(request.messages) if request.messages else 0
+                "messages": request.messages
             }
         )
 
-        # 1. Validar request
-        self._validator.validate_request(request)
+        self._agent_request_validator.validate_request(request)
 
         try:
-            # 2. Asegurar que el workflow está listo
-            await self._ensure_workflow_initialized()
-
-            # 3. Construir estado inicial
-            initial_state = StateBuilder.build_initial_state(
-                request=request,
-                default_sentiment=self._config.default_sentiment
+            initial_agent_state = self._agent_state_builder.build_agent_state(
+                request=request
             )
 
-            # 4. Ejecutar workflow
-            logger.debug("Invoking workflow")
-            final_state = await self._workflow.ainvoke(initial_state)
-
-            # 5. Extraer respuesta
-            response = ResponseExtractor.extract_response(final_state)
+            final_agent_state = await self._agent_workflow.ainvoke(initial_agent_state)
 
             logger.info(
                 "Agent request executed successfully",
                 extra={
-                    "answer_length": len(response.answer),
-                    "tool_used": response.tool_used
+                    "initial_agent_state": initial_agent_state,
+                    "final_agent_state": final_agent_state
                 }
             )
 
-            return response
+            processed_messages = []
+            for message in final_agent_state.get("messages", []):
+                if isinstance(message, str):
+                    processed_messages.append(str(message))
+                else:
+                    processed_messages.append(message)
 
-        except ValidationError:
-            # Re-lanzar errores de validación sin modificar
-            raise
+            return AgentResponse(
+                answer=processed_messages[-1]
+            )
 
         except Exception as e:
             logger.exception(
-                "Unexpected error during agent execution",
-                extra={"error_type": type(e).__name__}
+                "Unexpected error during agent_node execution",
+                extra={
+                    "error_type": type(e).__name__
+                }
             )
-            raise AppError(
+            raise AgentServiceError(
                 message=f"Error inesperado al ejecutar el agente: {str(e)}",
-                status_code=500,
-                code="AgentServiceError"
-            ) from e
-
-    async def _ensure_workflow_initialized(self) -> None:
-        """
-        Asegura que el workflow esté construido y listo (lazy loading).
-
-        Raises:
-            AppError: Si la inicialización falla
-        """
-        # Si ya está inicializado, retornar
-        if self._workflow is not None:
-            return
-
-        # Si ya intentamos y falló, no reintentar
-        if self._workflow_initialization_failed:
-            raise AppError(
-                message="El workflow del agente no pudo ser inicializado previamente",
-                status_code=500,
-                code="WorkflowInitializationFailed"
-            )
-
-        logger.debug("Building workflow for first time (lazy loading)")
-
-        try:
-            # Construir workflow
-            builder = AgentWorkflowBuilder(
-                llm_facade=self._llm_facade,
-                config=self._config,
-                sentiment_config=self._sentiment_config,
-                agent_config=self._agent_config
-            )
-
-            self._workflow = await builder.build()
-
-            logger.info("Workflow initialized successfully")
-
-        except Exception as e:
-            self._workflow_initialization_failed = True
-            logger.error(
-                "Failed to initialize workflow",
-                extra={"error_type": type(e).__name__},
-                exc_info=True
-            )
-            raise AppError(
-                message="Error al inicializar el workflow del agente",
-                status_code=500,
-                code="WorkflowInitializationError"
+                status_code=500
             ) from e

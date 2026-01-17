@@ -1,12 +1,13 @@
 import logging
 import re
 from typing import Optional, Dict, Any, List
-from langchain_core.messages import BaseMessage, SystemMessage, HumanMessage
+from langchain_core.messages import BaseMessage
 from langchain_core.runnables import Runnable
 
-from app.application.services.agent_service.sentiment_configuration import SentimentConfiguration
 from app.application.services.agent_service.agent_state.agent_state import AgentState
-from app.domain.constants.sentimient import Sentiment
+from app.application.services.agent_service.sentiment_node.sentiment_node_configuration import SentimentNodeConfiguration
+from app.application.services.agent_service.sentiment_node.sentiment_node_prompt_builder import SentimentNodePromptBuilder
+from app.application.services.agent_service.constants.sentimient import Sentiment
 from app.infrastructure.ollama_llm_facade.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 
 logger = logging.getLogger(__name__)
@@ -15,9 +16,11 @@ logger = logging.getLogger(__name__)
 class SentimentNode:
     def __init__(self,
                  ollama_llm_facade: OllamaLLMFacadeInterface,
-                 configuration: Optional[SentimentConfiguration] = None) -> None:
+                 configuration: Optional[SentimentNodeConfiguration] = None) -> None:
         self._ollama_llm_facade = ollama_llm_facade
-        self._configuration = configuration or SentimentConfiguration()
+        self._configuration = configuration or SentimentNodeConfiguration()
+
+        self._prompt_builder = SentimentNodePromptBuilder()
 
         self._llm: Optional[Runnable] = None
         self._llm_initialization_failed = False
@@ -25,17 +28,17 @@ class SentimentNode:
         logger.debug("SentimentNode initialized")
 
     async def __call__(self,
-                       state: AgentState) -> Dict[str, Any]:
-        return await self.process(state)
+                       agent_state: AgentState) -> Dict[str, Any]:
+        return await self.process(agent_state)
 
     async def process(self,
-                      state: AgentState) -> Dict[str, Any]:
-        logger.debug("Processing sentiment analysis")
+                      agent_state: AgentState) -> Dict[str, Any]:
+        logger.debug("Processing sentiment_node analysis")
 
         try:
             await self._ensure_llm_initialized()
 
-            last_message = self._extract_last_message(state)
+            last_message = self._extract_last_message(agent_state)
 
             prompt = self._build_prompt(last_message.content)
 
@@ -44,7 +47,7 @@ class SentimentNode:
             logger.info(f"Sentiment analyzed: {sentiment.value}")
 
             return {
-                "sentiment": sentiment.value
+                "sentiment_node": sentiment.value
             }
 
         except Exception as e:
@@ -56,7 +59,7 @@ class SentimentNode:
                 exc_info=True
             )
             return {
-                "sentiment": Sentiment.neutral.value
+                "sentiment_node": Sentiment.NEUTRAL.value
             }
 
     async def _ensure_llm_initialized(self) -> None:
@@ -68,40 +71,35 @@ class SentimentNode:
 
         try:
             self._llm = await self._ollama_llm_facade.get_llm_base()
-            logger.debug("LLM initialized for sentiment analysis")
+            logger.debug("LLM initialized for sentiment_node analysis")
         except Exception as e:
             self._llm_initialization_failed = True
-            logger.error("Failed to initialize LLM", exc_info=True)
-            raise RuntimeError("Failed to initialize LLM for sentiment analysis") from e
+            logger.error(
+                "Failed to initialize LLM",
+                exc_info=True
+            )
+            raise RuntimeError("Failed to initialize LLM for sentiment_node analysis") from e
 
     @staticmethod
-    def _extract_last_message(state: AgentState) -> BaseMessage:
-        messages = state.get("messages")
+    def _extract_last_message(agent_state: AgentState) -> BaseMessage:
+        messages = agent_state.get("messages")
 
         if not messages or len(messages) == 0:
-            raise ValueError("State must contain at least one message for sentiment analysis")
+            raise ValueError("State must contain at least one message for sentiment_node analysis")
 
         last_message = messages[-1]
 
         if not isinstance(last_message, BaseMessage):
-            raise ValueError(
-                f"Last message must be BaseMessage, got {type(last_message)}"
-            )
+            raise ValueError(f"Last message must be BaseMessage, got {type(last_message)}")
 
         return last_message
 
     def _build_prompt(self,
-                      message: str) -> List[BaseMessage]:
-        return [
-            SystemMessage(
-                content=self._configuration.system_prompt
-            ),
-            HumanMessage(
-                content=self._configuration.custom_user_template.format(
-                    message=message
-                )
-            )
-        ]
+                      last_message: str) -> List[BaseMessage]:
+        return self._prompt_builder.build_prompt(
+            system_prompt=self._configuration.system_prompt,
+            input_text=last_message
+        )
 
     async def _classify_sentiment(self,
                                   prompt: List[BaseMessage]) -> Sentiment:
@@ -115,19 +113,19 @@ class SentimentNode:
                 raise TypeError(f"LLM returned invalid type: {type(response)}")
 
             sentiment = self._parse_sentiment_response(response.content)
-            logger.debug(f"Parsed sentiment: {sentiment.value}")
+            logger.debug(f"Parsed sentiment_node: {sentiment.value}")
 
             return sentiment
 
         except Exception as e:
             logger.exception("Sentiment classification failed")
-            raise RuntimeError("Failed to classify sentiment") from e
+            raise RuntimeError("Failed to classify sentiment_node") from e
 
     @staticmethod
     def _parse_sentiment_response(response: str) -> Sentiment:
         cleaned = (response or "").strip().lower()
 
-        logger.debug(f"Parsing sentiment from response: {cleaned!r}")
+        logger.debug(f"Parsing sentiment_node from response: {cleaned}")
 
         for sentiment in Sentiment:
             if cleaned == sentiment.value.lower():
@@ -142,7 +140,5 @@ class SentimentNode:
                 if sentiment.value.lower() == word:
                     return sentiment
 
-        logger.warning(
-            f"Could not parse sentiment from: {cleaned!r}, defaulting to neutral"
-        )
-        return Sentiment.neutral
+        logger.warning(f"Could not parse sentiment_node from: {cleaned}, defaulting to neutral")
+        return Sentiment.NEUTRAL

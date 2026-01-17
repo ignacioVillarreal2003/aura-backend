@@ -7,9 +7,9 @@ from app.application.services.agent_service.agent_state.agent_state import Agent
 class NodeInterface(ABC):
     @abstractmethod
     async def process(self,
-                      state: AgentState) -> Dict[str, Any]:
+                      agent_state: AgentState) -> Dict[str, Any]:
         pass
 
     async def __call__(self,
-                       state: AgentState) -> Dict[str, Any]:
-        return await self.process(state)
+                       agent_state: AgentState) -> Dict[str, Any]:
+        return await self.process(agent_state)

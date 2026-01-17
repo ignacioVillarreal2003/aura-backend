@@ -2,7 +2,7 @@ import operator
 from typing import Annotated, List, TypedDict
 from langchain_core.messages import AnyMessage
 
-from app.domain.constants.sentimient import Sentiment
+from app.application.services.agent_service.constants.sentimient import Sentiment
 
 
 class AgentState(TypedDict):
