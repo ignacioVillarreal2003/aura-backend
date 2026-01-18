@@ -87,8 +87,8 @@ class EnvironmentVariables(BaseSettings):
         return v_upper
 
     @field_validator("ollama_base_url",
-                     "retrieve_fragments_by_question_url",
-                     "retrieve_fragments_by_document_url")
+                     "retrieve_context_fragments_by_question_url",
+                     "retrieve_context_fragments_by_document_url")
     @classmethod
     def validate_url(cls, v: str) -> str:
         if not v.startswith(("http://", "https://")):

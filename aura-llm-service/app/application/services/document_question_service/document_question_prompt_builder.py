@@ -39,12 +39,7 @@ class DocumentQuestionPromptBuilder:
         question_message = self._build_question_message(question)
         prompt_messages.append(question_message)
 
-        logger.info(
-            "Complete prompt built successfully",
-            extra={
-                "prompt_messages": prompt_messages
-            }
-        )
+        logger.info("Complete prompt built successfully")
 
         return prompt_messages
 

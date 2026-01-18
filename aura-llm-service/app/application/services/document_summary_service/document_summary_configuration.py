@@ -74,8 +74,8 @@ class DocumentSummaryConfiguration:
         self._validate_large_document_threshold()
         self._validate_chunk_size()
         self._validate_max_concurrent_chunks()
-        self._validate_retry_attempts_and_delay()
-        self._validate_min_document_id()
+        self._validate_max_retry_attempts()
+        self._validate_retry_delay()
 
     def _validate_large_document_threshold(self) -> None:
         if not (self.MIN_LARGE_DOCUMENT_THRESHOLD

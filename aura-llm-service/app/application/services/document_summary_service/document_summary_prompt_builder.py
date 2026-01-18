@@ -145,9 +145,6 @@ class DocumentSummaryPromptBuilder:
 
         logger.info(
             "Reduction messages built successfully",
-            extra={
-                "messages": messages
-            }
         )
 
         return messages

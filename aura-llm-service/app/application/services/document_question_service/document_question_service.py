@@ -229,12 +229,7 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
         if self._llm is None:
             raise DocumentQuestionServiceError("LLM no inicializado. Esto no debería ocurrir.")
 
-        logger.debug(
-            "Invoking LLM",
-            extra={
-                "prompt": prompt
-            }
-        )
+        logger.debug("Invoking LLM")
 
         try:
             answer = await self._ollama_llm_facade.call_llm_text(
