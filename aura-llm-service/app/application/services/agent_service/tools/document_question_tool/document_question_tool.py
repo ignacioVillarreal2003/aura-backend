@@ -7,7 +7,8 @@ from langchain_core.callbacks import AsyncCallbackManagerForToolRun, CallbackMan
 from app.application.services.agent_service.tools.document_question_tool.document_question_tool_input import (
     DocumentQuestionToolInput
 )
-from app.application.services.document_question_service.document_question_service import DocumentQuestionService
+from app.application.services.document_question_service.interfaces.document_question_service_interface import \
+    DocumentQuestionServiceInterface
 from app.domain.dtos.document_question_request import DocumentQuestionRequest
 
 logger = logging.getLogger(__name__)
@@ -23,10 +24,10 @@ class DocumentQuestionTool(BaseTool):
     )
     args_schema: Type[BaseModel] = DocumentQuestionToolInput
 
-    _document_question_service: DocumentQuestionService = PrivateAttr()
+    _document_question_service: DocumentQuestionServiceInterface = PrivateAttr()
 
     def __init__(self,
-                 document_question_service: DocumentQuestionService,
+                 document_question_service: DocumentQuestionServiceInterface,
                  **kwargs):
         super().__init__(**kwargs)
         self._document_question_service = document_question_service

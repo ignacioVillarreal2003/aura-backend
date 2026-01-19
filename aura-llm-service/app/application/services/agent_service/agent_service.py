@@ -6,6 +6,7 @@ from app.application.services.agent_service.agent_node.agent_node_configuration 
 from app.application.services.agent_service.agent_workflow import AgentWorkflow
 from app.application.services.agent_service.constants.sentimient import Sentiment
 from app.application.services.agent_service.exceptions.agent_service_exceptions import AgentServiceError
+from app.application.services.agent_service.interfaces.agent_service_interface import AgentServiceInterface
 from app.application.services.agent_service.sentiment_node.sentiment_node_configuration import (
     SentimentNodeConfiguration
 )
@@ -18,7 +19,7 @@ from app.infrastructure.ollama_llm_facade.interfaces.ollama_llm_facade_interface
 logger = logging.getLogger(__name__)
 
 
-class AgentService:
+class AgentService(AgentServiceInterface):
     def __init__(self,
                  ollama_llm_facade: OllamaLLMFacadeInterface,
                  agent_configuration: Optional[AgentConfiguration] = None,
@@ -39,7 +40,7 @@ class AgentService:
             sentiment_node_configuration=self._sentiment_node_configuration,
             agent_node_configuration=self._agent_node_configuration
         )
-        self._agent_workflow.build()
+        self._workflow_built = False
 
         self._agent_state_builder = AgentStateBuilder()
 
@@ -97,30 +98,30 @@ class AgentService:
             agent_node_configuration=agent_node_configuration
         )
 
+    async def _ensure_workflow_built(self) -> None:
+        if not self._workflow_built:
+            await self._agent_workflow.build()
+            self._workflow_built = True
+
     async def execute_agent(self,
                             request: AgentRequest) -> AgentResponse:
         logger.info(
-            "Executing agent_node request",
-            extra={
-                "messages": request.messages
-            }
+            "Executing agent_node request"
         )
 
         self._agent_request_validator.validate_request(request)
 
         try:
+            await self._ensure_workflow_built()
+
             initial_agent_state = self._agent_state_builder.build_agent_state(
                 request=request
             )
 
-            final_agent_state = await self._agent_workflow.ainvoke(initial_agent_state)
+            final_agent_state = await self._agent_workflow.invoke(initial_agent_state)
 
             logger.info(
-                "Agent request executed successfully",
-                extra={
-                    "initial_agent_state": initial_agent_state,
-                    "final_agent_state": final_agent_state
-                }
+                "Agent request executed successfully"
             )
 
             processed_messages = []
@@ -128,10 +129,10 @@ class AgentService:
                 if isinstance(message, str):
                     processed_messages.append(str(message))
                 else:
-                    processed_messages.append(message)
+                    processed_messages.append(str(message.content) if hasattr(message, 'content') else str(message))
 
             return AgentResponse(
-                answer=processed_messages[-1]
+                answer=processed_messages[-1] if processed_messages else ""
             )
 
         except Exception as e:

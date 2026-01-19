@@ -24,20 +24,14 @@ class AgentController:
     async def execute_agent(request_body: AgentRequest,
                             agent_service: AgentServiceInterface = Depends(get_agent_service)) -> AgentResponse:
         logger.info(
-            "Processing agent_node request",
-            extra={
-                "message": request_body.message
-            }
+            "Processing agent_node request"
         )
 
         try:
             response: AgentResponse = await agent_service.execute_agent(request_body)
 
             logger.info(
-                "Agent request processed successfully",
-                extra={
-                    "answer": response.answer
-                }
+                "Agent request processed successfully"
             )
 
             return response
@@ -48,8 +42,7 @@ class AgentController:
                 extra={
                     "error_code": e.code,
                     "error_message": e.message,
-                    "status_code": e.status_code,
-                    "message": request_body.message
+                    "status_code": e.status_code
                 }
             )
             raise HTTPException(
@@ -64,8 +57,7 @@ class AgentController:
             logger.exception(
                 "Unexpected error in agent_node controller",
                 extra={
-                    "error_type": type(e).__name__,
-                    "message": request_body.message
+                    "error_type": type(e).__name__
                 }
             )
             raise HTTPException(

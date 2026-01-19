@@ -16,12 +16,7 @@ class AgentNodePromptBuilder:
                      sentiment_instruction: str,
                      history_messages: Optional[List[BaseMessage]]) -> List[BaseMessage]:
         logger.info(
-            "Starting sentiment_node prompt build",
-            extra={
-                "system_prompt": system_prompt,
-                "sentiment_instruction": sentiment_instruction,
-                "history_messages": history_messages
-            }
+            "Starting sentiment_node prompt build"
         )
 
         prompt_messages: List[BaseMessage] = []
@@ -40,10 +35,7 @@ class AgentNodePromptBuilder:
         )
 
         logger.info(
-            "Sentiment prompt built successfully",
-            extra={
-                "prompt_messages": prompt_messages
-            }
+            "Sentiment prompt built successfully"
         )
 
         return prompt_messages

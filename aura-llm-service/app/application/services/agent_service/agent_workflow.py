@@ -30,6 +30,7 @@ class AgentWorkflow:
         self._agent_node_configuration = agent_node_configuration
 
         self._workflow = StateGraph(AgentState)
+        self._compiled_workflow = None
 
         self._sentiment_node: Optional[SentimentNode] = None
         self._agent_node: Optional[AgentNode] = None
@@ -49,15 +50,21 @@ class AgentWorkflow:
 
             self._add_edges()
 
-            compiled = self._workflow.compile()
+            self._compiled_workflow = self._workflow.compile()
 
             logger.info("Agent workflow built successfully")
 
-            return compiled
+            return self._compiled_workflow
 
         except Exception as e:
             logger.exception("Failed to build agent_node workflow")
             raise RuntimeError("Failed to build agent_node workflow") from e
+
+    async def invoke(self, state: AgentState):
+        if self._compiled_workflow is None:
+            raise RuntimeError("Workflow not built. Call build() first.")
+
+        return await self._compiled_workflow.ainvoke(state)
 
     async def _create_nodes(self) -> None:
         logger.debug("Creating workflow nodes")
@@ -82,13 +89,13 @@ class AgentWorkflow:
         if self._sentiment_node is not None:
             self._workflow.add_node(
                 NodeName.SENTIMENT.value,
-                self._sentiment_node
+                self._sentiment_node.process
             )
 
         if self._agent_node is not None:
             self._workflow.add_node(
                 NodeName.AGENT.value,
-                self._agent_node
+                self._agent_node.process
             )
 
         if self._tool_node is not None:

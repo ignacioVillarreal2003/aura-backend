@@ -8,6 +8,8 @@ from app.application.services.agent_service.tools.document_summary_tool.document
     DocumentSummaryToolInput
 )
 from app.application.services.document_summary_service.document_summary_service import DocumentSummaryService
+from app.application.services.document_summary_service.interfaces.document_summary_service_interface import \
+    DocumentSummaryServiceInterface
 from app.domain.dtos.document_summary_request import DocumentSummaryRequest
 
 logger = logging.getLogger(__name__)
@@ -26,10 +28,10 @@ class DocumentSummaryTool(BaseTool):
     )
     args_schema: Type[BaseModel] = DocumentSummaryToolInput
 
-    _document_summary_service: DocumentSummaryService = PrivateAttr()
+    _document_summary_service: DocumentSummaryServiceInterface = PrivateAttr()
 
     def __init__(self,
-                 document_summary_service: DocumentSummaryService,
+                 document_summary_service: DocumentSummaryServiceInterface,
                  **kwargs) -> None:
         super().__init__(**kwargs)
         self._document_summary_service = document_summary_service

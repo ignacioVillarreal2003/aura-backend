@@ -190,7 +190,8 @@ if __name__ == "__main__":
 
 
 class MockExternalApiRequest(BaseModel):
-    document_id: int
+    question: str
+    max_context_fragments_count: int
 
 @app.post("/mock/external-api")
 async def mock_external_api(
@@ -213,6 +214,5 @@ async def mock_external_api(
             "Con la llegada de la primavera, Bruno se volvió casi una celebridad en el puerto. Los turistas y habitantes lo reconocían, señalándolo con sonrisas, y muchos llevaban pequeños regalos: huesos, pelotas y golosinas. Pero más allá de los premios, lo que Bruno valoraba era la compañía de la ballena y la sensación de explorar un mundo que parecía infinito. Cada amanecer traía nuevas aventuras: descubrir cuevas escondidas, seguir barcos que cruzaban el horizonte y escuchar los cantos misteriosos del océano. Cada fragmento de experiencia se sumaba a la gran historia que unía al perro, la ballena y el puerto, convirtiéndose en recuerdos imborrables que perdurarían para siempre.",
             "Incluso los pescadores comenzaron a colaborar con Bruno: algunos arrojaban redes de manera segura para permitir que el perro saltara entre ellas, mientras otros narraban historias antiguas del puerto y de criaturas marinas que, según decían, compartían secretos con quienes demostraban coraje y curiosidad. Bruno aprendió a escuchar atentamente, a interpretar las palabras humanas y los sonidos del mar, y cada día parecía comprender un poco más el lenguaje universal de la aventura, la paciencia y la amistad. La ballena, siempre presente, seguía siendo su guía silenciosa, recordándole que la grandeza no siempre se mide por el tamaño, sino por la bondad y el respeto entre seres que se encuentran por casualidad en el vasto mundo."
         ]
-
     }
 

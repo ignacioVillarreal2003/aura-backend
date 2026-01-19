@@ -15,11 +15,7 @@ class SentimentNodePromptBuilder:
                      system_prompt: str,
                      input_text: str) -> List[BaseMessage]:
         logger.info(
-            "Starting sentiment_node prompt build",
-            extra={
-                "system_prompt": system_prompt,
-                "input_text": input_text
-            }
+            "Starting sentiment_node prompt build"
         )
 
         prompt_messages: List[BaseMessage] = []
@@ -33,10 +29,7 @@ class SentimentNodePromptBuilder:
         )
 
         logger.info(
-            "Sentiment prompt built successfully",
-            extra={
-                "prompt_messages": prompt_messages
-            }
+            "Sentiment prompt built successfully"
         )
 
         return prompt_messages
@@ -44,10 +37,7 @@ class SentimentNodePromptBuilder:
     @staticmethod
     def _build_system_message(system_prompt: str) -> SystemMessage:
         logger.debug(
-            "Building system message",
-            extra={
-                "system_prompt": system_prompt
-            }
+            "Building system message"
         )
 
         return SystemMessage(
@@ -57,10 +47,7 @@ class SentimentNodePromptBuilder:
     @staticmethod
     def _build_sentiment_input_message(input_text: str) -> HumanMessage:
         logger.debug(
-            "Building sentiment_node input message",
-            extra={
-                "input_text": input_text
-            }
+            "Building sentiment_node input message"
         )
 
         return HumanMessage(

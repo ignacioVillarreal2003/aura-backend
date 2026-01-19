@@ -1,7 +1,14 @@
 import logging
 
+from app.application.services.agent_service.interfaces.agent_service_interface import AgentServiceInterface
+from app.application.services.agent_service.tools.document_question_tool.document_question_tool import (
+    DocumentQuestionTool
+)
+from app.application.services.agent_service.tools.document_summary_tool.document_summary_tool import (
+    DocumentSummaryTool
+)
 from app.infrastructure.ollama_llm_facade.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
-from app.infrastructure.ollama_llm_facade.ollama_llm_facade_factory import get_global_ollama_llm_facade
+from app.infrastructure.ollama_llm_facade.ollama_llm_facade import OllamaLLMFacade
 from app.application.services.agent_service.agent_service import AgentService
 from app.application.services.document_question_service.document_question_service import DocumentQuestionService
 from app.application.services.document_question_service.interfaces.document_question_service_interface import (
@@ -21,6 +28,9 @@ from app.infrastructure.http_client.interfaces.http_client_interface import Http
 
 logger = logging.getLogger(__name__)
 
+# =============================================================================
+# HTTP Client
+# =============================================================================
 _http_client: HttpClientInterface | None = None
 
 
@@ -31,6 +41,9 @@ async def get_http_client() -> HttpClientInterface:
     return _http_client
 
 
+# =============================================================================
+# Document Context Provider
+# =============================================================================
 async def get_document_context_provider() -> DocumentContextProviderInterface:
     http_client = await get_http_client()
     return DocumentContextProvider.create(
@@ -40,43 +53,124 @@ async def get_document_context_provider() -> DocumentContextProviderInterface:
     )
 
 
-_ollama_llm_facade: OllamaLLMFacadeInterface | None = None
+# =============================================================================
+# Ollama LLM Facade (Two-Phase Initialization to avoid recursion)
+# =============================================================================
+_ollama_llm_facade_base: OllamaLLMFacadeInterface | None = None  # Sin tools, para services
+_ollama_llm_facade: OllamaLLMFacadeInterface | None = None       # Con tools, para el agente
+
+# Services cacheados para las tools
+_document_question_service: DocumentQuestionServiceInterface | None = None
+_document_summary_service: DocumentSummaryServiceInterface | None = None
+
+
+async def _get_ollama_llm_facade_base() -> OllamaLLMFacadeInterface:
+    """
+    Facade SIN tools, usado internamente por los services.
+    Esto evita la recursión: services necesitan facade, pero facade con tools necesita services.
+    """
+    global _ollama_llm_facade_base
+    if _ollama_llm_facade_base is None:
+        _ollama_llm_facade_base = OllamaLLMFacade.create(
+            ollama_model_name=environment_variables.ollama_model_name,
+            ollama_base_url=environment_variables.ollama_base_url,
+            tool_factories=[]  # Sin tools
+        )
+        await _ollama_llm_facade_base.initialize()
+    return _ollama_llm_facade_base
+
+
+async def _initialize_services_for_tools() -> None:
+    """
+    Inicializa los services que las tools necesitan.
+    Usa el facade base (sin tools) para evitar recursión.
+    """
+    global _document_question_service, _document_summary_service
+
+    if _document_question_service is not None and _document_summary_service is not None:
+        return
+
+    facade_base = await _get_ollama_llm_facade_base()
+    document_context_provider = await get_document_context_provider()
+
+    if _document_question_service is None:
+        _document_question_service = DocumentQuestionService.create(
+            ollama_llm_facade=facade_base,
+            document_context_provider=document_context_provider
+        )
+
+    if _document_summary_service is None:
+        _document_summary_service = DocumentSummaryService.create(
+            ollama_llm_facade=facade_base,
+            document_context_provider=document_context_provider
+        )
+
+
+def _create_document_question_tool() -> DocumentQuestionTool:
+    """Factory síncrona para DocumentQuestionTool (requerida por OllamaToolManager)."""
+    if _document_question_service is None:
+        raise RuntimeError("DocumentQuestionService not initialized. Call _initialize_services_for_tools() first.")
+    return DocumentQuestionTool(document_question_service=_document_question_service)
+
+
+def _create_document_summary_tool() -> DocumentSummaryTool:
+    """Factory síncrona para DocumentSummaryTool (requerida por OllamaToolManager)."""
+    if _document_summary_service is None:
+        raise RuntimeError("DocumentSummaryService not initialized. Call _initialize_services_for_tools() first.")
+    return DocumentSummaryTool(document_summary_service=_document_summary_service)
 
 
 async def get_ollama_llm_facade() -> OllamaLLMFacadeInterface:
+    """
+    Facade CON tools, para uso del agente.
+    Primero inicializa los services, luego crea el facade con las factories.
+    """
     global _ollama_llm_facade
     if _ollama_llm_facade is None:
-        tools_factories = []
-        _ollama_llm_facade = await get_global_ollama_llm_facade(
+        # Fase 1: Inicializar services (usa facade base sin tools, sin recursión)
+        await _initialize_services_for_tools()
+
+        # Fase 2: Crear facade con tools
+        _ollama_llm_facade = OllamaLLMFacade.create(
             ollama_model_name=environment_variables.ollama_model_name,
             ollama_base_url=environment_variables.ollama_base_url,
-            tool_factories=tools_factories
+            tool_factories=[
+                _create_document_question_tool,
+                _create_document_summary_tool,
+            ]
         )
+        await _ollama_llm_facade.initialize()
     return _ollama_llm_facade
 
 
+# =============================================================================
+# Document Services (para uso externo, usan el facade base)
+# =============================================================================
 async def get_document_question_service() -> DocumentQuestionServiceInterface:
-    ollama_llm_facade = await get_ollama_llm_facade()
-    document_context_provider = await get_document_context_provider()
-    return DocumentQuestionService.create(
-        ollama_llm_facade=ollama_llm_facade,
-        document_context_provider=document_context_provider
-    )
+    """Retorna el service de document question. Usa facade base (sin tools)."""
+    await _initialize_services_for_tools()
+    return _document_question_service
 
 
 async def get_document_summary_service() -> DocumentSummaryServiceInterface:
+    """Retorna el service de document summary. Usa facade base (sin tools)."""
+    await _initialize_services_for_tools()
+    return _document_summary_service
+
+
+# =============================================================================
+# Agent Service
+# =============================================================================
+async def get_agent_service() -> AgentServiceInterface:
     ollama_llm_facade = await get_ollama_llm_facade()
-    document_context_provider = await get_document_context_provider()
-    return DocumentSummaryService.create(
-        ollama_llm_facade=ollama_llm_facade,
-        document_context_provider=document_context_provider
+    return AgentService.create(
+        ollama_llm_facade=ollama_llm_facade
     )
 
 
-async def get_agent_service() -> AgentService:
-    pass
-
-
+# =============================================================================
+# Application Lifecycle
+# =============================================================================
 async def startup_dependencies() -> None:
     try:
         logger.info("Starting up application dependencies")
@@ -84,8 +178,8 @@ async def startup_dependencies() -> None:
         http_client = await get_http_client()
         await http_client.start()
 
-        ollama_llm_facade = await get_ollama_llm_facade()
-        await ollama_llm_facade.initialize()
+        # El facade ya se inicializa en get_ollama_llm_facade()
+        await get_ollama_llm_facade()
 
         logger.info("All dependencies started successfully")
 
@@ -98,7 +192,8 @@ async def shutdown_dependencies() -> None:
     try:
         logger.info("Shutting down application dependencies")
 
-        await _http_client.stop()
+        if _http_client is not None:
+            await _http_client.stop()
 
         logger.info("All dependencies shut down successfully")
 

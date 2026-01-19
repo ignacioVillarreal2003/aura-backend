@@ -26,10 +26,6 @@ class AgentNode:
 
         logger.debug("AgentNode initialized")
 
-    async def __call__(self,
-                       state: AgentState) -> Dict[str, Any]:
-        return await self.process(state)
-
     async def process(self,
                       state: AgentState) -> Dict[str, Any]:
         logger.debug("Processing agent_node node")
@@ -98,10 +94,7 @@ class AgentNode:
                 return Sentiment(sentiment)
         except ValueError:
             logger.warning(
-                "Invalid sentiment value, defaulting to NEUTRAL",
-                extra={
-                    "sentiment": sentiment
-                }
+                "Invalid sentiment value, defaulting to NEUTRAL"
             )
 
         return Sentiment.NEUTRAL

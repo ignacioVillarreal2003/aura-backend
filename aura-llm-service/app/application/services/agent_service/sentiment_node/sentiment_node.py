@@ -27,10 +27,6 @@ class SentimentNode:
 
         logger.debug("SentimentNode initialized")
 
-    async def __call__(self,
-                       agent_state: AgentState) -> Dict[str, Any]:
-        return await self.process(agent_state)
-
     async def process(self,
                       agent_state: AgentState) -> Dict[str, Any]:
         logger.debug("Processing sentiment_node analysis")
@@ -47,7 +43,7 @@ class SentimentNode:
             logger.info(f"Sentiment analyzed: {sentiment.value}")
 
             return {
-                "sentiment_node": sentiment.value
+                "sentiment": sentiment.value
             }
 
         except Exception as e:
@@ -59,7 +55,7 @@ class SentimentNode:
                 exc_info=True
             )
             return {
-                "sentiment_node": Sentiment.NEUTRAL.value
+                "sentiment": Sentiment.NEUTRAL.value
             }
 
     async def _ensure_llm_initialized(self) -> None:
