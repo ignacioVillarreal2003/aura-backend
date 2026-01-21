@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
 
 
-class ContextFragmentsByDocumentRequest(BaseModel):
+class DocumentContextFragmentsRequest(BaseModel):
     document_id: int = Field(...)

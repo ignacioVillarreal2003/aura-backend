@@ -1,6 +1,6 @@
 import logging
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -10,40 +10,27 @@ logger = logging.getLogger(__name__)
     kw_only=True
 )
 class DocumentContextProviderConfiguration:
-    MIN_FRAGMENT_CHARS: Final[int] = 1
-    MAX_FRAGMENT_CHARS: Final[int] = 100_000
+    MAX_CHARS_PER_FRAGMENTS: Final[Tuple[int, int]] = (1_000, 100_000)
+    MAX_FRAGMENTS_TOTAL: Final[Tuple[int, int]] = (3, 30)
+    MAX_TOTAL_CHARS: Final[Tuple[int, int]] = (10_000, 1_000_000)
 
-    MIN_TOTAL_FRAGMENTS_IN_RESPONSE: Final[int] = 1
-    MAX_TOTAL_FRAGMENTS_IN_RESPONSE: Final[int] = 1_000
-
-    MIN_RESPONSE_SIZE_CHARS: Final[int] = 1
-    MAX_RESPONSE_SIZE_CHARS: Final[int] = 1_000_000
-
-    DEFAULT_MAX_FRAGMENT_CHARS: Final[int] = 10_000
-    DEFAULT_TRUNCATE_OVERSIZED_FRAGMENTS: Final[bool] = False
-    DEFAULT_MAX_TOTAL_FRAGMENTS_IN_RESPONSE: Final[int] = 100
+    DEFAULT_MAX_CHARS_PER_FRAGMENTS: Final[int] = 10_000
+    DEFAULT_TRUNCATE_FRAGMENTS_EXCEEDING_MAX_CHARS: Final[bool] = False
+    DEFAULT_MAX_FRAGMENTS_TOTAL: Final[int] = 6
     DEFAULT_MAX_RESPONSE_SIZE_CHARS: Final[int] = 500_000
 
-    max_fragment_chars: int = DEFAULT_MAX_FRAGMENT_CHARS
-    truncate_oversized_fragments: bool = DEFAULT_TRUNCATE_OVERSIZED_FRAGMENTS
-    max_total_fragments_in_response: int = DEFAULT_MAX_TOTAL_FRAGMENTS_IN_RESPONSE
-    max_response_size_chars: int = DEFAULT_MAX_RESPONSE_SIZE_CHARS
+    max_chars_per_fragment: int = DEFAULT_MAX_CHARS_PER_FRAGMENTS
+    truncate_fragments_exceeding_max_chars: bool = DEFAULT_TRUNCATE_FRAGMENTS_EXCEEDING_MAX_CHARS
+    max_fragments_total: int = DEFAULT_MAX_FRAGMENTS_TOTAL
+    max_total_chars: int = DEFAULT_MAX_RESPONSE_SIZE_CHARS
 
     def __post_init__(self) -> None:
         try:
             self._validate_all()
-            logger.info(
-                "ContextProviderConfiguration initialized successfully",
-                extra={
-                    "max_fragment_chars": self.max_fragment_chars,
-                    "truncate_oversized_fragments": self.truncate_oversized_fragments,
-                    "max_total_fragments_in_response": self.max_total_fragments_in_response,
-                    "max_response_size_chars": self.max_response_size_chars
-                }
-            )
+            logger.info("DocumentContextProviderConfiguration initialized successfully")
         except ValueError as e:
             logger.error(
-                "ContextProviderConfiguration validation failed",
+                "DocumentContextProviderConfiguration validation failed",
                 extra={
                     "error": str(e)
                 },
@@ -52,34 +39,34 @@ class DocumentContextProviderConfiguration:
             raise
 
     def _validate_all(self) -> None:
-        self._validate_max_fragment_chars()
-        self._validate_max_total_fragments_in_response()
-        self._validate_max_response_size_chars()
+        self._validate_max_chars_per_fragment()
+        self._validate_max_fragments_total()
+        self._validate_max_total_chars()
 
-    def _validate_max_fragment_chars(self) -> None:
-        if not (self.MIN_FRAGMENT_CHARS
-                <= self.max_fragment_chars
-                <= self.MAX_FRAGMENT_CHARS):
+    def _validate_max_chars_per_fragment(self) -> None:
+        if not (self.MAX_CHARS_PER_FRAGMENTS[0]
+                <= self.max_chars_per_fragment
+                <= self.MAX_CHARS_PER_FRAGMENTS[1]):
             raise ValueError(
-                f"max_fragment_chars debe estar entre {self.MIN_FRAGMENT_CHARS} y {self.MAX_FRAGMENT_CHARS}, "
-                f"se recibió: {self.max_fragment_chars}"
+                f"max_chars_per_fragment debe estar entre {self.MAX_CHARS_PER_FRAGMENTS[0]} y {self.MAX_CHARS_PER_FRAGMENTS[1]}, "
+                f"se recibió: {self.max_chars_per_fragment}"
             )
 
-    def _validate_max_total_fragments_in_response(self) -> None:
-        if not (self.MIN_TOTAL_FRAGMENTS_IN_RESPONSE
-                <= self.max_total_fragments_in_response
-                <= self.MAX_TOTAL_FRAGMENTS_IN_RESPONSE):
+    def _validate_max_fragments_total(self) -> None:
+        if not (self.MAX_FRAGMENTS_TOTAL[0]
+                <= self.max_fragments_total
+                <= self.MAX_FRAGMENTS_TOTAL[1]):
             raise ValueError(
-                f"max_total_fragments_in_response debe estar entre "
-                f"{self.MIN_TOTAL_FRAGMENTS_IN_RESPONSE} y {self.MAX_TOTAL_FRAGMENTS_IN_RESPONSE}, "
-                f"se recibió: {self.max_total_fragments_in_response}"
+                f"max_fragments_total debe estar entre "
+                f"{self.MAX_FRAGMENTS_TOTAL[0]} y {self.MAX_FRAGMENTS_TOTAL[1]}, "
+                f"se recibió: {self.max_fragments_total}"
             )
 
-    def _validate_max_response_size_chars(self) -> None:
-        if not (self.MIN_RESPONSE_SIZE_CHARS
-                <= self.max_response_size_chars
-                <= self.MAX_RESPONSE_SIZE_CHARS):
+    def _validate_max_total_chars(self) -> None:
+        if not (self.MAX_TOTAL_CHARS[0]
+                <= self.max_total_chars
+                <= self.MAX_TOTAL_CHARS[1]):
             raise ValueError(
-                f"max_response_size_chars debe estar entre {self.MIN_RESPONSE_SIZE_CHARS} y {self.MAX_RESPONSE_SIZE_CHARS}, "
-                f"se recibió: {self.max_response_size_chars}"
+                f"max_total_chars debe estar entre {self.MAX_TOTAL_CHARS[0]} y {self.MAX_TOTAL_CHARS[1]}, "
+                f"se recibió: {self.max_total_chars}"
             )
