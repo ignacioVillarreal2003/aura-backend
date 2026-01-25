@@ -11,38 +11,20 @@ from app.domain.dtos.document_summary_response import DocumentSummaryResponse
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(
-    tags=["Document Summary"],
-    responses={
-        400: {"description": "Bad Request"},
-        500: {"description": "Internal Server Error"}
-    }
-)
-
 
 class DocumentSummaryController:
     @staticmethod
-    async def execute_document_summary(request_body: DocumentSummaryRequest,
+    async def execute_document_summary(document_summary_request: DocumentSummaryRequest,
                                        document_summary_service: DocumentSummaryServiceInterface = Depends(
                                            get_document_summary_service)) -> DocumentSummaryResponse:
-        logger.info(
-            "Processing document summary request",
-            extra={
-                "document_id": request_body.document_id
-            }
-        )
+        logger.info("Processing document summary request")
 
         try:
-            response = await document_summary_service.execute_document_summary(request_body)
+            document_summary_response = await document_summary_service.execute_document_summary(document_summary_request)
 
-            logger.info(
-                "Document summary request processed successfully",
-                extra={
-                    "document_id": request_body.document_id
-                }
-            )
+            logger.info("Document summary request processed successfully")
 
-            return response
+            return document_summary_response
 
         except AppError as e:
             logger.warning(
@@ -50,8 +32,7 @@ class DocumentSummaryController:
                 extra={
                     "error_code": e.code,
                     "error_message": e.message,
-                    "status_code": e.status_code,
-                    "document_id": request_body.document_id
+                    "status_code": e.status_code
                 }
             )
             raise HTTPException(
@@ -66,8 +47,7 @@ class DocumentSummaryController:
             logger.exception(
                 "Unexpected error in document summary controller",
                 extra={
-                    "error_type": type(e).__name__,
-                    "document_id": request_body.document_id
+                    "error_type": type(e).__name__
                 }
             )
             raise HTTPException(
@@ -79,20 +59,11 @@ class DocumentSummaryController:
             )
 
 
+router = APIRouter()
+
 document_summary_controller = DocumentSummaryController()
 
 router.post(
     "",
-    response_model=DocumentSummaryResponse,
-    summary="Execute a document summary request",
-    description=(
-        "Generates a structured and comprehensive summary for a specific document identified "
-        "by its ID. The summarization process analyzes the document content to extract and "
-        "condense the most relevant information."
-    ),
-    response_description=(
-        "Returns a coherent and concise summary of the requested document, capturing its main "
-        "ideas, key sections, and essential information."
-    ),
-    status_code=status.HTTP_200_OK
+    response_model=DocumentSummaryResponse
 )(document_summary_controller.execute_document_summary)

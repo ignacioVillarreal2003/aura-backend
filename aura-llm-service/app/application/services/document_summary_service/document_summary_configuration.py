@@ -47,19 +47,7 @@ class DocumentSummaryConfiguration:
     def __post_init__(self) -> None:
         try:
             self._validate_all()
-            logger.info(
-                "DocumentSummaryConfiguration initialized successfully",
-                extra={
-                    "large_document_threshold": self.large_document_threshold,
-                    "chunk_size": self.chunk_size,
-                    "max_concurrent_chunks": self.max_concurrent_chunks,
-                    "max_retry_attempts": self.max_retry_attempts,
-                    "retry_delay": self.retry_delay,
-                    "min_document_id": self.min_document_id,
-                    "max_document_id": self.max_document_id,
-                    "uses_custom_system_prompt": self.custom_system_prompt is not None
-                }
-            )
+            logger.info("DocumentSummaryConfiguration initialized successfully")
         except ValueError as e:
             logger.error(
                 "Configuration validation failed",

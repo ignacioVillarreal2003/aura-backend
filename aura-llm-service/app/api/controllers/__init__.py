@@ -22,6 +22,6 @@ router.include_router(
 
 router.include_router(
     agent_controller.router,
-    prefix="/agent_node",
+    prefix="/agent",
     tags=["Agent"]
 )

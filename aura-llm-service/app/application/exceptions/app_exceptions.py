@@ -12,7 +12,7 @@ class AppError(Exception):
 
 class ValidationError(AppError):
     def __init__(self,
-                 message: str = "Invalid value",
+                 message: str = "Valor invalido",
                  status_code: int = 400,
                  *,
                  code: str | None = None):

@@ -13,7 +13,7 @@ from app.application.services.agent_service.sentiment_node.sentiment_node_config
 )
 from app.application.services.agent_service.agent_state.agent_state import AgentState
 from app.application.services.agent_service.tools.tool_call_router import ToolCallRouter
-from app.infrastructure.ollama_llm_facade.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
+from app.infrastructure.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 
 logger = logging.getLogger(__name__)
 

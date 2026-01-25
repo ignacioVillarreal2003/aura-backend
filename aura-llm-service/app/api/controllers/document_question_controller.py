@@ -11,38 +11,20 @@ from app.domain.dtos.document_question_response import DocumentQuestionResponse
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(
-    tags=["Document Question"],
-    responses={
-        400: {"description": "Bad Request"},
-        500: {"description": "Internal Server Error"}
-    }
-)
-
 
 class DocumentQuestionController:
     @staticmethod
-    async def execute_document_question(request_body: DocumentQuestionRequest,
+    async def execute_document_question(document_question_request: DocumentQuestionRequest,
                                         document_question_service: DocumentQuestionServiceInterface = Depends(
                                             get_document_question_service)) -> DocumentQuestionResponse:
-        logger.info(
-            "Processing document question request",
-            extra={
-                "question": request_body.question
-            }
-        )
+        logger.info("Processing document question request")
 
         try:
-            response = await document_question_service.execute_document_question(request_body)
+            document_question_response = await document_question_service.execute_document_question(document_question_request)
 
-            logger.info(
-                "Document question request processed successfully",
-                extra={
-                    "question": request_body.question
-                }
-            )
+            logger.info("Document question request processed successfully")
 
-            return response
+            return document_question_response
 
         except AppError as e:
             logger.warning(
@@ -50,8 +32,7 @@ class DocumentQuestionController:
                 extra={
                     "error_code": e.code,
                     "error_message": e.message,
-                    "status_code": e.status_code,
-                    "question": request_body.question
+                    "status_code": e.status_code
                 }
             )
             raise HTTPException(
@@ -66,8 +47,7 @@ class DocumentQuestionController:
             logger.exception(
                 "Unexpected error in document question controller",
                 extra={
-                    "error_type": type(e).__name__,
-                    "question": request_body.question
+                    "error_type": type(e).__name__
                 }
             )
             raise HTTPException(
@@ -79,20 +59,11 @@ class DocumentQuestionController:
             )
 
 
+router = APIRouter()
+
 document_question_controller = DocumentQuestionController()
 
 router.post(
     "",
-    response_model=DocumentQuestionResponse,
-    summary="Execute a document question request",
-    description=(
-        "Processes a user question by retrieving relevant information from indexed documents "
-        "and generating a contextualized answer using retrieval-augmented generation. "
-        "The response is grounded exclusively in the retrieved document content."
-    ),
-    response_description=(
-        "Returns a contextualized answer generated from the most relevant document fragments, "
-        "along with references or metadata related to the retrieved content."
-    ),
-    status_code=status.HTTP_200_OK
+    response_model=DocumentQuestionResponse
 )(document_question_controller.execute_document_question)

@@ -1,8 +1,8 @@
 import logging
-from typing import Callable, Optional, Iterable, List
+from typing import Callable, Optional, List
 from langchain_core.tools import BaseTool
 
-from app.infrastructure.ollama_llm_facade.exceptions.llm_facade_exceptions import ToolInitializationError
+from app.infrastructure.ollama_llm.exceptions.ollama_llm_facade_exceptions import ToolInitializationError
 
 logger = logging.getLogger(__name__)
 
@@ -11,53 +11,35 @@ ToolFactory = Callable[[], BaseTool]
 
 class OllamaToolManager:
     def __init__(self,
-                 tool_factories: Optional[Iterable[ToolFactory]] = None):
-        self._factories: List[ToolFactory] = (
-            list(tool_factories) if tool_factories else []
-        )
+                 tool_factories: Optional[List[ToolFactory]] = None):
+        self._tool_factories = tool_factories
         self._tools: List[BaseTool] = []
         self._initialized = False
 
-        logger.debug(
-            "OllamaToolManager created",
-            extra={
-                "factories_count": len(self._factories)
-            }
-        )
+        logger.debug("OllamaToolManager created")
 
     def initialize(self) -> None:
         if self._initialized:
             logger.debug("OllamaToolManager already initialized")
             return
 
-        if not self._factories:
+        if not self._tool_factories:
             logger.debug("No tool factories provided")
             self._tools = []
             self._initialized = True
             return
 
-        logger.info(
-            "Initializing OllamaToolManager",
-            extra={
-                "factories_count": len(self._factories)
-            }
-        )
+        logger.info("Initializing OllamaToolManager")
 
         created_tools: List[BaseTool] = []
         errors: List[tuple[int, Exception]] = []
 
-        for idx, factory in enumerate(self._factories):
+        for idx, factory in enumerate(self._tool_factories):
             try:
                 tool = self._create_and_validate_tool(factory, idx)
                 created_tools.append(tool)
 
-                logger.debug(
-                    "Tool created successfully",
-                    extra={
-                        "factory_index": idx,
-                        "tool_name": getattr(tool, "name", "unknown")
-                    }
-                )
+                logger.debug("Tool created successfully")
 
             except Exception as e:
                 logger.warning(
@@ -72,9 +54,7 @@ class OllamaToolManager:
                 errors.append((idx, e))
 
         if errors and not created_tools:
-            error_details = "; ".join(
-                f"Factory {idx}: {str(err)}" for idx, err in errors
-            )
+            error_details = "; ".join(f"Factory {idx}: {str(err)}" for idx, err in errors)
             logger.error(
                 "All tool factories failed",
                 extra={
@@ -82,9 +62,7 @@ class OllamaToolManager:
                     "error_details": error_details
                 }
             )
-            raise ToolInitializationError(
-                f"All tool factories failed: {error_details}"
-            )
+            raise ToolInitializationError(f"All tool factories failed: {error_details}")
 
         if errors:
             logger.warning(
@@ -92,21 +70,14 @@ class OllamaToolManager:
                 extra={
                     "failed_factories": len(errors),
                     "succeeded_factories": len(created_tools),
-                    "total_factories": len(self._factories)
+                    "total_factories": len(self._tool_factories)
                 }
             )
 
         self._tools = created_tools
         self._initialized = True
 
-        logger.info(
-            "OllamaToolManager initialized successfully",
-            extra={
-                "tools_created": len(created_tools),
-                "tools_failed": len(errors),
-                "total_factories": len(self._factories)
-            }
-        )
+        logger.info("OllamaToolManager initialized successfully")
 
     @staticmethod
     def _create_and_validate_tool(factory: ToolFactory,

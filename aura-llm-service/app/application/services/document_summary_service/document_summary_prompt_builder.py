@@ -8,12 +8,7 @@ logger = logging.getLogger(__name__)
 class DocumentSummaryPromptBuilder:
     @staticmethod
     def _build_system_message(system_prompt: str) -> SystemMessage:
-        logger.debug(
-            "Building system message",
-            extra={
-                "system_prompt": system_prompt
-            }
-        )
+        logger.debug("Building system message")
         return SystemMessage(
             content=system_prompt
         )
@@ -21,13 +16,7 @@ class DocumentSummaryPromptBuilder:
     def build_summarization_messages(self,
                                      system_prompt: str,
                                      fragments: Optional[Sequence[str]]) -> List[BaseMessage]:
-        logger.info(
-            "Starting summarization messages build",
-            extra={
-                "system_prompt": system_prompt,
-                "fragments": fragments
-            }
-        )
+        logger.info("Starting summarization messages build")
 
         if not fragments:
             logger.info("No fragments provided, using empty context message")
@@ -43,12 +32,7 @@ class DocumentSummaryPromptBuilder:
                 f"Fragmento de contexto {idx + 1}:\n{fragment}"
                 for idx, fragment in enumerate(fragments)
             )
-            logger.debug(
-                "Fragments joined for summarization",
-                extra={
-                    "fragments_joined": fragments_joined
-                }
-            )
+            logger.debug("Fragments joined for summarization")
         except Exception as e:
             logger.error(
                 "Failed to join fragments for summarization",
@@ -75,26 +59,14 @@ class DocumentSummaryPromptBuilder:
             HumanMessage(content=prompt)
         ]
 
-        logger.info(
-            "Summarization messages built successfully",
-            extra={
-                "messages_count": len(messages),
-                "fragments_count": len(fragments)
-            }
-        )
+        logger.info("Summarization messages built successfully")
 
         return messages
 
     def build_reduction_messages(self,
                                  system_prompt: str,
                                  partial_summaries: Optional[Sequence[str]]) -> List[BaseMessage]:
-        logger.info(
-            "Starting reduction messages build",
-            extra={
-                "system_prompt": system_prompt,
-                "partial_summaries": partial_summaries
-            }
-        )
+        logger.info("Starting reduction messages build")
 
         if not partial_summaries:
             logger.info("No partial summaries provided, using empty reduction message")
@@ -110,12 +82,7 @@ class DocumentSummaryPromptBuilder:
                 f"Resumen parcial {idx + 1}:\n{summary}"
                 for idx, summary in enumerate(partial_summaries)
             )
-            logger.debug(
-                "Partial summaries joined for reduction",
-                extra={
-                    "joined_summaries": joined_summaries
-                }
-            )
+            logger.debug("Partial summaries joined for reduction")
         except Exception as e:
             logger.error(
                 "Failed to join partial summaries for reduction",

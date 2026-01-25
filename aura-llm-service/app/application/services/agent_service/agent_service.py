@@ -14,7 +14,7 @@ from app.application.services.agent_service.agent_request_validator import Agent
 from app.application.services.agent_service.agent_state.agent_state_builder import AgentStateBuilder
 from app.domain.dtos.agent_request import AgentRequest
 from app.domain.dtos.agent_response import AgentResponse
-from app.infrastructure.ollama_llm_facade.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
+from app.infrastructure.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 
 logger = logging.getLogger(__name__)
 

@@ -64,12 +64,12 @@ class EnvironmentVariables(BaseSettings):
         description="Ollama service base URL"
     )
 
-    retrieve_context_fragments_by_question_url: str = Field(
+    question_context_fragments_url: str = Field(
         default="http://localhost:8001/api/fragments/by-question",
         description="Endpoint URL used to retrieve relevant context fragments based on a question"
     )
 
-    retrieve_context_fragments_by_document_url: str = Field(
+    document_context_fragments_url: str = Field(
         default="http://localhost:8001/api/fragments/by-document",
         description="Endpoint URL used to retrieve relevant context fragments for a specific document"
     )
@@ -87,8 +87,8 @@ class EnvironmentVariables(BaseSettings):
         return v_upper
 
     @field_validator("ollama_base_url",
-                     "retrieve_context_fragments_by_question_url",
-                     "retrieve_context_fragments_by_document_url")
+                     "question_context_fragments_url",
+                     "document_context_fragments_url")
     @classmethod
     def validate_url(cls, v: str) -> str:
         if not v.startswith(("http://", "https://")):

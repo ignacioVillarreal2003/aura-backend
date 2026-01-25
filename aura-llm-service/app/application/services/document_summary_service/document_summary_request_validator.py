@@ -17,12 +17,7 @@ class DocumentSummaryRequestValidator:
 
     def validate_request(self,
                          request: DocumentSummaryRequest) -> None:
-        logger.debug(
-            "Starting request validation",
-            extra={
-                "document_id": request.document_id
-            }
-        )
+        logger.debug("Starting request validation")
         self._validate_document_id(request.document_id)
 
     def _validate_document_id(self,

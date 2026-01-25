@@ -6,48 +6,36 @@ from langchain_core.runnables import Runnable
 from app.application.services.document_summary_service.exceptions.document_summary_service_exceptions import (
     DocumentSummaryServiceError
 )
-from app.infrastructure.ollama_llm_facade.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
+from app.infrastructure.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 from app.application.services.document_summary_service.document_summary_configuration import (
     DocumentSummaryConfiguration
 )
 from app.application.services.document_summary_service.document_summary_prompt_builder import (
     DocumentSummaryPromptBuilder
 )
+from app.infrastructure.ollama_llm.interfaces.ollama_llm_invoker_interface import OllamaLLMInvokerInterface
 
 logger = logging.getLogger(__name__)
 
 
 class DocumentSummaryChunkProcessor:
     def __init__(self,
-                 configuration: DocumentSummaryConfiguration,
-                 ollama_llm_facade: OllamaLLMFacadeInterface,
+                 document_summary_configuration: DocumentSummaryConfiguration,
                  document_summary_prompt_builder: DocumentSummaryPromptBuilder,
+                 ollama_llm_invoker: OllamaLLMInvokerInterface,
                  llm: Runnable) -> None:
-        self._configuration = configuration
-        self._ollama_llm_facade = ollama_llm_facade
+        self._document_summary_configuration = document_summary_configuration
         self._document_summary_prompt_builder = document_summary_prompt_builder
+        self._ollama_llm_invoker = ollama_llm_invoker
         self._llm = llm
 
-        self._semaphore = asyncio.Semaphore(configuration.max_concurrent_chunks)
+        self._semaphore = asyncio.Semaphore(self._document_summary_configuration.max_concurrent_chunks)
 
-        logger.debug(
-            "DocumentSummaryChunkProcessor initialized",
-            extra={
-                "max_concurrent_chunks": configuration.max_concurrent_chunks,
-                "max_retry_attempts": configuration.max_retry_attempts,
-                "retry_delay": configuration.retry_delay
-            }
-        )
+        logger.debug("DocumentSummaryChunkProcessor initialized")
 
     async def process_chunks(self,
                              chunks: List[List[str]]) -> List[str]:
-        logger.info(
-            "Starting parallel chunk processing",
-            extra={
-                "total_chunks": len(chunks),
-                "max_concurrent": self._configuration.max_concurrent_chunks
-            }
-        )
+        logger.info("Starting parallel chunk processing")
 
         results = await asyncio.gather(
             *[self._process_single_chunk_with_retry(i, chunk) for i, chunk in enumerate(chunks)],
@@ -62,22 +50,9 @@ class DocumentSummaryChunkProcessor:
             raise DocumentSummaryServiceError(error_msg)
 
         if failed_count > 0:
-            logger.warning(
-                "Partial processing success",
-                extra={
-                    "successful": len(successful_summaries),
-                    "failed": failed_count,
-                    "success_rate": f"{len(successful_summaries) / len(chunks):.1%}"
-                }
-            )
+            logger.warning("Partial processing success")
 
-        logger.info(
-            "Chunk processing completed",
-            extra={
-                "successful_chunks": len(successful_summaries),
-                "failed_chunks": failed_count
-            }
-        )
+        logger.info("Chunk processing completed")
 
         return successful_summaries
 
@@ -117,14 +92,14 @@ class DocumentSummaryChunkProcessor:
         async with self._semaphore:
             last_error: Optional[Exception] = None
 
-            for attempt in range(self._configuration.max_retry_attempts):
+            for attempt in range(self._document_summary_configuration.max_retry_attempts):
                 try:
                     logger.debug(
                         "Processing chunk",
                         extra={
                             "chunk_index": chunk_index,
                             "attempt": attempt + 1,
-                            "max_attempts": self._configuration.max_retry_attempts,
+                            "max_attempts": self._document_summary_configuration.max_retry_attempts,
                             "fragments_in_chunk": len(chunk)
                         }
                     )
@@ -145,7 +120,7 @@ class DocumentSummaryChunkProcessor:
                 except Exception as e:
                     last_error = e
 
-                    if attempt < self._configuration.max_retry_attempts - 1:
+                    if attempt < self._document_summary_configuration.max_retry_attempts - 1:
                         logger.warning(
                             "Chunk processing failed, retrying",
                             extra={
@@ -153,32 +128,32 @@ class DocumentSummaryChunkProcessor:
                                 "attempt": attempt + 1,
                                 "error_type": type(e).__name__,
                                 "error": str(e),
-                                "retry_delay": self._configuration.retry_delay
+                                "retry_delay": self._document_summary_configuration.retry_delay
                             }
                         )
-                        await asyncio.sleep(self._configuration.retry_delay)
+                        await asyncio.sleep(self._document_summary_configuration.retry_delay)
                     else:
                         logger.error(
                             "Chunk processing failed after all retries",
                             extra={
                                 "chunk_index": chunk_index,
-                                "total_attempts": self._configuration.max_retry_attempts,
+                                "total_attempts": self._document_summary_configuration.max_retry_attempts,
                                 "error_type": type(e).__name__,
                                 "error": str(e)
                             }
                         )
 
             raise DocumentSummaryServiceError(
-                f"Failed to process chunk {chunk_index} after {self._configuration.max_retry_attempts} attempts"
+                f"Failed to process chunk {chunk_index} after {self._document_summary_configuration.max_retry_attempts} attempts"
             ) from last_error
 
     async def _process_chunk(self, chunk: List[str]) -> str:
         llm_input = self._document_summary_prompt_builder.build_summarization_messages(
-            system_prompt=self._configuration.system_prompt,
+            system_prompt=self._document_summary_configuration.system_prompt,
             fragments=chunk
         )
 
-        summary = await self._ollama_llm_facade.call_llm_text(
+        summary = await self._ollama_llm_invoker.call_llm_content(
             llm=self._llm,
             llm_input=llm_input
         )
@@ -202,14 +177,6 @@ class DocumentSummaryChunkProcessor:
             for i in range(0, len(fragments), chunk_size)
         ]
 
-        logger.debug(
-            "Chunks created",
-            extra={
-                "total_fragments": len(fragments),
-                "chunk_size": chunk_size,
-                "total_chunks": len(chunks),
-                "last_chunk_size": len(chunks[-1]) if chunks else 0
-            }
-        )
+        logger.debug("Chunks created")
 
         return chunks

@@ -10,24 +10,24 @@ logger = logging.getLogger(__name__)
     kw_only=True
 )
 class DocumentQuestionConfiguration:
-    MIN_CONTEXT_FRAGMENTS_COUNT: Final[int] = 1
-    MAX_CONTEXT_FRAGMENTS_COUNT: Final[int] = 6
+    MIN_CONTEXT_FRAGMENTS: Final[int] = 1
+    MAX_CONTEXT_FRAGMENTS: Final[int] = 6
 
     MIN_QUESTION_LENGTH: Final[int] = 100
     MAX_QUESTION_LENGTH: Final[int] = 10000
 
-    MIN_HISTORY_MESSAGES_COUNT: Final[int] = 0
-    MAX_HISTORY_MESSAGES_COUNT: Final[int] = 6
+    MIN_HISTORY_MESSAGES: Final[int] = 0
+    MAX_HISTORY_MESSAGES: Final[int] = 6
 
-    DEFAULT_MAX_CONTEXT_FRAGMENTS_COUNT: Final[int] = 3
+    DEFAULT_MAX_CONTEXT_FRAGMENTS: Final[int] = 3
     DEFAULT_MIN_QUESTION_LENGTH: Final[int] = 1
     DEFAULT_MAX_QUESTION_LENGTH: Final[int] = 1000
-    DEFAULT_MAX_HISTORY_MESSAGES_COUNT: Final[int] = 3
+    DEFAULT_MAX_HISTORY_MESSAGES: Final[int] = 3
 
-    max_context_fragments_count: int = DEFAULT_MAX_CONTEXT_FRAGMENTS_COUNT
+    max_context_fragments: int = DEFAULT_MAX_CONTEXT_FRAGMENTS
     min_question_length: int = DEFAULT_MIN_QUESTION_LENGTH
     max_question_length: int = DEFAULT_MAX_QUESTION_LENGTH
-    max_history_messages_count: int = DEFAULT_MAX_HISTORY_MESSAGES_COUNT
+    max_history_messages: int = DEFAULT_MAX_HISTORY_MESSAGES
     custom_system_prompt: Optional[str] = None
 
     def __post_init__(self) -> None:
@@ -36,10 +36,10 @@ class DocumentQuestionConfiguration:
             logger.info(
                 "DocumentQuestionConfiguration initialized successfully",
                 extra={
-                    "max_context_fragments_count": self.max_context_fragments_count,
+                    "max_context_fragments": self.max_context_fragments,
                     "min_question_length": self.min_question_length,
                     "max_question_length": self.max_question_length,
-                    "max_history_messages_count": self.max_history_messages_count,
+                    "max_history_messages": self.max_history_messages,
                     "uses_custom_system_prompt": self.custom_system_prompt is not None
                 }
             )
@@ -54,17 +54,17 @@ class DocumentQuestionConfiguration:
             raise
 
     def _validate_all(self) -> None:
-        self._validate_max_context_fragments_count()
+        self._validate_max_context_fragments()
         self._validate_max_question_length()
-        self._validate_max_history_messages_count()
+        self._validate_max_history_messages()
 
-    def _validate_max_context_fragments_count(self) -> None:
-        if not (self.MIN_CONTEXT_FRAGMENTS_COUNT
-                <= self.max_context_fragments_count
-                <= self.MAX_CONTEXT_FRAGMENTS_COUNT):
+    def _validate_max_context_fragments(self) -> None:
+        if not (self.MIN_CONTEXT_FRAGMENTS
+                <= self.max_context_fragments
+                <= self.MAX_CONTEXT_FRAGMENTS):
             raise ValueError(
-                f"max_context_fragments_count debe estar entre {self.MIN_CONTEXT_FRAGMENTS_COUNT} y {self.MAX_CONTEXT_FRAGMENTS_COUNT}, "
-                f"se recibió: {self.max_context_fragments_count}"
+                f"max_context_fragments debe estar entre {self.MIN_CONTEXT_FRAGMENTS} y {self.MAX_CONTEXT_FRAGMENTS}, "
+                f"se recibió: {self.max_context_fragments}"
             )
 
     def _validate_max_question_length(self) -> None:
@@ -87,13 +87,13 @@ class DocumentQuestionConfiguration:
                 f"max_question_length ({self.max_question_length})"
             )
 
-    def _validate_max_history_messages_count(self) -> None:
-        if not (self.MIN_HISTORY_MESSAGES_COUNT
-                <= self.max_history_messages_count
-                <= self.MAX_HISTORY_MESSAGES_COUNT):
+    def _validate_max_history_messages(self) -> None:
+        if not (self.MIN_HISTORY_MESSAGES
+                <= self.max_history_messages
+                <= self.MAX_HISTORY_MESSAGES):
             raise ValueError(
-                f"max_history_messages_count debe estar entre {self.MIN_HISTORY_MESSAGES_COUNT} y {self.MAX_HISTORY_MESSAGES_COUNT}, "
-                f"se recibió: {self.max_history_messages_count}"
+                f"max_history_messages debe estar entre {self.MIN_HISTORY_MESSAGES} y {self.MAX_HISTORY_MESSAGES}, "
+                f"se recibió: {self.max_history_messages}"
             )
 
     @property

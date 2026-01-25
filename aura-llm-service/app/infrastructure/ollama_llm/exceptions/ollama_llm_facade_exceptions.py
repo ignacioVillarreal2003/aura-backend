@@ -1,7 +1,7 @@
 from app.application.exceptions.app_exceptions import AppError
 
 
-class LLMFacadeError(AppError):
+class OllamaLLMFacadeError(AppError):
     def __init__(self,
                  message: str = "Error en la operación del LLM",
                  *,
@@ -14,7 +14,7 @@ class LLMFacadeError(AppError):
         )
 
 
-class LLMInitializationError(LLMFacadeError):
+class LLMInitializationError(OllamaLLMFacadeError):
     def __init__(self,
                  message: str = "El LLM no pudo ser inicializado",
                  *,
@@ -36,20 +36,9 @@ class LLMNotConfiguredError(LLMInitializationError):
         )
 
 
-class ToolInitializationError(LLMFacadeError):
+class ToolInitializationError(OllamaLLMFacadeError):
     def __init__(self,
                  message: str = "Error al inicializar las herramientas",
-                 *,
-                 code: str | None = None):
-        super().__init__(
-            message=message,
-            code=code
-        )
-
-
-class LLMInvocationError(LLMFacadeError):
-    def __init__(self,
-                 message: str = "Error al invocar el LLM",
                  *,
                  code: str | None = None):
         super().__init__(

@@ -8,7 +8,7 @@ from app.application.services.agent_service.agent_state.agent_state import Agent
 from app.application.services.agent_service.sentiment_node.sentiment_node_configuration import SentimentNodeConfiguration
 from app.application.services.agent_service.sentiment_node.sentiment_node_prompt_builder import SentimentNodePromptBuilder
 from app.application.services.agent_service.constants.sentimient import Sentiment
-from app.infrastructure.ollama_llm_facade.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
+from app.infrastructure.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 
 logger = logging.getLogger(__name__)
 

@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from typing import Optional, List
-from langchain_core.messages import BaseMessage
 from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
 
@@ -8,12 +7,6 @@ from langchain_core.tools import BaseTool
 class OllamaLLMFacadeInterface(ABC):
     @abstractmethod
     async def initialize(self) -> None:
-        pass
-
-    @abstractmethod
-    async def call_llm_text(self,
-                            llm: Runnable,
-                            llm_input: List[BaseMessage]) -> str:
         pass
 
     @abstractmethod

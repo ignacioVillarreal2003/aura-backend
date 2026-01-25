@@ -24,7 +24,8 @@ from app.domain.dtos.message import Message
 from app.infrastructure.document_context_provider.interfaces.document_context_provider_interface import (
     DocumentContextProviderInterface
 )
-from app.infrastructure.ollama_llm_facade.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
+from app.infrastructure.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
+from app.infrastructure.ollama_llm.ollama_llm_invoker import OllamaLLMInvoker
 
 logger = logging.getLogger(__name__)
 
@@ -33,13 +34,15 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
     def __init__(self,
                  ollama_llm_facade: OllamaLLMFacadeInterface,
                  document_context_provider: DocumentContextProviderInterface,
-                 configuration: Optional[DocumentQuestionConfiguration] = None) -> None:
+                 document_question_configuration: Optional[DocumentQuestionConfiguration] = None) -> None:
         self._ollama_llm_facade = ollama_llm_facade
         self._document_context_provider = document_context_provider
-        self._configuration = configuration or DocumentQuestionConfiguration()
+        self._document_question_configuration = document_question_configuration or DocumentQuestionConfiguration()
 
-        self._request_validator = DocumentQuestionRequestValidator(self._configuration)
-        self._prompt_builder = DocumentQuestionPromptBuilder()
+        self._document_question_request_validator = DocumentQuestionRequestValidator(self._document_question_configuration)
+        self._document_question_prompt_builder = DocumentQuestionPromptBuilder()
+
+        self._ollama_llm_invoker = OllamaLLMInvoker()
 
         self._llm: Optional[Runnable] = None
         self._llm_initialization_failed = False
@@ -50,14 +53,14 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
     def create(cls,
                ollama_llm_facade: OllamaLLMFacadeInterface,
                document_context_provider: DocumentContextProviderInterface,
-               max_context_fragments_count: Optional[int] = None,
+               max_context_fragments: Optional[int] = None,
                max_question_length: Optional[int] = None,
                max_history_messages_count: Optional[int] = None,
                custom_system_prompt: Optional[str] = None) -> "DocumentQuestionService":
         config_kwargs = {}
 
-        if max_context_fragments_count is not None:
-            config_kwargs['max_context_fragments_count'] = max_context_fragments_count
+        if max_context_fragments is not None:
+            config_kwargs['max_context_fragments'] = max_context_fragments
         if max_question_length is not None:
             config_kwargs['max_question_length'] = max_question_length
         if max_history_messages_count is not None:
@@ -65,41 +68,29 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
         if custom_system_prompt is not None:
             config_kwargs['custom_system_prompt'] = custom_system_prompt
 
-        configuration = DocumentQuestionConfiguration(**config_kwargs)
+        document_question_configuration = DocumentQuestionConfiguration(**config_kwargs)
 
         return cls(
             ollama_llm_facade=ollama_llm_facade,
             document_context_provider=document_context_provider,
-            configuration=configuration
+            document_question_configuration=document_question_configuration
         )
 
     async def execute_document_question(self,
-                                        request: DocumentQuestionRequest) -> DocumentQuestionResponse:
-        logger.info(
-            "Starting document question execution",
-            extra={
-                "question": request.question,
-                "history_messages": request.history_messages if request.history_messages else None
-            }
-        )
+                                        document_question_request: DocumentQuestionRequest) -> DocumentQuestionResponse:
+        logger.info("Starting document question execution")
 
-        self._request_validator.validate_request(request)
+        self._document_question_request_validator.validate_request(document_question_request)
 
-        context_fragments = await self.retrieve_context_fragments_by_question(request.question)
+        context_fragments = await self.retrieve_context_fragments_by_question(document_question_request.question)
 
         answer = await self.generate_answer(
-            question=request.question,
-            history_messages=request.history_messages or [],
+            question=document_question_request.question,
+            history_messages=document_question_request.history_messages or [],
             context_fragments=context_fragments
         )
 
-        logger.info(
-            "Document question executed successfully",
-            extra={
-                "question": request.question,
-                "answer": answer
-            }
-        )
+        logger.info("Document question executed successfully")
 
         return DocumentQuestionResponse(
             answer=answer
@@ -107,29 +98,18 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
 
     async def retrieve_context_fragments_by_question(self,
                                                      question: str,
-                                                     max_context_fragments_count: Optional[int] = None) -> List[str]:
-        max_context_fragments_count = max_context_fragments_count or self._configuration.max_context_fragments_count
+                                                     max_context_fragments: Optional[int] = None) -> List[str]:
+        max_context_fragments = max_context_fragments or self._document_question_configuration.max_context_fragments
 
-        logger.debug(
-            "Retrieving context fragments",
-            extra={
-                "question": question,
-                "max_context_fragments_count": max_context_fragments_count
-            }
-        )
+        logger.debug("Retrieving context fragments")
 
         try:
             fragments = await self._document_context_provider.retrieve_context_fragments_by_question(
                 question=question,
-                max_context_fragments_count=max_context_fragments_count
+                max_context_fragments=max_context_fragments
             )
 
-            logger.info(
-                "Context fragments retrieved successfully",
-                extra={
-                    "fragments": fragments,
-                }
-            )
+            logger.info("Context fragments retrieved successfully")
 
             return fragments
 
@@ -137,9 +117,7 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
             logger.exception(
                 "Unexpected error during context retrieval",
                 extra={
-                    "error_type": type(e).__name__,
-                    "question": question,
-                    "max_context_fragments_count": max_context_fragments_count
+                    "error_type": type(e).__name__
                 }
             )
             raise DocumentQuestionServiceError("Error inesperado al recuperar fragmentos del documento") from e
@@ -148,14 +126,7 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
                               question: str,
                               history_messages: Optional[List[Message]] = None,
                               context_fragments: Optional[List[str]] = None) -> str:
-        logger.debug(
-            "Generating answer",
-            extra={
-                "question": question,
-                "history_messages": history_messages,
-                "context_fragments": context_fragments
-            }
-        )
+        logger.debug("Generating answer")
 
         try:
             await self._ensure_llm_initialized()
@@ -172,12 +143,7 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
                 logger.warning("LLM returned empty answer")
                 raise DocumentQuestionServiceError("El modelo no generó una respuesta válida")
 
-            logger.info(
-                "Answer generated successfully",
-                extra={
-                    "answer": answer
-                }
-            )
+            logger.info("Answer generated successfully")
 
             return answer.strip()
 
@@ -217,8 +183,8 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
                       question: str,
                       context_fragments: Optional[List[str]] = None,
                       history_messages: Optional[List[Message]] = None) -> List[BaseMessage]:
-        return self._prompt_builder.build_complete_prompt(
-            system_prompt=self._configuration.system_prompt,
+        return self._document_question_prompt_builder.build_complete_prompt(
+            system_prompt=self._document_question_configuration.system_prompt,
             question=question,
             context_fragments=context_fragments,
             history_messages=history_messages
@@ -232,17 +198,12 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
         logger.debug("Invoking LLM")
 
         try:
-            answer = await self._ollama_llm_facade.call_llm_text(
+            answer = await self._ollama_llm_invoker.call_llm_content(
                 llm=self._llm,
                 llm_input=prompt
             )
 
-            logger.debug(
-                "LLM invocation successful",
-                extra={
-                    "answer": answer
-                }
-            )
+            logger.debug("LLM invocation successful")
 
             return answer
 

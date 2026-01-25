@@ -191,12 +191,10 @@ if __name__ == "__main__":
 
 class MockExternalApiRequest(BaseModel):
     question: str
-    max_context_fragments_count: int
+    max_context_fragments: int
 
 @app.post("/mock/external-api")
-async def mock_external_api(
-    request: MockExternalApiRequest
-):
+async def mock_external_api(request: MockExternalApiRequest):
     await asyncio.sleep(0.8)
 
     return {
