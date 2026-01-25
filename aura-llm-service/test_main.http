@@ -1,3 +1,13 @@
+POST http://127.0.0.1:8000/api/document/question
+Accept: application/json
+Content-Type: application/json
+
+{
+  "question": "¿Cuál es la misión principal de la Fuerza Aérea de Uruguay?"
+}
+
+###
+
 GET http://127.0.0.1:11434
 
 ###
@@ -6,12 +16,12 @@ GET http://127.0.0.1:11434/api/tags
 
 ###
 
-POST http://127.0.0.1:8000/api/questions
+POST http://127.0.0.1:8000/api/document/question
 Accept: application/json
 Content-Type: application/json
 
 {
-  "question": "¿Cuál es la misión principal de la Fuerza Aérea de Uruguay?"
+  "question": "Dame 3 caracteristicas de bruno y su significado"
 }
 
 ###
@@ -101,6 +111,6 @@ Content-Type: application/json
     "En el ámbito del audio, los modelos de IA han alcanzado hitos extraordinarios en síntesis y transformación de voz. Los sistemas de texto-a-voz (TTS) modernos, como WaveNet y Tacotron, utilizan arquitecturas generativas que producen un audio tan natural que resulta indistinguible de la voz humana. Estos modelos no concatenan fragmentos pregrabados, sino que generan la forma de onda de audio muestreo a muestreo, aprendiendo las complejas características prosódicas del habla humana como el tono, el timbre y el ritmo. Paralelamente, los sistemas de separación de fuentes sonoros pueden aislar voces individuales en una grabación con múltiples hablantes, o separar instrumentos musicales en una mezcla estereofónica. Esta tecnología tiene aplicaciones cruciales en la mejora de sistemas de reconocimiento de voz en entornos ruidosos, la restauración de audio histórico, y la creación de herramientas para productores musicales. La capacidad de manipular el audio a este nivel de precisión abre posibilidades creativas ilimitadas, pero también plantea serios desafíos éticos en cuanto a la autenticidad y el potencial uso malicioso.",
     "La fusión de visión por computador y procesamiento de audio está dando lugar a sistemas multimodales que replican la percepción humana integral. Un ejemplo destacado son los modelos que pueden generar descripciones textuales de escenas visuales (image captioning) e incluso sintetizar audio correspondiente a lo que sucede en un video. Estos sistemas aprenden las correlaciones entre modalidades diferentes, entendiendo que un video de olas rompiendo debería acompañarse con sonido de agua, o que una imagen de un perro ladrando debe asociarse con ese sonido específico. La investigación en este campo ha llevado al desarrollo de redes que pueden 'predecir' el sonido que produciría un objeto al ser golpeado, analizando únicamente su apariencia visual. Estas capacidades tienen aplicaciones prácticas en la creación de contenido multimedia automatizado, sistemas de vigilancia inteligente que detectan eventos tanto por imagen como por sonido, y herramientas de accesibilidad para personas con discapacidades sensoriales. La verdadera potencia de estos sistemas multimodaless reside en su capacidad para transferir conocimiento entre dominios sensoriales, imitando la forma en que los humanos integramos información de múltiples sentidos.",
     "Las aplicaciones de IA en el análisis de video están transformando la vigilancia, el entretenimiento y los deportes. Los algoritmos de seguimiento de objetos pueden identificar y seguir múltiples elementos a través de secuencias de video, manteniendo consistencia incluso cuando los objetos se ocluyen temporalmente o cambian de apariencia. En el ámbito de la producción cinematográfica, la IA se utiliza para tareas como la corrección de color automática, la estabilización de video, y incluso la generación de efectos visuales complejos. Los sistemas de análisis de gestos y posturas pueden interpretar el lenguaje corporal humano en tiempo real, con aplicaciones que van desde interfaces hombre-máquina naturales hasta el análisis del rendimiento deportivo. En medicina, el procesamiento de video permite el monitoreo automatizado de pacientes para detectar caídas o cambios en el comportamiento. Una de las aplicaciones más avanzadas es la estimación de profundidad a partir de video monocular, donde la IA aprende a reconstruir la estructura tridimensional de una escena a partir de imágenes bidimensionales, una capacidad crucial para la realidad aumentada y la robótica.",
-    "La generación de contenido multimedia sintético mediante IA representa la frontera más avanzada y polémica en visión y audio. Los modelos generativos como GANs (Redes Generativas Antagónicas) y diffusion models pueden crear imágenes, video y audio hiperrealistas a partir de descripciones textuales o simplemente de ruido aleatorio. En el dominio visual, sistemas como DALL-E, Stable Diffusion y Midjourney pueden generar imágenes fotorrealistas de escenas que nunca existieron, mientras que en video, modelos como Make-A-Video pueden crear clips cortos coherentes a partir de prompts de texto. En audio, herramientas como MusicLM generan composiciones musicales completas en diferentes estilos. La contraparte de esta capacidad creativa es el riesgo de los deepfakes: manipulaciones audiovisuales tan convincentes que pueden suplantar identidades y crear eventos ficticios. La comunidad investigadora responde desarrollando técnicas de detección de contenido sintético y métodos de marca de agua digital para identificar el origen de los medios generados por IA. Este equilibrio entre el potencial creativo ilimitado y la necesidad de verificación y autenticidad definirá el futuro del contenido digital."
+    "La generación de contenido multimedia sintético mediante IA representa la frontera más avanzada y polémica en visión y audio. Los modelos generativos como GANs (Redes Generativas Antagónicas) y diffusion dtos pueden crear imágenes, video y audio hiperrealistas a partir de descripciones textuales o simplemente de ruido aleatorio. En el dominio visual, sistemas como DALL-E, Stable Diffusion y Midjourney pueden generar imágenes fotorrealistas de escenas que nunca existieron, mientras que en video, modelos como Make-A-Video pueden crear clips cortos coherentes a partir de prompts de texto. En audio, herramientas como MusicLM generan composiciones musicales completas en diferentes estilos. La contraparte de esta capacidad creativa es el riesgo de los deepfakes: manipulaciones audiovisuales tan convincentes que pueden suplantar identidades y crear eventos ficticios. La comunidad investigadora responde desarrollando técnicas de detección de contenido sintético y métodos de marca de agua digital para identificar el origen de los medios generados por IA. Este equilibrio entre el potencial creativo ilimitado y la necesidad de verificación y autenticidad definirá el futuro del contenido digital."
   ]
 }
