@@ -2,15 +2,19 @@ from langchain_experimental.text_splitter import SemanticChunker
 from langchain_huggingface import HuggingFaceEmbeddings
 from typing import Literal
 
-from app.application.exceptions.api_exceptions import TextSplitterError
-from app.application.processors.text_splitters.interfaces.text_splitter_interface import TextSplitterInterface
+from app.application.exceptions.app_exception import TextSplitterError
+from app.application.processors.text_splitters.interfaces.text_splitter_adapter_interface import (
+    TextSplitterAdapterInterface
+)
 
 
-class SemanticTextSplitterAdapter(TextSplitterInterface):
-    def split_text(self,
-                   text: str,
-                   size: int,
-                   overlap: int) -> list[str]:
+class SemanticTextSplitterAdapter(TextSplitterAdapterInterface):
+    def split_text(
+            self,
+            text: str,
+            size: int,
+            overlap: int
+    ) -> list[str]:
         try:
             breakpoint_type: Literal["percentile", "standard_deviation", "interquartile", "gradient"] = "percentile"
             model_name: str = "sentence-transformers/all-MiniLM-L6-v2"

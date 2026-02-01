@@ -5,13 +5,19 @@ from pathlib import Path
 from pdf2image import convert_from_path
 import pytesseract
 
-from app.application.exceptions.api_exceptions import ReaderFileNotFoundError, UnsupportedScannedPDFFormatError, \
-    ScannedPDFOCRExtractionError, ScannedPDFReadError
-from app.application.processors.readers.interfaces.document_reader_interface import DocumentReaderInterface
+from app.application.processors.readers.exceptions.reader_exception import (
+    ReaderFileNotFoundError,
+    UnsupportedScannedPDFFormatError,
+    ScannedPDFOCRExtractionError,
+    ScannedPDFReadError
+)
+from app.application.processors.readers.interfaces.reader_adapter_interface import DocumentReaderInterface
 
 
 class ScannedPDFReaderAdapter(DocumentReaderInterface):
-    def __init__(self):
+    def __init__(
+            self
+    ):
         self.tesseract_path = None
         self.poppler_path = None
 
@@ -32,12 +38,16 @@ class ScannedPDFReaderAdapter(DocumentReaderInterface):
         if self.tesseract_path:
             pytesseract.pytesseract.tesseract_cmd = self.tesseract_path
 
-    def can_handle(self,
-                   file_path: Path) -> bool:
+    def can_handle(
+            self,
+            file_path: Path
+    ) -> bool:
         return file_path.suffix.lower() == ".pdf"
 
-    def read(self,
-             file_path: Path) -> str:
+    def read(
+            self,
+            file_path: Path
+    ) -> str:
         if not file_path.exists():
             raise ReaderFileNotFoundError(str(file_path))
 

@@ -1,14 +1,18 @@
 from langchain_text_splitters import SpacyTextSplitter
 
-from app.application.exceptions.api_exceptions import TextSplitterError
-from app.application.processors.text_splitters.interfaces.text_splitter_interface import TextSplitterInterface
+from app.application.exceptions.app_exception import TextSplitterError
+from app.application.processors.text_splitters.interfaces.text_splitter_adapter_interface import (
+    TextSplitterAdapterInterface
+)
 
 
-class SpacyTextSplitterAdapter(TextSplitterInterface):
-    def split_text(self,
-                   text: str,
-                   size: int,
-                   overlap: int) -> list[str]:
+class SpacyTextSplitterAdapter(TextSplitterAdapterInterface):
+    def split_text(
+            self,
+            text: str,
+            size: int,
+            overlap: int
+    ) -> list[str]:
         try:
             splitter = SpacyTextSplitter(
                 chunk_size=size,

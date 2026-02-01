@@ -1,16 +1,25 @@
 from pathlib import Path
 from docx import Document
 
-from app.application.exceptions.api_exceptions import ReaderFileNotFoundError, UnsupportedDOCXFormatError, DOCXReadError
-from app.application.processors.readers.interfaces.document_reader_interface import DocumentReaderInterface
+from app.application.processors.readers.exceptions.reader_exception import (
+    ReaderFileNotFoundError,
+    UnsupportedDOCXFormatError,
+    DOCXReadError
+)
+from app.application.processors.readers.interfaces.reader_adapter_interface import DocumentReaderInterface
 
 
 class DOCXReaderAdapter(DocumentReaderInterface):
-    def can_handle(self,
-                   file_path: Path) -> bool:
+    def can_handle(
+            self,
+            file_path: Path
+    ) -> bool:
         return file_path.suffix.lower() == ".docx"
 
-    def read(self, file_path: Path) -> str:
+    def read(
+            self,
+            file_path: Path
+    ) -> str:
         if not file_path.exists():
             raise ReaderFileNotFoundError(str(file_path))
 
