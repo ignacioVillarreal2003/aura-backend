@@ -1,4 +1,4 @@
-POST http://127.0.0.1:8000/api/document-context/question
+POST http://localhost:8000/api/document-context/question
 Accept: application/json
 Content-Type: application/json
 
@@ -7,9 +7,11 @@ Content-Type: application/json
   "max_context_fragments": 3
 }
 
+
 ###
 
-POST http://127.0.0.1:8000/api/document-context/question
+
+POST http://localhost:8000/api/document-context/question
 Accept: application/json
 Content-Type: application/json
 
@@ -18,9 +20,11 @@ Content-Type: application/json
   "max_context_fragments": 3
 }
 
+
 ###
 
-POST http://127.0.0.1:8000/api/document-context/question
+
+POST http://localhost:8000/api/document-context/question
 Accept: application/json
 Content-Type: application/json
 
@@ -29,9 +33,11 @@ Content-Type: application/json
   "max_context_fragments": 3
 }
 
+
 ###
 
-POST http://127.0.0.1:8000/api/document-context/question
+
+POST http://localhost:8000/api/document-context/question
 Accept: application/json
 Content-Type: application/json
 
@@ -40,9 +46,11 @@ Content-Type: application/json
   "max_context_fragments": 3
 }
 
+
 ###
 
-POST http://127.0.0.1:8000/api/document-context/question
+
+POST http://localhost:8000/api/document-context/question
 Accept: application/json
 Content-Type: application/json
 
@@ -51,9 +59,11 @@ Content-Type: application/json
   "max_context_fragments": 3
 }
 
+
 ###
 
-POST http://127.0.0.1:8000/api/document-context/question
+
+POST http://localhost:8000/api/document-context/question
 Accept: application/json
 Content-Type: application/json
 
@@ -62,9 +72,11 @@ Content-Type: application/json
   "max_context_fragments": 3
 }
 
+
 ###
 
-POST http://127.0.0.1:8000/api/document-context/question
+
+POST http://localhost:8000/api/document-context/question
 Accept: application/json
 Content-Type: application/json
 
@@ -73,9 +85,11 @@ Content-Type: application/json
   "max_context_fragments": 3
 }
 
+
 ###
 
-POST http://127.0.0.1:8000/api/document-context/question
+
+POST http://localhost:8000/api/document-context/question
 Accept: application/json
 Content-Type: application/json
 
@@ -84,9 +98,11 @@ Content-Type: application/json
   "max_context_fragments": 3
 }
 
+
 ###
 
-POST http://127.0.0.1:8000/api/document-context/question
+
+POST http://localhost:8000/api/document-context/question
 Accept: application/json
 Content-Type: application/json
 
@@ -95,9 +111,11 @@ Content-Type: application/json
   "max_context_fragments": 3
 }
 
+
 ###
 
-POST http://127.0.0.1:8000/api/document-context/question
+
+POST http://localhost:8000/api/document-context/question
 Accept: application/json
 Content-Type: application/json
 
@@ -106,9 +124,11 @@ Content-Type: application/json
   "max_context_fragments": 3
 }
 
+
 ###
 
-POST http://127.0.0.1:8000/api/document-context/question
+
+POST http://localhost:8000/api/document-context/question
 Accept: application/json
 Content-Type: application/json
 
@@ -117,9 +137,11 @@ Content-Type: application/json
   "max_context_fragments": 3
 }
 
+
 ###
 
-POST http://127.0.0.1:8000/api/document-context/question
+
+POST http://localhost:8000/api/document-context/question
 Accept: application/json
 Content-Type: application/json
 
@@ -127,5 +149,6 @@ Content-Type: application/json
   "question": "¿Qué importancia tiene la radiación cósmica de fondo para la validación del modelo del Big Bang?",
   "max_context_fragments": 3
 }
+
 
 ###
