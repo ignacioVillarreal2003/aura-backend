@@ -34,7 +34,7 @@ class EnvironmentVariables(BaseSettings):
         description="Host to bind the application"
     )
     app_port: int = Field(
-        default=8001,
+        default=8000,
         ge=1,
         le=65535,
         description="Port to bind the application"

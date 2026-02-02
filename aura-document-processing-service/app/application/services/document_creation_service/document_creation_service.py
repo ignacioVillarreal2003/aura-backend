@@ -118,7 +118,7 @@ class DocumentCreationService(DocumentCreationServiceInterface):
             raise
 
         document = Document(
-            file_name=raw_document.filename,
+            name=raw_document.filename,
             type=document_type,
             path=path,
             created_by=1,

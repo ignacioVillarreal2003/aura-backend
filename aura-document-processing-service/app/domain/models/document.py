@@ -9,16 +9,73 @@ from app.domain.models.base import Base
 class Document(Base):
     __tablename__ = "document"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
 
-    file_name = Column(String(255), nullable=False)
-    type = Column(Enum(DocumentType), nullable=False)
-    status = Column(Enum(DocumentStatus), default=DocumentStatus.pending)
-    path = Column(String(255), nullable=True)
+    name = Column(
+        String(255),
+        nullable=False
+    )
+    type = Column(
+        Enum(DocumentType),
+        nullable=False
+    )
+    status = Column(
+        Enum(DocumentStatus),
+        default=DocumentStatus.pending,
+        nullable=False
+    )
+    path = Column(
+        String(255),
+        nullable=True
+    )
 
-    created_by = Column(Integer, nullable=False)
-    created_at = Column(DateTime, server_default=func.now())
-    updated_by = Column(Integer, nullable=True)
-    updated_at = Column(DateTime, nullable=True)
-    deleted_by = Column(Integer, nullable=True)
-    deleted_at = Column(DateTime, nullable=True)
+    text_cleaner_type = Column(
+        String(255),
+        nullable=True
+    )
+    text_splitter_type = Column(
+        String(255),
+        nullable=True
+    )
+    embedder_type = Column(
+        String(255),
+        nullable=True
+    )
+    split_size = Column(
+        Integer,
+        nullable=True
+    )
+    split_overlap = Column(
+        Integer,
+        nullable=True
+    )
+
+    created_by = Column(
+        Integer,
+        nullable=False
+    )
+    created_at = Column(
+        DateTime,
+        server_default=func.now(),
+        nullable=False
+    )
+    updated_by = Column(
+        Integer,
+        nullable=True
+    )
+    updated_at = Column(
+        DateTime,
+        nullable=True
+    )
+    deleted_by = Column(
+        Integer,
+        nullable=True
+    )
+    deleted_at = Column(
+        DateTime,
+        nullable=True
+    )

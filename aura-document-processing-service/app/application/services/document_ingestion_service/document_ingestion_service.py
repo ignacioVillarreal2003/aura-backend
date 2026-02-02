@@ -15,6 +15,7 @@ from app.application.services.document_ingestion_service.document_ingestion_serv
 from app.application.services.document_ingestion_service.interfaces.document_ingestion_service_interface import (
     DocumentIngestionServiceInterface
 )
+from app.domain.constants.document_status import DocumentStatus
 from app.domain.models.document import Document
 from app.domain.models.fragment import Fragment
 from app.infrastructure.persistence.repositories.document_repository.document_repository import (
@@ -133,17 +134,38 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                 fragment = Fragment(
                     document_id=document.id,
                     vector=embedder_result[idx],
-                    embedding_model=self._document_creation_service_configuration.embedder_type,
                     content=splitter_result[idx],
                     fragment_index=idx,
-                    chunk_size=self._document_creation_service_configuration.split_size,
                     created_by=document.created_by,
                     created_at=datetime.now(),
                 )
-                self._fragment_repository.create(fragment, db)
+                self._fragment_repository.create(
+                    fragment,
+                    db
+                )
+
+            document.text_cleaner_type = self._document_creation_service_configuration.text_cleaner_type
+            document.text_splitter_type = self._document_creation_service_configuration.text_splitter_type
+            document.embedder_type = self._document_creation_service_configuration.embedder_type
+            document.split_size = self._document_creation_service_configuration.split_size
+            document.split_overlap = self._document_creation_service_configuration.split_overlap
+            document.status = DocumentStatus.done
+
+            self._document_repository.update(
+                document=document,
+                db=db
+            )
 
         except Exception as e:
-            logger.exception("Error processing document")
+            document.status = DocumentStatus.failed
+            self._document_repository.update(
+                document=document,
+                db=db
+            )
+            logger.exception(
+                f"Error processing document: {type(e).__name__}: {str(e)}",
+                exc_info=True
+            )
             raise DatabaseError("Error en la ingesta del documento") from e
 
         finally:
