@@ -1,9 +1,9 @@
-POST http://localhost:8000/api/document-context/document
+POST http://localhost:8001/api/document-context/document
 Accept: application/json
 Content-Type: application/json
 
 {
-  "document_id": 11
+  "document_id": 22
 }
 
 ###

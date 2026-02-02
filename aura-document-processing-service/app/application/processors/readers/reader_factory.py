@@ -2,7 +2,8 @@ from pathlib import Path
 from typing import Type, Dict
 
 from app.application.processors.readers.adapters.digital_pdf_reader_adapter import DigitalPDFReaderAdapter
-from app.application.processors.readers.adapters.docx_reader_adapter import DOCXReaderAdapter
+from app.application.processors.readers.adapters.digital_docx_reader_adapter import DigitalDOCXReaderAdapter
+from app.application.processors.readers.adapters.scanned_docx_reader_adapter import ScannedDOCXReaderAdapter
 from app.application.processors.readers.exceptions.reader_exception import UnsupportedReaderError
 from app.application.processors.readers.interfaces.reader_adapter_interface import DocumentReaderInterface
 from app.application.processors.readers.adapters.scanned_pdf_reader_adapter import ScannedPDFReaderAdapter
@@ -16,7 +17,8 @@ class ReaderFactory:
         self._readers: Dict[ReaderType, Type[DocumentReaderInterface]] = {
             ReaderType.DIGITAL_PDF: DigitalPDFReaderAdapter,
             ReaderType.SCANNED_PDF: ScannedPDFReaderAdapter,
-            ReaderType.DOCX: DOCXReaderAdapter
+            ReaderType.DIGITAL_DOCX: DigitalDOCXReaderAdapter,
+            ReaderType.SCANNED_DOCX: ScannedDOCXReaderAdapter
         }
         self._instances: Dict[str, DocumentReaderInterface] = {}
 

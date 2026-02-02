@@ -42,6 +42,42 @@ class DOCXReadError(AppError):
         super().__init__(message, status_code=500, code=code)
 
 
+class UnsupportedDigitalDOCXFormatError(AppError):
+    def __init__(self, extension: str, *, code: str | None = None):
+        message = f"Formato no soportado por DigitalDOCXReader: {extension}"
+        super().__init__(message, status_code=415, code=code)
+
+
+class DigitalDOCXReadError(AppError):
+    def __init__(self, file_path: str, original: Exception, *, code: str | None = None):
+        message = f"Error al leer el archivo DOCX digital {file_path}: {original}"
+        super().__init__(message, status_code=500, code=code)
+
+
+class DOCXHasNoExtractableTextError(AppError):
+    def __init__(self, *, code: str | None = None):
+        message = "El DOCX no contiene texto extraíble."
+        super().__init__(message, status_code=422, code=code)
+
+
+class UnsupportedScannedDOCXFormatError(AppError):
+    def __init__(self, extension: str, *, code: str | None = None):
+        message = f"Formato no soportado por ScannedDOCXReader: {extension}"
+        super().__init__(message, status_code=415, code=code)
+
+
+class ScannedDOCXOCRExtractionError(AppError):
+    def __init__(self, *, code: str | None = None):
+        message = "No se extrajo texto mediante OCR del DOCX escaneado."
+        super().__init__(message, status_code=422, code=code)
+
+
+class ScannedDOCXReadError(AppError):
+    def __init__(self, file_path: str, original: Exception, *, code: str | None = None):
+        message = f"Error al aplicar OCR al archivo DOCX {file_path}. Error: {original}"
+        super().__init__(message, status_code=500, code=code)
+
+
 class UnsupportedDigitalPDFFormatError(AppError):
     def __init__(self, extension: str, *, code: str | None = None):
         message = f"Formato no soportado por PDFReaderDigital: {extension}"

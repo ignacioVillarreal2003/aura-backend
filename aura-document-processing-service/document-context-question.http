@@ -141,13 +141,13 @@ Content-Type: application/json
 ###
 
 
-POST http://localhost:8000/api/document-context/question
+POST http://localhost:8001/api/document-context/question
 Accept: application/json
 Content-Type: application/json
 
 {
   "question": "¿Qué importancia tiene la radiación cósmica de fondo para la validación del modelo del Big Bang?",
-  "max_context_fragments": 3
+  "max_context_fragments": 4
 }
 
 
