@@ -1,11 +1,15 @@
 import re
 
-from app.application.processors.text_cleaners.interfaces.text_cleaner_interface import TextCleanerInterface
+from app.application.processors.text_cleaners.interfaces.text_cleaner_adapter_interface import (
+    TextCleanerAdapterInterface
+)
 
 
-class NoLineBreaksTextCleanerAdapter(TextCleanerInterface):
-    def clean_text(self,
-                   text: str) -> str:
+class NoLineBreaksTextCleanerAdapter(TextCleanerAdapterInterface):
+    def clean_text(
+            self,
+            text: str
+    ) -> str:
         if not text:
             return ""
 

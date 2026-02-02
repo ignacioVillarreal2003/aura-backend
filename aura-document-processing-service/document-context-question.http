@@ -1,0 +1,154 @@
+POST http://localhost:8000/api/document-context/question
+Accept: application/json
+Content-Type: application/json
+
+{
+  "question": "¿Qué representa simbólicamente la ballena para Nereo y por qué el enfrentamiento no termina con su muerte?",
+  "max_context_fragments": 3
+}
+
+
+###
+
+
+POST http://localhost:8000/api/document-context/question
+Accept: application/json
+Content-Type: application/json
+
+{
+  "question": "¿Cómo se utiliza el mar como elemento narrativo para reforzar la idea de leyenda y destino?",
+  "max_context_fragments": 3
+}
+
+
+###
+
+
+POST http://localhost:8000/api/document-context/question
+Accept: application/json
+Content-Type: application/json
+
+{
+  "question": "¿Qué ventajas operativas ofrece la integración de sistemas fly-by-wire y aviónica de fusión de sensores en un caza multirrol?",
+  "max_context_fragments": 3
+}
+
+
+###
+
+
+POST http://localhost:8000/api/document-context/question
+Accept: application/json
+Content-Type: application/json
+
+{
+  "question": "¿Por qué la reducción de la firma radar (RCS) es un factor clave en el diseño del F-X?",
+  "max_context_fragments": 3
+}
+
+
+###
+
+
+POST http://localhost:8000/api/document-context/question
+Accept: application/json
+Content-Type: application/json
+
+{
+  "question": "¿Cómo influye la modularidad del diseño del rifle en su adaptación a distintos entornos operativos?",
+  "max_context_fragments": 3
+}
+
+
+###
+
+
+POST http://localhost:8000/api/document-context/question
+Accept: application/json
+Content-Type: application/json
+
+{
+  "question": "¿Por qué la fiabilidad mecánica es prioritaria frente a la complejidad tecnológica en armas de infantería?",
+  "max_context_fragments": 3
+}
+
+
+###
+
+
+POST http://localhost:8000/api/document-context/question
+Accept: application/json
+Content-Type: application/json
+
+{
+  "question": "¿De qué manera la imposibilidad de crecer afecta la identidad y el sentido de pertenencia del protagonista?",
+  "max_context_fragments": 3
+}
+
+
+###
+
+
+POST http://localhost:8000/api/document-context/question
+Accept: application/json
+Content-Type: application/json
+
+{
+  "question": "¿Qué simboliza la Luna en relación con el tiempo y la soledad del niño?",
+  "max_context_fragments": 3
+}
+
+
+###
+
+
+POST http://localhost:8000/api/document-context/question
+Accept: application/json
+Content-Type: application/json
+
+{
+  "question": "¿Por qué la logística es presentada como el factor determinante del ritmo operacional en el Teatro Boreal?",
+  "max_context_fragments": 3
+}
+
+
+###
+
+
+POST http://localhost:8000/api/document-context/question
+Accept: application/json
+Content-Type: application/json
+
+{
+  "question": "¿Cómo se relacionan la ética operacional y la legitimidad estratégica dentro de la doctrina de Asterión?",
+  "max_context_fragments": 3
+}
+
+
+###
+
+
+POST http://localhost:8000/api/document-context/question
+Accept: application/json
+Content-Type: application/json
+
+{
+  "question": "¿Por qué el Big Bang no debe interpretarse como una explosión convencional dentro de un espacio preexistente?",
+  "max_context_fragments": 3
+}
+
+
+###
+
+
+POST http://localhost:8001/api/document-context/question
+Accept: application/json
+Content-Type: application/json
+
+{
+  "question": "¿Qué importancia tiene la radiación cósmica de fondo para la validación del modelo del Big Bang?",
+  "max_context_fragments": 4
+}
+
+
+###

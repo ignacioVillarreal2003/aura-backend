@@ -1,14 +1,20 @@
 from pathlib import Path
 import pypdf
 
-from app.application.exceptions.api_exceptions import ReaderFileNotFoundError, UnsupportedDigitalPDFFormatError, \
-    DigitalPDFReadError, PDFHasNoExtractableTextError
-from app.application.processors.readers.interfaces.document_reader_interface import DocumentReaderInterface
+from app.application.processors.readers.exceptions.reader_exception import (
+    ReaderFileNotFoundError,
+    UnsupportedDigitalPDFFormatError,
+    PDFHasNoExtractableTextError,
+    DigitalPDFReadError
+)
+from app.application.processors.readers.interfaces.reader_adapter_interface import DocumentReaderInterface
 
 
 class DigitalPDFReaderAdapter(DocumentReaderInterface):
-    def can_handle(self,
-                   file_path: Path) -> bool:
+    def can_handle(
+            self,
+            file_path: Path
+    ) -> bool:
         if file_path.suffix.lower() != ".pdf":
             return False
 
@@ -31,8 +37,10 @@ class DigitalPDFReaderAdapter(DocumentReaderInterface):
         except Exception:
             return False
 
-    def read(self,
-             file_path: Path) -> str:
+    def read(
+            self,
+            file_path: Path
+    ) -> str:
         if not file_path.exists():
             raise ReaderFileNotFoundError(str(file_path))
 

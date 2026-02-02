@@ -1,26 +1,32 @@
 from typing import Dict, Type
 
-from app.application.exceptions.api_exceptions import UnsupportedEmbedderMethodError
-from app.application.processors.embedders.interfaces.embedding_interface import EmbedderInterface
 from app.application.processors.embedders.adapters.huggingface_embedder_adapter import HuggingfaceEmbedderAdapter
 from app.application.processors.embedders.adapters.ollama_embedder_adapter import OllamaEmbedderAdapter
-from app.application.processors.embedders.adapters.sentence_transformer_embedder_adapter import \
+from app.application.processors.embedders.adapters.sentence_transformer_embedder_adapter import (
     SentenceTransformerEmbedderAdapter
+)
 from app.application.processors.embedders.adapters.spacy_embedder_adapter import SpacyEmbedderAdapter
+from app.application.processors.embedders.exceptions.embedder_exception import UnsupportedEmbedderMethodError
+from app.application.processors.embedders.interfaces.embedder_adapter_interface import EmbedderAdapterInterface
+from app.domain.constants.embedder_type import EmbedderType
 
 
 class EmbedderFactory:
-    def __init__(self):
-        self._embeddings: Dict[str, Type[EmbedderInterface]] = {
-            "huggingface": HuggingfaceEmbedderAdapter,
-            "ollama": OllamaEmbedderAdapter,
-            "sentence_transformer": SentenceTransformerEmbedderAdapter,
-            "spacy": SpacyEmbedderAdapter,
+    def __init__(
+            self
+    ):
+        self._embeddings: Dict[EmbedderType, Type[EmbedderAdapterInterface]] = {
+            EmbedderType.HUGGINGFACE: HuggingfaceEmbedderAdapter,
+            EmbedderType.OLLAMA: OllamaEmbedderAdapter,
+            EmbedderType.SENTENCE_TRANSFORMER: SentenceTransformerEmbedderAdapter,
+            EmbedderType.SPACY: SpacyEmbedderAdapter,
         }
-        self._instances: Dict[str, EmbedderInterface] = {}
+        self._instances: Dict[str, EmbedderAdapterInterface] = {}
 
-    def get_embedder(self,
-                     method: str) -> EmbedderInterface:
+    def get_embedder(
+            self,
+            method: EmbedderType
+    ) -> EmbedderAdapterInterface:
         if method not in self._embeddings:
             raise UnsupportedEmbedderMethodError(method)
 

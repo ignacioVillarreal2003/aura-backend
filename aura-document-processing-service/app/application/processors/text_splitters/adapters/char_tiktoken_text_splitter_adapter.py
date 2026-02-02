@@ -1,14 +1,18 @@
 from langchain_text_splitters import CharacterTextSplitter
 
-from app.application.exceptions.api_exceptions import TextSplitterError
-from app.application.processors.text_splitters.interfaces.text_splitter_interface import TextSplitterInterface
+from app.application.processors.text_splitters.exceptions.text_splitter_exception import TextSplitterError
+from app.application.processors.text_splitters.interfaces.text_splitter_adapter_interface import (
+    TextSplitterAdapterInterface
+)
 
 
-class CharTiktokenTextSplitterAdapter(TextSplitterInterface):
-    def split_text(self,
-                   text: str,
-                   size: int,
-                   overlap: int) -> list[str]:
+class CharTiktokenTextSplitterAdapter(TextSplitterAdapterInterface):
+    def split_text(
+            self,
+            text: str,
+            size: int,
+            overlap: int
+    ) -> list[str]:
         try:
             splitter = CharacterTextSplitter.from_tiktoken_encoder(
                 encoding_name="cl100k_base",

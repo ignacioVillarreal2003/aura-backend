@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from contextlib import asynccontextmanager
 import uvicorn
@@ -6,7 +5,6 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
-from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.controllers import router

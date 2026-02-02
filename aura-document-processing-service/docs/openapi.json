@@ -1,57 +1,23 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Aura Document Processing Service",
+    "title": "Aura document processing service",
+    "description": "Agent-based document question answering",
     "version": "1.0.0"
   },
   "paths": {
-    "/api/documents": {
+    "/api/document-context/question": {
       "post": {
-        "summary": "Create",
-        "operationId": "create_api_documents_post",
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_create_api_documents_post"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentResponseSchema"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/retrieval": {
-      "post": {
-        "summary": "Search Fragments",
-        "operationId": "search_fragments_api_retrieval_post",
+        "tags": [
+          "DocumentContext"
+        ],
+        "summary": "Execute Retrieve Context Fragments By Question",
+        "operationId": "execute_retrieve_context_fragments_by_question_api_document_context_question_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/QuestionRequest"
+                "$ref": "#/components/schemas/QuestionContextFragmentsRequest"
               }
             }
           },
@@ -63,7 +29,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/QuestionResponse"
+                  "$ref": "#/components/schemas/ContextFragmentsResponse"
                 }
               }
             }
@@ -81,10 +47,95 @@
         }
       }
     },
-    "/": {
+    "/api/document-context/document": {
+      "post": {
+        "tags": [
+          "DocumentContext"
+        ],
+        "summary": "Execute Retrieve Context Fragments By Document",
+        "operationId": "execute_retrieve_context_fragments_by_document_api_document_context_document_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentContextFragmentsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextFragmentsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/document-creation": {
+      "post": {
+        "tags": [
+          "DocumentCreation"
+        ],
+        "summary": "Execute Document Creation",
+        "operationId": "execute_document_creation_api_document_creation_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_execute_document_creation_api_document_creation_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentCreationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
       "get": {
-        "summary": "Root",
-        "operationId": "root__get",
+        "tags": [
+          "Health"
+        ],
+        "summary": "Health Check",
+        "operationId": "health_check_health_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -100,12 +151,12 @@
   },
   "components": {
     "schemas": {
-      "Body_create_api_documents_post": {
+      "Body_execute_document_creation_api_document_creation_post": {
         "properties": {
-          "file": {
+          "raw_document": {
             "type": "string",
             "format": "binary",
-            "title": "File"
+            "title": "Raw Document"
           },
           "chat_id": {
             "type": "integer",
@@ -114,32 +165,51 @@
         },
         "type": "object",
         "required": [
-          "file",
+          "raw_document",
           "chat_id"
         ],
-        "title": "Body_create_api_documents_post"
+        "title": "Body_execute_document_creation_api_document_creation_post"
       },
-      "DocumentResponseSchema": {
+      "ContextFragmentsResponse": {
         "properties": {
-          "id": {
+          "context_fragments": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Context Fragments"
+          }
+        },
+        "type": "object",
+        "required": [
+          "context_fragments"
+        ],
+        "title": "ContextFragmentsResponse"
+      },
+      "DocumentContextFragmentsRequest": {
+        "properties": {
+          "document_id": {
             "type": "integer",
-            "title": "Id"
-          },
-          "file_name": {
-            "type": "string",
-            "title": "File Name"
-          },
+            "title": "Document Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id"
+        ],
+        "title": "DocumentContextFragmentsRequest"
+      },
+      "DocumentCreationResponse": {
+        "properties": {
           "status": {
             "$ref": "#/components/schemas/DocumentStatus"
           }
         },
         "type": "object",
         "required": [
-          "id",
-          "file_name",
           "status"
         ],
-        "title": "DocumentResponseSchema"
+        "title": "DocumentCreationResponse"
       },
       "DocumentStatus": {
         "type": "string",
@@ -163,88 +233,23 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
-      "Message": {
-        "properties": {
-          "role": {
-            "type": "string",
-            "title": "Role"
-          },
-          "content": {
-            "type": "string",
-            "title": "Content"
-          }
-        },
-        "type": "object",
-        "required": [
-          "role",
-          "content"
-        ],
-        "title": "Message"
-      },
-      "QuestionRequest": {
+      "QuestionContextFragmentsRequest": {
         "properties": {
           "question": {
             "type": "string",
             "title": "Question"
           },
-          "messages": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/Message"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Messages"
+          "max_context_fragments": {
+            "type": "integer",
+            "title": "Max Context Fragments"
           }
         },
         "type": "object",
         "required": [
-          "question"
+          "question",
+          "max_context_fragments"
         ],
-        "title": "QuestionRequest"
-      },
-      "QuestionResponse": {
-        "properties": {
-          "question": {
-            "type": "string",
-            "title": "Question"
-          },
-          "context": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Context"
-          },
-          "messages": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/Message"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Messages"
-          }
-        },
-        "type": "object",
-        "required": [
-          "question"
-        ],
-        "title": "QuestionResponse"
+        "title": "QuestionContextFragmentsRequest"
       },
       "ValidationError": {
         "properties": {
