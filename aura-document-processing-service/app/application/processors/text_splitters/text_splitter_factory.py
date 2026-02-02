@@ -24,28 +24,28 @@ from app.application.processors.text_splitters.exceptions.text_splitter_exceptio
 from app.application.processors.text_splitters.interfaces.text_splitter_adapter_interface import (
     TextSplitterAdapterInterface
 )
-from app.domain.constants.text_splitter_type import TextSpliterType
+from app.domain.constants.text_splitter_type import TextSplitterType
 
 
 class TextSplitterFactory:
     def __init__(
             self
     ):
-        self._splitters: Dict[TextSpliterType, Type[TextSplitterAdapterInterface]] = {
-            TextSpliterType.TOKEN: TokenTextSplitterAdapter,
-            TextSpliterType.SPACY: SpacyTextSplitterAdapter,
-            TextSpliterType.SENTENCE_TRANSFORMER: SentenceTransformerTextSplitterAdapter,
-            TextSpliterType.SEMANTIC: SemanticTextSplitterAdapter,
-            TextSpliterType.RECURSIVE: RecursiveTextSplitterAdapter,
-            TextSpliterType.HUGGINGFACE: HuggingfaceTextSplitterAdapter,
-            TextSpliterType.CHAR_TIKTOKEN: CharTiktokenTextSplitterAdapter,
-            TextSpliterType.CHAR: CharTextSplitterAdapter
+        self._splitters: Dict[TextSplitterType, Type[TextSplitterAdapterInterface]] = {
+            TextSplitterType.TOKEN: TokenTextSplitterAdapter,
+            TextSplitterType.SPACY: SpacyTextSplitterAdapter,
+            TextSplitterType.SENTENCE_TRANSFORMER: SentenceTransformerTextSplitterAdapter,
+            TextSplitterType.SEMANTIC: SemanticTextSplitterAdapter,
+            TextSplitterType.RECURSIVE: RecursiveTextSplitterAdapter,
+            TextSplitterType.HUGGINGFACE: HuggingfaceTextSplitterAdapter,
+            TextSplitterType.CHAR_TIKTOKEN: CharTiktokenTextSplitterAdapter,
+            TextSplitterType.CHAR: CharTextSplitterAdapter
         }
         self._instances: Dict[str, TextSplitterAdapterInterface] = {}
 
     def get_text_splitter(
             self,
-            method: TextSpliterType
+            method: TextSplitterType
     ) -> TextSplitterAdapterInterface:
         if method not in self._splitters:
             raise UnsupportedTextSplitterMethodError(method)

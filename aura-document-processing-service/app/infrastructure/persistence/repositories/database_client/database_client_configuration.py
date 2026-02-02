@@ -13,7 +13,7 @@ class DatabaseClientConfiguration:
     DEFAULT_POOL_PRE_PING: Final[bool] = True
     DEFAULT_ECHO: Final[bool] = False
     DEFAULT_POOL_TIMEOUT: Final[float] = 30.0
-    DEFAULT_CONNECT_TIMEOUT: Final[float] = 10.0
+    DEFAULT_CONNECT_TIMEOUT: Final[int] = 10
 
     db_driver: str
     db_user: str
@@ -27,7 +27,7 @@ class DatabaseClientConfiguration:
     pool_pre_ping: bool = DEFAULT_POOL_PRE_PING
     echo: bool = DEFAULT_ECHO
     pool_timeout: float = DEFAULT_POOL_TIMEOUT
-    connect_timeout: float = DEFAULT_CONNECT_TIMEOUT
+    connect_timeout: int = DEFAULT_CONNECT_TIMEOUT
 
     def __post_init__(
             self

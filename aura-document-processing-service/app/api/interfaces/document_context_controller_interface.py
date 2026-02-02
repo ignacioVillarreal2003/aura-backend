@@ -2,7 +2,9 @@ from abc import ABC, abstractmethod
 
 from sqlalchemy.orm.session import Session
 
-from app.application.services.interfaces.document_context_service_interface import DocumentContextServiceInterface
+from app.application.services.document_context_service.interfaces.document_context_service_interface import (
+    DocumentContextServiceInterface
+)
 from app.domain.dtos.context_fragments_response import ContextFragmentsResponse
 from app.domain.dtos.document_context_fragments_request import DocumentContextFragmentsRequest
 from app.domain.dtos.question_context_fragments_request import QuestionContextFragmentsRequest

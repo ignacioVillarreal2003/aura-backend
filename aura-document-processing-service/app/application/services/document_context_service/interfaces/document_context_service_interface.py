@@ -8,7 +8,7 @@ from app.domain.dtos.question_context_fragments_request import QuestionContextFr
 
 class DocumentContextServiceInterface(ABC):
     @abstractmethod
-    def execute_retrieve_context_fragments_by_question(
+    async def execute_retrieve_context_fragments_by_question(
             self,
             question_context_fragments_request: QuestionContextFragmentsRequest,
             db: Session
@@ -16,7 +16,7 @@ class DocumentContextServiceInterface(ABC):
         pass
 
     @abstractmethod
-    def execute_retrieve_context_fragments_by_document(
+    async def execute_retrieve_context_fragments_by_document(
             self,
             document_context_fragments_request: DocumentContextFragmentsRequest,
             db: Session

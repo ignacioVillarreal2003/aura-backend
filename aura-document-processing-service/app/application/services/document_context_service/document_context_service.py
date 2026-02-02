@@ -57,7 +57,7 @@ class DocumentContextService(DocumentContextServiceInterface):
             document_context_service_configuration=document_context_service_configuration
         )
 
-    def execute_retrieve_context_fragments_by_question(
+    async def execute_retrieve_context_fragments_by_question(
             self,
             question_context_fragments_request: QuestionContextFragmentsRequest,
             db: Session
@@ -90,7 +90,7 @@ class DocumentContextService(DocumentContextServiceInterface):
             logger.exception("Error in retrieval process")
             raise DatabaseError("Error al procesar la recuperación de fragmentos") from e
 
-    def execute_retrieve_context_fragments_by_document(
+    async def execute_retrieve_context_fragments_by_document(
             self,
             document_context_fragments_request: DocumentContextFragmentsRequest,
             db: Session

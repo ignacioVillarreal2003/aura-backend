@@ -58,7 +58,16 @@ async def get_database_client() -> DatabaseClientInterface:
 
 async def get_database_session():
     database_client = await get_database_client()
-    return database_client.get_session()
+    session_generator = database_client.get_session()
+
+    try:
+        db = next(session_generator)
+        yield db
+    finally:
+        try:
+            next(session_generator)
+        except StopIteration:
+            pass
 
 
 def get_document_repository() -> DocumentRepositoryInterface:
@@ -117,7 +126,9 @@ def get_document_ingestion_service() -> DocumentIngestionServiceInterface:
         embedder_factory=embedder_factory,
         text_cleaner_type=environment_variables.text_cleaner_type,
         text_splitter_type=environment_variables.text_splitter_type,
-        embedder_type=environment_variables.embedder_type
+        embedder_type=environment_variables.embedder_type,
+        split_size=environment_variables.split_size,
+        split_overlap=environment_variables.split_overlap
     )
 
 

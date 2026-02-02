@@ -1,6 +1,6 @@
 from langchain_huggingface import HuggingFaceEmbeddings
 
-from app.application.exceptions.app_exception import EmbedderError
+from app.application.processors.embedders.exceptions.embedder_exception import EmbedderError
 from app.application.processors.embedders.interfaces.embedder_adapter_interface import EmbedderAdapterInterface
 
 

@@ -81,7 +81,7 @@ class DocumentCreationService(DocumentCreationServiceInterface):
             document_creation_service_configuration=document_creation_service_configuration
         )
 
-    def execute_document_creation(
+    async def execute_document_creation(
             self,
             document_creation_request: DocumentCreationRequest,
             raw_document: UploadFile,

@@ -122,11 +122,11 @@ router = APIRouter()
 document_context_controller = DocumentContextController()
 
 router.post(
-    "question",
+    "/question",
     response_model=ContextFragmentsResponse
 )(document_context_controller.execute_retrieve_context_fragments_by_question)
 
 router.post(
-    "document",
+    "/document",
     response_model=ContextFragmentsResponse
 )(document_context_controller.execute_retrieve_context_fragments_by_document)

@@ -4,7 +4,7 @@ from typing import Optional, List
 import logging
 
 from app.domain.models.fragment import Fragment
-from app.application.exceptions.app_exception import DatabaseError
+from app.infrastructure.persistence.repositories.exceptions.database_exceptions import DatabaseError
 from app.infrastructure.persistence.repositories.fragment_repository.interfaces.fragment_repository_interface import (
     FragmentRepositoryInterface
 )

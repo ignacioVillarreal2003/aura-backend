@@ -1,0 +1,9 @@
+POST http://localhost:8000/api/document-context/document
+Accept: application/json
+Content-Type: application/json
+
+{
+  "document_id": 11
+}
+
+###

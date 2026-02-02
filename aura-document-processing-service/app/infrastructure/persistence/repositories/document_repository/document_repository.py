@@ -3,10 +3,10 @@ from typing import Optional
 import logging
 
 from app.domain.models.document import Document
-from app.application.exceptions.app_exception import DatabaseError
 from app.infrastructure.persistence.repositories.document_repository.interfaces.document_repository_interface import (
     DocumentRepositoryInterface
 )
+from app.infrastructure.persistence.repositories.exceptions.database_exceptions import DatabaseError
 
 logger = logging.getLogger(__name__)
 

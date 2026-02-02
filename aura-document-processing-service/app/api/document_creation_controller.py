@@ -18,7 +18,7 @@ class DocumentCreationController(DocumentCreationControllerInterface):
     async def execute_document_creation(
             self,
             background_tasks: BackgroundTasks,
-            document_creation_request: DocumentCreationRequest,
+            document_creation_request: DocumentCreationRequest = Depends(DocumentCreationRequest.as_form),
             raw_document: UploadFile = File(...),
             document_creation_service: DocumentCreationServiceInterface = Depends(get_document_creation_service),
             db: Session = Depends(get_database_session)
