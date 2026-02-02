@@ -2,7 +2,7 @@
 
 ## Ahora
 
-- Revisar todos los demas formatos si funcionan
+- Revisar scanned docx
 
 ## Revisar luego
 

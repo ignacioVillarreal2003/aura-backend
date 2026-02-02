@@ -96,6 +96,11 @@ class EnvironmentVariables(BaseSettings):
         description="Use HTTPS for MinIO connection"
     )
 
+    ollama_base_url: str = Field(
+        ...,
+        description="Ollama base url"
+    )
+
     text_cleaner_type: TextCleanerType = Field(
         default="basic",
         description="Cleaner strategy (basic, advanced, etc.)"
@@ -164,6 +169,14 @@ class EnvironmentVariables(BaseSettings):
             raise ValueError(f"Invalid log_level: {v}. Must be one of {valid_levels}")
 
         return v_upper
+
+    @field_validator("ollama_base_url")
+    @classmethod
+    def validate_url(cls, v: str) -> str:
+        if not v.startswith(("http://", "https://")):
+            raise ValueError(f"URL must start with http:// or https://, got: {v}")
+
+        return v.rstrip("/")
 
     @field_validator("cors_origins")
     @classmethod
