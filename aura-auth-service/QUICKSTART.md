@@ -1,207 +1,202 @@
-# Guía de Inicio Rápido - Aura Auth Service
+# Quick Start Guide
 
-## ⚡ 5 Minutos para Empezar
+Get the Aura Auth Service running in 5 minutes.
 
-### Paso 1: Clonar y preparar el entorno
-
-```bash
-# Entrar al directorio del servicio
-cd aura-auth-service
-
-# Crear virtual environment
-python -m venv venv
-
-# Activar virtual environment
-# En Windows:
-venv\Scripts\activate
-# En Linux/Mac:
-source venv/bin/activate
-```
-
-### Paso 2: Instalar dependencias
+## 1. Install Dependencies (1 min)
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### Paso 3: Configurar variables de entorno
+## 2. Configure Database (1 min)
+
+Edit `.env`:
+```env
+DB_NAME=aura_auth_db
+DB_USER=postgres
+DB_PASSWORD=postgres
+DB_HOST=localhost
+DB_PORT=5432
+```
+
+Create database (if not exists):
+```bash
+createdb aura_auth_db
+```
+
+## 3. Run Setup Script (2 min)
 
 ```bash
-# Copiar archivo de ejemplo
-cp .env.example .env
-
-# Editar .env si es necesario
-# (Usar valores por defecto para desarrollo local está bien)
+python scripts/setup_db.py
 ```
 
-### Paso 4: Verificar conectividad a la BD
+**What it does:**
+- ✅ Creates all tables (migrations)
+- ✅ Creates initial roles (SUPER_ADMIN, USER)
+- ✅ Creates permissions
+- ✅ Assigns permissions to roles
+- ✅ Creates superuser (interactive)
 
-Asegúrate de que PostgreSQL está corriendo:
+## 4. Start Development Server (30 sec)
 
 ```bash
-# Si usas Docker Compose desde la raíz del proyecto:
-cd ..
-docker-compose -f docker/docker-compose.yml up -d auth-db
-
-# Verificar que el contenedor está corriendo:
-docker ps | grep auth-db
+python manage.py runserver
 ```
 
-### Paso 5: Inicializar la base de datos
+## 5. Access Admin Panel (30 sec)
 
-```bash
-# Desde el directorio aura-auth-service
-python init_db.py
+Open in browser:
+```
+http://localhost:8000/admin/
 ```
 
-Deberías ver algo como:
-
-```
-=== Inicializando Aura Auth Service ===
-
-✓ Usuario administrador creado: admin
-✓ Rol creado: admin
-✓ Rol creado: user
-✓ Rol creado: moderator
-✓ Permiso creado: CREATE_USER
-...
-
-✓ Inicialización completada.
-```
-
-### Paso 6: Iniciar el servidor
-
-```bash
-cd app
-python manage.py runserver 0.0.0.0:8000
-```
-
-Deberías ver:
-
-```
-Starting development server at http://0.0.0.0:8000/
-Quit the server with CONTROL-C.
-```
-
-### Paso 7: Probar los endpoints
-
-**En otra terminal:**
-
-```bash
-# Listar usuarios
-curl http://localhost:8000/api/v1/admin/users
-
-# Crear un usuario
-curl -X POST http://localhost:8000/api/v1/admin/users \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "testuser",
-    "email": "test@example.com",
-    "password": "TestPass123!",
-    "created_by_id": 1
-  }'
-```
-
-## 🔍 Validar que todo funciona
-
-### Con cURL:
-
-```bash
-# GET usuarios
-curl http://localhost:8000/api/v1/admin/users
-
-# GET roles
-curl http://localhost:8000/api/v1/admin/roles
-```
-
-### Con REST Client (VS Code):
-
-1. Instalar extensión "REST Client" por Huachao Mao
-2. Abrir archivo [test.http](test.http)
-3. Hacer click en "Send Request" sobre cualquier endpoint
-
-## 📝 Respuestas esperadas
-
-**Listar usuarios (200 OK):**
-```json
-{
-    "success": true,
-    "count": 1,
-    "data": [
-        {
-            "id": 1,
-            "username": "admin",
-            "email": "admin@aura.com",
-            "status": "active",
-            "enabled": true,
-            "roles": [],
-            "created_at": "2024-01-01T10:00:00Z"
-        }
-    ]
-}
-```
-
-## 🐛 Solucionar problemas
-
-### Error: "Connection refused" (Base de datos)
-
-```bash
-# Verificar que PostgreSQL está corriendo
-docker ps
-
-# Si no está, iniciar:
-docker-compose -f docker/docker-compose.yml up -d auth-db
-
-# Verificar logs:
-docker logs aura-backend-auth-db-1
-```
-
-### Error: "ModuleNotFoundError"
-
-```bash
-# Asegúrate de estar en el directorio correcto:
-cd aura-auth-service
-
-# Verificar que virtual environment está activado
-which python  # Debe mostrar ruta a venv
-
-# Si no, activar:
-source venv/bin/activate  # Linux/Mac
-venv\Scripts\activate     # Windows
-```
-
-### Error: "Port 8000 already in use"
-
-```bash
-# Usar otro puerto:
-cd app
-python manage.py runserver 0.0.0.0:8001
-```
-
-### Error: "No such table: auth_user"
-
-```bash
-# La BD no está inicializada. Ejecutar:
-python init_db.py
-
-# Verificar que init.sql fue ejecutado en la BD:
-# (Esto lo hace Docker automáticamente)
-docker exec aura-backend-auth-db-1 psql -U postgres -d auth_db -c "\dt"
-```
-
-## 📚 Próximos pasos
-
-1. Leer [DOCUMENTATION.md](DOCUMENTATION.md) para entender la arquitectura
-2. Revisar [test.http](test.http) para ver más ejemplos de endpoints
-3. Modificar `.env` para ambiente de producción
-4. Implementar autenticación JWT (ver DOCUMENTATION.md sección "Próximos Pasos")
-
-## 🆘 Ayuda
-
-- 📖 Ver [DOCUMENTATION.md](DOCUMENTATION.md) para documentación completa
-- 🧪 Ver [test.http](test.http) para ejemplos de requests
-- 💬 Revisar logs en `aura_auth.log`
+Login with superuser credentials created in step 3.
 
 ---
 
-¿Necesitas ayuda? Revisa la sección "Consideraciones de Seguridad" en la documentación.
+## Common Commands
+
+```bash
+# Create shell (interactive Python with Django)
+python manage.py shell
+
+# Check project setup
+python manage.py check
+
+# View database
+python manage.py dbshell
+
+# Run tests
+python manage.py test accounts
+
+# Create migrations (if models changed)
+python manage.py makemigrations accounts
+
+# Apply migrations
+python manage.py migrate
+```
+
+---
+
+## Windows Users
+
+Use `run.bat` for shortcuts:
+
+```bash
+run.bat install          # Install dependencies
+run.bat migrate          # Apply migrations
+run.bat setup            # Run setup script
+run.bat runserver        # Start server
+run.bat shell            # Open Django shell
+```
+
+## Linux/macOS Users
+
+Use `run.sh`:
+
+```bash
+./run.sh install
+./run.sh migrate
+./run.sh setup
+./run.sh runserver
+./run.sh shell
+```
+
+---
+
+## What's Included
+
+✅ Custom User model with soft delete
+✅ Role-Based Access Control (RBAC)
+✅ Permission management
+✅ Audit trail (created_at, created_by, updated_at, updated_by, deleted_at, deleted_by)
+✅ PostgreSQL database
+✅ Django admin panel customization
+✅ Unit tests
+✅ Helper utilities
+
+---
+
+## Admin Features
+
+- Create/manage users
+- Create/manage roles
+- Create/manage permissions
+- Assign roles to users
+- Assign permissions to roles
+- View complete audit trail
+- Soft delete records
+- Search and filter
+
+---
+
+## Next Steps
+
+1. Read [README.md](README.md) for detailed documentation
+2. Check [SETUP.md](SETUP.md) for in-depth setup guide
+3. Explore [SHELL_EXAMPLES.md](SHELL_EXAMPLES.md) for Django shell usage
+4. Review [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md) for architecture details
+
+---
+
+## Troubleshooting
+
+### Error: "could not connect to server"
+PostgreSQL not running. Start it:
+```bash
+# Windows: Services > PostgreSQL > Start
+# macOS: brew services start postgresql
+# Linux: sudo systemctl start postgresql
+```
+
+### Error: "database does not exist"
+Create it:
+```bash
+createdb aura_auth_db
+```
+
+### Admin page shows 404
+Run migrations:
+```bash
+python manage.py migrate
+```
+
+### Need to reset database
+```bash
+python manage.py migrate accounts zero
+python manage.py migrate
+python scripts/setup_db.py
+```
+
+---
+
+## Production Deployment
+
+For production, refer to:
+- [README.md](README.md) - Security settings section
+- [SETUP.md](SETUP.md) - Backup and restore section
+- [settings.py](authservice/settings.py) - Security configuration
+
+**Key steps:**
+1. Set `DEBUG=False` in .env
+2. Use strong `SECRET_KEY`
+3. Configure `ALLOWED_HOSTS`
+4. Set up proper PostgreSQL user with limited permissions
+5. Use environment-specific .env file
+6. Run on WSGI server (Gunicorn)
+7. Use SSL/HTTPS
+8. Set up logging and monitoring
+
+---
+
+## Support
+
+Questions? Check:
+- 📖 [README.md](README.md) - Full documentation
+- 🔧 [SETUP.md](SETUP.md) - Setup troubleshooting
+- 💻 [SHELL_EXAMPLES.md](SHELL_EXAMPLES.md) - Django shell usage
+- 📋 [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md) - Architecture overview
+
+---
+
+Ready to go! 🚀

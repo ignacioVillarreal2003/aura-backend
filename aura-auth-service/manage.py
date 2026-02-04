@@ -1,14 +1,12 @@
 #!/usr/bin/env python
-"""
-Command-line interface para tareas administrativas.
-"""
+"""Django's command-line utility for administrative tasks."""
 import os
 import sys
 
 
 def main():
-    """Ejecuta tareas administrativas de Django."""
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'configuration.settings')
+    """Run administrative tasks."""
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'authservice.settings')
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

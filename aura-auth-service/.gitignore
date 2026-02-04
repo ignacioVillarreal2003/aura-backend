@@ -25,9 +25,24 @@ MANIFEST
 
 # Virtual environments
 venv/
-ENV/
 env/
-.venv
+ENV/
+env.bak/
+venv.bak/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+/media
+/staticfiles
+/static
+
+# Environment
+.env
+.env.local
+.env.*.local
 
 # IDE
 .vscode/
@@ -36,41 +51,36 @@ env/
 *.swo
 *~
 .DS_Store
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
 
-# Environment
-.env
-.env.local
-.env.*.local
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
 
-# Logs
-*.log
-logs/
-aura_auth.log
-
-# Database
-db.sqlite3
-*.db
+# Migrations (sometimes good to ignore during development)
+# accounts/migrations/0*.py
 
 # Testing
 .pytest_cache/
 .coverage
 htmlcov/
+.tox/
+.hypothesis/
 
-# Django
-*.pyc
-local_settings.py
-/staticfiles/
-/media/
+# Logs
+logs/
+*.log
 
-# OS
-.DS_Store
-.AppleDouble
-.LSOverride
-*.swp
-*.swo
-*~
-.vscode/settings.json
-.vscode/launch.json
+# Database backups
+*.sql
+*.sql.gz
 
-# Docker
-.dockerignore
+# Temporary files
+*.tmp
+temp/
+tmp/
