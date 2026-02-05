@@ -5,4 +5,6 @@ from app.domain.dtos.message import Message
 
 
 class AgentRequest(BaseModel):
-    messages: List[Message] = Field(...)
+    messages: List[Message] = Field(
+        ...
+    )

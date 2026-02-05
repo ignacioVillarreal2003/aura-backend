@@ -31,15 +31,18 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentQuestionService(DocumentQuestionServiceInterface):
-    def __init__(self,
-                 ollama_llm_facade: OllamaLLMFacadeInterface,
-                 document_context_provider: DocumentContextProviderInterface,
-                 document_question_configuration: Optional[DocumentQuestionConfiguration] = None) -> None:
+    def __init__(
+            self,
+            ollama_llm_facade: OllamaLLMFacadeInterface,
+            document_context_provider: DocumentContextProviderInterface,
+            document_question_configuration: Optional[DocumentQuestionConfiguration] = None
+    ) -> None:
         self._ollama_llm_facade = ollama_llm_facade
         self._document_context_provider = document_context_provider
         self._document_question_configuration = document_question_configuration or DocumentQuestionConfiguration()
 
-        self._document_question_request_validator = DocumentQuestionRequestValidator(self._document_question_configuration)
+        self._document_question_request_validator = DocumentQuestionRequestValidator(
+            self._document_question_configuration)
         self._document_question_prompt_builder = DocumentQuestionPromptBuilder()
 
         self._ollama_llm_invoker = OllamaLLMInvoker()
@@ -50,13 +53,15 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
         logger.info("DocumentQuestionService initialized")
 
     @classmethod
-    def create(cls,
-               ollama_llm_facade: OllamaLLMFacadeInterface,
-               document_context_provider: DocumentContextProviderInterface,
-               max_context_fragments: Optional[int] = None,
-               max_question_length: Optional[int] = None,
-               max_history_messages_count: Optional[int] = None,
-               custom_system_prompt: Optional[str] = None) -> "DocumentQuestionService":
+    def create(
+            cls,
+            ollama_llm_facade: OllamaLLMFacadeInterface,
+            document_context_provider: DocumentContextProviderInterface,
+            max_context_fragments: Optional[int] = None,
+            max_question_length: Optional[int] = None,
+            max_history_messages_count: Optional[int] = None,
+            custom_system_prompt: Optional[str] = None
+    ) -> "DocumentQuestionService":
         config_kwargs = {}
 
         if max_context_fragments is not None:
@@ -76,13 +81,19 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
             document_question_configuration=document_question_configuration
         )
 
-    async def execute_document_question(self,
-                                        document_question_request: DocumentQuestionRequest) -> DocumentQuestionResponse:
+    async def execute_document_question(
+            self,
+            document_question_request: DocumentQuestionRequest
+    ) -> DocumentQuestionResponse:
         logger.info("Starting document question execution")
 
-        self._document_question_request_validator.validate_request(document_question_request)
+        self._document_question_request_validator.validate_request(
+            document_question_request=document_question_request
+        )
 
-        context_fragments = await self.retrieve_context_fragments_by_question(document_question_request.question)
+        context_fragments = await self.retrieve_context_fragments_by_question(
+            question=document_question_request.question
+        )
 
         answer = await self.generate_answer(
             question=document_question_request.question,
@@ -96,9 +107,11 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
             answer=answer
         )
 
-    async def retrieve_context_fragments_by_question(self,
-                                                     question: str,
-                                                     max_context_fragments: Optional[int] = None) -> List[str]:
+    async def retrieve_context_fragments_by_question(
+            self,
+            question: str,
+            max_context_fragments: Optional[int] = None
+    ) -> List[str]:
         max_context_fragments = max_context_fragments or self._document_question_configuration.max_context_fragments
 
         logger.debug("Retrieving context fragments")
@@ -122,10 +135,12 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
             )
             raise DocumentQuestionServiceError("Error inesperado al recuperar fragmentos del documento") from e
 
-    async def generate_answer(self,
-                              question: str,
-                              history_messages: Optional[List[Message]] = None,
-                              context_fragments: Optional[List[str]] = None) -> str:
+    async def generate_answer(
+            self,
+            question: str,
+            history_messages: Optional[List[Message]] = None,
+            context_fragments: Optional[List[str]] = None
+    ) -> str:
         logger.debug("Generating answer")
 
         try:
@@ -156,7 +171,9 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
             )
             raise DocumentQuestionServiceError("Error inesperado al generar la respuesta") from e
 
-    async def _ensure_llm_initialized(self) -> None:
+    async def _ensure_llm_initialized(
+            self
+    ) -> None:
         if self._llm is not None:
             return
 
@@ -179,10 +196,12 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
             )
             raise DocumentQuestionServiceError("Error al inicializar el modelo de lenguaje") from e
 
-    def _build_prompt(self,
-                      question: str,
-                      context_fragments: Optional[List[str]] = None,
-                      history_messages: Optional[List[Message]] = None) -> List[BaseMessage]:
+    def _build_prompt(
+            self,
+            question: str,
+            context_fragments: Optional[List[str]] = None,
+            history_messages: Optional[List[Message]] = None
+    ) -> List[BaseMessage]:
         return self._document_question_prompt_builder.build_complete_prompt(
             system_prompt=self._document_question_configuration.system_prompt,
             question=question,
@@ -190,8 +209,10 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
             history_messages=history_messages
         )
 
-    async def _invoke_llm(self,
-                          prompt: List[BaseMessage]) -> str:
+    async def _invoke_llm(
+            self,
+            prompt: List[BaseMessage]
+    ) -> str:
         if self._llm is None:
             raise DocumentQuestionServiceError("LLM no inicializado. Esto no debería ocurrir.")
 

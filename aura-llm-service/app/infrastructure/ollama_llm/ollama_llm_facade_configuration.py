@@ -19,7 +19,9 @@ class OllamaLLMFacadeConfiguration:
     ollama_base_url: str
     ollama_temperature: float = DEFAULT_OLLAMA_TEMPERATURE
 
-    def __post_init__(self) -> None:
+    def __post_init__(
+            self
+    ) -> None:
         try:
             self._validate_all()
             logger.info("OllamaLLMFacadeConfiguration initialized successfully")
@@ -33,16 +35,22 @@ class OllamaLLMFacadeConfiguration:
             )
             raise
 
-    def _validate_all(self) -> None:
+    def _validate_all(
+            self
+    ) -> None:
         self._validate_ollama_model_name()
         self._validate_ollama_base_url()
         self._validate_ollama_temperature()
 
-    def _validate_ollama_model_name(self) -> None:
+    def _validate_ollama_model_name(
+            self
+    ) -> None:
         if not self.ollama_model_name or not self.ollama_model_name.strip():
             raise ValueError("ollama_model_name no puede estar vacío ni contener solo espacios en blanco")
 
-    def _validate_ollama_base_url(self) -> None:
+    def _validate_ollama_base_url(
+            self
+    ) -> None:
         if not self.ollama_base_url or not self.ollama_base_url.strip():
             raise ValueError("ollama_base_url no puede estar vacío ni contener solo espacios en blanco")
 
@@ -60,7 +68,9 @@ class OllamaLLMFacadeConfiguration:
         except Exception as e:
             raise ValueError(f"ollama_base_url no es una URL válida: {self.ollama_base_url}") from e
 
-    def _validate_ollama_temperature(self) -> None:
+    def _validate_ollama_temperature(
+            self
+    ) -> None:
         if not (self.OLLAMA_TEMPERATURE[0]
                 <= self.ollama_temperature
                 <= self.OLLAMA_TEMPERATURE[1]):

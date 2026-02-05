@@ -1,0 +1,10 @@
+POST http://localhost:8000/api/document/summary
+Accept: application/json
+Content-Type: application/json
+
+{
+  "document_id": 11
+}
+
+
+###

@@ -14,13 +14,16 @@ logger = logging.getLogger(__name__)
 
 class DocumentSummaryController:
     @staticmethod
-    async def execute_document_summary(document_summary_request: DocumentSummaryRequest,
-                                       document_summary_service: DocumentSummaryServiceInterface = Depends(
-                                           get_document_summary_service)) -> DocumentSummaryResponse:
+    async def execute_document_summary(
+            document_summary_request: DocumentSummaryRequest,
+            document_summary_service: DocumentSummaryServiceInterface = Depends(get_document_summary_service)
+    ) -> DocumentSummaryResponse:
         logger.info("Processing document summary request")
 
         try:
-            document_summary_response = await document_summary_service.execute_document_summary(document_summary_request)
+            document_summary_response = await document_summary_service.execute_document_summary(
+                document_summary_request=document_summary_request
+            )
 
             logger.info("Document summary request processed successfully")
 

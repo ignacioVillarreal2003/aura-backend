@@ -5,8 +5,10 @@ from langchain_core.messages import BaseMessage
 from langchain_core.runnables import Runnable
 
 from app.application.services.agent_service.agent_state.agent_state import AgentState
-from app.application.services.agent_service.sentiment_node.sentiment_node_configuration import SentimentNodeConfiguration
-from app.application.services.agent_service.sentiment_node.sentiment_node_prompt_builder import SentimentNodePromptBuilder
+from app.application.services.agent_service.sentiment_node.sentiment_node_configuration import \
+    SentimentNodeConfiguration
+from app.application.services.agent_service.sentiment_node.sentiment_node_prompt_builder import \
+    SentimentNodePromptBuilder
 from app.application.services.agent_service.constants.sentimient import Sentiment
 from app.infrastructure.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 
@@ -14,9 +16,11 @@ logger = logging.getLogger(__name__)
 
 
 class SentimentNode:
-    def __init__(self,
-                 ollama_llm_facade: OllamaLLMFacadeInterface,
-                 configuration: Optional[SentimentNodeConfiguration] = None) -> None:
+    def __init__(
+            self,
+            ollama_llm_facade: OllamaLLMFacadeInterface,
+            configuration: Optional[SentimentNodeConfiguration] = None
+    ) -> None:
         self._ollama_llm_facade = ollama_llm_facade
         self._configuration = configuration or SentimentNodeConfiguration()
 
@@ -27,8 +31,10 @@ class SentimentNode:
 
         logger.debug("SentimentNode initialized")
 
-    async def process(self,
-                      agent_state: AgentState) -> Dict[str, Any]:
+    async def process(
+            self,
+            agent_state: AgentState
+    ) -> Dict[str, Any]:
         logger.debug("Processing sentiment_node analysis")
 
         try:
@@ -58,7 +64,9 @@ class SentimentNode:
                 "sentiment": Sentiment.NEUTRAL.value
             }
 
-    async def _ensure_llm_initialized(self) -> None:
+    async def _ensure_llm_initialized(
+            self
+    ) -> None:
         if self._llm is not None:
             return
 
@@ -77,7 +85,9 @@ class SentimentNode:
             raise RuntimeError("Failed to initialize LLM for sentiment_node analysis") from e
 
     @staticmethod
-    def _extract_last_message(agent_state: AgentState) -> BaseMessage:
+    def _extract_last_message(
+            agent_state: AgentState
+    ) -> BaseMessage:
         messages = agent_state.get("messages")
 
         if not messages or len(messages) == 0:
@@ -90,15 +100,19 @@ class SentimentNode:
 
         return last_message
 
-    def _build_prompt(self,
-                      last_message: str) -> List[BaseMessage]:
+    def _build_prompt(
+            self,
+            last_message: str
+    ) -> List[BaseMessage]:
         return self._prompt_builder.build_prompt(
             system_prompt=self._configuration.system_prompt,
             input_text=last_message
         )
 
-    async def _classify_sentiment(self,
-                                  prompt: List[BaseMessage]) -> Sentiment:
+    async def _classify_sentiment(
+            self,
+            prompt: List[BaseMessage]
+    ) -> Sentiment:
         if self._llm is None:
             raise RuntimeError("LLM not initialized")
 
@@ -118,7 +132,9 @@ class SentimentNode:
             raise RuntimeError("Failed to classify sentiment_node") from e
 
     @staticmethod
-    def _parse_sentiment_response(response: str) -> Sentiment:
+    def _parse_sentiment_response(
+            response: str
+    ) -> Sentiment:
         cleaned = (response or "").strip().lower()
 
         logger.debug(f"Parsing sentiment_node from response: {cleaned}")

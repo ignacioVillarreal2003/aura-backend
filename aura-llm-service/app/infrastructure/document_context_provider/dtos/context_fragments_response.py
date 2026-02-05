@@ -7,10 +7,14 @@ class ContextFragmentsResponse(BaseModel):
         default_factory=list
     )
 
-    @field_validator('context_fragments')
+    @field_validator(
+        'context_fragments'
+    )
     @classmethod
-    def validate_context_fragments_list(cls,
-                                        v: List[str]) -> List[str]:
+    def validate_context_fragments_list(
+            cls,
+            v: List[str]
+    ) -> List[str]:
         if not isinstance(v, list):
             raise ValueError("context_fragments debe ser una lista")
 

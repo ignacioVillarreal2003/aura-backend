@@ -10,17 +10,19 @@ _global_http_client: Optional[HttpClient] = None
 _global_http_client_lock: Lock = Lock()
 
 
-async def get_global_http_client(timeout: Optional[float] = None,
-                                 max_keepalive_connections: Optional[int] = None,
-                                 max_connections: Optional[int] = None,
-                                 verify_ssl: Optional[bool] = None,
-                                 follow_redirects: Optional[bool] = None,
-                                 enable_circuit_breaker: Optional[bool] = None,
-                                 retry_max_attempts: Optional[int] = None,
-                                 retry_base_delay: Optional[float] = None,
-                                 retry_max_delay: Optional[float] = None,
-                                 retry_exponential_base: Optional[float] = None,
-                                 retry_on_status_codes: Optional[Set[int]] = None) -> HttpClient:
+async def get_global_http_client(
+        timeout: Optional[float] = None,
+        max_keepalive_connections: Optional[int] = None,
+        max_connections: Optional[int] = None,
+        verify_ssl: Optional[bool] = None,
+        follow_redirects: Optional[bool] = None,
+        enable_circuit_breaker: Optional[bool] = None,
+        retry_max_attempts: Optional[int] = None,
+        retry_base_delay: Optional[float] = None,
+        retry_max_delay: Optional[float] = None,
+        retry_exponential_base: Optional[float] = None,
+        retry_on_status_codes: Optional[Set[int]] = None
+) -> HttpClient:
     global _global_http_client
 
     async with _global_http_client_lock:

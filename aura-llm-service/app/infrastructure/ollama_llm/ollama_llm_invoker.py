@@ -10,9 +10,11 @@ logger = logging.getLogger(__name__)
 
 
 class OllamaLLMInvoker(OllamaLLMInvokerInterface):
-    async def call_llm(self,
-                       llm: Runnable,
-                       llm_input: List[BaseMessage]) -> BaseMessage:
+    async def call_llm(
+            self,
+            llm: Runnable,
+            llm_input: List[BaseMessage]
+    ) -> BaseMessage:
         logger.debug("Invoking LLM")
 
         try:
@@ -42,9 +44,11 @@ class OllamaLLMInvoker(OllamaLLMInvokerInterface):
             )
             raise LLMInvocationError("The LLM failed to process the request") from e
 
-    async def call_llm_content(self,
-                               llm: Runnable,
-                               llm_input: List[BaseMessage]) -> str:
+    async def call_llm_content(
+            self,
+            llm: Runnable,
+            llm_input: List[BaseMessage]
+    ) -> str:
         response = await self.call_llm(
             llm=llm,
             llm_input=llm_input
@@ -52,7 +56,9 @@ class OllamaLLMInvoker(OllamaLLMInvokerInterface):
         return self._extract_content(response)
 
     @staticmethod
-    def _extract_content(response: BaseMessage) -> str:
+    def _extract_content(
+            response: BaseMessage
+    ) -> str:
         content = getattr(response, "content", None)
 
         if content is None:

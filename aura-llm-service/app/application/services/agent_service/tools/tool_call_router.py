@@ -13,13 +13,17 @@ class ToolCallRouter:
 
     max_iterations: int = DEFAULT_MAX_ITERATIONS
 
-    def __init__(self) -> None:
+    def __init__(
+            self
+    ) -> None:
         self._iteration_count = 0
 
         logger.debug("ToolCallRouter initialized")
 
-    def should_continue(self,
-                        agent_state: AgentState) -> str:
+    def should_continue(
+            self,
+            agent_state: AgentState
+    ) -> str:
         logger.debug("Evaluating routing decision")
 
         messages = agent_state.get("messages", [])
@@ -61,13 +65,17 @@ class ToolCallRouter:
 
         return "tools"
 
-    def _reset_counter(self) -> None:
+    def _reset_counter(
+            self
+    ) -> None:
         if self._iteration_count > 0:
             logger.debug("Resetting iteration counter")
             self._iteration_count = 0
 
     @staticmethod
-    def _has_tool_calls(message: BaseMessage) -> bool:
+    def _has_tool_calls(
+            message: BaseMessage
+    ) -> bool:
         if hasattr(message, 'tool_calls') and message.tool_calls:
             logger.debug("Tool calls detected via tool_calls attribute")
             return True

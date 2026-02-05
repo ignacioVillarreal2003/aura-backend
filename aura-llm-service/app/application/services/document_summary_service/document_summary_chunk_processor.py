@@ -19,11 +19,13 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentSummaryChunkProcessor:
-    def __init__(self,
-                 document_summary_configuration: DocumentSummaryConfiguration,
-                 document_summary_prompt_builder: DocumentSummaryPromptBuilder,
-                 ollama_llm_invoker: OllamaLLMInvokerInterface,
-                 llm: Runnable) -> None:
+    def __init__(
+            self,
+            document_summary_configuration: DocumentSummaryConfiguration,
+            document_summary_prompt_builder: DocumentSummaryPromptBuilder,
+            ollama_llm_invoker: OllamaLLMInvokerInterface,
+            llm: Runnable
+    ) -> None:
         self._document_summary_configuration = document_summary_configuration
         self._document_summary_prompt_builder = document_summary_prompt_builder
         self._ollama_llm_invoker = ollama_llm_invoker
@@ -33,8 +35,10 @@ class DocumentSummaryChunkProcessor:
 
         logger.debug("DocumentSummaryChunkProcessor initialized")
 
-    async def process_chunks(self,
-                             chunks: List[List[str]]) -> List[str]:
+    async def process_chunks(
+            self,
+            chunks: List[List[str]]
+    ) -> List[str]:
         logger.info("Starting parallel chunk processing")
 
         results = await asyncio.gather(
@@ -57,7 +61,9 @@ class DocumentSummaryChunkProcessor:
         return successful_summaries
 
     @staticmethod
-    def _separate_results(results: List) -> tuple[List[str], int]:
+    def _separate_results(
+            results: List
+    ) -> tuple[List[str], int]:
         successful_summaries: List[str] = []
         failed_count = 0
 
@@ -86,9 +92,11 @@ class DocumentSummaryChunkProcessor:
 
         return successful_summaries, failed_count
 
-    async def _process_single_chunk_with_retry(self,
-                                               chunk_index: int,
-                                               chunk: List[str]) -> str:
+    async def _process_single_chunk_with_retry(
+            self,
+            chunk_index: int,
+            chunk: List[str]
+    ) -> str:
         async with self._semaphore:
             last_error: Optional[Exception] = None
 
@@ -147,7 +155,10 @@ class DocumentSummaryChunkProcessor:
                 f"Failed to process chunk {chunk_index} after {self._document_summary_configuration.max_retry_attempts} attempts"
             ) from last_error
 
-    async def _process_chunk(self, chunk: List[str]) -> str:
+    async def _process_chunk(
+            self,
+            chunk: List[str]
+    ) -> str:
         llm_input = self._document_summary_prompt_builder.build_summarization_messages(
             system_prompt=self._document_summary_configuration.system_prompt,
             fragments=chunk
@@ -164,7 +175,10 @@ class DocumentSummaryChunkProcessor:
         return summary.strip()
 
     @staticmethod
-    def create_chunks(fragments: List[str], chunk_size: int) -> List[List[str]]:
+    def create_chunks(
+            fragments: List[str],
+            chunk_size: int
+    ) -> List[List[str]]:
         if chunk_size <= 0:
             raise ValueError(f"chunk_size debe ser positivo, se recibió: {chunk_size}")
 

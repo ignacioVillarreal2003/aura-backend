@@ -17,10 +17,10 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    logger.info("=" * 60)
+async def lifespan(
+        app: FastAPI
+):
     logger.info("Starting FastAPI Application")
-    logger.info("=" * 60)
 
     try:
         await startup_dependencies()
@@ -32,9 +32,7 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    logger.info("=" * 60)
     logger.info("Shutting down FastAPI Application")
-    logger.info("=" * 60)
 
     try:
         await shutdown_dependencies()
@@ -65,7 +63,9 @@ def create_app() -> FastAPI:
     return app
 
 
-def configure_cors(app: FastAPI) -> None:
+def configure_cors(
+        app: FastAPI
+) -> None:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=environment_variables.cors_origins,
@@ -77,10 +77,16 @@ def configure_cors(app: FastAPI) -> None:
     logger.debug("CORS configured")
 
 
-def add_middleware(app: FastAPI) -> None:
-    @app.middleware("http_client")
-    async def log_requests(request: Request,
-                           call_next):
+def add_middleware(
+        app: FastAPI
+) -> None:
+    @app.middleware(
+        "http"
+    )
+    async def log_requests(
+            request: Request,
+            call_next
+    ):
         logger.info(f"Request: {request.method} {request.url.path}")
 
         response = await call_next(request)
@@ -92,13 +98,18 @@ def add_middleware(app: FastAPI) -> None:
     logger.debug("Middleware added")
 
 
-def include_routers(app: FastAPI) -> None:
+def include_routers(
+        app: FastAPI
+) -> None:
     app.include_router(
         router,
         prefix="/api"
     )
 
-    @app.get("/health", tags=["Health"])
+    @app.get(
+        "/health",
+        tags=["Health"]
+    )
     async def health_check():
         return {
             "status": "healthy",
@@ -109,10 +120,16 @@ def include_routers(app: FastAPI) -> None:
     logger.debug("Routers included")
 
 
-def add_exception_handlers(app: FastAPI) -> None:
-    @app.exception_handler(StarletteHTTPException)
-    async def http_exception_handler(request: Request,
-                                     exc: StarletteHTTPException):
+def add_exception_handlers(
+        app: FastAPI
+) -> None:
+    @app.exception_handler(
+        StarletteHTTPException
+    )
+    async def http_exception_handler(
+            request: Request,
+            exc: StarletteHTTPException
+    ):
         logger.warning(
             f"HTTP exception: {exc.status_code}",
             extra={
@@ -131,9 +148,13 @@ def add_exception_handlers(app: FastAPI) -> None:
             }
         )
 
-    @app.exception_handler(RequestValidationError)
-    async def validation_exception_handler(request: Request,
-                                           exc: RequestValidationError):
+    @app.exception_handler(
+        RequestValidationError
+    )
+    async def validation_exception_handler(
+            request: Request,
+            exc: RequestValidationError
+    ):
         logger.warning(
             "Validation error",
             extra={
@@ -151,9 +172,13 @@ def add_exception_handlers(app: FastAPI) -> None:
             }
         )
 
-    @app.exception_handler(Exception)
-    async def general_exception_handler(request: Request,
-                                        exc: Exception):
+    @app.exception_handler(
+        Exception
+    )
+    async def general_exception_handler(
+            request: Request,
+            exc: Exception
+    ):
         logger.exception(
             "Unexpected error",
             extra={

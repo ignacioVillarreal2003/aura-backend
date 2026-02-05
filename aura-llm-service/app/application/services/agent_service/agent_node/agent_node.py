@@ -13,11 +13,13 @@ logger = logging.getLogger(__name__)
 
 
 class AgentNode:
-    def __init__(self,
-                 ollama_llm_facade: OllamaLLMFacadeInterface,
-                 configuration: Optional[AgentNodeConfiguration] = None) -> None:
+    def __init__(
+            self,
+            ollama_llm_facade: OllamaLLMFacadeInterface,
+            agent_node_configuration: Optional[AgentNodeConfiguration] = None
+    ) -> None:
         self._ollama_llm_facade = ollama_llm_facade
-        self._configuration = configuration or AgentNodeConfiguration()
+        self._agent_node_configuration = agent_node_configuration or AgentNodeConfiguration()
 
         self._prompt_builder = AgentNodePromptBuilder()
 
@@ -26,8 +28,10 @@ class AgentNode:
 
         logger.debug("AgentNode initialized")
 
-    async def process(self,
-                      state: AgentState) -> Dict[str, Any]:
+    async def process(
+            self,
+            state: AgentState
+    ) -> Dict[str, Any]:
         logger.debug("Processing agent_node node")
 
         try:
@@ -56,7 +60,9 @@ class AgentNode:
             logger.exception("LLM invocation failed in agent_node node")
             raise RuntimeError("Failed to process agent_node node") from e
 
-    async def _ensure_llm_initialized(self) -> None:
+    async def _ensure_llm_initialized(
+            self
+    ) -> None:
         if self._llm_with_tools is not None:
             return
 
@@ -72,7 +78,9 @@ class AgentNode:
             raise RuntimeError("Failed to initialize LLM for agent_node") from e
 
     @staticmethod
-    def _extract_messages(agent_state: AgentState) -> List[BaseMessage]:
+    def _extract_messages(
+            agent_state: AgentState
+    ) -> List[BaseMessage]:
         messages = agent_state.get("messages")
 
         if messages is None:
@@ -84,7 +92,9 @@ class AgentNode:
         return messages
 
     @staticmethod
-    def _extract_sentiment(agent_state: AgentState) -> Sentiment:
+    def _extract_sentiment(
+            agent_state: AgentState
+    ) -> Sentiment:
         sentiment = agent_state.get("sentiment", Sentiment.NEUTRAL.value)
 
         try:
@@ -99,12 +109,14 @@ class AgentNode:
 
         return Sentiment.NEUTRAL
 
-    def _build_prompt(self,
-                      sentiment: Sentiment,
-                      messages: List[BaseMessage]) -> List[BaseMessage]:
+    def _build_prompt(
+            self,
+            sentiment: Sentiment,
+            messages: List[BaseMessage]
+    ) -> List[BaseMessage]:
         return self._prompt_builder.build_prompt(
-            system_prompt=self._configuration.system_prompt,
-            sentiment_instruction=self._configuration.get_sentiment_instruction(
+            system_prompt=self._agent_node_configuration.system_prompt,
+            sentiment_instruction=self._agent_node_configuration.get_sentiment_instruction(
                 sentiment=sentiment
             ),
             history_messages=messages

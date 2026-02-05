@@ -1,32 +1,42 @@
 import logging
 from typing import List
 
-from app.infrastructure.document_context_provider.document_context_provider_configuration import \
+from app.infrastructure.document_context_provider.document_context_provider_configuration import (
     DocumentContextProviderConfiguration
+)
 from app.infrastructure.document_context_provider.dtos.context_fragments_response import ContextFragmentsResponse
-from app.infrastructure.document_context_provider.exceptions.document_context_provider_exception import \
+from app.infrastructure.document_context_provider.exceptions.document_context_provider_exception import (
     DocumentContextProviderError
+)
 
 logger = logging.getLogger(__name__)
 
 
 class DocumentContextProviderResponseValidator:
-    def __init__(self,
-                 document_context_provider_configuration: DocumentContextProviderConfiguration) -> None:
+    def __init__(
+            self,
+            document_context_provider_configuration: DocumentContextProviderConfiguration
+    ) -> None:
         self._document_context_provider_configuration = document_context_provider_configuration
 
-    def validate_and_parse_response(self,
-                                    context_fragments_response: ContextFragmentsResponse) -> List[str]:
+    def validate_and_parse_response(
+            self,
+            context_fragments_response: ContextFragmentsResponse
+    ) -> List[str]:
         logger.debug("Starting request validation")
 
-        context_fragments = self._validate_context_fragments(context_fragments_response)
+        context_fragments = self._validate_context_fragments(
+            context_fragments_response=context_fragments_response
+        )
 
         logger.debug("Request validation completed successfully")
 
         return context_fragments
 
-    def _validate_context_fragments(self,
-                                    context_fragments_response: ContextFragmentsResponse) -> List[str]:
+    def _validate_context_fragments(
+            self,
+            context_fragments_response: ContextFragmentsResponse
+    ) -> List[str]:
         try:
             context_fragments_response_model = ContextFragmentsResponse.model_validate(context_fragments_response)
             context_fragments = context_fragments_response_model.context_fragments
@@ -53,8 +63,10 @@ class DocumentContextProviderResponseValidator:
 
         return context_fragments
 
-    def _apply_security_limits(self,
-                               context_fragments: List[str]) -> List[str]:
+    def _apply_security_limits(
+            self,
+            context_fragments: List[str]
+    ) -> List[str]:
         validated_context_fragments: List[str] = []
         total_chars = 0
         skipped_oversized = 0
@@ -79,7 +91,8 @@ class DocumentContextProviderResponseValidator:
 
             if context_fragment_len > self._document_context_provider_configuration.max_chars_per_fragment:
                 if self._document_context_provider_configuration.truncate_fragments_exceeding_max_chars:
-                    context_fragment = context_fragment[:self._document_context_provider_configuration.max_chars_per_fragment]
+                    context_fragment = context_fragment[
+                        :self._document_context_provider_configuration.max_chars_per_fragment]
                     truncated_count += 1
 
                     logger.debug("Fragment truncated due to size limit")

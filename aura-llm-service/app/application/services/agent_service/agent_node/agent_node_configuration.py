@@ -7,7 +7,10 @@ from app.application.services.agent_service.constants.sentimient import Sentimen
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(
+    frozen=True,
+    kw_only=True
+)
 class AgentNodeConfiguration:
     MAX_CUSTOM_SYSTEM_PROMPT_LENGTH: Final[Tuple[int, int]] = (1_000, 10_000)
     MAX_CUSTOM_SENTIMENT_INSTRUCTIONS_LENGTH: Final[Tuple[int, int]] = (1_000, 10_000)
@@ -22,11 +25,15 @@ class AgentNodeConfiguration:
     custom_sentiment_instructions: Optional[Dict[Sentiment, str]] = None
 
     @property
-    def system_prompt(self) -> str:
+    def system_prompt(
+            self
+    ) -> str:
         return self.custom_system_prompt or self._get_default_system_prompt()
 
     @property
-    def sentiment_instructions(self) -> Dict[Sentiment, str]:
+    def sentiment_instructions(
+            self
+    ) -> Dict[Sentiment, str]:
         return self.custom_sentiment_instructions or self._get_default_sentiment_instructions()
 
     @staticmethod
@@ -55,7 +62,9 @@ class AgentNodeConfiguration:
             )
         }
 
-    def __post_init__(self) -> None:
+    def __post_init__(
+            self
+    ) -> None:
         try:
             self._validate_all()
             logger.debug("AgentNodeConfiguration initialized")
@@ -69,7 +78,9 @@ class AgentNodeConfiguration:
             )
             raise
 
-    def _validate_all(self) -> None:
+    def _validate_all(
+            self
+    ) -> None:
         logger.debug(
             "Validating AgentNodeConfiguration",
             extra={
@@ -83,7 +94,9 @@ class AgentNodeConfiguration:
         if self.custom_sentiment_instructions is not None:
             self._validate_custom_sentiment_instructions()
 
-    def _validate_custom_system_prompt(self):
+    def _validate_custom_system_prompt(
+            self
+    ):
         logger.debug(
             "Validating custom system prompt",
             extra={
@@ -104,19 +117,15 @@ class AgentNodeConfiguration:
             logger.error("Custom system prompt validation failed: empty or whitespace-only")
             raise ValueError("El prompt del sistema no puede estar vacío ni contener solo espacios en blanco.")
 
-        if len(self.custom_system_prompt) > self.max_custom_system_prompt_length:
-            logger.error(
-                "Custom system prompt validation failed: prompt too long",
-                extra={
-                    "length": len(self.custom_system_prompt),
-                    "max_length": self.max_custom_system_prompt_length
-                }
-            )
+        if len(self.custom_system_prompt) > self.MAX_CUSTOM_SYSTEM_PROMPT_LENGTH[1]:
+            logger.error("Custom system prompt validation failed: prompt too long")
             raise ValueError(
-                f"El prompt del sistema es demasiado largo. El máximo permitido es de {self.max_custom_system_prompt_length} caracteres."
+                f"El prompt del sistema es demasiado largo. El máximo permitido es de {self.MAX_CUSTOM_SYSTEM_PROMPT_LENGTH[1]} caracteres."
             )
 
-    def _validate_custom_sentiment_instructions(self) -> None:
+    def _validate_custom_sentiment_instructions(
+            self
+    ) -> None:
         logger.debug(
             "Validating custom sentiment instructions",
             extra={
@@ -179,22 +188,17 @@ class AgentNodeConfiguration:
                 )
                 raise ValueError(f"La instrucción para el sentimiento {sentiment.value} no puede estar vacía.")
 
-            if len(instruction) > self.max_custom_sentiment_instructions_length:
-                logger.error(
-                    "Sentiment instruction too long",
-                    extra={
-                        "sentiment": sentiment.value,
-                        "length": len(instruction),
-                        "max_length": self.max_custom_sentiment_instructions_length
-                    }
-                )
+            if len(instruction) > self.MAX_CUSTOM_SENTIMENT_INSTRUCTIONS_LENGTH[1]:
+                logger.error("Sentiment instruction too long")
                 raise ValueError(
                     f"La instrucción para el sentimiento {sentiment.value} es demasiado larga. "
-                    f"El máximo permitido es de {self.max_custom_sentiment_instructions_length} caracteres."
+                    f"El máximo permitido es de {self.MAX_CUSTOM_SENTIMENT_INSTRUCTIONS_LENGTH[1]} caracteres."
                 )
 
-    def get_sentiment_instruction(self,
-                                  sentiment: Sentiment) -> str:
+    def get_sentiment_instruction(
+            self,
+            sentiment: Sentiment
+    ) -> str:
         return self.sentiment_instructions.get(
             sentiment,
             self.sentiment_instructions[Sentiment.NEUTRAL]

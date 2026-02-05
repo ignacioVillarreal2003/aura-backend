@@ -26,9 +26,11 @@ class DocumentQuestionTool(BaseTool):
 
     _document_question_service: DocumentQuestionServiceInterface = PrivateAttr()
 
-    def __init__(self,
-                 document_question_service: DocumentQuestionServiceInterface,
-                 **kwargs):
+    def __init__(
+            self,
+            document_question_service: DocumentQuestionServiceInterface,
+            **kwargs
+    ):
         super().__init__(**kwargs)
         self._document_question_service = document_question_service
 
@@ -39,9 +41,11 @@ class DocumentQuestionTool(BaseTool):
             }
         )
 
-    def _run(self,
-             question: str,
-             run_manager: Optional[CallbackManagerForToolRun] = None) -> str:
+    def _run(
+            self,
+            question: str,
+            run_manager: Optional[CallbackManagerForToolRun] = None
+    ) -> str:
         raise NotImplementedError("DocumentQuestionTool solo soporta ejecución asíncrona. Use _arun() en su lugar.")
 
     async def _arun(self,
@@ -55,13 +59,15 @@ class DocumentQuestionTool(BaseTool):
         )
 
         try:
-            request = DocumentQuestionRequest(
+            document_question_request = DocumentQuestionRequest(
                 question=question
             )
 
-            response = await self._document_question_service.execute_document_question(request)
+            document_question_response = await self._document_question_service.execute_document_question(
+                document_question_request=document_question_request
+            )
 
-            if not response.answer or not response.answer.strip():
+            if not document_question_response.answer or not document_question_response.answer.strip():
                 logger.warning(
                     "Service returned empty answer",
                     extra={
@@ -74,11 +80,11 @@ class DocumentQuestionTool(BaseTool):
                 "Question generated successfully",
                 extra={
                     "question": question,
-                    "answer": response.answer
+                    "answer": document_question_response.answer
                 }
             )
 
-            return response.answer
+            return document_question_response.answer
 
         except Exception as e:
             logger.error(

@@ -30,7 +30,9 @@ class DocumentQuestionConfiguration:
     max_history_messages: int = DEFAULT_MAX_HISTORY_MESSAGES
     custom_system_prompt: Optional[str] = None
 
-    def __post_init__(self) -> None:
+    def __post_init__(
+            self
+    ) -> None:
         try:
             self._validate_all()
             logger.info(
@@ -53,12 +55,16 @@ class DocumentQuestionConfiguration:
             )
             raise
 
-    def _validate_all(self) -> None:
+    def _validate_all(
+            self
+    ) -> None:
         self._validate_max_context_fragments()
         self._validate_max_question_length()
         self._validate_max_history_messages()
 
-    def _validate_max_context_fragments(self) -> None:
+    def _validate_max_context_fragments(
+            self
+    ) -> None:
         if not (self.MIN_CONTEXT_FRAGMENTS
                 <= self.max_context_fragments
                 <= self.MAX_CONTEXT_FRAGMENTS):
@@ -67,7 +73,9 @@ class DocumentQuestionConfiguration:
                 f"se recibió: {self.max_context_fragments}"
             )
 
-    def _validate_max_question_length(self) -> None:
+    def _validate_max_question_length(
+            self
+    ) -> None:
         if not (self.MIN_QUESTION_LENGTH
                 <= self.max_question_length
                 <= self.MAX_QUESTION_LENGTH):
@@ -87,7 +95,9 @@ class DocumentQuestionConfiguration:
                 f"max_question_length ({self.max_question_length})"
             )
 
-    def _validate_max_history_messages(self) -> None:
+    def _validate_max_history_messages(
+            self
+    ) -> None:
         if not (self.MIN_HISTORY_MESSAGES
                 <= self.max_history_messages
                 <= self.MAX_HISTORY_MESSAGES):
@@ -97,7 +107,9 @@ class DocumentQuestionConfiguration:
             )
 
     @property
-    def system_prompt(self) -> str:
+    def system_prompt(
+            self
+    ) -> str:
         return self.custom_system_prompt or self._get_default_system_prompt()
 
     @staticmethod

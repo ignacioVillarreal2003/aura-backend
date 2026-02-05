@@ -1,7 +1,7 @@
 import logging
 import time
 from asyncio import Lock
-from typing import Optional, Callable
+from typing import Optional, Callable, Any
 
 from app.infrastructure.http_client.constants.circuit_breaker_state import CircuitBreakerState
 from app.infrastructure.http_client.exceptions.http_client_exceptions import HttpClientError
@@ -11,8 +11,10 @@ logger = logging.getLogger(__name__)
 
 
 class CircuitBreaker:
-    def __init__(self,
-                 circuit_breaker_configuration: CircuitBreakerConfiguration):
+    def __init__(
+            self,
+            circuit_breaker_configuration: CircuitBreakerConfiguration
+    ) -> None:
         self._circuit_breaker_configuration = circuit_breaker_configuration
 
         self._failure_count = 0
@@ -22,10 +24,12 @@ class CircuitBreaker:
         self._lock = Lock()
 
     @classmethod
-    def create(cls,
-               failure_threshold: Optional[int] = None,
-               recovery_timeout: Optional[float] = None,
-               half_open_max_calls: Optional[int] = None) -> "CircuitBreaker":
+    def create(
+            cls,
+            failure_threshold: Optional[int] = None,
+            recovery_timeout: Optional[float] = None,
+            half_open_max_calls: Optional[int] = None
+    ) -> "CircuitBreaker":
         config_kwargs = {}
 
         if failure_threshold is not None:
@@ -42,10 +46,17 @@ class CircuitBreaker:
         )
 
     @property
-    def state(self) -> CircuitBreakerState:
+    def state(
+            self
+    ) -> CircuitBreakerState:
         return self._state
 
-    async def call(self, func: Callable, *args: Any, **kwargs: Any) -> Any:
+    async def call(
+            self,
+            func: Callable,
+            *args: Any,
+            **kwargs: Any
+    ) -> Any:
         async with self._lock:
             self._check_and_update_state()
 
@@ -68,7 +79,9 @@ class CircuitBreaker:
             await self._on_failure()
             raise
 
-    def _check_and_update_state(self) -> None:
+    def _check_and_update_state(
+            self
+    ) -> None:
         if self._state == CircuitBreakerState.OPEN and self._last_failure_time:
             elapsed = time.time() - self._last_failure_time
 
@@ -77,7 +90,9 @@ class CircuitBreaker:
                 self._state = CircuitBreakerState.HALF_OPEN
                 self._half_open_calls = 0
 
-    async def _on_success(self) -> None:
+    async def _on_success(
+            self
+    ) -> None:
         async with self._lock:
             if self._state == CircuitBreakerState.HALF_OPEN:
                 logger.info("Circuit breaker transitioning to CLOSED after successful recovery")
@@ -87,7 +102,9 @@ class CircuitBreaker:
             self._last_failure_time = None
             self._half_open_calls = 0
 
-    async def _on_failure(self) -> None:
+    async def _on_failure(
+            self
+    ) -> None:
         async with self._lock:
             self._failure_count += 1
             self._last_failure_time = time.time()

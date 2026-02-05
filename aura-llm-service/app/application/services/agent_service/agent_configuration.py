@@ -23,7 +23,9 @@ class AgentConfiguration:
     max_tool_iterations: int = DEFAULT_MAX_TOOL_ITERATIONS
     sentiment: Sentiment = DEFAULT_SENTIMENT
 
-    def __post_init__(self) -> None:
+    def __post_init__(
+            self
+    ) -> None:
         try:
             self._validate_all()
             logger.info(
@@ -45,13 +47,17 @@ class AgentConfiguration:
             )
             raise
 
-    def _validate_all(self) -> None:
+    def _validate_all(
+            self
+    ) -> None:
         self._validate_message_length()
         self._validate_max_messages_count()
         self._validate_max_tool_iterations()
         self._validate_sentiment()
 
-    def _validate_message_length(self) -> None:
+    def _validate_message_length(
+            self
+    ) -> None:
         if not (self.MAX_MESSAGE_LENGTH[0]
                 <= self.message_length[1]
                 <= self.MAX_MESSAGE_LENGTH[1]):
@@ -68,7 +74,9 @@ class AgentConfiguration:
                 f"min_message_length ({self.message_length[0]}) no puede ser mayor que max_message_length ({self.message_length[1]})"
             )
 
-    def _validate_max_messages_count(self) -> None:
+    def _validate_max_messages_count(
+            self
+    ) -> None:
         if not (self.MAX_MESSAGES_COUNT[0]
                 <= self.max_messages_count
                 <= self.MAX_MESSAGES_COUNT[1]):
@@ -77,7 +85,9 @@ class AgentConfiguration:
                 f"se recibió: {self.max_messages_count}"
             )
 
-    def _validate_max_tool_iterations(self) -> None:
+    def _validate_max_tool_iterations(
+            self
+    ) -> None:
         if not (self.MAX_TOOL_ITERATIONS[0]
                 <= self.max_tool_iterations
                 <= self.MAX_TOOL_ITERATIONS[1]):
@@ -86,6 +96,8 @@ class AgentConfiguration:
                 f"se recibió: {self.max_tool_iterations}"
             )
 
-    def _validate_sentiment(self) -> None:
+    def _validate_sentiment(
+            self
+    ) -> None:
         if not isinstance(self.sentiment, Sentiment):
             raise ValueError(f"sentiment debe ser una instancia de Sentiment, se recibió: {type(self.sentiment)}")

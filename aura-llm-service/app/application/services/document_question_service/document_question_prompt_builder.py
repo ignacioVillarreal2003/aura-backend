@@ -9,11 +9,13 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentQuestionPromptBuilder:
-    def build_complete_prompt(self,
-                              system_prompt: str,
-                              question: str,
-                              context_fragments: List[str],
-                              history_messages: List[Message]) -> List[BaseMessage]:
+    def build_complete_prompt(
+            self,
+            system_prompt: str,
+            question: str,
+            context_fragments: List[str],
+            history_messages: List[Message]
+    ) -> List[BaseMessage]:
 
         logger.info(
             "Starting complete prompt build",
@@ -44,7 +46,9 @@ class DocumentQuestionPromptBuilder:
         return prompt_messages
 
     @staticmethod
-    def _build_system_message(system_prompt: str) -> SystemMessage:
+    def _build_system_message(
+            system_prompt: str
+    ) -> SystemMessage:
         logger.debug(
             "Building system message",
             extra={
@@ -57,7 +61,9 @@ class DocumentQuestionPromptBuilder:
         )
 
     @staticmethod
-    def _build_context_message(context_fragments: Optional[List[str]]) -> HumanMessage:
+    def _build_context_message(
+            context_fragments: Optional[List[str]]
+    ) -> HumanMessage:
         logger.debug(
             "Building context message",
             extra={
@@ -88,7 +94,9 @@ class DocumentQuestionPromptBuilder:
         )
 
     @staticmethod
-    def _build_history_messages(history_messages: Optional[List[Message]]) -> List[BaseMessage]:
+    def _build_history_messages(
+            history_messages: Optional[List[Message]]
+    ) -> List[BaseMessage]:
         logger.debug(
             "Building history messages",
             extra={
@@ -152,7 +160,9 @@ class DocumentQuestionPromptBuilder:
         return messages
 
     @staticmethod
-    def _build_question_message(question: str) -> HumanMessage:
+    def _build_question_message(
+            question: str
+    ) -> HumanMessage:
         logger.debug(
             "Building question message",
             extra={

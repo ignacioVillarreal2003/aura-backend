@@ -10,13 +10,17 @@ logger = logging.getLogger(__name__)
 
 
 class AgentRequestValidator:
-    def __init__(self,
-                 agent_configuration: AgentConfiguration) -> None:
+    def __init__(
+            self,
+                 agent_configuration: AgentConfiguration
+    ) -> None:
         self._configuration = agent_configuration
         logger.debug("AgentRequestValidator initialized")
 
-    def validate_request(self,
-                         request: AgentRequest) -> None:
+    def validate_request(
+            self,
+                         request: AgentRequest
+    ) -> None:
         logger.debug(
             "Starting request validation",
             extra={

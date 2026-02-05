@@ -76,8 +76,10 @@ class EnvironmentVariables(BaseSettings):
 
     @field_validator("log_level")
     @classmethod
-    def validate_log_level(cls,
-                           v: str) -> str:
+    def validate_log_level(
+            cls,
+            v: str
+    ) -> str:
         valid_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
         v_upper = v.upper()
 
@@ -86,25 +88,37 @@ class EnvironmentVariables(BaseSettings):
 
         return v_upper
 
-    @field_validator("ollama_base_url",
-                     "question_context_fragments_url",
-                     "document_context_fragments_url")
+    @field_validator(
+        "ollama_base_url",
+        "question_context_fragments_url",
+        "document_context_fragments_url"
+    )
     @classmethod
-    def validate_url(cls, v: str) -> str:
+    def validate_url(
+            cls,
+            v: str
+    ) -> str:
         if not v.startswith(("http://", "https://")):
             raise ValueError(f"URL must start with http:// or https://, got: {v}")
 
         return v.rstrip("/")
 
-    @field_validator("cors_origins")
+    @field_validator(
+        "cors_origins"
+    )
     @classmethod
-    def validate_cors_origins(cls, v: List[str]) -> List[str]:
+    def validate_cors_origins(
+            cls,
+            v: List[str]
+    ) -> List[str]:
         if not v:
             raise ValueError("At least one CORS origin must be specified")
 
         return v
 
-    def log_configuration(self) -> None:
+    def log_configuration(
+            self
+    ) -> None:
         logger.info("=" * 60)
         logger.info("Application Configuration")
         logger.info("=" * 60)
@@ -115,10 +129,14 @@ class EnvironmentVariables(BaseSettings):
         logger.info(f"Reload: {self.app_reload}")
         logger.info("=" * 60)
 
-    def is_development(self) -> bool:
+    def is_development(
+            self
+    ) -> bool:
         return self.app_reload or self.log_level == "DEBUG"
 
-    def is_production(self) -> bool:
+    def is_production(
+            self
+    ) -> bool:
         return not self.is_development()
 
 
