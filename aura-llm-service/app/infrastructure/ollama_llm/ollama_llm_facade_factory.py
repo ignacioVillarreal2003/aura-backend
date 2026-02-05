@@ -15,9 +15,11 @@ _global_ollama_llm_facade_with_tools: Optional[OllamaLLMFacadeInterface] = None
 _global_ollama_llm_facade_with_tools_lock = Lock()
 
 
-async def get_global_ollama_llm_facade_base(ollama_model_name: str,
-                                            ollama_base_url: str,
-                                            ollama_temperature: Optional[float] = None) -> OllamaLLMFacadeInterface:
+async def get_global_ollama_llm_facade_base(
+        ollama_model_name: str,
+        ollama_base_url: str,
+        ollama_temperature: Optional[float] = None
+) -> OllamaLLMFacadeInterface:
     global _global_ollama_llm_facade_base
 
     async with _global_ollama_llm_facade_base_lock:
@@ -40,10 +42,12 @@ async def get_global_ollama_llm_facade_base(ollama_model_name: str,
     return _global_ollama_llm_facade_base
 
 
-async def get_global_ollama_llm_facade_with_tools(ollama_model_name: str,
-                                                  ollama_base_url: str,
-                                                  tool_factories: List[ToolFactory],
-                                                  ollama_temperature: Optional[float] = None) -> OllamaLLMFacadeInterface:
+async def get_global_ollama_llm_facade_with_tools(
+        ollama_model_name: str,
+        ollama_base_url: str,
+        tool_factories: List[ToolFactory],
+        ollama_temperature: Optional[float] = None
+) -> OllamaLLMFacadeInterface:
     global _global_ollama_llm_facade_with_tools
 
     async with _global_ollama_llm_facade_with_tools_lock:

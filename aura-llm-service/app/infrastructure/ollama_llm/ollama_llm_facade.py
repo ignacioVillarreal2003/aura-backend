@@ -17,9 +17,11 @@ logger = logging.getLogger(__name__)
 
 
 class OllamaLLMFacade(OllamaLLMFacadeInterface):
-    def __init__(self,
-                 ollama_llm_facade_configuration: OllamaLLMFacadeConfiguration,
-                 tool_factories: Optional[List[ToolFactory]] = None) -> None:
+    def __init__(
+            self,
+            ollama_llm_facade_configuration: OllamaLLMFacadeConfiguration,
+            tool_factories: Optional[List[ToolFactory]] = None
+    ) -> None:
         self._ollama_llm_facade_configuration = ollama_llm_facade_configuration
 
         self._ollama_tool_manager = OllamaToolManager(tool_factories)
@@ -33,11 +35,13 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
         logger.info("OllamaLLMFacade initialized successfully")
 
     @classmethod
-    def create(cls,
-               ollama_model_name: str,
-               ollama_base_url: str,
-               ollama_temperature: Optional[float] = None,
-               tool_factories: Optional[List[ToolFactory]] = None) -> "OllamaLLMFacade":
+    def create(
+            cls,
+            ollama_model_name: str,
+            ollama_base_url: str,
+            ollama_temperature: Optional[float] = None,
+            tool_factories: Optional[List[ToolFactory]] = None
+    ) -> "OllamaLLMFacade":
         config_kwargs = {}
 
         if ollama_model_name is not None:
@@ -54,7 +58,9 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
             tool_factories=tool_factories
         )
 
-    async def initialize(self) -> None:
+    async def initialize(
+            self
+    ) -> None:
         async with self._init_lock:
             if self._initialized:
                 logger.debug("OllamaLLMFacade already initialized")
@@ -81,7 +87,9 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
                 self._cleanup_on_failure()
                 raise LLMInitializationError("Failed to initialize OllamaLLMFacade") from e
 
-    def _initialize_base_llm(self) -> None:
+    def _initialize_base_llm(
+            self
+    ) -> None:
         try:
             logger.debug("Initializing base LLM")
 
@@ -104,7 +112,9 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
             )
             raise LLMInitializationError(f"Failed to initialize ChatOllama: {str(e)}") from e
 
-    def _initialize_llm_with_tools(self) -> None:
+    def _initialize_llm_with_tools(
+            self
+    ) -> None:
         if self._llm_base is None:
             raise LLMInitializationError("Base LLM must be initialized before binding tools")
 
@@ -133,14 +143,18 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
             )
             self._llm_with_tools = self._llm_base
 
-    def _cleanup_on_failure(self) -> None:
+    def _cleanup_on_failure(
+            self
+    ) -> None:
         logger.debug("Cleaning up after initialization failure")
 
         self._initialized = False
         self._llm_base = None
         self._llm_with_tools = None
 
-    async def _ensure_initialized(self) -> None:
+    async def _ensure_initialized(
+            self
+    ) -> None:
         if self._initialized:
             return
 
@@ -161,7 +175,9 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
             )
             raise LLMNotConfiguredError("Failed to initialize OllamaLLMFacade") from e
 
-    async def get_llm_base(self) -> Runnable:
+    async def get_llm_base(
+            self
+    ) -> Runnable:
         await self._ensure_initialized()
 
         if self._llm_base is None:
@@ -170,7 +186,9 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
 
         return self._llm_base
 
-    async def get_llm_with_tools(self) -> Runnable:
+    async def get_llm_with_tools(
+            self
+    ) -> Runnable:
         await self._ensure_initialized()
 
         if self._llm_with_tools is None:
@@ -180,9 +198,13 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
         return self._llm_with_tools
 
     @property
-    def tools(self) -> List[BaseTool]:
+    def tools(
+            self
+    ) -> List[BaseTool]:
         return self._ollama_tool_manager.tools
 
     @property
-    def tool_instructions(self) -> Optional[str]:
+    def tool_instructions(
+            self
+    ) -> Optional[str]:
         return self._ollama_tool_manager.generate_instructions()

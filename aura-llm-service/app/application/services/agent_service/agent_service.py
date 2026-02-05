@@ -20,11 +20,13 @@ logger = logging.getLogger(__name__)
 
 
 class AgentService(AgentServiceInterface):
-    def __init__(self,
-                 ollama_llm_facade: OllamaLLMFacadeInterface,
-                 agent_configuration: Optional[AgentConfiguration] = None,
-                 sentiment_node_configuration: Optional[SentimentNodeConfiguration] = None,
-                 agent_node_configuration: Optional[AgentNodeConfiguration] = None) -> None:
+    def __init__(
+            self,
+            ollama_llm_facade: OllamaLLMFacadeInterface,
+            agent_configuration: Optional[AgentConfiguration] = None,
+            sentiment_node_configuration: Optional[SentimentNodeConfiguration] = None,
+            agent_node_configuration: Optional[AgentNodeConfiguration] = None
+    ) -> None:
         self._ollama_llm_facade = ollama_llm_facade
         self._agent_configuration = agent_configuration or AgentConfiguration()
         self._sentiment_node_configuration = sentiment_node_configuration or SentimentNodeConfiguration()
@@ -47,15 +49,17 @@ class AgentService(AgentServiceInterface):
         logger.info("AgentService initialized")
 
     @classmethod
-    def create(cls,
-               ollama_llm_facade: OllamaLLMFacadeInterface,
-               message_length: Optional[Tuple[int, int]] = None,
-               max_messages_count: Optional[int] = None,
-               max_tool_iterations: Optional[int] = None,
-               sentiment: Optional[Sentiment] = None,
-               sentiment_custom_system_prompt: Optional[str] = None,
-               agent_custom_system_prompt: Optional[str] = None,
-               custom_sentiment_instructions: Optional[str] = None) -> "AgentService":
+    def create(
+            cls,
+            ollama_llm_facade: OllamaLLMFacadeInterface,
+            message_length: Optional[Tuple[int, int]] = None,
+            max_messages_count: Optional[int] = None,
+            max_tool_iterations: Optional[int] = None,
+            sentiment: Optional[Sentiment] = None,
+            sentiment_custom_system_prompt: Optional[str] = None,
+            agent_custom_system_prompt: Optional[str] = None,
+            custom_sentiment_instructions: Optional[str] = None
+    ) -> "AgentService":
         config_kwargs = {}
 
         if message_length is not None:
@@ -98,31 +102,31 @@ class AgentService(AgentServiceInterface):
             agent_node_configuration=agent_node_configuration
         )
 
-    async def _ensure_workflow_built(self) -> None:
+    async def _ensure_workflow_built(
+            self
+    ) -> None:
         if not self._workflow_built:
             await self._agent_workflow.build()
             self._workflow_built = True
 
-    async def execute_agent(self,
-                            request: AgentRequest) -> AgentResponse:
-        logger.info(
-            "Executing agent_node request"
-        )
+    async def execute_agent(
+            self,
+            agent_request: AgentRequest
+    ) -> AgentResponse:
+        logger.info("Executing agent_node request")
 
-        self._agent_request_validator.validate_request(request)
+        self._agent_request_validator.validate_request(agent_request)
 
         try:
             await self._ensure_workflow_built()
 
             initial_agent_state = self._agent_state_builder.build_agent_state(
-                request=request
+                agent_request=agent_request
             )
 
             final_agent_state = await self._agent_workflow.invoke(initial_agent_state)
 
-            logger.info(
-                "Agent request executed successfully"
-            )
+            logger.info("Agent request executed successfully")
 
             processed_messages = []
             for message in final_agent_state.get("messages", []):

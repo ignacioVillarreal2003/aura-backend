@@ -26,12 +26,14 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentContextProvider(DocumentContextProviderInterface):
-    def __init__(self,
-                 http_client: HttpClientInterface,
-                 question_context_fragments_url: str,
-                 document_context_fragments_url: str,
-                 document_context_provider_configuration: Optional[
-                     DocumentContextProviderConfiguration] = None) -> None:
+    def __init__(
+            self,
+            http_client: HttpClientInterface,
+            question_context_fragments_url: str,
+            document_context_fragments_url: str,
+            document_context_provider_configuration: Optional[
+                DocumentContextProviderConfiguration] = None
+    ) -> None:
         self._http_client = http_client
         self._question_context_fragments_url = question_context_fragments_url
         self._document_context_fragments_url = document_context_fragments_url
@@ -44,14 +46,16 @@ class DocumentContextProvider(DocumentContextProviderInterface):
         logger.info("ContextProvider initialized successfully")
 
     @classmethod
-    def create(cls,
-               http_client: HttpClientInterface,
-               question_context_fragments_url: str,
-               document_context_fragments_url: str,
-               max_chars_per_fragment: Optional[int] = None,
-               truncate_fragments_exceeding_max_chars: Optional[bool] = None,
-               max_fragments_total: Optional[int] = None,
-               max_total_chars: Optional[int] = None) -> "DocumentContextProvider":
+    def create(
+            cls,
+            http_client: HttpClientInterface,
+            question_context_fragments_url: str,
+            document_context_fragments_url: str,
+            max_chars_per_fragment: Optional[int] = None,
+            truncate_fragments_exceeding_max_chars: Optional[bool] = None,
+            max_fragments_total: Optional[int] = None,
+            max_total_chars: Optional[int] = None
+    ) -> "DocumentContextProvider":
         config_kwargs = {}
 
         if max_chars_per_fragment is not None:
@@ -72,9 +76,11 @@ class DocumentContextProvider(DocumentContextProviderInterface):
             document_context_provider_configuration=document_context_provider_configuration
         )
 
-    async def retrieve_context_fragments_by_question(self,
-                                                     question: str,
-                                                     max_context_fragments: int) -> List[str]:
+    async def retrieve_context_fragments_by_question(
+            self,
+            question: str,
+            max_context_fragments: int
+    ) -> List[str]:
         logger.info("Retrieving context fragments by question")
 
         try:
@@ -124,8 +130,10 @@ class DocumentContextProvider(DocumentContextProviderInterface):
                 "No se pudieron recuperar los fragmentos del servicio externo. Por favor, intente nuevamente más tarde."
             ) from e
 
-    async def retrieve_context_fragments_by_document(self,
-                                                     document_id: int) -> List[str]:
+    async def retrieve_context_fragments_by_document(
+            self,
+            document_id: int
+    ) -> List[str]:
         logger.info("Retrieving context fragments by document")
 
         try:

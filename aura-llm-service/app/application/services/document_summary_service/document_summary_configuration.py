@@ -44,7 +44,9 @@ class DocumentSummaryConfiguration:
     max_document_id: int = DEFAULT_MAX_DOCUMENT_ID
     custom_system_prompt: Optional[str] = None
 
-    def __post_init__(self) -> None:
+    def __post_init__(
+            self
+    ) -> None:
         try:
             self._validate_all()
             logger.info("DocumentSummaryConfiguration initialized successfully")
@@ -58,14 +60,18 @@ class DocumentSummaryConfiguration:
             )
             raise
 
-    def _validate_all(self) -> None:
+    def _validate_all(
+            self
+    ) -> None:
         self._validate_large_document_threshold()
         self._validate_chunk_size()
         self._validate_max_concurrent_chunks()
         self._validate_max_retry_attempts()
         self._validate_retry_delay()
 
-    def _validate_large_document_threshold(self) -> None:
+    def _validate_large_document_threshold(
+            self
+    ) -> None:
         if not (self.MIN_LARGE_DOCUMENT_THRESHOLD
                 <= self.large_document_threshold
                 <= self.MAX_LARGE_DOCUMENT_THRESHOLD):
@@ -74,7 +80,9 @@ class DocumentSummaryConfiguration:
                 f"se recibió: {self.large_document_threshold}"
             )
 
-    def _validate_chunk_size(self) -> None:
+    def _validate_chunk_size(
+            self
+    ) -> None:
         if not (self.MIN_CHUNK_SIZE
                 <= self.chunk_size
                 <= self.MAX_CHUNK_SIZE):
@@ -83,7 +91,9 @@ class DocumentSummaryConfiguration:
                 f"se recibió: {self.chunk_size}"
             )
 
-    def _validate_max_concurrent_chunks(self) -> None:
+    def _validate_max_concurrent_chunks(
+            self
+    ) -> None:
         if not (self.MIN_CONCURRENT_CHUNKS
                 <= self.max_concurrent_chunks
                 <= self.MAX_CONCURRENT_CHUNKS):
@@ -92,7 +102,9 @@ class DocumentSummaryConfiguration:
                 f"se recibió: {self.max_concurrent_chunks}"
             )
 
-    def _validate_max_retry_attempts(self) -> None:
+    def _validate_max_retry_attempts(
+            self
+    ) -> None:
         if not (self.MIN_RETRY_ATTEMPTS
                 <= self.max_retry_attempts
                 <= self.MAX_RETRY_ATTEMPTS):
@@ -101,7 +113,9 @@ class DocumentSummaryConfiguration:
                 f"se recibió: {self.max_retry_attempts}"
             )
 
-    def _validate_retry_delay(self) -> None:
+    def _validate_retry_delay(
+            self
+    ) -> None:
         if not (self.MIN_RETRY_DELAY
                 <= self.retry_delay
                 <= self.MAX_RETRY_DELAY):
@@ -110,14 +124,18 @@ class DocumentSummaryConfiguration:
                 f"se recibió: {self.retry_delay}"
             )
 
-    def select_strategy(self,
-                        fragment_count: int) -> SummarizationStrategy:
+    def select_strategy(
+            self,
+            fragment_count: int
+    ) -> SummarizationStrategy:
         if fragment_count > self.large_document_threshold:
             return SummarizationStrategy.MAP_REDUCE
         return SummarizationStrategy.DIRECT
 
     @property
-    def system_prompt(self) -> str:
+    def system_prompt(
+            self
+    ) -> str:
         return self.custom_system_prompt or self._get_default_system_prompt()
 
     @staticmethod

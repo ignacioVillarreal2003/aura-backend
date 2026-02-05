@@ -8,8 +8,10 @@ from app.domain.dtos.message import Message
 
 class DocumentQuestionServiceInterface(ABC):
     @abstractmethod
-    async def execute_document_question(self,
-                                        request: DocumentQuestionRequest) -> DocumentQuestionResponse:
+    async def execute_document_question(
+            self,
+            document_question_request: DocumentQuestionRequest
+    ) -> DocumentQuestionResponse:
         pass
 
     @abstractmethod

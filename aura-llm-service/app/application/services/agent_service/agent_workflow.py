@@ -19,11 +19,13 @@ logger = logging.getLogger(__name__)
 
 
 class AgentWorkflow:
-    def __init__(self,
-                 ollama_llm_facade: OllamaLLMFacadeInterface,
-                 agent_configuration: AgentConfiguration,
-                 sentiment_node_configuration: SentimentNodeConfiguration,
-                 agent_node_configuration: AgentNodeConfiguration) -> None:
+    def __init__(
+            self,
+            ollama_llm_facade: OllamaLLMFacadeInterface,
+            agent_configuration: AgentConfiguration,
+            sentiment_node_configuration: SentimentNodeConfiguration,
+            agent_node_configuration: AgentNodeConfiguration
+    ) -> None:
         self._ollama_llm_facade = ollama_llm_facade
         self._agent_configuration = agent_configuration
         self._sentiment_node_configuration = sentiment_node_configuration
@@ -38,7 +40,9 @@ class AgentWorkflow:
 
         logger.debug("AgentWorkflow initialized")
 
-    async def build(self):
+    async def build(
+            self
+    ):
         logger.info("Building agent workflow")
 
         try:
@@ -60,13 +64,18 @@ class AgentWorkflow:
             logger.exception("Failed to build agent_node workflow")
             raise RuntimeError("Failed to build agent_node workflow") from e
 
-    async def invoke(self, state: AgentState):
+    async def invoke(
+            self,
+            state: AgentState
+    ):
         if self._compiled_workflow is None:
             raise RuntimeError("Workflow not built. Call build() first.")
 
         return await self._compiled_workflow.ainvoke(state)
 
-    async def _create_nodes(self) -> None:
+    async def _create_nodes(
+            self
+    ) -> None:
         logger.debug("Creating workflow nodes")
 
         self._sentiment_node = SentimentNode(
@@ -83,7 +92,9 @@ class AgentWorkflow:
         if tools:
             self._tool_node = ToolNode(tools)
 
-    def _add_nodes(self) -> None:
+    def _add_nodes(
+            self
+    ) -> None:
         logger.debug("Adding nodes to workflow graph")
 
         if self._sentiment_node is not None:
@@ -104,7 +115,9 @@ class AgentWorkflow:
                 self._tool_node
             )
 
-    def _set_entry_point(self) -> None:
+    def _set_entry_point(
+            self
+    ) -> None:
         if self._sentiment_node:
             entry_point = NodeName.SENTIMENT.value
         else:
@@ -112,7 +125,9 @@ class AgentWorkflow:
 
         self._workflow.set_entry_point(entry_point)
 
-    def _add_edges(self) -> None:
+    def _add_edges(
+            self
+    ) -> None:
         if self._sentiment_node:
             self._workflow.add_edge(
                 NodeName.SENTIMENT.value,

@@ -10,15 +10,19 @@ ToolFactory = Callable[[], BaseTool]
 
 
 class OllamaToolManager:
-    def __init__(self,
-                 tool_factories: Optional[List[ToolFactory]] = None):
+    def __init__(
+            self,
+            tool_factories: Optional[List[ToolFactory]] = None
+    ) -> None:
         self._tool_factories = tool_factories
         self._tools: List[BaseTool] = []
         self._initialized = False
 
         logger.debug("OllamaToolManager created")
 
-    def initialize(self) -> None:
+    def initialize(
+            self
+    ) -> None:
         if self._initialized:
             logger.debug("OllamaToolManager already initialized")
             return
@@ -80,8 +84,10 @@ class OllamaToolManager:
         logger.info("OllamaToolManager initialized successfully")
 
     @staticmethod
-    def _create_and_validate_tool(factory: ToolFactory,
-                                  factory_index: int) -> BaseTool:
+    def _create_and_validate_tool(
+            factory: ToolFactory,
+            factory_index: int
+    ) -> BaseTool:
         tool = factory()
 
         if not isinstance(tool, BaseTool):
@@ -111,14 +117,20 @@ class OllamaToolManager:
         return tool
 
     @property
-    def tools(self) -> List[BaseTool]:
+    def tools(
+            self
+    ) -> List[BaseTool]:
         return self._tools.copy()
 
     @property
-    def has_tools(self) -> bool:
+    def has_tools(
+            self
+    ) -> bool:
         return len(self._tools) > 0
 
-    def generate_instructions(self) -> Optional[str]:
+    def generate_instructions(
+            self
+    ) -> Optional[str]:
         if not self._tools:
             return None
 
@@ -136,7 +148,9 @@ class OllamaToolManager:
         return "\n".join(lines)
 
     @staticmethod
-    def _extract_tool_info(tool: BaseTool) -> dict:
+    def _extract_tool_info(
+            tool: BaseTool
+    ) -> dict:
         name = getattr(
             tool,
             "name",

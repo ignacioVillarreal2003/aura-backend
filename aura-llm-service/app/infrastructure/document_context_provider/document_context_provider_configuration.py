@@ -24,7 +24,9 @@ class DocumentContextProviderConfiguration:
     max_fragments_total: int = DEFAULT_MAX_FRAGMENTS_TOTAL
     max_total_chars: int = DEFAULT_MAX_RESPONSE_SIZE_CHARS
 
-    def __post_init__(self) -> None:
+    def __post_init__(
+            self
+    ) -> None:
         try:
             self._validate_all()
             logger.info("DocumentContextProviderConfiguration initialized successfully")
@@ -38,12 +40,16 @@ class DocumentContextProviderConfiguration:
             )
             raise
 
-    def _validate_all(self) -> None:
+    def _validate_all(
+            self
+    ) -> None:
         self._validate_max_chars_per_fragment()
         self._validate_max_fragments_total()
         self._validate_max_total_chars()
 
-    def _validate_max_chars_per_fragment(self) -> None:
+    def _validate_max_chars_per_fragment(
+            self
+    ) -> None:
         if not (self.MAX_CHARS_PER_FRAGMENTS[0]
                 <= self.max_chars_per_fragment
                 <= self.MAX_CHARS_PER_FRAGMENTS[1]):
@@ -52,7 +58,9 @@ class DocumentContextProviderConfiguration:
                 f"se recibió: {self.max_chars_per_fragment}"
             )
 
-    def _validate_max_fragments_total(self) -> None:
+    def _validate_max_fragments_total(
+            self
+    ) -> None:
         if not (self.MAX_FRAGMENTS_TOTAL[0]
                 <= self.max_fragments_total
                 <= self.MAX_FRAGMENTS_TOTAL[1]):
@@ -62,7 +70,9 @@ class DocumentContextProviderConfiguration:
                 f"se recibió: {self.max_fragments_total}"
             )
 
-    def _validate_max_total_chars(self) -> None:
+    def _validate_max_total_chars(
+            self
+    ) -> None:
         if not (self.MAX_TOTAL_CHARS[0]
                 <= self.max_total_chars
                 <= self.MAX_TOTAL_CHARS[1]):

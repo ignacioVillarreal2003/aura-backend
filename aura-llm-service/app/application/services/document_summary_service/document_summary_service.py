@@ -33,10 +33,12 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentSummaryService(DocumentSummaryServiceInterface):
-    def __init__(self,
-                 ollama_llm_facade: OllamaLLMFacadeInterface,
-                 document_context_provider: DocumentContextProviderInterface,
-                 document_summary_configuration: Optional[DocumentSummaryConfiguration] = None) -> None:
+    def __init__(
+            self,
+            ollama_llm_facade: OllamaLLMFacadeInterface,
+            document_context_provider: DocumentContextProviderInterface,
+            document_summary_configuration: Optional[DocumentSummaryConfiguration] = None
+    ) -> None:
         self._ollama_llm_facade = ollama_llm_facade
         self._document_context_provider = document_context_provider
         self._document_summary_configuration = document_summary_configuration or DocumentSummaryConfiguration()
@@ -53,15 +55,17 @@ class DocumentSummaryService(DocumentSummaryServiceInterface):
         logger.info("DocumentSummaryService initialized")
 
     @classmethod
-    def create(cls,
-               ollama_llm_facade: OllamaLLMFacadeInterface,
-               document_context_provider: DocumentContextProviderInterface,
-               large_document_threshold: Optional[int] = None,
-               chunk_size: Optional[int] = None,
-               max_concurrent_chunks: Optional[int] = None,
-               max_retry_attempts: Optional[int] = None,
-               retry_delay: Optional[float] = None,
-               custom_system_prompt: Optional[str] = None) -> "DocumentSummaryService":
+    def create(
+            cls,
+            ollama_llm_facade: OllamaLLMFacadeInterface,
+            document_context_provider: DocumentContextProviderInterface,
+            large_document_threshold: Optional[int] = None,
+            chunk_size: Optional[int] = None,
+            max_concurrent_chunks: Optional[int] = None,
+            max_retry_attempts: Optional[int] = None,
+            retry_delay: Optional[float] = None,
+            custom_system_prompt: Optional[str] = None
+    ) -> "DocumentSummaryService":
         config_kwargs = {}
 
         if large_document_threshold is not None:
@@ -85,8 +89,10 @@ class DocumentSummaryService(DocumentSummaryServiceInterface):
             document_summary_configuration=document_summary_configuration
         )
 
-    async def execute_document_summary(self,
-                                       document_summary_request: DocumentSummaryRequest) -> DocumentSummaryResponse:
+    async def execute_document_summary(
+            self,
+            document_summary_request: DocumentSummaryRequest
+    ) -> DocumentSummaryResponse:
         logger.info("Starting document summary execution")
 
         self._document_summary_request_validator.validate_request(document_summary_request)
@@ -111,8 +117,10 @@ class DocumentSummaryService(DocumentSummaryServiceInterface):
             summary=summary
         )
 
-    async def retrieve_context_fragments_by_document(self,
-                                                     document_id: int) -> List[str]:
+    async def retrieve_context_fragments_by_document(
+            self,
+            document_id: int
+    ) -> List[str]:
         logger.debug("Retrieving fragments for document")
 
         try:
@@ -133,8 +141,10 @@ class DocumentSummaryService(DocumentSummaryServiceInterface):
             )
             raise DocumentSummaryServiceError("Error inesperado al recuperar fragmentos del documento") from e
 
-    async def generate_summary(self,
-                               context_fragments: List[str]) -> str:
+    async def generate_summary(
+            self,
+            context_fragments: List[str]
+    ) -> str:
         strategy = self._document_summary_configuration.select_strategy(len(context_fragments))
 
         logger.info("Generating summary")
@@ -164,7 +174,9 @@ class DocumentSummaryService(DocumentSummaryServiceInterface):
             )
             raise DocumentSummaryServiceError("Error inesperado al generar el resumen") from e
 
-    async def _ensure_llm_initialized(self) -> None:
+    async def _ensure_llm_initialized(
+            self
+    ) -> None:
         if self._llm is not None and self._chunk_processor is not None:
             return
 
@@ -196,8 +208,10 @@ class DocumentSummaryService(DocumentSummaryServiceInterface):
             )
             raise DocumentSummaryServiceError("Error al inicializar el modelo de lenguaje") from e
 
-    async def _summarize_direct(self,
-                                fragments: List[str]) -> str:
+    async def _summarize_direct(
+            self,
+            fragments: List[str]
+    ) -> str:
         logger.debug("Executing DIRECT summarization")
 
         if self._llm is None:
@@ -215,8 +229,10 @@ class DocumentSummaryService(DocumentSummaryServiceInterface):
 
         return summary
 
-    async def _summarize_map_reduce(self,
-                                    fragments: List[str]) -> str:
+    async def _summarize_map_reduce(
+            self,
+            fragments: List[str]
+    ) -> str:
         logger.debug("Executing MAP_REDUCE summarization")
 
         if self._chunk_processor is None:
@@ -237,8 +253,10 @@ class DocumentSummaryService(DocumentSummaryServiceInterface):
 
         return final_summary
 
-    async def _reduce_summaries(self,
-                                partial_summaries: List[str]) -> str:
+    async def _reduce_summaries(
+            self,
+            partial_summaries: List[str]
+    ) -> str:
         logger.debug("Reducing partial summaries")
 
         if self._llm is None:

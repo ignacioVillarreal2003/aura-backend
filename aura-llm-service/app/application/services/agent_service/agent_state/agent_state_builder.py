@@ -12,19 +12,21 @@ logger = logging.getLogger(__name__)
 
 
 class AgentStateBuilder:
-    def build_agent_state(self,
-                          request: AgentRequest) -> AgentState:
+    def build_agent_state(
+            self,
+            agent_request: AgentRequest
+    ) -> AgentState:
         logger.debug(
             "Building agent state",
             extra={
-                "messages": request.messages
+                "messages": agent_request.messages
             }
         )
 
         messages: List[BaseMessage] = []
 
-        if request.messages is not None:
-            messages = self._convert_messages(request.messages)
+        if agent_request.messages is not None:
+            messages = self._convert_messages(agent_request.messages)
 
         agent_state: AgentState = AgentState(
             messages=messages,
@@ -41,7 +43,9 @@ class AgentStateBuilder:
         return agent_state
 
     @staticmethod
-    def _convert_messages(messages: Optional[list[Message]]) -> List[BaseMessage]:
+    def _convert_messages(
+            messages: Optional[list[Message]]
+    ) -> List[BaseMessage]:
         history_messages: List[BaseMessage] = []
 
         for index, message in enumerate(messages):

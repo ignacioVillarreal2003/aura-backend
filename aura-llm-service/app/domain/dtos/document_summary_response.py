@@ -2,4 +2,6 @@ from pydantic import BaseModel, Field
 
 
 class DocumentSummaryResponse(BaseModel):
-    summary: str = Field(...)
+    summary: str = Field(
+        ...
+    )

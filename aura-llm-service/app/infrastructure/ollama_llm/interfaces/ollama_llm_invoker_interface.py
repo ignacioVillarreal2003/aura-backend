@@ -6,7 +6,9 @@ from langchain_core.runnables import Runnable
 
 class OllamaLLMInvokerInterface(ABC):
     @abstractmethod
-    async def call_llm_content(self,
-                               llm: Runnable,
-                               llm_input: List[BaseMessage]) -> str:
+    async def call_llm_content(
+            self,
+            llm: Runnable,
+            llm_input: List[BaseMessage]
+    ) -> str:
         pass

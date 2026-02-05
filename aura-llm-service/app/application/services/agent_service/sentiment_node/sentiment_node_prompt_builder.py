@@ -11,9 +11,11 @@ logger = logging.getLogger(__name__)
 
 
 class SentimentNodePromptBuilder:
-    def build_prompt(self,
-                     system_prompt: str,
-                     input_text: str) -> List[BaseMessage]:
+    def build_prompt(
+            self,
+            system_prompt: str,
+            input_text: str
+    ) -> List[BaseMessage]:
         logger.info(
             "Starting sentiment_node prompt build"
         )
@@ -35,7 +37,9 @@ class SentimentNodePromptBuilder:
         return prompt_messages
 
     @staticmethod
-    def _build_system_message(system_prompt: str) -> SystemMessage:
+    def _build_system_message(
+            system_prompt: str
+    ) -> SystemMessage:
         logger.debug(
             "Building system message"
         )
@@ -45,7 +49,9 @@ class SentimentNodePromptBuilder:
         )
 
     @staticmethod
-    def _build_sentiment_input_message(input_text: str) -> HumanMessage:
+    def _build_sentiment_input_message(
+            input_text: str
+    ) -> HumanMessage:
         logger.debug(
             "Building sentiment_node input message"
         )

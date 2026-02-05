@@ -12,8 +12,10 @@ logger = logging.getLogger(__name__)
 
 class AgentController:
     @staticmethod
-    async def execute_agent(agent_request: AgentRequest,
-                            agent_service: AgentServiceInterface = Depends(get_agent_service)) -> AgentResponse:
+    async def execute_agent(
+            agent_request: AgentRequest,
+            agent_service: AgentServiceInterface = Depends(get_agent_service)
+    ) -> AgentResponse:
         logger.info("Processing agent_node request")
 
         try:

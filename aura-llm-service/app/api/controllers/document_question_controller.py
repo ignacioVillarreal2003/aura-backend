@@ -14,13 +14,16 @@ logger = logging.getLogger(__name__)
 
 class DocumentQuestionController:
     @staticmethod
-    async def execute_document_question(document_question_request: DocumentQuestionRequest,
-                                        document_question_service: DocumentQuestionServiceInterface = Depends(
-                                            get_document_question_service)) -> DocumentQuestionResponse:
+    async def execute_document_question(
+            document_question_request: DocumentQuestionRequest,
+            document_question_service: DocumentQuestionServiceInterface = Depends(get_document_question_service)
+    ) -> DocumentQuestionResponse:
         logger.info("Processing document question request")
 
         try:
-            document_question_response = await document_question_service.execute_document_question(document_question_request)
+            document_question_response = await document_question_service.execute_document_question(
+                document_question_request=document_question_request
+            )
 
             logger.info("Document question request processed successfully")
 

@@ -22,8 +22,10 @@ logger = logging.getLogger(__name__)
 
 
 class HttpClient(HttpClientInterface):
-    def __init__(self,
-                 http_client_configuration: HttpClientConfiguration) -> None:
+    def __init__(
+            self,
+            http_client_configuration: HttpClientConfiguration
+    ) -> None:
         self._http_client_configuration = http_client_configuration
 
         self._circuit_breaker: Optional[CircuitBreaker] = None
@@ -36,18 +38,20 @@ class HttpClient(HttpClientInterface):
         logger.info("HttpClient initialized successfully")
 
     @classmethod
-    def create(cls,
-               timeout: Optional[float] = None,
-               max_keepalive_connections: Optional[int] = None,
-               max_connections: Optional[int] = None,
-               verify_ssl: Optional[bool] = None,
-               follow_redirects: Optional[bool] = None,
-               enable_circuit_breaker: Optional[bool] = None,
-               retry_max_attempts: Optional[int] = None,
-               retry_base_delay: Optional[float] = None,
-               retry_max_delay: Optional[float] = None,
-               retry_exponential_base: Optional[float] = None,
-               retry_on_status_codes: Optional[Set[int]] = None) -> "HttpClient":
+    def create(
+            cls,
+            timeout: Optional[float] = None,
+            max_keepalive_connections: Optional[int] = None,
+            max_connections: Optional[int] = None,
+            verify_ssl: Optional[bool] = None,
+            follow_redirects: Optional[bool] = None,
+            enable_circuit_breaker: Optional[bool] = None,
+            retry_max_attempts: Optional[int] = None,
+            retry_base_delay: Optional[float] = None,
+            retry_max_delay: Optional[float] = None,
+            retry_exponential_base: Optional[float] = None,
+            retry_on_status_codes: Optional[Set[int]] = None
+    ) -> "HttpClient":
         config_kwargs = {}
 
         if timeout is not None:
@@ -79,7 +83,9 @@ class HttpClient(HttpClientInterface):
             http_client_configuration=http_client_configuration
         )
 
-    async def start(self) -> None:
+    async def start(
+            self
+    ) -> None:
         async with self._lock:
             if self._client is not None:
                 logger.debug("HttpClient already started")
@@ -107,7 +113,9 @@ class HttpClient(HttpClientInterface):
                 self._client = None
                 raise HttpClientInitializationError("Failed to start HTTP client") from e
 
-    async def stop(self) -> None:
+    async def stop(
+            self
+    ) -> None:
         async with self._lock:
             if self._client is None:
                 logger.debug("HttpClient already stopped")
@@ -133,14 +141,18 @@ class HttpClient(HttpClientInterface):
                 self._client = None
 
     @property
-    def is_started(self) -> bool:
+    def is_started(
+            self
+    ) -> bool:
         return self._client is not None
 
-    async def get(self,
-                  url: str,
-                  params: Optional[Dict[str, Any]] = None,
-                  headers: Optional[Dict[str, str]] = None,
-                  **kwargs: Any) -> Any:
+    async def get(
+            self,
+            url: str,
+            params: Optional[Dict[str, Any]] = None,
+            headers: Optional[Dict[str, str]] = None,
+            **kwargs: Any
+    ) -> Any:
         return await self._request_with_resilience(
             method=HttpMethod.GET,
             url=url,
@@ -149,12 +161,14 @@ class HttpClient(HttpClientInterface):
             **kwargs
         )
 
-    async def post(self,
-                   url: str,
-                   json: Optional[Dict[str, Any]] = None,
-                   data: Optional[Any] = None,
-                   headers: Optional[Dict[str, str]] = None,
-                   **kwargs: Any) -> Any:
+    async def post(
+            self,
+            url: str,
+            json: Optional[Dict[str, Any]] = None,
+            data: Optional[Any] = None,
+            headers: Optional[Dict[str, str]] = None,
+            **kwargs: Any
+    ) -> Any:
         return await self._request_with_resilience(
             method=HttpMethod.POST,
             url=url,
@@ -164,12 +178,14 @@ class HttpClient(HttpClientInterface):
             **kwargs
         )
 
-    async def put(self,
-                  url: str,
-                  json: Optional[Dict[str, Any]] = None,
-                  data: Optional[Any] = None,
-                  headers: Optional[Dict[str, str]] = None,
-                  **kwargs: Any) -> Any:
+    async def put(
+            self,
+            url: str,
+            json: Optional[Dict[str, Any]] = None,
+            data: Optional[Any] = None,
+            headers: Optional[Dict[str, str]] = None,
+            **kwargs: Any
+    ) -> Any:
         return await self._request_with_resilience(
             method=HttpMethod.PUT,
             url=url,
@@ -179,10 +195,12 @@ class HttpClient(HttpClientInterface):
             **kwargs
         )
 
-    async def delete(self,
-                     url: str,
-                     headers: Optional[Dict[str, str]] = None,
-                     **kwargs: Any) -> Any:
+    async def delete(
+            self,
+            url: str,
+            headers: Optional[Dict[str, str]] = None,
+            **kwargs: Any
+    ) -> Any:
         return await self._request_with_resilience(
             method=HttpMethod.DELETE,
             url=url,
@@ -190,10 +208,12 @@ class HttpClient(HttpClientInterface):
             **kwargs
         )
 
-    async def _request_with_resilience(self,
-                                       method: HttpMethod,
-                                       url: str,
-                                       **kwargs: Any) -> Any:
+    async def _request_with_resilience(
+            self,
+            method: HttpMethod,
+            url: str,
+            **kwargs: Any
+    ) -> Any:
         if self._circuit_breaker:
             return await self._circuit_breaker.call(
                 self._request_with_retry,
@@ -208,10 +228,12 @@ class HttpClient(HttpClientInterface):
             **kwargs
         )
 
-    async def _request_with_retry(self,
-                                  method: HttpMethod,
-                                  url: str,
-                                  **kwargs: Any) -> Any:
+    async def _request_with_retry(
+            self,
+            method: HttpMethod,
+            url: str,
+            **kwargs: Any
+    ) -> Any:
         last_error: Optional[Exception] = None
 
         for attempt in range(self._http_client_configuration.retry_max_attempts):
@@ -235,16 +257,20 @@ class HttpClient(HttpClientInterface):
             raise last_error
         raise HttpClientError("All retry attempts failed")
 
-    def _ensure_client_initialized(self) -> httpx.AsyncClient:
+    def _ensure_client_initialized(
+            self
+    ) -> httpx.AsyncClient:
         if self._client is None:
             logger.error("Attempted to use uninitialized HttpClient")
             raise HttpClientNotInitializedError("HttpClient not started. Call start() first.")
         return self._client
 
-    async def _request(self,
-                       method: HttpMethod,
-                       url: str,
-                       **kwargs: Any) -> Any:
+    async def _request(
+            self,
+            method: HttpMethod,
+            url: str,
+            **kwargs: Any
+    ) -> Any:
         client = self._ensure_client_initialized()
 
         logger.debug("Initiating HTTP request")
@@ -271,10 +297,12 @@ class HttpClient(HttpClientInterface):
             logger.exception("Unexpected error in HTTP request")
             raise HttpClientError(f"Unexpected error: {type(e).__name__}") from e
 
-    def _handle_error_response(self,
-                               response: httpx.Response,
-                               url: str,
-                               method: HttpMethod) -> None:
+    def _handle_error_response(
+            self,
+            response: httpx.Response,
+            url: str,
+            method: HttpMethod
+    ) -> None:
         logger.warning(
             "External service returned error response",
             extra={
@@ -293,7 +321,9 @@ class HttpClient(HttpClientInterface):
         )
 
     @staticmethod
-    def _extract_error_message(response: httpx.Response) -> str:
+    def _extract_error_message(
+            response: httpx.Response
+    ) -> str:
         try:
             error_data = response.json()
             if isinstance(error_data, dict):
@@ -304,10 +334,12 @@ class HttpClient(HttpClientInterface):
         except Exception:
             return response.text or f"HTTP {response.status_code}"
 
-    def _parse_response(self,
-                        response: httpx.Response,
-                        url: str,
-                        method: HttpMethod) -> Union[Dict, list, str, None]:
+    def _parse_response(
+            self,
+            response: httpx.Response,
+            url: str,
+            method: HttpMethod
+    ) -> Union[Dict, list, str, None]:
         if response.status_code == 204 or not response.content:
             logger.debug(
                 "Empty or 204 response",
@@ -334,12 +366,18 @@ class HttpClient(HttpClientInterface):
 
         logger.debug(
             "Returning response as text",
-            extra={"url": url, "method": method.value, "content_type": content_type}
+            extra={
+                "url": url,
+                "method": method.value,
+                "content_type": content_type
+            }
         )
         return response.text
 
     @staticmethod
-    def _looks_like_json(text: str) -> bool:
+    def _looks_like_json(
+            text: str
+    ) -> bool:
         if not text:
             return False
         stripped = text.strip()

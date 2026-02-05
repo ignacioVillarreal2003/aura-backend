@@ -30,9 +30,11 @@ class DocumentSummaryTool(BaseTool):
 
     _document_summary_service: DocumentSummaryServiceInterface = PrivateAttr()
 
-    def __init__(self,
-                 document_summary_service: DocumentSummaryServiceInterface,
-                 **kwargs) -> None:
+    def __init__(
+            self,
+            document_summary_service: DocumentSummaryServiceInterface,
+            **kwargs
+    ) -> None:
         super().__init__(**kwargs)
         self._document_summary_service = document_summary_service
 
@@ -43,14 +45,18 @@ class DocumentSummaryTool(BaseTool):
             }
         )
 
-    def _run(self,
-             document_id: int,
-             run_manager: Optional[CallbackManagerForToolRun] = None) -> str:
+    def _run(
+            self,
+            document_id: int,
+            run_manager: Optional[CallbackManagerForToolRun] = None
+    ) -> str:
         raise NotImplementedError("DocumentSummaryTool solo soporta ejecución asíncrona. Use _arun() en su lugar.")
 
-    async def _arun(self,
-                    document_id: int,
-                    run_manager: Optional[AsyncCallbackManagerForToolRun] = None) -> str:
+    async def _arun(
+            self,
+            document_id: int,
+            run_manager: Optional[AsyncCallbackManagerForToolRun] = None
+    ) -> str:
         logger.info(
             "DocumentSummaryTool invoked",
             extra={
@@ -59,13 +65,15 @@ class DocumentSummaryTool(BaseTool):
         )
 
         try:
-            request = DocumentSummaryRequest(
+            document_summary_request = DocumentSummaryRequest(
                 document_id=document_id
             )
 
-            response = await self._document_summary_service.execute_document_summary(request)
+            document_summary_response = await self._document_summary_service.execute_document_summary(
+                document_summary_request=document_summary_request
+            )
 
-            if not response.summary or not response.summary.strip():
+            if not document_summary_response.summary or not document_summary_response.summary.strip():
                 logger.warning(
                     "Service returned empty summary",
                     extra={
@@ -78,11 +86,11 @@ class DocumentSummaryTool(BaseTool):
                 "Summary generated successfully",
                 extra={
                     "document_id": document_id,
-                    "summary": response.summary
+                    "summary": document_summary_response.summary
                 }
             )
 
-            return response.summary
+            return document_summary_response.summary
 
         except Exception as e:
             logger.error(

@@ -6,6 +6,8 @@ from app.domain.dtos.document_summary_response import DocumentSummaryResponse
 
 class DocumentSummaryServiceInterface(ABC):
     @abstractmethod
-    async def execute_document_summary(self,
-                                       request_body: DocumentSummaryRequest) -> DocumentSummaryResponse:
+    async def execute_document_summary(
+            self,
+                                       document_summary_request: DocumentSummaryRequest
+    ) -> DocumentSummaryResponse:
         pass

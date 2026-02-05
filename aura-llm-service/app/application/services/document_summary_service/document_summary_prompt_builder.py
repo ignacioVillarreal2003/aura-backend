@@ -7,15 +7,19 @@ logger = logging.getLogger(__name__)
 
 class DocumentSummaryPromptBuilder:
     @staticmethod
-    def _build_system_message(system_prompt: str) -> SystemMessage:
+    def _build_system_message(
+            system_prompt: str
+    ) -> SystemMessage:
         logger.debug("Building system message")
         return SystemMessage(
             content=system_prompt
         )
 
-    def build_summarization_messages(self,
-                                     system_prompt: str,
-                                     fragments: Optional[Sequence[str]]) -> List[BaseMessage]:
+    def build_summarization_messages(
+            self,
+            system_prompt: str,
+            fragments: Optional[Sequence[str]]
+    ) -> List[BaseMessage]:
         logger.info("Starting summarization messages build")
 
         if not fragments:
@@ -63,9 +67,11 @@ class DocumentSummaryPromptBuilder:
 
         return messages
 
-    def build_reduction_messages(self,
-                                 system_prompt: str,
-                                 partial_summaries: Optional[Sequence[str]]) -> List[BaseMessage]:
+    def build_reduction_messages(
+            self,
+            system_prompt: str,
+            partial_summaries: Optional[Sequence[str]]
+    ) -> List[BaseMessage]:
         logger.info("Starting reduction messages build")
 
         if not partial_summaries:

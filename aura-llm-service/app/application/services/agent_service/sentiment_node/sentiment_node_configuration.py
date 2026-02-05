@@ -5,7 +5,10 @@ from typing import Optional, Final, Tuple
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(
+    frozen=True,
+    kw_only=True
+)
 class SentimentNodeConfiguration:
     MAX_CUSTOM_SYSTEM_PROMPT_LENGTH: Final[Tuple[int, int]] = (1_000, 10_000)
 
@@ -28,7 +31,9 @@ class SentimentNodeConfiguration:
             "No incluyas explicaciones, puntuación adicional ni texto extra."
         )
 
-    def __post_init__(self) -> None:
+    def __post_init__(
+            self
+    ) -> None:
         try:
             self._validate_all()
             logger.debug("SentimentNodeConfiguration initialized")
@@ -42,18 +47,17 @@ class SentimentNodeConfiguration:
             )
             raise
 
-    def _validate_all(self) -> None:
-        logger.debug(
-            "Validating SentimentNodeConfiguration",
-            extra={
-                "has_custom_system_prompt": self.custom_system_prompt is not None
-            }
-        )
+    def _validate_all(
+            self
+    ) -> None:
+        logger.debug("Validating SentimentNodeConfiguration")
 
         if self.custom_system_prompt is not None:
             self._validate_custom_system_prompt()
 
-    def _validate_custom_system_prompt(self) -> None:
+    def _validate_custom_system_prompt(
+            self
+    ) -> None:
         logger.debug(
             "Validating custom system prompt",
             extra={
@@ -74,12 +78,7 @@ class SentimentNodeConfiguration:
             logger.error("Custom system prompt validation failed: empty or whitespace-only")
             raise ValueError("El prompt del sistema no puede estar vacío ni contener solo espacios en blanco.")
 
-        if len(self.custom_system_prompt) > self.max_custom_system_prompt_length:
-            logger.error(
-                "Custom system prompt validation failed: prompt too long",
-                extra={
-                    "length": len(self.custom_system_prompt),
-                    "max_length": self.max_custom_system_prompt_length
-                }
-            )
-            raise ValueError(f"El prompt del sistema es demasiado largo. El máximo permitido es de {self.max_custom_system_prompt_length} caracteres.")
+        if len(self.custom_system_prompt) > self.MAX_CUSTOM_SYSTEM_PROMPT_LENGTH[1]:
+            logger.error("Custom system prompt validation failed: prompt too long")
+            raise ValueError(
+                f"El prompt del sistema es demasiado largo. El máximo permitido es de {self.MAX_CUSTOM_SYSTEM_PROMPT_LENGTH[1]} caracteres.")

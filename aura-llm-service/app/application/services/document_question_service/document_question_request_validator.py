@@ -12,30 +12,38 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentQuestionRequestValidator:
-    def __init__(self,
-                 document_question_configuration: DocumentQuestionConfiguration) -> None:
+    def __init__(
+            self,
+            document_question_configuration: DocumentQuestionConfiguration
+    ) -> None:
         self._document_question_configuration = document_question_configuration
         logger.debug("DocumentQuestionRequestValidator initialized")
 
-    def validate_request(self,
-                         request: DocumentQuestionRequest) -> None:
+    def validate_request(
+            self,
+            document_question_request: DocumentQuestionRequest
+    ) -> None:
         logger.debug(
             "Starting request validation",
             extra={
-                "question": request.question,
-                "history_messages": request.history_messages if request.history_messages else None,
+                "question": document_question_request.question,
+                "history_messages": document_question_request.history_messages if document_question_request.history_messages else None,
             }
         )
 
-        self._validate_question(request.question)
+        self._validate_question(
+            question=document_question_request.question
+        )
 
-        if request.history_messages is not None:
-            self._validate_history_messages(request.history_messages)
+        if document_question_request.history_messages is not None:
+            self._validate_history_messages(document_question_request.history_messages)
 
         logger.debug("Request validation completed successfully")
 
-    def _validate_question(self,
-                           question: str) -> None:
+    def _validate_question(
+            self,
+            question: str
+    ) -> None:
         if not question or not question.strip():
             logger.warning(
                 "Question validation failed: empty or whitespace-only",
@@ -88,28 +96,30 @@ class DocumentQuestionRequestValidator:
                 status_code=400
             )
 
-    def _validate_history_messages(self,
-                                   history_messages: List[Message]) -> None:
+    def _validate_history_messages(
+            self,
+            history_messages: List[Message]
+    ) -> None:
         history_messages_count = len(history_messages)
 
         logger.debug(
             "Validating message history",
             extra={
                 "history_messages_count": history_messages_count,
-                "max_history_messages_count": self._document_question_configuration.max_history_messages_count
+                "max_history_messages": self._document_question_configuration.max_history_messages
             }
         )
 
-        if history_messages_count > self._document_question_configuration.max_history_messages_count:
+        if history_messages_count > self._document_question_configuration.max_history_messages:
             logger.warning(
                 "History validation failed: too many messages",
                 extra={
                     "history_messages_count": history_messages_count,
-                    "max_history_messages_count": self._document_question_configuration.max_history_messages_count
+                    "max_history_messages": self._document_question_configuration.max_history_messages
                 }
             )
             raise ValidationError(
                 f"El historial de mensajes es demasiado largo. "
-                f"Máximo permitido: {self._document_question_configuration.max_history_messages_count} mensajes.",
+                f"Máximo permitido: {self._document_question_configuration.max_history_messages} mensajes.",
                 status_code=400
             )

@@ -99,7 +99,9 @@ def create_document_question_tool_factory() -> ToolFactory:
         global _document_question_service
         if _document_question_service is None:
             raise RuntimeError("DocumentQuestionService not initialized. Call initialize_tools() first.")
-        return DocumentQuestionTool(document_question_service=_document_question_service)
+        return DocumentQuestionTool(
+            document_question_service=_document_question_service
+        )
 
     return factory
 
@@ -109,7 +111,9 @@ def create_document_summary_tool_factory() -> ToolFactory:
         global _document_summary_service
         if _document_summary_service is None:
             raise RuntimeError("DocumentSummaryService not initialized. Call initialize_tools() first.")
-        return DocumentSummaryTool(document_summary_service=_document_summary_service)
+        return DocumentSummaryTool(
+            document_summary_service=_document_summary_service
+        )
 
     return factory
 
@@ -123,7 +127,9 @@ async def get_agent_service() -> AgentServiceInterface:
             create_document_summary_tool_factory(),
         ]
     )
-    return AgentService.create(ollama_llm_facade=ollama_llm_facade)
+    return AgentService.create(
+        ollama_llm_facade=ollama_llm_facade
+    )
 
 
 async def startup_dependencies() -> None:
