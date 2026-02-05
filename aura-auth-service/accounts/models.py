@@ -15,7 +15,7 @@ Models:
 
 import uuid
 from django.db import models
-from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin, Group
 from django.utils import timezone
 from django.contrib.auth.hashers import make_password
 
@@ -34,7 +34,7 @@ class AuditedModel(models.Model):
     """
     created_at = models.DateTimeField(
         auto_now_add=True,
-        verbose_name='Creado el',
+        verbose_name='Creado',
         help_text="Creation timestamp"
     )
     created_by = models.CharField(
@@ -113,10 +113,9 @@ class CustomUserManager(BaseUserManager):
             raise ValueError('Email is required')
 
         email = self.normalize_email(email)
+        extra_fields.setdefault('is_super_admin', False)
         user = self.model(username=username, email=email, **extra_fields)
-        
-        if password:
-            user.password_hash = make_password(password)
+        user.set_password(password)
         
         user.save(using=self._db)
         return user
@@ -128,6 +127,7 @@ class CustomUserManager(BaseUserManager):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
         extra_fields.setdefault('is_active', True)
+        extra_fields.setdefault('is_super_admin', True)
 
         if extra_fields.get('is_staff') is not True:
             raise ValueError('Superuser must have is_staff=True')
@@ -155,13 +155,13 @@ class User(AbstractBaseUser, PermissionsMixin, AuditedModel):
         max_length=150,
         unique=True,
         db_index=True,
-        verbose_name='Nombre de usuario',
+        verbose_name='Usuario',
         help_text="Unique username for login"
     )
     email = models.EmailField(
         unique=True,
         db_index=True,
-        verbose_name='Correo electrónico',
+        verbose_name='Correo',
         help_text="Unique email address"
     )
     password = models.CharField(
@@ -183,6 +183,12 @@ class User(AbstractBaseUser, PermissionsMixin, AuditedModel):
         default=False,
         verbose_name='Es superusuario',
         help_text="Whether user has all permissions"
+    )
+    is_super_admin = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name='Es Super Admin',
+        help_text="Super admin bypass all permission checks"
     )
     last_login = models.DateTimeField(
         null=True,
@@ -417,3 +423,15 @@ class RolePermission(models.Model):
 
     def __str__(self):
         return f"{self.role.name} -> {self.permission.code}"
+
+
+class GroupProxy(Group):
+    """
+    Proxy model to show Django auth groups under the accounts app.
+    """
+
+    class Meta:
+        proxy = True
+        app_label = 'accounts'
+        verbose_name = 'Grupo'
+        verbose_name_plural = 'Grupos'

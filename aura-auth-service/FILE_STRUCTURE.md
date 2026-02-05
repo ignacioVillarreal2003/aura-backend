@@ -360,7 +360,7 @@ chmod +x run.sh
 class AccountsConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'accounts'
-    verbose_name = 'Cuentas y RBAC'
+    verbose_name = 'Gestión de Usuarios'
 ```
 
 ---

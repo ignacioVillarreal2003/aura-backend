@@ -222,7 +222,7 @@ class Migration(migrations.Migration):
             field=models.DateTimeField(
                 auto_now_add=True,
                 help_text="Creation timestamp",
-                verbose_name="Creado el",
+                verbose_name="Creado",
             ),
         ),
         migrations.AlterField(
@@ -265,7 +265,7 @@ class Migration(migrations.Migration):
                 help_text="Unique email address",
                 max_length=254,
                 unique=True,
-                verbose_name="Correo electrónico",
+                verbose_name="Correo",
             ),
         ),
         migrations.AlterField(
@@ -337,7 +337,7 @@ class Migration(migrations.Migration):
                 help_text="Unique username for login",
                 max_length=150,
                 unique=True,
-                verbose_name="Nombre de usuario",
+                verbose_name="Usuario",
             ),
         ),
         migrations.AlterField(

@@ -10,9 +10,81 @@ Features:
 """
 
 from django.contrib import admin
+from django import forms
+from django.contrib.auth.models import Group
+from django.contrib.admin.widgets import FilteredSelectMultiple
 from django.utils.translation import gettext_lazy as _
 from django.utils.html import format_html
-from .models import User, Role, Permission, UserRole, RolePermission
+from .models import User, Role, Permission, UserRole, RolePermission, GroupProxy
+
+
+class ActiveFilter(admin.SimpleListFilter):
+    title = 'Activo'
+    parameter_name = 'is_active'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('1', 'Sí'),
+            ('0', 'No'),
+        )
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if value == '1':
+            return queryset.filter(is_active=True)
+        if value == '0':
+            return queryset.filter(is_active=False)
+        return queryset
+
+
+class StaffFilter(admin.SimpleListFilter):
+    title = 'Staff'
+    parameter_name = 'is_staff'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('1', 'Sí'),
+            ('0', 'No'),
+        )
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if value == '1':
+            return queryset.filter(is_staff=True)
+        if value == '0':
+            return queryset.filter(is_staff=False)
+        return queryset
+
+
+class CreatedDateFilter(admin.DateFieldListFilter):
+    title = 'Creado'
+
+
+class UserAdminForm(forms.ModelForm):
+    groups = forms.ModelMultipleChoiceField(
+        queryset=Group.objects.all(),
+        required=False,
+        widget=FilteredSelectMultiple('Grupos', is_stacked=False),
+        label='',
+        help_text='Grupos disponibles → Grupos Elegidos',
+    )
+    
+    roles = forms.ModelMultipleChoiceField(
+        queryset=Role.objects.all(),
+        required=False,
+        widget=FilteredSelectMultiple('Roles', is_stacked=False),
+        label='Roles',
+    )
+
+    class Meta:
+        model = User
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            self.fields['roles'].initial = Role.objects.filter(user_assignments__user=self.instance)
+            self.fields['groups'].initial = self.instance.groups.all()
 
 
 @admin.register(User)
@@ -33,15 +105,12 @@ class UserAdmin(admin.ModelAdmin):
         'email',
         'is_active_badge',
         'is_staff_badge',
-        'created_at',
-        'is_deleted_badge',
+        'created_date',
     )
     list_filter = (
-        'is_active',
-        'is_staff',
-        'is_superuser',
-        'created_at',
-        ('deleted_at', admin.EmptyFieldListFilter),
+        ActiveFilter,
+        StaffFilter,
+        ('created_at', CreatedDateFilter),
     )
     search_fields = ('username', 'email')
     readonly_fields = (
@@ -55,6 +124,8 @@ class UserAdmin(admin.ModelAdmin):
         'last_login',
     )
     
+    form = UserAdminForm
+
     fieldsets = (
         ('Identidad', {
             'fields': ('id', 'username', 'email'),
@@ -63,8 +134,8 @@ class UserAdmin(admin.ModelAdmin):
             'fields': ('password',),
             'description': 'La contraseña se encripta automáticamente al guardar',
         }),
-        ('Permisos', {
-            'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions'),
+        ('Grupos y Roles', {
+            'fields': ('is_active', 'is_staff', 'groups', 'roles'),
         }),
         ('Información de Auditoría', {
             'fields': (
@@ -100,14 +171,13 @@ class UserAdmin(admin.ModelAdmin):
         return format_html('<span style="color: gray;">Usuario</span>')
     is_staff_badge.short_description = 'Tipo'
 
-    def is_deleted_badge(self, obj):
-        """Display soft delete status."""
-        if obj.is_deleted:
-            return format_html(
-                '<span style="color: red; font-weight: bold;">Eliminado</span>'
-            )
-        return format_html('<span style="color: green;">Activo</span>')
-    is_deleted_badge.short_description = 'Eliminado'
+    def created_date(self, obj):
+        """Display created date in dd/mm/aaaa format."""
+        if obj.created_at:
+            return obj.created_at.strftime('%d/%m/%Y')
+        return '-'
+    created_date.short_description = 'Creado'
+    created_date.admin_order_field = 'created_at'
 
     def get_readonly_fields(self, request, obj=None):
         """
@@ -116,6 +186,25 @@ class UserAdmin(admin.ModelAdmin):
         if obj:
             return self.readonly_fields + ('username', 'email')
         return self.readonly_fields
+
+    filter_horizontal = ('groups',)
+
+    class Media:
+        js = ('accounts/admin/user_password.js',)
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        if 'roles' in form.cleaned_data:
+            selected_roles = form.cleaned_data['roles']
+            UserRole.objects.filter(user=obj).exclude(role__in=selected_roles).delete()
+            existing_roles = set(UserRole.objects.filter(user=obj).values_list('role_id', flat=True))
+            to_create = [
+                UserRole(user=obj, role=role, assigned_by=request.user.username)
+                for role in selected_roles
+                if role.id not in existing_roles
+            ]
+            if to_create:
+                UserRole.objects.bulk_create(to_create)
 
 
 @admin.register(Role)
@@ -275,6 +364,8 @@ class UserRoleInline(admin.TabularInline):
     verbose_name_plural = 'Roles'
 
 
+
+
 @admin.register(UserRole)
 class UserRoleAdmin(admin.ModelAdmin):
     """
@@ -333,3 +424,53 @@ class RolePermissionAdmin(admin.ModelAdmin):
 admin.site.site_header = 'Administración'
 admin.site.site_title = 'Admin Aura Auth'
 admin.site.index_title = 'Panel de Administración'
+
+# Unregister Group from Django auth
+admin.site.unregister(Group)
+
+# Re-register Group under accounts app to appear in "Gestión de Usuarios"
+@admin.register(GroupProxy)
+class GroupAdmin(admin.ModelAdmin):
+    """
+    Custom admin for Group model to manage authentication groups.
+    
+    Appears under "Gestión de Usuarios" instead of "Autenticación y Autorización"
+    """
+    list_display = ('name', 'permission_count')
+    search_fields = ('name',)
+    filter_horizontal = ('permissions',)
+    
+    def permission_count(self, obj):
+        """Display count of assigned permissions."""
+        count = obj.permissions.count()
+        return format_html(
+            '<span style="background-color: #417690; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>',
+            count
+        )
+    permission_count.short_description = 'Permisos'
+
+
+def _custom_get_app_list(self, request):
+    """
+    Custom ordering for models in the admin index.
+    """
+    app_list = admin.AdminSite.get_app_list(self, request)
+    desired_order = [
+        'User',
+        'GroupProxy',
+        'Role',
+        'UserRole',
+        'Permission',
+        'RolePermission',
+    ]
+    order_map = {name: index for index, name in enumerate(desired_order)}
+
+    for app in app_list:
+        if app.get('app_label') == 'accounts':
+            app['models'].sort(
+                key=lambda model: order_map.get(model.get('object_name'), len(order_map))
+            )
+    return app_list
+
+
+admin.site.get_app_list = _custom_get_app_list.__get__(admin.site, admin.AdminSite)
