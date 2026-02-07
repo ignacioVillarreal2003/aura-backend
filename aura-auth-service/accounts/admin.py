@@ -60,6 +60,12 @@ class CreatedDateFilter(admin.DateFieldListFilter):
     title = 'Creado'
 
 
+def _apply_audit_fields(obj, username: str, is_create: bool):
+    if is_create and not obj.created_by:
+        obj.created_by = username
+    obj.updated_by = username
+
+
 class UserAdminForm(forms.ModelForm):
     groups = forms.ModelMultipleChoiceField(
         queryset=Group.objects.all(),
@@ -193,6 +199,7 @@ class UserAdmin(admin.ModelAdmin):
         js = ('accounts/admin/user_password.js',)
 
     def save_model(self, request, obj, form, change):
+        _apply_audit_fields(obj, request.user.username, is_create=not change)
         super().save_model(request, obj, form, change)
         if 'roles' in form.cleaned_data:
             selected_roles = form.cleaned_data['roles']
@@ -205,6 +212,13 @@ class UserAdmin(admin.ModelAdmin):
             ]
             if to_create:
                 UserRole.objects.bulk_create(to_create)
+
+    def delete_model(self, request, obj):
+        obj.soft_delete(deleted_by=request.user.username)
+
+    def delete_queryset(self, request, queryset):
+        for obj in queryset:
+            obj.soft_delete(deleted_by=request.user.username)
 
 
 @admin.register(Role)
@@ -250,6 +264,10 @@ class RoleAdmin(admin.ModelAdmin):
     )
 
     inlines = []  # Will add RolePermissionInline below
+
+    def save_model(self, request, obj, form, change):
+        _apply_audit_fields(obj, request.user.username, is_create=not change)
+        super().save_model(request, obj, form, change)
 
     def description_short(self, obj):
         """Display shortened description."""
@@ -317,6 +335,10 @@ class PermissionAdmin(admin.ModelAdmin):
             'classes': ('collapse',),
         }),
     )
+
+    def save_model(self, request, obj, form, change):
+        _apply_audit_fields(obj, request.user.username, is_create=not change)
+        super().save_model(request, obj, form, change)
 
     def description_short(self, obj):
         """Display shortened description."""

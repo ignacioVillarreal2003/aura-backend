@@ -236,6 +236,11 @@ class User(AbstractBaseUser, PermissionsMixin, AuditedModel):
         from django.contrib.auth.hashers import check_password
         return check_password(raw_password, self.password)
 
+    def delete(self, using=None, keep_parents=False, deleted_by=None):
+        """Soft delete user records by default."""
+        self.soft_delete(deleted_by=deleted_by)
+        return None
+
 
 class Role(AuditedModel):
     """
