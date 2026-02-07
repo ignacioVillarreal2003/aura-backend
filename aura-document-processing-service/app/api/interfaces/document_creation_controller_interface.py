@@ -5,13 +5,13 @@ from sqlalchemy.orm.session import Session
 from app.application.services.document_creation_service.interfaces.document_creation_service_interface import (
     DocumentCreationServiceInterface
 )
-from app.domain.dtos.document_creation_request import DocumentCreationRequest
-from app.domain.dtos.document_creation_response import DocumentCreationResponse
+from app.domain.dtos.document_creation.document_creation_request import DocumentCreationRequest
+from app.domain.dtos.document_creation.document_creation_response import DocumentCreationResponse
 
 
 class DocumentCreationControllerInterface(ABC):
     @abstractmethod
-    async def execute_document_creation(
+    async def create_document(
             self,
             background_tasks: BackgroundTasks,
             document_creation_request: DocumentCreationRequest,

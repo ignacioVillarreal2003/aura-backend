@@ -1,4 +1,4 @@
-class AppError(Exception):
+class AppException(Exception):
     def __init__(self,
                  message: str,
                  *,
@@ -10,7 +10,7 @@ class AppError(Exception):
         self.code = code or self.__class__.__name__
 
 
-class ValidationError(AppError):
+class RequestValidationException(AppException):
     def __init__(self,
                  message: str = "Valor invalido",
                  status_code: int = 400,

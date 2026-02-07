@@ -120,7 +120,9 @@ class DatabaseClient(DatabaseClientInterface):
                 self._session_local = None
                 raise DatabaseConnectionError("Failed to start database client") from e
 
-    async def stop(self) -> None:
+    async def stop(
+            self
+    ) -> None:
         async with self._lock:
             if self._engine is None:
                 logger.debug("DatabaseClient already stopped")
@@ -147,10 +149,14 @@ class DatabaseClient(DatabaseClientInterface):
                 self._session_local = None
 
     @property
-    def is_started(self) -> bool:
+    def is_started(
+            self
+    ) -> bool:
         return self._engine is not None
 
-    def get_session(self) -> Generator[Session, None, None]:
+    def get_session(
+            self
+    ) -> Generator[Session, None, None]:
         if self._session_local is None:
             logger.error("Attempted to get session from uninitialized DatabaseClient")
             raise DatabaseClientNotInitializedError("DatabaseClient not started. Call start() first.")
@@ -168,7 +174,9 @@ class DatabaseClient(DatabaseClientInterface):
             db.close()
             logger.debug("Database session closed")
 
-    async def health_check(self) -> bool:
+    async def health_check(
+            self
+    ) -> bool:
         if self._engine is None:
             logger.warning("Health check failed: DatabaseClient not started")
             return False

@@ -4,15 +4,15 @@ from sqlalchemy.orm import Session
 import logging
 
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
-from app.application.services.document_context_service.document_context_service_configuration import (
+from app.application.services.document_retrieve_service.document_context_service_configuration import (
     DocumentContextServiceConfiguration
 )
-from app.application.services.document_context_service.interfaces.document_context_service_interface import (
+from app.application.services.document_retrieve_service.interfaces.document_context_service_interface import (
     DocumentContextServiceInterface
 )
-from app.domain.dtos.context_fragments_response import ContextFragmentsResponse
-from app.domain.dtos.document_context_fragments_request import DocumentContextFragmentsRequest
-from app.domain.dtos.question_context_fragments_request import QuestionContextFragmentsRequest
+from app.domain.dtos.document_retrieve.context_fragments_response import ContextFragmentsResponse
+from app.domain.dtos.document_retrieve.document_context_fragments_request import DocumentContextFragmentsRequest
+from app.domain.dtos.document_retrieve.question_context_fragments_request import QuestionContextFragmentsRequest
 from app.infrastructure.persistence.repositories.exceptions.database_exceptions import DatabaseError
 from app.infrastructure.persistence.repositories.fragment_repository.interfaces.fragment_repository_interface import (
     FragmentRepositoryInterface
@@ -57,7 +57,7 @@ class DocumentContextService(DocumentContextServiceInterface):
             document_context_service_configuration=document_context_service_configuration
         )
 
-    async def execute_retrieve_context_fragments_by_question(
+    async def retrieve_context_fragments_by_question(
             self,
             question_context_fragments_request: QuestionContextFragmentsRequest,
             db: Session
@@ -70,7 +70,7 @@ class DocumentContextService(DocumentContextServiceInterface):
                 text=question_context_fragments_request.question
             )
 
-            fragments = self._fragment_repository.get_most_similar(
+            fragments = self._fragment_repository.get_most_similar_fragments(
                 query_vector=embedded_query,
                 db=db,
                 k=question_context_fragments_request.max_context_fragments
@@ -90,13 +90,13 @@ class DocumentContextService(DocumentContextServiceInterface):
             logger.exception("Error in retrieval process")
             raise DatabaseError("Error al procesar la recuperación de fragmentos") from e
 
-    async def execute_retrieve_context_fragments_by_document(
+    async def retrieve_context_fragments_by_document(
             self,
             document_context_fragments_request: DocumentContextFragmentsRequest,
             db: Session
     ) -> ContextFragmentsResponse:
         try:
-            fragments = self._fragment_repository.get_by_document_id(
+            fragments = self._fragment_repository.get_fragments_by_document_id(
                 document_id=document_context_fragments_request.document_id,
                 db=db
             )

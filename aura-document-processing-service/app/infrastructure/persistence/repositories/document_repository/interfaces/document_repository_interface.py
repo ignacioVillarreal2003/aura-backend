@@ -7,7 +7,7 @@ from app.domain.models.document import Document
 
 class DocumentRepositoryInterface(ABC):
     @abstractmethod
-    def create(
+    def create_document(
             self,
             document: Document,
             db: Session
@@ -15,7 +15,7 @@ class DocumentRepositoryInterface(ABC):
         pass
 
     @abstractmethod
-    def get_by_id(
+    def get_document_by_id(
             self,
             document_id: int,
             db: Session
@@ -23,34 +23,34 @@ class DocumentRepositoryInterface(ABC):
         pass
 
     @abstractmethod
-    def get_all(
+    def get_documents(
             self,
-            db: Session,
-            skip: int,
-            limit: int
+            page: Optional[int],
+            size: Optional[int],
+            db: Session
     ) -> list[Document]:
         pass
 
     @abstractmethod
-    def update(
+    def hard_delete_document_by_id(
+            self,
+            document_id: int,
+            db: Session
+    ) -> bool:
+        pass
+
+    @abstractmethod
+    def soft_delete_document_by_id(
+            self,
+            document_id: int,
+            db: Session
+    ) -> bool:
+        pass
+
+    @abstractmethod
+    def update_document(
             self,
             document: Document,
             db: Session
     ) -> Document:
-        pass
-
-    @abstractmethod
-    def delete(
-            self,
-            document_id: int,
-            db: Session
-    ) -> bool:
-        pass
-
-    @abstractmethod
-    def exists(
-            self,
-            document_id: int,
-            db: Session
-    ) -> bool:
         pass

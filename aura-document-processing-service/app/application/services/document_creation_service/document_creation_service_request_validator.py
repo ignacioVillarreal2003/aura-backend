@@ -1,24 +1,24 @@
 import logging
 from typing import Dict
-
 from fastapi import UploadFile
 
 from app.application.exceptions.app_exception import ValidationError
 from app.application.services.document_creation_service.document_creation_service_configuration import (
     DocumentCreationServiceConfiguration
 )
-from app.application.services.document_creation_service.exceptions.document_creation_service_exception import \
-    UnsupportedFileTypeError
+from app.application.services.document_creation_service.exceptions.document_creation_service_exception import (
+    UnsupportedDocumentTypeError
+)
 from app.domain.constants.document_type import DocumentType
-from app.domain.dtos.document_creation_request import DocumentCreationRequest
+from app.domain.dtos.document_creation.document_creation_request import DocumentCreationRequest
 
 logger = logging.getLogger(__name__)
 
 
 class DocumentCreationServiceRequestValidator:
     _CONTENT_TYPE_MAPPING: Dict[str, DocumentType] = {
-        "application/pdf": DocumentType.pdf,
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": DocumentType.docx,
+        "application/pdf": DocumentType.PDF,
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": DocumentType.DOCX,
     }
 
     def __init__(
@@ -63,7 +63,7 @@ class DocumentCreationServiceRequestValidator:
                 "Unsupported content type",
                 extra={"content_type": content_type}
             )
-            raise UnsupportedFileTypeError("Solo se admiten archivos PDF y DOCX")
+            raise UnsupportedDocumentTypeError()
 
         return self._CONTENT_TYPE_MAPPING[content_type]
 

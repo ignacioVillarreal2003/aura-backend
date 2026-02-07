@@ -4,8 +4,8 @@ from app.application.processors.embedders.embedder_factory import EmbedderFactor
 from app.application.processors.readers.reader_factory import ReaderFactory
 from app.application.processors.text_cleaners.text_cleaner_factory import TextCleanerFactory
 from app.application.processors.text_splitters.text_splitter_factory import TextSplitterFactory
-from app.application.services.document_context_service.document_context_service import DocumentContextService
-from app.application.services.document_context_service.interfaces.document_context_service_interface import (
+from app.application.services.document_retrieve_service.document_context_service import DocumentContextService
+from app.application.services.document_retrieve_service.interfaces.document_context_service_interface import (
     DocumentContextServiceInterface
 )
 from app.application.services.document_creation_service.document_creation_service import DocumentCreationService
@@ -151,6 +151,13 @@ def get_document_context_service() -> DocumentContextServiceInterface:
         embedder_factory=embedder_factory,
         embedder_type=environment_variables.embedder_type
     )
+
+
+def get_document_deletion_service():
+    pass
+
+def get_document_query_service():
+    pass
 
 
 async def startup_dependencies() -> None:

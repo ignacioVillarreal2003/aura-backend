@@ -20,9 +20,9 @@ from app.application.services.document_ingestion_service.interfaces.document_ing
     DocumentIngestionServiceInterface
 )
 from app.domain.constants.document_type import DocumentType
-from app.domain.dtos.document_creation_request import DocumentCreationRequest
+from app.domain.dtos.document_creation.document_creation_request import DocumentCreationRequest
 from app.domain.models.document import Document
-from app.domain.dtos.document_creation_response import DocumentCreationResponse
+from app.domain.dtos.document_creation.document_creation_response import DocumentCreationResponse
 from app.infrastructure.persistence.repositories.document_repository.document_repository import (
     DocumentRepositoryInterface
 )
@@ -81,7 +81,7 @@ class DocumentCreationService(DocumentCreationServiceInterface):
             document_creation_service_configuration=document_creation_service_configuration
         )
 
-    async def execute_document_creation(
+    async def create_document(
             self,
             document_creation_request: DocumentCreationRequest,
             raw_document: UploadFile,
@@ -110,7 +110,7 @@ class DocumentCreationService(DocumentCreationServiceInterface):
 
         try:
             logger.info("Uploading file to storage")
-            path = self._document_storage.upload(
+            path = self._document_storage.upload_document(
                 document=raw_document
             )
             logger.info("File uploaded to storage")
@@ -127,7 +127,7 @@ class DocumentCreationService(DocumentCreationServiceInterface):
 
         try:
             logger.info("Persisting document to database")
-            db_document = self._document_repository.create(
+            db_document = self._document_repository.create_document(
                 document=document,
                 db=db
             )
@@ -136,7 +136,7 @@ class DocumentCreationService(DocumentCreationServiceInterface):
             raise
 
         background_tasks.add_task(
-            self._document_ingestion_service.execute_document_creation,
+            self._document_ingestion_service.process_document,
             document=db_document,
             db=db,
             local_file_path=temp_path

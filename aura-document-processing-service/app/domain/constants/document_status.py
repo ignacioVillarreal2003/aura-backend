@@ -2,6 +2,6 @@ from enum import Enum
 
 
 class DocumentStatus(str, Enum):
-    pending = "pending"
-    done = "done",
-    failed = "failed"
+    PENDING = "pending"
+    DONE = "done",
+    FAILED = "failed"

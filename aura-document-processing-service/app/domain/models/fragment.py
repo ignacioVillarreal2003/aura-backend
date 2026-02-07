@@ -1,6 +1,6 @@
 from pgvector.sqlalchemy import VECTOR
 from sqlalchemy.sql import func
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, DateTime, Text, ForeignKey
 
 from app.configuration.environment_variables import environment_variables
 from app.domain.models.base import Base
@@ -46,14 +46,6 @@ class Fragment(Base):
     created_at = Column(
         DateTime,
         server_default=func.now()
-    )
-    updated_by = Column(
-        Integer,
-        nullable=True
-    )
-    updated_at = Column(
-        DateTime,
-        nullable=True
     )
     deleted_by = Column(
         Integer,

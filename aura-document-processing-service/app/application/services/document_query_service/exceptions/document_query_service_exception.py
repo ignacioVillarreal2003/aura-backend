@@ -3,12 +3,12 @@ from starlette import status
 from app.application.exceptions.app_exception import AppError
 
 
-class UnsupportedDocumentTypeError(AppError):
+class DocumentNotFoundError(AppError):
     def __init__(
             self,
-            message: str = "The type of the document is not supported"
+            message: str = "Document not found"
     ):
         super().__init__(
             message,
-            status_code=status.HTTP_413_CONTENT_TOO_LARGE
+            status_code=status.HTTP_404_NOT_FOUND
         )

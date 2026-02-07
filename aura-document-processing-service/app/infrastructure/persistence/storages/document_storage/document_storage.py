@@ -79,7 +79,7 @@ class DocumentStorage(DocumentStorageInterface):
             logger.exception("Unexpected error ensuring bucket")
             raise DocumentStorageError(f"Failed to ensure bucket {self._bucket_name}") from e
 
-    def upload(
+    def upload_document(
             self,
             document: UploadFile
     ) -> str:
@@ -114,14 +114,14 @@ class DocumentStorage(DocumentStorageInterface):
             logger.exception("Unexpected error uploading file")
             raise DocumentUploadError("Error inesperado al subir archivo") from e
 
-    def download(
+    def download_document(
             self,
-            document_key: str
+            document_path: str
     ) -> BinaryIO:
         try:
             response = self._minio_client.get_object(
                 bucket_name=self._bucket_name,
-                object_name=document_key
+                object_name=document_path
             )
 
             logger.info("File downloaded successfully")
@@ -142,14 +142,14 @@ class DocumentStorage(DocumentStorageInterface):
             logger.exception("Unexpected error downloading file")
             raise DocumentDownloadError("Error inesperado al descargar archivo") from e
 
-    def delete(
+    def delete_document(
             self,
-            document_key: str
+            document_path: str
     ) -> None:
         try:
             self._minio_client.remove_object(
                 bucket_name=self._bucket_name,
-                object_name=document_key
+                object_name=document_path
             )
 
             logger.info("File deleted successfully")

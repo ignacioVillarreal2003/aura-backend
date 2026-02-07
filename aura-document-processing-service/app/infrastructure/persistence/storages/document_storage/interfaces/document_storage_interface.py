@@ -1,27 +1,26 @@
 from abc import ABC, abstractmethod
 from typing import BinaryIO
-
 from fastapi import UploadFile
 
 
 class DocumentStorageInterface(ABC):
     @abstractmethod
-    def upload(
+    def upload_document(
             self,
             document: UploadFile
     ) -> str:
         pass
 
     @abstractmethod
-    def download(
+    def download_document(
             self,
-            document_key: str
+            document_path: str
     ) -> BinaryIO:
         pass
 
     @abstractmethod
-    def delete(
+    def delete_document(
             self,
-            document_key: str
+            document_path: str
     ) -> None:
         pass

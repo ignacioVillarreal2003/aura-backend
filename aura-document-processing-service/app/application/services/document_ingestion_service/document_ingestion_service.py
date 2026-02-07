@@ -93,7 +93,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             document_ingestion_service_configuration=document_ingestion_service_configuration
         )
 
-    def execute_document_creation(
+    async def process_document(
             self,
             document: Document,
             db: Session,
@@ -130,35 +130,39 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                 texts=splitter_result
             )
 
+            fragments = []
             for idx in range(len(embedder_result)):
-                fragment = Fragment(
-                    document_id=document.id,
-                    vector=embedder_result[idx],
-                    content=splitter_result[idx],
-                    fragment_index=idx,
-                    created_by=document.created_by,
-                    created_at=datetime.now(),
+                fragments.append(
+                    Fragment(
+                        document_id=document.id,
+                        vector=embedder_result[idx],
+                        content=splitter_result[idx],
+                        fragment_index=idx,
+                        created_by=document.created_by,
+                        created_at=datetime.now(),
+                    )
                 )
-                self._fragment_repository.create(
-                    fragment,
-                    db
-                )
+
+            self._fragment_repository.create_fragments(
+                fragments=fragments,
+                db=db
+            )
 
             document.text_cleaner_type = self._document_creation_service_configuration.text_cleaner_type
             document.text_splitter_type = self._document_creation_service_configuration.text_splitter_type
             document.embedder_type = self._document_creation_service_configuration.embedder_type
             document.split_size = self._document_creation_service_configuration.split_size
             document.split_overlap = self._document_creation_service_configuration.split_overlap
-            document.status = DocumentStatus.done
+            document.status = DocumentStatus.DONE
 
-            self._document_repository.update(
+            self._document_repository.update_document(
                 document=document,
                 db=db
             )
 
         except Exception as e:
-            document.status = DocumentStatus.failed
-            self._document_repository.update(
+            document.status = DocumentStatus.FAILED
+            self._document_repository.update_document(
                 document=document,
                 db=db
             )

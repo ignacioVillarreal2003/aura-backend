@@ -7,7 +7,7 @@ from app.domain.models.document import Document
 
 class DocumentIngestionServiceInterface(ABC):
     @abstractmethod
-    def execute_document_creation(
+    def process_document(
             self,
             document: Document,
             db: Session,
