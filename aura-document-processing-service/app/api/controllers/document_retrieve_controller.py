@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 import logging
 
-from app.api.interfaces.document_retrieve_controller_interface import DocumentRetrieveControllerInterface
+from app.api.controllers.interfaces.document_retrieve_controller_interface import DocumentRetrieveControllerInterface
 from app.application.services.document_retrieve_service.interfaces.document_context_service_interface import (
     DocumentContextServiceInterface
 )

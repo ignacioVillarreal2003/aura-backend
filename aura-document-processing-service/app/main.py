@@ -12,6 +12,7 @@ from app.configuration.dependencies import (
 )
 from app.configuration.logging_configuration import configure_logging
 from app.configuration.environment_variables import environment_variables
+from app.infrastructure.authentication_provider.middlewares.authentication_middleware import AuthenticationMiddleware
 
 configure_logging(
     level=logging.INFO
@@ -91,6 +92,18 @@ def add_middleware(app: FastAPI) -> None:
         logger.info(f"Response: {response.status_code}")
 
         return response
+
+    app.add_middleware(
+        AuthenticationMiddleware,
+        excluded_paths=[
+            "/",
+            "/health",
+            "/docs",
+            "/redoc",
+            "/openapi.json"
+        ],
+        require_auth=True
+    )
 
     logger.debug("Middleware added")
 

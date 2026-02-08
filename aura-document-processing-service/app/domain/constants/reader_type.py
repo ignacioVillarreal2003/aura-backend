@@ -2,7 +2,7 @@ from enum import Enum
 
 
 class ReaderType(str, Enum):
-    DIGITAL_PDF = "digital_pdf"
-    SCANNED_PDF = "scanned_pdf"
-    DIGITAL_DOCX = "digital_docx"
-    SCANNED_DOCX = "scanned_docx"
+    digital_pdf = "digital_pdf"
+    scanned_pdf = "scanned_pdf"
+    digital_docx = "digital_docx"
+    scanned_docx = "scanned_docx"

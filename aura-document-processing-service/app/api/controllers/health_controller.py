@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 import logging
 
-from app.api.interfaces.health_controller_interface import HealthControllerInterface
+from app.api.controllers.interfaces.health_controller_interface import HealthControllerInterface
 from app.configuration.environment_variables import environment_variables
 from app.domain.dtos.health.health_response import HealthResponse
 

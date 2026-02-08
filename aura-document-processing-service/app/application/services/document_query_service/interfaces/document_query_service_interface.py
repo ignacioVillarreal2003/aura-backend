@@ -4,6 +4,7 @@ from sqlalchemy.orm.session import Session
 
 from app.domain.dtos.document_query.document_list_response import DocumentListResponse
 from app.domain.dtos.document_query.document_response import DocumentResponse
+from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
 
 
 class DocumentQueryServiceInterface(ABC):
@@ -11,7 +12,8 @@ class DocumentQueryServiceInterface(ABC):
     async def get_document_by_id(
             self,
             document_id: int,
-            db: Session
+            db: Session,
+            user: AuthenticationResponse
     ) -> DocumentResponse:
         pass
 
@@ -20,6 +22,7 @@ class DocumentQueryServiceInterface(ABC):
             self,
             page: Optional[int],
             size: Optional[int],
-            db: Session
+            db: Session,
+            user: AuthenticationResponse
     ) -> DocumentListResponse:
         pass

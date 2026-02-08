@@ -16,10 +16,10 @@ class EmbedderFactory:
             self
     ):
         self._embeddings: Dict[EmbedderType, Type[EmbedderAdapterInterface]] = {
-            EmbedderType.HUGGINGFACE: HuggingfaceEmbedderAdapter,
-            EmbedderType.OLLAMA: OllamaEmbedderAdapter,
-            EmbedderType.SENTENCE_TRANSFORMER: SentenceTransformerEmbedderAdapter,
-            EmbedderType.SPACY: SpacyEmbedderAdapter,
+            EmbedderType.huggingface: HuggingfaceEmbedderAdapter,
+            EmbedderType.ollama: OllamaEmbedderAdapter,
+            EmbedderType.sentence_transformer: SentenceTransformerEmbedderAdapter,
+            EmbedderType.spacy: SpacyEmbedderAdapter,
         }
         self._instances: Dict[str, EmbedderAdapterInterface] = {}
 

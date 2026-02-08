@@ -33,7 +33,7 @@ class DocumentContextService(DocumentContextServiceInterface):
 
         self._document_context_service_configuration = document_context_service_configuration or DocumentContextServiceConfiguration()
 
-        logger.info("DocumentIngestionService initialized")
+        logger.info("DocumentContextService initialized")
 
     @classmethod
     def create(

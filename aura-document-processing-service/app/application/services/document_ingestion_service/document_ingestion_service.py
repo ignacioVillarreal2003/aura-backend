@@ -1,9 +1,9 @@
+import asyncio
 import logging
 import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-from sqlalchemy.orm import Session
 
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
 from app.application.processors.readers.reader_factory import ReaderFactory
@@ -14,6 +14,9 @@ from app.application.services.document_ingestion_service.document_ingestion_serv
 )
 from app.application.services.document_ingestion_service.interfaces.document_ingestion_service_interface import (
     DocumentIngestionServiceInterface
+)
+from app.infrastructure.persistence.repositories.database_client.interfaces.database_client_interface import (
+    DatabaseClientInterface
 )
 from app.domain.constants.document_status import DocumentStatus
 from app.domain.models.document import Document
@@ -38,6 +41,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             text_cleaner_factory: TextCleanerFactory,
             text_splitter_factory: TextSplitterFactory,
             embedder_factory: EmbedderFactory,
+            database_client: DatabaseClientInterface,
             document_ingestion_service_configuration: DocumentIngestionServiceConfiguration
     ) -> None:
         self._document_repository = document_repository
@@ -46,6 +50,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
         self._cleaner_factory = text_cleaner_factory
         self._splitter_factory = text_splitter_factory
         self._embedder_factory = embedder_factory
+        self._database_client = database_client
 
         self._document_creation_service_configuration = document_ingestion_service_configuration or DocumentIngestionServiceConfiguration()
 
@@ -60,6 +65,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             text_cleaner_factory: TextCleanerFactory,
             text_splitter_factory: TextSplitterFactory,
             embedder_factory: EmbedderFactory,
+            database_client: DatabaseClientInterface,
             text_cleaner_type: Optional[str] = None,
             text_splitter_type: Optional[str] = None,
             embedder_type: Optional[str] = None,
@@ -90,44 +96,55 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             text_cleaner_factory=text_cleaner_factory,
             text_splitter_factory=text_splitter_factory,
             embedder_factory=embedder_factory,
+            database_client=database_client,
             document_ingestion_service_configuration=document_ingestion_service_configuration
         )
 
     async def process_document(
             self,
             document: Document,
-            db: Session,
             local_file_path: Path
     ) -> None:
         try:
+            loop = asyncio.get_running_loop()
+
             reader = self._reader_factory.get_reader(
                 file_path=local_file_path
             )
-            reader_result = reader.read(
-                file_path=local_file_path
+            reader_result = await loop.run_in_executor(
+                None,
+                reader.read,
+                local_file_path
             )
 
             cleaner = self._cleaner_factory.get_text_cleaner(
                 method=self._document_creation_service_configuration.text_cleaner_type
             )
-            clean_result = cleaner.clean_text(
-                text=reader_result
+            clean_result = await loop.run_in_executor(
+                None,
+                cleaner.clean_text,
+                reader_result
             )
 
             splitter = self._splitter_factory.get_text_splitter(
                 method=self._document_creation_service_configuration.text_splitter_type
             )
-            splitter_result = splitter.split_text(
-                text=clean_result,
-                size=self._document_creation_service_configuration.split_size,
-                overlap=self._document_creation_service_configuration.split_overlap
+            splitter_result = await loop.run_in_executor(
+                None,
+                lambda: splitter.split_text(
+                    text=clean_result,
+                    size=self._document_creation_service_configuration.split_size,
+                    overlap=self._document_creation_service_configuration.split_overlap
+                )
             )
 
             embedder = self._embedder_factory.get_embedder(
                 method=self._document_creation_service_configuration.embedder_type
             )
-            embedder_result = embedder.embed_documents(
-                texts=splitter_result
+            embedder_result = await loop.run_in_executor(
+                None,
+                embedder.embed_documents,
+                splitter_result
             )
 
             fragments = []
@@ -143,34 +160,54 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                     )
                 )
 
-            self._fragment_repository.create_fragments(
-                fragments=fragments,
-                db=db
-            )
+            session_generator = self._database_client.get_session()
+            db = next(session_generator)
 
-            document.text_cleaner_type = self._document_creation_service_configuration.text_cleaner_type
-            document.text_splitter_type = self._document_creation_service_configuration.text_splitter_type
-            document.embedder_type = self._document_creation_service_configuration.embedder_type
-            document.split_size = self._document_creation_service_configuration.split_size
-            document.split_overlap = self._document_creation_service_configuration.split_overlap
-            document.status = DocumentStatus.DONE
+            try:
+                self._fragment_repository.create_fragments(
+                    fragments=fragments,
+                    db=db
+                )
 
-            self._document_repository.update_document(
-                document=document,
-                db=db
-            )
+                document.text_cleaner_type = self._document_creation_service_configuration.text_cleaner_type
+                document.text_splitter_type = self._document_creation_service_configuration.text_splitter_type
+                document.embedder_type = self._document_creation_service_configuration.embedder_type
+                document.split_size = self._document_creation_service_configuration.split_size
+                document.split_overlap = self._document_creation_service_configuration.split_overlap
+                document.status = DocumentStatus.done
+
+                self._document_repository.update_document(
+                    document=document,
+                    db=db
+                )
+
+            except Exception:
+                db.rollback()
+                raise
+            finally:
+                db.close()
 
         except Exception as e:
-            document.status = DocumentStatus.FAILED
-            self._document_repository.update_document(
-                document=document,
-                db=db
-            )
+            try:
+                session_generator = self._database_client.get_session()
+                db = next(session_generator)
+                try:
+                    document = self._document_repository.get_document_by_id(document.id, db)
+                    if document:
+                        document.status = DocumentStatus.failed
+                        self._document_repository.update_document(
+                            document=document,
+                            db=db
+                        )
+                finally:
+                    db.close()
+            except Exception as ex:
+                logger.error(f"Failed to update document status to FAILED: {ex}")
+
             logger.exception(
                 f"Error processing document: {type(e).__name__}: {str(e)}",
                 exc_info=True
             )
-            raise DatabaseError("Error en la ingesta del documento") from e
 
         finally:
             try:

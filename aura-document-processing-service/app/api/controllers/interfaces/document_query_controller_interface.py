@@ -7,6 +7,7 @@ from app.application.services.document_query_service.interfaces.document_query_s
 )
 from app.domain.dtos.document_query.document_list_response import DocumentListResponse
 from app.domain.dtos.document_query.document_response import DocumentResponse
+from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
 
 
 class DocumentQueryControllerInterface(ABC):
@@ -15,7 +16,8 @@ class DocumentQueryControllerInterface(ABC):
             self,
             document_id: int,
             document_query_service: DocumentQueryServiceInterface,
-            db: Session
+            db: Session,
+            user: AuthenticationResponse
     ) -> DocumentResponse:
         pass
 
@@ -25,6 +27,7 @@ class DocumentQueryControllerInterface(ABC):
             page: Optional[int],
             size: Optional[int],
             document_query_service: DocumentQueryServiceInterface,
-            db: Session
+            db: Session,
+            user: AuthenticationResponse
     ) -> DocumentListResponse:
         pass

@@ -1,4 +1,5 @@
 import logging
+from fastapi import Request, HTTPException, status
 
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
 from app.application.processors.readers.reader_factory import ReaderFactory
@@ -16,6 +17,13 @@ from app.application.services.document_ingestion_service.document_ingestion_serv
 from app.application.services.document_ingestion_service.interfaces.document_ingestion_service_interface import (
     DocumentIngestionServiceInterface
 )
+from app.infrastructure.authentication_provider.authentication_provider import AuthenticationProvider
+from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
+from app.infrastructure.authentication_provider.interfaces.authentication_provider_interface import \
+    AuthenticationProviderInterface
+from app.infrastructure.http_client.http_client import HttpClient
+from app.infrastructure.http_client.http_client_factory import get_http_client
+from app.infrastructure.http_client.interfaces.http_client_interface import HttpClientInterface
 from app.infrastructure.persistence.repositories.database_client.database_client_factory import (
     get_global_database_client,
     shutdown_global_database_client
@@ -43,6 +51,11 @@ from app.infrastructure.persistence.storages.minio_client.minio_client_factory i
 )
 
 logger = logging.getLogger(__name__)
+
+
+
+
+
 
 
 async def get_database_client() -> DatabaseClientInterface:
@@ -110,13 +123,15 @@ def get_embedder_factory() -> EmbedderFactory:
     return EmbedderFactory()
 
 
-def get_document_ingestion_service() -> DocumentIngestionServiceInterface:
+async def get_document_ingestion_service() -> DocumentIngestionServiceInterface:
     document_repository = get_document_repository()
     fragment_repository = get_fragment_repository()
     reader_factory = get_reader_factory()
     text_cleaner_factory = get_text_cleaner_factory()
     text_splitter_factory = get_text_splitter_factory()
     embedder_factory = get_embedder_factory()
+    database_client = await get_database_client()
+
     return DocumentIngestionService.create(
         document_repository=document_repository,
         fragment_repository=fragment_repository,
@@ -124,6 +139,7 @@ def get_document_ingestion_service() -> DocumentIngestionServiceInterface:
         text_cleaner_factory=text_cleaner_factory,
         text_splitter_factory=text_splitter_factory,
         embedder_factory=embedder_factory,
+        database_client=database_client,
         text_cleaner_type=environment_variables.text_cleaner_type,
         text_splitter_type=environment_variables.text_splitter_type,
         embedder_type=environment_variables.embedder_type,
@@ -135,7 +151,7 @@ def get_document_ingestion_service() -> DocumentIngestionServiceInterface:
 async def get_document_creation_service() -> DocumentCreationServiceInterface:
     document_repository = get_document_repository()
     document_storage = await get_document_storage()
-    document_ingestion_service = get_document_ingestion_service()
+    document_ingestion_service = await get_document_ingestion_service()
     return DocumentCreationService.create(
         document_repository=document_repository,
         document_storage=document_storage,
@@ -156,6 +172,7 @@ def get_document_context_service() -> DocumentContextServiceInterface:
 def get_document_deletion_service():
     pass
 
+
 def get_document_query_service():
     pass
 
@@ -163,6 +180,9 @@ def get_document_query_service():
 async def startup_dependencies() -> None:
     try:
         logger.info("Starting up application dependencies")
+
+        http_client = get_http_client()
+        await http_client.start_session()
 
         database_client = await get_database_client()
         if not database_client.is_started:
@@ -182,6 +202,9 @@ async def startup_dependencies() -> None:
 async def shutdown_dependencies() -> None:
     try:
         logger.info("Shutting down application dependencies")
+
+        http_client = get_http_client()
+        await http_client.close_session()
 
         await shutdown_global_database_client()
         await shutdown_global_minio_client()

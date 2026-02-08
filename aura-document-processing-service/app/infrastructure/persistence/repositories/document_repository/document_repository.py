@@ -146,27 +146,18 @@ class DocumentRepository(DocumentRepositoryInterface):
         try:
             logger.debug(f"Updating document with ID: {document.id}")
 
-            existing_document = db.query(Document).filter(
-                Document.id == document.id
-            ).first()
+            updated_document = db.merge(document)
 
-            if not existing_document:
-                logger.warning(f"Document not found for update with ID: {document.id}")
-                raise DatabaseError(f"Documento con ID {document.id} no encontrado")
-
-            existing_document.status = document.status
-            existing_document.updated_at = datetime.now()
+            updated_document.updated_at = datetime.now()
+            updated_document.updated_by = 0
 
             db.commit()
-            db.refresh(existing_document)
+            db.refresh(updated_document)
 
             logger.info(f"Document updated successfully with ID: {document.id}")
 
-            return existing_document
+            return updated_document
 
-        except DatabaseError:
-            db.rollback()
-            raise
         except Exception as e:
             db.rollback()
             logger.exception(f"Failed to update document with ID: {document.id}")

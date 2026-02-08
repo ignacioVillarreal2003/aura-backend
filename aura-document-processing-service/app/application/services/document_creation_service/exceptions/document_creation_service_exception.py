@@ -1,9 +1,9 @@
 from starlette import status
 
-from app.application.exceptions.app_exception import AppError
+from app.application.exceptions.app_exception import AppException
 
 
-class UnsupportedDocumentTypeError(AppError):
+class UnsupportedDocumentTypeError(AppException):
     def __init__(
             self,
             message: str = "The type of the document is not supported"

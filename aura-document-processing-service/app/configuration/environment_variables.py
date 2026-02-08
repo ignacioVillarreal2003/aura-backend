@@ -113,30 +113,39 @@ class EnvironmentVariables(BaseSettings):
         default="huggingface",
         description="Embedder backend"
     )
-
     vector_dimension: int = Field(
         default=384,
         gt=0,
         description="Embedding vector dimension"
     )
-
     split_size: int = Field(
         default=600,
         gt=0,
         description="Text split chunk size"
     )
-
     split_overlap: int = Field(
         default=60,
         ge=0,
         description="Text split overlap"
     )
-
     max_file_size_mb: int = Field(
         default=20,
         ge=1,
         le=500,
         description="Maximum allowed file size in MB"
+    )
+
+    authentication_validate_token_url: str = Field(
+        default="http://localhost:8080/auth/validate",
+        description="URL para validar tokens"
+    )
+    authentication_verify_permissions_url: str = Field(
+        default="http://localhost:8080/auth/verify-permissions",
+        description="URL para verificar permisos"
+    )
+    authentication_get_user_by_token_url: str = Field(
+        default="http://localhost:8080/auth/user",
+        description="URL para obtener usuario por token"
     )
 
     environment: str = Field(
@@ -170,7 +179,12 @@ class EnvironmentVariables(BaseSettings):
 
         return v_upper
 
-    @field_validator("ollama_base_url")
+    @field_validator(
+        "ollama_base_url",
+        "authentication_validate_token_url",
+        "authentication_verify_permissions_url",
+        "authentication_get_user_by_token_url"
+    )
     @classmethod
     def validate_url(cls, v: str) -> str:
         if not v.startswith(("http://", "https://")):

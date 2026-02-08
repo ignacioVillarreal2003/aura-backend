@@ -2,7 +2,7 @@ import logging
 from typing import Dict
 from fastapi import UploadFile
 
-from app.application.exceptions.app_exception import ValidationError
+from app.application.exceptions.app_exception import RequestValidationException
 from app.application.services.document_creation_service.document_creation_service_configuration import (
     DocumentCreationServiceConfiguration
 )
@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 
 class DocumentCreationServiceRequestValidator:
     _CONTENT_TYPE_MAPPING: Dict[str, DocumentType] = {
-        "application/pdf": DocumentType.PDF,
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": DocumentType.DOCX,
+        "application/pdf": DocumentType.pdf,
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": DocumentType.docx,
     }
 
     def __init__(
@@ -51,7 +51,7 @@ class DocumentCreationServiceRequestValidator:
     ) -> DocumentType:
         if file is None:
             logger.warning("No file provided in request")
-            raise ValidationError(
+            raise RequestValidationException(
                 "No se proporcionó ningún archivo",
                 status_code=400
             )
@@ -88,7 +88,7 @@ class DocumentCreationServiceRequestValidator:
 
         if file_size is not None and file_size > max_bytes:
             logger.warning("File exceeds maximum size")
-            raise ValidationError(
+            raise RequestValidationException(
                 f"El archivo excede el tamaño máximo permitido ({self._document_creation_service_configuration.max_file_size_mb} MB)",
                 status_code=400
             )

@@ -25,7 +25,7 @@ class Document(Base):
     )
     status = Column(
         Enum(DocumentStatus),
-        default=DocumentStatus.PENDING,
+        default=DocumentStatus.pending,
         nullable=False
     )
     path = Column(

@@ -3,13 +3,17 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 import logging
 
-from app.api.interfaces.document_query_controller_interface import DocumentQueryControllerInterface
+from app.api.controllers.interfaces.document_query_controller_interface import DocumentQueryControllerInterface
 from app.application.services.document_query_service.interfaces.document_query_service_interface import (
     DocumentQueryServiceInterface
 )
 from app.configuration.dependencies import get_document_query_service, get_database_session
 from app.domain.dtos.document_query.document_list_response import DocumentListResponse
 from app.domain.dtos.document_query.document_response import DocumentResponse
+from app.infrastructure.authentication_provider.dependencies.authentication_provider_dependencies import (
+    get_current_user
+)
+from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
 
 logger = logging.getLogger(__name__)
 
@@ -19,13 +23,15 @@ class DocumentQueryController(DocumentQueryControllerInterface):
             self,
             document_id: int,
             document_query_service: DocumentQueryServiceInterface = Depends(get_document_query_service),
-            db: Session = Depends(get_database_session)
+            db: Session = Depends(get_database_session),
+            user: AuthenticationResponse = Depends(get_current_user)
     ) -> DocumentResponse:
         logger.info("Processing document deletion request")
 
         document_response = await document_query_service.get_document_by_id(
             document_id=document_id,
-            db=db
+            db=db,
+            user=user
         )
 
         logger.info("Document deletion request processed successfully")
@@ -37,14 +43,16 @@ class DocumentQueryController(DocumentQueryControllerInterface):
             page: Optional[int] = None,
             size: Optional[int] = None,
             document_query_service: DocumentQueryServiceInterface = Depends(get_document_query_service),
-            db: Session = Depends(get_database_session)
+            db: Session = Depends(get_database_session),
+            user: AuthenticationResponse = Depends(get_current_user)
     ) -> DocumentListResponse:
         logger.info("Processing document deletion request")
 
         document_list_response = await document_query_service.get_documents(
             page=page,
             size=size,
-            db=db
+            db=db,
+            user=user
         )
 
         logger.info("Document deletion request processed successfully")

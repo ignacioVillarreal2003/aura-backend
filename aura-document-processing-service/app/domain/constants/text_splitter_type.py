@@ -2,11 +2,11 @@ from enum import Enum
 
 
 class TextSplitterType(str, Enum):
-    TOKEN = "token"
-    SPACY = "spacy",
-    SENTENCE_TRANSFORMER = "sentence_transformer",
-    SEMANTIC = "semantic"
-    RECURSIVE = "recursive",
-    HUGGINGFACE = "huggingface",
-    CHAR_TIKTOKEN = "char_tiktoken"
-    CHAR = "char"
+    token = "token"
+    spacy = "spacy",
+    sentence_transformer = "sentence_transformer",
+    semantic = "semantic"
+    recursive = "recursive",
+    huggingface = "huggingface",
+    char_tiktoken = "char_tiktoken"
+    char = "char"

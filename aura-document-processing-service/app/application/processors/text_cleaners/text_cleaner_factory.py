@@ -17,9 +17,9 @@ class TextCleanerFactory:
             self
     ):
         self._cleaners: Dict[TextCleanerType, Type[TextCleanerAdapterInterface]] = {
-            TextCleanerType.FULL: FullTextCleanerAdapter,
-            TextCleanerType.NO_LINE_BREAKS: NoLineBreaksTextCleanerAdapter,
-            TextCleanerType.SPACE: SpaceTextCleanerAdapter
+            TextCleanerType.full: FullTextCleanerAdapter,
+            TextCleanerType.no_line_breaks: NoLineBreaksTextCleanerAdapter,
+            TextCleanerType.space: SpaceTextCleanerAdapter
         }
         self._instances: Dict[str, TextCleanerAdapterInterface] = {}
 

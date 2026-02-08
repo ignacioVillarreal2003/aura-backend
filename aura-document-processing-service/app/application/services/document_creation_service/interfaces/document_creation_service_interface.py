@@ -4,6 +4,7 @@ from sqlalchemy.orm.session import Session
 
 from app.domain.dtos.document_creation.document_creation_request import DocumentCreationRequest
 from app.domain.dtos.document_creation.document_creation_response import DocumentCreationResponse
+from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
 
 
 class DocumentCreationServiceInterface(ABC):
@@ -13,6 +14,7 @@ class DocumentCreationServiceInterface(ABC):
             document_creation_request: DocumentCreationRequest,
             raw_document: UploadFile,
             background_tasks: BackgroundTasks,
-            db: Session
+            db: Session,
+            user: AuthenticationResponse
     ) -> DocumentCreationResponse:
         pass

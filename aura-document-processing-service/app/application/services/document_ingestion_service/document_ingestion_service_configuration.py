@@ -2,7 +2,7 @@ import logging
 from dataclasses import dataclass
 from typing import Final
 
-from app.application.exceptions.app_exception import ValidationError
+from app.application.exceptions.app_exception import RequestValidationException
 from app.domain.constants.embedder_type import EmbedderType
 from app.domain.constants.text_cleaner_type import TextCleanerType
 from app.domain.constants.text_splitter_type import TextSplitterType
@@ -22,9 +22,9 @@ class DocumentIngestionServiceConfiguration:
 
     DEFAULT_SPLIT_SIZE: Final[int] = 1000
     DEFAULT_SPLIT_OVERLAP: Final[int] = 200
-    DEFAULT_TEXT_CLEANER_TYPE: Final[TextCleanerType] = TextCleanerType.SPACE
-    DEFAULT_TEXT_SPLITTER_TYPE: Final[TextSplitterType] = TextSplitterType.RECURSIVE
-    DEFAULT_EMBEDDER_TYPE: Final[EmbedderType] = EmbedderType.OLLAMA
+    DEFAULT_TEXT_CLEANER_TYPE: Final[TextCleanerType] = TextCleanerType.space
+    DEFAULT_TEXT_SPLITTER_TYPE: Final[TextSplitterType] = TextSplitterType.recursive
+    DEFAULT_EMBEDDER_TYPE: Final[EmbedderType] = EmbedderType.ollama
 
     ALLOWED_TEXT_CLEANER_TYPES = {
         e.value for e in TextCleanerType
@@ -96,7 +96,7 @@ class DocumentIngestionServiceConfiguration:
         self._validate_non_empty_string("text_cleaner_type", self.text_cleaner_type)
 
         if self.text_cleaner_type not in self.ALLOWED_TEXT_CLEANER_TYPES:
-            raise ValidationError(
+            raise RequestValidationException(
                 f"text_cleaner_type no soportado: '{self.text_cleaner_type}'. "
                 f"Valores permitidos: {', '.join(sorted(self.ALLOWED_TEXT_CLEANER_TYPES))}",
                 status_code=400
@@ -108,7 +108,7 @@ class DocumentIngestionServiceConfiguration:
         self._validate_non_empty_string("text_splitter_type", self.text_splitter_type)
 
         if self.text_splitter_type not in self.ALLOWED_TEXT_SPLITTER_TYPES:
-            raise ValidationError(
+            raise RequestValidationException(
                 f"text_splitter_type no soportado: '{self.text_splitter_type}'. "
                 f"Valores permitidos: {', '.join(sorted(self.ALLOWED_TEXT_SPLITTER_TYPES))}",
                 status_code=400
@@ -120,7 +120,7 @@ class DocumentIngestionServiceConfiguration:
         self._validate_non_empty_string("embedder_type", self.embedder_type)
 
         if self.embedder_type not in self.ALLOWED_EMBEDDER_TYPES:
-            raise ValidationError(
+            raise RequestValidationException(
                 f"embedder_type no soportado: '{self.embedder_type}'. "
                 f"Valores permitidos: {', '.join(sorted(self.ALLOWED_EMBEDDER_TYPES))}",
                 status_code=400
@@ -135,7 +135,7 @@ class DocumentIngestionServiceConfiguration:
             logger.warning(
                 "Validation failed: empty or invalid string"
             )
-            raise ValidationError(
+            raise RequestValidationException(
                 f"{field_name} no puede estar vacío",
                 status_code=400
             )

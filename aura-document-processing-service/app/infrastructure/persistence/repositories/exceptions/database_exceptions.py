@@ -1,7 +1,7 @@
-from app.application.exceptions.app_exception import AppError
+from app.application.exceptions.app_exception import AppException
 
 
-class DatabaseError(AppError):
+class DatabaseError(AppException):
     def __init__(
             self,
             message: str = "Database error",

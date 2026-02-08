@@ -15,10 +15,10 @@ class ReaderFactory:
             self
     ):
         self._readers: Dict[ReaderType, Type[DocumentReaderInterface]] = {
-            ReaderType.DIGITAL_PDF: DigitalPDFReaderAdapter,
-            ReaderType.SCANNED_PDF: ScannedPDFReaderAdapter,
-            ReaderType.DIGITAL_DOCX: DigitalDOCXReaderAdapter,
-            ReaderType.SCANNED_DOCX: ScannedDOCXReaderAdapter
+            ReaderType.digital_pdf: DigitalPDFReaderAdapter,
+            ReaderType.scanned_pdf: ScannedPDFReaderAdapter,
+            ReaderType.digital_docx: DigitalDOCXReaderAdapter,
+            ReaderType.scanned_docx: ScannedDOCXReaderAdapter
         }
         self._instances: Dict[str, DocumentReaderInterface] = {}
 

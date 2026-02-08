@@ -10,7 +10,6 @@ class DocumentIngestionServiceInterface(ABC):
     def process_document(
             self,
             document: Document,
-            db: Session,
             local_file_path: Path
     ) -> None:
         pass

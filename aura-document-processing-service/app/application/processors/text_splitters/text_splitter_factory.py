@@ -32,14 +32,14 @@ class TextSplitterFactory:
             self
     ):
         self._splitters: Dict[TextSplitterType, Type[TextSplitterAdapterInterface]] = {
-            TextSplitterType.TOKEN: TokenTextSplitterAdapter,
-            TextSplitterType.SPACY: SpacyTextSplitterAdapter,
-            TextSplitterType.SENTENCE_TRANSFORMER: SentenceTransformerTextSplitterAdapter,
-            TextSplitterType.SEMANTIC: SemanticTextSplitterAdapter,
-            TextSplitterType.RECURSIVE: RecursiveTextSplitterAdapter,
-            TextSplitterType.HUGGINGFACE: HuggingfaceTextSplitterAdapter,
-            TextSplitterType.CHAR_TIKTOKEN: CharTiktokenTextSplitterAdapter,
-            TextSplitterType.CHAR: CharTextSplitterAdapter
+            TextSplitterType.token: TokenTextSplitterAdapter,
+            TextSplitterType.spacy: SpacyTextSplitterAdapter,
+            TextSplitterType.sentence_transformer: SentenceTransformerTextSplitterAdapter,
+            TextSplitterType.semantic: SemanticTextSplitterAdapter,
+            TextSplitterType.recursive: RecursiveTextSplitterAdapter,
+            TextSplitterType.huggingface: HuggingfaceTextSplitterAdapter,
+            TextSplitterType.char_tiktoken: CharTiktokenTextSplitterAdapter,
+            TextSplitterType.char: CharTextSplitterAdapter
         }
         self._instances: Dict[str, TextSplitterAdapterInterface] = {}
 

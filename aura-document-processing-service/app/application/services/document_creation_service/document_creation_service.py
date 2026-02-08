@@ -23,6 +23,7 @@ from app.domain.constants.document_type import DocumentType
 from app.domain.dtos.document_creation.document_creation_request import DocumentCreationRequest
 from app.domain.models.document import Document
 from app.domain.dtos.document_creation.document_creation_response import DocumentCreationResponse
+from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
 from app.infrastructure.persistence.repositories.document_repository.document_repository import (
     DocumentRepositoryInterface
 )
@@ -86,7 +87,8 @@ class DocumentCreationService(DocumentCreationServiceInterface):
             document_creation_request: DocumentCreationRequest,
             raw_document: UploadFile,
             background_tasks: BackgroundTasks,
-            db: Session
+            db: Session,
+            user: AuthenticationResponse
     ) -> DocumentCreationResponse:
         logger.info("Starting document creation execution")
 
@@ -121,7 +123,7 @@ class DocumentCreationService(DocumentCreationServiceInterface):
             name=raw_document.filename,
             type=document_type,
             path=path,
-            created_by=1,
+            created_by=user.id,
             created_at=datetime.now()
         )
 
@@ -138,7 +140,6 @@ class DocumentCreationService(DocumentCreationServiceInterface):
         background_tasks.add_task(
             self._document_ingestion_service.process_document,
             document=db_document,
-            db=db,
             local_file_path=temp_path
         )
 

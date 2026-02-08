@@ -1,7 +1,7 @@
-from app.application.exceptions.app_exception import AppError
+from app.application.exceptions.app_exception import AppException
 
 
-class EmbedderError(AppError):
+class EmbedderError(AppException):
     def __init__(self,
                  message: str = "Error al generar embeddings de documentos",
                  *,

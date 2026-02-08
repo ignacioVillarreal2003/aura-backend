@@ -2,7 +2,7 @@ import logging
 from dataclasses import dataclass
 from typing import Final
 
-from app.application.exceptions.app_exception import ValidationError
+from app.application.exceptions.app_exception import RequestValidationException
 from app.domain.constants.embedder_type import EmbedderType
 
 logger = logging.getLogger(__name__)
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
     kw_only=True
 )
 class DocumentContextServiceConfiguration:
-    DEFAULT_EMBEDDER_TYPE: Final[EmbedderType] = EmbedderType.OLLAMA
+    DEFAULT_EMBEDDER_TYPE: Final[EmbedderType] = EmbedderType.ollama
 
     ALLOWED_EMBEDDER_TYPES = {
         e.value for e in EmbedderType
@@ -48,7 +48,7 @@ class DocumentContextServiceConfiguration:
         self._validate_non_empty_string("embedder_type", self.embedder_type)
 
         if self.embedder_type not in self.ALLOWED_EMBEDDER_TYPES:
-            raise ValidationError(
+            raise RequestValidationException(
                 f"embedder_type no soportado: '{self.embedder_type}'. "
                 f"Valores permitidos: {', '.join(sorted(self.ALLOWED_EMBEDDER_TYPES))}",
                 status_code=400
@@ -63,7 +63,7 @@ class DocumentContextServiceConfiguration:
             logger.warning(
                 "Validation failed: empty or invalid string"
             )
-            raise ValidationError(
+            raise RequestValidationException(
                 f"{field_name} no puede estar vacío",
                 status_code=400
             )

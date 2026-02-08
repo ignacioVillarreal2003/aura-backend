@@ -10,6 +10,7 @@ from app.application.services.document_deletion_service.interfaces.document_dele
     DocumentDeletionServiceInterface
 )
 from app.domain.models.document import Document
+from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
 from app.infrastructure.persistence.repositories.document_repository.interfaces.document_repository_interface import (
     DocumentRepositoryInterface
 )
@@ -39,7 +40,8 @@ class DocumentDeletionService(DocumentDeletionServiceInterface):
     async def hard_delete_document(
             self,
             document_id: int,
-            db: Session
+            db: Session,
+            user: AuthenticationResponse
     ) -> Response:
         document: Document = self._document_repository.get_document_by_id(
             document_id=document_id,
@@ -63,7 +65,8 @@ class DocumentDeletionService(DocumentDeletionServiceInterface):
     async def soft_delete_document(
             self,
             document_id: int,
-            db: Session
+            db: Session,
+            user: AuthenticationResponse
     ) -> Response:
         document: Document = self._document_repository.get_document_by_id(
             document_id=document_id,

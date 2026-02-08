@@ -7,6 +7,7 @@ from app.application.services.document_creation_service.interfaces.document_crea
 )
 from app.domain.dtos.document_creation.document_creation_request import DocumentCreationRequest
 from app.domain.dtos.document_creation.document_creation_response import DocumentCreationResponse
+from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
 
 
 class DocumentCreationControllerInterface(ABC):
@@ -17,6 +18,7 @@ class DocumentCreationControllerInterface(ABC):
             document_creation_request: DocumentCreationRequest,
             document: UploadFile,
             document_creation_service: DocumentCreationServiceInterface,
-            db: Session
+            db: Session,
+            user: AuthenticationResponse
     ) -> DocumentCreationResponse:
         pass
