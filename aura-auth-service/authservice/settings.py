@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     
     # Local apps
     'accounts.apps.AccountsConfig',
+    'documents.apps.DocumentsConfig',
 ]
 
 MIDDLEWARE = [

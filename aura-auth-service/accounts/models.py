@@ -15,7 +15,7 @@ Models:
 
 import uuid
 from django.db import models
-from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin, Group
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.utils import timezone
 from django.contrib.auth.hashers import make_password
 
@@ -195,6 +195,12 @@ class User(AbstractBaseUser, PermissionsMixin, AuditedModel):
         blank=True,
         verbose_name='Último login'
     )
+    custom_groups = models.ManyToManyField(
+        'CustomGroup',
+        blank=True,
+        related_name='users',
+        verbose_name='Grupos'
+    )
 
     objects = CustomUserManager()
 
@@ -240,6 +246,42 @@ class User(AbstractBaseUser, PermissionsMixin, AuditedModel):
         """Soft delete user records by default."""
         self.soft_delete(deleted_by=deleted_by)
         return None
+
+
+class CustomGroup(AuditedModel):
+    """
+    Custom group model detached from permissions.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(
+        max_length=150,
+        unique=True,
+        db_index=True,
+        verbose_name='Nombre'
+    )
+    description = models.TextField(
+        blank=True,
+        verbose_name='Descripción'
+    )
+    documents = models.ManyToManyField(
+        'documents.Document',
+        blank=True,
+        related_name='groups',
+        verbose_name='Documentos'
+    )
+
+    class Meta:
+        db_table = 'custom_groups'
+        verbose_name = 'Grupo'
+        verbose_name_plural = 'Grupos'
+        indexes = [
+            models.Index(fields=['name']),
+            models.Index(fields=['deleted_at']),
+        ]
+
+    def __str__(self):
+        return self.name
 
 
 class Role(AuditedModel):
@@ -430,13 +472,3 @@ class RolePermission(models.Model):
         return f"{self.role.name} -> {self.permission.code}"
 
 
-class GroupProxy(Group):
-    """
-    Proxy model to show Django auth groups under the accounts app.
-    """
-
-    class Meta:
-        proxy = True
-        app_label = 'accounts'
-        verbose_name = 'Grupo'
-        verbose_name_plural = 'Grupos'

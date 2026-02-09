@@ -15,36 +15,39 @@ from django.contrib.auth.models import Group
 from django.contrib.admin.widgets import FilteredSelectMultiple
 from django.utils.translation import gettext_lazy as _
 from django.utils.html import format_html
-from .models import User, Role, Permission, UserRole, RolePermission, GroupProxy
+from .models import User, Role, Permission, UserRole, RolePermission, CustomGroup
 
 
-class ActiveFilter(admin.SimpleListFilter):
-    title = 'Activo'
-    parameter_name = 'is_active'
+class StatusFilter(admin.SimpleListFilter):
+    title = 'Estado'
+    parameter_name = 'estado'
 
     def lookups(self, request, model_admin):
         return (
-            ('1', 'Sí'),
-            ('0', 'No'),
+            ('activo', 'Activo'),
+            ('inactivo', 'Inactivo'),
+            ('eliminado', 'Eliminado'),
         )
 
     def queryset(self, request, queryset):
         value = self.value()
-        if value == '1':
-            return queryset.filter(is_active=True)
-        if value == '0':
-            return queryset.filter(is_active=False)
+        if value == 'activo':
+            return queryset.filter(is_active=True, deleted_at__isnull=True)
+        if value == 'inactivo':
+            return queryset.filter(is_active=False, deleted_at__isnull=True)
+        if value == 'eliminado':
+            return queryset.filter(deleted_at__isnull=False)
         return queryset
 
 
 class StaffFilter(admin.SimpleListFilter):
-    title = 'Staff'
+    title = 'Tipo'
     parameter_name = 'is_staff'
 
     def lookups(self, request, model_admin):
         return (
-            ('1', 'Sí'),
-            ('0', 'No'),
+            ('1', 'Admin'),
+            ('0', 'Usuario'),
         )
 
     def queryset(self, request, queryset):
@@ -66,20 +69,50 @@ def _apply_audit_fields(obj, username: str, is_create: bool):
     obj.updated_by = username
 
 
+def _is_super_admin_user(user: User) -> bool:
+    return bool(user and user.is_superuser)
+
+
+class HelpTextStripMixin:
+    """Remove help text from admin forms."""
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        formfield = super().formfield_for_dbfield(db_field, request, **kwargs)
+        if formfield:
+            formfield.help_text = ''
+        return formfield
+
+    def formfield_for_manytomany(self, db_field, request, **kwargs):
+        formfield = super().formfield_for_manytomany(db_field, request, **kwargs)
+        if formfield:
+            formfield.help_text = ''
+        return formfield
+
+
+class HelpTextStripInlineMixin:
+    """Remove help text from inline admin forms."""
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        formfield = super().formfield_for_dbfield(db_field, request, **kwargs)
+        if formfield:
+            formfield.help_text = ''
+        return formfield
+
+
 class UserAdminForm(forms.ModelForm):
-    groups = forms.ModelMultipleChoiceField(
-        queryset=Group.objects.all(),
+    custom_groups = forms.ModelMultipleChoiceField(
+        queryset=CustomGroup.objects.all(),
         required=False,
         widget=FilteredSelectMultiple('Grupos', is_stacked=False),
         label='',
-        help_text='Grupos disponibles → Grupos Elegidos',
+        help_text='',
     )
     
     roles = forms.ModelMultipleChoiceField(
         queryset=Role.objects.all(),
         required=False,
         widget=FilteredSelectMultiple('Roles', is_stacked=False),
-        label='Roles',
+        label='',
     )
 
     class Meta:
@@ -88,13 +121,17 @@ class UserAdminForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if 'is_staff' in self.fields:
+            self.fields['is_staff'].label = 'Administrador'
         if self.instance and self.instance.pk:
-            self.fields['roles'].initial = Role.objects.filter(user_assignments__user=self.instance)
-            self.fields['groups'].initial = self.instance.groups.all()
+            if 'roles' in self.fields:
+                self.fields['roles'].initial = Role.objects.filter(user_assignments__user=self.instance)
+            if 'custom_groups' in self.fields:
+                self.fields['custom_groups'].initial = self.instance.custom_groups.all()
 
 
 @admin.register(User)
-class UserAdmin(admin.ModelAdmin):
+class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
     """
     Custom admin for User model.
     
@@ -109,12 +146,12 @@ class UserAdmin(admin.ModelAdmin):
     list_display = (
         'username',
         'email',
-        'is_active_badge',
+        'status_badge',
         'is_staff_badge',
         'created_date',
     )
     list_filter = (
-        ActiveFilter,
+        StatusFilter,
         StaffFilter,
         ('created_at', CreatedDateFilter),
     )
@@ -131,6 +168,8 @@ class UserAdmin(admin.ModelAdmin):
     )
     
     form = UserAdminForm
+    actions = None
+    actions_selection_counter = False
 
     fieldsets = (
         ('Identidad', {
@@ -141,7 +180,7 @@ class UserAdmin(admin.ModelAdmin):
             'description': 'La contraseña se encripta automáticamente al guardar',
         }),
         ('Grupos y Roles', {
-            'fields': ('is_active', 'is_staff', 'groups', 'roles'),
+            'fields': ('is_active', 'is_staff', 'custom_groups', 'roles'),
         }),
         ('Información de Auditoría', {
             'fields': (
@@ -157,22 +196,26 @@ class UserAdmin(admin.ModelAdmin):
         }),
     )
 
-    def is_active_badge(self, obj):
-        """Display active status as a colored badge."""
+    def status_badge(self, obj):
+        """Display status with soft delete handling."""
+        if obj.is_deleted:
+            return format_html(
+                '<span style="color: red; font-weight: bold;">Eliminado</span>'
+            )
         if obj.is_active:
             return format_html(
                 '<span style="color: green; font-weight: bold;">✓ Activo</span>'
             )
         return format_html(
-            '<span style="color: red; font-weight: bold;">✗ Inactivo</span>'
+            '<span style="color: orange; font-weight: bold;">Inactivo</span>'
         )
-    is_active_badge.short_description = 'Estado'
+    status_badge.short_description = 'Estado'
 
     def is_staff_badge(self, obj):
         """Display staff status as a colored badge."""
         if obj.is_staff:
             return format_html(
-                '<span style="color: blue; font-weight: bold;">Staff</span>'
+                '<span style="color: blue; font-weight: bold;">Admin</span>'
             )
         return format_html('<span style="color: gray;">Usuario</span>')
     is_staff_badge.short_description = 'Tipo'
@@ -193,13 +236,133 @@ class UserAdmin(admin.ModelAdmin):
             return self.readonly_fields + ('username', 'email')
         return self.readonly_fields
 
-    filter_horizontal = ('groups',)
+    def get_fieldsets(self, request, obj=None):
+        if obj is None:
+            if not _is_super_admin_user(request.user):
+                return (
+                    ('Identidad', {
+                        'fields': ('id', 'username', 'email'),
+                    }),
+                    ('Contraseña', {
+                        'fields': ('password',),
+                        'description': 'La contraseña se encripta automáticamente al guardar',
+                    }),
+                    ('Roles', {
+                        'fields': ('is_active', 'roles'),
+                    }),
+                )
+            return (
+                ('Identidad', {
+                    'fields': ('id', 'username', 'email'),
+                }),
+                ('Contraseña', {
+                    'fields': ('password',),
+                    'description': 'La contraseña se encripta automáticamente al guardar',
+                }),
+                ('Grupos y Roles', {
+                    'fields': ('is_active', 'is_staff', 'custom_groups', 'roles'),
+                }),
+            )
+        if _is_super_admin_user(request.user):
+            return (
+                ('Identidad', {
+                    'fields': ('id', 'username', 'email'),
+                }),
+                ('Grupos y Roles', {
+                    'fields': ('is_active', 'is_staff', 'custom_groups', 'roles'),
+                }),
+                ('Información de Auditoría', {
+                    'fields': (
+                        'created_at',
+                        'created_by',
+                        'updated_at',
+                        'updated_by',
+                        'deleted_at',
+                        'deleted_by',
+                        'last_login',
+                    ),
+                    'classes': ('collapse',),
+                }),
+            )
+        return (
+            ('Identidad', {
+                'fields': ('id', 'username', 'email'),
+            }),
+            ('Roles', {
+                'fields': ('is_active', 'roles'),
+            }),
+            ('Información de Auditoría', {
+                'fields': (
+                    'created_at',
+                    'created_by',
+                    'updated_at',
+                    'updated_by',
+                    'deleted_at',
+                    'deleted_by',
+                    'last_login',
+                ),
+                'classes': ('collapse',),
+            }),
+        )
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        if not _is_super_admin_user(request.user):
+            for field_name in ('is_staff', 'is_superuser', 'is_super_admin', 'custom_groups'):
+                if field_name in form.base_fields:
+                    form.base_fields.pop(field_name)
+        return form
+
+    def get_list_filter(self, request):
+        if _is_super_admin_user(request.user):
+            return self.list_filter
+        return (StatusFilter, ('created_at', CreatedDateFilter))
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        if _is_super_admin_user(request.user):
+            return queryset.order_by('deleted_at', 'username')
+        return queryset.filter(is_staff=False).order_by('deleted_at', 'username')
+
+    def has_add_permission(self, request):
+        if _is_super_admin_user(request.user):
+            return True
+        return bool(request.user and request.user.is_staff)
+
+    def has_view_permission(self, request, obj=None):
+        if _is_super_admin_user(request.user):
+            return True
+        if obj is None:
+            return bool(request.user and request.user.is_staff)
+        return bool(request.user and request.user.is_staff and not obj.is_staff)
+
+    def has_change_permission(self, request, obj=None):
+        if _is_super_admin_user(request.user):
+            return True
+        if obj is None:
+            return bool(request.user and request.user.is_staff)
+        return bool(request.user and request.user.is_staff and not obj.is_staff)
+
+    def has_delete_permission(self, request, obj=None):
+        if _is_super_admin_user(request.user):
+            return True
+        if obj is None:
+            return False
+        return bool(request.user and request.user.is_staff and not obj.is_staff)
+
+    filter_horizontal = ('custom_groups',)
 
     class Media:
         js = ('accounts/admin/user_password.js',)
 
     def save_model(self, request, obj, form, change):
+        if 'password' in form.changed_data:
+            obj.set_password(form.cleaned_data['password'])
         _apply_audit_fields(obj, request.user.username, is_create=not change)
+        if not _is_super_admin_user(request.user):
+            obj.is_staff = False
+            obj.is_superuser = False
+            obj.is_super_admin = False
         super().save_model(request, obj, form, change)
         if 'roles' in form.cleaned_data:
             selected_roles = form.cleaned_data['roles']
@@ -222,7 +385,7 @@ class UserAdmin(admin.ModelAdmin):
 
 
 @admin.register(Role)
-class RoleAdmin(admin.ModelAdmin):
+class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
     """
     Admin for Role model.
     
@@ -265,6 +428,21 @@ class RoleAdmin(admin.ModelAdmin):
 
     inlines = []  # Will add RolePermissionInline below
 
+    def has_module_permission(self, request):
+        return _is_super_admin_user(request.user)
+
+    def has_view_permission(self, request, obj=None):
+        return _is_super_admin_user(request.user)
+
+    def has_add_permission(self, request):
+        return _is_super_admin_user(request.user)
+
+    def has_change_permission(self, request, obj=None):
+        return _is_super_admin_user(request.user)
+
+    def has_delete_permission(self, request, obj=None):
+        return _is_super_admin_user(request.user)
+
     def save_model(self, request, obj, form, change):
         _apply_audit_fields(obj, request.user.username, is_create=not change)
         super().save_model(request, obj, form, change)
@@ -296,7 +474,7 @@ class RoleAdmin(admin.ModelAdmin):
 
 
 @admin.register(Permission)
-class PermissionAdmin(admin.ModelAdmin):
+class PermissionAdmin(HelpTextStripMixin, admin.ModelAdmin):
     """
     Admin for Permission model.
     
@@ -340,6 +518,21 @@ class PermissionAdmin(admin.ModelAdmin):
         _apply_audit_fields(obj, request.user.username, is_create=not change)
         super().save_model(request, obj, form, change)
 
+    def has_module_permission(self, request):
+        return _is_super_admin_user(request.user)
+
+    def has_view_permission(self, request, obj=None):
+        return _is_super_admin_user(request.user)
+
+    def has_add_permission(self, request):
+        return _is_super_admin_user(request.user)
+
+    def has_change_permission(self, request, obj=None):
+        return _is_super_admin_user(request.user)
+
+    def has_delete_permission(self, request, obj=None):
+        return _is_super_admin_user(request.user)
+
     def description_short(self, obj):
         """Display shortened description."""
         if obj.description:
@@ -366,7 +559,7 @@ class PermissionAdmin(admin.ModelAdmin):
     is_deleted_badge.short_description = 'Estado'
 
 
-class RolePermissionInline(admin.TabularInline):
+class RolePermissionInline(HelpTextStripInlineMixin, admin.TabularInline):
     """Inline admin for assigning permissions to roles."""
     model = RolePermission
     extra = 1
@@ -376,7 +569,7 @@ class RolePermissionInline(admin.TabularInline):
     verbose_name_plural = 'Permisos'
 
 
-class UserRoleInline(admin.TabularInline):
+class UserRoleInline(HelpTextStripInlineMixin, admin.TabularInline):
     """Inline admin for assigning roles to users."""
     model = UserRole
     extra = 1
@@ -389,7 +582,7 @@ class UserRoleInline(admin.TabularInline):
 
 
 @admin.register(UserRole)
-class UserRoleAdmin(admin.ModelAdmin):
+class UserRoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
     """
     Admin for UserRole relationship.
     
@@ -414,9 +607,55 @@ class UserRoleAdmin(admin.ModelAdmin):
         }),
     )
 
+    def get_list_display(self, request):
+        if _is_super_admin_user(request.user):
+            return self.list_display
+        return ('user', 'role')
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        if _is_super_admin_user(request.user):
+            return queryset
+        return queryset.filter(user__is_staff=False)
+
+    def has_view_permission(self, request, obj=None):
+        if _is_super_admin_user(request.user):
+            return True
+        if obj is None:
+            return bool(request.user and request.user.is_staff)
+        return bool(request.user and request.user.is_staff and not obj.user.is_staff)
+
+    def has_change_permission(self, request, obj=None):
+        if _is_super_admin_user(request.user):
+            return True
+        if obj is None:
+            return bool(request.user and request.user.is_staff)
+        return bool(request.user and request.user.is_staff and not obj.user.is_staff)
+
+    def has_delete_permission(self, request, obj=None):
+        if _is_super_admin_user(request.user):
+            return True
+        if obj is None:
+            return False
+        return bool(request.user and request.user.is_staff and not obj.user.is_staff)
+
+    def get_fieldsets(self, request, obj=None):
+        if _is_super_admin_user(request.user):
+            return super().get_fieldsets(request, obj)
+        return (
+            ('Asignación', {
+                'fields': ('id', 'user', 'role'),
+            }),
+        )
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == 'user' and not _is_super_admin_user(request.user):
+            kwargs['queryset'] = User.objects.filter(is_staff=False)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
 
 @admin.register(RolePermission)
-class RolePermissionAdmin(admin.ModelAdmin):
+class RolePermissionAdmin(HelpTextStripMixin, admin.ModelAdmin):
     """
     Admin for RolePermission relationship.
     
@@ -441,6 +680,21 @@ class RolePermissionAdmin(admin.ModelAdmin):
         }),
     )
 
+    def has_module_permission(self, request):
+        return _is_super_admin_user(request.user)
+
+    def has_view_permission(self, request, obj=None):
+        return _is_super_admin_user(request.user)
+
+    def has_add_permission(self, request):
+        return _is_super_admin_user(request.user)
+
+    def has_change_permission(self, request, obj=None):
+        return _is_super_admin_user(request.user)
+
+    def has_delete_permission(self, request, obj=None):
+        return _is_super_admin_user(request.user)
+
 
 # Customize admin site
 admin.site.site_header = 'Administración'
@@ -450,26 +704,74 @@ admin.site.index_title = 'Panel de Administración'
 # Unregister Group from Django auth
 admin.site.unregister(Group)
 
-# Re-register Group under accounts app to appear in "Gestión de Usuarios"
-@admin.register(GroupProxy)
-class GroupAdmin(admin.ModelAdmin):
+# Register custom groups under accounts app
+@admin.register(CustomGroup)
+class CustomGroupAdmin(HelpTextStripMixin, admin.ModelAdmin):
     """
-    Custom admin for Group model to manage authentication groups.
-    
-    Appears under "Gestión de Usuarios" instead of "Autenticación y Autorización"
+    Custom admin for Group model to manage groups.
     """
-    list_display = ('name', 'permission_count')
+    list_display = ('name', 'description_short', 'document_count', 'created_at')
     search_fields = ('name',)
-    filter_horizontal = ('permissions',)
-    
-    def permission_count(self, obj):
-        """Display count of assigned permissions."""
-        count = obj.permissions.count()
+    filter_horizontal = ('documents',)
+
+    fieldsets = (
+        ('Información Básica', {
+            'fields': ('id', 'name', 'description', 'documents'),
+        }),
+        ('Información de Auditoría', {
+            'fields': (
+                'created_at',
+                'created_by',
+                'updated_at',
+                'updated_by',
+                'deleted_at',
+                'deleted_by',
+            ),
+            'classes': ('collapse',),
+        }),
+    )
+    readonly_fields = (
+        'id',
+        'created_at',
+        'created_by',
+        'updated_at',
+        'updated_by',
+        'deleted_at',
+        'deleted_by',
+    )
+
+    def description_short(self, obj):
+        if obj.description:
+            return obj.description[:50] + '...' if len(obj.description) > 50 else obj.description
+        return '-'
+    description_short.short_description = 'Descripción'
+
+    def document_count(self, obj):
+        count = obj.documents.count()
         return format_html(
             '<span style="background-color: #417690; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>',
             count
         )
-    permission_count.short_description = 'Permisos'
+    document_count.short_description = 'Documentos'
+
+    def has_module_permission(self, request):
+        return _is_super_admin_user(request.user)
+
+    def has_view_permission(self, request, obj=None):
+        return _is_super_admin_user(request.user)
+
+    def has_add_permission(self, request):
+        return _is_super_admin_user(request.user)
+
+    def has_change_permission(self, request, obj=None):
+        return _is_super_admin_user(request.user)
+
+    def has_delete_permission(self, request, obj=None):
+        return _is_super_admin_user(request.user)
+
+    def save_model(self, request, obj, form, change):
+        _apply_audit_fields(obj, request.user.username, is_create=not change)
+        super().save_model(request, obj, form, change)
 
 
 def _custom_get_app_list(self, request):
@@ -477,21 +779,46 @@ def _custom_get_app_list(self, request):
     Custom ordering for models in the admin index.
     """
     app_list = admin.AdminSite.get_app_list(self, request)
-    desired_order = [
-        'User',
-        'GroupProxy',
-        'Role',
-        'UserRole',
-        'Permission',
-        'RolePermission',
-    ]
+    desired_order = ['User', 'UserRole']
+    if _is_super_admin_user(request.user):
+        desired_order = [
+            'User',
+            'CustomGroup',
+            'Role',
+            'UserRole',
+            'Permission',
+            'RolePermission',
+        ]
     order_map = {name: index for index, name in enumerate(desired_order)}
+
+    documents_order = ['Document', 'DocumentRole']
+    documents_order_map = {name: index for index, name in enumerate(documents_order)}
+
+    app_order = {
+        'accounts': 0,
+        'documents': 1,
+    }
 
     for app in app_list:
         if app.get('app_label') == 'accounts':
+            if not _is_super_admin_user(request.user):
+                app['models'] = [
+                    model for model in app['models']
+                    if model.get('object_name') in {'User', 'UserRole'}
+                ]
             app['models'].sort(
                 key=lambda model: order_map.get(model.get('object_name'), len(order_map))
             )
+        if app.get('app_label') == 'documents':
+            app['models'].sort(
+                key=lambda model: documents_order_map.get(
+                    model.get('object_name'),
+                    len(documents_order_map)
+                )
+            )
+    app_list.sort(
+        key=lambda app: app_order.get(app.get('app_label'), len(app_order))
+    )
     return app_list
 
 
