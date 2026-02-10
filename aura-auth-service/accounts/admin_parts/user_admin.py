@@ -298,6 +298,10 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
     class Media:
         js = ('accounts/admin/user_password.js',)
 
+        css = {
+            "all": ("admin/custom.css",)
+        }
+
     def save_model(self, request, obj, form, change):
         if 'password' in form.changed_data:
             obj.set_password(form.cleaned_data['password'])
