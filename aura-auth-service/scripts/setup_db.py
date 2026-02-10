@@ -26,7 +26,7 @@ django.setup()
 
 from django.db import connection
 from django.core.management import execute_from_command_line
-from accounts.models import Role, Permission, User
+from accounts.models import Role, Permission, User, PermissionInRole, UserRole
 
 
 def create_initial_roles():
@@ -57,36 +57,36 @@ def create_initial_permissions():
     """Create initial permissions for the system."""
     permissions_data = [
         # User permissions
-        {'code': 'user.create', 'description': 'Create new users'},
-        {'code': 'user.read', 'description': 'View user details'},
-        {'code': 'user.update', 'description': 'Update user information'},
-        {'code': 'user.delete', 'description': 'Delete users'},
-        {'code': 'user.list', 'description': 'List all users'},
-        
+        {'name': 'user.create', 'description': 'Create new users'},
+        {'name': 'user.read', 'description': 'View user details'},
+        {'name': 'user.update', 'description': 'Update user information'},
+        {'name': 'user.delete', 'description': 'Delete users'},
+        {'name': 'user.list', 'description': 'List all users'},
+
         # Role permissions
-        {'code': 'role.create', 'description': 'Create new roles'},
-        {'code': 'role.read', 'description': 'View role details'},
-        {'code': 'role.update', 'description': 'Update roles'},
-        {'code': 'role.delete', 'description': 'Delete roles'},
-        {'code': 'role.list', 'description': 'List all roles'},
-        
+        {'name': 'role.create', 'description': 'Create new roles'},
+        {'name': 'role.read', 'description': 'View role details'},
+        {'name': 'role.update', 'description': 'Update roles'},
+        {'name': 'role.delete', 'description': 'Delete roles'},
+        {'name': 'role.list', 'description': 'List all roles'},
+
         # Permission permissions
-        {'code': 'permission.create', 'description': 'Create new permissions'},
-        {'code': 'permission.read', 'description': 'View permission details'},
-        {'code': 'permission.update', 'description': 'Update permissions'},
-        {'code': 'permission.delete', 'description': 'Delete permissions'},
-        {'code': 'permission.list', 'description': 'List all permissions'},
+        {'name': 'permission.create', 'description': 'Create new permissions'},
+        {'name': 'permission.read', 'description': 'View permission details'},
+        {'name': 'permission.update', 'description': 'Update permissions'},
+        {'name': 'permission.delete', 'description': 'Delete permissions'},
+        {'name': 'permission.list', 'description': 'List all permissions'},
     ]
     
     for perm_data in permissions_data:
         perm, created = Permission.objects.get_or_create(
-            code=perm_data['code'],
+            name=perm_data['name'],
             defaults={'description': perm_data['description']}
         )
         if created:
-            print(f"✓ Created permission: {perm.code}")
+            print(f"✓ Created permission: {perm.name}")
         else:
-            print(f"• Permission already exists: {perm.code}")
+            print(f"• Permission already exists: {perm.name}")
 
 
 def assign_permissions_to_roles():
@@ -98,13 +98,13 @@ def assign_permissions_to_roles():
         # SUPER_ADMIN gets all permissions
         all_permissions = Permission.objects.all()
         for perm in all_permissions:
-            super_admin.role_permissions.get_or_create(permission=perm)
+            PermissionInRole.objects.get_or_create(role=super_admin, permission=perm)
         print(f"✓ Assigned {all_permissions.count()} permissions to SUPER_ADMIN")
         
         # USER gets only read permissions
-        read_permissions = Permission.objects.filter(code__contains='read')
+        read_permissions = Permission.objects.filter(name__contains='read')
         for perm in read_permissions:
-            user_role.role_permissions.get_or_create(permission=perm)
+            PermissionInRole.objects.get_or_create(role=user_role, permission=perm)
         print(f"✓ Assigned {read_permissions.count()} read permissions to USER")
         
     except Role.DoesNotExist:
@@ -186,12 +186,14 @@ def main():
         superuser = User.objects.create_superuser(
             username=username,
             email=email,
-            password=password
+            password=password,
         )
-        
-        # Assign SUPER_ADMIN role
         super_admin_role = Role.objects.get(name='SUPER_ADMIN')
-        superuser.user_roles.get_or_create(role=super_admin_role)
+        UserRole.objects.get_or_create(
+            user=superuser,
+            role=super_admin_role,
+            defaults={'created_by': superuser},
+        )
         
         print(f"✓ Superuser '{username}' created successfully")
         print(f"  Email: {email}")

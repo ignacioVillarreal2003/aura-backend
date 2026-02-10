@@ -1,36 +1,21 @@
 """
-User, Role, Permission models and their relationships.
+User, Role, Permission models aligned with auth_db schema.
 
-This module implements the core RBAC (Role-Based Access Control) system
-with soft delete support and audit fields on all models.
-
-Models:
-- AuditedModel: Abstract base model with audit fields (created_at, created_by, etc.)
-- User: Custom user model with soft delete
-- Role: Role definition with permissions
-- Permission: Permission definition
-- UserRole: User-Role relationship
-- RolePermission: Role-Permission relationship
+This module maps Django models to the PostgreSQL auth_db tables defined
+in docker/auth-db/init.sql and keeps custom group and refresh token tables.
 """
 
 import uuid
-from django.db import models
-from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.apps import apps
+from django.db import models, connection, transaction
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 from django.utils import timezone
-from django.contrib.auth.hashers import make_password
+from django.contrib.auth.hashers import make_password, check_password
 
 
 class AuditedModel(models.Model):
     """
-    Abstract base model for all entities.
-    
-    Provides audit fields:
-    - created_at: Timestamp when created
-    - created_by: User who created the record
-    - updated_at: Timestamp of last update
-    - updated_by: User who last updated the record
-    - deleted_at: Soft delete timestamp (null = active)
-    - deleted_by: User who deleted the record
+    Abstract base model for custom tables that keep audit fields.
     """
     created_at = models.DateTimeField(
         auto_now_add=True,
@@ -74,132 +59,221 @@ class AuditedModel(models.Model):
         abstract = True
 
     def soft_delete(self, deleted_by: str = None):
-        """
-        Soft delete this record.
-        
-        Args:
-            deleted_by: Username performing the deletion
-        """
         self.deleted_at = timezone.now()
         self.deleted_by = deleted_by
         self.save(update_fields=['deleted_at', 'deleted_by', 'updated_at'])
 
     def restore(self):
-        """
-        Restore a soft-deleted record.
-        """
         self.deleted_at = None
         self.deleted_by = None
         self.save(update_fields=['deleted_at', 'deleted_by', 'updated_at'])
 
     @property
     def is_deleted(self) -> bool:
-        """Check if this record is soft-deleted."""
         return self.deleted_at is not None
+
+
+class UserStatus(models.TextChoices):
+    ACTIVE = 'active', 'Activo'
+    INACTIVE = 'inactive', 'Inactivo'
 
 
 class CustomUserManager(BaseUserManager):
     """
-    Manager for custom User model.
+    Manager for custom User model aligned to auth_db schema.
     """
 
-    def create_user(self, username, email, password=None, **extra_fields):
-        """
-        Create and save a regular user.
-        """
+    def _bootstrap_create_user(self, username, email, password=None, **extra_fields):
+        now = timezone.now()
+        table = self.model._meta.db_table
+        seq_expr = f"pg_get_serial_sequence('{table}', 'id')"
+        status = extra_fields.get('status', UserStatus.ACTIVE)
+        password_hash = make_password(password)
+        with transaction.atomic(using=self._db):
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    INSERT INTO {table} (
+                        id,
+                        username,
+                        email,
+                        password,
+                        status,
+                        last_login,
+                        account_non_expired,
+                        account_non_locked,
+                        failed_login_attempts,
+                        lockout_until,
+                        credentials_non_expired,
+                        last_password_change,
+                        enabled,
+                        refresh_token,
+                        created_by,
+                        created_at,
+                        updated_by,
+                        updated_at,
+                        deleted_by,
+                        deleted_at
+                    ) VALUES (
+                        nextval({seq_expr}),
+                        %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s,
+                        %s, %s, %s, %s,
+                        currval({seq_expr}),
+                        %s, %s, %s, %s, %s
+                    )
+                    RETURNING id
+                    """,
+                    [
+                        username,
+                        email,
+                        password_hash,
+                        status,
+                        extra_fields.get('last_login'),
+                        extra_fields.get('account_non_expired', True),
+                        extra_fields.get('account_non_locked', True),
+                        extra_fields.get('failed_login_attempts'),
+                        extra_fields.get('lockout_until'),
+                        extra_fields.get('credentials_non_expired', True),
+                        extra_fields.get('last_password_change', now),
+                        extra_fields.get('is_active', True),
+                        extra_fields.get('refresh_token'),
+                        now,
+                        extra_fields.get('updated_by_id'),
+                        now,
+                        extra_fields.get('deleted_by_id'),
+                        extra_fields.get('deleted_at'),
+                    ],
+                )
+                user_id = cursor.fetchone()[0]
+        return self.get(pk=user_id)
+
+    def create_user(self, username, email, password=None, created_by=None, **extra_fields):
         if not username:
             raise ValueError('Username is required')
         if not email:
             raise ValueError('Email is required')
 
         email = self.normalize_email(email)
-        extra_fields.setdefault('is_super_admin', False)
+        extra_fields.setdefault('status', UserStatus.ACTIVE)
+        extra_fields.setdefault('account_non_expired', True)
+        extra_fields.setdefault('account_non_locked', True)
+        extra_fields.setdefault('credentials_non_expired', True)
+        extra_fields.setdefault('is_active', True)
+        extra_fields.setdefault('failed_login_attempts', 0)
+        extra_fields.setdefault('last_password_change', timezone.now())
+
+        if created_by is None:
+            if self.model.objects.exists():
+                raise ValueError('created_by is required when users already exist')
+            return self._bootstrap_create_user(username, email, password, **extra_fields)
+
         user = self.model(username=username, email=email, **extra_fields)
+        if isinstance(created_by, self.model):
+            user.created_by = created_by
+        else:
+            user.created_by_id = created_by
         user.set_password(password)
-        
         user.save(using=self._db)
         return user
 
-    def create_superuser(self, username, email, password=None, **extra_fields):
-        """
-        Create and save a superuser.
-        """
-        extra_fields.setdefault('is_staff', True)
-        extra_fields.setdefault('is_superuser', True)
+    def create_superuser(self, username, email, password=None, created_by=None, **extra_fields):
+        extra_fields.setdefault('status', UserStatus.ACTIVE)
         extra_fields.setdefault('is_active', True)
-        extra_fields.setdefault('is_super_admin', True)
+        extra_fields.setdefault('account_non_expired', True)
+        extra_fields.setdefault('account_non_locked', True)
+        extra_fields.setdefault('credentials_non_expired', True)
 
-        if extra_fields.get('is_staff') is not True:
-            raise ValueError('Superuser must have is_staff=True')
-        if extra_fields.get('is_superuser') is not True:
-            raise ValueError('Superuser must have is_superuser=True')
+        user = self.create_user(username, email, password, created_by=created_by, **extra_fields)
+        role_model = apps.get_model('accounts', 'Role')
+        user_role_model = apps.get_model('accounts', 'UserRole')
+        role, _ = role_model.objects.get_or_create(
+            name='SUPER_ADMIN',
+            defaults={'description': 'Super admin role'},
+        )
+        user_role_model.objects.get_or_create(
+            user=user,
+            role=role,
+            defaults={'created_by': user},
+        )
+        return user
 
-        return self.create_user(username, email, password, **extra_fields)
 
-
-class User(AbstractBaseUser, PermissionsMixin, AuditedModel):
+class User(AbstractBaseUser):
     """
-    Custom User model for the authentication service.
-    
-    Fields:
-    - id: UUID primary key
-    - username: Unique username
-    - email: Unique email address
-    - password_hash: Hashed password
-    - is_active: Whether user can login
-    - Audit fields from AuditedModel
+    Custom User model aligned with auth_user table.
     """
-    
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    id = models.AutoField(primary_key=True)
     username = models.CharField(
-        max_length=150,
+        max_length=255,
         unique=True,
-        db_index=True,
         verbose_name='Usuario',
-        help_text="Unique username for login"
+        help_text="Unique username for login",
     )
     email = models.EmailField(
+        max_length=255,
         unique=True,
-        db_index=True,
         verbose_name='Correo',
-        help_text="Unique email address"
+        help_text="Unique email address",
     )
     password = models.CharField(
         max_length=255,
         verbose_name='Contraseña',
-        help_text="Hashed password"
+        help_text="Hashed password",
     )
-    is_active = models.BooleanField(
-        default=True,
-        verbose_name='Activo',
-        help_text="Whether this user can login"
-    )
-    is_staff = models.BooleanField(
-        default=False,
-        verbose_name='Es staff',
-        help_text="Whether user can access admin panel"
-    )
-    is_superuser = models.BooleanField(
-        default=False,
-        verbose_name='Es superusuario',
-        help_text="Whether user has all permissions"
-    )
-    is_super_admin = models.BooleanField(
-        default=False,
-        db_index=True,
-        verbose_name='Es Super Admin',
-        help_text="Super admin bypass all permission checks"
+    status = models.CharField(
+        max_length=8,
+        choices=UserStatus.choices,
+        verbose_name='Estado',
     )
     last_login = models.DateTimeField(
         null=True,
         blank=True,
-        verbose_name='Último login'
+        verbose_name='Último login',
     )
+    account_non_expired = models.BooleanField(default=True)
+    account_non_locked = models.BooleanField(default=True)
+    failed_login_attempts = models.IntegerField(null=True, blank=True)
+    lockout_until = models.DateTimeField(null=True, blank=True)
+    credentials_non_expired = models.BooleanField(default=True)
+    last_password_change = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(
+        default=True,
+        db_column='enabled',
+        verbose_name='Habilitado',
+    )
+    refresh_token = models.UUIDField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        'self',
+        on_delete=models.PROTECT,
+        related_name='created_users',
+        db_column='created_by',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_by = models.ForeignKey(
+        'self',
+        on_delete=models.PROTECT,
+        related_name='updated_users',
+        db_column='updated_by',
+        null=True,
+        blank=True,
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+    deleted_by = models.ForeignKey(
+        'self',
+        on_delete=models.PROTECT,
+        related_name='deleted_users',
+        db_column='deleted_by',
+        null=True,
+        blank=True,
+    )
+    deleted_at = models.DateTimeField(null=True, blank=True)
     custom_groups = models.ManyToManyField(
         'CustomGroup',
         blank=True,
         related_name='users',
-        verbose_name='Grupos'
+        verbose_name='Grupos',
     )
 
     objects = CustomUserManager()
@@ -208,44 +282,62 @@ class User(AbstractBaseUser, PermissionsMixin, AuditedModel):
     REQUIRED_FIELDS = ['email']
 
     class Meta:
-        db_table = 'users'
+        db_table = 'auth_user'
         verbose_name = 'Usuario'
         verbose_name_plural = 'Usuarios'
-        indexes = [
-            models.Index(fields=['username']),
-            models.Index(fields=['email']),
-            models.Index(fields=['is_active']),
-            models.Index(fields=['deleted_at']),
-        ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=['username'],
-                condition=models.Q(deleted_at__isnull=True),
-                name='unique_active_username'
-            ),
-            models.UniqueConstraint(
-                fields=['email'],
-                condition=models.Q(deleted_at__isnull=True),
-                name='unique_active_email'
-            ),
-        ]
 
     def __str__(self):
         return f"{self.username} ({self.email})"
 
     def set_password(self, raw_password):
-        """Hash and set the password."""
         self.password = make_password(raw_password)
+        self.last_password_change = timezone.now()
 
     def check_password(self, raw_password):
-        """Check if the provided password matches the hash."""
-        from django.contrib.auth.hashers import check_password
         return check_password(raw_password, self.password)
 
     def delete(self, using=None, keep_parents=False, deleted_by=None):
-        """Soft delete user records by default."""
         self.soft_delete(deleted_by=deleted_by)
         return None
+
+    @property
+    def is_staff(self) -> bool:
+        if not self.pk:
+            return False
+        return self.user_roles.filter(
+            role__name__in=['SUPER_ADMIN', 'ADMIN'],
+            deleted_at__isnull=True,
+        ).exists()
+
+    @property
+    def is_superuser(self) -> bool:
+        if not self.pk:
+            return False
+        return self.user_roles.filter(role__name='SUPER_ADMIN', deleted_at__isnull=True).exists()
+
+    def has_perm(self, perm, obj=None):
+        return self.is_superuser
+
+    def has_module_perms(self, app_label):
+        return self.is_superuser
+
+    def soft_delete(self, deleted_by=None):
+        self.deleted_at = timezone.now()
+        if deleted_by is not None:
+            if isinstance(deleted_by, User):
+                self.deleted_by = deleted_by
+            else:
+                self.deleted_by_id = deleted_by
+        self.save(update_fields=['deleted_at', 'deleted_by', 'updated_at'])
+
+    def restore(self):
+        self.deleted_at = None
+        self.deleted_by = None
+        self.save(update_fields=['deleted_at', 'deleted_by', 'updated_at'])
+
+    @property
+    def is_deleted(self) -> bool:
+        return self.deleted_at is not None
 
 
 class CustomGroup(AuditedModel):
@@ -276,199 +368,195 @@ class CustomGroup(AuditedModel):
         verbose_name = 'Grupo'
         verbose_name_plural = 'Grupos'
         indexes = [
-            models.Index(fields=['name']),
-            models.Index(fields=['deleted_at']),
+            models.Index(fields=['name'], name='custom_gro_name_8c5f90_idx'),
+            models.Index(fields=['deleted_at'], name='custom_gro_deleted_2b06a5_idx'),
         ]
 
     def __str__(self):
         return self.name
 
 
-class Role(AuditedModel):
+class Role(models.Model):
     """
-    Role model for RBAC.
-    
-    Represents a role that can be assigned to users.
-    A role contains multiple permissions.
+    Role model aligned with role table.
     """
-    
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    id = models.AutoField(primary_key=True)
     name = models.CharField(
-        max_length=100,
-        unique=True,
-        db_index=True,
+        max_length=255,
         verbose_name='Nombre',
-        help_text="Unique role name (e.g., SUPER_ADMIN, USER)"
     )
-    description = models.TextField(
-        blank=True,
+    description = models.CharField(
+        max_length=255,
         verbose_name='Descripción',
-        help_text="Role description and purpose"
     )
 
     class Meta:
-        db_table = 'roles'
+        db_table = 'role'
         verbose_name = 'Rol'
         verbose_name_plural = 'Roles'
-        indexes = [
-            models.Index(fields=['name']),
-            models.Index(fields=['deleted_at']),
-        ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=['name'],
-                condition=models.Q(deleted_at__isnull=True),
-                name='unique_active_role_name'
-            ),
-        ]
 
     def __str__(self):
         return self.name
 
 
-class Permission(AuditedModel):
+class Permission(models.Model):
     """
-    Permission model for RBAC.
-    
-    Represents a specific permission that can be granted to roles.
-    Permissions are fine-grained actions (e.g., 'user.create', 'role.edit').
+    Permission model aligned with permission table.
     """
-    
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    code = models.CharField(
-        max_length=100,
-        unique=True,
-        db_index=True,
-        verbose_name='Código',
-        help_text="Unique permission code (e.g., 'user.create', 'role.delete')"
+
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(
+        max_length=255,
+        verbose_name='Nombre',
     )
-    description = models.TextField(
+    description = models.CharField(
+        max_length=255,
+        null=True,
         blank=True,
         verbose_name='Descripción',
-        help_text="Permission description"
     )
 
     class Meta:
-        db_table = 'permissions'
+        db_table = 'permission'
         verbose_name = 'Permiso'
         verbose_name_plural = 'Permisos'
-        indexes = [
-            models.Index(fields=['code']),
-            models.Index(fields=['deleted_at']),
-        ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=['code'],
-                condition=models.Q(deleted_at__isnull=True),
-                name='unique_active_permission_code'
-            ),
-        ]
 
     def __str__(self):
-        return self.code
+        return self.name
 
 
 class UserRole(models.Model):
     """
-    UserRole relationship model.
-    
-    Represents the many-to-many relationship between User and Role.
-    A user can have multiple roles, and a role can be assigned to multiple users.
-    
-    This model uses explicit through table for better auditability.
+    User-role relationship aligned with auth_user_in_role table.
     """
-    
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    id = models.AutoField(primary_key=True)
     user = models.ForeignKey(
         User,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name='user_roles',
+        db_column='auth_user_id',
         verbose_name='Usuario',
-        help_text="User reference"
+        help_text="User reference",
     )
     role = models.ForeignKey(
         Role,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name='user_assignments',
+        db_column='role_id',
         verbose_name='Rol',
-        help_text="Role reference"
+        help_text="Role reference",
     )
-    assigned_at = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name='Asignado el',
-        help_text="When this role was assigned"
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='created_user_roles',
+        db_column='created_by',
     )
-    assigned_by = models.CharField(
-        max_length=255,
+    created_at = models.DateField(auto_now_add=True)
+    deleted_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='deleted_user_roles',
+        db_column='deleted_by',
         null=True,
         blank=True,
-        verbose_name='Asignado por',
-        help_text="Username who assigned this role"
     )
+    deleted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        db_table = 'user_roles'
+        db_table = 'auth_user_in_role'
         verbose_name = 'Rol de Usuario'
         verbose_name_plural = 'Roles de Usuario'
-        unique_together = [('user', 'role')]
-        indexes = [
-            models.Index(fields=['user']),
-            models.Index(fields=['role']),
-        ]
 
     def __str__(self):
         return f"{self.user.username} -> {self.role.name}"
 
 
-class RolePermission(models.Model):
+class PermissionInRole(models.Model):
     """
-    RolePermission relationship model.
-    
-    Represents the many-to-many relationship between Role and Permission.
-    A role can have multiple permissions, and a permission can belong to multiple roles.
-    
-    This model uses explicit through table for better auditability.
+    Role-permission relationship aligned with permission_in_role table.
     """
-    
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    id = models.AutoField(primary_key=True)
     role = models.ForeignKey(
         Role,
-        on_delete=models.CASCADE,
-        related_name='role_permissions',
+        on_delete=models.PROTECT,
+        related_name='permission_links',
+        db_column='role_id',
         verbose_name='Rol',
-        help_text="Role reference"
+        help_text="Role reference",
     )
     permission = models.ForeignKey(
         Permission,
-        on_delete=models.CASCADE,
-        related_name='permission_roles',
+        on_delete=models.PROTECT,
+        related_name='role_links',
+        db_column='permission_id',
         verbose_name='Permiso',
-        help_text="Permission reference"
-    )
-    granted_at = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name='Concedido el',
-        help_text="When this permission was granted"
-    )
-    granted_by = models.CharField(
-        max_length=255,
-        null=True,
-        blank=True,
-        verbose_name='Concedido por',
-        help_text="Username who granted this permission"
+        help_text="Permission reference",
     )
 
     class Meta:
-        db_table = 'role_permissions'
+        db_table = 'permission_in_role'
         verbose_name = 'Permiso de Rol'
         verbose_name_plural = 'Permisos de Rol'
-        unique_together = [('role', 'permission')]
-        indexes = [
-            models.Index(fields=['role']),
-            models.Index(fields=['permission']),
-        ]
 
     def __str__(self):
-        return f"{self.role.name} -> {self.permission.code}"
+        return f"{self.role.name} -> {self.permission.name}"
+
+
+class RefreshToken(AuditedModel):
+    """
+    Refresh token table for auth sessions.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    token = models.CharField(
+        max_length=255,
+        unique=True,
+        db_index=True,
+        verbose_name='Token',
+        help_text="Unique refresh token value (UUID)",
+    )
+    is_revoked = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name='Revocado',
+        help_text="Whether this token has been revoked",
+    )
+    expires_at = models.DateTimeField(
+        verbose_name='Expira el',
+        help_text="Token expiration timestamp",
+    )
+    ip_address = models.GenericIPAddressField(
+        null=True,
+        blank=True,
+        verbose_name='Dirección IP',
+        help_text="Client IP address when token was issued",
+    )
+    user_agent = models.TextField(
+        blank=True,
+        verbose_name='User Agent',
+        help_text="Client User-Agent when token was issued",
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='refresh_tokens',
+        verbose_name='Usuario',
+        help_text="User who owns this refresh token",
+    )
+
+    class Meta:
+        db_table = 'refresh_tokens'
+        verbose_name = 'Token de Refresco'
+        verbose_name_plural = 'Tokens de Refresco'
+        indexes = [
+            models.Index(fields=['user']),
+            models.Index(fields=['token']),
+            models.Index(fields=['is_revoked']),
+            models.Index(fields=['expires_at']),
+        ]
 
 

@@ -33,8 +33,8 @@ class Document(AuditedModel):
         verbose_name = 'Documento'
         verbose_name_plural = 'Documentos'
         indexes = [
-            models.Index(fields=['name']),
-            models.Index(fields=['deleted_at']),
+            models.Index(fields=['name'], name='documents_name_7e31f9_idx'),
+            models.Index(fields=['deleted_at'], name='documents_deleted_4df53c_idx'),
         ]
 
     def __str__(self):
@@ -75,8 +75,8 @@ class DocumentRole(models.Model):
         verbose_name_plural = 'Documentos por Rol'
         unique_together = [('document', 'role')]
         indexes = [
-            models.Index(fields=['document']),
-            models.Index(fields=['role']),
+            models.Index(fields=['document'], name='docrole_doc_50d0b6_idx'),
+            models.Index(fields=['role'], name='docrole_role_4a3c85_idx'),
         ]
 
     def __str__(self):

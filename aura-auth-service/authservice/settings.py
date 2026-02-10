@@ -73,33 +73,30 @@ TEMPLATES = [
 WSGI_APPLICATION = 'authservice.wsgi.application'
 
 # Database Configuration
-# Development: SQLite3 (default, no setup needed)
-# Production: PostgreSQL (set DB_ENGINE in .env)
+# Default: PostgreSQL auth_db from docker-compose
 
-DB_ENGINE = config('DB_ENGINE', default='django.db.backends.sqlite3')
+DB_ENGINE = config('DB_ENGINE', default='django.db.backends.postgresql')
 
 if DB_ENGINE == 'django.db.backends.sqlite3':
-    # SQLite3 Configuration (Development)
     DATABASES = {
         'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
+            'ENGINE': DB_ENGINE,
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
 else:
-    # PostgreSQL Configuration (Production)
     DATABASES = {
         'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': config('DB_NAME', default='aura_auth_db'),
-            'USER': config('DB_USER', default='postgres'),
-            'PASSWORD': config('DB_PASSWORD', default='postgres'),
+            'ENGINE': DB_ENGINE,
+            'NAME': config('DB_NAME', default='auth_db'),
+            'USER': config('DB_USER', default='aura_root'),
+            'PASSWORD': config('DB_PASSWORD', default='aura_password'),
             'HOST': config('DB_HOST', default='localhost'),
-            'PORT': config('DB_PORT', default='5432'),
-            'CONN_MAX_AGE': 600,  # Connection pooling
+            'PORT': config('DB_PORT', default='5433'),
+            'CONN_MAX_AGE': 600,
             'OPTIONS': {
                 'connect_timeout': 10,
-                'options': '-c statement_timeout=30000'  # 30 seconds
+                'options': '-c statement_timeout=30000'
             }
         }
     }
