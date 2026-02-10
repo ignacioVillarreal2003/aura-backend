@@ -245,10 +245,17 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
 
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)
+        for field_name in ('created_by', 'updated_by', 'deleted_by'):
+            if field_name in form.base_fields:
+                form.base_fields.pop(field_name)
         if not _is_super_admin_user(request.user):
             for field_name in ('custom_groups',):
                 if field_name in form.base_fields:
                     form.base_fields.pop(field_name)
+            if 'roles' in form.base_fields:
+                form.base_fields['roles'].queryset = Role.objects.exclude(
+                    name__in=['SUPER_ADMIN', 'ADMIN']
+                )
         return form
 
     def get_list_filter(self, request):

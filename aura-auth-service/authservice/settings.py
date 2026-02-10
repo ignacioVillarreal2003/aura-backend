@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django_extensions',
     
     # Third-party apps
     'corsheaders',
@@ -148,6 +149,11 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
 }
+
+# JWT Configuration
+JWT_ACCESS_LIFETIME_MINUTES = config('JWT_ACCESS_LIFETIME_MINUTES', default=15, cast=int)
+JWT_ALGORITHM = config('JWT_ALGORITHM', default='HS256')
+JWT_SIGNING_KEY = config('JWT_SIGNING_KEY', default=SECRET_KEY)
 
 # Logging Configuration
 LOGGING = {

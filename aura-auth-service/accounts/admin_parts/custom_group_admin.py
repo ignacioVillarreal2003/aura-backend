@@ -70,5 +70,5 @@ class CustomGroupAdmin(HelpTextStripMixin, admin.ModelAdmin):
         return _is_super_admin_user(request.user)
 
     def save_model(self, request, obj, form, change):
-        _apply_audit_fields(obj, request.user.username, is_create=not change)
+        _apply_audit_fields(obj, request.user, is_create=not change)
         super().save_model(request, obj, form, change)

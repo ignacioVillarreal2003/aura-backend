@@ -50,7 +50,7 @@ class CreatedDateFilter(admin.DateFieldListFilter):
 
 
 def _apply_audit_fields(obj, actor, is_create: bool):
-    if is_create and not obj.created_by:
+    if is_create and not obj.created_by_id:
         obj.created_by = actor
     obj.updated_by = actor
 

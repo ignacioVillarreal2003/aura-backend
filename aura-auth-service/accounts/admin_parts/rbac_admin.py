@@ -187,6 +187,8 @@ class UserRoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == 'user' and not _is_super_admin_user(request.user):
             kwargs['queryset'] = User.objects.filter(status='active', is_active=True)
+        if db_field.name == 'role' and not _is_super_admin_user(request.user):
+            kwargs['queryset'] = Role.objects.exclude(name__in=['SUPER_ADMIN', 'ADMIN'])
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     def save_model(self, request, obj, form, change):
