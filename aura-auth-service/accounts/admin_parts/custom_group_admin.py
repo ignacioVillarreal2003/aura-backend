@@ -6,7 +6,12 @@ from django.db import connections
 from django.utils import timezone
 from django.utils.html import format_html
 from accounts.models import CustomGroup
-from accounts.admin_parts.common import HelpTextStripMixin, _apply_audit_fields, _is_super_admin_user
+from accounts.admin_parts.common import (
+    HelpTextStripMixin,
+    _apply_audit_fields,
+    _is_super_admin_user,
+    _is_admin_or_super_user,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,19 +68,19 @@ class CustomGroupAdmin(HelpTextStripMixin, admin.ModelAdmin):
     document_count.short_description = 'Documentos'
 
     def has_module_permission(self, request):
-        return _is_super_admin_user(request.user)
+        return _is_admin_or_super_user(request.user)
 
     def has_view_permission(self, request, obj=None):
-        return _is_super_admin_user(request.user)
+        return _is_admin_or_super_user(request.user)
 
     def has_add_permission(self, request):
-        return _is_super_admin_user(request.user)
+        return _is_admin_or_super_user(request.user)
 
     def has_change_permission(self, request, obj=None):
-        return _is_super_admin_user(request.user)
+        return _is_admin_or_super_user(request.user)
 
     def has_delete_permission(self, request, obj=None):
-        return _is_super_admin_user(request.user)
+        return _is_admin_or_super_user(request.user)
 
     def _sync_collection_create_or_update(self, request, obj, old_name=None, is_create=False):
         try:

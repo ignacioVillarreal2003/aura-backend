@@ -1,72 +1,18 @@
 """User admin configuration."""
 
-from django import forms
 from django.contrib import admin
-from django.contrib.admin.widgets import FilteredSelectMultiple
 from django.utils import timezone
 from django.utils.html import format_html
-from accounts.models import User, Role, UserRole, CustomGroup
+from accounts.models import User, Role, UserRole
 from accounts.admin_parts.common import (
     StatusFilter,
     CreatedDateFilter,
     HelpTextStripMixin,
     _apply_audit_fields,
     _is_super_admin_user,
+    _is_admin_or_super_user,
 )
-
-
-class UserAdminForm(forms.ModelForm):
-    
-    active = forms.BooleanField(
-        required=False,
-        initial=True,
-        label='Activo',
-    )
-
-    custom_groups = forms.ModelMultipleChoiceField(
-        queryset=CustomGroup.objects.all(),
-        required=False,
-        widget=FilteredSelectMultiple('Grupos', is_stacked=False),
-        label='',
-        help_text='',
-    )
-
-    roles = forms.ModelChoiceField(
-        queryset=Role.objects.filter(name__in=['ADMIN', 'USER']),
-        required=False,
-        widget=forms.RadioSelect(),
-        label='Rol',
-    )
-
-    class Meta:
-        model = User
-        fields = '__all__'
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if 'status' in self.fields:
-            self.fields['status'].widget = forms.HiddenInput()
-        if self.instance and self.instance.pk:
-            self.fields['active'].initial = (self.instance.status == 'active')
-            if 'roles' in self.fields:
-                self.fields['roles'].initial = Role.objects.filter(
-                    user_assignments__user=self.instance,
-                    user_assignments__deleted_at__isnull=True,
-                ).first()
-            if 'custom_groups' in self.fields:
-                self.fields['custom_groups'].initial = self.instance.custom_groups.all()
-        else:
-            if 'roles' in self.fields:
-                self.fields['roles'].initial = Role.objects.filter(name='USER').first()
-        if 'roles' in self.fields:
-            def _role_label(role):
-                if role.name == 'ADMIN':
-                    return 'Administrador'
-                if role.name == 'USER':
-                    return 'Usuario'
-                return role.name
-            self.fields['roles'].label_from_instance = _role_label
-            
+from accounts.admin_parts.forms.user_form import UserAdminForm
 
 
 @admin.register(User)
@@ -263,26 +209,31 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
         return queryset.prefetch_related('user_roles__role').order_by('deleted_at', 'username')
 
     def has_add_permission(self, request):
-        if _is_super_admin_user(request.user):
+        if _is_admin_or_super_user(request.user):
+            return True
+        return bool(request.user and request.user.is_staff)
+
+    def has_module_permission(self, request):
+        if _is_admin_or_super_user(request.user):
             return True
         return bool(request.user and request.user.is_staff)
 
     def has_view_permission(self, request, obj=None):
-        if _is_super_admin_user(request.user):
+        if _is_admin_or_super_user(request.user):
             return True
         if obj is None:
             return bool(request.user and request.user.is_staff)
         return bool(request.user and request.user.is_staff)
 
     def has_change_permission(self, request, obj=None):
-        if _is_super_admin_user(request.user):
+        if _is_admin_or_super_user(request.user):
             return True
         if obj is None:
             return bool(request.user and request.user.is_staff)
         return bool(request.user and request.user.is_staff)
 
     def has_delete_permission(self, request, obj=None):
-        if _is_super_admin_user(request.user):
+        if _is_admin_or_super_user(request.user):
             return True
         if obj is None:
             return False

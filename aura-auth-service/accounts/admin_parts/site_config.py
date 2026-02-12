@@ -2,7 +2,7 @@
 
 from django.contrib import admin
 from django.contrib.auth.models import Group
-from accounts.admin_parts.common import _is_super_admin_user
+from accounts.admin_parts.common import _is_super_admin_user, _is_admin_user
 
 
 # Customize admin site
@@ -17,7 +17,7 @@ admin.site.unregister(Group)
 def _custom_get_app_list(self, request):
     app_list = admin.AdminSite.get_app_list(self, request)
     desired_order = ['User', 'UserRole']
-    if _is_super_admin_user(request.user):
+    if _is_super_admin_user(request.user) or _is_admin_user(request.user):
         desired_order = [
             'User',
             'CustomGroup',
@@ -53,14 +53,18 @@ def _custom_get_app_list(self, request):
             'has_module_perms': True,
             'models': [],
         },
-        {
-            'app_label': 'auditoria',
-            'name': 'Auditoría',
-            'app_url': '',
-            'has_module_perms': True,
-            'models': [],
-        },
     ]
+
+    if _is_super_admin_user(request.user):
+        placeholder_apps.append(
+            {
+                'app_label': 'auditoria',
+                'name': 'Auditoría',
+                'app_url': '',
+                'has_module_perms': True,
+                'models': [],
+            }
+        )
 
     app_order = {
         'dashboard': 0,
@@ -73,7 +77,7 @@ def _custom_get_app_list(self, request):
 
     for app in app_list:
         if app.get('app_label') == 'accounts':
-            if not _is_super_admin_user(request.user):
+            if not (_is_super_admin_user(request.user) or _is_admin_user(request.user)):
                 app['models'] = [
                     model for model in app['models']
                     if model.get('object_name') in {'User', 'UserRole'}
