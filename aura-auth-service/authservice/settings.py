@@ -173,6 +173,12 @@ JWT_ACCESS_LIFETIME_MINUTES = config('JWT_ACCESS_LIFETIME_MINUTES', default=15, 
 JWT_ALGORITHM = config('JWT_ALGORITHM', default='HS256')
 JWT_SIGNING_KEY = config('JWT_SIGNING_KEY', default=SECRET_KEY)
 
+# Document Processing Service
+DOCUMENT_PROCESSING_URL = config(
+    'DOCUMENT_PROCESSING_URL',
+    default='http://localhost:8001/api/document-creation',
+)
+
 # Logging Configuration
 LOGGING = {
     'version': 1,
