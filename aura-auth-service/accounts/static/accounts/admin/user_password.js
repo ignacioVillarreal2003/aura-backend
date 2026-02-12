@@ -10,6 +10,11 @@
 
   document.addEventListener('DOMContentLoaded', function () {
     var input = document.querySelector('#id_password') || document.querySelector('input[name="password"]');
+    var chosenTitle = document.querySelector('.selector-chosen h2');
+    if (chosenTitle && chosenTitle.textContent) {
+      chosenTitle.textContent = chosenTitle.textContent.replace('Grupos elegidos', 'Grupos Elegidos');
+    }
+
     if (!input) {
       return;
     }

@@ -40,7 +40,6 @@ class CustomUserManager(BaseUserManager):
                         lockout_until,
                         credentials_non_expired,
                         last_password_change,
-                        enabled,
                         refresh_token,
                         created_by,
                         created_at,
@@ -52,7 +51,7 @@ class CustomUserManager(BaseUserManager):
                         nextval({seq_expr}),
                         %s, %s, %s, %s, %s,
                         %s, %s, %s, %s,
-                        %s, %s, %s, %s,
+                        %s, %s, %s,
                         currval({seq_expr}),
                         %s, %s, %s, %s, %s
                     )
@@ -70,7 +69,6 @@ class CustomUserManager(BaseUserManager):
                         extra_fields.get('lockout_until'),
                         extra_fields.get('credentials_non_expired', True),
                         extra_fields.get('last_password_change', now),
-                        extra_fields.get('is_active', True),
                         extra_fields.get('refresh_token'),
                         now,
                         extra_fields.get('updated_by_id'),
@@ -93,14 +91,14 @@ class CustomUserManager(BaseUserManager):
         extra_fields.setdefault('account_non_expired', True)
         extra_fields.setdefault('account_non_locked', True)
         extra_fields.setdefault('credentials_non_expired', True)
-        extra_fields.setdefault('is_active', True)
         extra_fields.setdefault('failed_login_attempts', 0)
         extra_fields.setdefault('last_password_change', timezone.now())
 
         if created_by is None:
             if self.model.objects.exists():
-                raise ValueError('created_by is required when users already exist')
-            return self._bootstrap_create_user(username, email, password, **extra_fields)
+                created_by = self.model.objects.order_by('id').first()
+            else:
+                return self._bootstrap_create_user(username, email, password, **extra_fields)
 
         user = self.model(username=username, email=email, **extra_fields)
         if isinstance(created_by, self.model):
@@ -113,7 +111,6 @@ class CustomUserManager(BaseUserManager):
 
     def create_superuser(self, username, email, password=None, created_by=None, **extra_fields):
         extra_fields.setdefault('status', UserStatus.ACTIVE)
-        extra_fields.setdefault('is_active', True)
         extra_fields.setdefault('account_non_expired', True)
         extra_fields.setdefault('account_non_locked', True)
         extra_fields.setdefault('credentials_non_expired', True)
@@ -143,13 +140,11 @@ class User(AbstractBaseUser):
         max_length=255,
         unique=True,
         verbose_name='Usuario',
-        help_text="Unique username for login",
     )
     email = models.EmailField(
         max_length=255,
         unique=True,
         verbose_name='Correo',
-        help_text="Unique email address",
     )
     password = models.CharField(
         max_length=255,
@@ -171,11 +166,10 @@ class User(AbstractBaseUser):
     failed_login_attempts = models.IntegerField(null=True, blank=True)
     lockout_until = models.DateTimeField(null=True, blank=True)
     credentials_non_expired = models.BooleanField(default=True)
-    last_password_change = models.DateTimeField(null=True, blank=True)
-    is_active = models.BooleanField(
-        default=True,
-        db_column='enabled',
-        verbose_name='Habilitado',
+    last_password_change = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Ultimo cambio de contrasena',
     )
     refresh_token = models.UUIDField(null=True, blank=True)
     created_by = models.ForeignKey(
@@ -183,8 +177,9 @@ class User(AbstractBaseUser):
         on_delete=models.PROTECT,
         related_name='created_users',
         db_column='created_by',
+        verbose_name='Creado por',
     )
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Fecha creado')
     updated_by = models.ForeignKey(
         'self',
         on_delete=models.PROTECT,
@@ -192,8 +187,9 @@ class User(AbstractBaseUser):
         db_column='updated_by',
         null=True,
         blank=True,
+        verbose_name='Actualizado por',
     )
-    updated_at = models.DateTimeField(auto_now=True)
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Fecha actualizado')
     deleted_by = models.ForeignKey(
         'self',
         on_delete=models.PROTECT,
@@ -201,8 +197,9 @@ class User(AbstractBaseUser):
         db_column='deleted_by',
         null=True,
         blank=True,
+        verbose_name='Eliminado por',
     )
-    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_at = models.DateTimeField(null=True, blank=True, verbose_name='Fecha eliminado')
     custom_groups = models.ManyToManyField(
         'CustomGroup',
         blank=True,

@@ -40,7 +40,30 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
         return _is_super_admin_user(request.user)
 
     def has_delete_permission(self, request, obj=None):
-        return _is_super_admin_user(request.user)
+        if not _is_super_admin_user(request.user):
+            return False
+        if obj is None:
+            return True
+        if obj.name in ['SUPER_ADMIN', 'ADMIN']:
+            return False
+        if request.user and obj.user_assignments.filter(
+            user=request.user,
+            deleted_at__isnull=True,
+        ).exists():
+            return False
+        return True
+
+    def delete_queryset(self, request, queryset):
+        if not _is_super_admin_user(request.user):
+            return
+        protected = queryset.filter(
+            name__in=['SUPER_ADMIN', 'ADMIN']
+        ) | queryset.filter(
+            user_assignments__user=request.user,
+            user_assignments__deleted_at__isnull=True,
+        )
+        safe_queryset = queryset.exclude(id__in=protected.values_list('id', flat=True))
+        super().delete_queryset(request, safe_queryset)
 
     def description_short(self, obj):
         if obj.description:
@@ -186,7 +209,7 @@ class UserRoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == 'user' and not _is_super_admin_user(request.user):
-            kwargs['queryset'] = User.objects.filter(status='active', is_active=True)
+            kwargs['queryset'] = User.objects.filter(status='active', deleted_at__isnull=True)
         if db_field.name == 'role' and not _is_super_admin_user(request.user):
             kwargs['queryset'] = Role.objects.exclude(name__in=['SUPER_ADMIN', 'ADMIN'])
         return super().formfield_for_foreignkey(db_field, request, **kwargs)

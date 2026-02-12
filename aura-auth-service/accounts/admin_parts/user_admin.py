@@ -8,7 +8,6 @@ from django.utils.html import format_html
 from accounts.models import User, Role, UserRole, CustomGroup
 from accounts.admin_parts.common import (
     StatusFilter,
-    EnabledFilter,
     CreatedDateFilter,
     HelpTextStripMixin,
     _apply_audit_fields,
@@ -17,6 +16,13 @@ from accounts.admin_parts.common import (
 
 
 class UserAdminForm(forms.ModelForm):
+    
+    active = forms.BooleanField(
+        required=False,
+        initial=True,
+        label='Activo',
+    )
+
     custom_groups = forms.ModelMultipleChoiceField(
         queryset=CustomGroup.objects.all(),
         required=False,
@@ -25,11 +31,11 @@ class UserAdminForm(forms.ModelForm):
         help_text='',
     )
 
-    roles = forms.ModelMultipleChoiceField(
-        queryset=Role.objects.all(),
+    roles = forms.ModelChoiceField(
+        queryset=Role.objects.filter(name__in=['ADMIN', 'USER']),
         required=False,
-        widget=FilteredSelectMultiple('Roles', is_stacked=False),
-        label='',
+        widget=forms.RadioSelect(),
+        label='Rol',
     )
 
     class Meta:
@@ -38,11 +44,29 @@ class UserAdminForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if 'status' in self.fields:
+            self.fields['status'].widget = forms.HiddenInput()
         if self.instance and self.instance.pk:
+            self.fields['active'].initial = (self.instance.status == 'active')
             if 'roles' in self.fields:
-                self.fields['roles'].initial = Role.objects.filter(user_assignments__user=self.instance)
+                self.fields['roles'].initial = Role.objects.filter(
+                    user_assignments__user=self.instance,
+                    user_assignments__deleted_at__isnull=True,
+                ).first()
             if 'custom_groups' in self.fields:
                 self.fields['custom_groups'].initial = self.instance.custom_groups.all()
+        else:
+            if 'roles' in self.fields:
+                self.fields['roles'].initial = Role.objects.filter(name='USER').first()
+        if 'roles' in self.fields:
+            def _role_label(role):
+                if role.name == 'ADMIN':
+                    return 'Administrador'
+                if role.name == 'USER':
+                    return 'Usuario'
+                return role.name
+            self.fields['roles'].label_from_instance = _role_label
+            
 
 
 @admin.register(User)
@@ -54,13 +78,14 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
     list_display = (
         'username',
         'email',
+        'roles_display',
         'status_badge',
-        'enabled_badge',
         'created_date',
+        'created_by_display',
+        'last_login_display',
     )
     list_filter = (
         StatusFilter,
-        EnabledFilter,
         ('created_at', CreatedDateFilter),
     )
     search_fields = ('username', 'email')
@@ -73,6 +98,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
         'deleted_at',
         'deleted_by',
         'last_login',
+        'last_password_change',
     )
 
     form = UserAdminForm
@@ -81,62 +107,39 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
 
     fieldsets = (
         ('Identidad', {
-            'fields': ('id', 'username', 'email'),
+            'fields': ('roles', 'username', 'email', 'password', 'active'),
         }),
-        ('Contraseña', {
-            'fields': ('password',),
-            'description': 'La contraseña se encripta automáticamente al guardar',
-        }),
-        ('Estado y Seguridad', {
-            'fields': (
-                'status',
-                'is_active',
-                'account_non_expired',
-                'account_non_locked',
-                'credentials_non_expired',
-                'failed_login_attempts',
-                'lockout_until',
-                'last_password_change',
-            ),
-        }),
-        ('Grupos y Roles', {
-            'fields': ('custom_groups', 'roles'),
-        }),
-        ('Información de Auditoría', {
-            'fields': (
-                'created_at',
-                'created_by',
-                'updated_at',
-                'updated_by',
-                'deleted_at',
-                'deleted_by',
-                'last_login',
-            ),
-            'classes': ('collapse',),
+        ('Grupos', {
+            'fields': ('custom_groups',),
         }),
     )
 
     def status_badge(self, obj):
         if obj.is_deleted:
             return format_html(
-                '<span style="color: red; font-weight: bold;">Eliminado</span>'
+                '<span style="color: red; font-weight: bold;">&#10007; Eliminado</span>'
             )
         if obj.status == 'active':
             return format_html(
-                '<span style="color: green; font-weight: bold;">Activo</span>'
+                '<span style="color: green; font-weight: bold;">&#10003; Activo</span>'
             )
         return format_html(
-            '<span style="color: orange; font-weight: bold;">Inactivo</span>'
+            '<span style="color: #d96c6c; font-weight: bold;">&#x2753; Inactivo</span>'
         )
     status_badge.short_description = 'Estado'
 
-    def enabled_badge(self, obj):
-        if obj.is_active:
-            return format_html(
-                '<span style="color: green; font-weight: bold;">Habilitado</span>'
-            )
-        return format_html('<span style="color: gray;">Deshabilitado</span>')
-    enabled_badge.short_description = 'Habilitado'
+    def roles_display(self, obj):
+        roles = obj.user_roles.filter(deleted_at__isnull=True).values_list('role__name', flat=True)
+        labels = []
+        for role in roles:
+            if role == 'ADMIN':
+                labels.append('Administrador')
+            elif role == 'USER':
+                labels.append('Usuario')
+            else:
+                labels.append(role)
+        return ', '.join(labels) if labels else '-'
+    roles_display.short_description = 'Rol'
 
     def created_date(self, obj):
         if obj.created_at:
@@ -145,101 +148,57 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
     created_date.short_description = 'Creado'
     created_date.admin_order_field = 'created_at'
 
+    def created_by_display(self, obj):
+        if obj.is_superuser and obj.created_by and obj.created_by.is_superuser:
+            return 'Administracion'
+        if obj.created_by:
+            return obj.created_by.username
+        return '-'
+    created_by_display.short_description = 'Creado por'
+    created_by_display.admin_order_field = 'created_by__username'
+
+    def last_login_display(self, obj):
+        if obj.last_login:
+            return obj.last_login.strftime('%d/%m/%Y %H:%M')
+        return '-'
+    last_login_display.short_description = 'Ultimo login'
+    last_login_display.admin_order_field = 'last_login'
+
     def get_readonly_fields(self, request, obj=None):
         if obj:
-            return self.readonly_fields + ('username', 'email')
+            return self.readonly_fields + ('username', 'email', 'roles_display')
         return self.readonly_fields
 
     def get_fieldsets(self, request, obj=None):
         if obj is None:
-            if not _is_super_admin_user(request.user):
-                return (
-                    ('Identidad', {
-                        'fields': ('id', 'username', 'email'),
-                    }),
-                    ('Contraseña', {
-                        'fields': ('password',),
-                        'description': 'La contraseña se encripta automáticamente al guardar',
-                    }),
-                    ('Roles', {
-                        'fields': ('roles',),
-                    }),
-                )
-            return (
-                ('Identidad', {
-                    'fields': ('id', 'username', 'email'),
-                }),
-                ('Contraseña', {
-                    'fields': ('password',),
-                    'description': 'La contraseña se encripta automáticamente al guardar',
-                }),
-                ('Estado y Seguridad', {
-                    'fields': (
-                        'status',
-                        'is_active',
-                        'account_non_expired',
-                        'account_non_locked',
-                        'credentials_non_expired',
-                        'failed_login_attempts',
-                        'lockout_until',
-                        'last_password_change',
-                    ),
-                }),
-                ('Grupos y Roles', {
-                    'fields': ('custom_groups', 'roles'),
-                }),
-            )
+            return self.fieldsets
         if _is_super_admin_user(request.user):
             return (
                 ('Identidad', {
-                    'fields': ('id', 'username', 'email'),
+                    'fields': ('roles_display', 'username', 'email', 'active'),
                 }),
-                ('Estado y Seguridad', {
+                ('Grupos', {
+                    'fields': ('custom_groups',),
+                }),
+                ('Auditoría', {
                     'fields': (
-                        'status',
-                        'is_active',
-                        'account_non_expired',
-                        'account_non_locked',
-                        'credentials_non_expired',
-                        'failed_login_attempts',
-                        'lockout_until',
-                        'last_password_change',
-                    ),
-                }),
-                ('Grupos y Roles', {
-                    'fields': ('custom_groups', 'roles'),
-                }),
-                ('Información de Auditoría', {
-                    'fields': (
-                        'created_at',
                         'created_by',
-                        'updated_at',
+                        'created_at',
                         'updated_by',
-                        'deleted_at',
-                        'deleted_by',
+                        'updated_at',
                         'last_login',
+                        'last_password_change',
+                        'deleted_by',
+                        'deleted_at',
                     ),
-                    'classes': ('collapse',),
                 }),
             )
         return (
             ('Identidad', {
-                'fields': ('id', 'username', 'email'),
+                'fields': ('roles_display', 'username', 'email', 'active'),
             }),
-            ('Roles', {
-                'fields': ('roles',),
-            }),
-            ('Información de Auditoría', {
-                'fields': (
-                    'created_at',
-                    'created_by',
-                    'updated_at',
-                    'updated_by',
-                    'deleted_at',
-                    'deleted_by',
-                    'last_login',
-                ),
-                'classes': ('collapse',),
+            ('Grupos', {
+                'fields': ('custom_groups',),
             }),
         )
 
@@ -248,10 +207,27 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
         for field_name in ('created_by', 'updated_by', 'deleted_by'):
             if field_name in form.base_fields:
                 form.base_fields.pop(field_name)
-        if not _is_super_admin_user(request.user):
-            for field_name in ('custom_groups',):
+        for field_name in ('username', 'email'):
+            if field_name in form.base_fields:
+                form.base_fields[field_name].help_text = ''
+        if obj:
+            for field_name in ('roles', 'password'):
                 if field_name in form.base_fields:
                     form.base_fields.pop(field_name)
+            audit_labels = {
+                'created_by': 'Creado por',
+                'created_at': 'Fecha creado',
+                'updated_by': 'Actualizado por',
+                'updated_at': 'Fecha actualizado',
+                'last_login': 'Ultimo inicio de sesion',
+                'last_password_change': 'Ultimo cambio de contrasena',
+                'deleted_by': 'Eliminado por',
+                'deleted_at': 'Fecha eliminado',
+            }
+            for field_name, label in audit_labels.items():
+                if field_name in form.base_fields:
+                    form.base_fields[field_name].label = label
+        if not _is_super_admin_user(request.user):
             if 'roles' in form.base_fields:
                 form.base_fields['roles'].queryset = Role.objects.exclude(
                     name__in=['SUPER_ADMIN', 'ADMIN']
@@ -265,7 +241,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        return queryset.order_by('deleted_at', 'username')
+        return queryset.prefetch_related('user_roles__role').order_by('deleted_at', 'username')
 
     def has_add_permission(self, request):
         if _is_super_admin_user(request.user):
@@ -305,10 +281,24 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         if 'password' in form.changed_data:
             obj.set_password(form.cleaned_data['password'])
+        if 'active' in form.cleaned_data:
+            obj.status = 'active' if form.cleaned_data['active'] else 'inactive'
         _apply_audit_fields(obj, request.user, is_create=not change)
         super().save_model(request, obj, form, change)
         if 'roles' in form.cleaned_data:
-            selected_roles = form.cleaned_data['roles']
+            selected_roles = []
+            selected_role = form.cleaned_data['roles']
+            if selected_role:
+                selected_roles.append(selected_role)
+            if not _is_super_admin_user(request.user):
+                protected_roles = Role.objects.filter(
+                    name__in=['SUPER_ADMIN', 'ADMIN'],
+                    user_assignments__user=obj,
+                    user_assignments__deleted_at__isnull=True,
+                )
+                for role in protected_roles:
+                    if role not in selected_roles:
+                        selected_roles.append(role)
             UserRole.objects.filter(
                 user=obj,
                 deleted_at__isnull=True,

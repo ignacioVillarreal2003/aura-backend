@@ -83,7 +83,11 @@ if DB_ENGINE == 'django.db.backends.sqlite3':
         'default': {
             'ENGINE': DB_ENGINE,
             'NAME': BASE_DIR / 'db.sqlite3',
-        }
+        },
+        'aura_db': {
+            'ENGINE': DB_ENGINE,
+            'NAME': BASE_DIR / 'aura_db.sqlite3',
+        },
     }
 else:
     DATABASES = {
@@ -98,6 +102,20 @@ else:
             'OPTIONS': {
                 'connect_timeout': 10,
                 'options': '-c statement_timeout=30000'
+            }
+        },
+        'aura_db': {
+            'ENGINE': DB_ENGINE,
+            'NAME': config('AURA_DB_NAME', default='aura_db', cast=str),
+            'USER': config('AURA_DB_USER', default='aura_root', cast=str),
+            'PASSWORD': config('AURA_DB_PASSWORD', default='aura_password', cast=str),
+            'HOST': config('AURA_DB_HOST', default='localhost', cast=str),
+            'PORT': config('AURA_DB_PORT', default='5432', cast=str),
+            'CONN_MAX_AGE': 600,
+            'OPTIONS': {
+                'connect_timeout': 10,
+                'options': '-c statement_timeout=30000',
+                'client_encoding': 'UTF8',
             }
         }
     }

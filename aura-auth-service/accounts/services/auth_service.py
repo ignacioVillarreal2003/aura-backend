@@ -16,7 +16,7 @@ def authenticate_user(username: str, password: str):
 	user = authenticate(username=username, password=password)
 	if not user:
 		return None
-	if user.is_deleted or not user.is_active:
+	if user.is_deleted or user.status != 'active':
 		return None
 	if not user.account_non_locked:
 		return None
@@ -113,7 +113,7 @@ def introspect_token(token: str) -> dict | None:
 	if not user_id:
 		return None
 	user = User.objects.filter(id=user_id).first()
-	if not user or user.is_deleted or not user.is_active:
+	if not user or user.is_deleted or user.status != 'active':
 		return None
 
 	if user.is_superuser:

@@ -10,3 +10,7 @@
 #toolbar .object-tools li {
     float: none !important;
 }
+
+.selector-chosen h2 {
+    text-transform: capitalize;
+}

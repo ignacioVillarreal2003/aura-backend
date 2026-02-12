@@ -13,7 +13,17 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RunSQL(
-            "CREATE TYPE user_status AS ENUM ('active', 'inactive');",
+            """
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_type WHERE typname = 'user_status'
+                ) THEN
+                    CREATE TYPE user_status AS ENUM ('active', 'inactive');
+                END IF;
+            END
+            $$;
+            """,
             "DROP TYPE IF EXISTS user_status;",
         ),
         migrations.CreateModel(
@@ -23,7 +33,6 @@ class Migration(migrations.Migration):
                 (
                     "username",
                     models.CharField(
-                        help_text="Unique username for login",
                         max_length=255,
                         unique=True,
                         verbose_name="Usuario",
@@ -32,7 +41,6 @@ class Migration(migrations.Migration):
                 (
                     "email",
                     models.EmailField(
-                        help_text="Unique email address",
                         max_length=255,
                         unique=True,
                         verbose_name="Correo",
@@ -57,7 +65,9 @@ class Migration(migrations.Migration):
                 (
                     "last_login",
                     models.DateTimeField(
-                        blank=True, null=True, verbose_name="Último login"
+                        blank=True,
+                        null=True,
+                        verbose_name="Último login",
                     ),
                 ),
                 ("account_non_expired", models.BooleanField(default=True)),
@@ -65,23 +75,38 @@ class Migration(migrations.Migration):
                 ("failed_login_attempts", models.IntegerField(blank=True, null=True)),
                 ("lockout_until", models.DateTimeField(blank=True, null=True)),
                 ("credentials_non_expired", models.BooleanField(default=True)),
-                ("last_password_change", models.DateTimeField(blank=True, null=True)),
                 (
-                    "is_active",
-                    models.BooleanField(
-                        db_column="enabled", default=True, verbose_name="Habilitado"
+                    "last_password_change",
+                    models.DateTimeField(
+                        blank=True,
+                        null=True,
+                        verbose_name="Ultimo cambio de contrasena",
                     ),
                 ),
                 ("refresh_token", models.UUIDField(blank=True, null=True)),
-                ("created_at", models.DateTimeField(auto_now_add=True)),
-                ("updated_at", models.DateTimeField(auto_now=True)),
-                ("deleted_at", models.DateTimeField(blank=True, null=True)),
+                (
+                    "created_at",
+                    models.DateTimeField(auto_now_add=True, verbose_name="Fecha creado"),
+                ),
+                (
+                    "updated_at",
+                    models.DateTimeField(auto_now=True, verbose_name="Fecha actualizado"),
+                ),
+                (
+                    "deleted_at",
+                    models.DateTimeField(
+                        blank=True,
+                        null=True,
+                        verbose_name="Fecha eliminado",
+                    ),
+                ),
                 (
                     "created_by",
                     models.ForeignKey(
                         db_column="created_by",
                         on_delete=django.db.models.deletion.PROTECT,
                         related_name="created_users",
+                        verbose_name="Creado por",
                         to="accounts.user",
                     ),
                 ),
@@ -93,6 +118,7 @@ class Migration(migrations.Migration):
                         null=True,
                         on_delete=django.db.models.deletion.PROTECT,
                         related_name="updated_users",
+                        verbose_name="Actualizado por",
                         to="accounts.user",
                     ),
                 ),
@@ -104,6 +130,7 @@ class Migration(migrations.Migration):
                         null=True,
                         on_delete=django.db.models.deletion.PROTECT,
                         related_name="deleted_users",
+                        verbose_name="Eliminado por",
                         to="accounts.user",
                     ),
                 ),

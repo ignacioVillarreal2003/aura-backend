@@ -35,7 +35,6 @@ class UserModelTest(TestCase):
     def test_create_user(self):
         self.assertEqual(self.user.username, 'testuser')
         self.assertEqual(self.user.email, 'test@example.com')
-        self.assertTrue(self.user.is_active)
         self.assertEqual(self.user.status, 'active')
         self.assertEqual(self.user.created_by, self.bootstrap_user)
 
