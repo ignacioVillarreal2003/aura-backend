@@ -15,9 +15,12 @@ logger = logging.getLogger(__name__)
 class CustomGroupAdmin(HelpTextStripMixin, admin.ModelAdmin):
     """Custom admin for Group model to manage groups."""
 
-    list_display = ('name', 'description_short', 'document_count', 'created_at')
+    list_display = ('name', 'description_short', 'document_count')
+    list_filter = ('created_at',)
     search_fields = ('name',)
     filter_horizontal = ('documents',)
+    actions = None
+    actions_selection_counter = False
 
     fieldsets = (
         ('Información Básica', {

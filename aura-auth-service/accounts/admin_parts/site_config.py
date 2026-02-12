@@ -28,12 +28,47 @@ def _custom_get_app_list(self, request):
         ]
     order_map = {name: index for index, name in enumerate(desired_order)}
 
-    documents_order = ['Document', 'DocumentRole']
+    documents_order = ['Document']
     documents_order_map = {name: index for index, name in enumerate(documents_order)}
 
+    placeholder_apps = [
+        {
+            'app_label': 'dashboard',
+            'name': 'Dashboard',
+            'app_url': '',
+            'has_module_perms': True,
+            'models': [],
+        },
+        {
+            'app_label': 'chats',
+            'name': 'Gestión de Chats',
+            'app_url': '',
+            'has_module_perms': True,
+            'models': [],
+        },
+        {
+            'app_label': 'notifications',
+            'name': 'Notificaciones',
+            'app_url': '',
+            'has_module_perms': True,
+            'models': [],
+        },
+        {
+            'app_label': 'auditoria',
+            'name': 'Auditoría',
+            'app_url': '',
+            'has_module_perms': True,
+            'models': [],
+        },
+    ]
+
     app_order = {
-        'accounts': 0,
-        'documents': 1,
+        'dashboard': 0,
+        'accounts': 1,
+        'documents': 2,
+        'chats': 3,
+        'notifications': 4,
+        'auditoria': 5,
     }
 
     for app in app_list:
@@ -53,6 +88,7 @@ def _custom_get_app_list(self, request):
                     len(documents_order_map)
                 )
             )
+    app_list = placeholder_apps[:1] + app_list + placeholder_apps[1:]
     app_list.sort(
         key=lambda app: app_order.get(app.get('app_label'), len(app_order))
     )

@@ -88,6 +88,8 @@ class PermissionAdmin(HelpTextStripMixin, admin.ModelAdmin):
     list_filter = ()
     search_fields = ('name', 'description')
     readonly_fields = ('id',)
+    actions = None
+    actions_selection_counter = False
 
     fieldsets = (
         ('Información Básica', {

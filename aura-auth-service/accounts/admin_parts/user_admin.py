@@ -75,6 +75,23 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
     Custom admin for User model.
     """
 
+    class RoleFilter(admin.SimpleListFilter):
+        title = 'Rol'
+        parameter_name = 'rol'
+
+        def lookups(self, request, model_admin):
+            roles = Role.objects.order_by('name').values_list('name', flat=True)
+            return [(name, name) for name in roles]
+
+        def queryset(self, request, queryset):
+            value = self.value()
+            if not value:
+                return queryset
+            return queryset.filter(
+                user_roles__role__name=value,
+                user_roles__deleted_at__isnull=True,
+            )
+
     list_display = (
         'username',
         'email',
@@ -85,6 +102,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
         'last_login_display',
     )
     list_filter = (
+        RoleFilter,
         StatusFilter,
         ('created_at', CreatedDateFilter),
     )
@@ -111,6 +129,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
         }),
         ('Grupos', {
             'fields': ('custom_groups',),
+            'classes': ('groups-section',),
         }),
     )
 
@@ -237,7 +256,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
     def get_list_filter(self, request):
         if _is_super_admin_user(request.user):
             return self.list_filter
-        return (StatusFilter, ('created_at', CreatedDateFilter))
+        return (self.RoleFilter, StatusFilter, ('created_at', CreatedDateFilter))
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
@@ -272,7 +291,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
     filter_horizontal = ('custom_groups',)
 
     class Media:
-        js = ('accounts/admin/user_password.js',)
+        js = ('accounts/admin/user_password.js', 'accounts/admin/user_form.js')
 
         css = {
             "all": ("admin/custom.css",)
