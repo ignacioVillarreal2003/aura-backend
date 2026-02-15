@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Optional
-from sqlalchemy.orm.session import Session
+from typing import Dict, Optional
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.dtos.document_query.document_list_response import DocumentListResponse
 from app.domain.dtos.document_query.document_response import DocumentResponse
@@ -12,7 +12,7 @@ class DocumentQueryServiceInterface(ABC):
     async def get_document_by_id(
             self,
             document_id: int,
-            db: Session,
+            database_session: AsyncSession,
             user: AuthenticationResponse
     ) -> DocumentResponse:
         pass
@@ -22,7 +22,13 @@ class DocumentQueryServiceInterface(ABC):
             self,
             page: Optional[int],
             size: Optional[int],
-            db: Session,
+            database_session: AsyncSession,
             user: AuthenticationResponse
     ) -> DocumentListResponse:
+        pass
+
+    @abstractmethod
+    def get_metrics(
+            self
+    ) -> Dict[str, int]:
         pass

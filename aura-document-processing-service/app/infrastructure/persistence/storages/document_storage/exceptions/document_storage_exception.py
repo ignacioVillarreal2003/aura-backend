@@ -1,20 +1,41 @@
-class DocumentStorageError(Exception):
-    def __init__(self, message: str = "Document storage operation failed", *, status_code: int = 500):
-        self.message = message
-        self.status_code = status_code
-        super().__init__(self.message)
+from app.application.exceptions.app_exception import AppException
 
 
-class DocumentUploadError(DocumentStorageError):
-    def __init__(self, message: str = "Failed to upload document"):
-        super().__init__(message, status_code=500)
+class DocumentStorageException(AppException):
+    pass
 
 
-class DocumentDownloadError(DocumentStorageError):
-    def __init__(self, message: str = "Failed to download document"):
-        super().__init__(message, status_code=404)
+class DocumentStorageError(DocumentStorageException):
+    pass
 
 
-class DocumentDeleteError(DocumentStorageError):
-    def __init__(self, message: str = "Failed to delete document"):
-        super().__init__(message, status_code=500)
+class DocumentValidationError(DocumentStorageException):
+    pass
+
+
+class DocumentUploadError(DocumentStorageException):
+    pass
+
+
+class DocumentDownloadError(DocumentStorageException):
+    pass
+
+
+class DocumentDeleteError(DocumentStorageException):
+    pass
+
+
+class DocumentNotFoundError(DocumentStorageException):
+    pass
+
+
+class DocumentAccessError(DocumentStorageException):
+    pass
+
+
+class DocumentSizeLimitError(DocumentValidationError):
+    pass
+
+
+class DocumentExtensionError(DocumentValidationError):
+    pass

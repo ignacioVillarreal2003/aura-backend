@@ -1,24 +1,22 @@
 import logging
-import os
-import uuid
-from pathlib import Path
-from typing import BinaryIO, Optional
+import time
+from typing import Optional, Dict, Any, List
 from fastapi import UploadFile
-from minio.error import S3Error
 
-from app.infrastructure.persistence.storages.document_storage.document_storage_configuration import (
-    DocumentStorageConfiguration
-)
+from app.infrastructure.persistence.storages.document_storage.document_storage_settings import DocumentStorageSettings
 from app.infrastructure.persistence.storages.document_storage.exceptions.document_storage_exception import (
     DocumentStorageError,
     DocumentUploadError,
     DocumentDownloadError,
-    DocumentDeleteError
+    DocumentDeleteError,
+    DocumentValidationError
 )
 from app.infrastructure.persistence.storages.document_storage.interfaces.document_storage_interface import (
     DocumentStorageInterface
 )
-from app.infrastructure.persistence.storages.minio_client.interfaces.minio_client_interface import MinioClientInterface
+from app.infrastructure.persistence.storages.minio_manager.interfaces.minio_manager_interface import (
+    MinioManagerInterface
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,144 +24,340 @@ logger = logging.getLogger(__name__)
 class DocumentStorage(DocumentStorageInterface):
     def __init__(
             self,
-            minio_client: MinioClientInterface,
-            document_storage_configuration: DocumentStorageConfiguration
+            minio_manager: MinioManagerInterface,
+            document_storage_settings: DocumentStorageSettings
     ):
-        self._minio_client = minio_client.client
-        self._document_storage_configuration = document_storage_configuration
-        self._bucket_name = document_storage_configuration.bucket_name
+        self._minio_manager = minio_manager
+        self._document_storage_settings = document_storage_settings
+        self._bucket_name = document_storage_settings.bucket_name
 
-        self._ensure_bucket()
-
-        logger.info("DocumentStorage initialized successfully")
+        self._upload_count = 0
+        self._download_count = 0
+        self._delete_count = 0
+        self._error_count = 0
+        self._bytes_uploaded = 0
+        self._bytes_downloaded = 0
 
     @classmethod
     def create(
             cls,
-            minio_client: MinioClientInterface,
-            bucket_name: Optional[str] = None
+            minio_manager: MinioManagerInterface,
+            bucket_name: Optional[str] = None,
+            **config_kwargs
     ) -> "DocumentStorage":
-        config_kwargs = {}
-
-        if bucket_name is not None:
+        if bucket_name:
             config_kwargs['bucket_name'] = bucket_name
 
-        document_storage_configuration = DocumentStorageConfiguration(**config_kwargs)
-
-        return cls(
-            minio_client=minio_client,
-            document_storage_configuration=document_storage_configuration
+        document_storage_settings = DocumentStorageSettings(
+            **config_kwargs
         )
 
-    def _ensure_bucket(
+        return cls(
+            minio_manager=minio_manager,
+            document_storage_settings=document_storage_settings
+        )
+
+    async def start(
             self
     ) -> None:
         try:
-            if not self._minio_client.bucket_exists(bucket_name=self._bucket_name):
-                self._minio_client.make_bucket(self._bucket_name)
-                logger.info("Bucket created successfully")
-            else:
-                logger.debug("Bucket already exists")
+            if self._document_storage_settings.auto_create_bucket:
+                logger.info(f"Ensuring bucket exists: {self._bucket_name}")
+                await self._minio_manager.ensure_bucket(self._bucket_name)
 
-        except S3Error as e:
-            logger.error(
-                "S3Error ensuring bucket",
-                extra={
-                    "error_code": e.code,
-                    "error_message": str(e)
-                },
-                exc_info=True
-            )
-            raise DocumentStorageError(f"Failed to ensure bucket {self._bucket_name}: {e.code}") from e
+            logger.info("DocumentStorage started successfully")
+
         except Exception as e:
-            logger.exception("Unexpected error ensuring bucket")
-            raise DocumentStorageError(f"Failed to ensure bucket {self._bucket_name}") from e
+            logger.exception("Failed to start DocumentStorage")
+            raise DocumentStorageError(f"Failed to start DocumentStorage: {str(e)}") from e
 
-    def upload_document(
+    def _validate_file(
             self,
-            document: UploadFile
+            file: UploadFile
+    ) -> None:
+        if not file.filename:
+            raise DocumentValidationError("Filename cannot be empty")
+
+        if not self._document_storage_settings.is_extension_allowed(file.filename):
+            allowed = ", ".join(
+                self._document_storage_settings.allowed_extensions) if self._document_storage_settings.allowed_extensions else "all"
+            raise DocumentValidationError(f"File extension not allowed. Allowed extensions: {allowed}")
+
+        if file.size is not None:
+            if self._document_storage_settings.max_file_size and file.size > self._document_storage_settings.max_file_size:
+                max_mb = self._document_storage_settings.max_file_size / (1024 * 1024)
+                raise DocumentValidationError(f"File too large. Maximum size: {max_mb:.2f} MB")
+
+            if file.size < self._document_storage_settings.min_file_size:
+                raise DocumentValidationError(
+                    f"File too small. Minimum size: {self._document_storage_settings.min_file_size} bytes"
+                )
+
+    async def upload_document(
+            self,
+            file: UploadFile,
+            document_id: Optional[str] = None,
+            additional_metadata: Optional[Dict[str, str]] = None
     ) -> str:
-        file_key = f"{uuid.uuid4()}{Path(document.filename).suffix}"
+        start_time = time.time()
 
         try:
-            document.file.seek(0, 0)
+            self._validate_file(file)
 
-            self._minio_client.put_object(
+            object_name = self._document_storage_settings.generate_object_name(
+                original_filename=file.filename,
+                document_id=document_id
+            )
+
+            content = await file.read()
+            file_size = len(content)
+
+            metadata = {}
+            if self._document_storage_settings.store_metadata:
+                metadata["original_filename"] = file.filename
+                metadata["document_id"] = document_id if document_id else "none"
+                metadata["upload_timestamp"] = str(int(time.time()))
+
+                if additional_metadata:
+                    metadata.update(additional_metadata)
+
+            await self._minio_manager.upload_data(
                 bucket_name=self._bucket_name,
-                object_name=file_key,
-                data=document.file,
-                length=os.fstat(document.file.fileno()).st_size,
-                content_type=document.content_type,
+                object_name=object_name,
+                data=content,
+                content_type=file.content_type if self._document_storage_settings.include_content_type else None,
+                metadata=metadata if metadata else None
             )
 
-            logger.info("File uploaded successfully")
+            self._upload_count += 1
+            self._bytes_uploaded += file_size
 
-            return file_key
+            elapsed = (time.time() - start_time) * 1000
 
-        except S3Error as e:
-            logger.error(
-                "S3Error uploading file",
+            logger.info(
+                "Document uploaded successfully",
                 extra={
-                    "error_code": e.code,
-                    "error_message": str(e)
-                },
-                exc_info=True
+                    "object_name": object_name,
+                    "filename": file.filename,
+                    "size_bytes": file_size,
+                    "elapsed_ms": round(elapsed, 2)
+                }
             )
-            raise DocumentUploadError(f"Error al subir archivo al almacenamiento: {e.code}") from e
-        except Exception as e:
-            logger.exception("Unexpected error uploading file")
-            raise DocumentUploadError("Error inesperado al subir archivo") from e
 
-    def download_document(
+            return object_name
+
+        except DocumentValidationError:
+            self._error_count += 1
+            raise
+
+        except Exception as e:
+            self._error_count += 1
+            logger.exception("Failed to upload document")
+            raise DocumentUploadError(f"Failed to upload document: {str(e)}") from e
+
+    async def download_document(
             self,
-            document_path: str
-    ) -> BinaryIO:
+            object_name: str
+    ) -> bytes:
+        start_time = time.time()
+
         try:
-            response = self._minio_client.get_object(
+            content = await self._minio_manager.download_data(
                 bucket_name=self._bucket_name,
-                object_name=document_path
+                object_name=object_name
             )
 
-            logger.info("File downloaded successfully")
+            self._download_count += 1
+            self._bytes_downloaded += len(content)
 
-            return response
+            elapsed = (time.time() - start_time) * 1000
 
-        except S3Error as e:
-            logger.error(
-                "S3Error downloading file",
+            logger.info(
+                "Document downloaded successfully",
                 extra={
-                    "error_code": e.code,
-                    "error_message": str(e)
-                },
-                exc_info=True
+                    "object_name": object_name,
+                    "size_bytes": len(content),
+                    "elapsed_ms": round(elapsed, 2)
+                }
             )
-            raise DocumentDownloadError(f"Error al descargar archivo del almacenamiento: {e.code}") from e
-        except Exception as e:
-            logger.exception("Unexpected error downloading file")
-            raise DocumentDownloadError("Error inesperado al descargar archivo") from e
 
-    def delete_document(
+            return content
+
+        except Exception as e:
+            self._error_count += 1
+            logger.exception("Failed to download document")
+            raise DocumentDownloadError(f"Failed to download document: {str(e)}") from e
+
+    async def download_document_to_file(
             self,
-            document_path: str
+            object_name: str,
+            file_path: str
     ) -> None:
         try:
-            self._minio_client.remove_object(
+            await self._minio_manager.download_file(
                 bucket_name=self._bucket_name,
-                object_name=document_path
+                object_name=object_name,
+                file_path=file_path
             )
 
-            logger.info("File deleted successfully")
+            self._download_count += 1
 
-        except S3Error as e:
-            logger.error(
-                "S3Error deleting file",
+            logger.info(
+                "Document downloaded to file",
                 extra={
-                    "error_code": e.code,
-                    "error_message": str(e)
-                },
-                exc_info=True
+                    "object_name": object_name,
+                    "file_path": file_path
+                }
             )
-            raise DocumentDeleteError(f"Error al eliminar archivo del almacenamiento: {e.code}") from e
+
         except Exception as e:
-            logger.exception("Unexpected error deleting file")
-            raise DocumentDeleteError("Error inesperado al eliminar archivo") from e
+            self._error_count += 1
+            logger.exception("Failed to download document to file")
+            raise DocumentDownloadError(f"Failed to download document to file: {str(e)}") from e
+
+    async def delete_document(
+            self,
+            object_name: str
+    ) -> None:
+        try:
+            await self._minio_manager.delete_object(
+                bucket_name=self._bucket_name,
+                object_name=object_name
+            )
+
+            self._delete_count += 1
+
+            logger.info(
+                "Document deleted successfully",
+                extra={
+                    "object_name": object_name
+                }
+            )
+
+        except Exception as e:
+            self._error_count += 1
+            logger.exception("Failed to delete document")
+            raise DocumentDeleteError(f"Failed to delete document: {str(e)}") from e
+
+    async def document_exists(
+            self,
+            object_name: str
+    ) -> bool:
+        try:
+            return await self._minio_manager.object_exists(
+                bucket_name=self._bucket_name,
+                object_name=object_name
+            )
+        except Exception as e:
+            logger.exception("Error checking document existence")
+            raise DocumentStorageError(f"Failed to check document existence: {str(e)}") from e
+
+    async def get_presigned_url(
+            self,
+            object_name: str,
+            expires: Optional[int] = None,
+            method: str = "GET"
+    ) -> str:
+        try:
+            if expires is None:
+                expires = self._document_storage_settings.default_presigned_url_expiry
+
+            url = await self._minio_manager.get_presigned_url(
+                bucket_name=self._bucket_name,
+                object_name=object_name,
+                expires=expires,
+                method=method
+            )
+
+            logger.debug(
+                "Presigned URL generated",
+                extra={
+                    "object_name": object_name,
+                    "expires": expires,
+                    "method": method
+                }
+            )
+
+            return url
+
+        except Exception as e:
+            logger.exception("Failed to generate presigned URL")
+            raise DocumentStorageError(f"Failed to generate presigned URL: {str(e)}") from e
+
+    async def list_documents(
+            self,
+            prefix: Optional[str] = None,
+            recursive: bool = True
+    ) -> List[Dict[str, Any]]:
+        try:
+            full_prefix = None
+            if self._document_storage_settings.path_prefix or prefix:
+                parts = []
+                if self._document_storage_settings.path_prefix:
+                    parts.append(self._document_storage_settings.path_prefix)
+                if prefix:
+                    parts.append(prefix.lstrip('/'))
+                full_prefix = "/".join(parts)
+
+            objects = await self._minio_manager.list_objects(
+                bucket_name=self._bucket_name,
+                prefix=full_prefix,
+                recursive=recursive
+            )
+
+            logger.debug(
+                f"Listed {len(objects)} documents",
+                extra={
+                    "prefix": full_prefix,
+                    "count": len(objects)
+                }
+            )
+
+            return objects
+
+        except Exception as e:
+            logger.exception("Failed to list documents")
+            raise DocumentStorageError(f"Failed to list documents: {str(e)}") from e
+
+    async def health_check(
+            self
+    ) -> Dict[str, Any]:
+        try:
+            minio_health = await self._minio_manager.health_check()
+
+            bucket_accessible = await self._minio_manager.object_exists(
+                bucket_name=self._bucket_name,
+                object_name=".health_check"  # Dummy object
+            ) if minio_health["status"] == "healthy" else False
+
+            status = "healthy" if minio_health["status"] == "healthy" else "unhealthy"
+
+            return {
+                "status": status,
+                "bucket": self._bucket_name,
+                "bucket_accessible": bucket_accessible,
+                "minio": minio_health,
+                "metrics": self.get_metrics(),
+                "timestamp": time.time()
+            }
+
+        except Exception as e:
+            logger.exception("Health check failed")
+            return {
+                "status": "unhealthy",
+                "bucket": self._bucket_name,
+                "error": str(e),
+                "timestamp": time.time()
+            }
+
+    def get_metrics(
+            self
+    ) -> Dict[str, int]:
+        return {
+            "upload_count": self._upload_count,
+            "download_count": self._download_count,
+            "delete_count": self._delete_count,
+            "error_count": self._error_count,
+            "bytes_uploaded": self._bytes_uploaded,
+            "bytes_downloaded": self._bytes_downloaded,
+        }

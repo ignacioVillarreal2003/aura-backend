@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from fastapi import BackgroundTasks, UploadFile
-from sqlalchemy.orm.session import Session
+from sqlalchemy.ext.asyncio.session import AsyncSession
 
 from app.application.services.document_creation_service.interfaces.document_creation_service_interface import (
     DocumentCreationServiceInterface
@@ -16,9 +16,9 @@ class DocumentCreationControllerInterface(ABC):
             self,
             background_tasks: BackgroundTasks,
             document_creation_request: DocumentCreationRequest,
-            document: UploadFile,
+            raw_document: UploadFile,
             document_creation_service: DocumentCreationServiceInterface,
-            db: Session,
+            database_session: AsyncSession,
             user: AuthenticationResponse
     ) -> DocumentCreationResponse:
         pass

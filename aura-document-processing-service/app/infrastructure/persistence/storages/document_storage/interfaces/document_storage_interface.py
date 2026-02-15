@@ -1,26 +1,78 @@
 from abc import ABC, abstractmethod
-from typing import BinaryIO
+from typing import Dict, Any, Optional, List
 from fastapi import UploadFile
 
 
 class DocumentStorageInterface(ABC):
     @abstractmethod
-    def upload_document(
+    async def start(
+            self
+    ) -> None:
+        pass
+
+    @abstractmethod
+    async def upload_document(
             self,
-            document: UploadFile
+            file: UploadFile,
+            document_id: Optional[str] = None,
+            additional_metadata: Optional[Dict[str, str]] = None
     ) -> str:
         pass
 
     @abstractmethod
-    def download_document(
+    async def download_document(
             self,
-            document_path: str
-    ) -> BinaryIO:
+            object_name: str
+    ) -> bytes:
         pass
 
     @abstractmethod
-    def delete_document(
+    async def download_document_to_file(
             self,
-            document_path: str
+            object_name: str,
+            file_path: str
     ) -> None:
+        pass
+
+    @abstractmethod
+    async def delete_document(
+            self,
+            object_name: str
+    ) -> None:
+        pass
+
+    @abstractmethod
+    async def document_exists(
+            self,
+            object_name: str
+    ) -> bool:
+        pass
+
+    @abstractmethod
+    async def get_presigned_url(
+            self,
+            object_name: str,
+            expires: Optional[int] = None,
+            method: str = "GET"
+    ) -> str:
+        pass
+
+    @abstractmethod
+    async def list_documents(
+            self,
+            prefix: Optional[str] = None,
+            recursive: bool = True
+    ) -> List[Dict[str, Any]]:
+        pass
+
+    @abstractmethod
+    async def health_check(
+            self
+    ) -> Dict[str, Any]:
+        pass
+
+    @abstractmethod
+    def get_metrics(
+            self
+    ) -> Dict[str, int]:
         pass

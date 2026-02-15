@@ -5,6 +5,10 @@ class HttpClientException(AppException):
     pass
 
 
+class HttpClientNotStartedException(HttpClientException):
+    pass
+
+
 class HttpClientConnectionException(HttpClientException):
     pass
 
@@ -14,4 +18,12 @@ class HttpClientTimeoutException(HttpClientException):
 
 
 class HttpClientCircuitBreakerException(HttpClientException):
+    pass
+
+
+class HttpClientConfigurationException(HttpClientException):
+    pass
+
+
+class HttpClientRetryException(HttpClientException):
     pass

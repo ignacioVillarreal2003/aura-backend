@@ -4,9 +4,9 @@ from typing import List
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.domain.constants.embedder_type import EmbedderType
-from app.domain.constants.text_cleaner_type import TextCleanerType
-from app.domain.constants.text_splitter_type import TextSplitterType
+from app.application.processors.embedders.constants.embedder_type import EmbedderType
+from app.application.processors.text_cleaners.constants.text_cleaner_type import TextCleanerType
+from app.application.processors.text_splitters.constants.text_splitter_type import TextSplitterType
 
 logger = logging.getLogger(__name__)
 
@@ -52,29 +52,29 @@ class EnvironmentVariables(BaseSettings):
         description="Allowed CORS origins"
     )
 
-    db_host: str = Field(
+    database_host: str = Field(
         ...,
         description="Database host"
     )
-    db_port: int = Field(
+    database_port: int = Field(
         ...,
         ge=1,
         le=65535,
         description="Database port"
     )
-    db_name: str = Field(
+    database_name: str = Field(
         ...,
         description="Database name"
     )
-    db_user: str = Field(
+    database_user: str = Field(
         ...,
         description="Database user"
     )
-    db_password: str = Field(
+    database_password: str = Field(
         ...,
         description="Database password"
     )
-    db_driver: str = Field(
+    database_driver: str = Field(
         default="postgresql+psycopg2",
         description="SQLAlchemy database driver"
     )
@@ -90,10 +90,6 @@ class EnvironmentVariables(BaseSettings):
     minio_secret_key: str = Field(
         ...,
         description="MinIO secret key"
-    )
-    minio_secure: bool = Field(
-        default=False,
-        description="Use HTTPS for MinIO connection"
     )
 
     ollama_base_url: str = Field(

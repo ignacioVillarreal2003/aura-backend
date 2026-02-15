@@ -1,14 +1,17 @@
-from starlette import status
-
-from app.application.exceptions.app_exception import AppError
+from app.application.exceptions.app_exception import AppException
 
 
-class DocumentNotFoundError(AppError):
-    def __init__(
-            self,
-            message: str = "Document not found"
-    ):
-        super().__init__(
-            message,
-            status_code=status.HTTP_404_NOT_FOUND
-        )
+class DocumentQueryServiceException(AppException):
+    pass
+
+
+class DocumentNotFoundError(DocumentQueryServiceException):
+    pass
+
+
+class DocumentQueryException(DocumentQueryServiceException):
+    pass
+
+
+class InvalidPaginationException(DocumentQueryServiceException):
+    pass

@@ -1,14 +1,17 @@
 from fastapi import APIRouter, Depends
 from fastapi import Response, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio.session import AsyncSession
 import logging
 
 from app.api.controllers.interfaces.document_deletion_controller_interface import DocumentDeletionControllerInterface
+from app.application.services.document_deletion_service.document_deletion_service_dependency import (
+    get_document_deletion_service
+)
 from app.application.services.document_deletion_service.interfaces.document_deletion_service_interface import (
     DocumentDeletionServiceInterface
 )
-from app.configuration.dependencies import get_database_session, get_document_deletion_service
-from app.infrastructure.authentication_provider.dependencies.authentication_provider_dependencies import (
+from app.infrastructure.persistence.database.database_manager.database_manager_dependency import get_database_session
+from app.infrastructure.authentication_provider.authentication_provider_dependency import (
     get_current_user
 )
 from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
@@ -21,14 +24,14 @@ class DocumentDeletionController(DocumentDeletionControllerInterface):
             self,
             document_id: int,
             document_deletion_service: DocumentDeletionServiceInterface = Depends(get_document_deletion_service),
-            db: Session = Depends(get_database_session),
+            database_session: AsyncSession = Depends(get_database_session),
             user: AuthenticationResponse = Depends(get_current_user)
     ) -> Response:
         logger.info("Processing document deletion request")
 
         await document_deletion_service.soft_delete_document(
             document_id=document_id,
-            db=db,
+            database_session=database_session,
             user=user
         )
 
@@ -42,14 +45,14 @@ class DocumentDeletionController(DocumentDeletionControllerInterface):
             self,
             document_id: int,
             document_deletion_service: DocumentDeletionServiceInterface = Depends(get_document_deletion_service),
-            db: Session = Depends(get_database_session),
+            database_session: AsyncSession = Depends(get_database_session),
             user: AuthenticationResponse = Depends(get_current_user)
     ) -> Response:
         logger.info("Processing document deletion request")
 
         await document_deletion_service.hard_delete_document(
             document_id=document_id,
-            db=db,
+            database_session=database_session,
             user=user
         )
 

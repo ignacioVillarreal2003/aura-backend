@@ -1,17 +1,17 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, Union
+from typing import Dict, Any, Optional, Union
 import httpx
 
 
 class HttpClientInterface(ABC):
     @abstractmethod
-    async def start_session(
+    async def start(
             self
     ) -> None:
         pass
 
     @abstractmethod
-    async def close_session(
+    async def stop(
             self
     ) -> None:
         pass
@@ -63,9 +63,17 @@ class HttpClientInterface(ABC):
         pass
 
     @abstractmethod
-    def reset_metrics(
+    async def patch(
+            self,
+            url: str,
+            **kwargs
+    ) -> httpx.Response:
+        pass
+
+    @abstractmethod
+    async def health_check(
             self
-    ) -> None:
+    ) -> Dict[str, Any]:
         pass
 
     @abstractmethod
@@ -76,14 +84,14 @@ class HttpClientInterface(ABC):
 
     @property
     @abstractmethod
-    def is_session_active(
+    def is_started(
             self
     ) -> bool:
         pass
 
     @property
     @abstractmethod
-    def circuit_breaker_state(
+    def client(
             self
-    ) -> str:
+    ) -> httpx.AsyncClient:
         pass

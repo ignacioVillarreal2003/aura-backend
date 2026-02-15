@@ -1,22 +1,18 @@
 import httpx
 import logging
-from typing import Optional, Dict, Any, Union, ClassVar
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-    retry_if_exception_type,
-    before_sleep_log
-)
+import time
+from typing import Optional, Dict, Any, Union
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, before_sleep_log
 from aiobreaker import CircuitBreaker, CircuitBreakerError
-from datetime import datetime, timedelta
-from threading import Lock
+from datetime import timedelta
 
+from app.infrastructure.http_client.http_client_settings import HttpClientSettings
 from app.infrastructure.http_client.exceptions.http_client_exceptions import (
     HttpClientException,
     HttpClientConnectionException,
     HttpClientCircuitBreakerException,
-    HttpClientTimeoutException
+    HttpClientTimeoutException,
+    HttpClientNotStartedException
 )
 from app.infrastructure.http_client.interfaces.http_client_interface import HttpClientInterface
 
@@ -24,147 +20,154 @@ logger = logging.getLogger(__name__)
 
 
 class HttpClient(HttpClientInterface):
-    _instance: ClassVar[Optional['HttpClient']] = None
-    _lock: ClassVar[Lock] = Lock()
-
-    def __new__(
-            cls,
-            *args,
-            **kwargs
-    ):
-        if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = super().__new__(cls)
-                    cls._instance._initialized = False
-        return cls._instance
-
     def __init__(
             self,
-            timeout: float = 10.0,
-            max_retries: int = 3,
-            retry_min_wait: float = 2.0,
-            retry_max_wait: float = 8.0,
-            circuit_breaker_failures: int = 5,
-            circuit_breaker_timeout: int = 60,
-            max_connections: int = 100,
-            max_keepalive_connections: int = 20,
-            headers: Optional[Dict[str, str]] = None,
-            verify_ssl: bool = True,
-    ):
-        if self._initialized:
-            logger.debug("HttpClient already initialized")
-            return
-
-        self.timeout = timeout
-        self.max_retries = max_retries
-        self.retry_min_wait = retry_min_wait
-        self.retry_max_wait = retry_max_wait
-        self.verify_ssl = verify_ssl
-
-        self.default_headers = {
-            "User-Agent": "HttpClient/1.0",
-            **(headers or {})
-        }
-
-        self.breaker = CircuitBreaker(
-            fail_max=circuit_breaker_failures,
-            timeout_duration=timedelta(seconds=circuit_breaker_timeout),
-            name="HttpClient"
-        )
-
-        self.limits = httpx.Limits(
-            max_connections=max_connections,
-            max_keepalive_connections=max_keepalive_connections
-        )
+            http_client_settings: HttpClientSettings
+    ) -> None:
+        self._http_client_settings = http_client_settings
 
         self._client: Optional[httpx.AsyncClient] = None
-        self._session_active = False
+        self._is_started = False
+        self._breaker: Optional[CircuitBreaker] = None
 
-        self.metrics = {
-            "total_requests": 0,
-            "successful_requests": 0,
-            "failed_requests": 0,
-            "circuit_breaker_opens": 0,
-            "retries": 0,
-        }
-
-        self._initialized = True
+        self._request_count = 0
+        self._successful_requests = 0
+        self._failed_requests = 0
+        self._circuit_breaker_opens = 0
+        self._retry_count = 0
+        self._total_request_time = 0.0
+        self._last_health_check: Optional[Dict[str, Any]] = None
 
         logger.info(
-            f"HttpClient singleton initialized - "
-            f"timeout={timeout}s, max_retries={max_retries}, "
-            f"max_connections={max_connections}"
+            "HttpClient initialized",
+            extra={
+                "timeout": self._http_client_settings.timeout,
+                "max_retries": self._http_client_settings.max_retries,
+                "circuit_breaker_failures": self._http_client_settings.circuit_breaker_failures
+            }
         )
 
     @classmethod
-    def get_instance(
-            cls
-    ) -> 'HttpClient':
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
+    def create(
+            cls,
+            **kwargs
+    ) -> "HttpClient":
+        http_client_settings = HttpClientSettings(
+            **kwargs
+        )
 
-    @classmethod
-    def reset_instance(
-            cls
-    ):
-        with cls._lock:
-            if cls._instance is not None:
-                if cls._instance._session_active and cls._instance._client:
-                    logger.warning(
-                        "Resetting instance with active session. "
-                        "Call close_session() first in async context."
-                    )
-                cls._instance = None
-                logger.info("HttpClient singleton instance reset")
+        return cls(
+            http_client_settings=http_client_settings
+        )
 
-    async def __aenter__(
+    @property
+    def settings(
             self
-    ):
-        await self.start_session()
-        return self
+    ) -> HttpClientSettings:
+        return self._http_client_settings
 
-    async def __aexit__(
-            self,
-            exc_type,
-            exc_val,
-            exc_tb
-    ):
-        await self.close_session()
-
-    async def start_session(
+    @property
+    def is_started(
             self
-    ):
-        if self._session_active:
-            logger.debug("Session already active")
+    ) -> bool:
+        return self._is_started
+
+    @property
+    def client(
+            self
+    ) -> httpx.AsyncClient:
+        if not self._is_started or not self._client:
+            logger.error("Attempted to access unstarted HttpClient")
+            raise HttpClientNotStartedException("HttpClient not started. Call start() first.")
+        return self._client
+
+    async def start(
+            self
+    ) -> None:
+        if self._is_started:
+            logger.warning("HttpClient already started")
             return
 
-        self._client = httpx.AsyncClient(
-            timeout=httpx.Timeout(self.timeout),
-            limits=self.limits,
-            headers=self.default_headers,
-            verify=self.verify_ssl,
-            follow_redirects=True,
+        logger.info(
+            "Starting HttpClient",
+            extra={
+                "timeout": self.settings.timeout,
+                "max_retries": self.settings.max_retries,
+                "max_connections": self.settings.max_connections,
+            }
         )
-        self._session_active = True
-        logger.info("HTTP session started")
 
-    async def close_session(
+        try:
+            self._breaker = CircuitBreaker(
+                fail_max=self.settings.circuit_breaker_failures,
+                timeout_duration=timedelta(
+                    seconds=self.settings.circuit_breaker_timeout
+                ),
+                name="HttpClient"
+            )
+
+            self._client = httpx.AsyncClient(
+                timeout=httpx.Timeout(**self.settings.get_httpx_timeout()),
+                limits=httpx.Limits(**self.settings.get_httpx_limits()),
+                headers=self.settings.headers,
+                verify=self.settings.verify_ssl,
+                follow_redirects=self.settings.follow_redirects,
+            )
+
+            self._is_started = True
+            logger.info("HttpClient started successfully")
+
+        except Exception as e:
+            logger.exception("Failed to start HttpClient")
+            await self.stop()
+            raise HttpClientException(f"Failed to start HTTP client: {str(e)}") from e
+
+    async def stop(
+            self
+    ) -> None:
+        if not self._is_started:
+            logger.debug("HttpClient already stopped")
+            return
+
+        logger.info("Stopping HttpClient")
+
+        try:
+            metrics = self.get_metrics()
+            logger.info(
+                "Final HttpClient metrics",
+                extra=metrics
+            )
+
+            if self._client:
+                await self._client.aclose()
+
+            self._client = None
+            self._breaker = None
+            self._is_started = False
+
+            logger.info("HttpClient stopped successfully")
+
+        except Exception as e:
+            logger.error(
+                "Error stopping HttpClient",
+                extra={
+                    "error_type": type(e).__name__,
+                    "error_message": str(e)
+                },
+                exc_info=True
+            )
+            self._client = None
+            self._breaker = None
+            self._is_started = False
+
+    def _create_retry_decorator(
             self
     ):
-        if self._client and self._session_active:
-            await self._client.aclose()
-            self._session_active = False
-            logger.info("HTTP session closed")
-            logger.info(f"Final session metrics: {self.metrics}")
-
-    def _create_retry_decorator(self):
         return retry(
-            stop=stop_after_attempt(self.max_retries),
+            stop=stop_after_attempt(self.settings.max_retries),
             wait=wait_exponential(
-                min=self.retry_min_wait,
-                max=self.retry_max_wait
+                min=self.settings.retry_backoff_min,
+                max=self.settings.retry_backoff_max
             ),
             retry=retry_if_exception_type((
                 httpx.TimeoutException,
@@ -180,7 +183,6 @@ class HttpClient(HttpClientInterface):
 
     async def _safe_request(
             self,
-            client: httpx.AsyncClient,
             method: str,
             url: str,
             **kwargs
@@ -189,14 +191,17 @@ class HttpClient(HttpClientInterface):
 
         @retry_decorator
         async def _request():
-            start_time = datetime.now()
+            start_time = time.time()
 
             try:
                 logger.debug(f"HTTP request: {method} {url}")
-                resp = await client.request(method, url, **kwargs)
+
+                resp = await self.client.request(method, url, **kwargs)
                 resp.raise_for_status()
 
-                duration = (datetime.now() - start_time).total_seconds()
+                duration = time.time() - start_time
+                self._total_request_time += duration
+
                 logger.debug(
                     f"HTTP response: {method} {url} - "
                     f"Status: {resp.status_code}, Duration: {duration:.3f}s"
@@ -205,15 +210,12 @@ class HttpClient(HttpClientInterface):
                 return resp
 
             except httpx.TimeoutException as e:
-                self.metrics["retries"] += 1
+                self._retry_count += 1
                 logger.warning(f"Timeout on {method} {url}: {e}")
                 raise HttpClientTimeoutException(f"Request timeout: {e}") from e
 
-            except (
-                    httpx.ConnectError,
-                    httpx.NetworkError
-            ) as e:
-                self.metrics["retries"] += 1
+            except (httpx.ConnectError, httpx.NetworkError) as e:
+                self._retry_count += 1
                 logger.warning(f"Connection error on {method} {url}: {e}")
                 raise HttpClientConnectionException(f"Connection failed: {e}") from e
 
@@ -222,9 +224,7 @@ class HttpClient(HttpClientInterface):
                     f"HTTP error on {method} {url}: "
                     f"Status {e.response.status_code}"
                 )
-                raise HttpClientException(
-                    f"HTTP {e.response.status_code}: {e.response.text}"
-                ) from e
+                raise HttpClientException(f"HTTP {e.response.status_code}: {e.response.text}") from e
 
         return await _request()
 
@@ -239,123 +239,172 @@ class HttpClient(HttpClientInterface):
             timeout: Optional[float] = None,
             **kwargs
     ) -> httpx.Response:
-        self.metrics["total_requests"] += 1
+        if not self._is_started or not self._client or not self._breaker:
+            raise HttpClientNotStartedException("HttpClient not started. Call start() first.")
 
-        request_headers = {**self.default_headers, **(headers or {})}
+        self._request_count += 1
+
+        request_headers = {**self.settings.headers, **(headers or {})}
 
         if timeout:
             kwargs["timeout"] = httpx.Timeout(timeout)
 
-        if self._session_active and self._client:
-            client = self._client
-            close_client = False
-            logger.debug("Using persistent client (connection pool)")
-        else:
-            logger.debug("Creating temporary client (no session active)")
-            client = httpx.AsyncClient(
-                timeout=httpx.Timeout(timeout or self.timeout),
-                limits=self.limits,
-                headers=request_headers,
-                verify=self.verify_ssl,
-                follow_redirects=True,
-            )
-            close_client = True
-
         try:
-            response = await self.breaker.call(
+            response = await self._breaker.call(
                 self._safe_request,
-                client,
                 method,
                 url,
                 params=params,
                 json=json,
                 data=data,
-                headers=request_headers if not self._session_active else headers,
+                headers=request_headers,
                 **kwargs
             )
 
-            self.metrics["successful_requests"] += 1
+            self._successful_requests += 1
             return response
 
         except CircuitBreakerError as e:
-            self.metrics["circuit_breaker_opens"] += 1
+            self._circuit_breaker_opens += 1
+            self._failed_requests += 1
             logger.error(f"Circuit breaker is open for {method} {url}")
-            raise HttpClientCircuitBreakerException(
-                "Service temporarily unavailable (circuit breaker open)"
-            ) from e
+            raise HttpClientCircuitBreakerException("Service temporarily unavailable (circuit breaker open)") from e
 
         except Exception as e:
-            self.metrics["failed_requests"] += 1
+            self._failed_requests += 1
             logger.error(f"Request failed ({method} {url}): {e}")
             raise
-
-        finally:
-            if close_client:
-                await client.aclose()
 
     async def get(
             self,
             url: str,
             **kwargs
     ) -> httpx.Response:
-        return await self.request(
-            "GET",
-            url,
-            **kwargs
-        )
+        return await self.request("GET", url, **kwargs)
 
     async def post(
             self,
             url: str,
             **kwargs
     ) -> httpx.Response:
-        return await self.request(
-            "POST",
-            url,
-            **kwargs
-        )
+        return await self.request("POST", url, **kwargs)
 
     async def put(
             self,
             url: str,
             **kwargs
     ) -> httpx.Response:
-        return await self.request(
-            "PUT",
-            url,
-            **kwargs
-        )
+        return await self.request("PUT", url, **kwargs)
 
     async def delete(
             self,
             url: str,
             **kwargs
     ) -> httpx.Response:
-        return await self.request(
-            "DELETE",
-            url,
-            **kwargs
-        )
+        return await self.request("DELETE", url, **kwargs)
 
-    def reset_metrics(
+    async def patch(
+            self,
+            url: str,
+            **kwargs
+    ) -> httpx.Response:
+        return await self.request("PATCH", url, **kwargs)
+
+    async def health_check(
             self
-    ):
-        self.metrics = {key: 0 for key in self.metrics}
-        logger.info("Metrics reset")
+    ) -> Dict[str, Any]:
+        if (not self._is_started or
+                not self._client or
+                not self._breaker):
+            health_data = {
+                "status": "unhealthy",
+                "started": False,
+                "error": "HTTP client not started",
+                "timestamp": time.time(),
+            }
+            self._last_health_check = health_data
+            return health_data
+
+        try:
+            start_time = time.time()
+
+            _ = self._client.build_request("GET", "http://localhost")
+
+            latency_ms = (time.time() - start_time) * 1000
+
+            avg_request_time = (
+                self._total_request_time / self._successful_requests
+                if self._successful_requests > 0
+                else 0
+            )
+
+            health_data = {
+                "status": "healthy",
+                "started": True,
+                "latency_ms": round(latency_ms, 2),
+                "timestamp": time.time(),
+                "circuit_breaker": {
+                    "state": self._breaker.current_state,
+                    "failure_count": self._breaker.fail_counter,
+                },
+                "metrics": self.get_metrics(),
+                "performance": {
+                    "avg_request_time_ms": round(avg_request_time * 1000, 2),
+                    "success_rate": round(
+                        (self._successful_requests / self._request_count * 100)
+                        if self._request_count > 0
+                        else 0,
+                        2
+                    )
+                },
+                "settings": {
+                    "timeout": self.settings.timeout,
+                    "max_retries": self.settings.max_retries,
+                    "max_connections": self.settings.max_connections,
+                },
+            }
+
+            self._last_health_check = health_data
+            return health_data
+
+        except Exception as e:
+            logger.warning(
+                "HttpClient health check failed",
+                extra={
+                    "error_type": type(e).__name__,
+                    "error_message": str(e)
+                }
+            )
+            health_data = {
+                "status": "unhealthy",
+                "started": True,
+                "error": str(e),
+                "timestamp": time.time(),
+            }
+            self._last_health_check = health_data
+            return health_data
 
     def get_metrics(
             self
     ) -> Dict[str, int]:
-        return self.metrics.copy()
+        return {
+            "request_count": self._request_count,
+            "successful_requests": self._successful_requests,
+            "failed_requests": self._failed_requests,
+            "circuit_breaker_opens": self._circuit_breaker_opens,
+            "retry_count": self._retry_count,
+        }
 
-    @property
-    def is_session_active(
+    async def __aenter__(
             self
-    ) -> bool:
-        return self._session_active
+    ):
+        await self.start()
+        return self
 
-    @property
-    def circuit_breaker_state(
-            self
-    ) -> str:
-        return self.breaker.current_state
+    async def __aexit__(
+            self,
+            exc_type,
+            exc_val,
+            exc_tb
+    ):
+        await self.stop()

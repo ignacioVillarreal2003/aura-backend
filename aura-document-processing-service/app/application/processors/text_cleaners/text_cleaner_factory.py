@@ -9,7 +9,7 @@ from app.application.processors.text_cleaners.exceptions.text_cleaner_exception 
 from app.application.processors.text_cleaners.interfaces.text_cleaner_adapter_interface import (
     TextCleanerAdapterInterface
 )
-from app.domain.constants.text_cleaner_type import TextCleanerType
+from app.application.processors.text_cleaners.constants.text_cleaner_type import TextCleanerType
 
 
 class TextCleanerFactory:

@@ -1,6 +1,9 @@
 from abc import ABC, abstractmethod
+from typing import List, Dict
 
-from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
+from app.infrastructure.authentication_provider.dtos.authentication_response import (
+    AuthenticationResponse
+)
 
 
 class AuthenticationProviderInterface(ABC):
@@ -15,7 +18,7 @@ class AuthenticationProviderInterface(ABC):
     async def verify_permissions(
             self,
             token: str,
-            required_roles: list[str]
+            required_roles: List[str]
     ) -> AuthenticationResponse:
         pass
 
@@ -24,4 +27,10 @@ class AuthenticationProviderInterface(ABC):
             self,
             token: str
     ) -> AuthenticationResponse:
+        pass
+
+    @abstractmethod
+    def get_metrics(
+            self
+    ) -> Dict[str, int]:
         pass

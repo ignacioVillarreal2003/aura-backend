@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Optional
-from sqlalchemy.orm.session import Session
+from sqlalchemy.ext.asyncio.session import AsyncSession
 
 from app.application.services.document_query_service.interfaces.document_query_service_interface import (
     DocumentQueryServiceInterface
@@ -16,7 +16,7 @@ class DocumentQueryControllerInterface(ABC):
             self,
             document_id: int,
             document_query_service: DocumentQueryServiceInterface,
-            db: Session,
+            database_session: AsyncSession,
             user: AuthenticationResponse
     ) -> DocumentResponse:
         pass
@@ -27,7 +27,7 @@ class DocumentQueryControllerInterface(ABC):
             page: Optional[int],
             size: Optional[int],
             document_query_service: DocumentQueryServiceInterface,
-            db: Session,
+            database_session: AsyncSession,
             user: AuthenticationResponse
     ) -> DocumentListResponse:
         pass

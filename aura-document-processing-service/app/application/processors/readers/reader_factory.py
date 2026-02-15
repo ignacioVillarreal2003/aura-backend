@@ -7,7 +7,7 @@ from app.application.processors.readers.adapters.scanned_docx_reader_adapter imp
 from app.application.processors.readers.exceptions.reader_exception import UnsupportedReaderError
 from app.application.processors.readers.interfaces.reader_adapter_interface import DocumentReaderInterface
 from app.application.processors.readers.adapters.scanned_pdf_reader_adapter import ScannedPDFReaderAdapter
-from app.domain.constants.reader_type import ReaderType
+from app.application.processors.readers.constants.reader_type import ReaderType
 
 
 class ReaderFactory:
