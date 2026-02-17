@@ -7,6 +7,7 @@ from app.application.services.document_creation_service.interfaces.document_crea
 )
 from app.domain.dtos.document_creation.document_creation_request import DocumentCreationRequest
 from app.domain.dtos.document_creation.document_creation_response import DocumentCreationResponse
+from app.domain.dtos.document_creation.document_creation_status_response import DocumentCreationStatusResponse
 from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
 
 
@@ -21,4 +22,14 @@ class DocumentCreationControllerInterface(ABC):
             database_session: AsyncSession,
             user: AuthenticationResponse
     ) -> DocumentCreationResponse:
+        pass
+
+    @abstractmethod
+    async def get_document_creation_status(
+            self,
+            document_id: int,
+            document_creation_service: DocumentCreationServiceInterface,
+            database_session: AsyncSession,
+            user: AuthenticationResponse
+    ) -> DocumentCreationStatusResponse:
         pass

@@ -39,7 +39,7 @@ async def get_database_manager(
 async def get_database_session(
         request: Request
 ) -> AsyncGenerator[AsyncSession, None]:
-    db_manager = await get_db_manager(request)
+    db_manager = await get_database_manager(request)
 
     try:
         async with db_manager.session() as session:
@@ -63,7 +63,7 @@ async def get_database_session(
 async def get_database_session_read_only(
         request: Request
 ) -> AsyncGenerator[AsyncSession, None]:
-    db_manager = await get_db_manager(request)
+    db_manager = await get_database_manager(request)
 
     try:
         async with db_manager.session() as session:

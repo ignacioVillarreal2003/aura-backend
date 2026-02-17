@@ -1,5 +1,7 @@
 import logging
 from typing import Optional
+
+import unicodedata
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
@@ -52,7 +54,7 @@ class DocumentStorageSettings(BaseSettings):
     )
 
     store_metadata: bool = Field(
-        default=True,
+        default=False,
         description="Store additional metadata with documents"
     )
     include_content_type: bool = Field(
@@ -198,3 +200,13 @@ class DocumentStorageSettings(BaseSettings):
         object_name = "/".join(parts + [f"{filename}{ext}"])
 
         return object_name
+
+    def sanitize_metadata_value(
+            self,
+            value: str
+    ) -> str:
+        return (
+            unicodedata.normalize("NFKD", value)
+            .encode("ascii", "ignore")
+            .decode("ascii")
+        )

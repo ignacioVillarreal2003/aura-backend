@@ -1,5 +1,6 @@
 POST http://localhost:8000/api/document-creation
 Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+Authorization: Bearer user_token_123
 
 ------WebKitFormBoundary7MA4YWxkTrZu0gW
 Content-Disposition: form-data; name="chat_id"
@@ -18,6 +19,7 @@ Content-Type: application/pdf
 
 POST http://localhost:8000/api/document-creation
 Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+Authorization: Bearer user_token_123
 
 ------WebKitFormBoundary7MA4YWxkTrZu0gW
 Content-Disposition: form-data; name="chat_id"
@@ -36,6 +38,7 @@ Content-Type: application/pdf
 
 POST http://localhost:8000/api/document-creation
 Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+Authorization: Bearer user_token_123
 
 ------WebKitFormBoundary7MA4YWxkTrZu0gW
 Content-Disposition: form-data; name="chat_id"
@@ -54,6 +57,7 @@ Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.doc
 
 POST http://localhost:8000/api/document-creation
 Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+Authorization: Bearer user_token_123
 
 ------WebKitFormBoundary7MA4YWxkTrZu0gW
 Content-Disposition: form-data; name="chat_id"
@@ -72,6 +76,7 @@ Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.doc
 
 POST http://localhost:8001/api/document-creation
 Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+Authorization: Bearer user_token_123
 
 ------WebKitFormBoundary7MA4YWxkTrZu0gW
 Content-Disposition: form-data; name="chat_id"
@@ -90,6 +95,7 @@ Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.doc
 
 POST http://localhost:8001/api/document-creation
 Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+Authorization: Bearer user_token_123
 
 ------WebKitFormBoundary7MA4YWxkTrZu0gW
 Content-Disposition: form-data; name="chat_id"
@@ -101,6 +107,91 @@ Content-Type: application/pdf
 
 < ./test_documents/Fuerzas_Conjuntas_de_Asterión_scanned_pdf.pdf
 ------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+
+###
+
+
+POST http://localhost:8000/api/document-creation
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+Authorization: Bearer user_token_123
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="chat_id"
+
+12345
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="raw_document"; filename="Arte_y_Cultura_Capitulo_I_digital_pdf.pdf"
+Content-Type: application/pdf
+
+< ./test_documents/Arte_y_Cultura_Capitulo_I_digital_pdf.pdf
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+
+###
+
+
+POST http://localhost:8000/api/document-creation
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+Authorization: Bearer user_token_123
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="chat_id"
+
+12345
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="raw_document"; filename="Ciencia_y_Tecnologia_Capitulo_I_digital_docx.docx"
+Content-Type: application/pdf
+
+< ./test_documents/Ciencia_y_Tecnologia_Capitulo_I_digital_docx.docx
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+
+###
+
+
+POST http://localhost:8000/api/document-creation
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+Authorization: Bearer user_token_123
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="chat_id"
+
+12345
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="raw_document"; filename="Historia_Universal_Capitulo_I_digital_docx.docx"
+Content-Type: application/pdf
+
+< ./test_documents/Historia_Universal_Capitulo_I_digital_docx.docx
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+
+###
+
+
+POST http://localhost:8000/api/document-creation
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+Authorization: Bearer user_token_123
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="chat_id"
+
+12345
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="raw_document"; filename="Religiones_del_Mundo_digital_pdf.docx.pdf"
+Content-Type: application/pdf
+
+< ./test_documents/Religiones_del_Mundo_digital_pdf.docx.pdf
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+
+###
+
+
+GET http://localhost:8001/api/document-creation/document/12
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
 
 
 ###

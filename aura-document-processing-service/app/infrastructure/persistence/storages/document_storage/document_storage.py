@@ -114,7 +114,7 @@ class DocumentStorage(DocumentStorageInterface):
 
             metadata = {}
             if self._document_storage_settings.store_metadata:
-                metadata["original_filename"] = file.filename
+                metadata["original_filename"] = self._document_storage_settings.sanitize_metadata_value(file.filename)
                 metadata["document_id"] = document_id if document_id else "none"
                 metadata["upload_timestamp"] = str(int(time.time()))
 
@@ -138,7 +138,7 @@ class DocumentStorage(DocumentStorageInterface):
                 "Document uploaded successfully",
                 extra={
                     "object_name": object_name,
-                    "filename": file.filename,
+                    "document_filename": file.filename,
                     "size_bytes": file_size,
                     "elapsed_ms": round(elapsed, 2)
                 }

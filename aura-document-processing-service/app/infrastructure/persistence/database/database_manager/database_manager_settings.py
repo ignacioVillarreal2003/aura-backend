@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 class DatabaseManagerSettings(BaseSettings):
     driver: str = Field(
-        default="postgresql",
+        default="asyncpg",
         description="Database driver (currently only postgresql supported)"
     )
     user: str = Field(
@@ -114,7 +114,7 @@ class DatabaseManagerSettings(BaseSettings):
             cls,
             v: str
     ) -> str:
-        allowed = ["postgresql"]
+        allowed = ["postgresql", "postgresql+asyncpg"]
         if v not in allowed:
             raise ValueError(f"Driver must be one of {allowed}, got: {v}")
         return v

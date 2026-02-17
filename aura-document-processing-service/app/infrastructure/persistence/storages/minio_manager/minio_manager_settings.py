@@ -21,7 +21,7 @@ class MinioManagerSettings(BaseSettings):
         description="MinIO secret key"
     )
     secure: bool = Field(
-        default=True,
+        default=False,
         description="Use HTTPS for connections"
     )
     region: str = Field(
@@ -88,7 +88,7 @@ class MinioManagerSettings(BaseSettings):
     )
 
     multipart_threshold: int = Field(
-        default=5 * 1024 * 1024,  # 5MB
+        default=5 * 1024 * 1024,
         gt=0,
         description="Minimum file size in bytes to use multipart upload"
     )

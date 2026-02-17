@@ -1,5 +1,6 @@
-from sqlalchemy import Column, Integer, String, Enum, DateTime
+from sqlalchemy import Column, Integer, String, DateTime
 from sqlalchemy.sql import func
+from sqlalchemy.dialects.postgresql import ENUM
 
 from app.domain.constants.document_status import DocumentStatus
 from app.domain.constants.document_type import DocumentType
@@ -20,11 +21,11 @@ class Document(Base):
         nullable=False
     )
     type = Column(
-        Enum(DocumentType),
+        ENUM(DocumentType, name="document_type", create_type=False),
         nullable=False
     )
     status = Column(
-        Enum(DocumentStatus),
+        ENUM(DocumentStatus, name="document_status", create_type=False),
         default=DocumentStatus.pending,
         nullable=False
     )

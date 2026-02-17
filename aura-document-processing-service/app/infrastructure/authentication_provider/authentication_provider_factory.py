@@ -7,12 +7,13 @@ from app.infrastructure.authentication_provider.interfaces.authentication_provid
     AuthenticationProviderInterface
 )
 from app.infrastructure.http_client.http_client import HttpClient
+from app.infrastructure.http_client.interfaces.http_client_interface import HttpClientInterface
 
 logger = logging.getLogger(__name__)
 
 
 def create_authentication_provider(
-        http_client: HttpClient,
+        http_client: HttpClientInterface,
         authentication_validate_token_url: str,
         authentication_verify_permissions_url: str,
         authentication_get_user_by_token_url: str,

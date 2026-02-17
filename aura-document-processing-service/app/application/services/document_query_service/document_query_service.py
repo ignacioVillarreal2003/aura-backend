@@ -122,7 +122,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             database_session: AsyncSession,
             user: AuthenticationResponse
     ) -> DocumentListResponse:
-        page = page if page is not None else 1
+        page = page if page is not None else 0
         size = size if size is not None else self._document_query_service_settings.default_page_size
 
         if size > self._document_query_service_settings.max_page_size:

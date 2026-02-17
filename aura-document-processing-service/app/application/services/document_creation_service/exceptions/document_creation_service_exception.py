@@ -35,3 +35,11 @@ class DocumentProcessingException(DocumentCreationServiceException):
 
 class TempFileException(DocumentCreationServiceException):
     pass
+
+
+class DocumentNotFoundException(DocumentCreationServiceException):
+    pass
+
+
+class DocumentAccessForbiddenException(DocumentCreationServiceException):
+    pass

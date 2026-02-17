@@ -1,0 +1,16 @@
+DELETE http://localhost:8001/api/document-deletion/soft/8
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+
+###
+
+
+DELETE http://localhost:8000/api/document-deletion/hard/6
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+
+###

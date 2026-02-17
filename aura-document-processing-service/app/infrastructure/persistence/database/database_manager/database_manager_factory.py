@@ -18,6 +18,7 @@ def create_database_manager(
         host: Optional[str],
         port: Optional[int],
         name: Optional[str],
+        database_driver: Optional[str],
         database_manager_settings: Optional[DatabaseManagerSettings] = None,
         **config_kwargs
 ) -> DatabaseManagerInterface:
@@ -32,6 +33,7 @@ def create_database_manager(
                     host=host,
                     port=port,
                     name=name,
+                    driver=database_driver,
                     **config_kwargs
                 )
             else:

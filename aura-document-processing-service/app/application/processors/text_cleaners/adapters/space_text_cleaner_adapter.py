@@ -13,8 +13,9 @@ class SpaceTextCleanerAdapter(TextCleanerAdapterInterface):
         if not text:
             return ""
 
-        text = re.sub(r"[\t\r]+", " ", text)
-        text = re.sub(r"[ ]{2,}", " ", text)
-        text = re.sub(r"\n{2,}", "\n", text)
+        text = re.sub(r"\n\s*\n", " ", text)
+        text = re.sub(r"\n", " ", text)
+        text = re.sub(r"[\t\r]", " ", text)
+        text = re.sub(r"\s{2,}", " ", text)
 
         return text.strip()

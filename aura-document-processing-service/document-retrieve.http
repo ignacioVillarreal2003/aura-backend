@@ -1,6 +1,19 @@
-POST http://localhost:8000/api/document-context/question
+POST http://localhost:8001/api/document-retrieve/document
 Accept: application/json
 Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "document_id": 22
+}
+
+###
+
+
+POST http://localhost:8000/api/document-retrieve/question
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
 
 {
   "question": "¿Qué representa simbólicamente la ballena para Nereo y por qué el enfrentamiento no termina con su muerte?",
@@ -11,9 +24,10 @@ Content-Type: application/json
 ###
 
 
-POST http://localhost:8000/api/document-context/question
+POST http://localhost:8000/api/document-retrieve/question
 Accept: application/json
 Content-Type: application/json
+Authorization: Bearer user_token_123
 
 {
   "question": "¿Cómo se utiliza el mar como elemento narrativo para reforzar la idea de leyenda y destino?",
@@ -24,9 +38,10 @@ Content-Type: application/json
 ###
 
 
-POST http://localhost:8000/api/document-context/question
+POST http://localhost:8000/api/document-retrieve/question
 Accept: application/json
 Content-Type: application/json
+Authorization: Bearer user_token_123
 
 {
   "question": "¿Qué ventajas operativas ofrece la integración de sistemas fly-by-wire y aviónica de fusión de sensores en un caza multirrol?",
@@ -37,9 +52,10 @@ Content-Type: application/json
 ###
 
 
-POST http://localhost:8000/api/document-context/question
+POST http://localhost:8000/api/document-retrieve/question
 Accept: application/json
 Content-Type: application/json
+Authorization: Bearer user_token_123
 
 {
   "question": "¿Por qué la reducción de la firma radar (RCS) es un factor clave en el diseño del F-X?",
@@ -50,9 +66,10 @@ Content-Type: application/json
 ###
 
 
-POST http://localhost:8000/api/document-context/question
+POST http://localhost:8000/api/document-retrieve/question
 Accept: application/json
 Content-Type: application/json
+Authorization: Bearer user_token_123
 
 {
   "question": "¿Cómo influye la modularidad del diseño del rifle en su adaptación a distintos entornos operativos?",
@@ -63,9 +80,10 @@ Content-Type: application/json
 ###
 
 
-POST http://localhost:8000/api/document-context/question
+POST http://localhost:8000/api/document-retrieve/question
 Accept: application/json
 Content-Type: application/json
+Authorization: Bearer user_token_123
 
 {
   "question": "¿Por qué la fiabilidad mecánica es prioritaria frente a la complejidad tecnológica en armas de infantería?",
@@ -76,9 +94,10 @@ Content-Type: application/json
 ###
 
 
-POST http://localhost:8000/api/document-context/question
+POST http://localhost:8000/api/document-retrieve/question
 Accept: application/json
 Content-Type: application/json
+Authorization: Bearer user_token_123
 
 {
   "question": "¿De qué manera la imposibilidad de crecer afecta la identidad y el sentido de pertenencia del protagonista?",
@@ -89,9 +108,10 @@ Content-Type: application/json
 ###
 
 
-POST http://localhost:8000/api/document-context/question
+POST http://localhost:8000/api/document-retrieve/question
 Accept: application/json
 Content-Type: application/json
+Authorization: Bearer user_token_123
 
 {
   "question": "¿Qué simboliza la Luna en relación con el tiempo y la soledad del niño?",
@@ -102,9 +122,10 @@ Content-Type: application/json
 ###
 
 
-POST http://localhost:8000/api/document-context/question
+POST http://localhost:8000/api/document-retrieve/question
 Accept: application/json
 Content-Type: application/json
+Authorization: Bearer user_token_123
 
 {
   "question": "¿Por qué la logística es presentada como el factor determinante del ritmo operacional en el Teatro Boreal?",
@@ -115,9 +136,10 @@ Content-Type: application/json
 ###
 
 
-POST http://localhost:8000/api/document-context/question
+POST http://localhost:8000/api/document-retrieve/question
 Accept: application/json
 Content-Type: application/json
+Authorization: Bearer user_token_123
 
 {
   "question": "¿Cómo se relacionan la ética operacional y la legitimidad estratégica dentro de la doctrina de Asterión?",
@@ -128,9 +150,10 @@ Content-Type: application/json
 ###
 
 
-POST http://localhost:8000/api/document-context/question
+POST http://localhost:8000/api/document-retrieve/question
 Accept: application/json
 Content-Type: application/json
+Authorization: Bearer user_token_123
 
 {
   "question": "¿Por qué el Big Bang no debe interpretarse como una explosión convencional dentro de un espacio preexistente?",
@@ -141,13 +164,28 @@ Content-Type: application/json
 ###
 
 
-POST http://localhost:8001/api/document-context/question
+POST http://localhost:8001/api/document-retrieve/question
 Accept: application/json
 Content-Type: application/json
+Authorization: Bearer user_token_123
 
 {
   "question": "¿Qué importancia tiene la radiación cósmica de fondo para la validación del modelo del Big Bang?",
   "max_context_fragments": 4
+}
+
+
+###
+
+
+POST http://localhost:8000/api/document-retrieve/question
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "question": "¿Cuáles son las principales diferencias doctrinales entre el monoteísmo y el politeísmo según las religiones analizadas en el documento?",
+  "max_context_fragments": 3
 }
 
 

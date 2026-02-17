@@ -15,6 +15,7 @@ from app.application.services.document_retrieve_service.document_retrieve_servic
     create_document_retrieve_service
 )
 from app.configuration.environment_variables import environment_variables
+from app.infrastructure.authentication_provider.authentication_provider_factory import create_authentication_provider
 from app.infrastructure.http_client.http_client_factory import create_http_client
 from app.infrastructure.persistence.database.database_manager.database_manager_factory import create_database_manager
 from app.infrastructure.persistence.storages.document_storage.document_storage_factory import create_document_storage
@@ -79,6 +80,14 @@ async def startup_dependencies(
 
         document_retrieve_service = create_document_retrieve_service()
         app.state.document_retrieve_service = document_retrieve_service
+
+        authentication_provider = create_authentication_provider(
+            http_client=http_client,
+            authentication_validate_token_url=environment_variables.authentication_validate_token_url,
+            authentication_verify_permissions_url=environment_variables.authentication_verify_permissions_url,
+            authentication_get_user_by_token_url=environment_variables.authentication_get_user_by_token_url
+        )
+        app.state.authentication_provider = authentication_provider
 
         logger.info("All dependencies started successfully")
 

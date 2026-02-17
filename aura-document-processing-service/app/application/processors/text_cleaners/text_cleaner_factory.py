@@ -1,9 +1,5 @@
 from typing import Dict, Type
 
-from app.application.processors.text_cleaners.adapters.full_text_cleaner_adapter import FullTextCleanerAdapter
-from app.application.processors.text_cleaners.adapters.no_line_breaks_text_cleaner_adapter import (
-    NoLineBreaksTextCleanerAdapter
-)
 from app.application.processors.text_cleaners.adapters.space_text_cleaner_adapter import SpaceTextCleanerAdapter
 from app.application.processors.text_cleaners.exceptions.text_cleaner_exception import UnsupportedTextCleanerMethodError
 from app.application.processors.text_cleaners.interfaces.text_cleaner_adapter_interface import (
@@ -17,8 +13,6 @@ class TextCleanerFactory:
             self
     ):
         self._cleaners: Dict[TextCleanerType, Type[TextCleanerAdapterInterface]] = {
-            TextCleanerType.full: FullTextCleanerAdapter,
-            TextCleanerType.no_line_breaks: NoLineBreaksTextCleanerAdapter,
             TextCleanerType.space: SpaceTextCleanerAdapter
         }
         self._instances: Dict[str, TextCleanerAdapterInterface] = {}

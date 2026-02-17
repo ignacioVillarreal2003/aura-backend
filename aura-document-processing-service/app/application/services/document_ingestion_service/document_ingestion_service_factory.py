@@ -8,20 +8,15 @@ from app.application.processors.text_splitters.text_splitter_factory import Text
 from app.application.services.document_ingestion_service.document_ingestion_service import (
     DocumentIngestionService
 )
-from app.application.services.document_ingestion_service.document_ingestion_service_configuration import (
-    DocumentIngestionServiceConfiguration
-)
-
-from app.application.services.document_ingestion_service.document_ingestion_service_settings import \
+from app.application.services.document_ingestion_service.document_ingestion_service_settings import (
     DocumentIngestionServiceSettings
+)
 from app.application.services.document_ingestion_service.interfaces.document_ingestion_service_interface import (
     DocumentIngestionServiceInterface
 )
-from app.infrastructure.persistence.database.database_manager.database_manager import (
-    DatabaseManager
-)
-from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import \
+from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
     DatabaseManagerInterface
+)
 from app.infrastructure.persistence.database.repositories.document_repository.document_repository_factory import (
     create_document_repository
 )

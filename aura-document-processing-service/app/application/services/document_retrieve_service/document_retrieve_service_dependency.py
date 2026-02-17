@@ -12,12 +12,12 @@ async def get_document_retrieve_service(
         request: Request
 ) -> DocumentRetrieveServiceInterface:
     try:
-        document_context_service: DocumentRetrieveServiceInterface = request.app.state.document_context_service
+        document_context_service: DocumentRetrieveServiceInterface = request.app.state.document_retrieve_service
         return document_context_service
 
     except AttributeError:
-        logger.error("DocumentContextService not found in application state")
+        logger.error("DocumentRetrieveService not found in application state")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Document context service not configured",
+            detail="Document retrieve service not configured",
         )

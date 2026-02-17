@@ -67,12 +67,12 @@ router = APIRouter()
 
 document_deletion_controller = DocumentDeletionController()
 
-router.post(
-    "/soft",
+router.delete(
+    "/soft/{document_id}",
     response_model=None
 )(document_deletion_controller.soft_delete_document)
 
-router.post(
-    "/hard",
+router.delete(
+    "/hard/{document_id}",
     response_model=None
 )(document_deletion_controller.hard_delete_document)

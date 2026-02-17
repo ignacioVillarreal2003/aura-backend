@@ -18,7 +18,7 @@ from app.application.services.document_creation_service.exceptions.document_crea
     DocumentValidationException,
     DocumentUploadException,
     DocumentPersistenceException,
-    DocumentCreationServiceException
+    DocumentCreationServiceException, DocumentNotFoundException, DocumentAccessForbiddenException
 )
 from app.application.services.document_creation_service.interfaces.document_creation_service_interface import (
     DocumentCreationServiceInterface
@@ -28,6 +28,7 @@ from app.application.services.document_ingestion_service.interfaces.document_ing
 )
 from app.domain.constants.document_type import DocumentType
 from app.domain.dtos.document_creation.document_creation_request import DocumentCreationRequest
+from app.domain.dtos.document_creation.document_creation_status_response import DocumentCreationStatusResponse
 from app.domain.models.document import Document
 from app.domain.dtos.document_creation.document_creation_response import DocumentCreationResponse
 from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
@@ -103,7 +104,7 @@ class DocumentCreationService(DocumentCreationServiceInterface):
         logger.info(
             "Starting document creation",
             extra={
-                "filename": raw_document.filename,
+                "document_filename": raw_document.filename,
                 "content_type": raw_document.content_type,
                 "user_id": user.id
             }
@@ -133,7 +134,7 @@ class DocumentCreationService(DocumentCreationServiceInterface):
                     "Validation failed",
                     extra={
                         "error": str(e),
-                        "filename": raw_document.filename
+                        "document_filename": raw_document.filename
                     }
                 )
                 raise DocumentValidationException(f"Document validation failed: {str(e)}") from e
@@ -149,7 +150,6 @@ class DocumentCreationService(DocumentCreationServiceInterface):
                     additional_metadata={
                         "user_id": user.id,
                         "document_type": document_type.value,
-                        "original_filename": raw_document.filename
                     }
                 )
 
@@ -166,7 +166,7 @@ class DocumentCreationService(DocumentCreationServiceInterface):
                     "Storage upload failed",
                     extra={
                         "error": str(e),
-                        "filename": raw_document.filename
+                        "document_filename": raw_document.filename
                     }
                 )
                 raise DocumentUploadException(f"Failed to upload document to storage: {str(e)}") from e
@@ -198,7 +198,7 @@ class DocumentCreationService(DocumentCreationServiceInterface):
                     "Database persistence failed",
                     extra={
                         "error": str(e),
-                        "filename": raw_document.filename
+                        "document_filename": raw_document.filename
                     }
                 )
 
@@ -257,7 +257,7 @@ class DocumentCreationService(DocumentCreationServiceInterface):
             logger.exception(
                 "Unexpected error during document creation",
                 extra={
-                    "filename": raw_document.filename
+                    "document_filename": raw_document.filename
                 }
             )
             raise DocumentCreationServiceException(f"Document creation failed: {str(e)}") from e
@@ -347,6 +347,83 @@ class DocumentCreationService(DocumentCreationServiceInterface):
                             "path": str(local_file_path)
                         }
                     )
+
+    async def get_document_creation_status(
+            self,
+            document_id: int,
+            database_session: AsyncSession,
+            user: AuthenticationResponse
+    ) -> DocumentCreationStatusResponse:
+        logger.info(
+            "Fetching document creation status",
+            extra={
+                "document_id": document_id,
+                "user_id": user.id
+            }
+        )
+
+        try:
+            document = await self._document_repository.get_document_by_id(
+                document_id=document_id,
+                database_session=database_session
+            )
+
+            if not document or document.deleted_at is not None:
+                logger.warning(
+                    "Document not found",
+                    extra={
+                        "document_id": document_id
+                    }
+                )
+                raise DocumentNotFoundException(f"Document {document_id} not found")
+
+            if document.created_by != user.id:
+                logger.warning(
+                    "Unauthorized access to document status",
+                    extra={
+                        "document_id": document_id,
+                        "user_id": user.id,
+                        "owner_id": document.created_by
+                    }
+                )
+                raise DocumentAccessForbiddenException(f"Access to document {document_id} is forbidden")
+
+            logger.info(
+                "Document status retrieved successfully",
+                extra={
+                    "document_id": document_id,
+                    "status": document.status
+                }
+            )
+
+            return DocumentCreationStatusResponse(
+                document_id=document.id,
+                status=document.status
+            )
+
+        except (
+                DocumentNotFoundException,
+                DocumentAccessForbiddenException
+        ):
+            raise
+
+        except DatabaseException as e:
+            logger.exception(
+                "Database error fetching document status",
+                extra={
+                    "document_id": document_id
+                }
+            )
+            raise DocumentCreationServiceException(f"Failed to fetch document status: {str(e)}") from e
+
+        except Exception as e:
+            logger.exception(
+                "Unexpected error fetching document status",
+                extra={
+                    "document_id": document_id
+                }
+            )
+            raise DocumentCreationServiceException(f"Unexpected error fetching document status: {str(e)}") from e
 
     def get_metrics(
             self

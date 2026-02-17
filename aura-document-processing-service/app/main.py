@@ -105,10 +105,10 @@ def add_middleware(
         AuthenticationMiddleware,
         excluded_paths=[
             "/",
-            "/health",
-            "/docs",
-            "/redoc",
-            "/openapi.json"
+            "/api/health",
+            "/api/docs",
+            "/api/redoc",
+            "/api/openapi.json"
         ],
         require_auth=True
     )

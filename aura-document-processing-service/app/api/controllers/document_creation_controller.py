@@ -11,6 +11,7 @@ from app.application.services.document_creation_service.interfaces.document_crea
 )
 from app.domain.dtos.document_creation.document_creation_request import DocumentCreationRequest
 from app.domain.dtos.document_creation.document_creation_response import DocumentCreationResponse
+from app.domain.dtos.document_creation.document_creation_status_response import DocumentCreationStatusResponse
 from app.infrastructure.authentication_provider.authentication_provider_dependency import (
     get_current_user
 )
@@ -44,6 +45,24 @@ class DocumentCreationController(DocumentCreationControllerInterface):
 
         return document_creation_response
 
+    async def get_document_creation_status(
+            self,
+            document_id: int,
+            document_creation_service: DocumentCreationServiceInterface = Depends(get_document_creation_service),
+            database_session: AsyncSession = Depends(get_database_session),
+            user: AuthenticationResponse = Depends(get_current_user)
+    ) -> DocumentCreationStatusResponse:
+        logger.info("Processing document creation request")
+
+        document_creation_status_response = await document_creation_service.get_document_creation_status(
+            document_id=document_id,
+            database_session=database_session,
+            user=user
+        )
+
+        logger.info("Document creation request processed successfully")
+
+        return document_creation_status_response
 
 router = APIRouter()
 
@@ -53,3 +72,8 @@ router.post(
     "",
     response_model=DocumentCreationResponse
 )(document_creation_controller.create_document)
+
+router.get(
+    "/document/{document_id}",
+    response_model=DocumentCreationStatusResponse
+)(document_creation_controller.get_document_creation_status)
