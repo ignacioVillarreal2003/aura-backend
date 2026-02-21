@@ -1,7 +1,7 @@
 from typing import Dict, Type
 
 from app.application.processors.embedders.adapters.ollama_embedder_adapter import OllamaEmbedderAdapter
-from app.application.processors.embedders.exceptions.embedder_exception import UnsupportedEmbedderMethodError
+from app.application.processors.embedders.exceptions.embedder_exception import UnsupportedEmbedderTypeException
 from app.application.processors.embedders.interfaces.embedder_adapter_interface import EmbedderAdapterInterface
 from app.application.processors.embedders.constants.embedder_type import EmbedderType
 
@@ -17,12 +17,12 @@ class EmbedderFactory:
 
     def get_embedder(
             self,
-            method: EmbedderType
+            type: EmbedderType
     ) -> EmbedderAdapterInterface:
-        if method not in self._embeddings:
-            raise UnsupportedEmbedderMethodError(method)
+        if type not in self._embeddings:
+            raise UnsupportedEmbedderTypeException(type)
 
-        if method not in self._instances:
-            self._instances[method] = self._embeddings[method]()
+        if type not in self._instances:
+            self._instances[type] = self._embeddings[type]()
 
-        return self._instances[method]
+        return self._instances[type]

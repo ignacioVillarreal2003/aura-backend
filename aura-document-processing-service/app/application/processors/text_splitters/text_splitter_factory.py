@@ -4,7 +4,7 @@ from app.application.processors.text_splitters.adapters.recursive_text_splitter_
     RecursiveTextSplitterAdapter
 )
 from app.application.processors.text_splitters.exceptions.text_splitter_exception import (
-    UnsupportedTextSplitterMethodError
+    UnsupportedTextSplitterTypeException
 )
 from app.application.processors.text_splitters.interfaces.text_splitter_adapter_interface import (
     TextSplitterAdapterInterface
@@ -23,12 +23,12 @@ class TextSplitterFactory:
 
     def get_text_splitter(
             self,
-            method: TextSplitterType
+            type: TextSplitterType
     ) -> TextSplitterAdapterInterface:
-        if method not in self._splitters:
-            raise UnsupportedTextSplitterMethodError(method)
+        if type not in self._splitters:
+            raise UnsupportedTextSplitterTypeException("Método de text splitting no soportado")
 
-        if method not in self._instances:
-            self._instances[method] = self._splitters[method]()
+        if type not in self._instances:
+            self._instances[type] = self._splitters[type]()
 
-        return self._instances[method]
+        return self._instances[type]

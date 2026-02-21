@@ -24,18 +24,18 @@ class ReaderFactory:
 
     def _get_or_create_reader(
             self,
-            method: ReaderType
+            type: ReaderType
     ) -> DocumentReaderInterface:
-        if method not in self._instances:
-            self._instances[method] = self._readers[method]()
-        return self._instances[method]
+        if type not in self._instances:
+            self._instances[type] = self._readers[type]()
+        return self._instances[type]
 
     def get_reader(
             self,
             file_path: Path
     ) -> DocumentReaderInterface:
-        for method in self._readers:
-            reader = self._get_or_create_reader(method)
+        for type in self._readers:
+            reader = self._get_or_create_reader(type)
             try:
                 if reader.can_handle(file_path):
                     return reader

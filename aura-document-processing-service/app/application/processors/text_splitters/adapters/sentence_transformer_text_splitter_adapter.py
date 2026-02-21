@@ -1,6 +1,6 @@
 from langchain_text_splitters import SentenceTransformersTokenTextSplitter
 
-from app.application.processors.text_splitters.exceptions.text_splitter_exception import TextSplitterError
+from app.application.processors.text_splitters.exceptions.text_splitter_exception import TextSplitterException
 from app.application.processors.text_splitters.interfaces.text_splitter_adapter_interface import (
     TextSplitterAdapterInterface
 )
@@ -22,5 +22,5 @@ class SentenceTransformerTextSplitterAdapter(TextSplitterAdapterInterface):
             )
             return splitter.split_text(text)
         except Exception as e:
-            raise TextSplitterError(
+            raise TextSplitterException(
                 f"Error al generar splits de texto con SentenceTransformerTextSplitterAdapter: {str(e)}")

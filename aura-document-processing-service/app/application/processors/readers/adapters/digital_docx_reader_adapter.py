@@ -1,13 +1,17 @@
+import logging
 from pathlib import Path
+
 from docx import Document
 
 from app.application.processors.readers.exceptions.reader_exception import (
-    ReaderFileNotFoundError,
-    UnsupportedDigitalDOCXFormatError,
-    DigitalDOCXReadError,
-    DOCXHasNoExtractableTextError
+    ReaderFileNotFoundException,
+    UnsupportedDigitalDOCXFormatException,
+    DigitalDOCXReadException,
+    DOCXHasNoExtractableTextException
 )
 from app.application.processors.readers.interfaces.reader_adapter_interface import DocumentReaderInterface
+
+logger = logging.getLogger(__name__)
 
 
 class DigitalDOCXReaderAdapter(DocumentReaderInterface):
@@ -33,18 +37,25 @@ class DigitalDOCXReaderAdapter(DocumentReaderInterface):
             file_path: Path
     ) -> str:
         if not file_path.exists():
-            raise ReaderFileNotFoundError(str(file_path))
+            raise ReaderFileNotFoundException(str(file_path))
 
-        if not self.can_handle(file_path):
-            raise UnsupportedDigitalDOCXFormatError(file_path.suffix)
+        logger.info(f"Reading digital DOCX [file={file_path.name}]")
 
         try:
             doc = Document(file_path)
+            # Use \n\n as paragraph separator — consistent with PDF reader and
+            # compatible with RecursiveCharacterTextSplitter's default separators
             text_parts = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
-            
+
             if not text_parts:
-                raise DOCXHasNoExtractableTextError()
-            
-            return "\n".join(text_parts)
+                raise DOCXHasNoExtractableTextException()
+
+            logger.info(
+                f"Digital DOCX read successfully [file={file_path.name}, paragraphs={len(text_parts)}]"
+            )
+            return "\n\n".join(text_parts)
+
+        except (ReaderFileNotFoundException, DOCXHasNoExtractableTextException):
+            raise
         except Exception as e:
-            raise DigitalDOCXReadError(str(file_path), e)
+            raise DigitalDOCXReadException(str(file_path), e)

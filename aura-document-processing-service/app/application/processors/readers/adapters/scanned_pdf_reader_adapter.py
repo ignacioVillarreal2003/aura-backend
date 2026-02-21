@@ -1,3 +1,4 @@
+import logging
 import os
 import platform
 import shutil
@@ -10,12 +11,14 @@ from pdf2image import convert_from_path
 import pytesseract
 
 from app.application.processors.readers.exceptions.reader_exception import (
-    ReaderFileNotFoundError,
-    UnsupportedScannedPDFFormatError,
-    ScannedPDFOCRExtractionError,
-    ScannedPDFReadError
+    ReaderFileNotFoundException,
+    UnsupportedScannedPDFFormatException,
+    ScannedPDFOCRExtractionException,
+    ScannedPDFReadException
 )
 from app.application.processors.readers.interfaces.reader_adapter_interface import DocumentReaderInterface
+
+logger = logging.getLogger(__name__)
 
 
 class ScannedPDFReaderAdapter(DocumentReaderInterface):
@@ -76,24 +79,21 @@ class ScannedPDFReaderAdapter(DocumentReaderInterface):
             }
 
             for future in as_completed(future_to_page):
+                page_num = future_to_page[future]
                 try:
                     page_num, text = future.result()
                     if text:
                         all_text[page_num] = text
                 except Exception as e:
-                    page_num = future_to_page[future]
-                    all_text[page_num] = f"[Error en página {page_num}: {str(e)}]"
+                    logger.warning(f"OCR failed for page {page_num} — skipping [reason={e}]")
 
         return [text for text in all_text if text]
 
     @staticmethod
     def _process_single_page(args: Tuple[object, int, str]) -> Tuple[int, str]:
         page_image, page_num, lang = args
-        try:
-            text = pytesseract.image_to_string(page_image, lang=lang)
-            return (page_num, text.strip() if text else "")
-        except Exception as e:
-            return (page_num, f"[Error procesando página {page_num}: {str(e)}]")
+        text = pytesseract.image_to_string(page_image, lang=lang)
+        return (page_num, text.strip() if text else "")
 
     def _process_pages_sequential(
             self,
@@ -107,7 +107,7 @@ class ScannedPDFReaderAdapter(DocumentReaderInterface):
                 if text.strip():
                     all_text.append(text.strip())
             except Exception as e:
-                all_text.append(f"[Error en página {i}: {str(e)}]")
+                logger.warning(f"OCR failed for page {i} — skipping [reason={e}]")
 
         return all_text
 
@@ -116,10 +116,14 @@ class ScannedPDFReaderAdapter(DocumentReaderInterface):
             file_path: Path
     ) -> str:
         if not file_path.exists():
-            raise ReaderFileNotFoundError(str(file_path))
+            raise ReaderFileNotFoundException(str(file_path))
 
         if not self.can_handle(file_path):
-            raise UnsupportedScannedPDFFormatError(file_path.suffix)
+            raise UnsupportedScannedPDFFormatException(file_path.suffix)
+
+        logger.info(
+            f"Reading scanned PDF [file={file_path.name}, dpi={self.dpi}, lang={self.lang}, parallel={self.use_parallel}]"
+        )
 
         try:
             pages = convert_from_path(
@@ -129,7 +133,9 @@ class ScannedPDFReaderAdapter(DocumentReaderInterface):
             )
 
             if not pages:
-                raise ScannedPDFOCRExtractionError()
+                raise ScannedPDFOCRExtractionException()
+
+            logger.info(f"PDF converted to images [file={file_path.name}, pages={len(pages)}]")
 
             if self.use_parallel and len(pages) > 1:
                 all_text = self._process_pages_parallel(pages)
@@ -137,11 +143,14 @@ class ScannedPDFReaderAdapter(DocumentReaderInterface):
                 all_text = self._process_pages_sequential(pages)
 
             if not all_text:
-                raise ScannedPDFOCRExtractionError()
+                raise ScannedPDFOCRExtractionException()
 
+            logger.info(
+                f"Scanned PDF read successfully [file={file_path.name}, pages_with_text={len(all_text)}/{len(pages)}]"
+            )
             return "\n\n".join(all_text)
 
-        except (ReaderFileNotFoundError, UnsupportedScannedPDFFormatError, ScannedPDFOCRExtractionError):
+        except (ReaderFileNotFoundException, UnsupportedScannedPDFFormatException, ScannedPDFOCRExtractionException):
             raise
         except Exception as e:
-            raise ScannedPDFReadError(str(file_path), e)
+            raise ScannedPDFReadException(str(file_path), e)

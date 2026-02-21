@@ -12,8 +12,8 @@ from app.application.services.document_query_service.exceptions.document_query_s
 from app.application.services.document_query_service.interfaces.document_query_service_interface import (
     DocumentQueryServiceInterface
 )
-from app.domain.dtos.document_query.document_list_response import DocumentListResponse
-from app.domain.dtos.document_query.document_response import DocumentResponse
+from app.domain.dtos.document_query.document_query_list_response import DocumentQueryListResponse
+from app.domain.dtos.document_query.document_query_response import DocumentQueryResponse
 from app.domain.models.document import Document
 from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
 from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
@@ -59,7 +59,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             document_id: int,
             database_session: AsyncSession,
             user: AuthenticationResponse
-    ) -> DocumentResponse:
+    ) -> DocumentQueryResponse:
         logger.info(
             "Retrieving document by ID",
             extra={
@@ -93,13 +93,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
                 }
             )
 
-            return DocumentResponse(
-                id=document.id,
-                name=document.name,
-                type=document.type,
-                status=document.status,
-                path=document.path
-            )
+            return DocumentQueryResponse.model_validate(document)
 
         except DocumentNotFoundError:
             self._failed_queries += 1
@@ -121,7 +115,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             size: Optional[int],
             database_session: AsyncSession,
             user: AuthenticationResponse
-    ) -> DocumentListResponse:
+    ) -> DocumentQueryListResponse:
         page = page if page is not None else 0
         size = size if size is not None else self._document_query_service_settings.default_page_size
 
@@ -145,14 +139,8 @@ class DocumentQueryService(DocumentQueryServiceInterface):
                 database_session=database_session
             )
 
-            document_list: List[DocumentResponse] = [
-                DocumentResponse(
-                    id=d.id,
-                    name=d.name,
-                    type=d.type,
-                    status=d.status,
-                    path=d.path
-                ) for d in documents
+            document_list: List[DocumentQueryResponse] = [
+                DocumentQueryResponse.model_validate(d) for d in documents
             ]
 
             self._list_queries += 1
@@ -167,7 +155,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
                 }
             )
 
-            return DocumentListResponse(
+            return DocumentQueryListResponse(
                 documents=document_list
             )
 

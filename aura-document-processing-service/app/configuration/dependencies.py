@@ -4,15 +4,18 @@ from fastapi import FastAPI
 from app.application.services.document_creation_service.document_creation_service_factory import (
     create_document_creation_service
 )
-from app.application.services.document_deletion_service.document_deletion_service_factory import (
+from app.application.services.delete_document_service.delete_document_service_factory import (
     create_document_deletion_service
 )
 from app.application.services.document_ingestion_service.document_ingestion_service_factory import (
     create_document_ingestion_service
 )
 from app.application.services.document_query_service.document_query_service_factory import create_document_query_service
-from app.application.services.document_retrieve_service.document_retrieve_service_factory import (
+from app.application.services.retrieve_document_service.retrieve_document_service_factory import (
     create_document_retrieve_service
+)
+from app.application.services.update_document_service.document_update_service_factory import (
+    create_update_document_service
 )
 from app.configuration.environment_variables import environment_variables
 from app.infrastructure.authentication_provider.authentication_provider_factory import create_authentication_provider
@@ -74,6 +77,9 @@ async def startup_dependencies(
             document_storage=document_storage
         )
         app.state.document_deletion_service = document_deletion_service
+
+        update_document_service = create_update_document_service()
+        app.state.update_document_service = update_document_service
 
         document_query_service = create_document_query_service()
         app.state.document_query_service = document_query_service

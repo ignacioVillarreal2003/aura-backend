@@ -1,6 +1,6 @@
 from sentence_transformers import SentenceTransformer
 
-from app.application.processors.embedders.exceptions.embedder_exception import EmbedderError
+from app.application.processors.embedders.exceptions.embedder_exception import EmbedderException
 from app.application.processors.embedders.interfaces.embedder_adapter_interface import EmbedderAdapterInterface
 
 
@@ -13,7 +13,7 @@ class SentenceTransformerEmbedderAdapter(EmbedderAdapterInterface):
                 model_name_or_path="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
             )
         except Exception as e:
-            raise EmbedderError(f"Error al inicializar SentenceTransformerEmbedderAdapter: {str(e)}")
+            raise EmbedderException(f"Exception al inicializar SentenceTransformerEmbedderAdapter: {str(e)}")
 
     def embed_documents(
             self,
@@ -25,8 +25,8 @@ class SentenceTransformerEmbedderAdapter(EmbedderAdapterInterface):
                 convert_to_numpy=True
             ).tolist()
         except Exception as e:
-            raise EmbedderError(
-                f"Error al generar embeddings de documentos con SentenceTransformerEmbedderAdapter: {str(e)}"
+            raise EmbedderException(
+                f"Exception al generar embeddings de documentos con SentenceTransformerEmbedderAdapter: {str(e)}"
             )
 
     def embed_query(
@@ -38,6 +38,6 @@ class SentenceTransformerEmbedderAdapter(EmbedderAdapterInterface):
                 convert_to_numpy=True
             ).tolist()
         except Exception as e:
-            raise EmbedderError(
-                f"Error al generar embeddings de documentos con SentenceTransformerEmbedderAdapter: {str(e)}"
+            raise EmbedderException(
+                f"Exception al generar embeddings de documentos con SentenceTransformerEmbedderAdapter: {str(e)}"
             )

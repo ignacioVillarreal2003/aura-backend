@@ -13,9 +13,18 @@ class SpaceTextCleanerAdapter(TextCleanerAdapterInterface):
         if not text:
             return ""
 
-        text = re.sub(r"\n\s*\n", " ", text)
-        text = re.sub(r"\n", " ", text)
+        # Remove carriage returns and tabs
         text = re.sub(r"[\t\r]", " ", text)
-        text = re.sub(r"\s{2,}", " ", text)
+
+        # Normalize multiple blank lines to a single paragraph separator
+        # This preserves the \n\n boundary that RecursiveCharacterTextSplitter uses
+        text = re.sub(r"\n{3,}", "\n\n", text)
+
+        # Collapse multiple spaces within a line (but not newlines)
+        text = re.sub(r"[ ]{2,}", " ", text)
+
+        # Clean trailing/leading spaces on each line
+        lines = [line.strip() for line in text.split("\n")]
+        text = "\n".join(lines)
 
         return text.strip()

@@ -1,9 +1,9 @@
 from app.application.exceptions.app_exception import AppException
 
 
-class TextCleanerError(AppException):
+class TextCleanerException(AppException):
     pass
 
 
-class UnsupportedTextCleanerMethodError(TextCleanerError):
+class UnsupportedTextCleanerTypeException(TextCleanerException):
     pass

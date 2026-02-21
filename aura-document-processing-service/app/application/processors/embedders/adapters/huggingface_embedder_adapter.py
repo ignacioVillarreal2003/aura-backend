@@ -1,6 +1,6 @@
 from langchain_huggingface import HuggingFaceEmbeddings
 
-from app.application.processors.embedders.exceptions.embedder_exception import EmbedderError
+from app.application.processors.embedders.exceptions.embedder_exception import EmbedderException
 from app.application.processors.embedders.interfaces.embedder_adapter_interface import EmbedderAdapterInterface
 
 
@@ -16,7 +16,7 @@ class HuggingfaceEmbedderAdapter(EmbedderAdapterInterface):
                 }
             )
         except Exception as e:
-            raise EmbedderError(f"Error al inicializar HuggingfaceEmbedderAdapter: {str(e)}")
+            raise EmbedderException(f"Exception al inicializar HuggingfaceEmbedderAdapter: {str(e)}")
 
     def embed_documents(
             self,
@@ -25,7 +25,7 @@ class HuggingfaceEmbedderAdapter(EmbedderAdapterInterface):
         try:
             return self.embeddings_model.embed_documents(texts)
         except Exception as e:
-            raise EmbedderError(f"Error al generar embeddings de documentos con HuggingfaceEmbedderAdapter: {str(e)}")
+            raise EmbedderException(f"Exception al generar embeddings de documentos con HuggingfaceEmbedderAdapter: {str(e)}")
 
     def embed_query(
             self,
@@ -34,4 +34,4 @@ class HuggingfaceEmbedderAdapter(EmbedderAdapterInterface):
         try:
             return self.embeddings_model.embed_query(text)
         except Exception as e:
-            raise EmbedderError(f"Error al generar embeddings de documentos con HuggingfaceEmbedderAdapter: {str(e)}")
+            raise EmbedderException(f"Exception al generar embeddings de documentos con HuggingfaceEmbedderAdapter: {str(e)}")

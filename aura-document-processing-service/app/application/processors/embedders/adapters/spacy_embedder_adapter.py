@@ -1,6 +1,6 @@
 import spacy
 
-from app.application.processors.embedders.exceptions.embedder_exception import EmbedderError
+from app.application.processors.embedders.exceptions.embedder_exception import EmbedderException
 from app.application.processors.embedders.interfaces.embedder_adapter_interface import EmbedderAdapterInterface
 
 
@@ -11,7 +11,7 @@ class SpacyEmbedderAdapter(EmbedderAdapterInterface):
         try:
             self.nlp = spacy.load("es_core_news_sm")
         except Exception as e:
-            raise EmbedderError(f"Error al inicializar SpacyEmbedderAdapter: {str(e)}")
+            raise EmbedderException(f"Exception al inicializar SpacyEmbedderAdapter: {str(e)}")
 
     def embed_documents(
             self,
@@ -23,7 +23,7 @@ class SpacyEmbedderAdapter(EmbedderAdapterInterface):
                 vectors.append(self.nlp(text).vector.tolist())
             return vectors
         except Exception as e:
-            raise EmbedderError(f"Error al generar embeddings de documentos con SpacyEmbedderAdapter: {str(e)}")
+            raise EmbedderException(f"Exception al generar embeddings de documentos con SpacyEmbedderAdapter: {str(e)}")
 
     def embed_query(
             self,
@@ -32,4 +32,4 @@ class SpacyEmbedderAdapter(EmbedderAdapterInterface):
         try:
             return self.nlp(text).vector.tolist()
         except Exception as e:
-            raise EmbedderError(f"Error al generar embeddings de documentos con SpacyEmbedderAdapter: {str(e)}")
+            raise EmbedderException(f"Exception al generar embeddings de documentos con SpacyEmbedderAdapter: {str(e)}")

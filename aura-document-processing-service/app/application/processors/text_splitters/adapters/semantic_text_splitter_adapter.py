@@ -2,7 +2,7 @@ from langchain_experimental.text_splitter import SemanticChunker
 from langchain_huggingface import HuggingFaceEmbeddings
 from typing import Literal
 
-from app.application.processors.text_splitters.exceptions.text_splitter_exception import TextSplitterError
+from app.application.processors.text_splitters.exceptions.text_splitter_exception import TextSplitterException
 from app.application.processors.text_splitters.interfaces.text_splitter_adapter_interface import (
     TextSplitterAdapterInterface
 )
@@ -26,4 +26,4 @@ class SemanticTextSplitterAdapter(TextSplitterAdapterInterface):
             )
             return splitter.split_text(text)
         except Exception as e:
-            raise TextSplitterError(f"Error al generar splits de texto con SemanticTextSplitterAdapter: {str(e)}")
+            raise TextSplitterException(f"Error al generar splits de texto con SemanticTextSplitterAdapter: {str(e)}")

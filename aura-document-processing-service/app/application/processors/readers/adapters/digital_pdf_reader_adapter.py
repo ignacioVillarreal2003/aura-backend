@@ -1,13 +1,17 @@
+import logging
 from pathlib import Path
+
 import pypdf
 
 from app.application.processors.readers.exceptions.reader_exception import (
-    ReaderFileNotFoundError,
-    UnsupportedDigitalPDFFormatError,
-    PDFHasNoExtractableTextError,
-    DigitalPDFReadError
+    ReaderFileNotFoundException,
+    UnsupportedDigitalPDFFormatException,
+    PDFHasNoExtractableTextException,
+    DigitalPDFReadException
 )
 from app.application.processors.readers.interfaces.reader_adapter_interface import DocumentReaderInterface
+
+logger = logging.getLogger(__name__)
 
 
 class DigitalPDFReaderAdapter(DocumentReaderInterface):
@@ -32,7 +36,7 @@ class DigitalPDFReaderAdapter(DocumentReaderInterface):
                         return True
                 return False
 
-        except pypdf.errors.PdfReadError:
+        except pypdf.Exceptions.PdfReadException:
             return False
         except Exception:
             return False
@@ -42,25 +46,30 @@ class DigitalPDFReaderAdapter(DocumentReaderInterface):
             file_path: Path
     ) -> str:
         if not file_path.exists():
-            raise ReaderFileNotFoundError(str(file_path))
+            raise ReaderFileNotFoundException(str(file_path))
 
-        if not self.can_handle(file_path):
-            raise UnsupportedDigitalPDFFormatError(file_path.suffix)
+        logger.info(f"Reading digital PDF [file={file_path.name}]")
 
         text_parts = []
         try:
             with open(file_path, "rb") as file:
                 pdf_reader = pypdf.PdfReader(file)
+                total_pages = len(pdf_reader.pages)
+
                 for page_num, page in enumerate(pdf_reader.pages, 1):
                     page_text = page.extract_text()
-
                     if page_text and page_text.strip():
                         text_parts.append(page_text.strip())
 
             if not text_parts:
-                raise PDFHasNoExtractableTextError()
+                raise PDFHasNoExtractableTextException()
 
+            logger.info(
+                f"Digital PDF read successfully [file={file_path.name}, pages={total_pages}, extracted={len(text_parts)}]"
+            )
             return "\n\n".join(text_parts)
 
+        except (ReaderFileNotFoundException, PDFHasNoExtractableTextException):
+            raise
         except Exception as e:
-            raise DigitalPDFReadError(str(file_path), e)
+            raise DigitalPDFReadException(str(file_path), e)

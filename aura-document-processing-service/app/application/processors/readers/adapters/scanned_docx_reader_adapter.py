@@ -1,4 +1,5 @@
 import io
+import logging
 import os
 import platform
 import shutil
@@ -9,18 +10,22 @@ import pytesseract
 from PIL import Image
 
 from app.application.processors.readers.exceptions.reader_exception import (
-    ReaderFileNotFoundError,
-    UnsupportedScannedDOCXFormatError,
-    ScannedDOCXOCRExtractionError,
-    ScannedDOCXReadError
+    ReaderFileNotFoundException,
+    UnsupportedScannedDOCXFormatException,
+    ScannedDOCXOCRExtractionException,
+    ScannedDOCXReadException
 )
 from app.application.processors.readers.interfaces.reader_adapter_interface import DocumentReaderInterface
+
+logger = logging.getLogger(__name__)
 
 
 class ScannedDOCXReaderAdapter(DocumentReaderInterface):
     def __init__(
-            self
+            self,
+            lang: str = "spa"
     ):
+        self.lang = lang
         self.tesseract_path = None
 
         if not self.tesseract_path:
@@ -46,29 +51,39 @@ class ScannedDOCXReaderAdapter(DocumentReaderInterface):
             file_path: Path
     ) -> str:
         if not file_path.exists():
-            raise ReaderFileNotFoundError(str(file_path))
+            raise ReaderFileNotFoundException(str(file_path))
 
         if not self.can_handle(file_path):
-            raise UnsupportedScannedDOCXFormatError(file_path.suffix)
+            raise UnsupportedScannedDOCXFormatException(file_path.suffix)
+
+        logger.info(f"Reading scanned DOCX [file={file_path.name}, lang={self.lang}]")
 
         all_text = []
         try:
             images = self._extract_images_from_docx(file_path)
-            
+
+            logger.info(f"Extracted images from DOCX [file={file_path.name}, images={len(images)}]")
+
             for i, image in enumerate(images, start=1):
-                text = pytesseract.image_to_string(image, lang="spa")
-                if text.strip():
-                    all_text.append(text.strip())
+                try:
+                    text = pytesseract.image_to_string(image, lang=self.lang)
+                    if text.strip():
+                        all_text.append(text.strip())
+                except Exception as e:
+                    logger.warning(f"OCR failed for image {i} in DOCX — skipping [reason={e}]")
 
             if not all_text:
-                raise ScannedDOCXOCRExtractionError()
+                raise ScannedDOCXOCRExtractionException()
 
+            logger.info(
+                f"Scanned DOCX read successfully [file={file_path.name}, images_with_text={len(all_text)}/{len(images)}]"
+            )
             return "\n\n".join(all_text)
 
-        except ScannedDOCXOCRExtractionError:
+        except (ReaderFileNotFoundException, UnsupportedScannedDOCXFormatException, ScannedDOCXOCRExtractionException):
             raise
         except Exception as e:
-            raise ScannedDOCXReadError(str(file_path), e)
+            raise ScannedDOCXReadException(str(file_path), e)
 
     def _extract_images_from_docx(
             self,

@@ -1,31 +1,23 @@
 from fastapi import APIRouter
 
-from app.api.controllers import (
-    document_query_controller,
-    document_creation_controller,
-    document_retrieve_controller,
-    document_deletion_controller,
-    health_controller
-)
+from app.api.controllers.create_document_controller.create_document_controller import create_document_controller
+from app.api.controllers.delete_document_controller.document_deletion_controller import delete_document_controller
+from app.api.controllers.document_query_controller.document_query_controller import document_query_controller
+from app.api.controllers.retrieve_document_controller.retrieve_document_controller import retrieve_document_controller
+from app.api.controllers.update_document_controller.update_document_controller import update_document_controller
 
 router = APIRouter()
 
 router.include_router(
-    document_retrieve_controller.router,
-    prefix="/document-retrieve",
-    tags=["DocumentRetrieve"]
+    create_document_controller.router,
+    prefix="/create-document",
+    tags=["CreateDocument"]
 )
 
 router.include_router(
-    document_creation_controller.router,
-    prefix="/document-creation",
-    tags=["DocumentCreation"]
-)
-
-router.include_router(
-    document_deletion_controller.router,
-    prefix="/document-deletion",
-    tags=["DocumentDeletion"]
+    delete_document_controller.router,
+    prefix="/delete-document",
+    tags=["DeleteDocument"]
 )
 
 router.include_router(
@@ -35,7 +27,16 @@ router.include_router(
 )
 
 router.include_router(
-    health_controller.router,
-    prefix="/health",
-    tags=["Health"]
+    retrieve_document_controller.router,
+    prefix="/retrieve-document",
+    tags=["RetrieveDocument"]
 )
+
+router.include_router(
+    update_document_controller.router,
+    prefix="/update-document",
+    tags=["UpdateDocument"]
+)
+
+
+

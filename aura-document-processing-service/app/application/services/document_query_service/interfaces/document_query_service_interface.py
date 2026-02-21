@@ -2,8 +2,8 @@ from abc import ABC, abstractmethod
 from typing import Dict, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.dtos.document_query.document_list_response import DocumentListResponse
-from app.domain.dtos.document_query.document_response import DocumentResponse
+from app.domain.dtos.document_query.document_query_list_response import DocumentListResponse
+from app.domain.dtos.document_query.document_query_response import DocumentResponse
 from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
 
 
