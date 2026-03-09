@@ -1,25 +1,21 @@
-from app.application.exceptions.app_exception import AppError
+from app.application.exceptions.app_exception import AppException
 
 
-class EmbedderError(AppError):
-    def __init__(self,
-                 message: str = "Error al generar embeddings de documentos",
-                 *,
-                 status_code: int = 500,
-                 code: str | None = None):
-        super().__init__(
-            message=message,
-            status_code=status_code,
-            code=code,
-        )
+class EmbedderException(AppException):
+    pass
 
 
-class UnsupportedEmbedderMethodError(EmbedderError):
-    def __init__(self,
-                 message: str = "Método de embedding no soportado",
-                 *,
-                 code: str | None = None):
-        super().__init__(
-            message=message,
-            code=code
-        )
+class UnsupportedEmbedderTypeException(EmbedderException):
+    pass
+
+
+class EmbedderInitializationException(EmbedderException):
+    pass
+
+
+class EmbedDocumentsException(EmbedderException):
+    pass
+
+
+class EmbedQueryException(EmbedderException):
+    pass

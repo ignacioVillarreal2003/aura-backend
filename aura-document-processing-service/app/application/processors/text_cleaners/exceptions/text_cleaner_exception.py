@@ -1,25 +1,13 @@
-from app.application.exceptions.app_exception import AppError
+from app.application.exceptions.app_exception import AppException
 
 
-class TextCleanerError(AppError):
-    def __init__(self,
-                 message: str = "Error al generar leer el documento",
-                 *,
-                 status_code: int = 500,
-                 code: str | None = None):
-        super().__init__(
-            message=message,
-            status_code=status_code,
-            code=code,
-        )
+class TextCleanerException(AppException):
+    pass
 
 
-class UnsupportedTextCleanerMethodError(TextCleanerError):
-    def __init__(self,
-                 message: str = "Método de text cleaning no soportado",
-                 *,
-                 code: str | None = 400):
-        super().__init__(
-            message=message,
-            code=code
-        )
+class UnsupportedTextCleanerTypeException(TextCleanerException):
+    pass
+
+
+class TextCleanerInitializationException(TextCleanerException):
+    pass

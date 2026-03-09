@@ -1,28 +1,37 @@
+import asyncio
 import logging
-import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
-from sqlalchemy.orm import Session
+from typing import List, Optional
 
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
 from app.application.processors.readers.reader_factory import ReaderFactory
 from app.application.processors.text_cleaners.text_cleaner_factory import TextCleanerFactory
 from app.application.processors.text_splitters.text_splitter_factory import TextSplitterFactory
-from app.application.services.document_ingestion_service.document_ingestion_service_configuration import (
-    DocumentIngestionServiceConfiguration
+from app.application.services.document_ingestion_service.exceptions.document_ingestion_service_exception import (
+    DocumentIngestionCleanException,
+    DocumentIngestionEmbedException,
+    DocumentIngestionPersistenceException,
+    DocumentIngestionReadException,
+    DocumentIngestionServiceException,
+    DocumentIngestionSplitException
 )
 from app.application.services.document_ingestion_service.interfaces.document_ingestion_service_interface import (
     DocumentIngestionServiceInterface
 )
+from app.application.services.document_ingestion_service.document_ingestion_service_settings import (
+    DocumentIngestionServiceSettings
+)
 from app.domain.constants.document_status import DocumentStatus
 from app.domain.models.document import Document
 from app.domain.models.fragment import Fragment
-from app.infrastructure.persistence.repositories.document_repository.document_repository import (
+from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
+    DatabaseManagerInterface
+)
+from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
     DocumentRepositoryInterface
 )
-from app.infrastructure.persistence.repositories.exceptions.database_exceptions import DatabaseError
-from app.infrastructure.persistence.repositories.fragment_repository.interfaces.fragment_repository_interface import (
+from app.infrastructure.persistence.database.repositories.fragment_repository.interfaces.fragment_repository_interface import (
     FragmentRepositoryInterface
 )
 
@@ -38,7 +47,8 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             text_cleaner_factory: TextCleanerFactory,
             text_splitter_factory: TextSplitterFactory,
             embedder_factory: EmbedderFactory,
-            document_ingestion_service_configuration: DocumentIngestionServiceConfiguration
+            database_manager: DatabaseManagerInterface,
+            document_ingestion_service_settings: Optional[DocumentIngestionServiceSettings] = None
     ) -> None:
         self._document_repository = document_repository
         self._fragment_repository = fragment_repository
@@ -46,137 +56,289 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
         self._cleaner_factory = text_cleaner_factory
         self._splitter_factory = text_splitter_factory
         self._embedder_factory = embedder_factory
+        self._database_manager = database_manager
+        self._document_ingestion_service_settings = document_ingestion_service_settings or DocumentIngestionServiceSettings()
 
-        self._document_creation_service_configuration = document_ingestion_service_configuration or DocumentIngestionServiceConfiguration()
-
-        logger.info("DocumentIngestionService initialized")
-
-    @classmethod
-    def create(
-            cls,
-            document_repository: DocumentRepositoryInterface,
-            fragment_repository: FragmentRepositoryInterface,
-            reader_factory: ReaderFactory,
-            text_cleaner_factory: TextCleanerFactory,
-            text_splitter_factory: TextSplitterFactory,
-            embedder_factory: EmbedderFactory,
-            text_cleaner_type: Optional[str] = None,
-            text_splitter_type: Optional[str] = None,
-            embedder_type: Optional[str] = None,
-            split_size: Optional[int] = None,
-            split_overlap: Optional[int] = None
-    ) -> "DocumentIngestionService":
-        config_kwargs = {}
-
-        if text_cleaner_type is not None:
-            config_kwargs['text_cleaner_type'] = text_cleaner_type
-        if text_splitter_type is not None:
-            config_kwargs['text_splitter_type'] = text_splitter_type
-        if embedder_type is not None:
-            config_kwargs['embedder_type'] = embedder_type
-        if split_size is not None:
-            config_kwargs['split_size'] = split_size
-        if split_overlap is not None:
-            config_kwargs['split_overlap'] = split_overlap
-
-        document_ingestion_service_configuration = DocumentIngestionServiceConfiguration(
-            **config_kwargs
-        )
-
-        return cls(
-            document_repository=document_repository,
-            fragment_repository=fragment_repository,
-            reader_factory=reader_factory,
-            text_cleaner_factory=text_cleaner_factory,
-            text_splitter_factory=text_splitter_factory,
-            embedder_factory=embedder_factory,
-            document_ingestion_service_configuration=document_ingestion_service_configuration
-        )
-
-    def execute_document_creation(
+    async def process_document(
             self,
             document: Document,
-            db: Session,
             local_file_path: Path
     ) -> None:
+        logger.info(
+            "Document ingestion initiated",
+            extra={
+                "document_id": document.id,
+                "file_path": str(local_file_path)
+            }
+        )
+
         try:
-            reader = self._reader_factory.get_reader(
-                file_path=local_file_path
-            )
-            reader_result = reader.read(
-                file_path=local_file_path
+            raw_text = await self._read_document(document, local_file_path)
+            clean_text = await self._clean_text(document, raw_text)
+            chunks = await self._split_text(document, clean_text)
+            embeddings = await self._embed_chunks(document, chunks)
+            fragments = self._build_fragments(document, chunks, embeddings)
+
+            await self._persist_fragments_and_update_document(document, fragments)
+
+            logger.info(
+                "Document ingestion completed",
+                extra={
+                    "document_id": document.id,
+                    "fragment_count": len(fragments)
+                }
             )
 
+        except (
+                DocumentIngestionReadException,
+                DocumentIngestionCleanException,
+                DocumentIngestionSplitException,
+                DocumentIngestionEmbedException,
+                DocumentIngestionPersistenceException
+        ):
+            await self._mark_document_as_failed(document)
+            raise
+
+        except Exception as e:
+            await self._mark_document_as_failed(document)
+            logger.exception(
+                "Unexpected error during document ingestion",
+                extra={
+                    "document_id": document.id
+                }
+            )
+            raise DocumentIngestionServiceException(f"Document ingestion failed for document {document.id}") from e
+
+        finally:
+            await self._cleanup_temp_file(local_file_path)
+
+    async def _read_document(
+            self,
+            document: Document,
+            local_file_path: Path
+    ) -> str:
+        try:
+            reader = self._reader_factory.get_reader(file_path=local_file_path)
+            raw_text: str = await asyncio.to_thread(reader.read, local_file_path)
+
+            logger.info(
+                "Document read completed",
+                extra={
+                    "document_id": document.id,
+                    "content_length": len(raw_text) if raw_text else 0
+                }
+            )
+            return raw_text
+
+        except Exception as e:
+            raise DocumentIngestionReadException(f"Failed to read document {document.id}: {e}") from e
+
+    async def _clean_text(
+            self,
+            document: Document,
+            raw_text: str
+    ) -> str:
+        try:
             cleaner = self._cleaner_factory.get_text_cleaner(
-                method=self._document_creation_service_configuration.text_cleaner_type
+                text_cleaner_type=self._document_ingestion_service_settings.text_cleaner_type
             )
-            clean_result = cleaner.clean_text(
-                text=reader_result
-            )
+            clean_text: str = await asyncio.to_thread(cleaner.clean_text, raw_text)
 
+            logger.debug(
+                "Text cleaning completed",
+                extra={
+                    "document_id": document.id
+                }
+            )
+            return clean_text
+
+        except Exception as e:
+            raise DocumentIngestionCleanException(f"Failed to clean text for document {document.id}: {e}") from e
+
+    async def _split_text(
+            self,
+            document: Document,
+            clean_text: str
+    ) -> List[str]:
+        try:
             splitter = self._splitter_factory.get_text_splitter(
-                method=self._document_creation_service_configuration.text_splitter_type
+                text_splitter_type=self._document_ingestion_service_settings.text_splitter_type
             )
-            splitter_result = splitter.split_text(
-                text=clean_result,
-                size=self._document_creation_service_configuration.split_size,
-                overlap=self._document_creation_service_configuration.split_overlap
-            )
+            chunks: List[str] = await asyncio.to_thread(splitter.split_text, clean_text)
 
+            logger.info(
+                "Text splitting completed",
+                extra={
+                    "document_id": document.id,
+                    "chunk_count": len(chunks)
+                }
+            )
+            return chunks
+
+        except Exception as e:
+            raise DocumentIngestionSplitException(f"Failed to split text for document {document.id}: {e}") from e
+
+    async def _embed_chunks(
+            self,
+            document: Document,
+            chunks: List[str],
+    ) -> List[list[float]]:
+        try:
             embedder = self._embedder_factory.get_embedder(
-                method=self._document_creation_service_configuration.embedder_type
-            )
-            embedder_result = embedder.embed_documents(
-                texts=splitter_result
+                embedder_type=self._document_ingestion_service_settings.embedder_type
             )
 
-            for idx in range(len(embedder_result)):
-                fragment = Fragment(
+            all_embeddings: List[list[float]] = []
+            batch_size = self._document_ingestion_service_settings.batch_size
+            total_batches = (len(chunks) + batch_size - 1) // batch_size
+
+            for batch_idx, start in enumerate(range(0, len(chunks), batch_size)):
+                batch = chunks[start: start + batch_size]
+                batch_embeddings: List[list[float]] = await asyncio.to_thread(
+                    embedder.embed_documents, batch
+                )
+                all_embeddings.extend(batch_embeddings)
+
+                logger.debug(
+                    "Embedding batch completed",
+                    extra={
+                        "document_id": document.id,
+                        "batch": f"{batch_idx + 1}/{total_batches}",
+                        "batch_size": len(batch)
+                    }
+                )
+
+            logger.info(
+                "Embedding generation completed",
+                extra={
+                    "document_id": document.id,
+                    "embedding_count": len(all_embeddings),
+                    "batch_count": total_batches
+                }
+            )
+            return all_embeddings
+
+        except Exception as e:
+            raise DocumentIngestionEmbedException(
+                f"Failed to generate embeddings for document {document.id}: {e}"
+            ) from e
+
+    def _build_fragments(
+            self,
+            document: Document,
+            chunks: List[str],
+            embeddings: List[list[float]]
+    ) -> List[Fragment]:
+        now = datetime.now(timezone.utc)
+        fragments = [
+            Fragment(
+                document_id=document.id,
+                vector=embedding,
+                content=chunk,
+                fragment_index=idx,
+                created_by=document.created_by,
+                created_at=now
+            )
+            for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings))
+        ]
+
+        logger.debug(
+            "Fragments built",
+            extra={
+                "document_id": document.id,
+                "fragment_count": len(fragments)
+            }
+        )
+        return fragments
+
+    async def _persist_fragments_and_update_document(
+            self,
+            document: Document,
+            fragments: List[Fragment]
+    ) -> None:
+        try:
+            async with self._database_manager.session() as database_session:
+                await self._fragment_repository.create_fragments(
+                    fragments=fragments,
+                    database_session=database_session
+                )
+
+                document.text_cleaner_type = self._document_ingestion_service_settings.text_cleaner_type
+                document.text_splitter_type = self._document_ingestion_service_settings.text_splitter_type
+                document.embedder_type = self._document_ingestion_service_settings.embedder_type
+                document.status = DocumentStatus.processed
+                document.processing_finished_at = datetime.now(timezone.utc)
+
+                await self._document_repository.update_document(
+                    document=document,
+                    database_session=database_session
+                )
+
+                logger.info(
+                    "Fragments and document status persisted",
+                    extra={
+                        "document_id": document.id,
+                        "fragment_count": len(fragments)
+                    }
+                )
+
+        except Exception as e:
+            raise DocumentIngestionPersistenceException(
+                f"Failed to persist fragments for document {document.id}: {e}"
+            ) from e
+
+    async def _mark_document_as_failed(
+            self,
+            document: Document
+    ) -> None:
+        try:
+            async with self._database_manager.session() as database_session:
+                db_document = await self._document_repository.get_document_by_id(
                     document_id=document.id,
-                    vector=embedder_result[idx],
-                    content=splitter_result[idx],
-                    fragment_index=idx,
-                    created_by=document.created_by,
-                    created_at=datetime.now(),
-                )
-                self._fragment_repository.create(
-                    fragment,
-                    db
+                    database_session=database_session
                 )
 
-            document.text_cleaner_type = self._document_creation_service_configuration.text_cleaner_type
-            document.text_splitter_type = self._document_creation_service_configuration.text_splitter_type
-            document.embedder_type = self._document_creation_service_configuration.embedder_type
-            document.split_size = self._document_creation_service_configuration.split_size
-            document.split_overlap = self._document_creation_service_configuration.split_overlap
-            document.status = DocumentStatus.done
+                if db_document is not None:
+                    db_document.status = DocumentStatus.failed
+                    await self._document_repository.update_document(
+                        document=db_document,
+                        database_session=database_session
+                    )
 
-            self._document_repository.update(
-                document=document,
-                db=db
+            logger.info(
+                "Document marked as failed",
+                extra={
+                    "document_id": document.id
+                }
             )
 
         except Exception as e:
-            document.status = DocumentStatus.failed
-            self._document_repository.update(
-                document=document,
-                db=db
+            logger.error(
+                "Failed to mark document as failed",
+                extra={
+                    "document_id": document.id,
+                    "error": str(e)
+                }
             )
-            logger.exception(
-                f"Error processing document: {type(e).__name__}: {str(e)}",
-                exc_info=True
-            )
-            raise DatabaseError("Error en la ingesta del documento") from e
 
-        finally:
-            try:
-                if os.path.exists(local_file_path):
-                    os.remove(local_file_path)
-                    logger.info("Temporary file deleted")
-            except Exception as e:
-                logger.warning(
-                    "Could not delete temporary file",
+    async def _cleanup_temp_file(
+            self,
+            file_path: Path
+    ) -> None:
+        try:
+            if await asyncio.to_thread(file_path.exists):
+                await asyncio.to_thread(file_path.unlink)
+                logger.debug(
+                    "Temporary file deleted",
                     extra={
-                        "error": str(e)
+                        "path": str(file_path)
                     }
                 )
+        except Exception as e:
+            logger.warning(
+                "Failed to delete temporary file",
+                extra={
+                    "path": str(file_path),
+                    "error": str(e)
+                }
+            )

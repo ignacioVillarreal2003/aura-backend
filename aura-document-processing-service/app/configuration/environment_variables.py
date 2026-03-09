@@ -4,10 +4,6 @@ from typing import List
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.domain.constants.embedder_type import EmbedderType
-from app.domain.constants.text_cleaner_type import TextCleanerType
-from app.domain.constants.text_splitter_type import TextSplitterType
-
 logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -15,7 +11,8 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 
 class EnvironmentVariables(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=BASE_DIR / ".env",
+        env_prefix="",
+        env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore"
@@ -52,109 +49,10 @@ class EnvironmentVariables(BaseSettings):
         description="Allowed CORS origins"
     )
 
-    db_host: str = Field(
-        ...,
-        description="Database host"
-    )
-    db_port: int = Field(
-        ...,
-        ge=1,
-        le=65535,
-        description="Database port"
-    )
-    db_name: str = Field(
-        ...,
-        description="Database name"
-    )
-    db_user: str = Field(
-        ...,
-        description="Database user"
-    )
-    db_password: str = Field(
-        ...,
-        description="Database password"
-    )
-    db_driver: str = Field(
-        default="postgresql+psycopg2",
-        description="SQLAlchemy database driver"
-    )
-
-    minio_endpoint: str = Field(
-        ...,
-        description="MinIO endpoint URL"
-    )
-    minio_access_key: str = Field(
-        ...,
-        description="MinIO access key"
-    )
-    minio_secret_key: str = Field(
-        ...,
-        description="MinIO secret key"
-    )
-    minio_secure: bool = Field(
-        default=False,
-        description="Use HTTPS for MinIO connection"
-    )
-
-    ollama_base_url: str = Field(
-        ...,
-        description="Ollama base url"
-    )
-
-    text_cleaner_type: TextCleanerType = Field(
-        default="basic",
-        description="Cleaner strategy (basic, advanced, etc.)"
-    )
-    text_splitter_type: TextSplitterType = Field(
-        default="recursive",
-        description="Splitter strategy (character, sentence, recursive)"
-    )
-    embedder_type: EmbedderType = Field(
-        default="huggingface",
-        description="Embedder backend"
-    )
-
-    vector_dimension: int = Field(
-        default=384,
-        gt=0,
-        description="Embedding vector dimension"
-    )
-
-    split_size: int = Field(
-        default=600,
-        gt=0,
-        description="Text split chunk size"
-    )
-
-    split_overlap: int = Field(
-        default=60,
-        ge=0,
-        description="Text split overlap"
-    )
-
-    max_file_size_mb: int = Field(
-        default=20,
-        ge=1,
-        le=500,
-        description="Maximum allowed file size in MB"
-    )
-
     environment: str = Field(
         default="development",
         description="Application environment (development | production)"
     )
-
-    @field_validator("split_overlap")
-    @classmethod
-    def validate_overlap(
-            cls,
-            v: int,
-            info
-    ) -> int:
-        split_size = info.data.get("split_size")
-        if split_size is not None and v >= split_size:
-            raise ValueError("split_overlap debe ser menor que split_size")
-        return v
 
     @field_validator("log_level")
     @classmethod
@@ -169,14 +67,6 @@ class EnvironmentVariables(BaseSettings):
             raise ValueError(f"Invalid log_level: {v}. Must be one of {valid_levels}")
 
         return v_upper
-
-    @field_validator("ollama_base_url")
-    @classmethod
-    def validate_url(cls, v: str) -> str:
-        if not v.startswith(("http://", "https://")):
-            raise ValueError(f"URL must start with http:// or https://, got: {v}")
-
-        return v.rstrip("/")
 
     @field_validator("cors_origins")
     @classmethod
