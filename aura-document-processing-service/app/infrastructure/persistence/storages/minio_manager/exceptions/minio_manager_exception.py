@@ -31,7 +31,3 @@ class MinioDownloadException(MinioOperationException):
 
 class MinioDeleteException(MinioOperationException):
     pass
-
-
-class MinioConfigurationException(MinioManagerException):
-    pass

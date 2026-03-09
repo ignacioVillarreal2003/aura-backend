@@ -7,3 +7,11 @@ class TextSplitterException(AppException):
 
 class UnsupportedTextSplitterTypeException(TextSplitterException):
     pass
+
+
+class TextSplitterInitializationException(TextSplitterException):
+    pass
+
+
+class TextSplitterExecutionException(TextSplitterException):
+    pass

@@ -7,3 +7,7 @@ class TextCleanerException(AppException):
 
 class UnsupportedTextCleanerTypeException(TextCleanerException):
     pass
+
+
+class TextCleanerInitializationException(TextCleanerException):
+    pass

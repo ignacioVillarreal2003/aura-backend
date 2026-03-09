@@ -1,208 +1,208 @@
 import logging
-from typing import Optional
-
+import re
 import unicodedata
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
 
 class DocumentStorageSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="DOCUMENT_STORAGE_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore"
+    )
+
     bucket_name: str = Field(
-        default="documents",
-        description="Bucket name for document storage"
+        default="documents"
+    )
+    auto_create_bucket_if_missing: bool = Field(
+        default=True
     )
 
-    use_uuid_prefix: bool = Field(
-        default=True,
-        description="Use UUID prefixes for organizing documents"
+    object_key_prefix: Optional[str] = Field(
+        default="documents"
     )
-    path_prefix: Optional[str] = Field(
-        default="documents",
-        description="Prefix for all document paths (e.g., 'documents/', 'files/')"
+    organize_objects_by_date: bool = Field(
+        default=True
     )
-    organize_by_date: bool = Field(
-        default=True,
-        description="Organize documents by date (YYYY/MM/DD structure)"
+    preserve_original_filename_as_stem: bool = Field(
+        default=False
     )
-
-    preserve_original_filename: bool = Field(
-        default=False,
-        description="Preserve original filename in object name"
+    uuid_prefix_on_preserved_stem: bool = Field(
+        default=True
     )
-    max_filename_length: int = Field(
+    max_object_stem_length: int = Field(
         default=255,
         gt=0,
-        le=1024,
-        description="Maximum length for generated filenames"
-    )
-    allowed_extensions: Optional[list[str]] = Field(
-        default=["pdf", "doc", "docx"],
-        description="List of allowed file extensions (None = allow all)"
+        le=1024
     )
 
-    max_file_size: Optional[int] = Field(
+    allowed_file_extensions: Optional[list[str]] = Field(
+        default=[
+            "pdf",
+            "doc",
+            "docx"
+        ]
+    )
+    max_file_size_bytes: Optional[int] = Field(
         default=100 * 1024 * 1024,
-        gt=0,
-        description="Maximum file size in bytes (None = no limit)"
+        gt=0
     )
-    min_file_size: int = Field(
+    min_file_size_bytes: int = Field(
         default=1,
-        gt=0,
-        description="Minimum file size in bytes"
+        gt=0
     )
 
-    store_metadata: bool = Field(
-        default=False,
-        description="Store additional metadata with documents"
+    attach_metadata_to_objects: bool = Field(
+        default=False
     )
-    include_content_type: bool = Field(
-        default=True,
-        description="Include content type in object metadata"
+    send_content_type_header: bool = Field(
+        default=True
     )
 
-    default_presigned_url_expiry: int = Field(
+    presigned_url_expiry_seconds: int = Field(
         default=3600,
         gt=0,
-        le=604800,
-        description="Default expiry for presigned URLs in seconds"
+        le=604_800
     )
 
-    enable_metrics: bool = Field(
-        default=True,
-        description="Enable operation metrics tracking"
-    )
-    auto_create_bucket: bool = Field(
-        default=True,
-        description="Automatically create bucket on start"
+    metrics_enabled: bool = Field(
+        default=True
     )
 
-    @field_validator("bucket_name")
+    @field_validator(
+        "bucket_name",
+        mode="before"
+    )
     @classmethod
     def validate_bucket_name(
             cls,
             v: str
     ) -> str:
-        if not v or not v.strip():
-            raise ValueError("Bucket name cannot be empty")
-
         v = v.strip()
 
-        if len(v) < 3 or len(v) > 63:
+        if not (3 <= len(v) <= 63):
+            raise ValueError(f"Bucket name must be between 3 and 63 characters, got {len(v)}")
+
+        bucket_name_re = re.compile(r"^[a-z0-9][a-z0-9.\-]*[a-z0-9]$")
+        if not bucket_name_re.match(v):
             raise ValueError(
-                f"Bucket name must be between 3 and 63 characters, got: {len(v)}"
+                "Bucket name may only contain lowercase letters, numbers, "
+                "hyphens and dots, and must start/end with a letter or number"
             )
 
-        if not v.islower():
-            raise ValueError("Bucket name must be lowercase")
-
-        if not v[0].isalnum() or not v[-1].isalnum():
-            raise ValueError("Bucket name must start and end with letter or number")
-
-        import re
-        if not re.match(r'^[a-z0-9][a-z0-9.-]*[a-z0-9]$', v):
+        invalid_consecutive_chars_re = re.compile(r"\.\.|\.[-]|[-]\.")
+        if invalid_consecutive_chars_re.search(v):
             raise ValueError(
-                "Bucket name can only contain lowercase letters, numbers, dots, and hyphens"
+                "Bucket name cannot contain consecutive special characters "
+                "('..', '.-', '-.')"
             )
-
-        if '..' in v or '.-' in v or '-.' in v:
-            raise ValueError("Bucket name cannot contain consecutive special characters")
 
         return v
 
-    @field_validator("path_prefix")
+    @field_validator(
+        "object_key_prefix",
+        mode="before"
+    )
     @classmethod
-    def validate_path_prefix(
+    def validate_object_key_prefix(
             cls,
             v: Optional[str]
     ) -> Optional[str]:
         if v is None:
             return v
 
-        v = v.strip()
+        v = v.strip().strip("/")
         if not v:
             return None
 
-        v = v.strip('/')
-
-        if not all(c.isalnum() or c in ['/', '-', '_'] for c in v):
+        object_key_prefix_re = re.compile(r"^[a-zA-Z0-9/_-]+$")
+        if not object_key_prefix_re.match(v):
             raise ValueError(
-                "Path prefix can only contain alphanumeric characters, slashes, hyphens, and underscores"
+                "object_key_prefix may only contain alphanumeric characters, "
+                "forward slashes, hyphens and underscores"
             )
 
         return v
 
-    @field_validator("allowed_extensions")
+    @field_validator(
+        "allowed_file_extensions",
+        mode="before"
+    )
     @classmethod
-    def validate_allowed_extensions(
+    def normalise_allowed_file_extensions(
             cls,
             v: Optional[list[str]]
     ) -> Optional[list[str]]:
         if v is None:
-            return v
+            return None
 
-        normalized = []
-        for ext in v:
-            ext = ext.strip().lower()
-            ext = ext.lstrip('.')
-            if ext:
-                normalized.append(ext)
+        if isinstance(v, str):
+            v = v.split(",")
 
-        return normalized if normalized else None
+        normalised = [
+            ext.strip().lower().lstrip(".")
+            for ext in v
+            if ext.strip().lstrip(".")
+        ]
+        return normalised or None
 
     def is_extension_allowed(
             self,
             filename: str
     ) -> bool:
-        if self.allowed_extensions is None:
+        if self.allowed_file_extensions is None:
             return True
-
-        from pathlib import Path
-        ext = Path(filename).suffix.lower().lstrip('.')
-
-        return ext in self.allowed_extensions
+        ext = Path(filename).suffix.lower().lstrip(".")
+        return ext in self.allowed_file_extensions
 
     def generate_object_name(
             self,
             original_filename: str,
             document_id: Optional[str] = None
     ) -> str:
-        from pathlib import Path
-        from datetime import datetime
-        import uuid
-
         ext = Path(original_filename).suffix
+        parts: list[str] = []
 
-        parts = []
+        if self.object_key_prefix:
+            parts.append(self.object_key_prefix)
 
-        if self.path_prefix:
-            parts.append(self.path_prefix)
+        if self.organize_objects_by_date:
+            now = datetime.now(timezone.utc)
+            parts += [str(now.year), f"{now.month:02d}", f"{now.day:02d}"]
 
-        if self.organize_by_date:
-            now = datetime.utcnow()
-            parts.extend([
-                str(now.year),
-                f"{now.month:02d}",
-                f"{now.day:02d}"
-            ])
+        if document_id:
+            stem = document_id
 
-        if self.preserve_original_filename:
-            filename = Path(original_filename).stem
-            filename = "".join(c for c in filename if c.isalnum() or c in ['-', '_'])
-            filename = filename[:self.max_filename_length - len(ext)]
+        elif self.preserve_original_filename_as_stem:
+            raw_stem = Path(original_filename).stem
+            sanitised = "".join(
+                c for c in raw_stem if c.isalnum() or c in ("-", "_")
+            )
+            max_stem = max(0, self.max_object_stem_length - len(ext))
+            sanitised = sanitised[:max_stem] or uuid.uuid4().hex
+
+            stem = (
+                f"{uuid.uuid4().hex[:8]}_{sanitised}"
+                if self.uuid_prefix_on_preserved_stem
+                else sanitised
+            )
+
         else:
-            filename = document_id if document_id else str(uuid.uuid4())
+            stem = str(uuid.uuid4())
 
-        if self.use_uuid_prefix and not document_id:
-            filename = f"{uuid.uuid4().hex[:8]}_{filename}"
+        return "/".join(parts + [f"{stem}{ext}"])
 
-        object_name = "/".join(parts + [f"{filename}{ext}"])
-
-        return object_name
-
+    @staticmethod
     def sanitize_metadata_value(
-            self,
             value: str
     ) -> str:
         return (

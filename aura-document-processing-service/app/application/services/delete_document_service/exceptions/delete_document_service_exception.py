@@ -5,17 +5,17 @@ class DeleteDocumentServiceException(AppException):
     pass
 
 
-class DocumentNotFoundError(DeleteDocumentServiceException):
+class DeleteDocumentNotFoundException(DeleteDocumentServiceException):
     pass
 
 
-class DocumentDeletionException(DeleteDocumentServiceException):
+class DeleteDocumentUnauthorizedException(DeleteDocumentServiceException):
     pass
 
 
-class FragmentDeletionException(DeleteDocumentServiceException):
+class DeleteDocumentFailedException(DeleteDocumentServiceException):
     pass
 
 
-class StorageDeletionException(DeleteDocumentServiceException):
+class DeleteFragmentsFailedException(DeleteDocumentServiceException):
     pass

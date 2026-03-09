@@ -1,65 +1,47 @@
 import logging
-from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings
+from pydantic import Field, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.application.processors.embedders.constants.embedder_type import EmbedderType
 
 logger = logging.getLogger(__name__)
 
 
 class DocumentQueryServiceSettings(BaseSettings):
-    default_page_size: int = Field(
-        default=10,
+    model_config = SettingsConfigDict(
+        env_prefix="DOCUMENT_QUERY_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore"
+    )
+
+    embedder_type: EmbedderType = Field(
+        default=EmbedderType.ollama
+    )
+
+    max_fragments: int = Field(
+        default=5,
         gt=0,
-        le=100,
-        description="Default page size for list queries"
+        le=100
     )
-    max_page_size: int = Field(
-        default=100,
+
+    max_question_length: int = Field(
+        default=10000,
         gt=0,
-        le=1000,
-        description="Maximum allowed page size"
+        le=100000
     )
 
-    include_deleted: bool = Field(
-        default=False,
-        description="Include soft-deleted documents in queries"
+    min_question_length: int = Field(
+        default=1,
+        gt=0
     )
 
-    enable_caching: bool = Field(
-        default=False,
-        description="Enable query result caching"
-    )
-    cache_ttl_seconds: int = Field(
-        default=300,
-        gt=0,
-        le=3600,
-        description="Cache TTL in seconds"
-    )
-
-    enable_metrics: bool = Field(
-        default=True,
-        description="Enable metrics collection"
-    )
-
-    @field_validator("default_page_size")
-    @classmethod
-    def validate_default_page_size(
-            cls,
-            v: int
-    ) -> int:
-        if v < 1:
-            raise ValueError("default_page_size must be at least 1")
-        if v > 100:
-            raise ValueError("default_page_size cannot exceed 100")
-        return v
-
-    @field_validator("max_page_size")
-    @classmethod
-    def validate_max_page_size(
-            cls,
-            v: int
-    ) -> int:
-        if v < 1:
-            raise ValueError("max_page_size must be at least 1")
-        if v > 1000:
-            raise ValueError("max_page_size cannot exceed 1000")
-        return v
+    @model_validator(mode="after")
+    def validate_configuration_coherence(self) -> "DocumentQueryServiceSettings":
+        if self.min_question_length >= self.max_question_length:
+            raise ValueError(
+                f"min_question_length ({self.min_question_length}) "
+                f"must be strictly less than max_question_length ({self.max_question_length})"
+            )
+        return self

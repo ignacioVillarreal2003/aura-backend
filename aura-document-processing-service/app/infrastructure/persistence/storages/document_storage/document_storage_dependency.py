@@ -8,17 +8,12 @@ from app.infrastructure.persistence.storages.document_storage.interfaces.documen
 logger = logging.getLogger(__name__)
 
 
-async def get_document_storage(
-        request: Request
-) -> DocumentStorageInterface:
+async def get_document_storage(request: Request) -> DocumentStorageInterface:
     try:
-        document_storage: DocumentStorageInterface = request.app.state.document_storage
-
-        return document_storage
-
+        return request.app.state.document_storage
     except AttributeError:
         logger.error("DocumentStorage not found in application state")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Document storage service not configured",
+            detail="DocumentStorage service not configured"
         )

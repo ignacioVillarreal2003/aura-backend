@@ -5,9 +5,7 @@ from fastapi import UploadFile
 
 class DocumentStorageInterface(ABC):
     @abstractmethod
-    async def start(
-            self
-    ) -> None:
+    async def start(self) -> None:
         pass
 
     @abstractmethod
@@ -52,27 +50,23 @@ class DocumentStorageInterface(ABC):
     async def get_presigned_url(
             self,
             object_name: str,
-            expires: Optional[int] = None,
-            method: str = "GET"
+            method: str,
+            expires: Optional[int] = None
     ) -> str:
         pass
 
     @abstractmethod
     async def list_documents(
             self,
-            prefix: Optional[str] = None,
-            recursive: bool = True
+            recursive: bool = True,
+            prefix: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         pass
 
     @abstractmethod
-    async def health_check(
-            self
-    ) -> Dict[str, Any]:
+    async def health_check(self) -> Dict[str, Any]:
         pass
 
     @abstractmethod
-    def get_metrics(
-            self
-    ) -> Dict[str, int]:
+    def get_metrics(self) -> Dict[str, int]:
         pass

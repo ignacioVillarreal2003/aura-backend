@@ -5,9 +5,13 @@ class UpdateDocumentServiceException(AppException):
     pass
 
 
-class DocumentNotFoundError(UpdateDocumentServiceException):
+class UpdateDocumentNotFoundException(UpdateDocumentServiceException):
     pass
 
 
-class DocumentUpdateException(UpdateDocumentServiceException):
+class UpdateDocumentUnauthorizedException(UpdateDocumentServiceException):
+    pass
+
+
+class UpdateDocumentFailedException(UpdateDocumentServiceException):
     pass

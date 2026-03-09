@@ -1,3 +1,13 @@
+Text cleaner::::
+Errores OCR (0 por o, 4 por a) → eso es corrección semántica, otro componente.
+Palabras separadas (docu mento) → requiere NLP/diccionario.
+Deduplicación de párrafos → corresponde al pipeline de indexado, no al cleaner.
+
+
+
+
+
+
 # Prontos para revision
 
 # 🔥 PRIORIDAD 1 — BLOQUEANTES PARA PRODUCCIÓN (resolver sí o sí)

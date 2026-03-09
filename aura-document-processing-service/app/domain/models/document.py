@@ -1,4 +1,4 @@
-from sqlalchemy import Column, BigInteger, String, DateTime, Boolean, Text, Integer
+from sqlalchemy import Column, BigInteger, String, DateTime, Text, Integer, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import ENUM
 
@@ -17,6 +17,15 @@ class Document(Base):
         index=True
     )
 
+    chat_id = Column(
+        BigInteger,
+        ForeignKey(
+            "chat.id",
+            ondelete="CASCADE"
+        ),
+        nullable=True
+    )
+
     name = Column(
         String(255),
         nullable=False
@@ -25,14 +34,10 @@ class Document(Base):
         Text,
         nullable=True
     )
-    original_name = Column(
-        String(255),
-        nullable=False
-    )
     mime_type = Column(
         ENUM(
             DocumentMimeType,
-            name="mime_type",
+            name="document_mime_type",
             create_type=False
         ),
         nullable=False
@@ -40,7 +45,7 @@ class Document(Base):
     status = Column(
         ENUM(
             DocumentStatus,
-            name="status",
+            name="document_status",
             create_type=False
         ),
         default=DocumentStatus.uploaded,
@@ -59,7 +64,7 @@ class Document(Base):
     type = Column(
         ENUM(
             DocumentType,
-            name="type",
+            name="document_type",
             create_type=False),
         nullable=True
     )
@@ -89,28 +94,13 @@ class Document(Base):
         nullable=True
     )
 
-    total_pages = Column(
-        Integer,
-        nullable=True
-    )
-    extracted_text_length = Column(
-        Integer,
-        nullable=True
-    )
-
-    is_active = Column(
-        Boolean,
-        default=True,
-        nullable=False
-    )
-
     processing_started_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         server_default=func.now(),
         nullable=False
     )
     processing_finished_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=True
     )
 
@@ -119,7 +109,7 @@ class Document(Base):
         nullable=False
     )
     created_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         server_default=func.now(),
         nullable=False
     )
@@ -128,7 +118,7 @@ class Document(Base):
         nullable=True
     )
     updated_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=True
     )
     deleted_by = Column(
@@ -136,6 +126,6 @@ class Document(Base):
         nullable=True
     )
     deleted_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=True
     )

@@ -5,15 +5,11 @@ import httpx
 
 class HttpClientInterface(ABC):
     @abstractmethod
-    async def start(
-            self
-    ) -> None:
+    async def start(self) -> None:
         pass
 
     @abstractmethod
-    async def stop(
-            self
-    ) -> None:
+    async def stop(self) -> None:
         pass
 
     @abstractmethod
@@ -21,11 +17,11 @@ class HttpClientInterface(ABC):
             self,
             method: str,
             url: str,
-            params: Optional[Dict[str, Any]] = None,
-            json: Optional[Dict[str, Any]] = None,
-            data: Optional[Union[Dict[str, Any], bytes]] = None,
-            headers: Optional[Dict[str, str]] = None,
-            timeout: Optional[float] = None,
+            params: Optional[Dict[str, Any]],
+            json: Optional[Dict[str, Any]],
+            data: Optional[Union[Dict[str, Any], bytes]],
+            headers: Optional[Dict[str, str]],
+            timeout: Optional[float],
             **kwargs
     ) -> httpx.Response:
         pass
@@ -55,14 +51,6 @@ class HttpClientInterface(ABC):
         pass
 
     @abstractmethod
-    async def delete(
-            self,
-            url: str,
-            **kwargs
-    ) -> httpx.Response:
-        pass
-
-    @abstractmethod
     async def patch(
             self,
             url: str,
@@ -71,27 +59,27 @@ class HttpClientInterface(ABC):
         pass
 
     @abstractmethod
-    async def health_check(
-            self
-    ) -> Dict[str, Any]:
+    async def delete(
+            self,
+            url: str,
+            **kwargs
+    ) -> httpx.Response:
         pass
 
     @abstractmethod
-    def get_metrics(
-            self
-    ) -> Dict[str, int]:
+    async def health_check(self) -> Dict[str, Any]:
         pass
 
-    @property
     @abstractmethod
-    def is_started(
-            self
-    ) -> bool:
+    def get_metrics(self) -> Dict[str, Union[int, float]]:
         pass
 
     @property
     @abstractmethod
-    def client(
-            self
-    ) -> httpx.AsyncClient:
+    def is_started(self) -> bool:
+        pass
+
+    @property
+    @abstractmethod
+    def client(self) -> httpx.AsyncClient:
         pass

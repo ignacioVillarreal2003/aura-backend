@@ -1,180 +1,167 @@
 import logging
-from typing import Optional, Dict
-from pydantic import Field, field_validator, model_validator
-from pydantic_settings import BaseSettings
+from typing import Dict, Optional
+
+from pydantic import Field, model_validator, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
 
 class HttpClientSettings(BaseSettings):
-    timeout: float = Field(
+    model_config = SettingsConfigDict(
+        env_prefix="HTTP_CLIENT_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore"
+    )
+
+    default_timeout_seconds: float = Field(
         default=30.0,
         gt=0,
-        le=300.0,
-        description="Default timeout for HTTP requests in seconds"
+        le=300.0
     )
-    connect_timeout: float = Field(
+    tcp_connect_timeout_seconds: float = Field(
         default=10.0,
         gt=0,
-        le=60.0,
-        description="Connection timeout in seconds"
+        le=60.0
     )
-    read_timeout: float = Field(
+    socket_read_timeout_seconds: float = Field(
         default=30.0,
         gt=0,
-        le=300.0,
-        description="Read timeout in seconds"
+        le=300.0
     )
-    write_timeout: float = Field(
+    socket_write_timeout_seconds: float = Field(
         default=60.0,
         gt=0,
-        le=600.0,
-        description="Write timeout in seconds"
+        le=600.0
     )
 
-    max_retries: int = Field(
+    retry_max_attempts: int = Field(
         default=3,
         ge=0,
-        le=10,
-        description="Maximum number of retry attempts"
+        le=10
     )
-    retry_backoff_min: float = Field(
+    retry_backoff_min_seconds: float = Field(
         default=1.0,
         gt=0,
-        le=30.0,
-        description="Minimum wait time between retries in seconds"
+        le=30.0
     )
-    retry_backoff_max: float = Field(
+    retry_backoff_max_seconds: float = Field(
         default=10.0,
         gt=0,
-        le=60.0,
-        description="Maximum wait time between retries in seconds"
+        le=60.0
     )
 
-    circuit_breaker_failures: int = Field(
+    circuit_breaker_failure_threshold: int = Field(
         default=5,
         ge=1,
-        le=20,
-        description="Number of failures before opening circuit breaker"
+        le=20
     )
-    circuit_breaker_timeout: int = Field(
+    circuit_breaker_recovery_timeout_seconds: int = Field(
         default=60,
         gt=0,
-        le=600,
-        description="Circuit breaker timeout in seconds"
+        le=600
     )
 
-    max_connections: int = Field(
+    connection_pool_max_size: int = Field(
         default=100,
         gt=0,
-        le=1000,
-        description="Maximum number of concurrent connections"
+        le=1000
     )
-    max_keepalive_connections: int = Field(
+    connection_pool_max_keepalive: int = Field(
         default=20,
         gt=0,
-        le=100,
-        description="Maximum number of keepalive connections"
+        le=100
     )
 
-    verify_ssl: bool = Field(
-        default=True,
-        description="Verify SSL certificates"
+    ssl_verify_certificates: bool = Field(
+        default=True
     )
-    follow_redirects: bool = Field(
-        default=True,
-        description="Follow HTTP redirects"
+    follow_http_redirects: bool = Field(
+        default=True
     )
 
-    default_headers: Optional[Dict[str, str]] = Field(
-        default=None,
-        description="Default headers to include in all requests"
+    request_user_agent: str = Field(
+        default="app/1.0"
+    )
+    request_default_headers: Optional[Dict[str, str]] = Field(
+        default=None
     )
 
-    user_agent: str = Field(
-        default="aura-document-processing-service/1.0",
-        description="User-Agent header value"
+    metrics_enabled: bool = Field(
+        default=True
     )
 
-    enable_metrics: bool = Field(
-        default=True,
-        description="Enable metrics collection"
+    @field_validator(
+        "request_default_headers",
+        mode="before"
     )
-
-    @field_validator("max_keepalive_connections")
     @classmethod
-    def validate_keepalive_connections(
+    def empty_string_to_none(
             cls,
-            v: int,
-            info
-    ) -> int:
-        max_connections = info.data.get("max_connections", 100)
-        if v > max_connections:
-            raise ValueError(
-                f"max_keepalive_connections ({v}) cannot exceed "
-                f"max_connections ({max_connections})"
-            )
+            v
+    ):
+        if isinstance(v, str) and not v.strip():
+            return None
         return v
 
     @model_validator(
-        mode='after'
+        mode="after"
     )
-    def validate_timeouts(
-            self
-    ) -> 'HttpClientSettings':
-        if self.connect_timeout >= self.read_timeout:
-            logger.warning(
-                f"connect_timeout ({self.connect_timeout}s) should be less than "
-                f"read_timeout ({self.read_timeout}s)"
-            )
-
-        if self.read_timeout >= self.write_timeout:
-            logger.warning(
-                f"read_timeout ({self.read_timeout}s) should be less than "
-                f"write_timeout ({self.write_timeout}s) for large uploads"
-            )
-
-        return self
-
-    @model_validator(
-        mode='after'
-    )
-    def validate_retry_settings(
-            self
-    ) -> 'HttpClientSettings':
-        if self.retry_backoff_min >= self.retry_backoff_max:
+    def validate_configuration_coherence(self) -> "HttpClientSettings":
+        if self.retry_backoff_min_seconds >= self.retry_backoff_max_seconds:
             raise ValueError(
-                f"retry_backoff_min ({self.retry_backoff_min}) must be less than "
-                f"retry_backoff_max ({self.retry_backoff_max})"
+                f"retry_backoff_min_seconds ({self.retry_backoff_min_seconds}s) must be "
+                f"strictly less than retry_backoff_max_seconds ({self.retry_backoff_max_seconds}s)"
+            )
+
+        if self.connection_pool_max_keepalive > self.connection_pool_max_size:
+            raise ValueError(
+                f"connection_pool_max_keepalive ({self.connection_pool_max_keepalive}) "
+                f"cannot exceed connection_pool_max_size ({self.connection_pool_max_size})"
+            )
+
+        if self.tcp_connect_timeout_seconds >= self.socket_read_timeout_seconds:
+            logger.warning(
+                "tcp_connect_timeout_seconds is not less than socket_read_timeout_seconds",
+                extra={
+                    "tcp_connect_timeout_seconds": self.tcp_connect_timeout_seconds,
+                    "socket_read_timeout_seconds": self.socket_read_timeout_seconds
+                }
+            )
+
+        if self.socket_read_timeout_seconds >= self.socket_write_timeout_seconds:
+            logger.warning(
+                "socket_read_timeout_seconds is not less than socket_write_timeout_seconds"
+                " — large request bodies may time out",
+                extra={
+                    "socket_read_timeout_seconds": self.socket_read_timeout_seconds,
+                    "socket_write_timeout_seconds": self.socket_write_timeout_seconds
+                }
             )
 
         return self
 
     @property
-    def headers(
-            self
-    ) -> Dict[str, str]:
-        base_headers = {
-            "User-Agent": self.user_agent,
+    def merged_request_headers(self) -> Dict[str, str]:
+        base: Dict[str, str] = {
+            "User-Agent": self.request_user_agent
         }
-        if self.default_headers:
-            base_headers.update(self.default_headers)
-        return base_headers
+        if self.request_default_headers:
+            base.update(self.request_default_headers)
+        return base
 
-    def get_httpx_limits(
-            self
-    ) -> dict:
+    def get_httpx_timeout(self) -> dict:
         return {
-            "max_connections": self.max_connections,
-            "max_keepalive_connections": self.max_keepalive_connections,
+            "timeout": self.default_timeout_seconds,
+            "connect": self.tcp_connect_timeout_seconds,
+            "read": self.socket_read_timeout_seconds,
+            "write": self.socket_write_timeout_seconds
         }
 
-    def get_httpx_timeout(
-            self
-    ) -> dict:
+    def get_httpx_limits(self) -> dict:
         return {
-            "timeout": self.timeout,
-            "connect": self.connect_timeout,
-            "read": self.read_timeout,
-            "write": self.write_timeout,
+            "max_connections": self.connection_pool_max_size,
+            "max_keepalive_connections": self.connection_pool_max_keepalive
         }

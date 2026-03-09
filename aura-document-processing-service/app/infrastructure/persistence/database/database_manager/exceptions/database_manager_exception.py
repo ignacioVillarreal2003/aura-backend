@@ -7,3 +7,7 @@ class DatabaseManagerException(AppException):
 
 class DatabaseNotInitializedException(DatabaseManagerException):
     pass
+
+
+class DatabaseSessionException(DatabaseManagerException):
+    pass

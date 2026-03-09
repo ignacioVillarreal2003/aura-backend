@@ -1,12 +1,13 @@
-PUT http://localhost:8000/api/update-document/8
+PUT http://localhost:8000/api/update-document/post-process/document/8
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
 
 {
-  "is_active": false
+  "description": "description",
+  "type": "manual",
+  "category": "category"
 }
-
 
 ###
 

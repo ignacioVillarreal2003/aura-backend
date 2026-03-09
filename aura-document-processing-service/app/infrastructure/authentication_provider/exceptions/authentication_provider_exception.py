@@ -17,13 +17,5 @@ class AuthenticationProviderUserNotFoundException(AuthenticationProviderExceptio
     pass
 
 
-class AuthenticationProviderInsufficientPermissionsException(AuthenticationProviderException):
-    pass
-
-
 class AuthenticationProviderServiceUnavailableException(AuthenticationProviderException):
-    pass
-
-
-class AuthenticationProviderConfigurationException(AuthenticationProviderException):
     pass

@@ -6,32 +6,16 @@ class EmbedderException(AppException):
 
 
 class UnsupportedEmbedderTypeException(EmbedderException):
-    def __init__(self, embedder_type: str):
-        super().__init__(
-            f"Unsupported embedder type: '{embedder_type}'",
-            status_code=422
-        )
+    pass
 
 
 class EmbedderInitializationException(EmbedderException):
-    def __init__(self, embedder_name: str, cause: Exception):
-        super().__init__(
-            f"Failed to initialize embedder '{embedder_name}': {cause}",
-            status_code=500
-        )
+    pass
 
 
 class EmbedDocumentsException(EmbedderException):
-    def __init__(self, embedder_name: str, cause: Exception):
-        super().__init__(
-            f"Failed to generate document embeddings with '{embedder_name}': {cause}",
-            status_code=500
-        )
+    pass
 
 
 class EmbedQueryException(EmbedderException):
-    def __init__(self, embedder_name: str, cause: Exception):
-        super().__init__(
-            f"Failed to generate query embedding with '{embedder_name}': {cause}",
-            status_code=500
-        )
+    pass

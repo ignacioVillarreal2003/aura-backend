@@ -13,9 +13,7 @@ from app.application.services.create_document_service.interfaces.create_document
 )
 from app.domain.dtos.create_document.create_document_request import CreateDocumentRequest
 from app.domain.dtos.create_document.create_document_response import CreateDocumentResponse
-from app.infrastructure.authentication_provider.authentication_provider_dependency import (
-    get_current_user
-)
+from app.infrastructure.authentication_provider.authentication_provider_dependency import get_current_user
 from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
 from app.infrastructure.persistence.database.database_manager.database_manager_dependency import get_database_session
 
@@ -32,7 +30,14 @@ class CreateDocumentController(CreateDocumentControllerInterface):
             database_session: AsyncSession = Depends(get_database_session),
             user: AuthenticationResponse = Depends(get_current_user)
     ) -> CreateDocumentResponse:
-        logger.info("Received document creation request")
+        logger.info(
+            "Create document request received",
+            extra={
+                "filename_document": raw_document.filename,
+                "content_type": raw_document.content_type,
+                "user_id": user.id
+            }
+        )
 
         create_document_response = await create_document_service.create_document(
             create_document_request=create_document_request,
@@ -42,7 +47,13 @@ class CreateDocumentController(CreateDocumentControllerInterface):
             user=user
         )
 
-        logger.info("Document creation request completed successfully")
+        logger.info(
+            "Create document request completed",
+            extra={
+                "document_id": create_document_response.id,
+                "user_id": user.id
+            }
+        )
 
         return create_document_response
 

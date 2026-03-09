@@ -5,13 +5,21 @@ class DocumentQueryServiceException(AppException):
     pass
 
 
-class DocumentNotFoundError(DocumentQueryServiceException):
+class DocumentQueryNotFoundException(DocumentQueryServiceException):
     pass
 
 
-class DocumentQueryException(DocumentQueryServiceException):
+class DocumentQueryUnauthorizedException(DocumentQueryServiceException):
     pass
 
 
-class InvalidPaginationException(DocumentQueryServiceException):
+class DocumentQueryInvalidRequestException(DocumentQueryServiceException):
+    pass
+
+
+class DocumentQueryEmbeddingException(DocumentQueryServiceException):
+    pass
+
+
+class DocumentQueryFragmentRetrievalException(DocumentQueryServiceException):
     pass

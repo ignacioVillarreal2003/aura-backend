@@ -10,9 +10,29 @@ from app.infrastructure.authentication_provider.dtos.authentication_response imp
 
 class DeleteDocumentControllerInterface(ABC):
     @abstractmethod
+    async def soft_delete_documents_by_chat(
+            self,
+            chat_id: int,
+            delete_document_service: DeleteDocumentServiceInterface,
+            database_session: AsyncSession,
+            user: AuthenticationResponse
+    ) -> Response:
+        pass
+
+    @abstractmethod
     async def soft_delete_document(
             self,
             document_id: int,
+            delete_document_service: DeleteDocumentServiceInterface,
+            database_session: AsyncSession,
+            user: AuthenticationResponse
+    ) -> Response:
+        pass
+
+    @abstractmethod
+    async def hard_delete_documents_by_chat(
+            self,
+            chat_id: int,
             delete_document_service: DeleteDocumentServiceInterface,
             database_session: AsyncSession,
             user: AuthenticationResponse

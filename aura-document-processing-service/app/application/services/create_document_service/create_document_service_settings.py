@@ -1,83 +1,75 @@
 import logging
 from typing import List
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
 
 class CreateDocumentServiceSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="CREATE_DOCUMENT_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore"
+    )
+
     max_file_size_mb: int = Field(
         default=50,
         gt=0,
-        le=500,
-        description="Maximum file size in MB"
+        le=500
     )
     min_file_size_bytes: int = Field(
         default=1,
+        gt=0
+    )
+    chunk_size_bytes: int = Field(
+        default=65536,
         gt=0,
-        description="Minimum file size in bytes"
+        description="Chunk size in bytes for streaming reads and hash computation"
     )
 
-    allowed_content_types: List[str] = Field(
-        default=[
-            "application/pdf",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "application/msword",
-            "text/plain",
-        ],
-        description="List of allowed MIME types"
-    )
+    allowed_content_types: list[str] = [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ]
+    content_type_mapping: dict[str, str] = {
+        "application/pdf": "pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx"
+    }
+    magic_number_validation: dict[str, list[bytes]] = {
+        "application/pdf": [b"%PDF"],
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [
+            b"PK\x03\x04",
+            b"PK\x05\x06",
+            b"PK\x07\x08"
+        ]
+    }
 
-    enable_background_processing: bool = Field(
-        default=True,
-        description="Enable background document processing"
-    )
-    cleanup_temp_files: bool = Field(
-        default=True,
-        description="Automatically cleanup temporary files after processing"
-    )
     temp_dir_prefix: str = Field(
-        default="doc_uploads",
-        description="Prefix for temporary directory"
+        default="doc_uploads"
     )
 
-    strict_validation: bool = Field(
-        default=True,
-        description="Enable strict validation (filename, content type, etc.)"
-    )
-    validate_file_content: bool = Field(
-        default=False,
-        description="Validate actual file content (slower but more secure)"
+    background_processing_timeout: int = Field(
+        default=300,
+        ge=30,
+        le=3600
     )
 
-    preserve_original_filename: bool = Field(
-        default=True,
-        description="Preserve original filename in storage"
+    deduplication_enabled: bool = Field(
+        default=True
     )
-    generate_unique_names: bool = Field(
-        default=True,
-        description="Generate unique names to avoid collisions"
-    )
-
-    enable_metrics: bool = Field(
-        default=True,
-        description="Enable metrics collection"
+    deduplication_window_hours: int = Field(
+        default=24,
+        ge=1,
+        le=168
     )
 
-    @field_validator("max_file_size_mb")
-    @classmethod
-    def validate_max_file_size(
-            cls,
-            v: int
-    ) -> int:
-        if v < 1:
-            raise ValueError("max_file_size_mb must be at least 1 MB")
-        if v > 500:
-            raise ValueError("max_file_size_mb cannot exceed 500 MB")
-        return v
-
-    @field_validator("allowed_content_types")
+    @field_validator(
+        "allowed_content_types",
+        mode="before"
+    )
     @classmethod
     def validate_content_types(
             cls,
@@ -86,27 +78,27 @@ class CreateDocumentServiceSettings(BaseSettings):
         if not v:
             raise ValueError("allowed_content_types cannot be empty")
 
-        normalized = [ct.lower().strip() for ct in v]
+        normalised = [ct.lower().strip() for ct in v]
 
-        if len(normalized) != len(set(normalized)):
+        if len(normalised) != len(set(normalised)):
             raise ValueError("allowed_content_types contains duplicates")
 
-        return normalized
+        return normalised
 
-    @field_validator("temp_dir_prefix")
+    @field_validator(
+        "temp_dir_prefix",
+        mode="before"
+    )
     @classmethod
     def validate_temp_dir_prefix(
             cls,
             v: str
     ) -> str:
-        if not v or not v.strip():
-            raise ValueError("temp_dir_prefix cannot be empty")
-
         v = v.strip()
-
-        if '/' in v or '\\' in v:
+        if not v:
+            raise ValueError("temp_dir_prefix cannot be empty")
+        if "/" in v or "\\" in v:
             raise ValueError("temp_dir_prefix cannot contain path separators")
-
         return v
 
     def is_content_type_allowed(
@@ -115,8 +107,18 @@ class CreateDocumentServiceSettings(BaseSettings):
     ) -> bool:
         return content_type.lower() in self.allowed_content_types
 
+    def get_document_type(
+            self,
+            content_type: str
+    ) -> str:
+        return self.content_type_mapping.get(content_type.lower())
+
+    def get_magic_numbers(
+            self,
+            content_type: str
+    ) -> list[bytes]:
+        return self.magic_number_validation.get(content_type.lower(), [])
+
     @property
-    def max_file_size_bytes(
-            self
-    ) -> int:
+    def max_file_size_bytes(self) -> int:
         return self.max_file_size_mb * 1024 * 1024

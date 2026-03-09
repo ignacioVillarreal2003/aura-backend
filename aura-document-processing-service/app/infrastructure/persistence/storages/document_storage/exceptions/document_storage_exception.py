@@ -5,37 +5,29 @@ class DocumentStorageException(AppException):
     pass
 
 
-class DocumentStorageError(DocumentStorageException):
+class DocumentValidationException(DocumentStorageException):
     pass
 
 
-class DocumentValidationError(DocumentStorageException):
+class DocumentSizeLimitException(DocumentValidationException):
     pass
 
 
-class DocumentUploadError(DocumentStorageException):
+class DocumentExtensionException(DocumentValidationException):
     pass
 
 
-class DocumentDownloadError(DocumentStorageException):
+class DocumentUploadException(DocumentStorageException):
     pass
 
 
-class DocumentDeleteError(DocumentStorageException):
+class DocumentDownloadException(DocumentStorageException):
     pass
 
 
-class DocumentNotFoundError(DocumentStorageException):
+class DocumentDeleteException(DocumentStorageException):
     pass
 
 
-class DocumentAccessError(DocumentStorageException):
-    pass
-
-
-class DocumentSizeLimitError(DocumentValidationError):
-    pass
-
-
-class DocumentExtensionError(DocumentValidationError):
+class DocumentNotFoundException(DocumentStorageException):
     pass

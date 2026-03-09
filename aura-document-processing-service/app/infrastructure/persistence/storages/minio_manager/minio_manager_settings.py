@@ -1,175 +1,159 @@
 import logging
+import re
 from typing import Optional
-from pydantic import Field, SecretStr, field_validator, model_validator
-from pydantic_settings import BaseSettings
 from urllib.parse import urlparse
+from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
 
 class MinioManagerSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="MINIO_MANAGER_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore"
+    )
+
     endpoint: str = Field(
-        ...,
-        description="MinIO endpoint (e.g., 'localhost:9000' or 'minio.example.com')"
+        ...
     )
     access_key: str = Field(
-        ...,
-        description="MinIO access key"
+        ...
     )
     secret_key: SecretStr = Field(
-        ...,
-        description="MinIO secret key"
+        ...
     )
-    secure: bool = Field(
-        default=False,
-        description="Use HTTPS for connections"
+    use_tls: bool = Field(
+        default=False
     )
     region: str = Field(
-        default="us-east-1",
-        description="MinIO region"
+        default="us-east-1"
     )
 
-    connect_timeout: float = Field(
+    connection_pool_size: int = Field(
+        default=10,
+        gt=0,
+        le=100
+    )
+    tcp_connect_timeout_seconds: float = Field(
         default=10.0,
         gt=0,
-        le=60.0,
-        description="Connection timeout in seconds"
+        le=60.0
     )
-    read_timeout: float = Field(
+    socket_read_timeout_seconds: float = Field(
         default=30.0,
         gt=0,
-        le=300.0,
-        description="Read timeout in seconds"
+        le=300.0
     )
-    write_timeout: float = Field(
+    socket_write_timeout_seconds: float = Field(
         default=60.0,
         gt=0,
-        le=600.0,
-        description="Write timeout in seconds"
+        le=600.0
     )
 
-    max_retries: int = Field(
+    retry_max_attempts: int = Field(
         default=3,
         ge=0,
-        le=10,
-        description="Maximum number of retry attempts"
+        le=10
     )
     retry_backoff_multiplier: float = Field(
         default=1.0,
         gt=0,
-        le=10.0,
-        description="Multiplier for exponential backoff"
+        le=10.0
     )
-    retry_backoff_min: float = Field(
+    retry_backoff_min_seconds: float = Field(
         default=1.0,
         gt=0,
-        le=30.0,
-        description="Minimum wait time between retries in seconds"
+        le=30.0
     )
-    retry_backoff_max: float = Field(
+    retry_backoff_max_seconds: float = Field(
         default=10.0,
         gt=0,
-        le=60.0,
-        description="Maximum wait time between retries in seconds"
+        le=60.0
     )
 
-    max_pool_connections: int = Field(
-        default=10,
-        gt=0,
-        le=100,
-        description="Maximum number of pooled connections"
-    )
-
-    presigned_url_expiry: int = Field(
+    presigned_url_expiry_seconds: int = Field(
         default=3600,
         gt=0,
-        le=604800,
-        description="Default expiry time for presigned URLs in seconds"
+        le=604_800
     )
 
-    multipart_threshold: int = Field(
+    multipart_upload_threshold_bytes: int = Field(
         default=5 * 1024 * 1024,
-        gt=0,
-        description="Minimum file size in bytes to use multipart upload"
+        gt=0
     )
-    multipart_chunksize: int = Field(
+    multipart_upload_chunk_size_bytes: int = Field(
         default=5 * 1024 * 1024,
-        gt=0,
-        description="Chunk size in bytes for multipart uploads"
+        gt=0
     )
 
-    enable_metrics: bool = Field(
-        default=True,
-        description="Enable metrics collection"
+    default_bucket_name: Optional[str] = Field(
+        default=None
     )
-    enable_health_check: bool = Field(
-        default=True,
-        description="Enable periodic health checks"
+    auto_create_bucket_if_missing: bool = Field(
+        default=False
     )
 
-    default_bucket: Optional[str] = Field(
-        default=None,
-        description="Default bucket name if not specified in operations"
-    )
-    auto_create_bucket: bool = Field(
-        default=False,
-        description="Automatically create bucket if it doesn't exist"
+    metrics_enabled: bool = Field(
+        default=True
     )
 
-    @field_validator("endpoint")
+    @field_validator(
+        "endpoint",
+        mode="before"
+    )
     @classmethod
     def validate_endpoint(
             cls,
             v: str
     ) -> str:
-        if not v or not v.strip():
-            raise ValueError("Endpoint cannot be empty")
-
         v = v.strip()
-
+        if not v:
+            raise ValueError("Endpoint cannot be empty")
         if v.startswith(("http://", "https://")):
             raise ValueError(
-                "Endpoint should not include protocol. "
-                "Use 'secure' parameter to control HTTP/HTTPS"
+                "Endpoint must not include a protocol prefix. "
+                "Use 'use_tls' to toggle HTTPS."
             )
-
-        try:
-            parsed = urlparse(f"http://{v}")
-            if not parsed.netloc:
-                raise ValueError(f"Invalid endpoint format: {v}")
-        except Exception as e:
-            raise ValueError(f"Invalid endpoint: {v}") from e
-
+        if not urlparse(f"http://{v}").netloc:
+            raise ValueError(f"Invalid endpoint format: '{v}'")
         return v
 
-    @field_validator("access_key")
+    @field_validator(
+        "access_key",
+        mode="before"
+    )
     @classmethod
     def validate_access_key(
             cls,
             v: str
     ) -> str:
-        if not v or not v.strip():
-            raise ValueError("Access key cannot be empty")
-
         v = v.strip()
-
         if len(v) < 3:
             raise ValueError("Access key must be at least 3 characters")
-
         return v
 
-    @field_validator("region")
+    @field_validator(
+        "region",
+        mode="before"
+    )
     @classmethod
     def validate_region(
             cls,
             v: str
     ) -> str:
-        if not v or not v.strip():
+        v = v.strip()
+        if not v:
             raise ValueError("Region cannot be empty")
+        return v
 
-        return v.strip()
-
-    @field_validator("default_bucket")
+    @field_validator(
+        "default_bucket_name",
+        mode="before"
+    )
     @classmethod
     def validate_bucket_name(
             cls,
@@ -180,120 +164,107 @@ class MinioManagerSettings(BaseSettings):
 
         v = v.strip()
 
-        if len(v) < 3 or len(v) > 63:
+        v = v.strip()
+        if not v:
+            return None
+
+        if not (3 <= len(v) <= 63):
             raise ValueError("Bucket name must be between 3 and 63 characters")
 
-        if not v[0].isalnum() or not v[-1].isalnum():
-            raise ValueError("Bucket name must start and end with letter or number")
-
-        import re
-        if not re.match(r'^[a-z0-9][a-z0-9.-]*[a-z0-9]$', v):
+        bucket_name_re = re.compile(r"^[a-z0-9][a-z0-9.\-]*[a-z0-9]$")
+        if not bucket_name_re.match(v):
             raise ValueError(
-                "Bucket name can only contain lowercase letters, numbers, dots, and hyphens"
+                "Bucket name may only contain lowercase letters, numbers, "
+                "hyphens and dots, and must start/end with a letter or number"
             )
 
-        if '..' in v or '.-' in v or '-.' in v:
-            raise ValueError("Bucket name cannot contain consecutive special characters")
+        invalid_consecutive_chars_re = re.compile(r"\.\.|\.[-]|[-]\.")
+        if invalid_consecutive_chars_re.search(v):
+            raise ValueError(
+                "Bucket name cannot contain consecutive special characters "
+                "('..', '.-', '-.')"
+            )
 
         return v
 
-    @model_validator(
-        mode='after'
+    @field_validator(
+        "multipart_upload_chunk_size_bytes",
+        mode="after"
     )
-    def validate_timeouts(
-            self
-    ) -> 'MinioManagerSettings':
-        if self.connect_timeout >= self.read_timeout:
-            logger.warning(
-                f"connect_timeout ({self.connect_timeout}s) should be less than "
-                f"read_timeout ({self.read_timeout}s)"
-            )
-
-        if self.read_timeout >= self.write_timeout:
-            logger.warning(
-                f"read_timeout ({self.read_timeout}s) should be less than "
-                f"write_timeout ({self.write_timeout}s) for large uploads"
-            )
-
-        return self
-
-    @model_validator(
-        mode='after'
-    )
-    def validate_retry_settings(
-            self
-    ) -> 'MinioManagerSettings':
-        if self.retry_backoff_min >= self.retry_backoff_max:
+    @classmethod
+    def validate_chunk_size(
+            cls,
+            v: int
+    ) -> int:
+        min_size = 5 * 1024 * 1024
+        if v < min_size:
             raise ValueError(
-                f"retry_backoff_min ({self.retry_backoff_min}) must be less than "
-                f"retry_backoff_max ({self.retry_backoff_max})"
+                f"multipart_upload_chunk_size_bytes ({v}) must be at least "
+                f"{min_size} bytes (5 MiB) — S3-compatible APIs reject smaller parts."
             )
+        return v
 
-        return self
-
-    @model_validator(
-        mode='after'
+    @field_validator(
+        "multipart_upload_threshold_bytes",
+        mode="after"
     )
-    def validate_multipart_settings(
-            self
-    ) -> 'MinioManagerSettings':
-        min_part_size = 5 * 1024 * 1024
-
-        if self.multipart_chunksize < min_part_size:
-            logger.warning(
-                f"multipart_chunksize ({self.multipart_chunksize} bytes) is below "
-                f"recommended minimum ({min_part_size} bytes). Setting to minimum."
+    @classmethod
+    def validate_multipart_threshold(
+            cls,
+            v: int
+    ) -> int:
+        min_size = 5 * 1024 * 1024
+        if v < min_size:
+            raise ValueError(
+                f"multipart_upload_threshold_bytes ({v}) must be at least "
+                f"{min_size} bytes (5 MiB)."
             )
-            object.__setattr__(self, 'multipart_chunksize', min_part_size)
+        return v
 
-        if self.multipart_threshold < min_part_size:
+    @model_validator(mode="after")
+    def validate_configuration_coherence(self) -> "MinioManagerSettings":
+        if self.retry_backoff_min_seconds >= self.retry_backoff_max_seconds:
+            raise ValueError(
+                f"retry_backoff_min_seconds ({self.retry_backoff_min_seconds}s) "
+                f"must be strictly less than "
+                f"retry_backoff_max_seconds ({self.retry_backoff_max_seconds}s)"
+            )
+
+        if self.tcp_connect_timeout_seconds >= self.socket_read_timeout_seconds:
             logger.warning(
-                f"multipart_threshold ({self.multipart_threshold} bytes) is below "
-                f"recommended minimum ({min_part_size} bytes)."
+                "tcp_connect_timeout_seconds is not less than socket_read_timeout_seconds",
+                extra={
+                    "tcp_connect_timeout_seconds": self.tcp_connect_timeout_seconds,
+                    "socket_read_timeout_seconds": self.socket_read_timeout_seconds
+                }
+            )
+
+        if self.socket_read_timeout_seconds >= self.socket_write_timeout_seconds:
+            logger.warning(
+                "socket_read_timeout_seconds is not less than socket_write_timeout_seconds"
+                " — large uploads may time out",
+                extra={
+                    "socket_read_timeout_seconds": self.socket_read_timeout_seconds,
+                    "socket_write_timeout_seconds": self.socket_write_timeout_seconds,
+                },
             )
 
         return self
 
     @property
-    def endpoint_url(
-            self
-    ) -> str:
-        protocol = "https" if self.secure else "http"
+    def endpoint_url(self) -> str:
+        protocol = "https" if self.use_tls else "http"
         return f"{protocol}://{self.endpoint}"
 
     @property
-    def endpoint_safe(
-            self
-    ) -> str:
-        return f"{self.endpoint} (secure={self.secure})"
+    def endpoint_safe(self) -> str:
+        return f"{self.endpoint} (tls={self.use_tls})"
 
-    def get_boto3_config(
-            self
-    ) -> dict:
+    def get_minio_config(self) -> dict:
         return {
-            'aws_access_key_id': self.access_key,
-            'aws_secret_access_key': self.secret_key.get_secret_value(),
-            'endpoint_url': self.endpoint_url,
-            'region_name': self.region,
-            'config': {
-                'signature_version': 's3v4',
-                'connect_timeout': self.connect_timeout,
-                'read_timeout': self.read_timeout,
-                'retries': {
-                    'max_attempts': self.max_retries,
-                    'mode': 'adaptive'
-                },
-                'max_pool_connections': self.max_pool_connections,
-            }
-        }
-
-    def get_minio_config(
-            self
-    ) -> dict:
-        return {
-            'endpoint': self.endpoint,
-            'access_key': self.access_key,
-            'secret_key': self.secret_key.get_secret_value(),
-            'secure': self.secure,
-            'region': self.region,
+            "endpoint": self.endpoint,
+            "access_key": self.access_key,
+            "secret_key": self.secret_key.get_secret_value(),
+            "secure": self.use_tls,
+            "region": self.region,
         }

@@ -15,6 +15,7 @@ from app.configuration.environment_variables import environment_variables
 from app.infrastructure.authentication_provider.middlewares.authentication_provider_middleware import (
     AuthenticationMiddleware,
 )
+import app.domain.models
 
 configure_logging(
     level=logging.INFO

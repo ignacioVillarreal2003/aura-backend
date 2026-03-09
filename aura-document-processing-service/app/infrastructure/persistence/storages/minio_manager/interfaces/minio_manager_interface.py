@@ -1,34 +1,25 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List
-
 from minio import Minio
 
 
 class MinioManagerInterface(ABC):
     @abstractmethod
-    async def start(
-            self
-    ) -> None:
+    async def start(self) -> None:
         pass
 
     @abstractmethod
-    async def stop(
-            self
-    ) -> None:
+    async def stop(self) -> None:
         pass
 
     @property
     @abstractmethod
-    def is_started(
-            self
-    ) -> bool:
+    def is_started(self) -> bool:
         pass
 
     @property
     @abstractmethod
-    def client(
-            self
-    ) -> Minio:
+    def client(self) -> Minio:
         pass
 
     @abstractmethod
@@ -44,8 +35,8 @@ class MinioManagerInterface(ABC):
             bucket_name: str,
             object_name: str,
             file_path: str,
-            content_type: Optional[str] = None,
-            metadata: Optional[Dict[str, str]] = None
+            content_type: Optional[str],
+            metadata: Optional[Dict[str, str]]
     ) -> None:
         pass
 
@@ -55,8 +46,8 @@ class MinioManagerInterface(ABC):
             bucket_name: str,
             object_name: str,
             data: bytes,
-            content_type: Optional[str] = None,
-            metadata: Optional[Dict[str, str]] = None
+            content_type: Optional[str],
+            metadata: Optional[Dict[str, str]]
     ) -> None:
         pass
 
@@ -98,8 +89,8 @@ class MinioManagerInterface(ABC):
             self,
             bucket_name: str,
             object_name: str,
-            expires: Optional[int] = None,
-            method: str = "GET"
+            expires: Optional[int],
+            method: str
     ) -> str:
         pass
 
@@ -107,19 +98,15 @@ class MinioManagerInterface(ABC):
     async def list_objects(
             self,
             bucket_name: str,
-            prefix: Optional[str] = None,
-            recursive: bool = False
+            prefix: Optional[str],
+            recursive: bool
     ) -> List[Dict[str, Any]]:
         pass
 
     @abstractmethod
-    async def health_check(
-            self
-    ) -> Dict[str, Any]:
+    async def health_check(self) -> Dict[str, Any]:
         pass
 
     @abstractmethod
-    def get_metrics(
-            self
-    ) -> Dict[str, int]:
+    def get_metrics(self) -> Dict[str, int]:
         pass

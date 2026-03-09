@@ -25,10 +25,25 @@ class DocumentRepositoryInterface(ABC):
     @abstractmethod
     async def get_documents(
             self,
-            page: Optional[int],
-            size: Optional[int],
+            database_session: AsyncSession,
+            page: Optional[int] = None,
+            size: Optional[int] = None
+    ) -> List[Document]:
+        pass
+
+    async def get_documents_by_chat_id(
+            self,
+            chat_id: int,
             database_session: AsyncSession
     ) -> List[Document]:
+        pass
+
+    @abstractmethod
+    async def update_document(
+            self,
+            document: Document,
+            database_session: AsyncSession
+    ) -> Document:
         pass
 
     @abstractmethod
@@ -46,12 +61,4 @@ class DocumentRepositoryInterface(ABC):
             user_id: int,
             database_session: AsyncSession
     ) -> bool:
-        pass
-
-    @abstractmethod
-    async def update_document(
-            self,
-            document: Document,
-            database_session: AsyncSession
-    ) -> Document:
         pass

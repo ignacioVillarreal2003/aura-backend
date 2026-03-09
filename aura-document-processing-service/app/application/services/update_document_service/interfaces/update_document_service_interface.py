@@ -1,25 +1,18 @@
 from abc import ABC, abstractmethod
-from typing import Dict
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.dtos.update_document.update_document_request import UpdateDocumentRequest
-from app.domain.dtos.update_document.update_document_response import UpdateDocumentResponse
+from app.domain.dtos.update_document_controller.post_process_document_request import PostProcessDocumentRequest
+from app.domain.dtos.update_document_controller.post_process_document_response import PostProcessDocumentResponse
 from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
 
 
 class UpdateDocumentServiceInterface(ABC):
     @abstractmethod
-    async def update_document(
+    async def post_process_document(
             self,
             document_id: int,
-            update_document_request: UpdateDocumentRequest,
+            post_process_document_request: PostProcessDocumentRequest,
             database_session: AsyncSession,
             user: AuthenticationResponse
-    ) -> UpdateDocumentResponse:
-        pass
-
-    @abstractmethod
-    def get_metrics(
-            self
-    ) -> Dict[str, int]:
+    ) -> PostProcessDocumentResponse:
         pass

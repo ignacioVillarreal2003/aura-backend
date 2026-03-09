@@ -8,7 +8,7 @@ MOCK_USERS = {
         "id": 12,
         "email": "user@example.com",
         "username": "john_doe",
-        "roles": ["user"]
+        "roles": ["user", "admin", "superuser"]
     },
     "admin_token_456": {
         "id": 22,
@@ -67,65 +67,6 @@ async def validate_token(authorization: str = Header(None)):
     print(f"✅ Token validated: {token[:20]}... -> User: {user['email']}")
 
     return user
-
-
-@mock_auth_app.post("/auth/verify-permissions")
-async def verify_permissions(
-        roles_required: dict,
-        authorization: str = Header(None)
-):
-    token = extract_token(authorization)
-    user = get_user_from_token(token)
-
-    required_roles = roles_required.get("roles", [])
-    user_roles = user.get("roles", [])
-
-    # Verificar si tiene al menos uno de los roles requeridos
-    has_permission = any(role in user_roles for role in required_roles)
-
-    if not has_permission:
-        print(f"❌ Permission denied for {user['email']} - Required: {required_roles}, Has: {user_roles}")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Required roles: {', '.join(required_roles)}"
-        )
-
-    print(f"✅ Permission granted for {user['email']} - Required: {required_roles}, Has: {user_roles}")
-
-    return user
-
-
-@mock_auth_app.get("/auth/user")
-async def get_user_by_token(authorization: str = Header(None)):
-    token = extract_token(authorization)
-    user = get_user_from_token(token)
-
-    print(f"✅ User retrieved: {user['email']}")
-
-    return user
-
-@mock_auth_app.post("/auth/simulate-error")
-async def simulate_error(error_type: str):
-    if error_type == "unauthorized":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Simulated unauthorized error"
-        )
-    elif error_type == "forbidden":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Simulated forbidden error"
-        )
-    elif error_type == "not_found":
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Simulated not found error"
-        )
-    elif error_type == "timeout":
-        import asyncio
-        await asyncio.sleep(30)  # Simular timeout
-
-    return {"message": "No error"}
 
 if __name__ == "__main__":
     import uvicorn

@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Dict
 from fastapi import UploadFile, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,10 +17,4 @@ class CreateDocumentServiceInterface(ABC):
             database_session: AsyncSession,
             user: AuthenticationResponse
     ) -> CreateDocumentResponse:
-        pass
-
-    @abstractmethod
-    def get_metrics(
-            self
-    ) -> Dict[str, int]:
         pass

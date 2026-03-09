@@ -19,11 +19,3 @@ class HttpClientTimeoutException(HttpClientException):
 
 class HttpClientCircuitBreakerException(HttpClientException):
     pass
-
-
-class HttpClientConfigurationException(HttpClientException):
-    pass
-
-
-class HttpClientRetryException(HttpClientException):
-    pass

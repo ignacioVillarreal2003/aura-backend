@@ -3,8 +3,10 @@ from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 from sqlalchemy.sql import func
 from sqlalchemy import Column, Integer, DateTime, Text, ForeignKey, BigInteger
 
-from app.configuration.environment_variables import environment_variables
 from app.domain.models.base import Base
+from app.domain.settings.fragment_settings import FragmentSettings
+
+_fragment_settings = FragmentSettings()
 
 
 class Fragment(Base):
@@ -29,17 +31,9 @@ class Fragment(Base):
         Text,
         nullable=False
     )
-    cleaned_content = Column(
-        Text,
-        nullable=False
-    )
-    character_count = Column(
-        Integer,
-        nullable=False
-    )
     vector = Column(
         VECTOR(
-            dim=environment_variables.vector_dimension
+            dim=_fragment_settings.vector_dimension
         ),
         nullable=False
     )
@@ -66,15 +60,23 @@ class Fragment(Base):
         nullable=False
     )
     created_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         server_default=func.now(),
         nullable=False
+    )
+    updated_by = Column(
+        BigInteger,
+        nullable=True
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=True
     )
     deleted_by = Column(
         BigInteger,
         nullable=True
     )
     deleted_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=True
     )

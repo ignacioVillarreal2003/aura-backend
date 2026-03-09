@@ -1,55 +1,46 @@
 import logging
-from typing import Dict, Optional
+from typing import Optional
 from fastapi import UploadFile
 
 from app.application.exceptions.app_exception import RequestValidationException
+from app.application.services.create_document_service.exceptions.create_document_service_exception import (
+    CreateDocumentSizeExceededException,
+    CreateDocumentInvalidException,
+    CreateDocumentUnsupportedTypeException
+)
 from app.application.services.create_document_service.create_document_service_settings import (
     CreateDocumentServiceSettings
 )
-from app.application.services.create_document_service.exceptions.create_document_service_exception import (
-    InvalidDocumentError,
-    UnsupportedDocumentTypeError,
-    DocumentSizeExceededError
-)
-from app.domain.constants.document_mime_type import DocumentMimeType
 from app.domain.dtos.create_document.create_document_request import CreateDocumentRequest
 
 logger = logging.getLogger(__name__)
 
 
 class CreateDocumentServiceRequestValidator:
-    _CONTENT_TYPE_MAPPING: Dict[str, DocumentMimeType] = {
-        "application/pdf": DocumentMimeType.pdf,
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": DocumentMimeType.docx
-    }
-
     def __init__(
             self,
             create_document_service_settings: CreateDocumentServiceSettings
     ) -> None:
         self._create_document_service_settings = create_document_service_settings
 
-    def validate_request(
+    async def validate_create_document_request(
             self,
-            create_document_request: CreateDocumentRequest,
-            raw_document: UploadFile
+            raw_document: UploadFile,
+            create_document_request: CreateDocumentRequest
     ) -> None:
         logger.debug(
             "Starting request validation",
             extra={
-                "filename": raw_document.filename,
+                "document_filename": raw_document.filename,
                 "content_type": raw_document.content_type
             }
         )
 
         self._validate_document_file(raw_document)
-
         self._validate_type(raw_document)
-
         self._validate_size(raw_document)
-
-        if self._create_document_service_settings.strict_validation:
-            self._validate_filename(raw_document)
+        self._validate_filename(raw_document)
+        await self._validate_magic_numbers(raw_document)
 
         logger.debug("Request validation completed successfully")
 
@@ -81,33 +72,34 @@ class CreateDocumentServiceRequestValidator:
             logger.warning(
                 "No content type provided",
                 extra={
-                    "filename": file.filename
+                    "document_filename": file.filename
                 }
             )
-            raise InvalidDocumentError("File content type not provided")
+            raise CreateDocumentInvalidException("File content type not provided")
 
         if not self._create_document_service_settings.is_content_type_allowed(content_type):
             logger.warning(
                 "Unsupported content type",
                 extra={
                     "content_type": content_type,
-                    "filename": file.filename,
+                    "document_filename": file.filename,
                     "allowed_types": self._create_document_service_settings.allowed_content_types
                 }
             )
-            raise UnsupportedDocumentTypeError(
+            raise CreateDocumentUnsupportedTypeException(
                 f"File type '{content_type}' is not supported. "
                 f"Allowed types: {', '.join(self._create_document_service_settings.allowed_content_types)}"
             )
 
-        if content_type not in self._CONTENT_TYPE_MAPPING:
+        doc_type = self._create_document_service_settings.get_document_type(content_type)
+        if not doc_type:
             logger.warning(
                 "Content type not in mapping",
                 extra={
                     "content_type": content_type
                 }
             )
-            raise UnsupportedDocumentTypeError(f"Content type '{content_type}' is not mapped to a document type")
+            raise CreateDocumentUnsupportedTypeException(f"Content type '{content_type}' is not mapped to a document type")
 
     def _validate_size(
             self,
@@ -122,17 +114,15 @@ class CreateDocumentServiceRequestValidator:
             logger.warning(
                 "Could not determine file size",
                 extra={
-                    "filename": file.filename
+                    "document_filename": file.filename
                 }
             )
-            if self._create_document_service_settings.strict_validation:
-                raise InvalidDocumentError("Could not determine file size")
-            return
+            raise CreateDocumentInvalidException("Could not determine file size")
 
         logger.debug(
             "Validating file size",
             extra={
-                "filename": file.filename,
+                "document_filename": file.filename,
                 "size_bytes": file_size,
                 "max_bytes": max_bytes,
                 "min_bytes": min_bytes
@@ -147,12 +137,11 @@ class CreateDocumentServiceRequestValidator:
                     "min": min_bytes
                 }
             )
-            raise InvalidDocumentError(f"File too small. Minimum size: {min_bytes} bytes")
+            raise CreateDocumentInvalidException(f"File too small. Minimum size: {min_bytes} bytes")
 
         if file_size > max_bytes:
             size_mb = file_size / (1024 * 1024)
             max_mb = self._create_document_service_settings.max_file_size_mb
-
             logger.warning(
                 "File too large",
                 extra={
@@ -160,7 +149,9 @@ class CreateDocumentServiceRequestValidator:
                     "max_mb": max_mb
                 }
             )
-            raise DocumentSizeExceededError(f"File too large ({round(size_mb, 2)} MB). Maximum allowed: {max_mb} MB")
+            raise CreateDocumentSizeExceededException(
+                f"File too large ({round(size_mb, 2)} MB). Maximum allowed: {max_mb} MB"
+            )
 
     def _validate_filename(
             self,
@@ -168,23 +159,23 @@ class CreateDocumentServiceRequestValidator:
     ) -> None:
         filename = file.filename
 
-        if '..' in filename or '/' in filename or '\\' in filename:
+        if ".." in filename or "/" in filename or "\\" in filename:
             logger.warning(
                 "Potential path traversal in filename",
                 extra={
-                    "filename": filename
+                    "document_filename": filename
                 }
             )
-            raise InvalidDocumentError("Filename contains invalid characters (path separators)")
+            raise CreateDocumentInvalidException("Filename contains invalid characters (path separators)")
 
-        if '\x00' in filename:
+        if "\x00" in filename:
             logger.warning(
                 "Null byte in filename",
                 extra={
-                    "filename": filename
+                    "document_filename": filename
                 }
             )
-            raise InvalidDocumentError("Filename contains null bytes")
+            raise CreateDocumentInvalidException("Filename contains null bytes")
 
         if len(filename) > 255:
             logger.warning(
@@ -193,14 +184,74 @@ class CreateDocumentServiceRequestValidator:
                     "length": len(filename)
                 }
             )
-            raise InvalidDocumentError("Filename too long (max 255 characters)")
+            raise CreateDocumentInvalidException("Filename too long (max 255 characters)")
+
+    async def _validate_magic_numbers(
+            self,
+            file: UploadFile
+    ) -> None:
+        content_type = file.content_type
+        magic_numbers = self._create_document_service_settings.get_magic_numbers(content_type)
+
+        if not magic_numbers:
+            logger.debug(
+                "No magic numbers configured for content type",
+                extra={
+                    "content_type": content_type
+                }
+            )
+            return
+
+        try:
+            await file.seek(0)
+            header = await file.read(8)
+            await file.seek(0)
+
+            if not header:
+                raise CreateDocumentInvalidException("Cannot read file header")
+
+            is_valid = any(header.startswith(magic) for magic in magic_numbers)
+
+            if not is_valid:
+                logger.warning(
+                    "Magic number validation failed",
+                    extra={
+                        "document_filename": file.filename,
+                        "content_type": content_type,
+                        "header": header[:8].hex()
+                    }
+                )
+                raise CreateDocumentInvalidException(
+                    f"File content does not match declared type '{content_type}'. "
+                    f"Possible file type spoofing."
+                )
+
+            logger.debug(
+                "Magic number validation passed",
+                extra={
+                    "document_filename": file.filename,
+                    "content_type": content_type
+                }
+            )
+
+        except CreateDocumentInvalidException:
+            raise
+
+        except Exception as e:
+            logger.error(
+                "Failed to validate magic numbers",
+                extra={
+                    "document_filename": file.filename,
+                    "error": str(e)
+                }
+            )
+            raise CreateDocumentInvalidException(f"Failed to validate file content: {e}")
 
     def _get_file_size(
             self,
             file: UploadFile
     ) -> Optional[int]:
         file_size = getattr(file, "size", None)
-
         if file_size is not None:
             return file_size
 
@@ -212,37 +263,10 @@ class CreateDocumentServiceRequestValidator:
             return file_size
         except Exception as e:
             logger.debug(
-                f"Could not determine file size: {e}",
+                "Could not determine file size",
                 extra={
-                    "filename": file.filename
+                    "document_filename": file.filename,
+                    "error": str(e)
                 }
             )
             return None
-
-    def get_document_mime_type(
-            self,
-            raw_document: UploadFile
-    ) -> DocumentMimeType:
-        logger.debug(
-            "Getting document type",
-            extra={
-                "filename": raw_document.filename,
-                "content_type": raw_document.content_type
-            }
-        )
-
-        content_type = raw_document.content_type
-
-        if content_type not in self._CONTENT_TYPE_MAPPING:
-            raise UnsupportedDocumentTypeError(f"Content type '{content_type}' is not supported")
-
-        document_mime_type = self._CONTENT_TYPE_MAPPING[content_type]
-
-        logger.debug(
-            "Document type determined",
-            extra={
-                "document_type": document_mime_type.value
-            }
-        )
-
-        return document_mime_type

@@ -5,20 +5,25 @@ from sqlalchemy.ext.asyncio.session import AsyncSession
 from app.application.services.document_query_service.interfaces.document_query_service_interface import (
     DocumentQueryServiceInterface
 )
-from app.domain.dtos.document_query.document_query_list_response import DocumentQueryListResponse
-from app.domain.dtos.document_query.document_query_response import DocumentQueryResponse
+from app.domain.dtos.document_query_controller.context_fragment_response import ContextFragmentListResponse
+from app.domain.dtos.document_query_controller.document_response import (
+    DocumentResponse,
+    DocumentListResponse
+)
+from app.domain.dtos.document_query_controller.document_context_fragments_request import DocumentContextFragmentsRequest
+from app.domain.dtos.document_query_controller.question_context_fragments_request import QuestionContextFragmentsRequest
 from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
 
 
 class DocumentQueryControllerInterface(ABC):
     @abstractmethod
-    async def get_document_by_id(
+    async def get_document(
             self,
             document_id: int,
             document_query_service: DocumentQueryServiceInterface,
             database_session: AsyncSession,
             user: AuthenticationResponse
-    ) -> DocumentQueryResponse:
+    ) -> DocumentResponse:
         pass
 
     @abstractmethod
@@ -29,5 +34,23 @@ class DocumentQueryControllerInterface(ABC):
             document_query_service: DocumentQueryServiceInterface,
             database_session: AsyncSession,
             user: AuthenticationResponse
-    ) -> DocumentQueryListResponse:
+    ) -> DocumentListResponse:
+        pass
+
+    @abstractmethod
+    async def retrieve_context_fragments_by_question(
+            self,
+            question_context_fragments_request: QuestionContextFragmentsRequest,
+            document_query_service: DocumentQueryServiceInterface,
+            database_session: AsyncSession
+    ) -> ContextFragmentListResponse:
+        pass
+
+    @abstractmethod
+    async def retrieve_context_fragments_by_document(
+            self,
+            document_context_fragments_request: DocumentContextFragmentsRequest,
+            document_query_service: DocumentQueryServiceInterface,
+            database_session: AsyncSession
+    ) -> ContextFragmentListResponse:
         pass

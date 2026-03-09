@@ -1,44 +1,42 @@
+import asyncio
 import logging
 import tempfile
-import time
-import asyncio
-from datetime import datetime
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Dict, Any
-from fastapi import UploadFile, BackgroundTasks
+from typing import Optional
+from fastapi import BackgroundTasks, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.services.create_document_service.create_document_service_request_validator import (
-    CreateDocumentServiceRequestValidator
-)
-from app.application.services.create_document_service.create_document_service_settings import (
-    CreateDocumentServiceSettings
-)
 from app.application.services.create_document_service.exceptions.create_document_service_exception import (
-    DocumentValidationException,
-    DocumentUploadException,
-    DocumentPersistenceException,
-    CreateDocumentServiceException
+    CreateDocumentServiceException,
+    CreateDocumentPersistenceException,
+    CreateDocumentUploadException,
+    CreateDocumentValidationException
 )
 from app.application.services.create_document_service.interfaces.create_document_service_interface import (
     CreateDocumentServiceInterface
 )
+from app.application.services.create_document_service.create_document_service_request_validator import (
+    CreateDocumentServiceRequestValidator
+)
+from app.application.services.create_document_service.create_document_service_settings import CreateDocumentServiceSettings
+from app.application.services.create_document_service.create_document_service_utils import CreateDocumentServiceUtils
 from app.application.services.document_ingestion_service.interfaces.document_ingestion_service_interface import (
     DocumentIngestionServiceInterface
 )
 from app.domain.constants.document_mime_type import DocumentMimeType
 from app.domain.constants.document_status import DocumentStatus
-from app.domain.constants.document_type import DocumentType
 from app.domain.dtos.create_document.create_document_request import CreateDocumentRequest
 from app.domain.dtos.create_document.create_document_response import CreateDocumentResponse
 from app.domain.models.document import Document
 from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
-from app.infrastructure.persistence.database.repositories.document_repository.document_repository import (
+from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
     DocumentRepositoryInterface
 )
 from app.infrastructure.persistence.database.repositories.exceptions.database_exceptions import DatabaseException
 from app.infrastructure.persistence.storages.document_storage.exceptions.document_storage_exception import (
-    DocumentStorageError
+    DocumentStorageException
 )
 from app.infrastructure.persistence.storages.document_storage.interfaces.document_storage_interface import (
     DocumentStorageInterface
@@ -53,43 +51,22 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             document_repository: DocumentRepositoryInterface,
             document_storage: DocumentStorageInterface,
             document_ingestion_service: DocumentIngestionServiceInterface,
-            create_document_service_settings: CreateDocumentServiceSettings
+            create_document_service_settings: Optional[CreateDocumentServiceSettings] = None
     ):
         self._document_repository = document_repository
         self._document_storage = document_storage
         self._document_ingestion_service = document_ingestion_service
-        self._create_document_service_settings = create_document_service_settings
+        self._create_document_service_settings = create_document_service_settings or CreateDocumentServiceSettings()
 
         self._create_document_service_request_validator = CreateDocumentServiceRequestValidator(
             create_document_service_settings=self._create_document_service_settings
         )
-
-        self._documents_created = 0
-        self._documents_failed = 0
-        self._validation_errors = 0
-        self._upload_errors = 0
-        self._database_errors = 0
-        self._total_bytes_uploaded = 0
-        self._last_health_check: Optional[Dict[str, Any]] = None
-
-    @classmethod
-    def create(
-            cls,
-            document_repository: DocumentRepositoryInterface,
-            document_storage: DocumentStorageInterface,
-            document_ingestion_service: DocumentIngestionServiceInterface,
-            **config_kwargs
-    ) -> "CreateDocumentService":
-        create_document_service_settings = CreateDocumentServiceSettings(
-            **config_kwargs
+        self._create_document_service_utils = CreateDocumentServiceUtils(
+            create_document_service_settings=self._create_document_service_settings
         )
 
-        return cls(
-            document_repository=document_repository,
-            document_storage=document_storage,
-            document_ingestion_service=document_ingestion_service,
-            create_document_service_settings=create_document_service_settings
-        )
+        self._deduplication_lock = asyncio.Lock()
+        self._recent_hashes: dict[str, datetime] = {}
 
     async def create_document(
             self,
@@ -99,11 +76,12 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             database_session: AsyncSession,
             user: AuthenticationResponse
     ) -> CreateDocumentResponse:
-        start_time = time.time()
         temp_path: Optional[Path] = None
+        object_name: Optional[str] = None
+        file_hash: Optional[str] = None
 
         logger.info(
-            "Starting document creation",
+            "Document creation initiated",
             extra={
                 "document_filename": raw_document.filename,
                 "content_type": raw_document.content_type,
@@ -113,76 +91,61 @@ class CreateDocumentService(CreateDocumentServiceInterface):
 
         try:
             try:
-                self._create_document_service_request_validator.validate_request(
-                    create_document_request=create_document_request,
-                    raw_document=raw_document
+                await self._create_document_service_request_validator.validate_create_document_request(
+                    raw_document=raw_document,
+                    create_document_request=create_document_request
                 )
-
-                document_mime_type: DocumentMimeType = self._create_document_service_request_validator.get_document_mime_type(
-                    raw_document=raw_document
+                document_mime_type: DocumentMimeType = (
+                    self._create_document_service_utils.get_document_mime_type(
+                        raw_document=raw_document
+                    )
                 )
-
                 logger.info(
-                    "Validation completed",
+                    "Document validation completed",
                     extra={
-                        "document_type": document_mime_type.value
+                        "document_mime_type": document_mime_type.value
                     }
                 )
 
             except Exception as e:
-                self._validation_errors += 1
-                logger.error(
-                    "Validation failed",
-                    extra={
-                        "error": str(e),
-                        "document_filename": raw_document.filename
-                    }
-                )
-                raise DocumentValidationException(f"Document validation failed: {str(e)}") from e
+                raise CreateDocumentValidationException(f"Document validation failed: {e}") from e
 
-            temp_path = await self._save_temp_file(raw_document)
+            if self._create_document_service_settings.deduplication_enabled:
+                file_hash = await self._create_document_service_utils.compute_file_hash(raw_document)
+                if await self._is_duplicate(file_hash):
+                    raise CreateDocumentValidationException(
+                        "Duplicate document detected. This file was recently uploaded."
+                    )
 
-            if raw_document.size:
-                self._total_bytes_uploaded += raw_document.size
+            temp_path = await self._save_temp_file_streaming(raw_document)
+            file_size = temp_path.stat().st_size
 
             try:
+                await raw_document.seek(0)
                 object_name = await self._document_storage.upload_document(
-                    file=raw_document,
-                    additional_metadata={
-                        "user_id": user.id,
-                        "document_mime_type": document_mime_type.value,
-                    }
+                    file=raw_document
                 )
-
                 logger.info(
-                    "File uploaded to storage",
+                    "Document uploaded to storage",
                     extra={
-                        "object_name": object_name
+                        "object_name": object_name,
+                        "size_bytes": file_size
                     }
                 )
 
-            except DocumentStorageError as e:
-                self._upload_errors += 1
-                logger.error(
-                    "Storage upload failed",
-                    extra={
-                        "error": str(e),
-                        "document_filename": raw_document.filename
-                    }
-                )
-                raise DocumentUploadException(f"Failed to upload document to storage: {str(e)}") from e
+            except DocumentStorageException as e:
+                raise CreateDocumentUploadException(f"Failed to upload document to storage: {e}") from e
 
             document = Document(
+                chat_id=create_document_request.chat_id,
                 name=raw_document.filename,
-                original_name=raw_document.filename,
                 mime_type=document_mime_type,
                 status=DocumentStatus.uploaded,
                 storage_url=object_name,
-                file_size_bytes=raw_document.size,
-                is_active=True,
-                processing_started_at=datetime.utcnow(),
+                file_size_bytes=file_size,
+                processing_started_at=datetime.now(timezone.utc),
                 created_by=user.id,
-                created_at=datetime.utcnow()
+                created_at=datetime.now(timezone.utc)
             )
 
             try:
@@ -190,7 +153,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                     document=document,
                     database_session=database_session
                 )
-
+                await database_session.commit()
                 logger.info(
                     "Document persisted to database",
                     extra={
@@ -199,99 +162,99 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 )
 
             except DatabaseException as e:
-                self._database_errors += 1
-                logger.error(
-                    "Database persistence failed",
-                    extra={
-                        "error": str(e),
-                        "document_filename": raw_document.filename
-                    }
-                )
+                await self._cleanup_storage(object_name)
+                raise CreateDocumentPersistenceException(f"Failed to persist document to database: {e}") from e
 
-                try:
-                    await self._document_storage.delete_document(object_name)
-                    logger.info("Compensating action: deleted from storage")
-                except Exception as cleanup_error:
-                    logger.error(
-                        f"Failed to cleanup storage after database error: {cleanup_error}"
-                    )
+            if self._create_document_service_settings.deduplication_enabled and file_hash:
+                await self._register_hash(file_hash)
 
-                raise DocumentPersistenceException(f"Failed to persist document to database: {str(e)}") from e
-
-            if (self._create_document_service_settings.enable_background_processing
-                    and temp_path):
-                background_tasks.add_task(
-                    self._process_document_background,
-                    document=database_document,
-                    local_file_path=temp_path
-                )
-
-                logger.info(
-                    "Document processing scheduled",
-                    extra={
-                        "document_id": database_document.id
-                    }
-                )
-
-            self._documents_created += 1
-
-            elapsed = (time.time() - start_time) * 1000
+            background_tasks.add_task(
+                self._process_document_background,
+                document=database_document,
+                local_file_path=temp_path,
+            )
 
             logger.info(
-                "Document creation completed successfully",
+                "Document creation completed",
                 extra={
                     "document_id": database_document.id,
-                    "elapsed_ms": round(elapsed, 2),
-                    "status": database_document.status
+                    "status": database_document.status.value
                 }
             )
 
-            return CreateDocumentResponse(
-                status=database_document.status
-            )
+            return CreateDocumentResponse.model_validate(database_document)
 
         except (
-                DocumentValidationException,
-                DocumentUploadException,
-                DocumentPersistenceException
+                CreateDocumentValidationException,
+                CreateDocumentUploadException,
+                CreateDocumentPersistenceException
         ):
-            self._documents_failed += 1
+            if temp_path and temp_path.exists():
+                await self._cleanup_temp_file(temp_path)
             raise
 
         except Exception as e:
-            self._documents_failed += 1
             logger.exception(
                 "Unexpected error during document creation",
                 extra={
                     "document_filename": raw_document.filename
                 }
             )
-            raise CreateDocumentServiceException(f"Document creation failed: {str(e)}") from e
+            if temp_path and temp_path.exists():
+                await self._cleanup_temp_file(temp_path)
+            raise CreateDocumentServiceException(f"Document creation failed: {e}") from e
 
-    async def _save_temp_file(
+    async def _is_duplicate(
+            self,
+            file_hash: str
+    ) -> bool:
+        now = datetime.now(timezone.utc)
+        cutoff_seconds = self._create_document_service_settings.deduplication_window_hours * 3600
+
+        async with self._deduplication_lock:
+            self._recent_hashes = {
+                h: ts
+                for h, ts in self._recent_hashes.items()
+                if (now - ts).total_seconds() < cutoff_seconds
+            }
+            return file_hash in self._recent_hashes
+
+    async def _register_hash(
+            self,
+            file_hash: str
+    ) -> None:
+        async with self._deduplication_lock:
+            self._recent_hashes[file_hash] = datetime.now(timezone.utc)
+
+    async def _save_temp_file_streaming(
             self,
             file: UploadFile
     ) -> Path:
         try:
             temp_dir = Path(tempfile.gettempdir()) / self._create_document_service_settings.temp_dir_prefix
-            temp_dir.mkdir(
-                parents=True,
-                exist_ok=True
-            )
+            temp_dir.mkdir(parents=True, exist_ok=True)
 
-            temp_path = temp_dir / f"{int(time.time() * 1000)}_{file.filename}"
+            temp_path = temp_dir / f"{uuid.uuid4().hex}_{file.filename}"
+            chunk_size = self._create_document_service_settings.chunk_size_bytes
 
-            content = await file.read()
+            await file.seek(0)
 
-            await asyncio.to_thread(temp_path.write_bytes, content)
+            def write_chunks():
+                with open(temp_path, "wb") as f:
+                    while True:
+                        chunk = file.file.read(chunk_size)
+                        if not chunk:
+                            break
+                        f.write(chunk)
 
+            await asyncio.to_thread(write_chunks)
             await file.seek(0)
 
             logger.debug(
                 "Temporary file saved",
                 extra={
                     "path": str(temp_path),
-                    "size": len(content)
+                    "size_bytes": temp_path.stat().st_size
                 }
             )
 
@@ -299,7 +262,49 @@ class CreateDocumentService(CreateDocumentServiceInterface):
 
         except Exception as e:
             logger.exception("Failed to save temporary file")
-            raise IOError(f"Failed to save temporary file: {str(e)}") from e
+            raise IOError(f"Failed to save temporary file: {e}") from e
+
+    async def _cleanup_temp_file(
+            self,
+            temp_path: Path
+    ) -> None:
+        try:
+            await asyncio.to_thread(temp_path.unlink)
+            logger.debug(
+                "Temporary file deleted",
+                extra={
+                    "path": str(temp_path)
+                }
+            )
+        except Exception as e:
+            logger.error(
+                "Failed to delete temporary file",
+                extra={
+                    "path": str(temp_path),
+                    "error": str(e)
+                }
+            )
+
+    async def _cleanup_storage(
+            self,
+            object_name: str
+    ) -> None:
+        try:
+            await self._document_storage.delete_document(object_name)
+            logger.info(
+                "Compensating action: document deleted from storage",
+                extra={
+                    "object_name": object_name
+                }
+            )
+        except Exception as e:
+            logger.error(
+                "Compensating storage delete failed — manual cleanup required",
+                extra={
+                    "object_name": object_name,
+                    "error": str(e)
+                }
+            )
 
     async def _process_document_background(
             self,
@@ -308,7 +313,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
     ) -> None:
         try:
             logger.info(
-                "Starting background processing",
+                "Background processing initiated",
                 extra={
                     "document_id": document.id
                 }
@@ -316,7 +321,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
 
             await self._document_ingestion_service.process_document(
                 document=document,
-                local_file_path=local_file_path
+                local_file_path=local_file_path,
             )
 
             logger.info(
@@ -336,32 +341,5 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             )
 
         finally:
-            if (self._create_document_service_settings.cleanup_temp_files and
-                    local_file_path.exists()):
-                try:
-                    await asyncio.to_thread(local_file_path.unlink)
-                    logger.debug(
-                        "Temporary file cleaned up",
-                        extra={
-                            "path": str(local_file_path)
-                        }
-                    )
-                except Exception as e:
-                    logger.error(
-                        f"Failed to cleanup temporary file: {e}",
-                        extra={
-                            "path": str(local_file_path)
-                        }
-                    )
-
-    def get_metrics(
-            self
-    ) -> Dict[str, int]:
-        return {
-            "documents_created": self._documents_created,
-            "documents_failed": self._documents_failed,
-            "validation_errors": self._validation_errors,
-            "upload_errors": self._upload_errors,
-            "database_errors": self._database_errors,
-            "total_bytes_uploaded": self._total_bytes_uploaded,
-        }
+            if local_file_path.exists():
+                await self._cleanup_temp_file(local_file_path)

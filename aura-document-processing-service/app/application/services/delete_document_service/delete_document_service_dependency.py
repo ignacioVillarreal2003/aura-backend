@@ -8,16 +8,12 @@ from app.application.services.delete_document_service.interfaces.delete_document
 logger = logging.getLogger(__name__)
 
 
-async def get_delete_document_service(
-        request: Request
-) -> DeleteDocumentServiceInterface:
+async def get_delete_document_service(request: Request) -> DeleteDocumentServiceInterface:
     try:
-        delete_document_service: DeleteDocumentServiceInterface = request.app.state.delete_document_service
-        return delete_document_service
-
+        return request.app.state.delete_document_service
     except AttributeError:
-        logger.error("DocumentDeletionService not found in application state")
+        logger.error("DeleteDocumentService not found in application state")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Document deletion service not configured",
+            detail="DeleteDocumentService not configured"
         )

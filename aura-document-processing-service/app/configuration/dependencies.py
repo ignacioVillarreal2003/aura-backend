@@ -1,28 +1,22 @@
 import logging
 from fastapi import FastAPI
 
-from app.application.services.document_creation_service.document_creation_service_factory import (
-    create_document_creation_service
-)
-from app.application.services.delete_document_service.delete_document_service_factory import (
-    create_document_deletion_service
-)
-from app.application.services.document_ingestion_service.document_ingestion_service_factory import (
-    create_document_ingestion_service
-)
-from app.application.services.document_query_service.document_query_service_factory import create_document_query_service
-from app.application.services.retrieve_document_service.retrieve_document_service_factory import (
-    create_document_retrieve_service
-)
-from app.application.services.update_document_service.document_update_service_factory import (
-    create_update_document_service
-)
-from app.configuration.environment_variables import environment_variables
-from app.infrastructure.authentication_provider.authentication_provider_factory import create_authentication_provider
-from app.infrastructure.http_client.http_client_factory import create_http_client
-from app.infrastructure.persistence.database.database_manager.database_manager_factory import create_database_manager
-from app.infrastructure.persistence.storages.document_storage.document_storage_factory import create_document_storage
-from app.infrastructure.persistence.storages.minio_manager.minio_manager_factory import create_minio_manager
+from app.application.processors.embedders.embedder_factory import EmbedderFactory
+from app.application.processors.readers.reader_factory import ReaderFactory
+from app.application.processors.text_cleaners.text_cleaner_factory import TextCleanerFactory
+from app.application.processors.text_splitters.text_splitter_factory import TextSplitterFactory
+from app.application.services.create_document_service.create_document_service import CreateDocumentService
+from app.application.services.delete_document_service.delete_document_service import DeleteDocumentService
+from app.application.services.document_ingestion_service.document_ingestion_service import DocumentIngestionService
+from app.application.services.document_query_service.document_query_service import DocumentQueryService
+from app.application.services.update_document_service.update_document_service import UpdateDocumentService
+from app.infrastructure.authentication_provider.authentication_provider import AuthenticationProvider
+from app.infrastructure.http_client.http_client import HttpClient
+from app.infrastructure.persistence.database.database_manager.database_manager import DatabaseManager
+from app.infrastructure.persistence.database.repositories.document_repository.document_repository import DocumentRepository
+from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository import FragmentRepository
+from app.infrastructure.persistence.storages.document_storage.document_storage import DocumentStorage
+from app.infrastructure.persistence.storages.minio_manager.minio_manager import MinioManager
 
 logger = logging.getLogger(__name__)
 
@@ -33,67 +27,83 @@ async def startup_dependencies(
     try:
         logger.info("Starting up dependencies")
 
-        database_manager = create_database_manager(
-            user=environment_variables.database_user,
-            password=environment_variables.database_password,
-            host=environment_variables.database_host,
-            port=environment_variables.database_port,
-            name=environment_variables.database_name,
-            database_driver=environment_variables.database_driver
-        )
+        database_manager = DatabaseManager()
         await database_manager.initialize()
         app.state.db_manager = database_manager
 
-        minio_manager = create_minio_manager(
-            minio_endpoint=environment_variables.minio_endpoint,
-            minio_access_key=environment_variables.minio_access_key,
-            minio_secret_key=environment_variables.minio_secret_key
-        )
+        minio_manager = MinioManager()
         await minio_manager.start()
         app.state.minio_manager = minio_manager
 
-        http_client = create_http_client()
-        await http_client.start()
-        app.state.http_client = http_client
-
-        document_storage = create_document_storage(
+        document_storage = DocumentStorage(
             minio_manager=minio_manager
         )
         await document_storage.start()
         app.state.document_storage = document_storage
 
-        document_ingestion_service = create_document_ingestion_service(
-            database_manager=database_manager
+        http_client = HttpClient()
+        await http_client.start()
+        app.state.http_client = http_client
+
+        authentication_provider = AuthenticationProvider(
+            http_client=http_client
+        )
+        app.state.authentication_provider = authentication_provider
+
+        document_repository: DocumentRepository = DocumentRepository()
+        app.state.document_repository = document_repository
+
+        fragment_repository: FragmentRepository = FragmentRepository()
+        app.state.fragment_repository = fragment_repository
+
+        embedder_factory = EmbedderFactory()
+        app.state.embedder_factory = embedder_factory
+
+        reader_factory = ReaderFactory()
+        app.state.reader_factory = reader_factory
+
+        text_cleaner_factory = TextCleanerFactory()
+        app.state.text_cleaner_factory = text_cleaner_factory
+
+        text_splitter_factory = TextSplitterFactory()
+        app.state.text_splitter_factory = text_splitter_factory
+
+        update_document_service = UpdateDocumentService(
+            document_repository=document_repository
+        )
+        app.state.update_document_service = update_document_service
+
+        document_query_service = DocumentQueryService(
+            document_repository=document_repository,
+            fragment_repository=fragment_repository,
+            embedder_factory=embedder_factory
+        )
+        app.state.document_query_service = document_query_service
+
+        document_ingestion_service = DocumentIngestionService(
+            database_manager=database_manager,
+            document_repository=document_repository,
+            fragment_repository=fragment_repository,
+            reader_factory=reader_factory,
+            text_cleaner_factory=text_cleaner_factory,
+            text_splitter_factory=text_splitter_factory,
+            embedder_factory=embedder_factory
         )
         app.state.document_ingestion_service = document_ingestion_service
 
-        document_creation_service = create_document_creation_service(
+        delete_document_service = DeleteDocumentService(
+            document_repository=document_repository,
+            fragment_repository=fragment_repository,
+            document_storage=document_storage
+        )
+        app.state.delete_document_service = delete_document_service
+
+        create_document_service = CreateDocumentService(
+            document_repository=document_repository,
             document_storage=document_storage,
             document_ingestion_service=document_ingestion_service
         )
-        app.state.document_creation_service = document_creation_service
-
-        document_deletion_service = create_document_deletion_service(
-            document_storage=document_storage
-        )
-        app.state.document_deletion_service = document_deletion_service
-
-        update_document_service = create_update_document_service()
-        app.state.update_document_service = update_document_service
-
-        document_query_service = create_document_query_service()
-        app.state.document_query_service = document_query_service
-
-        document_retrieve_service = create_document_retrieve_service()
-        app.state.document_retrieve_service = document_retrieve_service
-
-        authentication_provider = create_authentication_provider(
-            http_client=http_client,
-            authentication_validate_token_url=environment_variables.authentication_validate_token_url,
-            authentication_verify_permissions_url=environment_variables.authentication_verify_permissions_url,
-            authentication_get_user_by_token_url=environment_variables.authentication_get_user_by_token_url
-        )
-        app.state.authentication_provider = authentication_provider
+        app.state.create_document_service = create_document_service
 
         logger.info("All dependencies started successfully")
 

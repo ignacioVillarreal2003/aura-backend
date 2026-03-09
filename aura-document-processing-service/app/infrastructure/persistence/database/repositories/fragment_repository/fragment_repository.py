@@ -1,11 +1,13 @@
-from datetime import datetime
-from sqlalchemy import text, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional, List
 import logging
+from datetime import datetime, timezone
+from typing import List
+from sqlalchemy import delete, select, text, update
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models.fragment import Fragment
-from app.infrastructure.persistence.database.repositories.exceptions.database_exceptions import DatabaseException
+from app.infrastructure.persistence.database.repositories.exceptions.database_exceptions import DatabaseException, \
+    DatabaseConstraintViolationException
 from app.infrastructure.persistence.database.repositories.fragment_repository.interfaces.fragment_repository_interface import (
     FragmentRepositoryInterface
 )
@@ -20,20 +22,31 @@ class FragmentRepository(FragmentRepositoryInterface):
             database_session: AsyncSession
     ) -> List[Fragment]:
         try:
-            logger.debug("Creating fragments in database")
+            logger.debug(
+                "Creating fragments in database",
+                extra={
+                    "num_fragments": len(fragments)
+                }
+            )
 
             database_session.add_all(fragments)
-            await database_session.commit()
+
+            await database_session.flush()
 
             for fragment in fragments:
                 await database_session.refresh(fragment)
 
-            logger.info("Created fragments successfully")
+            logger.info(
+                "Fragments created successfully",
+                extra={
+                    "num_fragments": len(fragments)
+                }
+            )
             return fragments
 
+        except IntegrityError as e:
+            raise DatabaseConstraintViolationException("Constraint violation creating fragments") from e
         except Exception as e:
-            await database_session.rollback()
-            logger.exception("Failed to create fragments in database")
             raise DatabaseException("Error creating fragments in the database") from e
 
     async def get_fragments_by_document_id(
@@ -42,50 +55,70 @@ class FragmentRepository(FragmentRepositoryInterface):
             database_session: AsyncSession
     ) -> List[Fragment]:
         try:
-            logger.debug(f"Fetching fragments by document id")
+            logger.debug(
+                "Fetching fragments by document ID",
+                extra={
+                    "document_id": document_id
+                }
+            )
 
             result = await database_session.execute(
-                select(Fragment).filter(
-                    Fragment.document_id == document_id
-                )
+                select(Fragment).where(Fragment.document_id == document_id)
             )
-            fragments = result.scalars().all()
+            fragments = list(result.scalars().all())
 
-            logger.debug("Fetched fragments successfully")
-            return list(fragments)
+            logger.debug(
+                "Fragments fetched successfully",
+                extra={
+                    "document_id": document_id,
+                    "num_fragments": len(fragments)
+                }
+            )
+            return fragments
 
         except Exception as e:
-            logger.exception("Failed to fetch fragments by document id")
-            raise DatabaseException("Error fetching fragments by document id") from e
+            raise DatabaseException("Error fetching fragments by document ID") from e
 
     async def get_most_similar_fragments(
             self,
             query_vector: List[float],
             database_session: AsyncSession,
-            k: Optional[int] = 3,
-            threshold: Optional[float] = 0.3
+            k: int = 3,
+            threshold: float = 0.3
     ) -> List[Fragment]:
         try:
-            logger.debug("Executing vector search")
+            logger.debug(
+                "Executing vector search",
+                extra={
+                    "k": k,
+                    "threshold": threshold
+                }
+            )
 
-            query_vector_str = "[" + ",".join(str(float(x)) for x in query_vector) + "]"
+            query_vector_str = "[" + ",".join(str(float(v)) for v in query_vector) + "]"
 
             sql = text(
                 """
                 SELECT id,
                        document_id,
-                       vector,
                        content,
+                       vector,
                        fragment_index,
+                       summary,
+                       entities,
+                       topics,
                        created_by,
                        created_at,
+                       updated_by,
+                       updated_at,
                        deleted_by,
                        deleted_at,
                        1 - (vector <=> :query_vector) AS cosine_similarity
                 FROM fragment
                 WHERE vector IS NOT NULL
+                  AND deleted_at IS NULL
                   AND 1 - (vector <=> :query_vector) >= :threshold
-                ORDER BY cosine_similarity DESC LIMIT :k
+                ORDER BY cosine_similarity DESC LIMIT  :k
                 """
             )
 
@@ -93,66 +126,76 @@ class FragmentRepository(FragmentRepositoryInterface):
                 sql,
                 {
                     "query_vector": query_vector_str,
-                    "k": k,
-                    "threshold": threshold
+                    "threshold": threshold,
+                    "k": k
                 }
             )
             rows = result.fetchall()
 
-            logger.info("Vector search completed.")
-
-            fragments = []
-            for row in rows:
-                fragments.append(Fragment(
+            fragments = [
+                Fragment(
                     id=row.id,
                     document_id=row.document_id,
-                    vector=row.vector,
                     content=row.content,
+                    vector=row.vector,
                     fragment_index=row.fragment_index,
+                    summary=row.summary,
+                    entities=row.entities,
+                    topics=row.topics,
                     created_by=row.created_by,
                     created_at=row.created_at,
+                    updated_by=row.updated_by,
+                    updated_at=row.updated_at,
                     deleted_by=row.deleted_by,
                     deleted_at=row.deleted_at
-                ))
+                )
+                for row in rows
+            ]
 
+            logger.info(
+                "Vector search completed",
+                extra={
+                    "k": k,
+                    "threshold": threshold,
+                    "results": len(fragments)
+                }
+            )
             return fragments
 
         except ValueError as e:
-            logger.error(f"Invalid query vector: {e}")
             raise DatabaseException("Invalid search vector") from e
         except Exception as e:
-            logger.exception("Error during vector search")
             raise DatabaseException("Error running vector search in pgvector") from e
 
     async def hard_delete_fragments_by_document_id(
             self,
             document_id: int,
             database_session: AsyncSession
-    ) -> bool:
+    ) -> int:
         try:
-            logger.debug("Deleting fragments by document id")
+            logger.debug(
+                "Hard-deleting fragments by document ID",
+                extra={
+                    "document_id": document_id
+                }
+            )
 
             result = await database_session.execute(
-                select(Fragment).filter(
-                    Fragment.document_id == document_id
-                )
+                delete(Fragment).where(Fragment.document_id == document_id)
             )
-            fragments = result.scalars().all()
+            deleted_count: int = result.rowcount
+            await database_session.flush()
 
-            if not fragments:
-                logger.warning("No fragments found")
-                return False
-
-            for fragment in fragments:
-                await database_session.delete(fragment)
-
-            await database_session.commit()
-            logger.info(f"Deleted fragments successfully")
-            return True
+            logger.info(
+                "Fragments hard-deleted successfully",
+                extra={
+                    "document_id": document_id,
+                    "deleted_count": deleted_count
+                }
+            )
+            return deleted_count
 
         except Exception as e:
-            await database_session.rollback()
-            logger.exception("Failed to delete fragments from database")
             raise DatabaseException("Error deleting fragments from the database") from e
 
     async def soft_delete_fragments_by_document_id(
@@ -160,31 +203,38 @@ class FragmentRepository(FragmentRepositoryInterface):
             document_id: int,
             user_id: int,
             database_session: AsyncSession
-    ) -> bool:
+    ) -> int:
         try:
-            logger.debug("Soft deleting fragments by document id")
+            logger.debug(
+                "Soft-deleting fragments by document ID",
+                extra={
+                    "document_id": document_id,
+                    "user_id": user_id
+                }
+            )
+
+            now = datetime.now(timezone.utc)
 
             result = await database_session.execute(
-                select(Fragment).filter(
-                    Fragment.document_id == document_id
+                update(Fragment)
+                .where(Fragment.document_id == document_id)
+                .values(
+                    deleted_by=user_id,
+                    deleted_at=now
                 )
             )
-            fragments = result.scalars().all()
+            updated_count: int = result.rowcount
+            await database_session.flush()
 
-            if not fragments:
-                logger.warning("No fragments found")
-                return False
-
-            for fragment in fragments:
-                fragment.deleted_by = user_id
-                fragment.deleted_at = datetime.now()
-
-            await database_session.commit()
-
-            logger.info(f"Soft deleted fragments successfully")
-            return True
+            logger.info(
+                "Fragments soft-deleted successfully",
+                extra={
+                    "document_id": document_id,
+                    "user_id": user_id,
+                    "updated_count": updated_count
+                }
+            )
+            return updated_count
 
         except Exception as e:
-            await database_session.rollback()
-            logger.exception("Failed to delete fragments from database")
-            raise DatabaseException("Error deleting fragments from the database") from e
+            raise DatabaseException("Error soft-deleting fragments from the database") from e

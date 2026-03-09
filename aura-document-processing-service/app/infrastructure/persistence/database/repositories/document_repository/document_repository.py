@@ -1,14 +1,18 @@
-from datetime import datetime
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional, List
 import logging
+from datetime import datetime, timezone
+from typing import Optional, List
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models.document import Document
 from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
-    DocumentRepositoryInterface
+    DocumentRepositoryInterface,
 )
-from app.infrastructure.persistence.database.repositories.exceptions.database_exceptions import DatabaseException
+from app.infrastructure.persistence.database.repositories.exceptions.database_exceptions import (
+    DatabaseException,
+    DatabaseConstraintViolationException
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,15 +27,21 @@ class DocumentRepository(DocumentRepositoryInterface):
             logger.debug("Creating document in database")
 
             database_session.add(document)
-            await database_session.commit()
+
+            await database_session.flush()
             await database_session.refresh(document)
 
-            logger.info(f"Document created successfully")
-
+            logger.info(
+                "Document created successfully",
+                extra={
+                    "document_id": document.id
+                }
+            )
             return document
 
+        except IntegrityError as e:
+            raise DatabaseConstraintViolationException("Constraint violation creating document") from e
         except Exception as e:
-            await database_session.rollback()
             logger.exception("Failed to create document in database")
             raise DatabaseException("Error creating document in the database") from e
 
@@ -41,55 +51,127 @@ class DocumentRepository(DocumentRepositoryInterface):
             database_session: AsyncSession
     ) -> Optional[Document]:
         try:
-            logger.debug("Fetching document by id")
+            logger.debug(
+                "Fetching document by ID",
+                extra={
+                    "document_id": document_id
+                }
+            )
 
             result = await database_session.execute(
-                select(Document).filter(
-                    Document.id == document_id
-                )
+                select(Document).where(Document.id == document_id)
             )
             document = result.scalars().first()
 
-            if document:
-                logger.debug("Document found")
-            else:
-                logger.debug(f"Document not found")
-
+            logger.debug(
+                "Document lookup completed",
+                extra={
+                    "document_id": document_id,
+                    "found": document is not None
+                }
+            )
             return document
 
         except Exception as e:
-            logger.exception("Failed to fetch document by id")
             raise DatabaseException("Error fetching document from the database") from e
+
+    async def get_documents_by_chat_id(
+            self,
+            chat_id: int,
+            database_session: AsyncSession
+    ) -> List[Document]:
+        try:
+            logger.debug(
+                "Fetching documents by chat ID",
+                extra={
+                    "chat_id": chat_id
+                }
+            )
+
+            result = await database_session.execute(
+                select(Document).where(Document.chat_id == chat_id)
+            )
+            documents = list(result.scalars().all())
+
+            logger.debug(
+                "Documents by chat lookup completed",
+                extra={
+                    "chat_id": chat_id,
+                    "count": len(documents)
+                }
+            )
+            return documents
+
+        except Exception as e:
+            raise DatabaseException("Error fetching documents by chat ID from the database") from e
 
     async def get_documents(
             self,
-            page: Optional[int] = 0,
-            size: Optional[int] = 10,
-            database_session: AsyncSession = None
+            database_session: AsyncSession,
+            page: Optional[int] = None,
+            size: Optional[int] = None
     ) -> List[Document]:
         try:
-            logger.debug("Fetching documents")
-
-            offset = page * size if page and size else 0
+            logger.debug(
+                "Fetching documents",
+                extra={
+                    "page": page,
+                    "size": size
+                }
+            )
 
             query = select(Document)
 
-            if offset:
-                query = query.offset(offset)
-
-            if size:
+            if page is not None and size is not None:
+                query = query.offset(page * size).limit(size)
+            elif size is not None:
                 query = query.limit(size)
 
             result = await database_session.execute(query)
-            documents = result.scalars().all()
+            documents = list(result.scalars().all())
 
-            logger.debug(f"Documents fetched successfully.")
-
-            return list(documents)
+            logger.debug(
+                "Documents fetched successfully",
+                extra={
+                    "page": page,
+                    "size": size,
+                    "count": len(documents)
+                }
+            )
+            return documents
 
         except Exception as e:
-            logger.exception("Failed to fetch documents")
             raise DatabaseException("Error fetching documents from the database") from e
+
+    async def update_document(
+            self,
+            document: Document,
+            database_session: AsyncSession
+    ) -> Document:
+        try:
+            logger.debug(
+                "Updating document",
+                extra={
+                    "document_id": document.id
+                }
+            )
+
+            updated_document = await database_session.merge(document)
+            await database_session.flush()
+            await database_session.refresh(updated_document)
+
+            logger.info(
+                "Document updated successfully",
+                extra={
+                    "document_id": updated_document.id
+                }
+            )
+            return updated_document
+
+        except IntegrityError as e:
+            raise DatabaseConstraintViolationException("Constraint violation updating document") from e
+        except Exception as e:
+            raise DatabaseException("Error updating document in the database") from e
 
     async def hard_delete_document_by_id(
             self,
@@ -97,29 +179,39 @@ class DocumentRepository(DocumentRepositoryInterface):
             database_session: AsyncSession
     ) -> bool:
         try:
-            logger.debug("Deleting document with id")
+            logger.debug(
+                "Hard-deleting document",
+                extra={
+                    "document_id": document_id
+                }
+            )
 
             result = await database_session.execute(
-                select(Document).filter(
-                    Document.id == document_id
-                )
+                select(Document).where(Document.id == document_id)
             )
             document = result.scalars().first()
 
-            if not document:
-                logger.warning("Document not found for deletion")
+            if document is None:
+                logger.warning(
+                    "Document not found for hard-delete",
+                    extra={
+                        "document_id": document_id
+                    }
+                )
                 return False
 
             await database_session.delete(document)
-            await database_session.commit()
+            await database_session.flush()
 
-            logger.info("Document deleted successfully")
-
+            logger.info(
+                "Document hard-deleted successfully",
+                extra={
+                    "document_id": document_id
+                }
+            )
             return True
 
         except Exception as e:
-            await database_session.rollback()
-            logger.exception("Failed to delete document")
             raise DatabaseException("Error deleting document from the database") from e
 
     async def soft_delete_document_by_id(
@@ -129,54 +221,42 @@ class DocumentRepository(DocumentRepositoryInterface):
             database_session: AsyncSession
     ) -> bool:
         try:
-            logger.debug("Soft deleting document by id")
+            logger.debug(
+                "Soft-deleting document",
+                extra={
+                    "document_id": document_id,
+                    "user_id": user_id
+                }
+            )
 
             result = await database_session.execute(
-                select(Document).filter(
-                    Document.id == document_id
-                )
+                select(Document).where(Document.id == document_id)
             )
             document = result.scalars().first()
 
-            if not document:
-                logger.warning("Document not found")
+            if document is None:
+                logger.warning(
+                    "Document not found for soft-delete",
+                    extra={
+                        "document_id": document_id
+                    }
+                )
                 return False
 
             document.deleted_by = user_id
-            document.deleted_at = datetime.now()
+            document.deleted_at = datetime.now(timezone.utc)
 
-            await database_session.commit()
+            await database_session.flush()
             await database_session.refresh(document)
 
-            logger.info("Document soft deleted successfully")
+            logger.info(
+                "Document soft-deleted successfully",
+                extra={
+                    "document_id": document_id,
+                    "user_id": user_id
+                }
+            )
             return True
 
         except Exception as e:
-            await database_session.rollback()
-            logger.exception("Failed to delete fragments from database")
-            raise DatabaseException("Error deleting fragments from the database") from e
-
-    async def update_document(
-            self,
-            document: Document,
-            database_session: AsyncSession
-    ) -> Document:
-        try:
-            logger.debug("Updating document")
-
-            updated_document = await database_session.merge(document)
-
-            updated_document.updated_at = datetime.now()
-            updated_document.updated_by = 0
-
-            await database_session.commit()
-            await database_session.refresh(updated_document)
-
-            logger.info(f"Document updated successfully")
-
-            return updated_document
-
-        except Exception as e:
-            await database_session.rollback()
-            logger.exception(f"Failed to update document")
-            raise DatabaseException("Error updating document in the database") from e
+            raise DatabaseException("Error soft-deleting document from the database") from e

@@ -1,242 +1,222 @@
 import logging
+import ssl
 from pathlib import Path
 from urllib.parse import quote_plus
 from typing import Optional
 from pydantic import Field, SecretStr, field_validator, model_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
 
 class DatabaseManagerSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="DATABASE_MANAGER_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore"
+    )
+
     driver: str = Field(
-        default="asyncpg",
-        description="Database driver (currently only postgresql supported)"
+        default="postgresql+asyncpg"
     )
     user: str = Field(
-        ...,
-        description="Database user"
+        ...
     )
     password: SecretStr = Field(
-        ...,
-        description="Database password"
+        ...
     )
     host: str = Field(
-        ...,
-        description="Database host"
+        ...
     )
     port: int = Field(
         default=5432,
         ge=1,
-        le=65535,
-        description="Database port"
+        le=65535
     )
     name: str = Field(
-        ...,
-        description="Database name"
+        ...
     )
 
-    pool_size: int = Field(
+    pool_persistent_connections: int = Field(
         default=10,
         gt=0,
-        le=100,
-        description="Number of connections to maintain in the pool"
+        le=100
     )
-    max_overflow: int = Field(
+    pool_overflow_connections: int = Field(
         default=20,
         ge=0,
-        le=100,
-        description="Maximum number of connections to create beyond pool_size"
+        le=100
     )
-    pool_recycle: int = Field(
-        default=3600,
-        gt=0,
-        description="Recycle connections after this many seconds (prevents stale connections)"
-    )
-    pool_pre_ping: bool = Field(
-        default=True,
-        description="Test connections for liveness before using them"
-    )
-    pool_timeout: float = Field(
+    pool_checkout_timeout_seconds: float = Field(
         default=30.0,
         gt=0,
-        le=300.0,
-        description="Seconds to wait before giving up on getting a connection from the pool"
+        le=300.0
+    )
+    pool_recycle_seconds: int = Field(
+        default=3600,
+        gt=0
+    )
+    pool_liveness_probe: bool = Field(
+        default=True
     )
 
-    connect_timeout: int = Field(
+    tcp_connect_timeout_seconds: int = Field(
         default=10,
         gt=0,
-        le=60,
-        description="Database connection timeout in seconds"
+        le=60
     )
-    statement_timeout: int = Field(
+    query_execution_timeout_seconds: int = Field(
         default=30,
         gt=0,
-        le=300,
-        description="Maximum time in seconds for a single SQL statement to execute"
+        le=300
     )
 
-    application_name: str = Field(
-        default="aura-document-processing-service",
-        description="Application name for database connection tracking"
+    echo_sql: bool = Field(
+        default=False
+    )
+    query_logging_enabled: bool = Field(
+        default=False
+    )
+    pg_application_name: str = Field(
+        default="app"
     )
 
-    echo: bool = Field(
-        default=False,
-        description="Enable SQLAlchemy engine logging"
+    ssl_enabled: bool = Field(
+        default=False
     )
-    enable_query_logging: bool = Field(
-        default=False,
-        description="Enable detailed query logging (use only in development)"
+    ssl_verify_server_certificate: bool = Field(
+        default=True
     )
-
-    ssl_mode: Optional[str] = Field(
-        default=None,
-        description="SSL mode: disable, allow, prefer, require, verify-ca, verify-full"
+    ssl_client_cert_path: Optional[Path] = Field(
+        default=None
     )
-    ssl_cert_path: Optional[Path] = Field(
-        default=None,
-        description="Path to SSL certificate file"
+    ssl_client_key_path: Optional[Path] = Field(
+        default=None
     )
-    ssl_key_path: Optional[Path] = Field(
-        default=None,
-        description="Path to SSL key file"
-    )
-    ssl_root_cert_path: Optional[Path] = Field(
-        default=None,
-        description="Path to SSL root certificate file"
+    ssl_ca_cert_path: Optional[Path] = Field(
+        default=None
     )
 
-    @field_validator("driver")
+    @field_validator(
+        "driver",
+        mode="before"
+    )
     @classmethod
-    def validate_driver(
+    def normalise_driver(
             cls,
             v: str
     ) -> str:
-        allowed = ["postgresql", "postgresql+asyncpg"]
-        if v not in allowed:
-            raise ValueError(f"Driver must be one of {allowed}, got: {v}")
-        return v
-
-    @field_validator("ssl_mode")
-    @classmethod
-    def validate_ssl_mode(
-            cls,
-            v: Optional[str]
-    ) -> Optional[str]:
-        if v is None:
+        if v == "postgresql":
+            return "postgresql+asyncpg"
+        if v == "postgresql+asyncpg":
             return v
+        raise ValueError(
+            f"Unsupported driver '{v}'. Only 'postgresql' / 'postgresql+asyncpg' are supported."
+        )
 
-        allowed = ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]
-        if v not in allowed:
-            raise ValueError(f"SSL mode must be one of {allowed}, got: {v}")
-        return v
-
-    @field_validator("ssl_cert_path", "ssl_key_path", "ssl_root_cert_path")
+    @field_validator(
+        "ssl_client_cert_path",
+        "ssl_client_key_path",
+        "ssl_ca_cert_path",
+        mode="before"
+    )
     @classmethod
-    def validate_ssl_path(
+    def validate_ssl_file_exists(
             cls,
             v: Optional[Path]
     ) -> Optional[Path]:
-        if v is not None and not v.exists():
-            raise ValueError(f"SSL file not found: {v}")
+        if isinstance(v, str) and not v.strip():
+            return None
+
+        if v is not None:
+            path = Path(v)
+            if not path.exists():
+                raise ValueError(f"SSL file not found: {path}")
+            return path
         return v
 
-    @model_validator(mode='after')
-    def validate_pool_settings(
-            self
-    ) -> 'DatabaseManagerSettings':
-        total_connections = self.pool_size + self.max_overflow
-
+    @model_validator(mode="after")
+    def validate_configuration_coherence(self) -> "DatabaseManagerSettings":
+        total_connections = self.pool_persistent_connections + self.pool_overflow_connections
         if total_connections > 100:
             logger.warning(
-                f"Total connections ({total_connections}) may exceed recommended PostgreSQL limits. "
-                f"Consider reducing pool_size or max_overflow."
+                "Total connection limit may exceed recommended PostgreSQL defaults",
+                extra={
+                    "pool_persistent_connections": self.pool_persistent_connections,
+                    "pool_overflow_connections": self.pool_overflow_connections,
+                    "total": total_connections
+                }
             )
 
-        if self.pool_timeout < self.connect_timeout:
+        if self.pool_checkout_timeout_seconds < self.tcp_connect_timeout_seconds:
             logger.warning(
-                f"pool_timeout ({self.pool_timeout}s) is less than connect_timeout ({self.connect_timeout}s). "
-                f"This may cause premature timeout errors."
+                "pool_checkout_timeout_seconds is shorter than tcp_connect_timeout_seconds"
+                " — pool may give up before the TCP handshake completes",
+                extra={
+                    "pool_checkout_timeout_seconds": self.pool_checkout_timeout_seconds,
+                    "tcp_connect_timeout_seconds": self.tcp_connect_timeout_seconds,
+                },
             )
 
-        return self
-
-    @model_validator(mode='after')
-    def validate_ssl_configuration(
-            self
-    ) -> 'DatabaseManagerSettings':
-        ssl_fields = [self.ssl_cert_path, self.ssl_key_path, self.ssl_root_cert_path]
-        ssl_fields_set = [f for f in ssl_fields if f is not None]
-
-        if ssl_fields_set and len(ssl_fields_set) < len(ssl_fields):
-            logger.warning(
-                "Incomplete SSL configuration. For full SSL support, provide all: "
-                "ssl_cert_path, ssl_key_path, ssl_root_cert_path"
-            )
-
-        if ssl_fields_set and self.ssl_mode is None:
-            logger.info("SSL certificates provided but ssl_mode not set. Defaulting to 'require'")
-            self.ssl_mode = "require"
+        if self.ssl_enabled:
+            mutual_tls_fields = [self.ssl_client_cert_path, self.ssl_client_key_path]
+            if any(mutual_tls_fields) and not all(mutual_tls_fields):
+                raise ValueError(
+                    "Incomplete mutual-TLS configuration: "
+                    "ssl_client_cert_path and ssl_client_key_path must be set together."
+                )
 
         return self
 
     @property
-    def url(
-            self
-    ) -> str:
+    def url(self) -> str:
         password = quote_plus(self.password.get_secret_value())
-        driver = f"{self.driver}+asyncpg" if self.driver == "postgresql" else self.driver
-
-        url = f"{driver}://{self.user}:{password}@{self.host}:{self.port}/{self.name}"
-
-        if self.ssl_mode:
-            url += f"?ssl={self.ssl_mode}"
-
-            if self.ssl_cert_path:
-                url += f"&sslcert={self.ssl_cert_path}"
-            if self.ssl_key_path:
-                url += f"&sslkey={self.ssl_key_path}"
-            if self.ssl_root_cert_path:
-                url += f"&sslrootcert={self.ssl_root_cert_path}"
-
-        return url
+        return f"{self.driver}://{self.user}:{password}@{self.host}:{self.port}/{self.name}"
 
     @property
-    def url_safe(
-            self
-    ) -> str:
-        base_url = f"{self.driver}://{self.user}:***@{self.host}:{self.port}/{self.name}"
+    def url_safe(self) -> str:
+        ssl_suffix = " (SSL)" if self.ssl_enabled else ""
+        return f"{self.driver}://{self.user}:***@{self.host}:{self.port}/{self.name}{ssl_suffix}"
 
-        if self.ssl_mode:
-            base_url += f" (SSL: {self.ssl_mode})"
-
-        return base_url
-
-    def get_connect_args(
-            self
-    ) -> dict:
-        args = {
-            "timeout": self.connect_timeout,
-            "command_timeout": self.statement_timeout,
+    def get_connect_args(self) -> dict:
+        args: dict = {
+            "timeout": self.tcp_connect_timeout_seconds,
+            "command_timeout": self.query_execution_timeout_seconds,
             "server_settings": {
-                "application_name": self.application_name,
+                "application_name": self.pg_application_name,
                 "jit": "off",
             },
         }
 
-        if self.ssl_mode and self.ssl_mode != "disable":
-            ssl_context = {}
-
-            if self.ssl_cert_path:
-                ssl_context["cert"] = str(self.ssl_cert_path)
-            if self.ssl_key_path:
-                ssl_context["key"] = str(self.ssl_key_path)
-            if self.ssl_root_cert_path:
-                ssl_context["ca"] = str(self.ssl_root_cert_path)
-
-            if ssl_context:
-                args["ssl"] = ssl_context
+        if self.ssl_enabled:
+            args["ssl"] = self._build_ssl_context()
 
         return args
+
+    def _build_ssl_context(self) -> ssl.SSLContext:
+        if self.ssl_ca_cert_path:
+            ctx = ssl.create_default_context(
+                purpose=ssl.Purpose.SERVER_AUTH,
+                cafile=str(
+                    self.ssl_ca_cert_path
+                )
+            )
+        else:
+            ctx = ssl.create_default_context(
+                purpose=ssl.Purpose.SERVER_AUTH
+            )
+
+        if not self.ssl_verify_server_certificate:
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+
+        if (self.ssl_client_cert_path
+                and self.ssl_client_key_path):
+            ctx.load_cert_chain(
+                certfile=str(self.ssl_client_cert_path),
+                keyfile=str(self.ssl_client_key_path)
+            )
+
+        return ctx

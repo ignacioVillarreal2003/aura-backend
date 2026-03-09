@@ -1,11 +1,12 @@
 from abc import ABC, abstractmethod
-from typing import Optional, List
+from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models.fragment import Fragment
 
 
 class FragmentRepositoryInterface(ABC):
+
     @abstractmethod
     async def create_fragments(
             self,
@@ -19,25 +20,25 @@ class FragmentRepositoryInterface(ABC):
             self,
             document_id: int,
             database_session: AsyncSession
-    ) -> list[Fragment]:
+    ) -> List[Fragment]:
         pass
 
     @abstractmethod
     async def get_most_similar_fragments(
             self,
-            query_vector: list[float],
+            query_vector: List[float],
             database_session: AsyncSession,
-            k: Optional[int],
-            threshold: Optional[float]
-    ) -> list[Fragment]:
+            k: int = 3,
+            threshold: float = 0.3
+    ) -> List[Fragment]:
         pass
 
     @abstractmethod
     async def hard_delete_fragments_by_document_id(
             self,
             document_id: int,
-            database_session: AsyncSession
-    ) -> bool:
+            database_session: AsyncSession,
+    ) -> int:
         pass
 
     @abstractmethod
@@ -45,6 +46,6 @@ class FragmentRepositoryInterface(ABC):
             self,
             document_id: int,
             user_id: int,
-            database_session: AsyncSession
-    ) -> bool:
+            database_session: AsyncSession,
+    ) -> int:
         pass

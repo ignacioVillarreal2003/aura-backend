@@ -5,41 +5,25 @@ class CreateDocumentServiceException(AppException):
     pass
 
 
-class DocumentValidationException(CreateDocumentServiceException):
+class CreateDocumentValidationException(CreateDocumentServiceException):
     pass
 
 
-class DocumentUploadException(CreateDocumentServiceException):
+class CreateDocumentUploadException(CreateDocumentServiceException):
     pass
 
 
-class DocumentPersistenceException(CreateDocumentServiceException):
+class CreateDocumentPersistenceException(CreateDocumentServiceException):
     pass
 
 
-class UnsupportedDocumentTypeError(DocumentValidationException):
+class CreateDocumentUnsupportedTypeException(CreateDocumentValidationException):
     pass
 
 
-class DocumentSizeExceededError(DocumentValidationException):
+class CreateDocumentSizeExceededException(CreateDocumentValidationException):
     pass
 
 
-class InvalidDocumentError(DocumentValidationException):
-    pass
-
-
-class DocumentProcessingException(CreateDocumentServiceException):
-    pass
-
-
-class TempFileException(CreateDocumentServiceException):
-    pass
-
-
-class DocumentNotFoundException(CreateDocumentServiceException):
-    pass
-
-
-class DocumentAccessForbiddenException(CreateDocumentServiceException):
+class CreateDocumentInvalidException(CreateDocumentValidationException):
     pass
