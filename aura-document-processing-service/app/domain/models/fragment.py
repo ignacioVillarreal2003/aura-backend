@@ -1,27 +1,82 @@
 from pgvector.sqlalchemy import VECTOR
+from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 from sqlalchemy.sql import func
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, DateTime, Text, ForeignKey, BigInteger
 
-from app.configuration.environment_variables import environment_variables
 from app.domain.models.base import Base
+from app.domain.settings.fragment_settings import FragmentSettings
+
+_fragment_settings = FragmentSettings()
 
 
 class Fragment(Base):
     __tablename__ = "fragment"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(
+        BigInteger,
+        primary_key=True,
+        index=True
+    )
 
-    document_id = Column(Integer, ForeignKey("document.id", ondelete="CASCADE"), nullable=False)
+    document_id = Column(
+        BigInteger,
+        ForeignKey(
+            "document.id",
+            ondelete="CASCADE"
+        ),
+        nullable=False
+    )
 
-    vector = Column(VECTOR(dim=environment_variables.vector_dimension), nullable=True)
-    embedding_model = Column(String(255), nullable=True)
-    content = Column(Text, nullable=False)
-    fragment_index = Column(Integer, nullable=False)
-    chunk_size = Column(Integer, nullable=False)
+    content = Column(
+        Text,
+        nullable=False
+    )
+    vector = Column(
+        VECTOR(
+            dim=_fragment_settings.vector_dimension
+        ),
+        nullable=False
+    )
+    fragment_index = Column(
+        Integer,
+        nullable=False
+    )
 
-    created_by = Column(Integer, nullable=False)
-    created_at = Column(DateTime, server_default=func.now())
-    updated_by = Column(Integer, nullable=True)
-    updated_at = Column(DateTime, nullable=True)
-    deleted_by = Column(Integer, nullable=True)
-    deleted_at = Column(DateTime, nullable=True)
+    summary = Column(
+        Text,
+        nullable=True
+    )
+    entities = Column(
+        JSONB,
+        nullable=True
+    )
+    topics = Column(
+        ARRAY(Text),
+        nullable=True
+    )
+
+    created_by = Column(
+        BigInteger,
+        nullable=False
+    )
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False
+    )
+    updated_by = Column(
+        BigInteger,
+        nullable=True
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=True
+    )
+    deleted_by = Column(
+        BigInteger,
+        nullable=True
+    )
+    deleted_at = Column(
+        DateTime(timezone=True),
+        nullable=True
+    )

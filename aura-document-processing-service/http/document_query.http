@@ -1,0 +1,38 @@
+GET http://localhost:8000/api/document-query/document/6
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+
+###
+
+
+GET http://localhost:8000/api/document-query/documents
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+
+###
+
+
+POST http://localhost:8000/api/document-query/retrieve-context-fragments-by-document
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "document_id": 6
+}
+
+###
+
+
+POST http://localhost:8000/api/document-query/retrieve-context-fragments-by-question
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "question": "Armas de todo tipo y aviones de modernos de combate",
+  "max_context_fragments": 3
+}

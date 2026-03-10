@@ -1,6 +1,27 @@
 from fastapi import APIRouter
-from app.api.controllers import question_controller, summary_controller
+
+from app.api.controllers import (
+    document_question_controller,
+    document_summary_controller,
+    agent_controller
+)
 
 router = APIRouter()
-router.include_router(question_controller.router, prefix="/questions")
-router.include_router(summary_controller.router, prefix="/summaries")
+
+router.include_router(
+    document_question_controller.router,
+    prefix="/document/question",
+    tags=["Document Question"]
+)
+
+router.include_router(
+    document_summary_controller.router,
+    prefix="/document/summary",
+    tags=["Document Summary"]
+)
+
+router.include_router(
+    agent_controller.router,
+    prefix="/agent",
+    tags=["Agent"]
+)

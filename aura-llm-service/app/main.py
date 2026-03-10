@@ -1,77 +1,210 @@
-from contextlib import asynccontextmanager
-
-from fastapi import FastAPI
 import logging
+from contextlib import asynccontextmanager
+import uvicorn
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from starlette.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.controllers import router
-from app.application.services.interfaces.question_service_interface import QuestionServiceInterface
-from app.application.services.llm_service import LLMService
-from app.application.services.question_service import QuestionService
-from app.configuration.dependencies import get_question_listener
+from app.configuration.dependencies import startup_dependencies, shutdown_dependencies
 from app.configuration.logging_configuration import configure_logging
-from app.application.exceptions.api_exceptions import AppError
-from app.infrastructure.messaging.rabbitmq_client import RabbitmqClient
+from app.configuration.environment_variables import environment_variables
 
 configure_logging(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    logger.info("Starting application...")
+async def lifespan(
+        app: FastAPI
+):
+    logger.info("Starting FastAPI Application")
 
-    logger.info("Starting RabbitMQ consumer thread...")
-    rabbitmq_client = RabbitmqClient()
-    llm_service = LLMService()
-    question_service = QuestionService(llm_service)
+    try:
+        await startup_dependencies()
+        logger.info("Application started successfully")
 
-    listener = get_question_listener(rabbitmq_client, question_service)
-    listener.start_consuming_background()
-
-    logger.info("RabbitMQ consumer started.")
+    except Exception:
+        logger.critical("Failed to start application")
+        raise
 
     yield
 
-    logger.info("Shutting down application...")
+    logger.info("Shutting down FastAPI Application")
 
-    listener.stop_consuming()
+    try:
+        await shutdown_dependencies()
+        logger.info("Application shut down successfully")
 
-    logger.info("Application shutdown complete")
-
-
-app = FastAPI(title="Aura Document Processing Service",
-              version="1.0.0",
-              lifespan=lifespan)
-app.add_middleware(CORSMiddleware,
-                   allow_origins=["*"],
-                   allow_credentials=True,
-                   allow_methods=["*"],
-                   allow_headers=["*"])
-app.include_router(router, prefix="/api")
+    except Exception:
+        logger.error("Error during application shutdown")
 
 
-@app.get("/")
-async def root():
-    return {"message": "Hello World"}
-
-
-@app.exception_handler(AppError)
-async def app_error_handler(_, exc: AppError):
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"error": exc.code, "message": exc.message}
+def create_app() -> FastAPI:
+    app = FastAPI(
+        title=environment_variables.app_name,
+        version=environment_variables.app_version,
+        description="Agent-based document question answering",
+        lifespan=lifespan,
+        docs_url="/api/docs",
+        redoc_url="/api/redoc",
+        openapi_url="/api/openapi.json"
     )
 
+    configure_cors(app)
+    add_middleware(app)
+    include_routers(app)
+    add_exception_handlers(app)
 
-@app.exception_handler(Exception)
-async def unhandled_exception_handler(_, exc: Exception):
-    logging.exception("Unhandled server error")
-    return JSONResponse(
-        status_code=500,
-        content={
-            "error": "InternalServerError",
-            "message": "Ha ocurrido un error inesperado"
+    logger.info("FastAPI application configured")
+
+    return app
+
+
+def configure_cors(
+        app: FastAPI
+) -> None:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=environment_variables.cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    logger.debug("CORS configured")
+
+
+def add_middleware(
+        app: FastAPI
+) -> None:
+    @app.middleware(
+        "http"
+    )
+    async def log_requests(
+            request: Request,
+            call_next
+    ):
+        logger.info(f"Request: {request.method} {request.url.path}")
+
+        response = await call_next(request)
+
+        logger.info(f"Response: {response.status_code}")
+
+        return response
+
+    logger.debug("Middleware added")
+
+
+def include_routers(
+        app: FastAPI
+) -> None:
+    app.include_router(
+        router,
+        prefix="/api"
+    )
+
+    @app.get(
+        "/health",
+        tags=["Health"]
+    )
+    async def health_check():
+        return {
+            "status": "healthy",
+            "app": environment_variables.app_name,
+            "version": environment_variables.app_version
         }
+
+    logger.debug("Routers included")
+
+
+def add_exception_handlers(
+        app: FastAPI
+) -> None:
+    @app.exception_handler(
+        StarletteHTTPException
+    )
+    async def http_exception_handler(
+            request: Request,
+            exc: StarletteHTTPException
+    ):
+        logger.warning(
+            f"HTTP exception: {exc.status_code}",
+            extra={
+                "status_code": exc.status_code,
+                "detail": exc.detail,
+                "path": request.url.path
+            }
+        )
+
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "error": "HTTPException",
+                "message": exc.detail,
+                "status_code": exc.status_code
+            }
+        )
+
+    @app.exception_handler(
+        RequestValidationError
+    )
+    async def validation_exception_handler(
+            request: Request,
+            exc: RequestValidationError
+    ):
+        logger.warning(
+            "Validation error",
+            extra={
+                "path": request.url.path,
+                "errors": exc.errors()
+            }
+        )
+
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": "ValidationError",
+                "message": "Request validation failed",
+                "details": exc.errors()
+            }
+        )
+
+    @app.exception_handler(
+        Exception
+    )
+    async def general_exception_handler(
+            request: Request,
+            exc: Exception
+    ):
+        logger.exception(
+            "Unexpected error",
+            extra={
+                "path": request.url.path,
+                "error_type": type(exc).__name__
+            }
+        )
+
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "InternalServerError",
+                "message": "An unexpected error occurred"
+            }
+        )
+
+    logger.debug("Exception handlers added")
+
+
+app = create_app()
+
+if __name__ == "__main__":
+    uvicorn.run(
+        "app.main:app",
+        host=environment_variables.app_host,
+        port=environment_variables.app_port,
+        reload=environment_variables.app_reload,
+        log_level=environment_variables.log_level.lower()
     )

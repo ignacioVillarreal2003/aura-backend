@@ -1,118 +1,123 @@
-from functools import lru_cache
-from typing import Generator
-from fastapi import Depends
-from sqlalchemy.orm import Session
+import logging
+from fastapi import FastAPI
 
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
 from app.application.processors.readers.reader_factory import ReaderFactory
 from app.application.processors.text_cleaners.text_cleaner_factory import TextCleanerFactory
 from app.application.processors.text_splitters.text_splitter_factory import TextSplitterFactory
-from app.application.services.document_service import DocumentService
-from app.application.services.ingestion_service import IngestionService
-from app.application.services.interfaces.document_service_interface import DocumentServiceInterface
-from app.application.services.interfaces.ingestion_service_interface import IngestionServiceInterface
-from app.application.services.interfaces.retrival_service_interface import RetrivalServiceInterface
-from app.application.services.retrival_service import RetrievalService
-from app.infrastructure.messaging.interfaces.question_publisher_interface import QuestionPublisherInterface
-from app.infrastructure.messaging.question_publisher import QuestionPublisher
-from app.infrastructure.messaging.rabbitmq_client import RabbitmqClient
-from app.infrastructure.persistence.repositories.database_client import DatabaseClient
-from app.infrastructure.persistence.repositories.document_repository import DocumentRepository
-from app.infrastructure.persistence.repositories.fragment_repository import FragmentRepository
-from app.infrastructure.persistence.repositories.interfaces.document_repository_interface import \
-    DocumentRepositoryInterface
-from app.infrastructure.persistence.repositories.interfaces.fragment_repository_interface import \
-    FragmentRepositoryInterface
-from app.infrastructure.persistence.storages.file_storage import FileStorage
-from app.infrastructure.persistence.storages.interfaces.file_storage_interface import FileStorageInterface
-from app.infrastructure.persistence.storages.minio_client import MinioClient
+from app.application.services.create_document_service.create_document_service import CreateDocumentService
+from app.application.services.delete_document_service.delete_document_service import DeleteDocumentService
+from app.application.services.document_ingestion_service.document_ingestion_service import DocumentIngestionService
+from app.application.services.document_query_service.document_query_service import DocumentQueryService
+from app.application.services.update_document_service.update_document_service import UpdateDocumentService
+from app.infrastructure.authentication_provider.authentication_provider import AuthenticationProvider
+from app.infrastructure.http_client.http_client import HttpClient
+from app.infrastructure.persistence.database.database_manager.database_manager import DatabaseManager
+from app.infrastructure.persistence.database.repositories.document_repository.document_repository import DocumentRepository
+from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository import FragmentRepository
+from app.infrastructure.persistence.storages.document_storage.document_storage import DocumentStorage
+from app.infrastructure.persistence.storages.minio_manager.minio_manager import MinioManager
+
+logger = logging.getLogger(__name__)
 
 
-@lru_cache()
-def get_minio_client() -> MinioClient:
-    return MinioClient()
+async def startup_dependencies(
+        app: FastAPI
+) -> None:
+    try:
+        logger.info("Starting up dependencies")
+
+        database_manager = DatabaseManager()
+        await database_manager.initialize()
+        app.state.db_manager = database_manager
+
+        minio_manager = MinioManager()
+        await minio_manager.start()
+        app.state.minio_manager = minio_manager
+
+        document_storage = DocumentStorage(
+            minio_manager=minio_manager
+        )
+        await document_storage.start()
+        app.state.document_storage = document_storage
+
+        http_client = HttpClient()
+        await http_client.start()
+        app.state.http_client = http_client
+
+        authentication_provider = AuthenticationProvider(
+            http_client=http_client
+        )
+        app.state.authentication_provider = authentication_provider
+
+        document_repository: DocumentRepository = DocumentRepository()
+        app.state.document_repository = document_repository
+
+        fragment_repository: FragmentRepository = FragmentRepository()
+        app.state.fragment_repository = fragment_repository
+
+        embedder_factory = EmbedderFactory()
+        app.state.embedder_factory = embedder_factory
+
+        reader_factory = ReaderFactory()
+        app.state.reader_factory = reader_factory
+
+        text_cleaner_factory = TextCleanerFactory()
+        app.state.text_cleaner_factory = text_cleaner_factory
+
+        text_splitter_factory = TextSplitterFactory()
+        app.state.text_splitter_factory = text_splitter_factory
+
+        update_document_service = UpdateDocumentService(
+            document_repository=document_repository
+        )
+        app.state.update_document_service = update_document_service
+
+        document_query_service = DocumentQueryService(
+            document_repository=document_repository,
+            fragment_repository=fragment_repository,
+            embedder_factory=embedder_factory
+        )
+        app.state.document_query_service = document_query_service
+
+        document_ingestion_service = DocumentIngestionService(
+            database_manager=database_manager,
+            document_repository=document_repository,
+            fragment_repository=fragment_repository,
+            reader_factory=reader_factory,
+            text_cleaner_factory=text_cleaner_factory,
+            text_splitter_factory=text_splitter_factory,
+            embedder_factory=embedder_factory
+        )
+        app.state.document_ingestion_service = document_ingestion_service
+
+        delete_document_service = DeleteDocumentService(
+            document_repository=document_repository,
+            fragment_repository=fragment_repository,
+            document_storage=document_storage
+        )
+        app.state.delete_document_service = delete_document_service
+
+        create_document_service = CreateDocumentService(
+            document_repository=document_repository,
+            document_storage=document_storage,
+            document_ingestion_service=document_ingestion_service
+        )
+        app.state.create_document_service = create_document_service
+
+        logger.info("All dependencies started successfully")
+
+    except Exception:
+        logger.critical("Error during dependency starting up")
+        raise
 
 
-def get_file_storage() -> FileStorageInterface:
-    return FileStorage(get_minio_client())
+async def shutdown_dependencies() -> None:
+    try:
+        logger.info("Shutting down dependencies")
 
+        logger.info("All dependencies shut down successfully")
 
-@lru_cache()
-def get_database_client() -> DatabaseClient:
-    return DatabaseClient()
-
-
-def get_db_session(database_client: DatabaseClient = Depends(get_database_client)) -> Generator[Session, None, None]:
-    yield from database_client.get_session()
-
-
-def get_document_repository() -> DocumentRepositoryInterface:
-    return DocumentRepository()
-
-
-def get_fragment_repository() -> FragmentRepositoryInterface:
-    return FragmentRepository()
-
-
-def get_rabbitmq_client() -> RabbitmqClient:
-    return RabbitmqClient()
-
-
-def get_question_publisher(
-        rabbitmq_client: RabbitmqClient = Depends(get_rabbitmq_client)) -> QuestionPublisherInterface:
-    return QuestionPublisher(rabbitmq_client)
-
-
-@lru_cache()
-def get_embedder_factory() -> EmbedderFactory:
-    return EmbedderFactory()
-
-
-@lru_cache()
-def get_text_splitter_factory() -> TextSplitterFactory:
-    return TextSplitterFactory()
-
-
-@lru_cache()
-def get_text_cleaner_factory() -> TextCleanerFactory:
-    return TextCleanerFactory()
-
-
-@lru_cache()
-def get_reader_factory() -> ReaderFactory:
-    return ReaderFactory()
-
-
-def get_ingestion_service(document_repository: DocumentRepositoryInterface = Depends(get_document_repository),
-                          fragment_repository: FragmentRepositoryInterface = Depends(get_fragment_repository),
-                          reader_factory: ReaderFactory = Depends(get_reader_factory),
-                          text_cleaner_factory: TextCleanerFactory = Depends(get_text_cleaner_factory),
-                          text_splitter_factory: TextSplitterFactory = Depends(get_text_splitter_factory),
-                          embedder_factory: EmbedderFactory = Depends(
-                              get_embedder_factory)) -> IngestionServiceInterface:
-    return IngestionService(document_repository,
-                            fragment_repository,
-                            reader_factory,
-                            text_cleaner_factory,
-                            text_splitter_factory,
-                            embedder_factory)
-
-
-def get_retrieval_service(fragment_repository: FragmentRepositoryInterface = Depends(get_fragment_repository),
-                          question_publisher: QuestionPublisherInterface = Depends(get_question_publisher),
-                          embedder_factory: EmbedderFactory = Depends(
-                              get_embedder_factory)) -> RetrivalServiceInterface:
-    return RetrievalService(fragment_repository,
-                            question_publisher,
-                            embedder_factory)
-
-
-def get_document_service(document_repository: DocumentRepositoryInterface = Depends(get_document_repository),
-                         file_storage: FileStorageInterface = Depends(get_file_storage),
-                         ingestion_service: IngestionServiceInterface = Depends(
-                             get_ingestion_service)) -> DocumentServiceInterface:
-    return DocumentService(
-        document_repository=document_repository,
-        file_storage=file_storage,
-        ingestion_service=ingestion_service
-    )
+    except Exception:
+        logger.error("Error during dependency shutdown")
+        raise
