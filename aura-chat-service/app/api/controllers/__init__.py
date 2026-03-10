@@ -13,3 +13,4 @@ router.include_router(message_router, tags=["Messages"])
 router.include_router(chat_completion_router, prefix="/chat", tags=["Chat Completions"])
 router.include_router(tool_call_router, prefix="/tool-calls", tags=["Tool Calls"])
 
+

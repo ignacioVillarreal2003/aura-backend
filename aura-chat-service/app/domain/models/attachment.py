@@ -85,3 +85,4 @@ class Attachment(Base):
         """Check if the attachment is soft-deleted."""
         return self.deleted_at is not None
 
+

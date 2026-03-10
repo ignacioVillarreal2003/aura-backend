@@ -91,3 +91,4 @@ class Conversation(Base):
         """Mark the conversation as deleted."""
         self.deleted_at = datetime.utcnow()
 
+

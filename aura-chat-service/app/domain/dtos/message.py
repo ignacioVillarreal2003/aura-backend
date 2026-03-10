@@ -195,3 +195,4 @@ class SSEError(BaseModel):
     message: str
     code: str
 
+

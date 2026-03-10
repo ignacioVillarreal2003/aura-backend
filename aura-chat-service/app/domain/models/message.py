@@ -130,3 +130,4 @@ class Message(Base):
         """Mark the message as deleted."""
         self.deleted_at = datetime.utcnow()
 
+

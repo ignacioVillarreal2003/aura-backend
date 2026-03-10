@@ -91,3 +91,4 @@ class ConversationListResponse(BaseModel):
     data: list[ConversationSummary]
     pagination: PaginationInfo
 
+
