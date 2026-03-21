@@ -1,135 +1,94 @@
+import importlib
 import logging
-from typing import Optional
+from functools import cached_property
 from fastapi import HTTPException, Request, status
 
-from app.application.processors.text_splitters.instances.recursive_text_splitter import RecursiveTextSplitter
 from app.application.processors.text_splitters.constants.text_splitter_type import TextSplitterType
 from app.application.processors.text_splitters.exceptions.text_splitter_exception import (
-    UnsupportedTextSplitterTypeException,
-    TextSplitterInitializationException
+    TextSplitterInitializationException,
+    UnsupportedTextSplitterTypeException
 )
 from app.application.processors.text_splitters.interfaces.text_splitter_interface import TextSplitterInterface
 from app.application.processors.text_splitters.text_splitter_settings import TextSplitterSettings
 
 logger = logging.getLogger(__name__)
 
+_TEXT_SPLITTER_REGISTRY: dict[TextSplitterType, str] = {
+    TextSplitterType.recursive: (
+        "app.application.processors.text_splitters.instances"
+        ".recursive_text_splitter.RecursiveTextSplitter"
+    ),
+    TextSplitterType.huggingface: (
+        "app.application.processors.text_splitters.instances"
+        ".huggingface_text_splitter.HuggingFaceTextSplitter"
+    ),
+}
+
+
+def _import_splitter_class(dotted_path: str) -> type[TextSplitterInterface]:
+    module_path, class_name = dotted_path.rsplit(".", 1)
+    module = importlib.import_module(module_path)
+    return getattr(module, class_name)
+
 
 class TextSplitterFactory:
-    def __init__(
-            self,
-            text_splitter_settings: Optional[TextSplitterSettings] = None
-    ) -> None:
-        self._text_splitter_settings = text_splitter_settings or TextSplitterSettings()
+    def __init__(self, text_splitter_settings: TextSplitterSettings | None = None) -> None:
+        self._settings = text_splitter_settings or TextSplitterSettings()
+        self._active_type = self._settings.active_type
 
-        self._text_splitter_classes: dict[TextSplitterType, type[TextSplitterInterface]] = {
-            TextSplitterType.recursive: RecursiveTextSplitter
-        }
-        self._text_splitter_cache: dict[TextSplitterType, TextSplitterInterface] = {}
-        self._initialize_text_splitters()
-
-    def get_text_splitter(
-            self,
-            text_splitter_type: TextSplitterType
-    ) -> TextSplitterInterface:
-        if text_splitter_type not in self._text_splitter_classes:
-            logger.error(
-                "Unsupported text splitter type",
-                extra={
-                    "text_splitter_type": text_splitter_type
-                }
-            )
-            raise UnsupportedTextSplitterTypeException(f"Unsupported text splitter type: {text_splitter_type}")
-
-        if text_splitter_type not in self._text_splitter_cache:
-            logger.warning(
-                "Text splitter not in cache — retrying initialization",
-                extra={
-                    "text_splitter_type": text_splitter_type
-                }
-            )
-            try:
-                text_splitter_class = self._text_splitter_classes[text_splitter_type]
-                text_splitter = text_splitter_class(
-                    text_splitter_settings=self._text_splitter_settings
-                )
-                self._text_splitter_cache[text_splitter_type] = text_splitter
-            except Exception as e:
-                logger.error(
-                    "Text splitter retry initialization failed",
-                    extra={
-                        "text_splitter_type": text_splitter_type,
-                        "error": str(e)
-                    }
-                )
-                raise TextSplitterInitializationException(
-                    f"Failed to initialize text splitter: {text_splitter_type}"
-                ) from e
-
-        logger.debug(
-            "Returning text splitter from cache",
+        logger.info(
+            "TextSplitterFactory created",
             extra={
-                "text_splitter_type": text_splitter_type
+                "active_type": self._active_type,
+                "available_types": [t.value for t in _TEXT_SPLITTER_REGISTRY]
             }
         )
 
-        return self._text_splitter_cache[text_splitter_type]
+    @cached_property
+    def splitter(self) -> TextSplitterInterface:
+        if self._active_type not in _TEXT_SPLITTER_REGISTRY:
+            raise UnsupportedTextSplitterTypeException(
+                f"Unsupported text splitter type: '{self._active_type}'. "
+                f"Available: {[t.value for t in _TEXT_SPLITTER_REGISTRY]}"
+            )
 
-    def is_supported(
-            self,
-            text_splitter_type: TextSplitterType
-    ) -> bool:
-        return text_splitter_type in self._text_splitter_classes
+        dotted_path = _TEXT_SPLITTER_REGISTRY[self._active_type]
 
-    def get_supported_types(
-            self
-    ) -> list[TextSplitterType]:
-        return list(self._text_splitter_classes.keys())
+        try:
+            splitter_class = _import_splitter_class(dotted_path)
+            instance = splitter_class(text_splitter_settings=self._settings)
+            logger.info(
+                "Text splitter initialized and cached",
+                extra={"type": self._active_type}
+            )
+            return instance
+        except TextSplitterInitializationException:
+            raise
+        except Exception as e:
+            logger.error(
+                "Unexpected error during text splitter initialization",
+                extra={"type": self._active_type, "error": str(e)}
+            )
+            raise TextSplitterInitializationException(
+                f"Failed to initialize text splitter '{self._active_type}': {e}"
+            ) from e
 
-    def get_settings(
-            self
-    ) -> TextSplitterSettings:
-        return self._text_splitter_settings
+    def get_active_type(self) -> TextSplitterType:
+        return self._active_type
 
-    def _initialize_text_splitters(
-            self
-    ) -> None:
-        for text_splitter_type, text_splitter_class in self._text_splitter_classes.items():
-            try:
-                logger.debug(
-                    "Initializing text splitter",
-                    extra={
-                        "text_splitter_type": text_splitter_type
-                    }
-                )
-                text_splitter = text_splitter_class(
-                    text_splitter_settings=self._text_splitter_settings
-                )
-                self._text_splitter_cache[text_splitter_type] = text_splitter
-                logger.debug(
-                    "Text splitter initialized successfully",
-                    extra={
-                        "text_splitter_type": text_splitter_type
-                    }
-                )
-            except Exception as e:
-                logger.error(
-                    "Failed to initialize text splitter — will retry on first use",
-                    extra={
-                        "text_splitter_type": text_splitter_type,
-                        "error": str(e)
-                    }
-                )
+    def is_supported(self, text_splitter_type: TextSplitterType) -> bool:
+        return text_splitter_type in _TEXT_SPLITTER_REGISTRY
+
+    def available_types(self) -> list[TextSplitterType]:
+        return list(_TEXT_SPLITTER_REGISTRY.keys())
 
 
-async def get_text_splitter_factory(
-        request: Request
-) -> TextSplitterFactory:
+async def get_text_splitter_factory(request: Request) -> TextSplitterFactory:
     try:
-        text_splitter_factory: TextSplitterFactory = request.app.state.text_splitter_factory
-        return text_splitter_factory
+        return request.app.state.text_splitter_factory
     except AttributeError:
         logger.error("TextSplitterFactory not found in application state")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Text splitter factory not configured"
+            detail="TextSplitterFactory is not available"
         )

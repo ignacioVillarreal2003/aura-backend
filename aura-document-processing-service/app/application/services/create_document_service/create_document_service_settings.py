@@ -1,6 +1,5 @@
 import logging
-from typing import List
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -15,20 +14,14 @@ class CreateDocumentServiceSettings(BaseSettings):
         extra="ignore"
     )
 
-    max_file_size_mb: int = Field(
-        default=50,
-        gt=0,
-        le=500
-    )
-    min_file_size_bytes: int = Field(
-        default=1,
-        gt=0
-    )
-    chunk_size_bytes: int = Field(
-        default=65536,
-        gt=0,
-        description="Chunk size in bytes for streaming reads and hash computation"
-    )
+    max_file_size_mb: int = Field(default=50, ge=1, le=500)
+    min_file_size_bytes: int = Field(default=1, ge=1)
+
+    chunk_size_bytes: int = Field(default=65536, ge=4096, le=10_485_760)
+    temp_dir_prefix: str = Field(default="doc_uploads")
+
+    deduplication_enabled: bool = Field(default=False)
+    deduplication_window_hours: int = Field(default=24, ge=1, le=168)
 
     allowed_content_types: list[str] = [
         "application/pdf",
@@ -47,53 +40,19 @@ class CreateDocumentServiceSettings(BaseSettings):
         ]
     }
 
-    temp_dir_prefix: str = Field(
-        default="doc_uploads"
-    )
-
-    background_processing_timeout: int = Field(
-        default=300,
-        ge=30,
-        le=3600
-    )
-
-    deduplication_enabled: bool = Field(
-        default=True
-    )
-    deduplication_window_hours: int = Field(
-        default=24,
-        ge=1,
-        le=168
-    )
-
-    @field_validator(
-        "allowed_content_types",
-        mode="before"
-    )
+    @field_validator("allowed_content_types", mode="before")
     @classmethod
-    def validate_content_types(
-            cls,
-            v: List[str]
-    ) -> List[str]:
+    def validate_content_types(cls, v: list[str]) -> list[str]:
         if not v:
             raise ValueError("allowed_content_types cannot be empty")
-
         normalised = [ct.lower().strip() for ct in v]
-
         if len(normalised) != len(set(normalised)):
             raise ValueError("allowed_content_types contains duplicates")
-
         return normalised
 
-    @field_validator(
-        "temp_dir_prefix",
-        mode="before"
-    )
+    @field_validator("temp_dir_prefix", mode="before")
     @classmethod
-    def validate_temp_dir_prefix(
-            cls,
-            v: str
-    ) -> str:
+    def validate_temp_dir_prefix(cls, v: str) -> str:
         v = v.strip()
         if not v:
             raise ValueError("temp_dir_prefix cannot be empty")
@@ -101,24 +60,24 @@ class CreateDocumentServiceSettings(BaseSettings):
             raise ValueError("temp_dir_prefix cannot contain path separators")
         return v
 
-    def is_content_type_allowed(
-            self,
-            content_type: str
-    ) -> bool:
-        return content_type.lower() in self.allowed_content_types
-
-    def get_document_type(
-            self,
-            content_type: str
-    ) -> str:
-        return self.content_type_mapping.get(content_type.lower())
-
-    def get_magic_numbers(
-            self,
-            content_type: str
-    ) -> list[bytes]:
-        return self.magic_number_validation.get(content_type.lower(), [])
+    @model_validator(mode="after")
+    def validate_coherence(self) -> "CreateDocumentServiceSettings":
+        if self.min_file_size_bytes >= self.max_file_size_bytes:
+            raise ValueError(
+                f"min_file_size_bytes ({self.min_file_size_bytes}) must be "
+                f"less than max_file_size_bytes ({self.max_file_size_bytes})"
+            )
+        return self
 
     @property
     def max_file_size_bytes(self) -> int:
         return self.max_file_size_mb * 1024 * 1024
+
+    def is_content_type_allowed(self, content_type: str) -> bool:
+        return content_type.lower() in self.allowed_content_types
+
+    def get_document_type(self, content_type: str) -> str | None:
+        return self.content_type_mapping.get(content_type.lower())
+
+    def get_magic_numbers(self, content_type: str) -> list[bytes]:
+        return self.magic_number_validation.get(content_type.lower(), [])

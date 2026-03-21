@@ -5,17 +5,15 @@ import logging
 from app.api.controllers.create_document_controller.interfaces.create_document_controller_interface import (
     CreateDocumentControllerInterface
 )
-from app.application.services.create_document_service.create_document_service_dependency import (
-    get_create_document_service
-)
+from app.application.services.create_document_service.create_document_service import get_create_document_service
 from app.application.services.create_document_service.interfaces.create_document_service_interface import (
     CreateDocumentServiceInterface
 )
 from app.domain.dtos.create_document.create_document_request import CreateDocumentRequest
 from app.domain.dtos.create_document.create_document_response import CreateDocumentResponse
-from app.infrastructure.authentication_provider.authentication_provider_dependency import get_current_user
+from app.infrastructure.authentication_provider.authentication_provider import get_current_user
 from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
-from app.infrastructure.persistence.database.database_manager.database_manager_dependency import get_database_session
+from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
 
 logger = logging.getLogger(__name__)
 

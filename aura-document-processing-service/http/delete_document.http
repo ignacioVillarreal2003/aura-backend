@@ -1,4 +1,4 @@
-DELETE http://localhost:8000/api/delete-document/soft/document/2
+DELETE http://localhost:8000/api/delete-document/soft/document/38
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -16,7 +16,7 @@ Authorization: Bearer user_token_123
 ###
 
 
-DELETE http://localhost:8000/api/delete-document/hard/document/2
+DELETE http://localhost:8000/api/delete-document/hard/document/38
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123

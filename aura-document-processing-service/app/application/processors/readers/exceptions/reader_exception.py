@@ -9,19 +9,11 @@ class UnsupportedReaderException(ReaderException):
     pass
 
 
+class ReaderInitializationException(ReaderException):
+    pass
+
+
 class ReaderFileNotFoundException(ReaderException):
-    pass
-
-
-class UnsupportedDOCXFormatException(ReaderException):
-    pass
-
-
-class DOCXReadException(ReaderException):
-    pass
-
-
-class UnsupportedDigitalDOCXFormatException(ReaderException):
     pass
 
 
@@ -30,6 +22,14 @@ class DigitalDOCXReadException(ReaderException):
 
 
 class DOCXHasNoExtractableTextException(ReaderException):
+    pass
+
+
+class DigitalPDFReadException(ReaderException):
+    pass
+
+
+class PDFHasNoExtractableTextException(ReaderException):
     pass
 
 
@@ -42,18 +42,6 @@ class ScannedDOCXOCRExtractionException(ReaderException):
 
 
 class ScannedDOCXReadException(ReaderException):
-    pass
-
-
-class UnsupportedDigitalPDFFormatException(ReaderException):
-    pass
-
-
-class PDFHasNoExtractableTextException(ReaderException):
-    pass
-
-
-class DigitalPDFReadException(ReaderException):
     pass
 
 

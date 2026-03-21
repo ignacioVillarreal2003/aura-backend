@@ -1,0 +1,12 @@
+POST http://localhost:8001/api/document-question
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "question": "Hablame sobre un ninio cazando una ballena, al menos 100 palabras necesito",
+  "max_context_fragments": 3
+}
+
+
+###

@@ -1,121 +1,90 @@
+import importlib
 import logging
+from functools import cached_property
 from fastapi import HTTPException, Request, status
 
-from app.application.processors.text_cleaners.instances.simple_text_cleaner import SimpleTextCleaner
 from app.application.processors.text_cleaners.constants.text_cleaner_type import TextCleanerType
 from app.application.processors.text_cleaners.exceptions.text_cleaner_exception import (
-    UnsupportedTextCleanerTypeException,
-    TextCleanerInitializationException
+    TextCleanerInitializationException,
+    UnsupportedTextCleanerTypeException
 )
 from app.application.processors.text_cleaners.interfaces.text_cleaner_interface import TextCleanerInterface
+from app.application.processors.text_cleaners.text_cleaner_settings import TextCleanerSettings
 
 logger = logging.getLogger(__name__)
 
+_TEXT_CLEANER_REGISTRY: dict[TextCleanerType, str] = {
+    TextCleanerType.simple: (
+        "app.application.processors.text_cleaners.instances"
+        ".simple_text_cleaner.SimpleTextCleaner"
+    )
+}
+
+
+def _import_cleaner_class(dotted_path: str) -> type[TextCleanerInterface]:
+    module_path, class_name = dotted_path.rsplit(".", 1)
+    module = importlib.import_module(module_path)
+    return getattr(module, class_name)
+
 
 class TextCleanerFactory:
-    def __init__(
-            self
-    ) -> None:
-        self._text_cleaner_classes: dict[TextCleanerType, type[TextCleanerInterface]] = {
-            TextCleanerType.simple: SimpleTextCleaner
-        }
-        self._text_cleaner_cache: dict[TextCleanerType, TextCleanerInterface] = {}
-        self._initialize_text_cleaners()
+    def __init__(self, text_cleaner_settings: TextCleanerSettings | None = None) -> None:
+        self._settings = text_cleaner_settings or TextCleanerSettings()
+        self._active_type = self._settings.active_type
 
-    def get_text_cleaner(
-            self,
-            text_cleaner_type: TextCleanerType
-    ) -> TextCleanerInterface:
-        if text_cleaner_type not in self._text_cleaner_classes:
-            logger.error(
-                "Unsupported text cleaner type",
-                extra={
-                    "text_cleaner_type": text_cleaner_type
-                }
-            )
-            raise UnsupportedTextCleanerTypeException(f"Unsupported text cleaner type: {text_cleaner_type}")
-
-        if text_cleaner_type not in self._text_cleaner_cache:
-            logger.warning(
-                "Text cleaner not in cache — retrying initialization",
-                extra={
-                    "text_cleaner_type": text_cleaner_type
-                }
-            )
-            try:
-                text_cleaner_class = self._text_cleaner_classes[text_cleaner_type]
-                text_cleaner = text_cleaner_class()
-                self._text_cleaner_cache[text_cleaner_type] = text_cleaner
-            except Exception as e:
-                logger.error(
-                    "Text cleaner retry initialization failed",
-                    extra={
-                        "text_cleaner_type": text_cleaner_type,
-                        "error": str(e)
-                    }
-                )
-                raise TextCleanerInitializationException(
-                    f"Failed to initialize text cleaner: {text_cleaner_type}"
-                ) from e
-
-        logger.debug(
-            "Returning text cleaner from cache",
+        logger.info(
+            "TextCleanerFactory created",
             extra={
-                "text_cleaner_type": text_cleaner_type
+                "active_type": self._active_type,
+                "available_types": [t.value for t in _TEXT_CLEANER_REGISTRY]
             }
         )
 
-        return self._text_cleaner_cache[text_cleaner_type]
+    @cached_property
+    def cleaner(self) -> TextCleanerInterface:
+        if self._active_type not in _TEXT_CLEANER_REGISTRY:
+            raise UnsupportedTextCleanerTypeException(
+                f"Unsupported text cleaner type: '{self._active_type}'. "
+                f"Available: {[t.value for t in _TEXT_CLEANER_REGISTRY]}"
+            )
 
-    def is_supported(
-            self,
-            text_cleaner_type: TextCleanerType
-    ) -> bool:
-        return text_cleaner_type in self._text_cleaner_classes
+        dotted_path = _TEXT_CLEANER_REGISTRY[self._active_type]
 
-    def get_supported_types(
-            self
-    ) -> list[TextCleanerType]:
-        return list(self._text_cleaner_classes.keys())
+        try:
+            cleaner_class = _import_cleaner_class(dotted_path)
+            instance = cleaner_class(text_cleaner_settings=self._settings)
+            logger.info(
+                "Text cleaner initialized and cached",
+                extra={"type": self._active_type}
+            )
+            return instance
+        except TextCleanerInitializationException:
+            raise
+        except Exception as e:
+            logger.error(
+                "Unexpected error during text cleaner initialization",
+                extra={"type": self._active_type, "error": str(e)}
+            )
+            raise TextCleanerInitializationException(
+                f"Failed to initialize text cleaner '{self._active_type}': {e}"
+            ) from e
 
-    def _initialize_text_cleaners(
-            self
-    ) -> None:
-        for text_cleaner_type, text_cleaner_class in self._text_cleaner_classes.items():
-            try:
-                logger.debug(
-                    "Initializing text cleaner",
-                    extra={
-                        "text_cleaner_type": text_cleaner_type
-                    }
-                )
-                text_cleaner = text_cleaner_class()
-                self._text_cleaner_cache[text_cleaner_type] = text_cleaner
-                logger.debug(
-                    "Text cleaner initialized successfully",
-                    extra={
-                        "text_cleaner_type": text_cleaner_type
-                    }
-                )
-            except Exception as e:
-                logger.error(
-                    "Failed to initialize text cleaner — will retry on first use",
-                    extra={
-                        "text_cleaner_type": text_cleaner_type,
-                        "error": str(e)
-                    }
-                )
+    def get_active_type(self) -> TextCleanerType:
+        return self._active_type
+
+    def is_supported(self, text_cleaner_type: TextCleanerType) -> bool:
+        return text_cleaner_type in _TEXT_CLEANER_REGISTRY
+
+    def available_types(self) -> list[TextCleanerType]:
+        return list(_TEXT_CLEANER_REGISTRY.keys())
 
 
-async def get_text_cleaner_factory(
-        request: Request
-) -> TextCleanerFactory:
+async def get_text_cleaner_factory(request: Request) -> TextCleanerFactory:
     try:
-        text_cleaner_factory: TextCleanerFactory = request.app.state.text_cleaner_factory
-        return text_cleaner_factory
+        return request.app.state.text_cleaner_factory
     except AttributeError:
         logger.error("TextCleanerFactory not found in application state")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Text cleaner factory not configured"
+            detail="TextCleanerFactory is not available"
         )

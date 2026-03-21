@@ -5,19 +5,13 @@ import logging
 from app.api.controllers.delete_document_controller.interfaces.delete_document_controller_interface import (
     DeleteDocumentControllerInterface
 )
-from app.application.services.delete_document_service.delete_document_service_dependency import (
-    get_delete_document_service
-)
+from app.application.services.delete_document_service.delete_document_service import get_delete_document_service
 from app.application.services.delete_document_service.interfaces.delete_document_service_interface import (
     DeleteDocumentServiceInterface
 )
-from app.infrastructure.persistence.database.database_manager.database_manager_dependency import (
-    get_database_session
-)
-from app.infrastructure.authentication_provider.authentication_provider_dependency import (
-    get_current_user
-)
+from app.infrastructure.authentication_provider.authentication_provider import get_current_user
 from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
+from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
 
 logger = logging.getLogger(__name__)
 

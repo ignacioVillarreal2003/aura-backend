@@ -1,8 +1,9 @@
 import logging
 import ssl
 from pathlib import Path
-from urllib.parse import quote_plus
 from typing import Optional
+from urllib.parse import quote_plus
+
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -18,96 +19,36 @@ class DatabaseManagerSettings(BaseSettings):
         extra="ignore"
     )
 
-    driver: str = Field(
-        default="postgresql+asyncpg"
-    )
-    user: str = Field(
-        ...
-    )
-    password: SecretStr = Field(
-        ...
-    )
-    host: str = Field(
-        ...
-    )
-    port: int = Field(
-        default=5432,
-        ge=1,
-        le=65535
-    )
-    name: str = Field(
-        ...
-    )
+    driver: str = Field(default="postgresql+asyncpg")
+    user: str = Field(...)
+    password: SecretStr = Field(...)
+    host: str = Field(...)
+    port: int = Field(default=5432, ge=1, le=65535)
+    name: str = Field(...)
 
-    pool_persistent_connections: int = Field(
-        default=10,
-        gt=0,
-        le=100
-    )
-    pool_overflow_connections: int = Field(
-        default=20,
-        ge=0,
-        le=100
-    )
-    pool_checkout_timeout_seconds: float = Field(
-        default=30.0,
-        gt=0,
-        le=300.0
-    )
-    pool_recycle_seconds: int = Field(
-        default=3600,
-        gt=0
-    )
-    pool_liveness_probe: bool = Field(
-        default=True
-    )
+    pool_persistent_connections: int = Field(default=10, gt=0, le=100)
+    pool_overflow_connections: int = Field(default=20, ge=0, le=100)
+    pool_checkout_timeout_seconds: float = Field(default=30.0, gt=0, le=300.0)
+    pool_recycle_seconds: int = Field(default=3600, gt=0)
+    pool_liveness_probe: bool = Field(default=True)
 
-    tcp_connect_timeout_seconds: int = Field(
-        default=10,
-        gt=0,
-        le=60
-    )
-    query_execution_timeout_seconds: int = Field(
-        default=30,
-        gt=0,
-        le=300
-    )
+    tcp_connect_timeout_seconds: int = Field(default=10, gt=0, le=60)
+    query_execution_timeout_seconds: int = Field(default=30, gt=0, le=300)
 
-    echo_sql: bool = Field(
-        default=False
-    )
-    query_logging_enabled: bool = Field(
-        default=False
-    )
-    pg_application_name: str = Field(
-        default="app"
-    )
+    echo_sql: bool = Field(default=False)
+    query_logging_enabled: bool = Field(default=False)
+    pg_application_name: str = Field(default="app")
 
-    ssl_enabled: bool = Field(
-        default=False
+    ssl_enabled: bool = Field(default=False)
+    ssl_verify_server_certificate: bool = Field(default=True)
+    ssl_client_cert_path: Optional[Path] = Field(default=None
     )
-    ssl_verify_server_certificate: bool = Field(
-        default=True
-    )
-    ssl_client_cert_path: Optional[Path] = Field(
-        default=None
-    )
-    ssl_client_key_path: Optional[Path] = Field(
-        default=None
-    )
-    ssl_ca_cert_path: Optional[Path] = Field(
-        default=None
-    )
+    ssl_client_key_path: Optional[Path] = Field(default=None)
+    ssl_ca_cert_path: Optional[Path] = Field(default=None)
 
-    @field_validator(
-        "driver",
-        mode="before"
-    )
+    @field_validator("driver", mode="before")
     @classmethod
-    def normalise_driver(
-            cls,
-            v: str
-    ) -> str:
+    def normalise_driver(cls, v: str) -> str:
         if v == "postgresql":
             return "postgresql+asyncpg"
         if v == "postgresql+asyncpg":
@@ -123,13 +64,9 @@ class DatabaseManagerSettings(BaseSettings):
         mode="before"
     )
     @classmethod
-    def validate_ssl_file_exists(
-            cls,
-            v: Optional[Path]
-    ) -> Optional[Path]:
+    def validate_ssl_file_exists(cls, v: Optional[Path]) -> Optional[Path]:
         if isinstance(v, str) and not v.strip():
             return None
-
         if v is not None:
             path = Path(v)
             if not path.exists():
@@ -138,34 +75,34 @@ class DatabaseManagerSettings(BaseSettings):
         return v
 
     @model_validator(mode="after")
-    def validate_configuration_coherence(self) -> "DatabaseManagerSettings":
-        total_connections = self.pool_persistent_connections + self.pool_overflow_connections
-        if total_connections > 100:
+    def validate_coherence(self) -> "DatabaseManagerSettings":
+        total = self.pool_persistent_connections + self.pool_overflow_connections
+        if total > 100:
             logger.warning(
                 "Total connection limit may exceed recommended PostgreSQL defaults",
                 extra={
-                    "pool_persistent_connections": self.pool_persistent_connections,
-                    "pool_overflow_connections": self.pool_overflow_connections,
-                    "total": total_connections
+                    "persistent": self.pool_persistent_connections,
+                    "overflow": self.pool_overflow_connections,
+                    "total": total
                 }
             )
 
         if self.pool_checkout_timeout_seconds < self.tcp_connect_timeout_seconds:
             logger.warning(
-                "pool_checkout_timeout_seconds is shorter than tcp_connect_timeout_seconds"
-                " — pool may give up before the TCP handshake completes",
+                "pool_checkout_timeout_seconds is shorter than tcp_connect_timeout_seconds "
+                "— pool may give up before the TCP handshake completes",
                 extra={
                     "pool_checkout_timeout_seconds": self.pool_checkout_timeout_seconds,
-                    "tcp_connect_timeout_seconds": self.tcp_connect_timeout_seconds,
-                },
+                    "tcp_connect_timeout_seconds": self.tcp_connect_timeout_seconds
+                }
             )
 
         if self.ssl_enabled:
-            mutual_tls_fields = [self.ssl_client_cert_path, self.ssl_client_key_path]
-            if any(mutual_tls_fields) and not all(mutual_tls_fields):
+            mutual_tls = [self.ssl_client_cert_path, self.ssl_client_key_path]
+            if any(mutual_tls) and not all(mutual_tls):
                 raise ValueError(
                     "Incomplete mutual-TLS configuration: "
-                    "ssl_client_cert_path and ssl_client_key_path must be set together."
+                    "ssl_client_cert_path and ssl_client_key_path must both be set."
                 )
 
         return self
@@ -186,34 +123,27 @@ class DatabaseManagerSettings(BaseSettings):
             "command_timeout": self.query_execution_timeout_seconds,
             "server_settings": {
                 "application_name": self.pg_application_name,
-                "jit": "off",
-            },
+                "jit": "off"
+            }
         }
-
         if self.ssl_enabled:
             args["ssl"] = self._build_ssl_context()
-
         return args
 
     def _build_ssl_context(self) -> ssl.SSLContext:
         if self.ssl_ca_cert_path:
             ctx = ssl.create_default_context(
                 purpose=ssl.Purpose.SERVER_AUTH,
-                cafile=str(
-                    self.ssl_ca_cert_path
-                )
+                cafile=str(self.ssl_ca_cert_path)
             )
         else:
-            ctx = ssl.create_default_context(
-                purpose=ssl.Purpose.SERVER_AUTH
-            )
+            ctx = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH)
 
         if not self.ssl_verify_server_certificate:
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
 
-        if (self.ssl_client_cert_path
-                and self.ssl_client_key_path):
+        if self.ssl_client_cert_path and self.ssl_client_key_path:
             ctx.load_cert_chain(
                 certfile=str(self.ssl_client_cert_path),
                 keyfile=str(self.ssl_client_key_path)

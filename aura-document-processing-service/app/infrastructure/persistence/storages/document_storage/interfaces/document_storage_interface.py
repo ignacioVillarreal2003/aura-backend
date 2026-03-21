@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional
 from fastapi import UploadFile
 
 
@@ -18,39 +18,26 @@ class DocumentStorageInterface(ABC):
         pass
 
     @abstractmethod
-    async def download_document(
-            self,
-            object_name: str
-    ) -> bytes:
+    async def download_document(self, object_name: str) -> bytes:
         pass
 
     @abstractmethod
-    async def download_document_to_file(
-            self,
-            object_name: str,
-            file_path: str
-    ) -> None:
+    async def download_document_to_file(self, object_name: str, file_path: str) -> None:
         pass
 
     @abstractmethod
-    async def delete_document(
-            self,
-            object_name: str
-    ) -> None:
+    async def delete_document(self, object_name: str) -> None:
         pass
 
     @abstractmethod
-    async def document_exists(
-            self,
-            object_name: str
-    ) -> bool:
+    async def document_exists(self, object_name: str) -> bool:
         pass
 
     @abstractmethod
     async def get_presigned_url(
             self,
             object_name: str,
-            method: str,
+            method: str = "GET",
             expires: Optional[int] = None
     ) -> str:
         pass

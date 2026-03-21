@@ -1,17 +1,17 @@
 import logging
 from datetime import datetime, timezone
-from typing import Optional, List
+from typing import List, Optional
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models.document import Document
 from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
-    DocumentRepositoryInterface,
+    DocumentRepositoryInterface
 )
 from app.infrastructure.persistence.database.repositories.exceptions.database_exceptions import (
-    DatabaseException,
-    DatabaseConstraintViolationException
+    DatabaseConstraintViolationException,
+    DatabaseException
 )
 
 logger = logging.getLogger(__name__)
@@ -27,20 +27,16 @@ class DocumentRepository(DocumentRepositoryInterface):
             logger.debug("Creating document in database")
 
             database_session.add(document)
-
             await database_session.flush()
             await database_session.refresh(document)
 
-            logger.info(
-                "Document created successfully",
-                extra={
-                    "document_id": document.id
-                }
-            )
+            logger.info("Document created successfully", extra={"document_id": document.id})
             return document
 
         except IntegrityError as e:
-            raise DatabaseConstraintViolationException("Constraint violation creating document") from e
+            raise DatabaseConstraintViolationException(
+                "Constraint violation creating document"
+            ) from e
         except Exception as e:
             logger.exception("Failed to create document in database")
             raise DatabaseException("Error creating document in the database") from e
@@ -51,12 +47,7 @@ class DocumentRepository(DocumentRepositoryInterface):
             database_session: AsyncSession
     ) -> Optional[Document]:
         try:
-            logger.debug(
-                "Fetching document by ID",
-                extra={
-                    "document_id": document_id
-                }
-            )
+            logger.debug("Fetching document by ID", extra={"document_id": document_id})
 
             result = await database_session.execute(
                 select(Document).where(Document.id == document_id)
@@ -65,10 +56,7 @@ class DocumentRepository(DocumentRepositoryInterface):
 
             logger.debug(
                 "Document lookup completed",
-                extra={
-                    "document_id": document_id,
-                    "found": document is not None
-                }
+                extra={"document_id": document_id, "found": document is not None}
             )
             return document
 
@@ -81,29 +69,26 @@ class DocumentRepository(DocumentRepositoryInterface):
             database_session: AsyncSession
     ) -> List[Document]:
         try:
-            logger.debug(
-                "Fetching documents by chat ID",
-                extra={
-                    "chat_id": chat_id
-                }
-            )
+            logger.debug("Fetching documents by chat ID", extra={"chat_id": chat_id})
 
             result = await database_session.execute(
-                select(Document).where(Document.chat_id == chat_id)
+                select(Document).where(
+                    Document.chat_id == chat_id,
+                    Document.deleted_at.is_(None),
+                )
             )
             documents = list(result.scalars().all())
 
             logger.debug(
                 "Documents by chat lookup completed",
-                extra={
-                    "chat_id": chat_id,
-                    "count": len(documents)
-                }
+                extra={"chat_id": chat_id, "count": len(documents)}
             )
             return documents
 
         except Exception as e:
-            raise DatabaseException("Error fetching documents by chat ID from the database") from e
+            raise DatabaseException(
+                "Error fetching documents by chat ID from the database"
+            ) from e
 
     async def get_documents(
             self,
@@ -112,15 +97,9 @@ class DocumentRepository(DocumentRepositoryInterface):
             size: Optional[int] = None
     ) -> List[Document]:
         try:
-            logger.debug(
-                "Fetching documents",
-                extra={
-                    "page": page,
-                    "size": size
-                }
-            )
+            logger.debug("Fetching documents", extra={"page": page, "size": size})
 
-            query = select(Document)
+            query = select(Document).where(Document.deleted_at.is_(None))
 
             if page is not None and size is not None:
                 query = query.offset(page * size).limit(size)
@@ -132,11 +111,7 @@ class DocumentRepository(DocumentRepositoryInterface):
 
             logger.debug(
                 "Documents fetched successfully",
-                extra={
-                    "page": page,
-                    "size": size,
-                    "count": len(documents)
-                }
+                extra={"page": page, "size": size, "count": len(documents)}
             )
             return documents
 
@@ -149,12 +124,7 @@ class DocumentRepository(DocumentRepositoryInterface):
             database_session: AsyncSession
     ) -> Document:
         try:
-            logger.debug(
-                "Updating document",
-                extra={
-                    "document_id": document.id
-                }
-            )
+            logger.debug("Updating document", extra={"document_id": document.id})
 
             updated_document = await database_session.merge(document)
             await database_session.flush()
@@ -162,14 +132,14 @@ class DocumentRepository(DocumentRepositoryInterface):
 
             logger.info(
                 "Document updated successfully",
-                extra={
-                    "document_id": updated_document.id
-                }
+                extra={"document_id": updated_document.id}
             )
             return updated_document
 
         except IntegrityError as e:
-            raise DatabaseConstraintViolationException("Constraint violation updating document") from e
+            raise DatabaseConstraintViolationException(
+                "Constraint violation updating document"
+            ) from e
         except Exception as e:
             raise DatabaseException("Error updating document in the database") from e
 
@@ -179,12 +149,7 @@ class DocumentRepository(DocumentRepositoryInterface):
             database_session: AsyncSession
     ) -> bool:
         try:
-            logger.debug(
-                "Hard-deleting document",
-                extra={
-                    "document_id": document_id
-                }
-            )
+            logger.debug("Hard-deleting document", extra={"document_id": document_id})
 
             result = await database_session.execute(
                 select(Document).where(Document.id == document_id)
@@ -194,21 +159,14 @@ class DocumentRepository(DocumentRepositoryInterface):
             if document is None:
                 logger.warning(
                     "Document not found for hard-delete",
-                    extra={
-                        "document_id": document_id
-                    }
+                    extra={"document_id": document_id}
                 )
                 return False
 
             await database_session.delete(document)
             await database_session.flush()
 
-            logger.info(
-                "Document hard-deleted successfully",
-                extra={
-                    "document_id": document_id
-                }
-            )
+            logger.info("Document hard-deleted successfully", extra={"document_id": document_id})
             return True
 
         except Exception as e:
@@ -223,23 +181,21 @@ class DocumentRepository(DocumentRepositoryInterface):
         try:
             logger.debug(
                 "Soft-deleting document",
-                extra={
-                    "document_id": document_id,
-                    "user_id": user_id
-                }
+                extra={"document_id": document_id, "user_id": user_id}
             )
 
             result = await database_session.execute(
-                select(Document).where(Document.id == document_id)
+                select(Document).where(
+                    Document.id == document_id,
+                    Document.deleted_at.is_(None)
+                )
             )
             document = result.scalars().first()
 
             if document is None:
                 logger.warning(
-                    "Document not found for soft-delete",
-                    extra={
-                        "document_id": document_id
-                    }
+                    "Document not found or already deleted for soft-delete",
+                    extra={"document_id": document_id}
                 )
                 return False
 
@@ -251,10 +207,7 @@ class DocumentRepository(DocumentRepositoryInterface):
 
             logger.info(
                 "Document soft-deleted successfully",
-                extra={
-                    "document_id": document_id,
-                    "user_id": user_id
-                }
+                extra={"document_id": document_id, "user_id": user_id}
             )
             return True
 
