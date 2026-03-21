@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, Union
+from typing import Any, Dict, Optional, Union
 import httpx
 
 
@@ -17,53 +17,33 @@ class HttpClientInterface(ABC):
             self,
             method: str,
             url: str,
-            params: Optional[Dict[str, Any]],
-            json: Optional[Dict[str, Any]],
-            data: Optional[Union[Dict[str, Any], bytes]],
-            headers: Optional[Dict[str, str]],
-            timeout: Optional[float],
+            params: Optional[Dict[str, Any]] = None,
+            json: Optional[Dict[str, Any]] = None,
+            data: Optional[Union[Dict[str, Any], bytes]] = None,
+            headers: Optional[Dict[str, str]] = None,
+            timeout: Optional[float] = None,
             **kwargs
     ) -> httpx.Response:
         pass
 
     @abstractmethod
-    async def get(
-            self,
-            url: str,
-            **kwargs
-    ) -> httpx.Response:
+    async def get(self, url: str, **kwargs) -> httpx.Response:
         pass
 
     @abstractmethod
-    async def post(
-            self,
-            url: str,
-            **kwargs
-    ) -> httpx.Response:
+    async def post(self, url: str, **kwargs) -> httpx.Response:
         pass
 
     @abstractmethod
-    async def put(
-            self,
-            url: str,
-            **kwargs
-    ) -> httpx.Response:
+    async def put(self, url: str, **kwargs) -> httpx.Response:
         pass
 
     @abstractmethod
-    async def patch(
-            self,
-            url: str,
-            **kwargs
-    ) -> httpx.Response:
+    async def patch(self, url: str, **kwargs) -> httpx.Response:
         pass
 
     @abstractmethod
-    async def delete(
-            self,
-            url: str,
-            **kwargs
-    ) -> httpx.Response:
+    async def delete(self, url: str, **kwargs) -> httpx.Response:
         pass
 
     @abstractmethod

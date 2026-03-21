@@ -1,4 +1,4 @@
-GET http://localhost:8000/api/document-query/document/6
+GET http://localhost:8000/api/document-query/document/29
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -17,12 +17,14 @@ Authorization: Bearer user_token_123
 
 
 POST http://localhost:8000/api/document-query/retrieve-context-fragments-by-document
+Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
 
 {
-  "document_id": 6
+  "document_id": 32
 }
+
 
 ###
 
@@ -33,6 +35,6 @@ Content-Type: application/json
 Authorization: Bearer user_token_123
 
 {
-  "question": "Armas de todo tipo y aviones de modernos de combate",
-  "max_context_fragments": 3
+  "question": "El ninio que tiene una ballena",
+  "max_context_fragments": 5
 }

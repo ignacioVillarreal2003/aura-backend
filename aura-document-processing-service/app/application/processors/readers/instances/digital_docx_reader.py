@@ -1,22 +1,35 @@
 import logging
 from pathlib import Path
+from typing import Optional
 from docx import Document
 
 from app.application.processors.readers.exceptions.reader_exception import (
     DigitalDOCXReadException,
     DOCXHasNoExtractableTextException,
-    ReaderFileNotFoundException
+    ReaderFileNotFoundException,
+    ReaderInitializationException
 )
 from app.application.processors.readers.interfaces.reader_interface import ReaderInterface
+from app.application.processors.readers.reader_settings import ReaderSettings
 
 logger = logging.getLogger(__name__)
 
 
 class DigitalDOCXReader(ReaderInterface):
-    def can_handle(
-            self,
-            file_path: Path
-    ) -> bool:
+    _DOCX_MAGIC = b"PK\x03\x04"
+
+    def __init__(self, reader_settings: Optional[ReaderSettings] = None) -> None:
+        self._settings = reader_settings or ReaderSettings()
+
+        try:
+            logger.info("DigitalDOCXReader initialized successfully")
+        except Exception as e:
+            logger.exception("Failed to initialize DigitalDOCXReader")
+            raise ReaderInitializationException(
+                f"DigitalDOCXReader initialization failed: {e}"
+            ) from e
+
+    def can_handle(self, file_path: Path) -> bool:
         if file_path.suffix.lower() != ".docx":
             return False
 
@@ -35,65 +48,43 @@ class DigitalDOCXReader(ReaderInterface):
             return has_paragraph_text or has_table_text
 
         except Exception as e:
-            logger.debug(
-                "Error during can_handle",
-                extra={
-                    "file": file_path.name,
-                    "error": str(e)
-                }
-            )
+            logger.debug("Error during can_handle", extra={"file": file_path.name, "error": str(e)})
             return False
 
-    def read(
-            self,
-            file_path: Path
-    ) -> str:
+    def read(self, file_path: Path) -> str:
         if not file_path.exists():
-            raise ReaderFileNotFoundException("The specified DOCX file does not exist or cannot be accessed.")
+            raise ReaderFileNotFoundException(
+                "The specified DOCX file does not exist or cannot be accessed."
+            )
 
-        logger.info(
-            "Reading digital DOCX",
-            extra={
-                "file": file_path.name
-            }
-        )
+        logger.info("Reading digital DOCX", extra={"file": file_path.name})
 
         try:
             doc = Document(file_path)
             text_parts = self._extract_text(doc)
 
             if not text_parts:
-                raise DOCXHasNoExtractableTextException("The DOCX file does not contain extractable text content.")
+                raise DOCXHasNoExtractableTextException(
+                    "The DOCX file does not contain extractable text content."
+                )
 
             logger.info(
                 "Digital DOCX read successfully",
-                extra={
-                    "file": file_path.name,
-                    "paragraphs": len(text_parts)
-                }
+                extra={"file": file_path.name, "parts": len(text_parts)}
             )
 
             return "\n\n".join(text_parts)
 
-        except (
-                ReaderFileNotFoundException,
-                DOCXHasNoExtractableTextException
-        ):
+        except (ReaderFileNotFoundException, DOCXHasNoExtractableTextException):
             raise
         except Exception as e:
-            logger.exception(
-                "Error reading digital DOCX",
-                extra={
-                    "file": file_path.name
-                }
-            )
-            raise DigitalDOCXReadException("An unexpected error occurred while reading the digital DOCX file.") from e
+            logger.exception("Error reading digital DOCX", extra={"file": file_path.name})
+            raise DigitalDOCXReadException(
+                "An unexpected error occurred while reading the digital DOCX file."
+            ) from e
 
-    def _extract_text(
-            self,
-            doc: Document
-    ) -> list[str]:
-        text_parts = []
+    def _extract_text(self, doc: Document) -> list[str]:
+        text_parts: list[str] = []
 
         for paragraph in doc.paragraphs:
             if paragraph.text and paragraph.text.strip():
@@ -111,21 +102,10 @@ class DigitalDOCXReader(ReaderInterface):
 
         return text_parts
 
-    def _is_valid_docx(
-            self,
-            file_path: Path
-    ) -> bool:
-        docx_magic_numbers = [b"PK\x03\x04"]
+    def _is_valid_docx(self, file_path: Path) -> bool:
         try:
             with open(file_path, "rb") as f:
-                header = f.read(4)
-                return any(header.startswith(magic) for magic in docx_magic_numbers)
+                return f.read(4).startswith(self._DOCX_MAGIC)
         except Exception as e:
-            logger.debug(
-                "Failed to validate DOCX magic numbers",
-                extra={
-                    "file": file_path.name,
-                    "error": str(e)
-                }
-            )
+            logger.debug("Failed to validate DOCX magic bytes", extra={"file": file_path.name, "error": str(e)})
             return False

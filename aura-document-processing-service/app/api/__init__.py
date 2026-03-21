@@ -11,20 +11,24 @@ router = APIRouter()
 
 router.include_router(
     update_document_controller.router,
-    prefix="/update-document"
+    prefix="/update-document",
+    tags=["update-document"]
 )
 
 router.include_router(
     delete_document_controller.router,
-    prefix="/delete-document"
+    prefix="/delete-document",
+    tags=["delete-document"]
 )
 
 router.include_router(
     create_document_controller.router,
-    prefix="/create-document"
+    prefix="/create-document",
+    tags=["create-document"]
 )
 
 router.include_router(
     document_query_controller.router,
-    prefix="/document-query"
+    prefix="/document-query",
+    tags=["document-query"]
 )

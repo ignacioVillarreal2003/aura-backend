@@ -1,32 +1,23 @@
-from typing import List
-from pydantic import BaseModel, Field, field_validator
+from datetime import datetime
+from typing import Optional
+from pydantic import BaseModel
 
 
-class ContextFragmentsResponse(BaseModel):
-    context_fragments: List[str] = Field(
-        default_factory=list
-    )
+class ContextFragmentResponse(BaseModel):
+    id: int
+    document_id: int
+    content: str
+    fragment_index: int
+    summary: Optional[str] = None
+    entities: Optional[dict] = None
+    topics: Optional[list[str]] = None
+    created_by: int
+    created_at: datetime
+    updated_by: Optional[int] = None
+    updated_at: Optional[datetime] = None
+    deleted_by: Optional[int] = None
+    deleted_at: Optional[datetime] = None
 
-    @field_validator(
-        'context_fragments'
-    )
-    @classmethod
-    def validate_context_fragments_list(
-            cls,
-            v: List[str]
-    ) -> List[str]:
-        if not isinstance(v, list):
-            raise ValueError("context_fragments debe ser una lista")
 
-        for idx, item in enumerate(v):
-            if not isinstance(item, str):
-                raise ValueError(
-                    f"El fragmento de contexto en la posición {idx} no es una cadena de texto. "
-                    f"Tipo recibido: {type(item).__name__}"
-                )
-
-        return v
-
-    model_config = {
-        "extra": "ignore"
-    }
+class ContextFragmentListResponse(BaseModel):
+    context_fragments: list[ContextFragmentResponse]

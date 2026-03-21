@@ -1,96 +1,92 @@
 import logging
 from typing import Optional, Type
-from pydantic import BaseModel, PrivateAttr
-from langchain_core.tools import BaseTool
 from langchain_core.callbacks import AsyncCallbackManagerForToolRun, CallbackManagerForToolRun
+from langchain_core.tools import BaseTool
+from pydantic import BaseModel, PrivateAttr
 
 from app.application.services.agent_service.tools.document_question_tool.document_question_tool_input import (
     DocumentQuestionToolInput
 )
-from app.application.services.document_question_service.interfaces.document_question_service_interface import \
+from app.application.services.document_question_service.interfaces.document_question_service_interface import (
     DocumentQuestionServiceInterface
-from app.domain.dtos.document_question_request import DocumentQuestionRequest
+)
+from app.domain.dtos.document_question.document_question_request import DocumentQuestionRequest
+from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
 
 logger = logging.getLogger(__name__)
 
 
 class DocumentQuestionTool(BaseTool):
+    _TOOL_USER = AuthenticationResponse(id=0, email="tool@agent", roles=[], permissions=[])
+
     name: str = "document_question_tool"
     description: str = (
-        "Retrieves relevant information from document knowledge base and answers questions. "
+        "Retrieves relevant information from the document knowledge base and answers questions. "
         "Use this when you need to access specific information from uploaded documents or "
         "when answering questions that require domain-specific knowledge. "
-        "Returns both the relevant context and a generated answer."
+        "Returns a generated answer grounded on the document context."
     )
     args_schema: Type[BaseModel] = DocumentQuestionToolInput
 
     _document_question_service: DocumentQuestionServiceInterface = PrivateAttr()
+    _authorization: Optional[str] = PrivateAttr(default=None)
 
     def __init__(
             self,
             document_question_service: DocumentQuestionServiceInterface,
             **kwargs
-    ):
+    ) -> None:
         super().__init__(**kwargs)
         self._document_question_service = document_question_service
+        logger.info("DocumentQuestionTool initialized", extra={"tool_name": self.name})
 
-        logger.info(
-            "DocumentQuestionTool initialized",
-            extra={
-                "tool_name": self.name
-            }
-        )
+    def set_authorization(self, authorization: Optional[str]) -> None:
+        self._authorization = authorization
 
     def _run(
             self,
             question: str,
-            run_manager: Optional[CallbackManagerForToolRun] = None
+            run_manager: Optional[CallbackManagerForToolRun] = None,
     ) -> str:
-        raise NotImplementedError("DocumentQuestionTool solo soporta ejecución asíncrona. Use _arun() en su lugar.")
-
-    async def _arun(self,
-                    question: str,
-                    run_manager: Optional[AsyncCallbackManagerForToolRun] = None) -> str:
-        logger.info(
-            "DocumentQuestionTool invoked",
-            extra={
-                "question": question
-            }
+        raise NotImplementedError(
+            "DocumentQuestionTool only supports async execution. Use _arun() instead."
         )
 
+    async def _arun(
+            self,
+            question: str,
+            run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
+    ) -> str:
+        logger.info("DocumentQuestionTool invoked", extra={"question_length": len(question)})
+
         try:
-            document_question_request = DocumentQuestionRequest(
-                question=question
+            response = await self._document_question_service.execute_document_question(
+                document_question_request=DocumentQuestionRequest(
+                    question=question,
+                    history_messages=[]
+                ),
+                user=self._TOOL_USER,
+                authorization=self._authorization,
             )
 
-            document_question_response = await self._document_question_service.execute_document_question(
-                document_question_request=document_question_request
-            )
-
-            if not document_question_response.answer or not document_question_response.answer.strip():
+            if not response.answer or not response.answer.strip():
                 logger.warning(
                     "Service returned empty answer",
-                    extra={
-                        "question": question
-                    }
+                    extra={"question_length": len(question)}
                 )
-                return "No se encontraron fragmentos para generar el la pregunta."
+                return "No se encontró información relevante para responder la pregunta."
 
             logger.info(
-                "Question generated successfully",
-                extra={
-                    "question": question,
-                    "answer": document_question_response.answer
-                }
+                "Question answered successfully",
+                extra={"question_length": len(question)}
             )
-
-            return document_question_response.answer
+            return response.answer
 
         except Exception as e:
             logger.error(
                 "Error executing DocumentQuestionTool",
                 extra={
-                    "question": question,
+                    "question_length": len(question),
                     "error_type": type(e).__name__,
                     "error": str(e)
                 },

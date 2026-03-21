@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional
 from minio import Minio
 
 
@@ -23,10 +23,7 @@ class MinioManagerInterface(ABC):
         pass
 
     @abstractmethod
-    async def ensure_bucket(
-            self,
-            bucket_name: str
-    ) -> None:
+    async def ensure_bucket(self, bucket_name: str) -> None:
         pass
 
     @abstractmethod
@@ -35,8 +32,8 @@ class MinioManagerInterface(ABC):
             bucket_name: str,
             object_name: str,
             file_path: str,
-            content_type: Optional[str],
-            metadata: Optional[Dict[str, str]]
+            content_type: Optional[str] = None,
+            metadata: Optional[Dict[str, str]] = None
     ) -> None:
         pass
 
@@ -46,8 +43,8 @@ class MinioManagerInterface(ABC):
             bucket_name: str,
             object_name: str,
             data: bytes,
-            content_type: Optional[str],
-            metadata: Optional[Dict[str, str]]
+            content_type: Optional[str] = None,
+            metadata: Optional[Dict[str, str]] = None
     ) -> None:
         pass
 
@@ -61,27 +58,15 @@ class MinioManagerInterface(ABC):
         pass
 
     @abstractmethod
-    async def download_data(
-            self,
-            bucket_name: str,
-            object_name: str
-    ) -> bytes:
+    async def download_data(self, bucket_name: str, object_name: str) -> bytes:
         pass
 
     @abstractmethod
-    async def delete_object(
-            self,
-            bucket_name: str,
-            object_name: str
-    ) -> None:
+    async def delete_object(self, bucket_name: str, object_name: str) -> None:
         pass
 
     @abstractmethod
-    async def object_exists(
-            self,
-            bucket_name: str,
-            object_name: str
-    ) -> bool:
+    async def object_exists(self, bucket_name: str, object_name: str) -> bool:
         pass
 
     @abstractmethod
@@ -89,8 +74,8 @@ class MinioManagerInterface(ABC):
             self,
             bucket_name: str,
             object_name: str,
-            expires: Optional[int],
-            method: str
+            expires: Optional[int] = None,
+            method: str = "GET"
     ) -> str:
         pass
 
@@ -98,8 +83,8 @@ class MinioManagerInterface(ABC):
     async def list_objects(
             self,
             bucket_name: str,
-            prefix: Optional[str],
-            recursive: bool
+            prefix: Optional[str] = None,
+            recursive: bool = False
     ) -> List[Dict[str, Any]]:
         pass
 

@@ -14,8 +14,4 @@ class FragmentSettings(BaseSettings):
         extra="ignore"
     )
 
-    vector_dimension: int = Field(
-        default=768,
-        gt=0,
-        description="Vector dimension for fragment embeddings"
-    )
+    vector_dimension: int = Field(default=768, gt=0)

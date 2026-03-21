@@ -42,7 +42,8 @@ class DocumentQueryControllerInterface(ABC):
             self,
             question_context_fragments_request: QuestionContextFragmentsRequest,
             document_query_service: DocumentQueryServiceInterface,
-            database_session: AsyncSession
+            database_session: AsyncSession,
+            user: AuthenticationResponse
     ) -> ContextFragmentListResponse:
         pass
 
@@ -51,6 +52,7 @@ class DocumentQueryControllerInterface(ABC):
             self,
             document_context_fragments_request: DocumentContextFragmentsRequest,
             document_query_service: DocumentQueryServiceInterface,
-            database_session: AsyncSession
+            database_session: AsyncSession,
+            user: AuthenticationResponse
     ) -> ContextFragmentListResponse:
         pass

@@ -44,9 +44,7 @@ dmypy.json
 **/.dockerignore
 
 # --- Environment Files ---
-.env
-.env.*
-!.env.example
+!.env
 !.env.docker
 
 # --- Database dumps ---

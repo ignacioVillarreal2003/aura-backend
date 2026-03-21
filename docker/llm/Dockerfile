@@ -2,7 +2,7 @@ FROM ollama/ollama:latest
 
 RUN ollama serve & sleep 5 && \
     ollama pull gemma3:1b && \
-    ollama pull nomic-embed-text:v1.5 && \
+    ollama pull qwen3-embedding:4b && \
     pkill ollama
 
 CMD ["serve"]
