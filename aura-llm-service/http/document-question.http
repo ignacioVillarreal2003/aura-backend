@@ -5,7 +5,7 @@ Authorization: Bearer user_token_123
 
 {
   "question": "Hablame sobre un ninio cazando una ballena, al menos 100 palabras necesito",
-  "max_context_fragments": 3
+  "history_messages": []
 }
 
 
