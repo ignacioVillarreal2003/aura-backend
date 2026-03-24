@@ -14,4 +14,4 @@ class FragmentSettings(BaseSettings):
         extra="ignore"
     )
 
-    vector_dimension: int = Field(default=768, gt=0)
+    vector_dimension: int = Field(gt=0)
