@@ -4,7 +4,7 @@ Content-Type: application/json
 Authorization: Bearer user_token_123
 
 {
-  "question": "Hablame sobre un ninio cazando una ballena, al menos 100 palabras necesito",
+  "question": "Hablame de un perro especial",
   "history_messages": []
 }
 
