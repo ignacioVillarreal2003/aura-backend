@@ -15,7 +15,7 @@ class AppException(Exception):
 class RequestValidationException(AppException):
     def __init__(
             self,
-            message: str = "Valor invalido",
+            message: str = "Invalid value",
             status_code: int = 400,
             *,
             code: str | None = None

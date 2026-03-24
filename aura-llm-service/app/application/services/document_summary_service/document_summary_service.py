@@ -91,7 +91,7 @@ class DocumentSummaryService(DocumentSummaryServiceInterface):
                     }
                 )
                 return DocumentSummaryResponse(
-                    summary="No se encontraron fragmentos para generar el resumen."
+                    summary="No fragments found to generate the summary."
                 )
 
             summary = await self._generate_summary(context_fragments=context_fragments)

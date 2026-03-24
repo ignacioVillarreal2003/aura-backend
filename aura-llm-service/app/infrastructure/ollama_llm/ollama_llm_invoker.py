@@ -60,7 +60,7 @@ class OllamaLLMInvoker(OllamaLLMInvokerInterface):
                 "Unexpected error during LLM invocation",
                 extra={"error_type": type(e).__name__}
             )
-            raise LLMInvocationError("El LLM no pudo procesar la solicitud.") from e
+            raise LLMInvocationError("The LLM could not process the request.") from e
 
     async def call_llm_content(
             self,
@@ -75,7 +75,7 @@ class OllamaLLMInvoker(OllamaLLMInvokerInterface):
         content = getattr(response, "content", None)
 
         if content is None:
-            raise LLMInvocationError("La respuesta del LLM no tiene contenido.")
+            raise LLMInvocationError("The LLM response has no content.")
 
         if isinstance(content, list):
             text_parts = [
@@ -95,7 +95,7 @@ class OllamaLLMInvoker(OllamaLLMInvokerInterface):
 
         if not isinstance(content, str):
             raise LLMInvocationError(
-                f"Tipo de contenido inesperado en la respuesta del LLM: {type(content).__name__}"
+                f"Unexpected content type in LLM response: {type(content).__name__}"
             )
 
         result = content.strip()

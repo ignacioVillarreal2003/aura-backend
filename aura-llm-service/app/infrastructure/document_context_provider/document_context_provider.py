@@ -64,7 +64,7 @@ class DocumentContextProvider(DocumentContextProviderInterface):
         except Exception as e:
             logger.error("Request validation failed", extra={"error": str(e)}, exc_info=True)
             raise DocumentContextProviderError(
-                f"Los parámetros de la solicitud son inválidos: {e}",
+                f"The request parameters are invalid: {e}",
                 status_code=400
             ) from e
 
@@ -92,7 +92,7 @@ class DocumentContextProvider(DocumentContextProviderInterface):
         except Exception as e:
             logger.exception("Unexpected error during fragment retrieval by question")
             raise DocumentContextProviderError(
-                "Error inesperado al recuperar los fragmentos del servicio externo."
+                "Unexpected error while retrieving fragments from the external service."
             ) from e
 
     async def retrieve_context_fragments_by_document(
@@ -107,7 +107,7 @@ class DocumentContextProvider(DocumentContextProviderInterface):
         except Exception as e:
             logger.error("Request validation failed", extra={"error": str(e)}, exc_info=True)
             raise DocumentContextProviderError(
-                f"Los parámetros de la solicitud son inválidos: {e}",
+                f"The request parameters are invalid: {e}",
                 status_code=400
             ) from e
 
@@ -135,7 +135,7 @@ class DocumentContextProvider(DocumentContextProviderInterface):
         except Exception as e:
             logger.exception("Unexpected error during fragment retrieval by document")
             raise DocumentContextProviderError(
-                "Error inesperado al recuperar los fragmentos del servicio externo."
+                "Unexpected error while retrieving fragments from the external service."
             ) from e
 
     @staticmethod
@@ -160,7 +160,7 @@ class DocumentContextProvider(DocumentContextProviderInterface):
                 exc_info=True
             )
             raise DocumentContextProviderError(
-                "El servicio de contexto retornó una respuesta con formato inválido."
+                "The context service returned an invalid format response."
             ) from e
 
         return self._apply_limits(fragments)
@@ -224,8 +224,8 @@ class DocumentContextProvider(DocumentContextProviderInterface):
                 extra={"operation": operation}
             )
             raise DocumentContextProviderError(
-                "El servicio de contexto no respondió a tiempo. "
-                "Por favor, intente nuevamente más tarde."
+                "The context service did not respond in time. "
+                "Please try again later."
             ) from error
 
         if isinstance(error, HttpClientConnectionException):
@@ -234,8 +234,8 @@ class DocumentContextProvider(DocumentContextProviderInterface):
                 extra={"operation": operation}
             )
             raise DocumentContextProviderError(
-                "No se pudo conectar al servicio de contexto. "
-                "Por favor, intente nuevamente más tarde."
+                "Could not connect to the context service. "
+                "Please try again later."
             ) from error
 
         if isinstance(error, HttpClientCircuitBreakerException):
@@ -244,8 +244,8 @@ class DocumentContextProvider(DocumentContextProviderInterface):
                 extra={"operation": operation}
             )
             raise DocumentContextProviderError(
-                "El servicio de contexto no está disponible temporalmente. "
-                "Por favor, intente nuevamente más tarde."
+                "The context service is temporarily unavailable. "
+                "Please try again later."
             ) from error
 
         status_code = getattr(error, "status_code", None)
@@ -254,8 +254,8 @@ class DocumentContextProvider(DocumentContextProviderInterface):
             extra={"operation": operation, "status_code": status_code}
         )
         raise DocumentContextProviderError(
-            f"Error del servicio de contexto (HTTP {status_code}). "
-            "Por favor, intente nuevamente más tarde."
+            f"Context service error (HTTP {status_code}). "
+            "Please try again later."
         ) from error
 
 

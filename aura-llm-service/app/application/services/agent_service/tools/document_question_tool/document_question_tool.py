@@ -74,7 +74,7 @@ class DocumentQuestionTool(BaseTool):
                     "Service returned empty answer",
                     extra={"question_length": len(question)}
                 )
-                return "No se encontró información relevante para responder la pregunta."
+                return "No relevant information found to answer the question."
 
             logger.info(
                 "Question answered successfully",
@@ -93,6 +93,6 @@ class DocumentQuestionTool(BaseTool):
                 exc_info=True
             )
             return (
-                "Ocurrió un error al procesar la solicitud. "
-                "No fue posible generar una respuesta basada en los documentos disponibles."
+                "An error occurred while processing the request. "
+                "It was not possible to generate an answer based on the available documents."
             )

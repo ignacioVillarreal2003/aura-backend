@@ -75,7 +75,7 @@ class DocumentSummaryTool(BaseTool):
                     "Service returned empty summary",
                     extra={"document_id": document_id}
                 )
-                return "No se encontraron fragmentos para generar el resumen del documento."
+                return "No fragments found to generate the document summary."
 
             logger.info(
                 "Summary generated successfully",
@@ -94,6 +94,6 @@ class DocumentSummaryTool(BaseTool):
                 exc_info=True
             )
             return (
-                "Ocurrió un error al procesar la solicitud. "
-                "No fue posible generar un resumen basado en los documentos disponibles."
+                "An error occurred while processing the request. "
+                "It was not possible to generate a summary based on the available documents."
             )

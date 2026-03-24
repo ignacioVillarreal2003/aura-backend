@@ -48,15 +48,15 @@ class DocumentQuestionPromptBuilder:
         if not context_fragments:
             logger.debug("No context fragments provided — using empty context message")
             return HumanMessage(
-                content="[CONTEXT]: No relevant information was found in the documents."
+                content="[CONTEXTO]: No se encontró información relevante en los documentos."
             )
 
         context_content = "\n\n---\n\n".join(
-            f"Context fragment {idx + 1}:\n{fragment}"
+            f"Fragmento de contexto {idx + 1}:\n{fragment}"
             for idx, fragment in enumerate(context_fragments)
         )
 
-        return HumanMessage(content=f"[CONTEXT]\n\n{context_content}\n\n[END OF CONTEXT]")
+        return HumanMessage(content=f"[CONTEXTO]\n\n{context_content}\n\n[FIN DEL CONTEXTO]")
 
     @staticmethod
     def _build_history_messages(history_messages: Optional[List[Message]]) -> List[BaseMessage]:
@@ -95,8 +95,8 @@ class DocumentQuestionPromptBuilder:
     def _build_question_message(question: str) -> HumanMessage:
         return HumanMessage(
             content=(
-                "Based EXCLUSIVELY on the context provided above, "
-                "answer the following question:\n\n"
+                "Basándote EXCLUSIVAMENTE en el contexto proporcionado arriba, "
+                "responde la siguiente pregunta:\n\n"
                 f"{question}"
             )
         )
