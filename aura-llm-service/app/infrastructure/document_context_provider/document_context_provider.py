@@ -75,7 +75,7 @@ class DocumentContextProvider(DocumentContextProviderInterface):
                 headers=self._build_headers(authorization)
             )
 
-            fragments = self._parse_and_apply_limits(response.json())
+            fragments = self._parse_and_apply_limits(response.json(), apply_max_fragments=True)
 
             logger.info(
                 "Fragments retrieved successfully by question",
@@ -118,7 +118,7 @@ class DocumentContextProvider(DocumentContextProviderInterface):
                 headers=self._build_headers(authorization),
             )
 
-            fragments = self._parse_and_apply_limits(response.json())
+            fragments = self._parse_and_apply_limits(response.json(), apply_max_fragments=False)
 
             logger.info(
                 "Fragments retrieved successfully by document",
@@ -148,7 +148,7 @@ class DocumentContextProvider(DocumentContextProviderInterface):
             headers["Authorization"] = authorization
         return headers
 
-    def _parse_and_apply_limits(self, raw_data: dict) -> list[str]:
+    def _parse_and_apply_limits(self, raw_data: dict, apply_max_fragments: bool = True) -> list[str]:
         try:
             response_model = ContextFragmentListResponse.model_validate(raw_data)
             fragments = response_model.context_fragments
@@ -163,15 +163,17 @@ class DocumentContextProvider(DocumentContextProviderInterface):
                 "The context service returned an invalid format response."
             ) from e
 
-        return self._apply_limits(fragments)
+        return self._apply_limits(fragments, apply_max_fragments)
 
-    def _apply_limits(self, fragments: list[ContextFragmentResponse]) -> list[str]:
+    def _apply_limits(self, fragments: list[ContextFragmentResponse], apply_max_fragments: bool = True) -> list[str]:
         validated: list[str] = []
         total_chars = 0
         skipped_oversized = 0
         truncated_count = 0
 
-        max_to_process = min(len(fragments), self._settings.max_fragments)
+        max_to_process = len(fragments)
+        if apply_max_fragments:
+            max_to_process = min(max_to_process, self._settings.max_fragments)
 
         if len(fragments) > max_to_process:
             logger.warning(

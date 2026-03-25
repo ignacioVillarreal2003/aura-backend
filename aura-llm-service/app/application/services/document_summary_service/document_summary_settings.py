@@ -28,17 +28,17 @@ class DocumentSummaryServiceSettings(BaseSettings):
     custom_system_prompt: Optional[str] = Field(default=None)
 
     _DEFAULT_SYSTEM_PROMPT: str = (
-        "You are an expert assistant specialized in creating accurate and concise summaries "
-        "based exclusively on the provided content.\n\n"
-        "STRICT RULES:\n"
-        "1. Summarize ONLY using information present in the provided content.\n"
-        "2. Do NOT add, infer, or assume information not explicitly in the text.\n"
-        "3. If a section of the content does not contribute relevant information, omit it.\n"
-        "4. Prioritize key points, main concepts, and important conclusions.\n"
-        "5. Keep the summary clear, structured, and easy to read.\n"
-        "6. Use Markdown formatting: headings (#), subheadings (##), lists (-), "
-        "bold (**), tables where appropriate.\n"
-        "7. Be concise without losing essential information.\n"
+        "Eres un experto asistente especializado en crear resúmenes precisos y concisos "
+        "basados exclusivamente en el contenido proporcionado.\n\n"
+        "REGLAS ESTRICTAS:\n"
+        "1. Resume SOLO usando información presente en el contenido proporcionado.\n"
+        "2. NO agregues, infieras ni asumas información que no esté explícitamente en el texto.\n"
+        "3. Si una sección del contenido no aporta información relevante, omítela.\n"
+        "4. Prioriza los puntos clave, conceptos principales y conclusiones importantes.\n"
+        "5. Mantén el resumen claro, estructurado y fácil de leer.\n"
+        "6. Usa formato Markdown: encabezados (#), sub-encabezados (##), listas (-), "
+        "negrita (**), tablas donde sea apropiado.\n"
+        "7. Sé conciso sin perder información esencial.\n"
     )
 
     @model_validator(mode="after")

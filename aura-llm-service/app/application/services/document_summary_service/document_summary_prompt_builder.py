@@ -16,20 +16,20 @@ class DocumentSummaryPromptBuilder:
             return [
                 self._build_system_message(system_prompt),
                 HumanMessage(
-                    content="[CONTEXT]: No relevant information was found in the document to generate a summary."
+                    content="[CONTEXTO]: No se encontró información relevante en el documento para generar un resumen."
                 )
             ]
 
         fragments_joined = "\n\n---\n\n".join(
-            f"Context fragment {idx + 1}:\n{fragment}"
+            f"Fragmento de contexto {idx + 1}:\n{fragment}"
             for idx, fragment in enumerate(fragments)
         )
 
         prompt = (
-            "Analyze the following document content and generate a complete, structured, and clear summary "
-            "that captures the main points and the most important information.\n\n"
-            f"Document content:\n\n{fragments_joined}\n\n"
-            "Summary:"
+            "Analiza el siguiente contenido del documento y genera un resumen completo, estructurado y claro "
+            "que capture los puntos principales y la información más importante.\n\n"
+            f"Contenido del documento:\n\n{fragments_joined}\n\n"
+            "Resumen:"
         )
 
         logger.debug(
@@ -52,21 +52,21 @@ class DocumentSummaryPromptBuilder:
             return [
                 self._build_system_message(system_prompt),
                 HumanMessage(
-                    content="[CONTEXT]: No partial summaries were received to reduce/combine."
+                    content="[CONTEXTO]: No se recibieron resúmenes parciales para reducir/combinar."
                 )
             ]
 
         joined_summaries = "\n\n---\n\n".join(
-            f"Partial summary {idx + 1}:\n{summary}"
+            f"Resumen parcial {idx + 1}:\n{summary}"
             for idx, summary in enumerate(partial_summaries)
         )
 
         prompt = (
-            "Below are multiple partial summaries of a larger document. "
-            "Merge all of them into a single final summary that is coherent, concise, and free of repetition. "
-            "Preserve the structure and main points of each section.\n\n"
-            f"Partial summaries:\n\n{joined_summaries}\n\n"
-            "Final summary:"
+            "A continuación se presentan múltiples resúmenes parciales de un documento más largo. "
+            "Combínalos todos en un único resumen final que sea coherente, conciso y sin repeticiones. "
+            "Preserva la estructura y los puntos principales de cada sección.\n\n"
+            f"Resúmenes parciales:\n\n{joined_summaries}\n\n"
+            "Resumen final:"
         )
 
         logger.debug(
