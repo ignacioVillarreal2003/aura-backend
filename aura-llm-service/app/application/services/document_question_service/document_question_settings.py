@@ -15,26 +15,17 @@ class DocumentQuestionServiceSettings(BaseSettings):
         extra="ignore"
     )
 
-    max_context_fragments: int = Field(default=3, ge=1, le=6)
+    max_context_fragments: int = Field(default=6, ge=1, le=10)
 
     min_question_length: int = Field(default=1, ge=1)
     max_question_length: int = Field(default=1000, ge=1, le=10_000)
 
     max_history_messages: int = Field(default=3, ge=0, le=20)
 
-    custom_system_prompt: Optional[str] = Field(default=None)
+    query_rewrite_enabled: bool = Field(default=True)
 
-    _DEFAULT_SYSTEM_PROMPT: str = (
-        "Eres un asistente especializado que responde preguntas basándose exclusivamente "
-        "en el contexto proporcionado.\n\n"
-        "REGLAS ESTRICTAS:\n"
-        "1. Responde SOLO usando la información del contexto proporcionado.\n"
-        "2. Si la información no está en el contexto, indica claramente que no está disponible.\n"
-        "3. NO inventes ni asumas información que no esté explícitamente presente.\n"
-        "4. Usa formato Markdown: encabezados (#, ##), listas (-), negrita (**), "
-        "tablas donde sea apropiado.\n"
-        "5. Sé conciso pero completo.\n"
-    )
+    rerank_threshold: int = Field(default=3, ge=1, le=20)
+    max_reranked_fragments: int = Field(default=3, ge=1, le=10)
 
     @model_validator(mode="after")
     def validate_coherence(self) -> "DocumentQuestionServiceSettings":
@@ -43,8 +34,9 @@ class DocumentQuestionServiceSettings(BaseSettings):
                 f"min_question_length ({self.min_question_length}) must be "
                 f"less than max_question_length ({self.max_question_length})"
             )
+        if self.max_reranked_fragments > self.max_context_fragments:
+            raise ValueError(
+                f"max_reranked_fragments ({self.max_reranked_fragments}) cannot exceed "
+                f"max_context_fragments ({self.max_context_fragments})"
+            )
         return self
-
-    @property
-    def system_prompt(self) -> str:
-        return self.custom_system_prompt or self._DEFAULT_SYSTEM_PROMPT
