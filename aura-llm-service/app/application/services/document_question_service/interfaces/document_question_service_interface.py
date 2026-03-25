@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Optional
 
 from app.domain.dtos.document_question.document_question_request import DocumentQuestionRequest
 from app.domain.dtos.document_question.document_question_response import DocumentQuestionResponse
@@ -12,6 +11,6 @@ class DocumentQuestionServiceInterface(ABC):
             self,
             document_question_request: DocumentQuestionRequest,
             user: AuthenticationResponse,
-            authorization: Optional[str] = None
+            authorization: str
     ) -> DocumentQuestionResponse:
         pass

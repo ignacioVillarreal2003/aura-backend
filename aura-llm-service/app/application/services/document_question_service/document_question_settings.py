@@ -1,5 +1,6 @@
 import logging
 from typing import Optional
+
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -21,11 +22,23 @@ class DocumentQuestionServiceSettings(BaseSettings):
     max_question_length: int = Field(default=1000, ge=1, le=10_000)
 
     max_history_messages: int = Field(default=3, ge=0, le=20)
+    history_window: int = Field(default=5, ge=1, le=20)
 
     query_rewrite_enabled: bool = Field(default=True)
 
     rerank_threshold: int = Field(default=3, ge=1, le=20)
     max_reranked_fragments: int = Field(default=3, ge=1, le=10)
+
+    pipeline_plugins: list[str] = Field(
+        default_factory=lambda: [
+            "validate_request",
+            "rewrite_query",
+            "retrieve_context",
+            "rerank_context",
+            "generate_answer",
+            "fallback_answer",
+        ]
+    )
 
     @model_validator(mode="after")
     def validate_coherence(self) -> "DocumentQuestionServiceSettings":

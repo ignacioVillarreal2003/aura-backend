@@ -10,7 +10,9 @@ from app.application.services.agent_service.tools.document_question_tool.documen
 from app.application.services.document_question_service.interfaces.document_question_service_interface import (
     DocumentQuestionServiceInterface
 )
+from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.document_question.document_question_request import DocumentQuestionRequest
+from app.domain.dtos.message import Message
 from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
 
 logger = logging.getLogger(__name__)
@@ -62,8 +64,9 @@ class DocumentQuestionTool(BaseTool):
         try:
             response = await self._document_question_service.execute_document_question(
                 document_question_request=DocumentQuestionRequest(
-                    question=question,
-                    history_messages=[]
+                    messages=[
+                        Message(role=MessageRole.human, content=question)
+                    ]
                 ),
                 user=self._TOOL_USER,
                 authorization=self._authorization,

@@ -7,6 +7,10 @@ Consulta:
 Fragmentos:
 {chunks}
 
-Devuelve solo los IDs o textos más relevantes (máximo 3-5).
+Devuelve SOLO un JSON array de enteros con índices 0-based, correspondientes a los fragmentos seleccionados.
+No devuelvas texto adicional.
+Ejemplo: [0,2]
+
+Usa como máximo {max_fragments} índices.
 Prioriza precisión, no cantidad.
 """
