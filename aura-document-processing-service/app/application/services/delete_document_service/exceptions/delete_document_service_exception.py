@@ -19,3 +19,7 @@ class DeleteDocumentFailedException(DeleteDocumentServiceException):
 
 class DeleteFragmentsFailedException(DeleteDocumentServiceException):
     pass
+
+
+class DeleteDocumentStorageException(DeleteDocumentServiceException):
+    pass

@@ -1,43 +1,9 @@
 services:
-  aura-llm-service:
-    build: ../aura-llm-service
-    container_name: aura-llm-service
-    ports:
-      - "8000:8000"
-    env_file:
-      - ../aura-llm-service/.env.docker
-    depends_on:
-      db:
-        condition: service_healthy
-      storage:
-        condition: service_healthy
-      queue:
-        condition: service_healthy
-      memory_db:
-        condition: service_healthy
-    restart: on-failure
-
-  aura-chat-service:
-    build: ../aura-chat-service
-    container_name: aura-chat-service
-    ports:
-      - "8003:8000"
-    env_file:
-      - ../aura-chat-service/.env.docker
-    depends_on:
-      db:
-        condition: service_healthy
-      memory_db:
-        condition: service_healthy
-      aura-llm-service:
-        condition: service_started
-    restart: on-failure
-
   aura-document-processing-service:
     build: ../aura-document-processing-service
     container_name: aura-document-processing-service
     ports:
-      - "8001:8000"
+      - "8000:8000"
     env_file:
       - ../aura-document-processing-service/.env.docker
     depends_on:
@@ -45,11 +11,21 @@ services:
         condition: service_healthy
       storage:
         condition: service_healthy
-      queue:
-        condition: service_healthy
-      memory_db:
-        condition: service_healthy
     restart: on-failure
+  
+  aura-llm-service:
+    build: ../aura-llm-service
+    container_name: aura-llm-service
+    ports:
+      - "8001:8000"
+    env_file:
+      - ../aura-llm-service/.env.docker
+
+  mock-auth:
+    build: ../mock-auth
+    container_name: mock-auth
+    ports:
+      - "8080:8000"
 
   db:
     build: ./db

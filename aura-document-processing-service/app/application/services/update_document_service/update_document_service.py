@@ -1,13 +1,13 @@
 import logging
 from datetime import datetime, timezone
-from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import HTTPException, Request, status
 
 from app.application.services.update_document_service.exceptions.update_document_service_exception import (
-    UpdateDocumentNotFoundException,
-    UpdateDocumentUnauthorizedException,
     UpdateDocumentFailedException,
-    UpdateDocumentServiceException
+    UpdateDocumentNotFoundException,
+    UpdateDocumentServiceException,
+    UpdateDocumentUnauthorizedException
 )
 from app.application.services.update_document_service.interfaces.update_document_service_interface import (
     UpdateDocumentServiceInterface
@@ -22,14 +22,23 @@ from app.infrastructure.persistence.database.repositories.document_repository.in
 
 logger = logging.getLogger(__name__)
 
-_ADMIN_ROLES = {"admin", "superadmin"}
-
 
 class UpdateDocumentService(UpdateDocumentServiceInterface):
-    def __init__(
-            self,
-            document_repository: DocumentRepositoryInterface
-    ) -> None:
+    _ROLE_ADMIN = "admin"
+    _ROLE_SUPERADMIN = "superadmin"
+
+    _ADMIN_ROLES = {_ROLE_ADMIN, _ROLE_SUPERADMIN}
+
+    _PERMISSION_DOCUMENT_UPDATE = "DOCUMENT_UPDATE"
+    _REQUIRED_PERMISSIONS = {_PERMISSION_DOCUMENT_UPDATE}
+
+    _KNOWN_EXCEPTIONS = (
+        UpdateDocumentNotFoundException,
+        UpdateDocumentUnauthorizedException,
+        UpdateDocumentFailedException,
+    )
+
+    def __init__(self, document_repository: DocumentRepositoryInterface) -> None:
         self._document_repository = document_repository
 
     async def post_process_document(
@@ -41,106 +50,96 @@ class UpdateDocumentService(UpdateDocumentServiceInterface):
     ) -> PostProcessDocumentResponse:
         logger.info(
             "Post-process document initiated",
-            extra={
-                "document_id": document_id,
-                "user_id": user.id
-            }
+            extra={"document_id": document_id, "user_id": user.id}
         )
 
         try:
-            document = await self._get_document_or_raise(
-                document_id=document_id,
-                database_session=database_session
-            )
-            self._authorize_or_raise(
-                document=document,
-                user=user
-            )
+            self._require_permissions(user)
+            self._require_roles(user, context=f"post_process_document({document_id})")
+
+            document = await self._get_document_or_raise(document_id, database_session)
             updated_document = await self._apply_and_persist(
                 document=document,
-                post_process_document_request=post_process_document_request,
+                request=post_process_document_request,
                 user=user,
                 database_session=database_session
             )
 
             logger.info(
                 "Post-process document completed",
-                extra={
-                    "document_id": document_id,
-                    "user_id": user.id
-                }
+                extra={"document_id": document_id, "user_id": user.id}
             )
-
             return PostProcessDocumentResponse.model_validate(updated_document)
 
-        except (
-                UpdateDocumentNotFoundException,
-                UpdateDocumentUnauthorizedException,
-                UpdateDocumentFailedException
-        ):
+        except self._KNOWN_EXCEPTIONS:
             raise
-
         except Exception as e:
             logger.exception(
                 "Unexpected error during post-process document",
-                extra={
-                    "document_id": document_id
-                }
+                extra={"document_id": document_id}
             )
             raise UpdateDocumentServiceException(
                 f"Unexpected error during post-process of document {document_id}"
             ) from e
+
+    def _require_permissions(self, user: AuthenticationResponse) -> None:
+        user_permissions = set(user.permissions)
+        missing = self._REQUIRED_PERMISSIONS - user_permissions
+
+        if missing:
+            logger.warning(
+                "Insufficient permissions for update operation",
+                extra={
+                    "user_id": user.id,
+                    "missing_permissions": sorted(missing),
+                    "user_permissions": sorted(user_permissions),
+                },
+            )
+            raise UpdateDocumentUnauthorizedException(
+                f"User {user.id} is missing required permissions: {sorted(missing)}"
+            )
+
+    def _require_roles(self, user: AuthenticationResponse, context: str) -> None:
+        if not bool(set(user.roles) & self._ADMIN_ROLES):
+            logger.warning(
+                "Insufficient role for update operation",
+                extra={
+                    "user_id": user.id,
+                    "user_roles": sorted(user.roles),
+                    "allowed_roles": sorted(self._ADMIN_ROLES),
+                    "context": context,
+                },
+            )
+            raise UpdateDocumentUnauthorizedException(
+                f"User {user.id} does not have the required role for {context}. "
+                f"Allowed roles: {sorted(self._ADMIN_ROLES)}"
+            )
 
     async def _get_document_or_raise(
             self,
             document_id: int,
             database_session: AsyncSession
     ) -> Document:
-        document: Optional[Document] = await self._document_repository.get_document_by_id(
+        document = await self._document_repository.get_document_by_id(
             document_id=document_id,
             database_session=database_session
         )
-
         if document is None:
-            logger.warning(
-                "Document not found",
-                extra={
-                    "document_id": document_id
-                }
-            )
+            logger.warning("Document not found", extra={"document_id": document_id})
             raise UpdateDocumentNotFoundException(f"Document {document_id} not found")
-
         return document
-
-    @staticmethod
-    def _authorize_or_raise(
-            document: Document,
-            user: AuthenticationResponse
-    ) -> None:
-        if not any(role in user.roles for role in _ADMIN_ROLES):
-            logger.warning(
-                "Unauthorized post-process attempt",
-                extra={
-                    "document_id": document.id,
-                    "user_id": user.id,
-                    "user_roles": list(user.roles)
-                }
-            )
-            raise UpdateDocumentUnauthorizedException(
-                f"User {user.id} is not authorized to post-process document {document.id}"
-            )
 
     async def _apply_and_persist(
             self,
             document: Document,
-            post_process_document_request: PostProcessDocumentRequest,
+            request: PostProcessDocumentRequest,
             user: AuthenticationResponse,
             database_session: AsyncSession
     ) -> Document:
         try:
-            document.type = post_process_document_request.type
-            document.category = post_process_document_request.category
-            document.description = post_process_document_request.description
+            document.type = request.type
+            document.category = request.category
+            document.description = request.description
             document.updated_by = user.id
             document.updated_at = datetime.now(timezone.utc)
 
@@ -149,17 +148,23 @@ class UpdateDocumentService(UpdateDocumentServiceInterface):
                 database_session=database_session
             )
 
-            logger.info(
+            logger.debug(
                 "Document persisted successfully",
-                extra={
-                    "document_id": document.id,
-                    "user_id": user.id
-                }
+                extra={"document_id": document.id, "user_id": user.id}
             )
-
             return updated_document
 
         except Exception as e:
             raise UpdateDocumentFailedException(
                 f"Failed to persist post-process for document {document.id}"
             ) from e
+
+async def get_update_document_service(request: Request) -> UpdateDocumentServiceInterface:
+    try:
+        return request.app.state.update_document_service
+    except AttributeError:
+        logger.error("UpdateDocumentService not found in application state")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="UpdateDocumentService not configured",
+        )

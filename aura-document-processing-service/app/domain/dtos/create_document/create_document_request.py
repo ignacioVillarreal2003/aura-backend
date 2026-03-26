@@ -6,9 +6,5 @@ class CreateDocumentRequest(BaseModel):
     chat_id: int = Field(...)
 
     @classmethod
-    def as_form(
-            cls,
-            chat_id: int = Form(...)):
-        return cls(
-            chat_id=chat_id
-        )
+    def as_form(cls, chat_id: int = Form(...)):
+        return cls(chat_id=chat_id)

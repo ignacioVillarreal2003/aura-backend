@@ -82,7 +82,7 @@ CREATE TABLE fragment (
     document_id     BIGINT          NOT NULL
         REFERENCES document(id) ON DELETE CASCADE,
     content         TEXT            NOT NULL,
-    vector          VECTOR(768)     NOT NULL,
+    vector          VECTOR          NOT NULL,
     fragment_index  INT             NOT NULL,
     summary         TEXT,
     entities        JSONB,
@@ -184,3 +184,7 @@ CREATE INDEX idx_chat_membership_chat_id  ON chat_membership(chat_id);
 CREATE INDEX idx_chat_membership_member   ON chat_membership(member_id);
 
 CREATE INDEX idx_notification_receiver    ON notification(receiver_id);
+
+INSERT INTO chat (id, name, created_by)
+VALUES (12345, 'Chat inicial', 1)
+ON CONFLICT (id) DO NOTHING;

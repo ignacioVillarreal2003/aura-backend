@@ -8,32 +8,25 @@ from app.api import router
 from app.api.exception_handlers.exception_handlers import register_exception_handlers
 from app.configuration.dependencies import (
     startup_dependencies,
-    shutdown_dependencies,
+    shutdown_dependencies
 )
 from app.configuration.logging_configuration import configure_logging
 from app.configuration.environment_variables import environment_variables
-from app.infrastructure.authentication_provider.middlewares.authentication_provider_middleware import (
-    AuthenticationMiddleware,
+from app.infrastructure.authentication_provider.authentication_provider_middleware import (
+    AuthenticationMiddleware
 )
 import app.domain.models
 
-configure_logging(
-    level=logging.INFO
-)
+configure_logging(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(
-        app: FastAPI
-):
+async def lifespan(app: FastAPI):
     logger.info("Starting application")
 
     try:
-        await startup_dependencies(
-            app=app
-        )
-
+        await startup_dependencies(app=app)
     except Exception:
         logger.critical("Failed to start application")
         raise
@@ -44,9 +37,7 @@ async def lifespan(
 
     try:
         await shutdown_dependencies()
-
         logger.info("Application shut down successfully")
-
     except Exception:
         logger.error("Error during application shutdown")
 
@@ -55,7 +46,6 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=environment_variables.app_name,
         version=environment_variables.app_version,
-        description="Agent-based document question answering",
         lifespan=lifespan,
         docs_url="/api/docs",
         redoc_url="/api/redoc",
@@ -72,9 +62,7 @@ def create_app() -> FastAPI:
     return app
 
 
-def configure_cors(
-        app: FastAPI
-) -> None:
+def configure_cors(app: FastAPI) -> None:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=environment_variables.cors_origins,
@@ -86,14 +74,9 @@ def configure_cors(
     logger.debug("CORS configured")
 
 
-def add_middleware(
-        app: FastAPI
-) -> None:
+def add_middleware(app: FastAPI) -> None:
     @app.middleware("http")
-    async def log_requests(
-            request: Request,
-            call_next
-    ):
+    async def log_requests(request: Request, call_next):
         logger.info(f"Request: {request.method} {request.url.path}")
 
         response = await call_next(request)
@@ -117,9 +100,7 @@ def add_middleware(
     logger.debug("Middleware added")
 
 
-def include_routers(
-        app: FastAPI
-) -> None:
+def include_routers(app: FastAPI) -> None:
     app.include_router(
         router,
         prefix="/api"

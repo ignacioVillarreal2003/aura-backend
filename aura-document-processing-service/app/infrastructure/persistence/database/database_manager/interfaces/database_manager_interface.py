@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import AsyncContextManager, Dict, Any
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.persistence.database.database_manager.database_manager_settings import (
@@ -27,7 +28,8 @@ class DatabaseManagerInterface(ABC):
         pass
 
     @abstractmethod
-    async def session(self) -> AsyncContextManager[AsyncSession]:
+    @asynccontextmanager
+    async def session(self) -> AsyncIterator[AsyncSession]:
         pass
 
     @abstractmethod

@@ -11,3 +11,7 @@ class UnsupportedTextCleanerTypeException(TextCleanerException):
 
 class TextCleanerInitializationException(TextCleanerException):
     pass
+
+
+class TextCleanerExecutionException(TextCleanerException):
+    pass

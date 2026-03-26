@@ -6,24 +6,20 @@ import logging
 from app.api.controllers.document_query_controller.interfaces.document_query_controller_interface import (
     DocumentQueryControllerInterface
 )
-from app.application.services.document_query_service.document_query_service_dependency import get_document_query_service
+from app.application.services.document_query_service.document_query_service import get_document_query_service
 from app.application.services.document_query_service.interfaces.document_query_service_interface import (
-
     DocumentQueryServiceInterface
 )
 from app.domain.dtos.document_query_controller.context_fragment_response import ContextFragmentListResponse
 from app.domain.dtos.document_query_controller.document_response import (
-
     DocumentResponse,
     DocumentListResponse
 )
 from app.domain.dtos.document_query_controller.document_context_fragments_request import DocumentContextFragmentsRequest
 from app.domain.dtos.document_query_controller.question_context_fragments_request import QuestionContextFragmentsRequest
-from app.infrastructure.authentication_provider.authentication_provider_dependency import get_current_user
+from app.infrastructure.authentication_provider.authentication_provider import get_current_user
 from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
-from app.infrastructure.persistence.database.database_manager.database_manager_dependency import (
-    get_database_session
-)
+from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +96,7 @@ class DocumentQueryController(DocumentQueryControllerInterface):
             question_context_fragments_request: QuestionContextFragmentsRequest,
             document_query_service: DocumentQueryServiceInterface = Depends(get_document_query_service),
             database_session: AsyncSession = Depends(get_database_session),
+            user: AuthenticationResponse = Depends(get_current_user)
     ) -> ContextFragmentListResponse:
         logger.info(
             "Retrieve context fragments by question request received",
@@ -110,7 +107,8 @@ class DocumentQueryController(DocumentQueryControllerInterface):
 
         context_fragment_list_response = await document_query_service.retrieve_context_fragments_by_question(
             question_context_fragments_request=question_context_fragments_request,
-            database_session=database_session
+            database_session=database_session,
+            user=user
         )
 
         logger.info(
@@ -127,6 +125,7 @@ class DocumentQueryController(DocumentQueryControllerInterface):
             document_context_fragments_request: DocumentContextFragmentsRequest,
             document_query_service: DocumentQueryServiceInterface = Depends(get_document_query_service),
             database_session: AsyncSession = Depends(get_database_session),
+            user: AuthenticationResponse = Depends(get_current_user)
     ) -> ContextFragmentListResponse:
         logger.info(
             "Retrieve context fragments by document request received",
@@ -137,7 +136,8 @@ class DocumentQueryController(DocumentQueryControllerInterface):
 
         context_fragment_list_response = await document_query_service.retrieve_context_fragments_by_document(
             document_context_fragments_request=document_context_fragments_request,
-            database_session=database_session
+            database_session=database_session,
+            user=user
         )
 
         logger.info(
