@@ -1,43 +1,45 @@
 from datetime import datetime
-from typing import Optional
-from uuid import UUID
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, ConfigDict
 
 
 # ==================== Request DTOs ====================
 
-class CreateConversationRequest(BaseModel):
-    """Request body for creating a new conversation."""
-    title: Optional[str] = Field(None, max_length=255)
+class CreateChatRequest(BaseModel):
+    """
+    Request body for creating a new chat.
+
+    - Individual chat: no member_ids (solo el creador como miembro).
+    - Group chat: member_ids con los IDs de los otros participantes.
+    """
+    name: str = Field(..., min_length=1, max_length=255)
     system_prompt: Optional[str] = Field(None, max_length=10000)
-    model: str = Field("default", max_length=100)
-    metadata: dict = Field(default_factory=dict)
+    response_style: Optional[str] = Field(None, max_length=10000)
+    member_ids: list[int] = Field(default_factory=list)
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "title": "Consulta sobre Python",
-                "system_prompt": "Eres un experto en Python.",
-                "model": "llama3",
-                "metadata": {"tags": ["trabajo"]}
+                "name": "Mi chat con el asistente",
+                "system_prompt": "Eres un asistente útil.",
+                "member_ids": []
             }
         }
     )
 
 
-class UpdateConversationRequest(BaseModel):
-    """Request body for updating a conversation."""
-    title: Optional[str] = Field(None, max_length=255)
+class UpdateChatRequest(BaseModel):
+    """Request body for updating a chat."""
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
     system_prompt: Optional[str] = Field(None, max_length=10000)
-    status: Optional[str] = Field(None, pattern="^(active|archived)$")
-    metadata: Optional[dict] = None
+    response_style: Optional[str] = Field(None, max_length=10000)
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "title": "Nuevo título",
-                "status": "archived"
+                "name": "Nuevo nombre del chat",
+                "response_style": "Responde siempre de forma concisa."
             }
         }
     )
@@ -45,34 +47,41 @@ class UpdateConversationRequest(BaseModel):
 
 # ==================== Response DTOs ====================
 
-class ConversationResponse(BaseModel):
-    """Response body for a conversation."""
-    id: UUID
-    title: Optional[str]
-    system_prompt: Optional[str]
-    model: str
+class ChatMembershipResponse(BaseModel):
+    """Membership info within a chat response."""
+    id: int
+    member_id: int
     status: str
-    metadata: dict
-    message_count: int
-    total_tokens: int
-    created_at: datetime
-    updated_at: Optional[datetime]
-    last_message_preview: Optional[str] = None
+    joined_at: Optional[datetime]
 
     model_config = ConfigDict(from_attributes=True)
 
 
-class ConversationSummary(BaseModel):
-    """Summary of a conversation for list views."""
-    id: UUID
-    title: Optional[str]
-    model: str
-    status: str
-    message_count: int
-    total_tokens: int
+class ChatResponse(BaseModel):
+    """Response body for a chat."""
+    id: int
+    name: str
+    system_prompt: Optional[str]
+    response_style: Optional[str]
+    chat_type: Literal["individual", "group"]
+    last_message_at: Optional[datetime]
+    members: list[ChatMembershipResponse]
+    created_by: int
     created_at: datetime
     updated_at: Optional[datetime]
-    last_message_preview: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ChatSummary(BaseModel):
+    """Summary of a chat for list views."""
+    id: int
+    name: str
+    chat_type: Literal["individual", "group"]
+    member_count: int
+    last_message_at: Optional[datetime]
+    created_at: datetime
+    updated_at: Optional[datetime]
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -86,9 +95,7 @@ class PaginationInfo(BaseModel):
     total_count: Optional[int] = None
 
 
-class ConversationListResponse(BaseModel):
-    """Response body for listing conversations."""
-    data: list[ConversationSummary]
+class ChatListResponse(BaseModel):
+    """Response body for listing chats."""
+    data: list[ChatSummary]
     pagination: PaginationInfo
-
-

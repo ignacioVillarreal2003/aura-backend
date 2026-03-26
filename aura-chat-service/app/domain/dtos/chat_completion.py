@@ -3,7 +3,35 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, ConfigDict
 
-from app.domain.dtos.message import ToolDefinition, ToolCallResponse, UsageInfo
+
+# ==================== Tool definitions (OpenAI-compatible) ====================
+
+class FunctionDefinition(BaseModel):
+    name: str = Field(..., max_length=255)
+    description: Optional[str] = Field(None, max_length=1000)
+    parameters: Optional[dict] = None
+
+
+class ToolDefinition(BaseModel):
+    type: str = Field("function", pattern="^function$")
+    function: FunctionDefinition
+
+
+class FunctionCall(BaseModel):
+    name: str
+    arguments: str
+
+
+class ToolCallResponse(BaseModel):
+    id: str
+    type: str
+    function: FunctionCall
+
+
+class UsageInfo(BaseModel):
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
 
 
 # ==================== OpenAI-Compatible Chat Completion ====================
