@@ -4,8 +4,30 @@ Content-Type: application/json
 Authorization: Bearer user_token_123
 
 {
-  "question": "Hablame de un perro especial",
-  "history_messages": []
+  "messages": [
+    {
+      "role": "human",
+      "content": "¿Puede una aeronave aterrizar fuera de un aeródromo habilitado? ¿En qué casos?"
+    }
+  ]
+}
+
+
+###
+
+
+POST http://localhost:8001/api/document-question
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "messages": [
+    {
+      "role": "human",
+      "content": "¿Qué requisitos debe cumplir una aeronave para poder operar o sobrevolar el territorio nacional?"
+    }
+  ]
 }
 
 

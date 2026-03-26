@@ -16,7 +16,7 @@ class DocumentQuestionServiceSettings(BaseSettings):
         extra="ignore"
     )
 
-    max_context_fragments: int = Field(default=6, ge=1, le=10)
+    max_context_fragments: int = Field(default=5, ge=1, le=10)
 
     min_question_length: int = Field(default=1, ge=1)
     max_question_length: int = Field(default=1000, ge=1, le=10_000)

@@ -14,9 +14,6 @@ from app.application.services.document_question_service.exceptions.document_ques
     DocumentQuestionServiceException,
 )
 from app.application.services.document_question_service.prompts.default_style_prompt import (
-    CONCISE_MODE,
-    EXPLANATORY_MODE,
-    FORMAL_MODE,
     LEARNING_GUIDELINES,
 )
 from app.application.services.document_question_service.prompts.generation_prompt import (
@@ -50,9 +47,6 @@ class GenerateAnswerPlugin(DocumentQuestionPlugin):
 
         style_block = (
             f"{LEARNING_GUIDELINES}\n\n"
-            f"{CONCISE_MODE}\n\n"
-            f"{EXPLANATORY_MODE}\n\n"
-            f"{FORMAL_MODE}"
         )
         context = "\n\n---\n\n".join(state.retrieved_fragments)
         history_tail = state.history_messages[-resources.settings.history_window:]
