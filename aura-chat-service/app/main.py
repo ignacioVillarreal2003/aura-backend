@@ -16,6 +16,7 @@ from app.api.controllers import router
 from app.configuration.logging_configuration import configure_logging
 from app.configuration.environment_variables import settings
 from app.application.exceptions.api_exceptions import AppError
+from app.infrastructure.database import engine
 
 # Configure logging
 configure_logging(level=logging.DEBUG if settings.DEBUG else logging.INFO)
@@ -28,16 +29,11 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Aura Chat Service...")
     logger.info(f"Debug mode: {settings.DEBUG}")
     logger.info(f"LLM Service URL: {settings.LLM_SERVICE_URL}")
-    
-    # TODO: Initialize database connection pool
-    # TODO: Initialize Redis connection
-    # TODO: Initialize rate limiter
-    
+
     yield
-    
+
     logger.info("Shutting down Aura Chat Service...")
-    # TODO: Close database connections
-    # TODO: Close Redis connection
+    await engine.dispose()
 
 
 # Create FastAPI application

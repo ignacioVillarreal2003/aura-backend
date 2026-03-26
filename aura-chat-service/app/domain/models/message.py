@@ -25,7 +25,6 @@ class ChatMessage(Base):
     chat_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("chat.id"), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
     sender_type: Mapped[SenderType] = mapped_column(Enum(SenderType, name="chat_message_sender_type"), nullable=False)
-    status: Mapped[MessageStatus] = mapped_column(Enum(MessageStatus, name="chat_message_status"), nullable=False)
 
     created_by: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
