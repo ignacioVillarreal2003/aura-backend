@@ -14,7 +14,7 @@ class DocumentQueryServiceSettings(BaseSettings):
         extra="ignore"
     )
 
-    max_fragments: int = Field(default=5, ge=1, le=100)
+    max_fragments: int = Field(default=20, ge=1, le=100)
     min_question_length: int = Field(default=1, ge=1)
     max_question_length: int = Field(default=10_000, ge=1, le=100_000)
     max_page_size: int = Field(default=100, ge=1, le=1000)

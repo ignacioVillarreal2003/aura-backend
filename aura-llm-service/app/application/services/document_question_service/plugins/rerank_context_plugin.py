@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-import json
 import logging
+from threading import Lock
+from typing import ClassVar
 
-from langchain_core.messages import HumanMessage
-
-from app.application.services.document_question_service.prompts.context_selection_prompt import (
-    CONTEXT_SELECTION_PROMPT,
-)
+from sentence_transformers import CrossEncoder
 from app.application.services.document_question_service.pipeline.document_question_pipeline_state import (
     DocumentQuestionPipelineState,
 )
@@ -22,6 +19,9 @@ logger = logging.getLogger(__name__)
 
 
 class RerankContextPlugin(DocumentQuestionPlugin):
+    _MODEL_CACHE: ClassVar[dict[str, CrossEncoder]] = {}
+    _MODEL_LOCK: ClassVar[Lock] = Lock()
+
     @property
     def plugin_name(self) -> str:
         return "rerank_context"
@@ -38,85 +38,78 @@ class RerankContextPlugin(DocumentQuestionPlugin):
             state: DocumentQuestionPipelineState,
             resources: DocumentQuestionPipelineResources,
     ) -> None:
+        query = state.effective_query or state.current_message.content
+        fragments = state.retrieved_fragments
+        if not fragments:
+            return
+
+        top_n = resources.settings.max_reranked_fragments
+        model_name = resources.settings.rerank_model_name
+        min_score = resources.settings.rerank_min_score
+        batch_size = resources.settings.rerank_batch_size
+
         logger.debug(
-            "Running context selection",
+            "Running cross-encoder reranking",
             extra={
-                "total_fragments": len(state.retrieved_fragments),
-                "max_reranked": resources.settings.max_reranked_fragments,
+                "model_name": model_name,
+                "total_fragments": len(fragments),
+                "max_reranked": top_n,
+                "min_score": min_score,
             },
         )
 
         try:
-            query = state.effective_query or state.current_message.content
-            numbered_chunks = "\n\n".join(
-                f"[{i}] {fragment}" for i, fragment in enumerate(state.retrieved_fragments)
-            )
-            content = CONTEXT_SELECTION_PROMPT.format(
-                query=query,
-                chunks=numbered_chunks,
-                max_fragments=resources.settings.max_reranked_fragments,
-            )
-            prompt = [HumanMessage(content=content)]
-
-            llm = await resources.ollama_llm_facade.get_llm_base()
-            raw_response = await resources.llm_invoker.call_llm_content(
-                llm=llm,
-                llm_input=prompt,
+            model = self._get_or_create_model(model_name)
+            pairs = [(query, fragment) for fragment in fragments]
+            scores = model.predict(
+                pairs,
+                batch_size=batch_size,
+                show_progress_bar=False,
             )
 
-            selected = self._parse_selection_indices(
-                raw=raw_response,
-                max_index=len(state.retrieved_fragments) - 1,
+            ranked = sorted(
+                zip(scores, fragments),
+                key=lambda item: float(item[0]),
+                reverse=True,
             )
+            top_ranked = ranked[:top_n]
+            selected = [
+                fragment
+                for score, fragment in top_ranked
+                if float(score) >= min_score
+            ]
 
             if not selected:
                 logger.warning(
-                    "Context selection returned no valid indices, keeping all fragments",
+                    "Reranking returned no fragments above threshold, using top-k",
+                    extra={"top_n": top_n, "min_score": min_score},
                 )
-                return
+                selected = [fragment for _, fragment in top_ranked]
 
             logger.debug(
-                "Context selection complete",
-                extra={"selected_indices": selected},
+                "Cross-encoder reranking complete",
+                extra={
+                    "kept": len(selected),
+                    "scores": [round(float(score), 3) for score, _ in top_ranked],
+                },
             )
-            state.retrieved_fragments = [state.retrieved_fragments[i] for i in selected]
+            state.retrieved_fragments = selected
         except Exception:
             logger.warning(
-                "Context selection failed, keeping all retrieved fragments",
+                "Cross-encoder reranking failed, falling back to original top-k order",
                 exc_info=True,
             )
+            state.retrieved_fragments = fragments[:top_n]
 
-    @staticmethod
-    def _parse_selection_indices(raw: str, max_index: int) -> list[int]:
-        if not raw:
-            return []
-
-        start = raw.find("[")
-        end = raw.rfind("]")
-
-        if start == -1 or end == -1 or end <= start:
-            logger.warning(
-                "No JSON array found in context selection response",
-                extra={"raw": raw},
-            )
-            return []
-
-        try:
-            indices = json.loads(raw[start: end + 1])
-        except json.JSONDecodeError:
-            logger.warning(
-                "Failed to parse JSON from context selection response",
-                extra={"raw": raw},
-            )
-            return []
-
-        if not isinstance(indices, list):
-            return []
-
-        valid = [
-            int(i)
-            for i in indices
-            if isinstance(i, (int, float)) and 0 <= int(i) <= max_index
-        ]
-
-        return list(dict.fromkeys(valid))
+    @classmethod
+    def _get_or_create_model(cls, model_name: str) -> CrossEncoder:
+        with cls._MODEL_LOCK:
+            model = cls._MODEL_CACHE.get(model_name)
+            if model is None:
+                logger.info(
+                    "Loading cross-encoder reranker model",
+                    extra={"model_name": model_name},
+                )
+                model = CrossEncoder(model_name)
+                cls._MODEL_CACHE[model_name] = model
+            return model

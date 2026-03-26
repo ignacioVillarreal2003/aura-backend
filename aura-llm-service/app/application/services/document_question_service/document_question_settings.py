@@ -16,7 +16,7 @@ class DocumentQuestionServiceSettings(BaseSettings):
         extra="ignore"
     )
 
-    max_context_fragments: int = Field(default=5, ge=1, le=10)
+    max_context_fragments: int = Field(default=12, ge=1, le=20)
 
     min_question_length: int = Field(default=1, ge=1)
     max_question_length: int = Field(default=1000, ge=1, le=10_000)
@@ -26,8 +26,11 @@ class DocumentQuestionServiceSettings(BaseSettings):
 
     query_rewrite_enabled: bool = Field(default=True)
 
-    rerank_threshold: int = Field(default=3, ge=1, le=20)
-    max_reranked_fragments: int = Field(default=3, ge=1, le=10)
+    rerank_threshold: int = Field(default=6, ge=1, le=20)
+    max_reranked_fragments: int = Field(default=6, ge=1, le=10)
+    rerank_model_name: str = Field(default="BAAI/bge-reranker-v2-m3")
+    rerank_min_score: float = Field(default=-10.0)
+    rerank_batch_size: int = Field(default=16, ge=1, le=256)
 
     pipeline_plugins: list[str] = Field(
         default_factory=lambda: [

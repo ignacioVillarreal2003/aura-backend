@@ -7,7 +7,6 @@ from app.infrastructure.document_context_provider.document_context_provider_sett
 )
 from app.infrastructure.document_context_provider.dtos.context_fragments_response import (
     ContextFragmentListResponse,
-    ContextFragmentResponse
 )
 from app.infrastructure.document_context_provider.dtos.document_context_fragments_request import (
     DocumentContextFragmentsRequest
@@ -75,7 +74,7 @@ class DocumentContextProvider(DocumentContextProviderInterface):
                 headers=self._build_headers(authorization)
             )
 
-            fragments = self._parse_and_apply_limits(response.json(), apply_max_fragments=True)
+            fragments = self._parse_and_apply_limits(response.json())
 
             logger.info(
                 "Fragments retrieved successfully by question",
@@ -118,7 +117,7 @@ class DocumentContextProvider(DocumentContextProviderInterface):
                 headers=self._build_headers(authorization),
             )
 
-            fragments = self._parse_and_apply_limits(response.json(), apply_max_fragments=False)
+            fragments = self._parse_and_apply_limits(response.json())
 
             logger.info(
                 "Fragments retrieved successfully by document",
@@ -148,7 +147,7 @@ class DocumentContextProvider(DocumentContextProviderInterface):
             headers["Authorization"] = authorization
         return headers
 
-    def _parse_and_apply_limits(self, raw_data: dict, apply_max_fragments: bool = True) -> list[str]:
+    def _parse_and_apply_limits(self, raw_data: dict) -> list[str]:
         try:
             response_model = ContextFragmentListResponse.model_validate(raw_data)
             fragments = response_model.context_fragments
@@ -163,54 +162,11 @@ class DocumentContextProvider(DocumentContextProviderInterface):
                 "The context service returned an invalid format response."
             ) from e
 
-        return self._apply_limits(fragments, apply_max_fragments)
-
-    def _apply_limits(self, fragments: list[ContextFragmentResponse], apply_max_fragments: bool = True) -> list[str]:
-        validated: list[str] = []
-        total_chars = 0
-        skipped_oversized = 0
-        truncated_count = 0
-
-        max_to_process = len(fragments)
-        if apply_max_fragments:
-            max_to_process = min(max_to_process, self._settings.max_fragments)
-
-        if len(fragments) > max_to_process:
-            logger.warning(
-                "Response exceeds max_fragments limit — truncating",
-                extra={
-                    "received": len(fragments),
-                    "max_fragments": self._settings.max_fragments
-                }
-            )
-
-        for fragment in fragments[:max_to_process]:
-            content = fragment.content
-
-            if len(content) > self._settings.max_chars_per_fragment:
-                if self._settings.truncate_oversized_fragments:
-                    content = content[: self._settings.max_chars_per_fragment]
-                    truncated_count += 1
-                    logger.debug("Fragment truncated due to size limit")
-                else:
-                    skipped_oversized += 1
-                    logger.warning("Fragment skipped due to excessive size")
-                    continue
-
-            if total_chars + len(content) > self._settings.max_total_chars:
-                logger.warning("max_total_chars limit reached — stopping collection")
-                break
-
-            validated.append(content)
-            total_chars += len(content)
-
+        validated = [fragment.content for fragment in fragments]
         logger.info(
-            "Fragment limits applied",
+            "Context fragments parsed",
             extra={
                 "accepted": len(validated),
-                "skipped_oversized": skipped_oversized,
-                "truncated": truncated_count,
-                "total_chars": total_chars
             }
         )
         return validated

@@ -17,7 +17,6 @@ class DocumentContextProviderSettings(BaseSettings):
     question_context_fragments_url: str = Field(...)
     document_context_fragments_url: str = Field(...)
 
-    max_fragments: int = Field(default=3, ge=1, le=8)
     max_chars_per_fragment: int = Field(default=10_000, ge=1_000, le=100_000)
     truncate_oversized_fragments: bool = Field(default=False)
     max_total_chars: int = Field(default=100_000, ge=10_000, le=1_000_000)
@@ -38,13 +37,12 @@ class DocumentContextProviderSettings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_coherence(self) -> "DocumentContextProviderSettings":
-        if self.max_chars_per_fragment * self.max_fragments > self.max_total_chars:
+        if self.max_chars_per_fragment > self.max_total_chars:
             logger.warning(
-                "max_total_chars is smaller than max_chars_per_fragment * max_fragments "
-                "— total budget may be exhausted before all fragments are collected",
+                "max_total_chars is smaller than max_chars_per_fragment "
+                "— a single fragment may exhaust the available budget",
                 extra={
                     "max_chars_per_fragment": self.max_chars_per_fragment,
-                    "max_fragments": self.max_fragments,
                     "max_total_chars": self.max_total_chars
                 }
             )

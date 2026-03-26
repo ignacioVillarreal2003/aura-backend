@@ -1,11 +1,11 @@
 FALLBACK_PROMPT = """
-El sistema no encontró información relevante en la base documental.
+No se encontró información relevante en los documentos disponibles para responder la consulta.
 
-Genera una respuesta indicando:
-- Que no hay información disponible
-- Sugerir reformular la consulta
-- Mantener tono profesional FAU
+Sugerencias:
+- Reformular la consulta utilizando términos más específicos
+- Incluir palabras clave técnicas o normativas
+- Indicar el área o documento de interés
 
-Consulta:
+Consulta original:
 {query}
 """

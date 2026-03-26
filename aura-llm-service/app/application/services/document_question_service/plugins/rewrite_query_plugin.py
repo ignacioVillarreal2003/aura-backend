@@ -1,4 +1,5 @@
 import logging
+import re
 from langchain_core.messages import HumanMessage
 
 from app.application.services.document_question_service.pipeline.document_question_pipeline_resources import (
@@ -58,6 +59,7 @@ class RewriteQueryPlugin(DocumentQuestionPlugin):
                 llm=llm,
                 llm_input=prompt,
             )
+            rewritten = self._sanitize_rewritten_query(rewritten)
 
             if rewritten and rewritten.strip():
                 logger.debug(
@@ -75,3 +77,33 @@ class RewriteQueryPlugin(DocumentQuestionPlugin):
                 exc_info=True,
             )
             state.effective_query = current_question
+
+    @staticmethod
+    def _sanitize_rewritten_query(raw: str) -> str:
+        if not raw:
+            return ""
+
+        lines = [line.strip() for line in raw.splitlines() if line.strip()]
+        if not lines:
+            return ""
+
+        cleaned_lines: list[str] = []
+        for line in lines:
+            normalized = re.sub(
+                r"^\s*(la\s+consulta\s+optimizada\s+ser[ií]a\s*:|consulta\s+optimizada\s*:)\s*",
+                "",
+                line,
+                flags=re.IGNORECASE,
+            )
+            normalized = normalized.strip().strip('"').strip("'").strip()
+            normalized = re.sub(r"^[-*]\s+", "", normalized)
+            normalized = normalized.strip()
+            if normalized:
+                cleaned_lines.append(normalized)
+
+        if not cleaned_lines:
+            return ""
+
+        # Prefer the longest cleaned line; usually it contains the full optimized query.
+        candidate = max(cleaned_lines, key=len)
+        return candidate
