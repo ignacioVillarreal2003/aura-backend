@@ -31,24 +31,24 @@ from app.application.services.document_question_service.pipeline.document_questi
     DocumentQuestionPipelineResources,
 )
 from app.application.services.document_question_service.interfaces.document_question_plugin_interface import (
-    DocumentQuestionPlugin,
+    DocumentQuestionPlugin,  # used as return type annotation in _build_pipeline_plugins
 )
-from app.application.services.document_question_service.plugins.validate_request_plugin import (
+from app.application.services.document_question_service.steps.validate_request.validate_request_plugin import (
     ValidateRequestPlugin,
 )
-from app.application.services.document_question_service.plugins.rewrite_query_plugin import (
+from app.application.services.document_question_service.steps.rewrite_query.rewrite_query_plugin import (
     RewriteQueryPlugin,
 )
-from app.application.services.document_question_service.plugins.retrieve_context_plugin import (
+from app.application.services.document_question_service.steps.retrieve_context.retrieve_context_plugin import (
     RetrieveContextPlugin,
 )
-from app.application.services.document_question_service.plugins.rerank_context_plugin import (
+from app.application.services.document_question_service.steps.rerank_context.rerank_context_plugin import (
     RerankContextPlugin,
 )
-from app.application.services.document_question_service.plugins.generate_answer_plugin import (
+from app.application.services.document_question_service.steps.generate_answer.generate_answer_plugin import (
     GenerateAnswerPlugin,
 )
-from app.application.services.document_question_service.plugins.fallback_answer_plugin import (
+from app.application.services.document_question_service.steps.fallback_answer.fallback_answer_plugin import (
     FallbackAnswerPlugin,
 )
 
@@ -71,7 +71,10 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
         self._ollama_llm_facade = ollama_llm_facade
         self._llm_invoker = llm_invoker
         self._document_context_provider = document_context_provider
-        self._settings = document_question_service_settings or DocumentQuestionServiceSettings()
+        settings = document_question_service_settings or DocumentQuestionServiceSettings()
+        self._pipeline = DocumentQuestionPipeline(
+            plugins=self._build_pipeline_plugins(settings.pipeline_plugins),
+        )
 
     async def execute_document_question(
             self,
@@ -84,25 +87,23 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
         try:
             state = DocumentQuestionPipelineState.from_request(
                 document_question_request,
-                authorization=authorization,
-                user=user,
+                authorization_token=authorization,
+                authenticated_user=user,
             )
             resources = DocumentQuestionPipelineResources(
-                document_question_service_settings=self._settings,
                 ollama_llm_facade=self._ollama_llm_facade,
                 llm_invoker=self._llm_invoker,
                 document_context_provider=self._document_context_provider,
             )
 
-            pipeline = DocumentQuestionPipeline(
-                plugins=self._build_pipeline_plugins(),
-            )
-
-            await pipeline.run(state=state, resources=resources)
-            answer = state.response
+            await self._pipeline.run(state=state, resources=resources)
 
             logger.info("Document question execution completed")
-            return DocumentQuestionResponse(answer=answer)
+            return DocumentQuestionResponse(
+                question=state.current_message.content,
+                answer=state.answer,
+                fragments=state.rerank_fragments or state.retrieved_fragments
+            )
 
         except self._KNOWN_EXCEPTIONS:
             raise
@@ -115,18 +116,8 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
                 "Unexpected error while processing the question"
             ) from e
 
-    def _build_pipeline_plugins(self) -> list[DocumentQuestionPlugin]:
-        default_order = [
-            "validate_request",
-            "rewrite_query",
-            "retrieve_context",
-            "rerank_context",
-            "generate_answer",
-            "fallback_answer",
-        ]
-
-        plugin_names = getattr(self._settings, "pipeline_plugins", None) or default_order
-
+    @staticmethod
+    def _build_pipeline_plugins(plugin_names: list[str]) -> list[DocumentQuestionPlugin]:
         registry: dict[str, type[DocumentQuestionPlugin]] = {
             "validate_request": ValidateRequestPlugin,
             "rewrite_query": RewriteQueryPlugin,

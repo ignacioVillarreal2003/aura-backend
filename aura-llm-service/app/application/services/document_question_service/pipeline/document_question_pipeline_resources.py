@@ -1,6 +1,3 @@
-from app.application.services.document_question_service.document_question_settings import (
-    DocumentQuestionServiceSettings
-)
 from app.infrastructure.document_context_provider.interfaces.document_context_provider_interface import (
     DocumentContextProviderInterface
 )
@@ -13,10 +10,8 @@ class DocumentQuestionPipelineResources:
             self,
             ollama_llm_facade: OllamaLLMFacadeInterface,
             llm_invoker: OllamaLLMInvokerInterface,
-            document_context_provider: DocumentContextProviderInterface,
-            document_question_service_settings: DocumentQuestionServiceSettings,
+            document_context_provider: DocumentContextProviderInterface
     ) -> None:
         self.ollama_llm_facade = ollama_llm_facade
         self.llm_invoker = llm_invoker
         self.document_context_provider = document_context_provider
-        self.settings = document_question_service_settings

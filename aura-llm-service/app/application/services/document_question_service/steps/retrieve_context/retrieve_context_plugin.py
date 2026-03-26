@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 from app.application.services.document_question_service.pipeline.document_question_pipeline_resources import (
     DocumentQuestionPipelineResources,
@@ -12,11 +13,17 @@ from app.application.services.document_question_service.interfaces.document_ques
 from app.application.services.document_question_service.exceptions.document_question_service_exceptions import (
     DocumentQuestionServiceException,
 )
+from app.application.services.document_question_service.steps.retrieve_context.retrieve_context_settings import (
+    RetrieveContextSettings,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class RetrieveContextPlugin(DocumentQuestionPlugin):
+    def __init__(self, retrieve_context_settings: Optional[RetrieveContextSettings] = None) -> None:
+        self._settings = retrieve_context_settings or RetrieveContextSettings()
+
     @property
     def plugin_name(self) -> str:
         return "retrieve_context"
@@ -33,16 +40,18 @@ class RetrieveContextPlugin(DocumentQuestionPlugin):
             state: DocumentQuestionPipelineState,
             resources: DocumentQuestionPipelineResources,
     ) -> None:
-        query = state.effective_query or state.current_message.content
+        query = state.retrieval_query or state.current_message.content
+
         try:
-            state.retrieved_fragments = await resources.document_context_provider.retrieve_context_fragments_by_question(
+            fragments = await resources.document_context_provider.retrieve_context_fragments_by_question(
                 question=query,
-                max_context_fragments=resources.settings.max_context_fragments,
-                authorization=state.authorization,
+                max_context_fragments=self._settings.max_fragments,
+                authorization=state.authorization_token,
             )
+            state.retrieved_fragments = fragments.context_fragments
             logger.debug(
                 "Context fragments retrieved",
-                extra={"fragment_count": len(state.retrieved_fragments)},
+                extra={"fragment_count": len(fragments.context_fragments), "max_fragments": self._settings.max_fragments},
             )
         except DocumentQuestionServiceException:
             raise

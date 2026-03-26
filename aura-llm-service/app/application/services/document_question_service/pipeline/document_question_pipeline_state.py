@@ -3,33 +3,32 @@ from typing import Optional
 
 from app.domain.dtos.document_question.document_question_request import DocumentQuestionRequest
 from app.domain.dtos.message import Message
-from app.infrastructure.authentication_provider.dtos.authentication_response import (
-    AuthenticationResponse
-)
+from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
+from app.infrastructure.document_context_provider.dtos.context_fragments_response import ContextFragmentResponse
 
 
 @dataclass
 class DocumentQuestionPipelineState:
-    authorization: str
-    user: AuthenticationResponse
+    authorization_token: str
+    authenticated_user: AuthenticationResponse
     messages: list[Message] = field(default_factory=list)
 
-    effective_query: Optional[str] = None
-    retrieved_fragments: list[str] = field(default_factory=list)
-
-    response: str = ""
+    retrieval_query: Optional[str] = None
+    retrieved_fragments: list[ContextFragmentResponse] = field(default_factory=list)
+    rerank_fragments: list[ContextFragmentResponse] = field(default_factory=list)
+    answer: str = ""
 
     @classmethod
     def from_request(
             cls,
             request: DocumentQuestionRequest,
-            authorization: str,
-            user: AuthenticationResponse,
+            authorization_token: str,
+            authenticated_user: AuthenticationResponse,
     ) -> "DocumentQuestionPipelineState":
         return cls(
             messages=request.messages,
-            authorization=authorization,
-            user=user,
+            authorization_token=authorization_token,
+            authenticated_user=authenticated_user,
         )
 
     @property

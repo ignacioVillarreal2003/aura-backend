@@ -52,7 +52,7 @@ class DocumentContextProvider(DocumentContextProviderInterface):
             question: str,
             max_context_fragments: int,
             authorization: Optional[str] = None
-    ) -> list[str]:
+    ) -> ContextFragmentListResponse:
         logger.info("Retrieving context fragments by question")
 
         try:
@@ -78,7 +78,7 @@ class DocumentContextProvider(DocumentContextProviderInterface):
 
             logger.info(
                 "Fragments retrieved successfully by question",
-                extra={"fragment_count": len(fragments)}
+                extra={"fragment_count": len(fragments.context_fragments)}
             )
             return fragments
 
@@ -98,7 +98,7 @@ class DocumentContextProvider(DocumentContextProviderInterface):
             self,
             document_id: int,
             authorization: Optional[str] = None
-    ) -> list[str]:
+    ) -> ContextFragmentListResponse:
         logger.info("Retrieving context fragments by document")
 
         try:
@@ -121,7 +121,7 @@ class DocumentContextProvider(DocumentContextProviderInterface):
 
             logger.info(
                 "Fragments retrieved successfully by document",
-                extra={"document_id": document_id, "fragment_count": len(fragments)}
+                extra={"document_id": document_id, "fragment_count": len(fragments.context_fragments)}
             )
             return fragments
 
@@ -147,11 +147,11 @@ class DocumentContextProvider(DocumentContextProviderInterface):
             headers["Authorization"] = authorization
         return headers
 
-    def _parse_and_apply_limits(self, raw_data: dict) -> list[str]:
+    def _parse_and_apply_limits(self, raw_data: dict) -> ContextFragmentListResponse:
         try:
             response_model = ContextFragmentListResponse.model_validate(raw_data)
-            fragments = response_model.context_fragments
             logger.debug("Response parsed successfully")
+            return response_model
         except Exception as e:
             logger.error(
                 "Failed to parse response",
@@ -161,15 +161,6 @@ class DocumentContextProvider(DocumentContextProviderInterface):
             raise DocumentContextProviderError(
                 "The context service returned an invalid format response."
             ) from e
-
-        validated = [fragment.content for fragment in fragments]
-        logger.info(
-            "Context fragments parsed",
-            extra={
-                "accepted": len(validated),
-            }
-        )
-        return validated
 
     def _handle_http_error(
             self,

@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 
+from app.infrastructure.document_context_provider.dtos.context_fragments_response import ContextFragmentListResponse
+
 
 class DocumentContextProviderInterface(ABC):
     @abstractmethod
@@ -9,7 +11,7 @@ class DocumentContextProviderInterface(ABC):
             question: str,
             max_context_fragments: int,
             authorization: Optional[str] = None
-    ) -> list[str]:
+    ) -> ContextFragmentListResponse:
         pass
 
     @abstractmethod
@@ -17,5 +19,5 @@ class DocumentContextProviderInterface(ABC):
             self,
             document_id: int,
             authorization: Optional[str] = None
-    ) -> list[str]:
+    ) -> ContextFragmentListResponse:
         pass

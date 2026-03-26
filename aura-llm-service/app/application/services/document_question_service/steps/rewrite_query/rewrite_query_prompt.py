@@ -1,4 +1,4 @@
-QUERY_REWRITE_PROMPT = """
+REWRITE_QUERY_PROMPT = """
 Reformula la consulta para maximizar la recuperación de información en una base normativa.
 
 Objetivo:
