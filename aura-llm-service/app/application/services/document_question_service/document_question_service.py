@@ -71,24 +71,24 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
         self._ollama_llm_facade = ollama_llm_facade
         self._llm_invoker = llm_invoker
         self._document_context_provider = document_context_provider
-        settings = document_question_service_settings or DocumentQuestionServiceSettings()
+        self._settings = document_question_service_settings or DocumentQuestionServiceSettings()
         self._pipeline = DocumentQuestionPipeline(
-            plugins=self._build_pipeline_plugins(settings.pipeline_plugins),
+            plugins=self._build_pipeline_plugins(self._settings.pipeline_plugins),
         )
 
     async def execute_document_question(
             self,
             document_question_request: DocumentQuestionRequest,
-            user: AuthenticationResponse,
-            authorization: Optional[str] = None,
+            authenticated_user: AuthenticationResponse,
+            authorization_token: Optional[str] = None,
     ) -> DocumentQuestionResponse:
         logger.info("Document question execution initiated")
 
         try:
             state = DocumentQuestionPipelineState.from_request(
                 document_question_request,
-                authorization_token=authorization,
-                authenticated_user=user,
+                authorization_token=authorization_token,
+                authenticated_user=authenticated_user,
             )
             resources = DocumentQuestionPipelineResources(
                 ollama_llm_facade=self._ollama_llm_facade,

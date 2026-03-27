@@ -10,7 +10,7 @@ class DocumentQuestionServiceInterface(ABC):
     async def execute_document_question(
             self,
             document_question_request: DocumentQuestionRequest,
-            user: AuthenticationResponse,
-            authorization: str
+            authenticated_user: AuthenticationResponse,
+            authorization_token: str
     ) -> DocumentQuestionResponse:
         pass

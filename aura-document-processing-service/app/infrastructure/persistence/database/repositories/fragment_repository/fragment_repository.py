@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timezone
 from typing import List
-from sqlalchemy import delete, select, text, update
+from sqlalchemy import delete, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -192,6 +192,96 @@ class FragmentRepository(FragmentRepositoryInterface):
 
         except Exception as e:
             raise DatabaseException("Error deleting fragments from the database") from e
+
+    async def get_fragments_missing_metadata(
+            self,
+            database_session: AsyncSession
+    ) -> List[Fragment]:
+        try:
+            logger.debug("Fetching fragments missing metadata")
+
+            result = await database_session.execute(
+                select(Fragment).where(
+                    Fragment.deleted_at.is_(None),
+                    or_(
+                        Fragment.summary.is_(None),
+                        Fragment.entities.is_(None),
+                        Fragment.topics.is_(None)
+                    )
+                ).order_by(Fragment.document_id, Fragment.fragment_index)
+            )
+            fragments = list(result.scalars().all())
+
+            logger.debug(
+                "Fragments missing metadata fetched",
+                extra={"count": len(fragments)}
+            )
+            return fragments
+
+        except Exception as e:
+            raise DatabaseException(
+                "Error fetching fragments missing metadata from the database"
+            ) from e
+
+    async def get_fragments_missing_metadata_by_document_ids(
+            self,
+            document_ids: List[int],
+            database_session: AsyncSession
+    ) -> List[Fragment]:
+        try:
+            logger.debug(
+                "Fetching fragments missing metadata by document IDs",
+                extra={"document_ids": document_ids}
+            )
+
+            result = await database_session.execute(
+                select(Fragment).where(
+                    Fragment.deleted_at.is_(None),
+                    Fragment.document_id.in_(document_ids),
+                    or_(
+                        Fragment.summary.is_(None),
+                        Fragment.entities.is_(None),
+                        Fragment.topics.is_(None)
+                    )
+                ).order_by(Fragment.document_id, Fragment.fragment_index)
+            )
+            fragments = list(result.scalars().all())
+
+            logger.debug(
+                "Fragments missing metadata by document IDs fetched",
+                extra={"document_ids": document_ids, "count": len(fragments)}
+            )
+            return fragments
+
+        except Exception as e:
+            raise DatabaseException(
+                "Error fetching fragments missing metadata by document IDs"
+            ) from e
+
+    async def update_fragment(
+            self,
+            fragment: Fragment,
+            database_session: AsyncSession
+    ) -> Fragment:
+        try:
+            logger.debug("Updating fragment", extra={"fragment_id": fragment.id})
+
+            updated_fragment = await database_session.merge(fragment)
+            await database_session.flush()
+            await database_session.refresh(updated_fragment)
+
+            logger.info(
+                "Fragment updated successfully",
+                extra={"fragment_id": updated_fragment.id}
+            )
+            return updated_fragment
+
+        except IntegrityError as e:
+            raise DatabaseConstraintViolationException(
+                "Constraint violation updating fragment"
+            ) from e
+        except Exception as e:
+            raise DatabaseException("Error updating fragment in the database") from e
 
     async def soft_delete_fragments_by_document_id(
             self,

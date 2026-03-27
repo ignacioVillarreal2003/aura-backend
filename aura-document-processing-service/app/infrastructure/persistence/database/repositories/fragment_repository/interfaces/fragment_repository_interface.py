@@ -49,3 +49,26 @@ class FragmentRepositoryInterface(ABC):
             database_session: AsyncSession,
     ) -> int:
         pass
+
+    @abstractmethod
+    async def get_fragments_missing_metadata(
+            self,
+            database_session: AsyncSession
+    ) -> List[Fragment]:
+        pass
+
+    @abstractmethod
+    async def get_fragments_missing_metadata_by_document_ids(
+            self,
+            document_ids: List[int],
+            database_session: AsyncSession
+    ) -> List[Fragment]:
+        pass
+
+    @abstractmethod
+    async def update_fragment(
+            self,
+            fragment: Fragment,
+            database_session: AsyncSession
+    ) -> Fragment:
+        pass

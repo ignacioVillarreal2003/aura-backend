@@ -91,7 +91,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             raw_document: UploadFile,
             background_tasks: BackgroundTasks,
             database_session: AsyncSession,
-            user: AuthenticationResponse
+            authenticated_user: AuthenticationResponse
     ) -> CreateDocumentResponse:
         temp_path: Optional[Path] = None
         object_name: Optional[str] = None
@@ -102,13 +102,13 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             extra={
                 "document_filename": raw_document.filename,
                 "content_type": raw_document.content_type,
-                "user_id": user.id
+                "user_id": authenticated_user.id
             }
         )
 
         try:
-            self._require_permissions(user)
-            self._require_roles(user)
+            self._require_permissions(authenticated_user)
+            self._require_roles(authenticated_user)
 
             try:
                 await self._validator.validate_create_document_request(
@@ -155,7 +155,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 storage_url=object_name,
                 file_size_bytes=file_size,
                 processing_started_at=now,
-                created_by=user.id,
+                created_by=authenticated_user.id,
                 created_at=now
             )
 
@@ -209,35 +209,35 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 await self._cleanup_temp_file(temp_path)
             raise CreateDocumentServiceException(f"Document creation failed: {e}") from e
 
-    def _require_permissions(self, user: AuthenticationResponse) -> None:
-        user_permissions = set(user.permissions)
+    def _require_permissions(self, authenticated_user: AuthenticationResponse) -> None:
+        user_permissions = set(authenticated_user.permissions)
         missing = self._REQUIRED_PERMISSIONS - user_permissions
 
         if missing:
             logger.warning(
                 "Insufficient permissions for document creation",
                 extra={
-                    "user_id": user.id,
+                    "user_id": authenticated_user.id,
                     "missing_permissions": sorted(missing),
                     "user_permissions": sorted(user_permissions),
                 },
             )
             raise CreateDocumentValidationException(
-                f"User {user.id} is missing required permissions: {sorted(missing)}"
+                f"User {authenticated_user.id} is missing required permissions: {sorted(missing)}"
             )
 
-    def _require_roles(self, user: AuthenticationResponse) -> None:
-        if not bool(set(user.roles) & self._ALL_ALLOWED_ROLES):
+    def _require_roles(self, authenticated_user: AuthenticationResponse) -> None:
+        if not bool(set(authenticated_user.roles) & self._ALL_ALLOWED_ROLES):
             logger.warning(
                 "Insufficient role for document creation",
                 extra={
-                    "user_id": user.id,
-                    "user_roles": sorted(user.roles),
+                    "user_id": authenticated_user.id,
+                    "user_roles": sorted(authenticated_user.roles),
                     "allowed_roles": sorted(self._ALL_ALLOWED_ROLES),
                 },
             )
             raise CreateDocumentValidationException(
-                f"User {user.id} does not have the required role for document creation. "
+                f"User {authenticated_user.id} does not have the required role for document creation. "
                 f"Allowed roles: {sorted(self._ALL_ALLOWED_ROLES)}"
             )
 

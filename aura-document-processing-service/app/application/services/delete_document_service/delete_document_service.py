@@ -66,25 +66,25 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             self,
             document_id: int,
             database_session: AsyncSession,
-            user: AuthenticationResponse,
+            authenticated_user: AuthenticationResponse,
     ) -> None:
         logger.info(
             "Soft delete document initiated",
-            extra={"document_id": document_id, "user_id": user.id}
+            extra={"document_id": document_id, "user_id": authenticated_user.id}
         )
 
         try:
-            self._require_permissions(user)
-            self._require_roles(user, self._ADMIN_ROLES, context=f"soft_delete_document({document_id})")
+            self._require_permissions(authenticated_user)
+            self._require_roles(authenticated_user, self._ADMIN_ROLES, context=f"soft_delete_document({document_id})")
 
             document = await self._get_document_or_raise(document_id, database_session)
 
-            await self._soft_delete_fragments(document.id, user.id, database_session)
-            await self._soft_delete_document(document.id, user.id, database_session)
+            await self._soft_delete_fragments(document.id, authenticated_user.id, database_session)
+            await self._soft_delete_document(document.id, authenticated_user.id, database_session)
 
             logger.info(
                 "Soft delete document completed",
-                extra={"document_id": document_id, "user_id": user.id}
+                extra={"document_id": document_id, "user_id": authenticated_user.id}
             )
 
         except self._KNOWN_EXCEPTIONS:
@@ -99,16 +99,16 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             self,
             chat_id: int,
             database_session: AsyncSession,
-            user: AuthenticationResponse
+            authenticated_user: AuthenticationResponse
     ) -> None:
         logger.info(
             "Soft delete documents by chat initiated",
-            extra={"chat_id": chat_id, "user_id": user.id}
+            extra={"chat_id": chat_id, "user_id": authenticated_user.id}
         )
 
         try:
-            self._require_permissions(user)
-            self._require_roles(user, self._ALL_ALLOWED_ROLES, context=f"soft_delete_documents_by_chat({chat_id})")
+            self._require_permissions(authenticated_user)
+            self._require_roles(authenticated_user, self._ALL_ALLOWED_ROLES, context=f"soft_delete_documents_by_chat({chat_id})")
 
             documents = await self._get_documents_by_chat(chat_id, database_session)
 
@@ -116,17 +116,17 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
                 logger.info("No documents found for chat — nothing to delete", extra={"chat_id": chat_id})
                 return
 
-            is_admin = self._has_any_role(user, self._ADMIN_ROLES)
+            is_admin = self._has_any_role(authenticated_user, self._ADMIN_ROLES)
             if not is_admin:
-                documents = self._filter_owned_or_raise(documents, user, chat_id)
+                documents = self._filter_owned_or_raise(documents, authenticated_user, chat_id)
 
             for document in documents:
-                await self._soft_delete_fragments(document.id, user.id, database_session)
-                await self._soft_delete_document(document.id, user.id, database_session)
+                await self._soft_delete_fragments(document.id, authenticated_user.id, database_session)
+                await self._soft_delete_document(document.id, authenticated_user.id, database_session)
 
             logger.info(
                 "Soft delete documents by chat completed",
-                extra={"chat_id": chat_id, "user_id": user.id, "document_count": len(documents)}
+                extra={"chat_id": chat_id, "user_id": authenticated_user.id, "document_count": len(documents)}
             )
 
         except self._KNOWN_EXCEPTIONS:
@@ -141,16 +141,16 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             self,
             document_id: int,
             database_session: AsyncSession,
-            user: AuthenticationResponse
+            authenticated_user: AuthenticationResponse
     ) -> None:
         logger.info(
             "Hard delete document initiated",
-            extra={"document_id": document_id, "user_id": user.id}
+            extra={"document_id": document_id, "user_id": authenticated_user.id}
         )
 
         try:
-            self._require_permissions(user)
-            self._require_roles(user, self._ADMIN_ROLES, context=f"hard_delete_document({document_id})")
+            self._require_permissions(authenticated_user)
+            self._require_roles(authenticated_user, self._ADMIN_ROLES, context=f"hard_delete_document({document_id})")
 
             document = await self._get_document_or_raise(document_id, database_session)
 
@@ -161,7 +161,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
 
             logger.info(
                 "Hard delete document completed",
-                extra={"document_id": document_id, "user_id": user.id}
+                extra={"document_id": document_id, "user_id": authenticated_user.id}
             )
 
         except self._KNOWN_EXCEPTIONS:
@@ -176,16 +176,16 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             self,
             chat_id: int,
             database_session: AsyncSession,
-            user: AuthenticationResponse
+            authenticated_user: AuthenticationResponse
     ) -> None:
         logger.info(
             "Hard delete documents by chat initiated",
-            extra={"chat_id": chat_id, "user_id": user.id}
+            extra={"chat_id": chat_id, "user_id": authenticated_user.id}
         )
 
         try:
-            self._require_permissions(user)
-            self._require_roles(user, self._ADMIN_ROLES, context=f"hard_delete_documents_by_chat({chat_id})")
+            self._require_permissions(authenticated_user)
+            self._require_roles(authenticated_user, self._ADMIN_ROLES, context=f"hard_delete_documents_by_chat({chat_id})")
 
             documents = await self._get_documents_by_chat(chat_id, database_session)
 
@@ -200,7 +200,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
 
             logger.info(
                 "Hard delete documents by chat completed",
-                extra={"chat_id": chat_id, "user_id": user.id, "document_count": len(documents)}
+                extra={"chat_id": chat_id, "user_id": authenticated_user.id, "document_count": len(documents)}
             )
 
         except self._KNOWN_EXCEPTIONS:
@@ -211,55 +211,55 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
                 f"Unexpected error during hard delete of documents for chat {chat_id}"
             ) from e
 
-    def _require_permissions(self, user: AuthenticationResponse) -> None:
-        user_permissions = set(user.permissions)
+    def _require_permissions(self, authenticated_user: AuthenticationResponse) -> None:
+        user_permissions = set(authenticated_user.permissions)
         missing = self._REQUIRED_PERMISSIONS - user_permissions
 
         if missing:
             logger.warning(
                 "Insufficient permissions for delete operation",
                 extra={
-                    "user_id": user.id,
+                    "user_id": authenticated_user.id,
                     "missing_permissions": sorted(missing),
                     "user_permissions": sorted(user_permissions)
                 }
             )
             raise DeleteDocumentUnauthorizedException(
-                f"User {user.id} is missing required permissions: {sorted(missing)}"
+                f"User {authenticated_user.id} is missing required permissions: {sorted(missing)}"
             )
 
     @staticmethod
     def _require_roles(
-            user: AuthenticationResponse,
+            authenticated_user: AuthenticationResponse,
             allowed_roles: set[str],
             context: str
     ) -> None:
-        if not DeleteDocumentService._has_any_role(user, allowed_roles):
+        if not DeleteDocumentService._has_any_role(authenticated_user, allowed_roles):
             logger.warning(
                 "Insufficient role for delete operation",
                 extra={
-                    "user_id": user.id,
-                    "user_roles": sorted(user.roles),
+                    "user_id": authenticated_user.id,
+                    "user_roles": sorted(authenticated_user.roles),
                     "allowed_roles": sorted(allowed_roles),
                     "context": context
                 }
             )
             raise DeleteDocumentUnauthorizedException(
-                f"User {user.id} does not have the required role for {context}. "
+                f"User {authenticated_user.id} does not have the required role for {context}. "
                 f"Allowed roles: {sorted(allowed_roles)}"
             )
 
     @staticmethod
-    def _has_any_role(user: AuthenticationResponse, roles: set[str]) -> bool:
-        return bool(set(user.roles) & roles)
+    def _has_any_role(authenticated_user: AuthenticationResponse, roles: set[str]) -> bool:
+        return bool(set(authenticated_user.roles) & roles)
 
     @staticmethod
     def _filter_owned_or_raise(
             documents: list[Document],
-            user: AuthenticationResponse,
+            authenticated_user: AuthenticationResponse,
             chat_id: int
     ) -> list[Document]:
-        owned = [doc for doc in documents if doc.created_by == user.id]
+        owned = [doc for doc in documents if doc.created_by == authenticated_user.id]
 
         if not owned:
             unauthorized_ids = [doc.id for doc in documents]
@@ -267,19 +267,19 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
                 "User attempted to delete documents they do not own",
                 extra={
                     "chat_id": chat_id,
-                    "user_id": user.id,
+                    "user_id": authenticated_user.id,
                     "document_ids": unauthorized_ids
                 }
             )
             raise DeleteDocumentUnauthorizedException(
-                f"User {user.id} does not own any documents in chat {chat_id}"
+                f"User {authenticated_user.id} does not own any documents in chat {chat_id}"
             )
 
-        not_owned = [doc.id for doc in documents if doc.created_by != user.id]
+        not_owned = [doc.id for doc in documents if doc.created_by != authenticated_user.id]
         if not_owned:
             logger.info(
                 "User role: skipping documents not owned by user",
-                extra={"chat_id": chat_id, "user_id": user.id, "skipped_document_ids": not_owned}
+                extra={"chat_id": chat_id, "user_id": authenticated_user.id, "skipped_document_ids": not_owned}
             )
 
         return owned

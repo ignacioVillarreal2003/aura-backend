@@ -23,24 +23,24 @@ class DocumentSummaryController(DocumentSummaryControllerInterface):
             request: Request,
             document_summary_request: DocumentSummaryRequest,
             document_summary_service: DocumentSummaryServiceInterface = Depends(get_document_summary_service),
-            user: AuthenticationResponse = Depends(get_current_user)
+            authenticated_user: AuthenticationResponse = Depends(get_current_user)
     ) -> DocumentSummaryResponse:
         logger.info(
             "Execute document summary request received",
-            extra={"user_id": user.id}
+            extra={"user_id": authenticated_user.id}
         )
 
-        authorization: Optional[str] = request.headers.get("Authorization")
+        authorization_token: Optional[str] = request.headers.get("Authorization")
 
         document_summary_response = await document_summary_service.execute_document_summary(
             document_summary_request=document_summary_request,
-            user=user,
-            authorization=authorization
+            authenticated_user=authenticated_user,
+            authorization_token=authorization_token
         )
 
         logger.info(
             "Execute document summary request completed",
-            extra={"user_id": user.id}
+            extra={"user_id": authenticated_user.id}
         )
 
         return document_summary_response

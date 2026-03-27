@@ -23,24 +23,24 @@ class DocumentQuestionController(DocumentQuestionControllerInterface):
             request: Request,
             document_question_request: DocumentQuestionRequest,
             document_question_service: DocumentQuestionServiceInterface = Depends(get_document_question_service),
-            user: AuthenticationResponse = Depends(get_current_user)
+            authenticated_user: AuthenticationResponse = Depends(get_current_user)
     ) -> DocumentQuestionResponse:
         logger.info(
             "Execute document question request received",
-            extra={"user_id": user.id}
+            extra={"user_id": authenticated_user.id}
         )
 
-        authorization: Optional[str] = request.headers.get("Authorization")
+        authorization_token: Optional[str] = request.headers.get("Authorization")
 
         document_question_response = await document_question_service.execute_document_question(
             document_question_request=document_question_request,
-            user=user,
-            authorization=authorization
+            authenticated_user=authenticated_user,
+            authorization_token=authorization_token
         )
 
         logger.info(
             "Execute document question request completed",
-            extra={"user_id": user.id}
+            extra={"user_id": authenticated_user.id}
         )
 
         return document_question_response

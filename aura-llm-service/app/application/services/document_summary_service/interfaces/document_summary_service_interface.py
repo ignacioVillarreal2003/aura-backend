@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Optional
 
 from app.domain.dtos.document_summary.document_summary_request import DocumentSummaryRequest
 from app.domain.dtos.document_summary.document_summary_response import DocumentSummaryResponse
@@ -11,7 +10,7 @@ class DocumentSummaryServiceInterface(ABC):
     async def execute_document_summary(
             self,
             document_summary_request: DocumentSummaryRequest,
-            user: AuthenticationResponse,
-            authorization: Optional[str] = None
+            authenticated_user: AuthenticationResponse,
+            authorization_token: str
     ) -> DocumentSummaryResponse:
         pass

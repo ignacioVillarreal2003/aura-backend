@@ -15,6 +15,6 @@ class CreateDocumentServiceInterface(ABC):
             raw_document: UploadFile,
             background_tasks: BackgroundTasks,
             database_session: AsyncSession,
-            user: AuthenticationResponse,
+            authenticated_user: AuthenticationResponse,
     ) -> CreateDocumentResponse:
         pass

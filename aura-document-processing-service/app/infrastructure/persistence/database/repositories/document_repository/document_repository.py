@@ -1,10 +1,11 @@
 import logging
 from datetime import datetime, timezone
 from typing import List, Optional
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.constants.document_type import DocumentType
 from app.domain.models.document import Document
 from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
     DocumentRepositoryInterface
@@ -171,6 +172,90 @@ class DocumentRepository(DocumentRepositoryInterface):
 
         except Exception as e:
             raise DatabaseException("Error deleting document from the database") from e
+
+    async def get_documents_missing_metadata(
+            self,
+            database_session: AsyncSession
+    ) -> List[Document]:
+        try:
+            logger.debug("Fetching documents missing metadata")
+
+            result = await database_session.execute(
+                select(Document).where(
+                    Document.deleted_at.is_(None),
+                    or_(
+                        Document.type.is_(None),
+                        Document.category.is_(None),
+                        Document.description.is_(None)
+                    )
+                )
+            )
+            documents = list(result.scalars().all())
+
+            logger.debug(
+                "Documents missing metadata fetched",
+                extra={"count": len(documents)}
+            )
+            return documents
+
+        except Exception as e:
+            raise DatabaseException(
+                "Error fetching documents missing metadata from the database"
+            ) from e
+
+    async def search_documents(
+            self,
+            database_session: AsyncSession,
+            page: Optional[int] = None,
+            size: Optional[int] = None,
+            name: Optional[str] = None,
+            description: Optional[str] = None,
+            category: Optional[str] = None,
+            type: Optional[DocumentType] = None,
+            created_from: Optional[datetime] = None,
+            created_to: Optional[datetime] = None,
+    ) -> List[Document]:
+        try:
+            logger.debug(
+                "Searching documents",
+                extra={
+                    "page": page, "size": size, "name": name,
+                    "description": description, "category": category,
+                    "type": type, "created_from": created_from, "created_to": created_to
+                }
+            )
+
+            query = select(Document).where(Document.deleted_at.is_(None))
+
+            if name is not None:
+                query = query.where(Document.name.ilike(f"%{name}%"))
+            if description is not None:
+                query = query.where(Document.description.ilike(f"%{description}%"))
+            if category is not None:
+                query = query.where(Document.category.ilike(f"%{category}%"))
+            if type is not None:
+                query = query.where(Document.type == type)
+            if created_from is not None:
+                query = query.where(Document.created_at >= created_from)
+            if created_to is not None:
+                query = query.where(Document.created_at <= created_to)
+
+            if page is not None and size is not None:
+                query = query.offset(page * size).limit(size)
+            elif size is not None:
+                query = query.limit(size)
+
+            result = await database_session.execute(query)
+            documents = list(result.scalars().all())
+
+            logger.debug(
+                "Documents search completed",
+                extra={"count": len(documents)}
+            )
+            return documents
+
+        except Exception as e:
+            raise DatabaseException("Error searching documents in the database") from e
 
     async def soft_delete_document_by_id(
             self,

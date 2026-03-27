@@ -3,6 +3,7 @@ from fastapi import FastAPI
 
 from app.application.services.agent_service.agent_service import AgentService
 from app.application.services.document_question_service.document_question_service import DocumentQuestionService
+from app.application.services.document_action_service.document_action_service import DocumentActionService
 from app.application.services.document_summary_service.document_summary_service import DocumentSummaryService
 from app.infrastructure.authentication_provider.authentication_provider import AuthenticationProvider
 from app.infrastructure.http_client.http_client import HttpClient
@@ -59,6 +60,13 @@ async def startup_dependencies(
             document_context_provider=document_context_provider
         )
         app.state.document_summary_service = document_summary_service
+
+        document_action_service = DocumentActionService(
+            ollama_llm_facade=ollama_llm_facade_base,
+            llm_invoker=llm_invoker,
+            document_context_provider=document_context_provider
+        )
+        app.state.document_action_service = document_action_service
 
         logger.info("All dependencies started successfully")
 

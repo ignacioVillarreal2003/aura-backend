@@ -46,28 +46,28 @@ class UpdateDocumentService(UpdateDocumentServiceInterface):
             document_id: int,
             post_process_document_request: PostProcessDocumentRequest,
             database_session: AsyncSession,
-            user: AuthenticationResponse
+            authenticated_user: AuthenticationResponse
     ) -> PostProcessDocumentResponse:
         logger.info(
             "Post-process document initiated",
-            extra={"document_id": document_id, "user_id": user.id}
+            extra={"document_id": document_id, "user_id": authenticated_user.id}
         )
 
         try:
-            self._require_permissions(user)
-            self._require_roles(user, context=f"post_process_document({document_id})")
+            self._require_permissions(authenticated_user)
+            self._require_roles(authenticated_user, context=f"post_process_document({document_id})")
 
             document = await self._get_document_or_raise(document_id, database_session)
             updated_document = await self._apply_and_persist(
                 document=document,
                 request=post_process_document_request,
-                user=user,
+                authenticated_user=authenticated_user,
                 database_session=database_session
             )
 
             logger.info(
                 "Post-process document completed",
-                extra={"document_id": document_id, "user_id": user.id}
+                extra={"document_id": document_id, "user_id": authenticated_user.id}
             )
             return PostProcessDocumentResponse.model_validate(updated_document)
 
@@ -82,36 +82,36 @@ class UpdateDocumentService(UpdateDocumentServiceInterface):
                 f"Unexpected error during post-process of document {document_id}"
             ) from e
 
-    def _require_permissions(self, user: AuthenticationResponse) -> None:
-        user_permissions = set(user.permissions)
+    def _require_permissions(self, authenticated_user: AuthenticationResponse) -> None:
+        user_permissions = set(authenticated_user.permissions)
         missing = self._REQUIRED_PERMISSIONS - user_permissions
 
         if missing:
             logger.warning(
                 "Insufficient permissions for update operation",
                 extra={
-                    "user_id": user.id,
+                    "user_id": authenticated_user.id,
                     "missing_permissions": sorted(missing),
                     "user_permissions": sorted(user_permissions),
                 },
             )
             raise UpdateDocumentUnauthorizedException(
-                f"User {user.id} is missing required permissions: {sorted(missing)}"
+                f"User {authenticated_user.id} is missing required permissions: {sorted(missing)}"
             )
 
-    def _require_roles(self, user: AuthenticationResponse, context: str) -> None:
-        if not bool(set(user.roles) & self._ADMIN_ROLES):
+    def _require_roles(self, authenticated_user: AuthenticationResponse, context: str) -> None:
+        if not bool(set(authenticated_user.roles) & self._ADMIN_ROLES):
             logger.warning(
                 "Insufficient role for update operation",
                 extra={
-                    "user_id": user.id,
-                    "user_roles": sorted(user.roles),
+                    "user_id": authenticated_user.id,
+                    "user_roles": sorted(authenticated_user.roles),
                     "allowed_roles": sorted(self._ADMIN_ROLES),
                     "context": context,
                 },
             )
             raise UpdateDocumentUnauthorizedException(
-                f"User {user.id} does not have the required role for {context}. "
+                f"User {authenticated_user.id} does not have the required role for {context}. "
                 f"Allowed roles: {sorted(self._ADMIN_ROLES)}"
             )
 
@@ -133,14 +133,14 @@ class UpdateDocumentService(UpdateDocumentServiceInterface):
             self,
             document: Document,
             request: PostProcessDocumentRequest,
-            user: AuthenticationResponse,
+            authenticated_user: AuthenticationResponse,
             database_session: AsyncSession
     ) -> Document:
         try:
             document.type = request.type
             document.category = request.category
             document.description = request.description
-            document.updated_by = user.id
+            document.updated_by = authenticated_user.id
             document.updated_at = datetime.now(timezone.utc)
 
             updated_document: Document = await self._document_repository.update_document(
@@ -150,7 +150,7 @@ class UpdateDocumentService(UpdateDocumentServiceInterface):
 
             logger.debug(
                 "Document persisted successfully",
-                extra={"document_id": document.id, "user_id": user.id}
+                extra={"document_id": document.id, "user_id": authenticated_user.id}
             )
             return updated_document
 

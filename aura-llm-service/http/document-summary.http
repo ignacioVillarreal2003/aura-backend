@@ -5,7 +5,7 @@ Content-Type: application/json
 Authorization: Bearer user_token_123
 
 {
-  "document_id": 3
+  "document_id": 12
 }
 
 

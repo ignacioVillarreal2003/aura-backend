@@ -13,6 +13,6 @@ class UpdateDocumentServiceInterface(ABC):
             document_id: int,
             post_process_document_request: PostProcessDocumentRequest,
             database_session: AsyncSession,
-            user: AuthenticationResponse
+            authenticated_user: AuthenticationResponse
     ) -> PostProcessDocumentResponse:
         pass
