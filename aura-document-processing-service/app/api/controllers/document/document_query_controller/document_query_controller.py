@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio.session import AsyncSession
 import logging
 
+from app.api.controllers.controller_logging import log_controller
 from app.api.controllers.document.document_query_controller.interfaces.document_query_controller_interface import (
     DocumentQueryControllerInterface
 )
@@ -31,12 +32,12 @@ class DocumentQueryController(DocumentQueryControllerInterface):
             database_session: AsyncSession = Depends(get_database_session),
             authenticated_user: AuthenticationResponse = Depends(get_current_user)
     ) -> DocumentResponse:
-        logger.info(
-            "Get document request received",
-            extra={
-                "document_id": document_id,
-                "user_id": authenticated_user.id
-            }
+        log_controller(
+            logger,
+            operation="get_document",
+            phase="start",
+            user_id=authenticated_user.id,
+            document_id=document_id,
         )
 
         document_response = await document_query_service.get_document(
@@ -45,12 +46,12 @@ class DocumentQueryController(DocumentQueryControllerInterface):
             authenticated_user=authenticated_user
         )
 
-        logger.info(
-            "Get document request completed",
-            extra={
-                "document_id": document_id,
-                "user_id": authenticated_user.id
-            }
+        log_controller(
+            logger,
+            operation="get_document",
+            phase="success",
+            user_id=authenticated_user.id,
+            document_id=document_id,
         )
 
         return document_response
@@ -69,16 +70,19 @@ class DocumentQueryController(DocumentQueryControllerInterface):
             database_session: AsyncSession = Depends(get_database_session),
             authenticated_user: AuthenticationResponse = Depends(get_current_user)
     ) -> DocumentListResponse:
-        logger.info(
-            "Get documents request received",
-            extra={
-                "page": page,
-                "size": size,
-                "name": name,
-                "category": category,
-                "type": type,
-                "user_id": authenticated_user.id
-            }
+        log_controller(
+            logger,
+            operation="list_documents",
+            phase="start",
+            user_id=authenticated_user.id,
+            page=page,
+            size=size,
+            name_filter=name,
+            description_filter=description,
+            category_filter=category,
+            document_type=type,
+            created_from=created_from,
+            created_to=created_to,
         )
 
         document_list_response = await document_query_service.get_documents(
@@ -94,13 +98,14 @@ class DocumentQueryController(DocumentQueryControllerInterface):
             created_to=created_to,
         )
 
-        logger.info(
-            "Get documents request completed",
-            extra={
-                "page": page,
-                "size": size,
-                "user_id": authenticated_user.id
-            }
+        log_controller(
+            logger,
+            operation="list_documents",
+            phase="success",
+            user_id=authenticated_user.id,
+            page=page,
+            size=size,
+            result_count=len(document_list_response.documents),
         )
 
         return document_list_response

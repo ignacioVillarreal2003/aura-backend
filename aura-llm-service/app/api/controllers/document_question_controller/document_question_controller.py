@@ -2,6 +2,7 @@ import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, Request
 
+from app.api.controllers.controller_logging import log_controller
 from app.api.controllers.document_question_controller.interfaces.document_question_controller_interface import (
     DocumentQuestionControllerInterface
 )
@@ -25,9 +26,12 @@ class DocumentQuestionController(DocumentQuestionControllerInterface):
             document_question_service: DocumentQuestionServiceInterface = Depends(get_document_question_service),
             authenticated_user: AuthenticationResponse = Depends(get_current_user)
     ) -> DocumentQuestionResponse:
-        logger.info(
-            "Execute document question request received",
-            extra={"user_id": authenticated_user.id}
+        log_controller(
+            logger,
+            operation="execute_document_question",
+            phase="start",
+            user_id=authenticated_user.id,
+            message_count=len(document_question_request.messages),
         )
 
         authorization_token: Optional[str] = request.headers.get("Authorization")
@@ -38,9 +42,13 @@ class DocumentQuestionController(DocumentQuestionControllerInterface):
             authorization_token=authorization_token
         )
 
-        logger.info(
-            "Execute document question request completed",
-            extra={"user_id": authenticated_user.id}
+        log_controller(
+            logger,
+            operation="execute_document_question",
+            phase="success",
+            user_id=authenticated_user.id,
+            fragment_count=len(document_question_response.fragments),
+            question_length=len(document_question_response.question or ""),
         )
 
         return document_question_response

@@ -1,6 +1,7 @@
 import logging
 from fastapi import APIRouter, Depends
 
+from app.api.controllers.controller_logging import log_controller
 from app.api.controllers.fragment.post_process_fragment_controller.interfaces.post_process_fragment_controller_interface import (
     PostProcessFragmentControllerInterface
 )
@@ -31,16 +32,21 @@ class PostProcessFragmentController(PostProcessFragmentControllerInterface):
             ),
             authenticated_user: AuthenticationResponse = Depends(get_current_user)
     ) -> PostProcessFragmentStartResponse:
-        logger.info(
-            "Start all fragment post-processing request received",
-            extra={"user_id": authenticated_user.id}
+        log_controller(
+            logger,
+            operation="post_process_fragment_start_all",
+            phase="start",
+            user_id=authenticated_user.id,
         )
 
         response = await post_process_fragment_service.start_all(authenticated_user=authenticated_user)
 
-        logger.info(
-            "Start all fragment post-processing request completed",
-            extra={"user_id": authenticated_user.id, "total_fragments": response.total_fragments}
+        log_controller(
+            logger,
+            operation="post_process_fragment_start_all",
+            phase="success",
+            user_id=authenticated_user.id,
+            total_fragments=response.total_fragments,
         )
 
         return response
@@ -53,12 +59,12 @@ class PostProcessFragmentController(PostProcessFragmentControllerInterface):
             ),
             authenticated_user: AuthenticationResponse = Depends(get_current_user)
     ) -> PostProcessFragmentStartResponse:
-        logger.info(
-            "Start fragment post-processing for specific documents request received",
-            extra={
-                "user_id": authenticated_user.id,
-                "document_ids": post_process_fragments_request.document_ids
-            }
+        log_controller(
+            logger,
+            operation="post_process_fragment_start_for_documents",
+            phase="start",
+            user_id=authenticated_user.id,
+            document_ids=post_process_fragments_request.document_ids,
         )
 
         response = await post_process_fragment_service.start_for_documents(
@@ -66,9 +72,12 @@ class PostProcessFragmentController(PostProcessFragmentControllerInterface):
             authenticated_user=authenticated_user
         )
 
-        logger.info(
-            "Start fragment post-processing for specific documents request completed",
-            extra={"user_id": authenticated_user.id, "total_fragments": response.total_fragments}
+        log_controller(
+            logger,
+            operation="post_process_fragment_start_for_documents",
+            phase="success",
+            user_id=authenticated_user.id,
+            total_fragments=response.total_fragments,
         )
 
         return response
@@ -80,12 +89,27 @@ class PostProcessFragmentController(PostProcessFragmentControllerInterface):
             ),
             authenticated_user: AuthenticationResponse = Depends(get_current_user)
     ) -> PostProcessFragmentStatusResponse:
-        logger.info(
-            "Fragment post-processing status request received",
-            extra={"user_id": authenticated_user.id}
+        log_controller(
+            logger,
+            operation="post_process_fragment_get_status",
+            phase="start",
+            user_id=authenticated_user.id,
         )
 
-        return post_process_fragment_service.get_status()
+        status_response = post_process_fragment_service.get_status()
+
+        log_controller(
+            logger,
+            operation="post_process_fragment_get_status",
+            phase="success",
+            user_id=authenticated_user.id,
+            is_running=status_response.is_running,
+            total_fragments=status_response.total_fragments,
+            processed_fragments=status_response.processed_fragments,
+            failed_fragments=status_response.failed_fragments,
+        )
+
+        return status_response
 
     async def stop(
             self,
@@ -94,16 +118,20 @@ class PostProcessFragmentController(PostProcessFragmentControllerInterface):
             ),
             authenticated_user: AuthenticationResponse = Depends(get_current_user)
     ) -> dict:
-        logger.info(
-            "Stop fragment post-processing request received",
-            extra={"user_id": authenticated_user.id}
+        log_controller(
+            logger,
+            operation="post_process_fragment_stop",
+            phase="start",
+            user_id=authenticated_user.id,
         )
 
         await post_process_fragment_service.stop()
 
-        logger.info(
-            "Stop fragment post-processing request completed",
-            extra={"user_id": authenticated_user.id}
+        log_controller(
+            logger,
+            operation="post_process_fragment_stop",
+            phase="success",
+            user_id=authenticated_user.id,
         )
 
         return {"message": "Fragment post-processing stop signal sent"}

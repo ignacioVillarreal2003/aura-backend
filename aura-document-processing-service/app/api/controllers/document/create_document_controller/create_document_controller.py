@@ -2,6 +2,7 @@ from fastapi import APIRouter, File, UploadFile, Depends, BackgroundTasks
 from sqlalchemy.ext.asyncio.session import AsyncSession
 import logging
 
+from app.api.controllers.controller_logging import log_controller
 from app.api.controllers.document.create_document_controller.interfaces.create_document_controller_interface import (
     CreateDocumentControllerInterface
 )
@@ -28,13 +29,13 @@ class CreateDocumentController(CreateDocumentControllerInterface):
             database_session: AsyncSession = Depends(get_database_session),
             authenticated_user: AuthenticationResponse = Depends(get_current_user)
     ) -> CreateDocumentResponse:
-        logger.info(
-            "Create document request received",
-            extra={
-                "filename_document": raw_document.filename,
-                "content_type": raw_document.content_type,
-                "user_id": authenticated_user.id
-            }
+        log_controller(
+            logger,
+            operation="create_document",
+            phase="start",
+            user_id=authenticated_user.id,
+            document_filename=raw_document.filename,
+            content_type=raw_document.content_type,
         )
 
         create_document_response = await create_document_service.create_document(
@@ -45,12 +46,12 @@ class CreateDocumentController(CreateDocumentControllerInterface):
             authenticated_user=authenticated_user
         )
 
-        logger.info(
-            "Create document request completed",
-            extra={
-                "document_id": create_document_response.id,
-                "user_id": authenticated_user.id
-            }
+        log_controller(
+            logger,
+            operation="create_document",
+            phase="success",
+            user_id=authenticated_user.id,
+            document_id=create_document_response.id,
         )
 
         return create_document_response

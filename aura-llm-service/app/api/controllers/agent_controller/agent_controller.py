@@ -2,6 +2,7 @@ import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, Request
 
+from app.api.controllers.controller_logging import log_controller
 from app.api.controllers.agent_controller.interfaces.agent_controller_interface import AgentControllerInterface
 from app.application.services.agent_service.agent_service import get_agent_service
 from app.application.services.agent_service.interfaces.agent_service_interface import AgentServiceInterface
@@ -21,9 +22,12 @@ class AgentController(AgentControllerInterface):
             agent_service: AgentServiceInterface = Depends(get_agent_service),
             user: AuthenticationResponse = Depends(get_current_user)
     ) -> AgentResponse:
-        logger.info(
-            "Execute agent request received",
-            extra={"user_id": user.id}
+        log_controller(
+            logger,
+            operation="execute_agent",
+            phase="start",
+            user_id=user.id,
+            message_count=len(agent_request.messages),
         )
 
         authorization: Optional[str] = request.headers.get("Authorization")
@@ -34,9 +38,12 @@ class AgentController(AgentControllerInterface):
             authorization=authorization
         )
 
-        logger.info(
-            "Execute agent request completed",
-            extra={"user_id": user.id}
+        log_controller(
+            logger,
+            operation="execute_agent",
+            phase="success",
+            user_id=user.id,
+            response_length=len(agent_response.message or ""),
         )
 
         return agent_response

@@ -3,6 +3,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Request
 
+from app.api.controllers.controller_logging import log_controller
 from app.api.controllers.document_action_controller.interfaces.document_action_controller_interface import (
     DocumentActionControllerInterface,
 )
@@ -26,9 +27,14 @@ class DocumentActionController(DocumentActionControllerInterface):
             document_action_service: DocumentActionServiceInterface = Depends(get_document_action_service),
             authenticated_user: AuthenticationResponse = Depends(get_current_user),
     ) -> DocumentActionResponse:
-        logger.info(
-            "Execute document action request received",
-            extra={"user_id": authenticated_user.id},
+        log_controller(
+            logger,
+            operation="execute_document_action",
+            phase="start",
+            user_id=authenticated_user.id,
+            document_ids=document_action_request.document_ids,
+            instruction_length=len(document_action_request.instruction or ""),
+            action=document_action_request.action,
         )
 
         authorization_token: Optional[str] = request.headers.get("Authorization")
@@ -39,9 +45,13 @@ class DocumentActionController(DocumentActionControllerInterface):
             authorization_token=authorization_token,
         )
 
-        logger.info(
-            "Execute document action request completed",
-            extra={"user_id": authenticated_user.id},
+        log_controller(
+            logger,
+            operation="execute_document_action",
+            phase="success",
+            user_id=authenticated_user.id,
+            document_ids=document_action_response.document_ids,
+            action=document_action_response.action,
         )
 
         return document_action_response

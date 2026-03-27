@@ -2,6 +2,7 @@ import logging
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio.session import AsyncSession
 
+from app.api.controllers.controller_logging import log_controller
 from app.api.controllers.fragment.fragment_query_controller.interfaces.fragment_query_controller_interface import (
     FragmentQueryControllerInterface
 )
@@ -29,12 +30,12 @@ class FragmentQueryController(FragmentQueryControllerInterface):
             database_session: AsyncSession = Depends(get_database_session),
             authenticated_user: AuthenticationResponse = Depends(get_service_caller_user)
     ) -> ContextFragmentListResponse:
-        logger.info(
-            "Retrieve context fragments by question request received",
-            extra={
-                "question": question_context_fragments_request.question,
-                "user_id": authenticated_user.id
-            }
+        log_controller(
+            logger,
+            operation="retrieve_context_fragments_by_question",
+            phase="start",
+            user_id=authenticated_user.id,
+            question_length=len(question_context_fragments_request.question or ""),
         )
 
         context_fragment_list_response = await fragment_query_service.retrieve_context_fragments_by_question(
@@ -43,13 +44,12 @@ class FragmentQueryController(FragmentQueryControllerInterface):
             authenticated_user=authenticated_user
         )
 
-        logger.info(
-            "Retrieve context fragments by question request completed",
-            extra={
-                "question": question_context_fragments_request.question,
-                "fragment_count": len(context_fragment_list_response.context_fragments),
-                "user_id": authenticated_user.id
-            }
+        log_controller(
+            logger,
+            operation="retrieve_context_fragments_by_question",
+            phase="success",
+            user_id=authenticated_user.id,
+            fragment_count=len(context_fragment_list_response.context_fragments),
         )
 
         return context_fragment_list_response
@@ -61,12 +61,12 @@ class FragmentQueryController(FragmentQueryControllerInterface):
             database_session: AsyncSession = Depends(get_database_session),
             authenticated_user: AuthenticationResponse = Depends(get_service_caller_user)
     ) -> ContextFragmentListResponse:
-        logger.info(
-            "Retrieve context fragments by documents request received",
-            extra={
-                "document_ids": documents_context_fragments_request.document_ids,
-                "user_id": authenticated_user.id
-            }
+        log_controller(
+            logger,
+            operation="retrieve_context_fragments_by_documents",
+            phase="start",
+            user_id=authenticated_user.id,
+            document_ids=documents_context_fragments_request.document_ids,
         )
 
         context_fragment_list_response = await fragment_query_service.retrieve_context_fragments_by_documents(
@@ -75,13 +75,13 @@ class FragmentQueryController(FragmentQueryControllerInterface):
             authenticated_user=authenticated_user
         )
 
-        logger.info(
-            "Retrieve context fragments by documents request completed",
-            extra={
-                "document_ids": documents_context_fragments_request.document_ids,
-                "fragment_count": len(context_fragment_list_response.context_fragments),
-                "user_id": authenticated_user.id
-            }
+        log_controller(
+            logger,
+            operation="retrieve_context_fragments_by_documents",
+            phase="success",
+            user_id=authenticated_user.id,
+            document_ids=documents_context_fragments_request.document_ids,
+            fragment_count=len(context_fragment_list_response.context_fragments),
         )
 
         return context_fragment_list_response

@@ -1,6 +1,7 @@
 import logging
 from fastapi import APIRouter, Depends
 
+from app.api.controllers.controller_logging import log_controller
 from app.api.controllers.document.post_process_document_controller.interfaces.post_process_document_controller_interface import (
     PostProcessDocumentControllerInterface
 )
@@ -29,16 +30,21 @@ class PostProcessDocumentController(PostProcessDocumentControllerInterface):
             ),
             authenticated_user: AuthenticationResponse = Depends(get_current_user)
     ) -> PostProcessStartResponse:
-        logger.info(
-            "Start all post-processing request received",
-            extra={"user_id": authenticated_user.id}
+        log_controller(
+            logger,
+            operation="post_process_document_start_all",
+            phase="start",
+            user_id=authenticated_user.id,
         )
 
         response = await post_process_document_service.start_all(authenticated_user=authenticated_user)
 
-        logger.info(
-            "Start all post-processing request completed",
-            extra={"user_id": authenticated_user.id, "total_documents": response.total_documents}
+        log_controller(
+            logger,
+            operation="post_process_document_start_all",
+            phase="success",
+            user_id=authenticated_user.id,
+            total_documents=response.total_documents,
         )
 
         return response
@@ -51,12 +57,12 @@ class PostProcessDocumentController(PostProcessDocumentControllerInterface):
             ),
             authenticated_user: AuthenticationResponse = Depends(get_current_user)
     ) -> PostProcessStartResponse:
-        logger.info(
-            "Start post-processing for specific documents request received",
-            extra={
-                "user_id": authenticated_user.id,
-                "document_ids": post_process_documents_request.document_ids
-            }
+        log_controller(
+            logger,
+            operation="post_process_document_start_for_documents",
+            phase="start",
+            user_id=authenticated_user.id,
+            document_ids=post_process_documents_request.document_ids,
         )
 
         response = await post_process_document_service.start_for_documents(
@@ -64,9 +70,12 @@ class PostProcessDocumentController(PostProcessDocumentControllerInterface):
             authenticated_user=authenticated_user
         )
 
-        logger.info(
-            "Start post-processing for specific documents request completed",
-            extra={"user_id": authenticated_user.id, "total_documents": response.total_documents}
+        log_controller(
+            logger,
+            operation="post_process_document_start_for_documents",
+            phase="success",
+            user_id=authenticated_user.id,
+            total_documents=response.total_documents,
         )
 
         return response
@@ -78,12 +87,27 @@ class PostProcessDocumentController(PostProcessDocumentControllerInterface):
             ),
             authenticated_user: AuthenticationResponse = Depends(get_current_user)
     ) -> PostProcessStatusResponse:
-        logger.info(
-            "Post-processing status request received",
-            extra={"user_id": authenticated_user.id}
+        log_controller(
+            logger,
+            operation="post_process_document_get_status",
+            phase="start",
+            user_id=authenticated_user.id,
         )
 
-        return post_process_document_service.get_status()
+        status_response = post_process_document_service.get_status()
+
+        log_controller(
+            logger,
+            operation="post_process_document_get_status",
+            phase="success",
+            user_id=authenticated_user.id,
+            is_running=status_response.is_running,
+            total_documents=status_response.total_documents,
+            processed_documents=status_response.processed_documents,
+            failed_documents=status_response.failed_documents,
+        )
+
+        return status_response
 
     async def stop(
             self,
@@ -92,16 +116,20 @@ class PostProcessDocumentController(PostProcessDocumentControllerInterface):
             ),
             authenticated_user: AuthenticationResponse = Depends(get_current_user)
     ) -> dict:
-        logger.info(
-            "Stop post-processing request received",
-            extra={"user_id": authenticated_user.id}
+        log_controller(
+            logger,
+            operation="post_process_document_stop",
+            phase="start",
+            user_id=authenticated_user.id,
         )
 
         await post_process_document_service.stop()
 
-        logger.info(
-            "Stop post-processing request completed",
-            extra={"user_id": authenticated_user.id}
+        log_controller(
+            logger,
+            operation="post_process_document_stop",
+            phase="success",
+            user_id=authenticated_user.id,
         )
 
         return {"message": "Post-processing stop signal sent"}
