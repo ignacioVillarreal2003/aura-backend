@@ -91,7 +91,9 @@ def add_middleware(app: FastAPI) -> None:
             "/api/health",
             "/api/docs",
             "/api/redoc",
-            "/api/openapi.json"
+            "/api/openapi.json",
+            "/api/document-classify",
+            "/api/fragment-enrich",
         ],
         require_auth=True
     )

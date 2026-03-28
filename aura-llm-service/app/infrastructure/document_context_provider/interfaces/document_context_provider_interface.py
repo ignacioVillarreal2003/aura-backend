@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 
+from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
 from app.infrastructure.document_context_provider.dtos.context_fragments_response import ContextFragmentListResponse
 
 
@@ -10,7 +11,7 @@ class DocumentContextProviderInterface(ABC):
             self,
             question: str,
             max_context_fragments: int,
-            authorization: Optional[str] = None
+            authenticated_user: Optional[AuthenticationResponse] = None
     ) -> ContextFragmentListResponse:
         pass
 
@@ -18,6 +19,6 @@ class DocumentContextProviderInterface(ABC):
     async def retrieve_context_fragments_by_document(
             self,
             document_id: int,
-            authorization: Optional[str] = None
+            authenticated_user: Optional[AuthenticationResponse] = None
     ) -> ContextFragmentListResponse:
         pass

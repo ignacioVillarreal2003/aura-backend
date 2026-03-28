@@ -1,6 +1,5 @@
 import logging
-from typing import Optional
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 
 from app.api.controllers.controller_logging import log_controller
 from app.api.controllers.document_summary_controller.interfaces.document_summary_controller_interface import (
@@ -21,7 +20,6 @@ logger = logging.getLogger(__name__)
 class DocumentSummaryController(DocumentSummaryControllerInterface):
     async def execute_document_summary(
             self,
-            request: Request,
             document_summary_request: DocumentSummaryRequest,
             document_summary_service: DocumentSummaryServiceInterface = Depends(get_document_summary_service),
             authenticated_user: AuthenticationResponse = Depends(get_current_user)
@@ -34,12 +32,9 @@ class DocumentSummaryController(DocumentSummaryControllerInterface):
             document_id=document_summary_request.document_id,
         )
 
-        authorization_token: Optional[str] = request.headers.get("Authorization")
-
         document_summary_response = await document_summary_service.execute_document_summary(
             document_summary_request=document_summary_request,
             authenticated_user=authenticated_user,
-            authorization_token=authorization_token
         )
 
         log_controller(

@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from fastapi import Request
 
 from app.application.services.document_summary_service.interfaces.document_summary_service_interface import (
     DocumentSummaryServiceInterface
@@ -13,9 +12,8 @@ class DocumentSummaryControllerInterface(ABC):
     @abstractmethod
     async def execute_document_summary(
             self,
-            request: Request,
             document_summary_request: DocumentSummaryRequest,
             document_summary_service: DocumentSummaryServiceInterface,
-            user: AuthenticationResponse
+            authenticated_user: AuthenticationResponse
     ) -> DocumentSummaryResponse:
         pass

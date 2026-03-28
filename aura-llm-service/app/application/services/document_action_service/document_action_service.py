@@ -79,7 +79,6 @@ class DocumentActionService(DocumentActionServiceInterface):
             self,
             document_action_request: DocumentActionRequest,
             authenticated_user: AuthenticationResponse,
-            authorization_token: Optional[str] = None,
     ) -> DocumentActionResponse:
         logger.info(
             "Document action execution initiated",
@@ -93,7 +92,6 @@ class DocumentActionService(DocumentActionServiceInterface):
         try:
             state = DocumentActionPipelineState.from_request(
                 document_action_request,
-                authorization_token=authorization_token,
                 authenticated_user=authenticated_user,
             )
             resources = DocumentActionPipelineResources(

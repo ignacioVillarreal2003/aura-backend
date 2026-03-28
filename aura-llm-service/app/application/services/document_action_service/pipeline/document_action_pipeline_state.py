@@ -13,7 +13,6 @@ class DocumentActionPipelineState:
     document_ids: list[int]
     instruction: str
     action: Optional[DocumentActionType]
-    authorization_token: Optional[str]
     authenticated_user: AuthenticationResponse
 
     fragments_by_document: dict[int, list[ContextFragmentResponse]] = field(default_factory=dict)
@@ -26,13 +25,11 @@ class DocumentActionPipelineState:
     def from_request(
             cls,
             request: DocumentActionRequest,
-            authorization_token: Optional[str],
             authenticated_user: AuthenticationResponse,
     ) -> "DocumentActionPipelineState":
         return cls(
             document_ids=request.document_ids,
             instruction=request.instruction,
             action=request.action,
-            authorization_token=authorization_token,
             authenticated_user=authenticated_user,
         )

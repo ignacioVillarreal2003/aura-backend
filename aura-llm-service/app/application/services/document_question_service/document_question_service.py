@@ -80,14 +80,12 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
             self,
             document_question_request: DocumentQuestionRequest,
             authenticated_user: AuthenticationResponse,
-            authorization_token: Optional[str] = None,
     ) -> DocumentQuestionResponse:
         logger.info("Document question execution initiated")
 
         try:
             state = DocumentQuestionPipelineState.from_request(
                 document_question_request,
-                authorization_token=authorization_token,
                 authenticated_user=authenticated_user,
             )
             resources = DocumentQuestionPipelineResources(

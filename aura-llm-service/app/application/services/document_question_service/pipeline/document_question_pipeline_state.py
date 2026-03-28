@@ -9,7 +9,6 @@ from app.infrastructure.document_context_provider.dtos.context_fragments_respons
 
 @dataclass
 class DocumentQuestionPipelineState:
-    authorization_token: str
     authenticated_user: AuthenticationResponse
     messages: list[Message] = field(default_factory=list)
 
@@ -22,12 +21,10 @@ class DocumentQuestionPipelineState:
     def from_request(
             cls,
             request: DocumentQuestionRequest,
-            authorization_token: str,
             authenticated_user: AuthenticationResponse,
     ) -> "DocumentQuestionPipelineState":
         return cls(
             messages=request.messages,
-            authorization_token=authorization_token,
             authenticated_user=authenticated_user,
         )
 

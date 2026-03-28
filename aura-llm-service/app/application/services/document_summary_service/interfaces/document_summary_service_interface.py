@@ -11,6 +11,5 @@ class DocumentSummaryServiceInterface(ABC):
             self,
             document_summary_request: DocumentSummaryRequest,
             authenticated_user: AuthenticationResponse,
-            authorization_token: str
     ) -> DocumentSummaryResponse:
         pass

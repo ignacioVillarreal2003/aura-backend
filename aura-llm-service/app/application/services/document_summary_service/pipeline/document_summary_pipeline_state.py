@@ -10,7 +10,6 @@ from app.infrastructure.document_context_provider.dtos.context_fragments_respons
 @dataclass
 class DocumentSummaryPipelineState:
     document_id: int
-    authorization_token: Optional[str]
     authenticated_user: AuthenticationResponse
 
     fragments: list[ContextFragmentResponse] = field(default_factory=list)
@@ -22,11 +21,9 @@ class DocumentSummaryPipelineState:
     def from_request(
             cls,
             request: DocumentSummaryRequest,
-            authorization_token: Optional[str],
             authenticated_user: AuthenticationResponse,
     ) -> "DocumentSummaryPipelineState":
         return cls(
             document_id=request.document_id,
-            authorization_token=authorization_token,
             authenticated_user=authenticated_user,
         )

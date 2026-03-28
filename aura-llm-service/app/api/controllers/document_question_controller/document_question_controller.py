@@ -1,6 +1,5 @@
 import logging
-from typing import Optional
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 
 from app.api.controllers.controller_logging import log_controller
 from app.api.controllers.document_question_controller.interfaces.document_question_controller_interface import (
@@ -21,7 +20,6 @@ logger = logging.getLogger(__name__)
 class DocumentQuestionController(DocumentQuestionControllerInterface):
     async def execute_document_question(
             self,
-            request: Request,
             document_question_request: DocumentQuestionRequest,
             document_question_service: DocumentQuestionServiceInterface = Depends(get_document_question_service),
             authenticated_user: AuthenticationResponse = Depends(get_current_user)
@@ -34,12 +32,9 @@ class DocumentQuestionController(DocumentQuestionControllerInterface):
             message_count=len(document_question_request.messages),
         )
 
-        authorization_token: Optional[str] = request.headers.get("Authorization")
-
         document_question_response = await document_question_service.execute_document_question(
             document_question_request=document_question_request,
             authenticated_user=authenticated_user,
-            authorization_token=authorization_token
         )
 
         log_controller(

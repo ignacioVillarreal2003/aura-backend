@@ -78,7 +78,6 @@ class DocumentSummaryService(DocumentSummaryServiceInterface):
             self,
             document_summary_request: DocumentSummaryRequest,
             authenticated_user: AuthenticationResponse,
-            authorization_token: Optional[str] = None,
     ) -> DocumentSummaryResponse:
         logger.info(
             "Document summary execution initiated",
@@ -88,7 +87,6 @@ class DocumentSummaryService(DocumentSummaryServiceInterface):
         try:
             state = DocumentSummaryPipelineState.from_request(
                 document_summary_request,
-                authorization_token=authorization_token,
                 authenticated_user=authenticated_user,
             )
             resources = DocumentSummaryPipelineResources(

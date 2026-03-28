@@ -1,7 +1,5 @@
 from abc import ABC, abstractmethod
 
-from fastapi import Request
-
 from app.application.services.document_action_service.interfaces.document_action_service_interface import (
     DocumentActionServiceInterface,
 )
@@ -14,9 +12,8 @@ class DocumentActionControllerInterface(ABC):
     @abstractmethod
     async def execute_document_action(
             self,
-            request: Request,
             document_action_request: DocumentActionRequest,
             document_action_service: DocumentActionServiceInterface,
-            user: AuthenticationResponse,
+            authenticated_user: AuthenticationResponse,
     ) -> DocumentActionResponse:
         pass

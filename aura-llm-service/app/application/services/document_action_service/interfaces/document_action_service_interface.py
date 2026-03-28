@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Optional
 
 from app.domain.dtos.document_action.document_action_request import DocumentActionRequest
 from app.domain.dtos.document_action.document_action_response import DocumentActionResponse
@@ -12,6 +11,5 @@ class DocumentActionServiceInterface(ABC):
             self,
             document_action_request: DocumentActionRequest,
             authenticated_user: AuthenticationResponse,
-            authorization_token: Optional[str] = None,
     ) -> DocumentActionResponse:
         pass

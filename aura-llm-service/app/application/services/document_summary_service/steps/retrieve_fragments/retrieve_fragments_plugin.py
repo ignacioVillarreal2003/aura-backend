@@ -52,7 +52,7 @@ class RetrieveFragmentsPlugin(DocumentSummaryPlugin):
         try:
             result = await resources.document_context_provider.retrieve_context_fragments_by_document(
                 document_id=state.document_id,
-                authorization=state.authorization_token,
+                authenticated_user=state.authenticated_user,
             )
             state.fragments = result.context_fragments
         except DocumentSummaryServiceException:

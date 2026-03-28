@@ -16,6 +16,7 @@ class DocumentContextProviderSettings(BaseSettings):
 
     question_context_fragments_url: str = Field(...)
     document_context_fragments_url: str = Field(...)
+    service_api_key: str = Field(...)
 
     max_chars_per_fragment: int = Field(default=10_000, ge=1_000, le=100_000)
     truncate_oversized_fragments: bool = Field(default=False)

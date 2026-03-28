@@ -5,6 +5,8 @@ from app.api.controllers import (
     document_summary_controller,
     document_action_controller,
     agent_controller,
+    document_classify_controller,
+    fragment_enrich_controller,
 )
 
 router = APIRouter()
@@ -27,4 +29,14 @@ router.include_router(
 router.include_router(
     agent_controller.router,
     prefix="/agent"
+)
+
+router.include_router(
+    document_classify_controller.router,
+    prefix="/document-classify",
+)
+
+router.include_router(
+    fragment_enrich_controller.router,
+    prefix="/fragment-enrich",
 )

@@ -46,7 +46,7 @@ class RetrieveContextPlugin(DocumentQuestionPlugin):
             fragments = await resources.document_context_provider.retrieve_context_fragments_by_question(
                 question=query,
                 max_context_fragments=self._settings.max_fragments,
-                authorization=state.authorization_token,
+                authenticated_user=state.authenticated_user,
             )
             state.retrieved_fragments = fragments.context_fragments
             logger.debug(

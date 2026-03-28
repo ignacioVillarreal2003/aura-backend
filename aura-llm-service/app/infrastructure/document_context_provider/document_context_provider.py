@@ -2,6 +2,7 @@ import logging
 from typing import NoReturn, Optional
 from fastapi import HTTPException, Request, status
 
+from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
 from app.infrastructure.document_context_provider.document_context_provider_settings import (
     DocumentContextProviderSettings
 )
@@ -51,7 +52,7 @@ class DocumentContextProvider(DocumentContextProviderInterface):
             self,
             question: str,
             max_context_fragments: int,
-            authorization: Optional[str] = None
+            authenticated_user: Optional[AuthenticationResponse] = None
     ) -> ContextFragmentListResponse:
         logger.info("Retrieving context fragments by question")
 
@@ -71,7 +72,7 @@ class DocumentContextProvider(DocumentContextProviderInterface):
             response = await self._http_client.post(
                 url=self._settings.question_context_fragments_url,
                 json=request_body.model_dump(),
-                headers=self._build_headers(authorization)
+                headers=self._build_headers(authenticated_user)
             )
 
             fragments = self._parse_and_apply_limits(response.json())
@@ -97,7 +98,7 @@ class DocumentContextProvider(DocumentContextProviderInterface):
     async def retrieve_context_fragments_by_document(
             self,
             document_id: int,
-            authorization: Optional[str] = None
+            authenticated_user: Optional[AuthenticationResponse] = None
     ) -> ContextFragmentListResponse:
         logger.info("Retrieving context fragments by document")
 
@@ -114,7 +115,7 @@ class DocumentContextProvider(DocumentContextProviderInterface):
             response = await self._http_client.post(
                 url=self._settings.document_context_fragments_url,
                 json=request_body.model_dump(),
-                headers=self._build_headers(authorization),
+                headers=self._build_headers(authenticated_user),
             )
 
             fragments = self._parse_and_apply_limits(response.json())
@@ -137,14 +138,12 @@ class DocumentContextProvider(DocumentContextProviderInterface):
                 "Unexpected error while retrieving fragments from the external service."
             ) from e
 
-    @staticmethod
-    def _build_headers(authorization: Optional[str]) -> dict[str, str]:
-        headers: dict[str, str] = {
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        }
-        if authorization:
-            headers["Authorization"] = authorization
+    def _build_headers(self, authenticated_user: Optional[AuthenticationResponse] = None) -> dict[str, str]:
+        headers: dict[str, str] = {"X-Service-Api-Key": self._settings.service_api_key}
+        if authenticated_user is not None:
+            headers["X-User-Id"] = str(authenticated_user.id)
+            headers["X-User-Roles"] = ",".join(authenticated_user.roles)
+            headers["X-User-Permissions"] = ",".join(authenticated_user.permissions)
         return headers
 
     def _parse_and_apply_limits(self, raw_data: dict) -> ContextFragmentListResponse:

@@ -11,6 +11,5 @@ class DocumentQuestionServiceInterface(ABC):
             self,
             document_question_request: DocumentQuestionRequest,
             authenticated_user: AuthenticationResponse,
-            authorization_token: str
     ) -> DocumentQuestionResponse:
         pass

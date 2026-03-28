@@ -56,7 +56,7 @@ class RetrieveFragmentsPlugin(DocumentActionPlugin):
                 *[
                     resources.document_context_provider.retrieve_context_fragments_by_document(
                         document_id=doc_id,
-                        authorization=state.authorization_token,
+                        authenticated_user=state.authenticated_user,
                     )
                     for doc_id in state.document_ids
                 ],

@@ -1,7 +1,6 @@
 import logging
-from typing import Optional
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 
 from app.api.controllers.controller_logging import log_controller
 from app.api.controllers.document_action_controller.interfaces.document_action_controller_interface import (
@@ -22,7 +21,6 @@ logger = logging.getLogger(__name__)
 class DocumentActionController(DocumentActionControllerInterface):
     async def execute_document_action(
             self,
-            request: Request,
             document_action_request: DocumentActionRequest,
             document_action_service: DocumentActionServiceInterface = Depends(get_document_action_service),
             authenticated_user: AuthenticationResponse = Depends(get_current_user),
@@ -37,12 +35,9 @@ class DocumentActionController(DocumentActionControllerInterface):
             action=document_action_request.action,
         )
 
-        authorization_token: Optional[str] = request.headers.get("Authorization")
-
         document_action_response = await document_action_service.execute_document_action(
             document_action_request=document_action_request,
             authenticated_user=authenticated_user,
-            authorization_token=authorization_token,
         )
 
         log_controller(
