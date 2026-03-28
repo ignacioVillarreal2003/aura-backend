@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.constants.document_type import DocumentType
+from app.domain.constants.document.document_type import DocumentType
 
 from app.application.services.document_query_service.document_query_service_request_validator import (
     DocumentQueryServiceRequestValidator
@@ -21,9 +21,9 @@ from app.application.services.document_query_service.exceptions.document_query_s
 from app.application.services.document_query_service.interfaces.document_query_service_interface import (
     DocumentQueryServiceInterface
 )
-from app.domain.dtos.document_query_controller.document_response import DocumentListResponse, DocumentResponse
+from app.domain.dtos.document.document_query_controller.document_response import DocumentListResponse, DocumentResponse
 from app.domain.models.document import Document
-from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
+from app.infrastructure.http.authentication_provider.dtos.authenticated_user_response import AuthenticationResponse
 from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
     DocumentRepositoryInterface
 )

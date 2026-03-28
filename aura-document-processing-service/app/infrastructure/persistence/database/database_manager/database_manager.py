@@ -1,5 +1,4 @@
 import logging
-import threading
 import time
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Dict, Optional
@@ -31,11 +30,6 @@ class DatabaseManager(DatabaseManagerInterface):
         self._engine: Optional[AsyncEngine] = None
         self._session_factory: Optional[async_sessionmaker[AsyncSession]] = None
         self._is_initialized: bool = False
-
-        self._metrics_lock = threading.Lock()
-        self._connection_count: int = 0
-        self._query_count: int = 0
-        self._error_count: int = 0
 
     @property
     def settings(self) -> DatabaseManagerSettings:
@@ -134,8 +128,6 @@ class DatabaseManager(DatabaseManagerInterface):
         except HTTPException:
             raise
         except Exception as e:
-            with self._metrics_lock:
-                self._error_count += 1
             try:
                 await db_session.rollback()
             except Exception:
@@ -170,7 +162,6 @@ class DatabaseManager(DatabaseManagerInterface):
                     "checked_out": pool.checkedout(),
                     "overflow_active": pool.overflow()
                 },
-                "metrics": self.get_metrics(),
                 "settings": {
                     "pool_persistent_connections": self._settings.pool_persistent_connections,
                     "pool_overflow_connections": self._settings.pool_overflow_connections,
@@ -185,14 +176,6 @@ class DatabaseManager(DatabaseManagerInterface):
                 "status": "unhealthy",
                 "initialized": True,
                 "error": "Health probe failed — see logs for details"
-            }
-
-    def get_metrics(self) -> Dict[str, int]:
-        with self._metrics_lock:
-            return {
-                "connection_count": self._connection_count,
-                "query_count": self._query_count,
-                "error_count": self._error_count
             }
 
     async def __aenter__(self) -> "DatabaseManager":
@@ -230,10 +213,7 @@ class DatabaseManager(DatabaseManagerInterface):
 
         @event.listens_for(self._engine.sync_engine, "connect")
         def on_connect(dbapi_conn, connection_record) -> None:
-            with self._metrics_lock:
-                self._connection_count += 1
-                count = self._connection_count
-            logger.debug("Database connection established", extra={"total_connections": count})
+            logger.debug("Database connection established")
 
         @event.listens_for(self._engine.sync_engine, "close")
         def on_close(dbapi_conn, connection_record) -> None:
@@ -251,9 +231,6 @@ class DatabaseManager(DatabaseManagerInterface):
 
         @event.listens_for(self._engine.sync_engine, "after_cursor_execute")
         def after_cursor_execute(conn, cursor, statement, parameters, context, executemany) -> None:
-            with self._metrics_lock:
-                self._query_count += 1
-
             if self._settings.query_logging_enabled:
                 logger.debug(
                     "SQL executed",
@@ -266,8 +243,6 @@ class DatabaseManager(DatabaseManagerInterface):
 
         @event.listens_for(self._engine.sync_engine, "handle_error")
         def handle_error(exception_context) -> None:
-            with self._metrics_lock:
-                self._error_count += 1
             logger.error(
                 "Database engine error",
                 extra={

@@ -91,7 +91,3 @@ class MinioManagerInterface(ABC):
     @abstractmethod
     async def health_check(self) -> Dict[str, Any]:
         pass
-
-    @abstractmethod
-    def get_metrics(self) -> Dict[str, int]:
-        pass

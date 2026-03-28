@@ -12,7 +12,7 @@ from app.configuration.dependencies import (
 )
 from app.configuration.logging_configuration import configure_logging
 from app.configuration.environment_variables import environment_variables
-from app.infrastructure.authentication_provider.authentication_provider_middleware import (
+from app.infrastructure.http.authentication_provider.authentication_provider_middleware import (
     AuthenticationMiddleware
 )
 import app.domain.models

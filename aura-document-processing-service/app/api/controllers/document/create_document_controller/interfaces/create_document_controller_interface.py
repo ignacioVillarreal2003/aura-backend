@@ -5,9 +5,9 @@ from sqlalchemy.ext.asyncio.session import AsyncSession
 from app.application.services.create_document_service.interfaces.create_document_service_interface import (
     CreateDocumentServiceInterface
 )
-from app.domain.dtos.create_document.create_document_request import CreateDocumentRequest
-from app.domain.dtos.create_document.create_document_response import CreateDocumentResponse
-from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
+from app.domain.dtos.document.create_document.create_document_request import CreateDocumentRequest
+from app.domain.dtos.document.create_document.create_document_response import CreateDocumentResponse
+from app.domain.models.authenticated_user import AuthenticatedUser
 
 
 class CreateDocumentControllerInterface(ABC):
@@ -19,6 +19,6 @@ class CreateDocumentControllerInterface(ABC):
             raw_document: UploadFile,
             create_document_service: CreateDocumentServiceInterface,
             database_session: AsyncSession,
-            authenticated_user: AuthenticationResponse
+            authenticated_user: AuthenticatedUser
     ) -> CreateDocumentResponse:
         pass

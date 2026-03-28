@@ -10,13 +10,15 @@ from app.application.services.fragment_query_service.fragment_query_service impo
 from app.application.services.fragment_query_service.interfaces.fragment_query_service_interface import (
     FragmentQueryServiceInterface
 )
-from app.domain.dtos.document_query_controller.context_fragment_response import ContextFragmentListResponse
-from app.domain.dtos.document_query_controller.question_context_fragments_request import QuestionContextFragmentsRequest
-from app.domain.dtos.fragment_query_controller.documents_context_fragments_request import (
+from app.domain.dtos.fragment.fragment_query_controller.documents_context_fragments_request import (
     DocumentsContextFragmentsRequest
 )
-from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
-from app.infrastructure.authentication_provider.service_authentication_provider import get_service_caller_user
+from app.domain.dtos.fragment.fragment_query_controller.fragment_list_response import FragmentListResponse
+from app.domain.dtos.fragment.fragment_query_controller.question_context_fragments_request import (
+    QuestionContextFragmentsRequest
+)
+from app.domain.models.authenticated_user import AuthenticatedUser
+from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
 
 logger = logging.getLogger(__name__)
@@ -28,14 +30,14 @@ class FragmentQueryController(FragmentQueryControllerInterface):
             question_context_fragments_request: QuestionContextFragmentsRequest,
             fragment_query_service: FragmentQueryServiceInterface = Depends(get_fragment_query_service),
             database_session: AsyncSession = Depends(get_database_session),
-            authenticated_user: AuthenticationResponse = Depends(get_service_caller_user)
-    ) -> ContextFragmentListResponse:
+            authenticated_user: AuthenticatedUser = Depends(get_authenticated_user)
+    ) -> FragmentListResponse:
         log_controller(
             logger,
-            operation="retrieve_context_fragments_by_question",
+            operation="retrieve_context_fragments_by_query",
             phase="start",
             user_id=authenticated_user.id,
-            question_length=len(question_context_fragments_request.question or ""),
+            question_length=len(question_context_fragments_request.query or ""),
         )
 
         context_fragment_list_response = await fragment_query_service.retrieve_context_fragments_by_question(
@@ -59,8 +61,8 @@ class FragmentQueryController(FragmentQueryControllerInterface):
             documents_context_fragments_request: DocumentsContextFragmentsRequest,
             fragment_query_service: FragmentQueryServiceInterface = Depends(get_fragment_query_service),
             database_session: AsyncSession = Depends(get_database_session),
-            authenticated_user: AuthenticationResponse = Depends(get_service_caller_user)
-    ) -> ContextFragmentListResponse:
+            authenticated_user: AuthenticatedUser = Depends(get_authenticated_user)
+    ) -> FragmentListResponse:
         log_controller(
             logger,
             operation="retrieve_context_fragments_by_documents",
@@ -93,10 +95,10 @@ fragment_query_controller = FragmentQueryController()
 
 router.post(
     "/by-question",
-    response_model=ContextFragmentListResponse
+    response_model=FragmentListResponse
 )(fragment_query_controller.retrieve_context_fragments_by_question)
 
 router.post(
     "/by-documents",
-    response_model=ContextFragmentListResponse
+    response_model=FragmentListResponse
 )(fragment_query_controller.retrieve_context_fragments_by_documents)

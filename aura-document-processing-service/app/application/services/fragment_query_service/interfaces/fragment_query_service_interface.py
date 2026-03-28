@@ -2,10 +2,10 @@ from abc import ABC, abstractmethod
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.dtos.document_query_controller.context_fragment_response import ContextFragmentListResponse
-from app.domain.dtos.document_query_controller.question_context_fragments_request import QuestionContextFragmentsRequest
-from app.domain.dtos.fragment_query_controller.documents_context_fragments_request import DocumentsContextFragmentsRequest
-from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
+from app.domain.dtos.fragment.fragment_query_controller.fragment_response import ContextFragmentListResponse
+from app.domain.dtos.fragment.fragment_query_controller.question_context_fragments_request import QuestionContextFragmentsRequest
+from app.domain.dtos.fragment.fragment_query_controller import DocumentsContextFragmentsRequest
+from app.infrastructure.http.authentication_provider.dtos.authenticated_user_response import AuthenticationResponse
 
 
 class FragmentQueryServiceInterface(ABC):

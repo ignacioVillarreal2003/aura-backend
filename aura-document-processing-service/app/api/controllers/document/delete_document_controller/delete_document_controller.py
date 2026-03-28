@@ -10,8 +10,8 @@ from app.application.services.delete_document_service.delete_document_service im
 from app.application.services.delete_document_service.interfaces.delete_document_service_interface import (
     DeleteDocumentServiceInterface
 )
-from app.infrastructure.authentication_provider.authentication_provider import get_current_user
-from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
+from app.domain.models.authenticated_user import AuthenticatedUser
+from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ class DeleteDocumentController(DeleteDocumentControllerInterface):
             document_id: int,
             delete_document_service: DeleteDocumentServiceInterface = Depends(get_delete_document_service),
             database_session: AsyncSession = Depends(get_database_session),
-            authenticated_user: AuthenticationResponse = Depends(get_current_user)
+            authenticated_user: AuthenticatedUser = Depends(get_authenticated_user)
     ) -> Response:
         log_controller(
             logger,
@@ -54,7 +54,7 @@ class DeleteDocumentController(DeleteDocumentControllerInterface):
             chat_id: int,
             delete_document_service: DeleteDocumentServiceInterface = Depends(get_delete_document_service),
             database_session: AsyncSession = Depends(get_database_session),
-            authenticated_user: AuthenticationResponse = Depends(get_current_user)
+            authenticated_user: AuthenticatedUser = Depends(get_authenticated_user)
     ) -> Response:
         log_controller(
             logger,
@@ -85,7 +85,7 @@ class DeleteDocumentController(DeleteDocumentControllerInterface):
             document_id: int,
             delete_document_service: DeleteDocumentServiceInterface = Depends(get_delete_document_service),
             database_session: AsyncSession = Depends(get_database_session),
-            authenticated_user: AuthenticationResponse = Depends(get_current_user)
+            authenticated_user: AuthenticatedUser = Depends(get_authenticated_user)
     ) -> Response:
         log_controller(
             logger,
@@ -116,7 +116,7 @@ class DeleteDocumentController(DeleteDocumentControllerInterface):
             chat_id: int,
             delete_document_service: DeleteDocumentServiceInterface = Depends(get_delete_document_service),
             database_session: AsyncSession = Depends(get_database_session),
-            authenticated_user: AuthenticationResponse = Depends(get_current_user)
+            authenticated_user: AuthenticatedUser = Depends(get_authenticated_user)
     ) -> Response:
         log_controller(
             logger,

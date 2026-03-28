@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
+from app.infrastructure.http.authentication_provider.dtos.authenticated_user_response import AuthenticationResponse
 
 
 class DeleteDocumentServiceInterface(ABC):

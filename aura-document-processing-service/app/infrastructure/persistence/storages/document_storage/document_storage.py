@@ -47,13 +47,6 @@ class DocumentStorage(DocumentStorageInterface):
         self._settings = document_storage_settings or DocumentStorageSettings()
         self._bucket_name = self._settings.bucket_name
 
-        self._upload_count: int = 0
-        self._download_count: int = 0
-        self._delete_count: int = 0
-        self._error_count: int = 0
-        self._bytes_uploaded: int = 0
-        self._bytes_downloaded: int = 0
-
     async def start(self) -> None:
         try:
             if self._settings.auto_create_bucket_if_missing:
@@ -116,9 +109,6 @@ class DocumentStorage(DocumentStorageInterface):
                 metadata=metadata or None,
             )
 
-            self._upload_count += 1
-            self._bytes_uploaded += file_size
-
             elapsed_ms = round((time.monotonic() - start_time) * 1000, 2)
             logger.info(
                 "Document uploaded successfully",
@@ -132,11 +122,9 @@ class DocumentStorage(DocumentStorageInterface):
             return object_name
 
         except self._KNOWN_EXCEPTIONS:
-            self._error_count += 1
             raise
 
         except Exception as e:
-            self._error_count += 1
             raise DocumentUploadException(f"Failed to upload document: {e}") from e
 
     async def download_document(self, object_name: str) -> bytes:
@@ -147,9 +135,6 @@ class DocumentStorage(DocumentStorageInterface):
                 bucket_name=self._bucket_name,
                 object_name=object_name
             )
-
-            self._download_count += 1
-            self._bytes_downloaded += len(content)
 
             elapsed_ms = round((time.monotonic() - start_time) * 1000, 2)
             logger.info(
@@ -163,7 +148,6 @@ class DocumentStorage(DocumentStorageInterface):
             return content
 
         except MinioDownloadException as e:
-            self._error_count += 1
             if self._is_not_found_error(e):
                 raise DocumentNotFoundException(f"Document '{object_name}' not found") from e
             raise DocumentDownloadException(
@@ -171,7 +155,6 @@ class DocumentStorage(DocumentStorageInterface):
             ) from e
 
         except Exception as e:
-            self._error_count += 1
             raise DocumentDownloadException(
                 f"Failed to download document '{object_name}': {e}"
             ) from e
@@ -187,8 +170,6 @@ class DocumentStorage(DocumentStorageInterface):
             )
 
             file_size = Path(file_path).stat().st_size
-            self._download_count += 1
-            self._bytes_downloaded += file_size
 
             elapsed_ms = round((time.monotonic() - start_time) * 1000, 2)
             logger.info(
@@ -202,7 +183,6 @@ class DocumentStorage(DocumentStorageInterface):
             )
 
         except Exception as e:
-            self._error_count += 1
             raise DocumentDownloadException(
                 f"Failed to download document '{object_name}' to file: {e}"
             ) from e
@@ -214,11 +194,9 @@ class DocumentStorage(DocumentStorageInterface):
                 object_name=object_name,
             )
 
-            self._delete_count += 1
             logger.info("Document deleted successfully", extra={"object_name": object_name})
 
         except MinioDeleteException as e:
-            self._error_count += 1
             if self._is_not_found_error(e):
                 raise DocumentNotFoundException(f"Document '{object_name}' not found") from e
             raise DocumentDeleteException(
@@ -226,7 +204,6 @@ class DocumentStorage(DocumentStorageInterface):
             ) from e
 
         except Exception as e:
-            self._error_count += 1
             raise DocumentDeleteException(
                 f"Failed to delete document '{object_name}': {e}"
             ) from e
@@ -238,7 +215,6 @@ class DocumentStorage(DocumentStorageInterface):
                 object_name=object_name,
             )
         except Exception as e:
-            self._error_count += 1
             raise DocumentStorageException(
                 f"Failed to check existence of '{object_name}': {e}"
             ) from e
@@ -270,7 +246,6 @@ class DocumentStorage(DocumentStorageInterface):
             return url
 
         except Exception as e:
-            self._error_count += 1
             raise DocumentStorageException(
                 f"Failed to generate presigned URL for '{object_name}': {e}"
             ) from e
@@ -295,7 +270,6 @@ class DocumentStorage(DocumentStorageInterface):
             return objects
 
         except Exception as e:
-            self._error_count += 1
             raise DocumentStorageException(f"Failed to list documents: {e}") from e
 
     async def health_check(self) -> Dict[str, Any]:
@@ -312,7 +286,6 @@ class DocumentStorage(DocumentStorageInterface):
                 "bucket": self._bucket_name,
                 "bucket_accessible": bucket_accessible,
                 "minio": minio_health,
-                "metrics": self.get_metrics()
             }
 
         except Exception:
@@ -322,16 +295,6 @@ class DocumentStorage(DocumentStorageInterface):
                 "bucket": self._bucket_name,
                 "error": "Health check failed — see logs for details"
             }
-
-    def get_metrics(self) -> Dict[str, int]:
-        return {
-            "upload_count": self._upload_count,
-            "download_count": self._download_count,
-            "delete_count": self._delete_count,
-            "error_count": self._error_count,
-            "bytes_uploaded": self._bytes_uploaded,
-            "bytes_downloaded": self._bytes_downloaded
-        }
 
     def _validate_file_size(self, file_size: int) -> None:
         if (

@@ -3,7 +3,6 @@ import ssl
 from pathlib import Path
 from typing import Optional
 from urllib.parse import quote_plus
-
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

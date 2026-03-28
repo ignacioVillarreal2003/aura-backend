@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response, status
 
 from app.api.controllers.controller_logging import log_controller
 from app.api.controllers.document.post_process_document_controller.interfaces.post_process_document_controller_interface import (
@@ -11,13 +11,15 @@ from app.application.services.post_process_document_service.interfaces.post_proc
 from app.application.services.post_process_document_service.post_process_document_service import (
     get_post_process_document_service
 )
-from app.domain.dtos.post_process_document_controller.post_process_documents_request import (
+from app.domain.dtos.document.post_process_document_controller.post_process_document_start_response import \
+    PostProcessDocumentStartResponse
+from app.domain.dtos.document.post_process_document_controller.post_process_documents_request import (
     PostProcessDocumentsRequest
 )
-from app.domain.dtos.post_process_document_controller.post_process_start_response import PostProcessStartResponse
-from app.domain.dtos.post_process_document_controller.post_process_status_response import PostProcessStatusResponse
-from app.infrastructure.authentication_provider.authentication_provider import get_current_user
-from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
+from app.domain.dtos.document.post_process_document_controller.post_process_document_status_response import \
+    PostProcessStatusResponse
+from app.domain.models.authenticated_user import AuthenticatedUser
+from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +30,8 @@ class PostProcessDocumentController(PostProcessDocumentControllerInterface):
             post_process_document_service: PostProcessDocumentServiceInterface = Depends(
                 get_post_process_document_service
             ),
-            authenticated_user: AuthenticationResponse = Depends(get_current_user)
-    ) -> PostProcessStartResponse:
+            authenticated_user: AuthenticatedUser = Depends(get_authenticated_user)
+    ) -> PostProcessDocumentStartResponse:
         log_controller(
             logger,
             operation="post_process_document_start_all",
@@ -55,8 +57,8 @@ class PostProcessDocumentController(PostProcessDocumentControllerInterface):
             post_process_document_service: PostProcessDocumentServiceInterface = Depends(
                 get_post_process_document_service
             ),
-            authenticated_user: AuthenticationResponse = Depends(get_current_user)
-    ) -> PostProcessStartResponse:
+            authenticated_user: AuthenticatedUser = Depends(get_authenticated_user)
+    ) -> PostProcessDocumentStartResponse:
         log_controller(
             logger,
             operation="post_process_document_start_for_documents",
@@ -85,7 +87,7 @@ class PostProcessDocumentController(PostProcessDocumentControllerInterface):
             post_process_document_service: PostProcessDocumentServiceInterface = Depends(
                 get_post_process_document_service
             ),
-            authenticated_user: AuthenticationResponse = Depends(get_current_user)
+            authenticated_user: AuthenticatedUser = Depends(get_authenticated_user)
     ) -> PostProcessStatusResponse:
         log_controller(
             logger,
@@ -114,8 +116,8 @@ class PostProcessDocumentController(PostProcessDocumentControllerInterface):
             post_process_document_service: PostProcessDocumentServiceInterface = Depends(
                 get_post_process_document_service
             ),
-            authenticated_user: AuthenticationResponse = Depends(get_current_user)
-    ) -> dict:
+            authenticated_user: AuthenticatedUser = Depends(get_authenticated_user)
+    ) -> Response:
         log_controller(
             logger,
             operation="post_process_document_stop",
@@ -132,7 +134,7 @@ class PostProcessDocumentController(PostProcessDocumentControllerInterface):
             user_id=authenticated_user.id,
         )
 
-        return {"message": "Post-processing stop signal sent"}
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 router = APIRouter()
@@ -141,12 +143,12 @@ post_process_document_controller = PostProcessDocumentController()
 
 router.post(
     "/start",
-    response_model=PostProcessStartResponse
+    response_model=PostProcessDocumentStartResponse
 )(post_process_document_controller.start_all)
 
 router.post(
     "/documents",
-    response_model=PostProcessStartResponse
+    response_model=PostProcessDocumentStartResponse
 )(post_process_document_controller.start_for_documents)
 
 router.get(

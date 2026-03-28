@@ -17,9 +17,9 @@ from app.application.services.post_process_fragment_service.post_process_fragmen
     PostProcessFragmentService
 )
 from app.application.services.update_document_service.update_document_service import UpdateDocumentService
-from app.infrastructure.authentication_provider.authentication_provider import AuthenticationProvider
-from app.infrastructure.http_client.http_client import HttpClient
-from app.infrastructure.llm_provider.llm_provider import LlmProvider
+from app.infrastructure.http.authentication_provider.authentication_provider import AuthenticationProvider
+from app.infrastructure.http.http_client.http_client import HttpClient
+from app.infrastructure.http.llm_provider.llm_provider import LlmProvider
 from app.infrastructure.persistence.database.database_manager.database_manager import DatabaseManager
 from app.infrastructure.persistence.database.repositories.document_repository.document_repository import DocumentRepository
 from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository import FragmentRepository

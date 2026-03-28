@@ -8,7 +8,7 @@ from app.application.services.create_document_service.create_document_service_se
 from app.application.services.create_document_service.exceptions.create_document_service_exception import (
     CreateDocumentUnsupportedTypeException
 )
-from app.domain.constants.document_mime_type import DocumentMimeType
+from app.domain.constants.document.document_mime_type import DocumentMimeType
 
 logger = logging.getLogger(__name__)
 

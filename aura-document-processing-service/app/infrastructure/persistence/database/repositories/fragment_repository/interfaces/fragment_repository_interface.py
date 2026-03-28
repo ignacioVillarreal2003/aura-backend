@@ -6,7 +6,6 @@ from app.domain.models.fragment import Fragment
 
 
 class FragmentRepositoryInterface(ABC):
-
     @abstractmethod
     async def create_fragments(
             self,

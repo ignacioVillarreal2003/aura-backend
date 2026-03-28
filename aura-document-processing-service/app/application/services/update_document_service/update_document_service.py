@@ -15,7 +15,7 @@ from app.application.services.update_document_service.interfaces.update_document
 from app.domain.dtos.update_document_controller.post_process_document_request import PostProcessDocumentRequest
 from app.domain.dtos.update_document_controller.post_process_document_response import PostProcessDocumentResponse
 from app.domain.models.document import Document
-from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
+from app.infrastructure.http.authentication_provider.dtos.authenticated_user_response import AuthenticationResponse
 from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
     DocumentRepositoryInterface
 )

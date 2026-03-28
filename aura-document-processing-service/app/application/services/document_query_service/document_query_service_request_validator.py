@@ -6,8 +6,8 @@ from app.application.services.document_query_service.document_query_service_sett
 from app.application.services.document_query_service.exceptions.document_query_service_exception import (
     DocumentQueryInvalidRequestException
 )
-from app.domain.dtos.document_query_controller.document_context_fragments_request import DocumentContextFragmentsRequest
-from app.domain.dtos.document_query_controller.question_context_fragments_request import QuestionContextFragmentsRequest
+from app.domain.dtos.fragment.fragment_query_controller.document_context_fragments_request import DocumentContextFragmentsRequest
+from app.domain.dtos.fragment.fragment_query_controller.question_context_fragments_request import QuestionContextFragmentsRequest
 
 logger = logging.getLogger(__name__)
 

@@ -6,12 +6,10 @@ from sqlalchemy.ext.asyncio.session import AsyncSession
 from app.application.services.document_query_service.interfaces.document_query_service_interface import (
     DocumentQueryServiceInterface
 )
-from app.domain.constants.document_type import DocumentType
-from app.domain.dtos.document_query_controller.document_response import (
-    DocumentResponse,
-    DocumentListResponse
-)
-from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
+from app.domain.constants.document.document_type import DocumentType
+from app.domain.dtos.document.document_query_controller.document_list_response import DocumentListResponse
+from app.domain.dtos.document.document_query_controller.document_response import DocumentResponse
+from app.domain.models.authenticated_user import AuthenticatedUser
 
 
 class DocumentQueryControllerInterface(ABC):
@@ -21,7 +19,7 @@ class DocumentQueryControllerInterface(ABC):
             document_id: int,
             document_query_service: DocumentQueryServiceInterface,
             database_session: AsyncSession,
-            authenticated_user: AuthenticationResponse
+            authenticated_user: AuthenticatedUser
     ) -> DocumentResponse:
         pass
 
@@ -38,6 +36,6 @@ class DocumentQueryControllerInterface(ABC):
             created_to: Optional[datetime],
             document_query_service: DocumentQueryServiceInterface,
             database_session: AsyncSession,
-            authenticated_user: AuthenticationResponse
+            authenticated_user: AuthenticatedUser
     ) -> DocumentListResponse:
         pass

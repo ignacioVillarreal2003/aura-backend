@@ -12,14 +12,13 @@ from app.application.services.post_process_document_service.exceptions.post_proc
 from app.application.services.post_process_document_service.interfaces.post_process_document_service_interface import (
     PostProcessDocumentServiceInterface
 )
-from app.domain.dtos.post_process_document_controller.post_process_start_response import PostProcessStartResponse
-from app.domain.dtos.post_process_document_controller.post_process_status_response import (
+from app.domain.dtos.document.post_process_document_controller.post_process_document_start_response import PostProcessStartResponse
+from app.domain.dtos.document.post_process_document_controller.post_process_document_status_response import (
     PostProcessDocumentError,
     PostProcessStatusResponse
 )
-from app.domain.models.document import Document
-from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
-from app.infrastructure.llm_provider.interfaces.llm_provider_interface import LlmProviderInterface
+from app.infrastructure.http.authentication_provider.dtos.authenticated_user_response import AuthenticationResponse
+from app.infrastructure.http.llm_provider.interfaces.llm_provider_interface import LlmProviderInterface
 from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
     DatabaseManagerInterface
 )

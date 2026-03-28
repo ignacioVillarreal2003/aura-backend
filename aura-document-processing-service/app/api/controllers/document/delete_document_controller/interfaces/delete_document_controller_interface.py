@@ -5,7 +5,7 @@ from fastapi import Response
 from app.application.services.delete_document_service.interfaces.delete_document_service_interface import (
     DeleteDocumentServiceInterface
 )
-from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
+from app.domain.models.authenticated_user import AuthenticatedUser
 
 
 class DeleteDocumentControllerInterface(ABC):
@@ -15,7 +15,7 @@ class DeleteDocumentControllerInterface(ABC):
             chat_id: int,
             delete_document_service: DeleteDocumentServiceInterface,
             database_session: AsyncSession,
-            authenticated_user: AuthenticationResponse
+            authenticated_user: AuthenticatedUser
     ) -> Response:
         pass
 
@@ -25,7 +25,7 @@ class DeleteDocumentControllerInterface(ABC):
             document_id: int,
             delete_document_service: DeleteDocumentServiceInterface,
             database_session: AsyncSession,
-            authenticated_user: AuthenticationResponse
+            authenticated_user: AuthenticatedUser
     ) -> Response:
         pass
 
@@ -35,7 +35,7 @@ class DeleteDocumentControllerInterface(ABC):
             chat_id: int,
             delete_document_service: DeleteDocumentServiceInterface,
             database_session: AsyncSession,
-            authenticated_user: AuthenticationResponse
+            authenticated_user: AuthenticatedUser
     ) -> Response:
         pass
 
@@ -45,6 +45,6 @@ class DeleteDocumentControllerInterface(ABC):
             document_id: int,
             delete_document_service: DeleteDocumentServiceInterface,
             database_session: AsyncSession,
-            authenticated_user: AuthenticationResponse
+            authenticated_user: AuthenticatedUser
     ) -> Response:
         pass

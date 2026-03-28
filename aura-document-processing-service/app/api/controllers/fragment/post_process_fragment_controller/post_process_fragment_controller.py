@@ -11,15 +11,17 @@ from app.application.services.post_process_fragment_service.interfaces.post_proc
 from app.application.services.post_process_fragment_service.post_process_fragment_service import (
     get_post_process_fragment_service
 )
-from app.domain.dtos.post_process_fragment_controller.post_process_fragments_request import PostProcessFragmentsRequest
-from app.domain.dtos.post_process_fragment_controller.post_process_fragment_start_response import (
+from app.domain.dtos.fragment.post_process_fragment_controller.post_process_fragment_start_response import (
     PostProcessFragmentStartResponse
 )
-from app.domain.dtos.post_process_fragment_controller.post_process_fragment_status_response import (
+from app.domain.dtos.fragment.post_process_fragment_controller.post_process_fragment_status_response import (
     PostProcessFragmentStatusResponse
 )
-from app.infrastructure.authentication_provider.authentication_provider import get_current_user
-from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
+from app.domain.dtos.fragment.post_process_fragment_controller.post_process_fragments_request import (
+    PostProcessFragmentsRequest
+)
+from app.domain.models.authenticated_user import AuthenticatedUser
+from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +32,7 @@ class PostProcessFragmentController(PostProcessFragmentControllerInterface):
             post_process_fragment_service: PostProcessFragmentServiceInterface = Depends(
                 get_post_process_fragment_service
             ),
-            authenticated_user: AuthenticationResponse = Depends(get_current_user)
+            authenticated_user: AuthenticatedUser = Depends(get_authenticated_user)
     ) -> PostProcessFragmentStartResponse:
         log_controller(
             logger,
@@ -57,7 +59,7 @@ class PostProcessFragmentController(PostProcessFragmentControllerInterface):
             post_process_fragment_service: PostProcessFragmentServiceInterface = Depends(
                 get_post_process_fragment_service
             ),
-            authenticated_user: AuthenticationResponse = Depends(get_current_user)
+            authenticated_user: AuthenticatedUser = Depends(get_authenticated_user)
     ) -> PostProcessFragmentStartResponse:
         log_controller(
             logger,
@@ -87,7 +89,7 @@ class PostProcessFragmentController(PostProcessFragmentControllerInterface):
             post_process_fragment_service: PostProcessFragmentServiceInterface = Depends(
                 get_post_process_fragment_service
             ),
-            authenticated_user: AuthenticationResponse = Depends(get_current_user)
+            authenticated_user: AuthenticatedUser = Depends(get_authenticated_user)
     ) -> PostProcessFragmentStatusResponse:
         log_controller(
             logger,
@@ -116,7 +118,7 @@ class PostProcessFragmentController(PostProcessFragmentControllerInterface):
             post_process_fragment_service: PostProcessFragmentServiceInterface = Depends(
                 get_post_process_fragment_service
             ),
-            authenticated_user: AuthenticationResponse = Depends(get_current_user)
+            authenticated_user: AuthenticatedUser = Depends(get_authenticated_user)
     ) -> dict:
         log_controller(
             logger,

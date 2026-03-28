@@ -12,13 +12,11 @@ from app.application.services.document_query_service.document_query_service impo
 from app.application.services.document_query_service.interfaces.document_query_service_interface import (
     DocumentQueryServiceInterface
 )
-from app.domain.constants.document_type import DocumentType
-from app.domain.dtos.document_query_controller.document_response import (
-    DocumentResponse,
-    DocumentListResponse
-)
-from app.infrastructure.authentication_provider.authentication_provider import get_current_user
-from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
+from app.domain.constants.document.document_type import DocumentType
+from app.domain.dtos.document.document_query_controller.document_list_response import DocumentListResponse
+from app.domain.dtos.document.document_query_controller.document_response import DocumentResponse
+from app.domain.models.authenticated_user import AuthenticatedUser
+from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
 
 logger = logging.getLogger(__name__)
@@ -30,7 +28,7 @@ class DocumentQueryController(DocumentQueryControllerInterface):
             document_id: int,
             document_query_service: DocumentQueryServiceInterface = Depends(get_document_query_service),
             database_session: AsyncSession = Depends(get_database_session),
-            authenticated_user: AuthenticationResponse = Depends(get_current_user)
+            authenticated_user: AuthenticatedUser = Depends(get_authenticated_user)
     ) -> DocumentResponse:
         log_controller(
             logger,
@@ -68,7 +66,7 @@ class DocumentQueryController(DocumentQueryControllerInterface):
             created_to: Optional[datetime] = Query(None),
             document_query_service: DocumentQueryServiceInterface = Depends(get_document_query_service),
             database_session: AsyncSession = Depends(get_database_session),
-            authenticated_user: AuthenticationResponse = Depends(get_current_user)
+            authenticated_user: AuthenticatedUser = Depends(get_authenticated_user)
     ) -> DocumentListResponse:
         log_controller(
             logger,

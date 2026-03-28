@@ -3,9 +3,9 @@ from datetime import datetime
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.constants.document_type import DocumentType
-from app.domain.dtos.document_query_controller.document_response import DocumentListResponse, DocumentResponse
-from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
+from app.domain.constants.document.document_type import DocumentType
+from app.domain.dtos.document.document_query_controller.document_response import DocumentListResponse, DocumentResponse
+from app.infrastructure.http.authentication_provider.dtos.authenticated_user_response import AuthenticationResponse
 
 
 class DocumentQueryServiceInterface(ABC):

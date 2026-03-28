@@ -13,16 +13,16 @@ from app.application.services.post_process_fragment_service.exceptions.post_proc
 from app.application.services.post_process_fragment_service.interfaces.post_process_fragment_service_interface import (
     PostProcessFragmentServiceInterface
 )
-from app.domain.dtos.post_process_fragment_controller.post_process_fragment_start_response import (
+from app.domain.dtos.fragment.post_process_fragment_controller import (
     PostProcessFragmentStartResponse
 )
-from app.domain.dtos.post_process_fragment_controller.post_process_fragment_status_response import (
+from app.domain.dtos.fragment.post_process_fragment_controller import (
     PostProcessFragmentError,
     PostProcessFragmentStatusResponse
 )
 from app.domain.models.fragment import Fragment
-from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
-from app.infrastructure.llm_provider.interfaces.llm_provider_interface import LlmProviderInterface
+from app.infrastructure.http.authentication_provider.dtos.authenticated_user_response import AuthenticationResponse
+from app.infrastructure.http.llm_provider.interfaces.llm_provider_interface import LlmProviderInterface
 from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
     DatabaseManagerInterface
 )

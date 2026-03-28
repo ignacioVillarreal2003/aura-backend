@@ -22,7 +22,7 @@ from app.application.services.document_ingestion_service.exceptions.document_ing
 from app.application.services.document_ingestion_service.interfaces.document_ingestion_service_interface import (
     DocumentIngestionServiceInterface
 )
-from app.domain.constants.document_status import DocumentStatus
+from app.domain.constants.document.document_status import DocumentStatus
 from app.domain.models.document import Document
 from app.domain.models.fragment import Fragment
 from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (

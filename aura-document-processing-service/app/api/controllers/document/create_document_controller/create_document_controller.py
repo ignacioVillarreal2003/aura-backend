@@ -10,10 +10,10 @@ from app.application.services.create_document_service.create_document_service im
 from app.application.services.create_document_service.interfaces.create_document_service_interface import (
     CreateDocumentServiceInterface
 )
-from app.domain.dtos.create_document.create_document_request import CreateDocumentRequest
-from app.domain.dtos.create_document.create_document_response import CreateDocumentResponse
-from app.infrastructure.authentication_provider.authentication_provider import get_current_user
-from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
+from app.domain.dtos.document.create_document.create_document_request import CreateDocumentRequest
+from app.domain.dtos.document.create_document.create_document_response import CreateDocumentResponse
+from app.domain.models.authenticated_user import AuthenticatedUser
+from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
 
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ class CreateDocumentController(CreateDocumentControllerInterface):
             raw_document: UploadFile = File(...),
             create_document_service: CreateDocumentServiceInterface = Depends(get_create_document_service),
             database_session: AsyncSession = Depends(get_database_session),
-            authenticated_user: AuthenticationResponse = Depends(get_current_user)
+            authenticated_user: AuthenticatedUser = Depends(get_authenticated_user)
     ) -> CreateDocumentResponse:
         log_controller(
             logger,

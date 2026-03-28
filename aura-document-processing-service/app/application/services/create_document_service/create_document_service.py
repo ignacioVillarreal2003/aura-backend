@@ -27,12 +27,12 @@ from app.application.services.create_document_service.interfaces.create_document
 from app.application.services.document_ingestion_service.interfaces.document_ingestion_service_interface import (
     DocumentIngestionServiceInterface
 )
-from app.domain.constants.document_mime_type import DocumentMimeType
-from app.domain.constants.document_status import DocumentStatus
-from app.domain.dtos.create_document.create_document_request import CreateDocumentRequest
-from app.domain.dtos.create_document.create_document_response import CreateDocumentResponse
+from app.domain.constants.document.document_mime_type import DocumentMimeType
+from app.domain.constants.document.document_status import DocumentStatus
+from app.domain.dtos.document.create_document.create_document_request import CreateDocumentRequest
+from app.domain.dtos.document.create_document.create_document_response import CreateDocumentResponse
 from app.domain.models.document import Document
-from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
+from app.infrastructure.http.authentication_provider.dtos.authenticated_user_response import AuthenticationResponse
 from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
     DocumentRepositoryInterface
 )

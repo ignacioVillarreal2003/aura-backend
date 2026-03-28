@@ -41,8 +41,6 @@ class MinioManagerSettings(BaseSettings):
     default_bucket_name: Optional[str] = Field(default=None)
     auto_create_bucket_if_missing: bool = Field(default=False)
 
-    metrics_enabled: bool = Field(default=True)
-
     @field_validator("endpoint", mode="before")
     @classmethod
     def validate_endpoint(cls, v: str) -> str:

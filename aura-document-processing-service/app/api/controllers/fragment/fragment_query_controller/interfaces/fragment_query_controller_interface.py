@@ -4,10 +4,14 @@ from sqlalchemy.ext.asyncio.session import AsyncSession
 from app.application.services.fragment_query_service.interfaces.fragment_query_service_interface import (
     FragmentQueryServiceInterface
 )
-from app.domain.dtos.document_query_controller.context_fragment_response import ContextFragmentListResponse
-from app.domain.dtos.document_query_controller.question_context_fragments_request import QuestionContextFragmentsRequest
-from app.domain.dtos.fragment_query_controller.documents_context_fragments_request import DocumentsContextFragmentsRequest
-from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
+from app.domain.dtos.fragment.fragment_query_controller.documents_context_fragments_request import (
+    DocumentsContextFragmentsRequest
+)
+from app.domain.dtos.fragment.fragment_query_controller.fragment_list_response import FragmentListResponse
+from app.domain.dtos.fragment.fragment_query_controller.question_context_fragments_request import (
+    QuestionContextFragmentsRequest
+)
+from app.domain.models.authenticated_user import AuthenticatedUser
 
 
 class FragmentQueryControllerInterface(ABC):
@@ -17,8 +21,8 @@ class FragmentQueryControllerInterface(ABC):
             question_context_fragments_request: QuestionContextFragmentsRequest,
             fragment_query_service: FragmentQueryServiceInterface,
             database_session: AsyncSession,
-            authenticated_user: AuthenticationResponse
-    ) -> ContextFragmentListResponse:
+            authenticated_user: AuthenticatedUser
+    ) -> FragmentListResponse:
         pass
 
     @abstractmethod
@@ -27,6 +31,6 @@ class FragmentQueryControllerInterface(ABC):
             documents_context_fragments_request: DocumentsContextFragmentsRequest,
             fragment_query_service: FragmentQueryServiceInterface,
             database_session: AsyncSession,
-            authenticated_user: AuthenticationResponse
-    ) -> ContextFragmentListResponse:
+            authenticated_user: AuthenticatedUser
+    ) -> FragmentListResponse:
         pass

@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import threading
 import time
 from datetime import timedelta
 from io import BytesIO
@@ -45,14 +44,6 @@ class MinioManager(MinioManagerInterface):
         self._download_file_retried: Optional[Callable] = None
         self._download_data_retried: Optional[Callable] = None
         self._delete_object_retried: Optional[Callable] = None
-
-        self._metrics_lock = threading.Lock()
-        self._operation_count: int = 0
-        self._error_count: int = 0
-        self._upload_count: int = 0
-        self._download_count: int = 0
-        self._bytes_uploaded: int = 0
-        self._bytes_downloaded: int = 0
 
     async def start(self) -> None:
         async with self._lifecycle_lock:
@@ -125,7 +116,7 @@ class MinioManager(MinioManagerInterface):
                 logger.debug("MinioManager already stopped — skipping")
                 return
 
-            logger.info("Stopping MinioManager", extra=self.get_metrics())
+            logger.info("Stopping MinioManager")
 
             self._client = None
             self._ensure_bucket_retried = None
@@ -186,15 +177,12 @@ class MinioManager(MinioManagerInterface):
         client = self.client
         try:
             await asyncio.to_thread(client.stat_object, bucket_name, object_name)
-            self._inc_operations()
             return True
         except S3Error as e:
             if e.code == "NoSuchKey":
                 return False
-            self._inc_errors()
             raise
         except Exception:
-            self._inc_errors()
             raise
 
     async def get_presigned_url(
@@ -217,10 +205,8 @@ class MinioManager(MinioManagerInterface):
                 object_name,
                 expires=timedelta(seconds=expiry_seconds)
             )
-            self._inc_operations()
             return url
         except Exception as e:
-            self._inc_errors()
             logger.exception(
                 "Error generating presigned URL",
                 extra={"bucket": bucket_name, "object": object_name, "method": method}
@@ -251,7 +237,6 @@ class MinioManager(MinioManagerInterface):
                 ]
 
             result = await asyncio.to_thread(_collect)
-            self._inc_operations()
 
             logger.debug(
                 "Objects listed successfully",
@@ -260,7 +245,6 @@ class MinioManager(MinioManagerInterface):
             return result
 
         except Exception as e:
-            self._inc_errors()
             logger.exception(
                 "Error listing objects",
                 extra={"bucket": bucket_name, "prefix": prefix},
@@ -287,7 +271,6 @@ class MinioManager(MinioManagerInterface):
                 "started": True,
                 "latency_ms": latency_ms,
                 "endpoint": self._settings.endpoint_safe,
-                "metrics": self.get_metrics()
             }
 
         except S3Error as e:
@@ -300,17 +283,6 @@ class MinioManager(MinioManagerInterface):
                 "status": "unhealthy",
                 "started": True,
                 "error": "Health probe failed — see logs for details"
-            }
-
-    def get_metrics(self) -> Dict[str, int]:
-        with self._metrics_lock:
-            return {
-                "operation_count": self._operation_count,
-                "error_count": self._error_count,
-                "upload_count": self._upload_count,
-                "download_count": self._download_count,
-                "bytes_uploaded": self._bytes_uploaded,
-                "bytes_downloaded": self._bytes_downloaded
             }
 
     async def __aenter__(self) -> "MinioManager":
@@ -333,10 +305,8 @@ class MinioManager(MinioManagerInterface):
             else:
                 logger.debug("Bucket already exists", extra={"bucket": bucket_name})
 
-            self._inc_operations()
 
         except S3Error as e:
-            self._inc_errors()
             logger.error(
                 "S3 error ensuring bucket",
                 extra={"bucket": bucket_name, "error_code": e.code},
@@ -346,7 +316,6 @@ class MinioManager(MinioManagerInterface):
             ) from e
 
         except Exception as e:
-            self._inc_errors()
             raise MinioBucketException(f"Failed to ensure bucket '{bucket_name}'") from e
 
     async def _upload_file_core(
@@ -374,10 +343,6 @@ class MinioManager(MinioManagerInterface):
             )
 
             file_size = Path(file_path).stat().st_size
-            with self._metrics_lock:
-                self._operation_count += 1
-                self._upload_count += 1
-                self._bytes_uploaded += file_size
 
             logger.info(
                 "File uploaded successfully",
@@ -390,7 +355,6 @@ class MinioManager(MinioManagerInterface):
             )
 
         except S3Error as e:
-            self._inc_errors()
             logger.error(
                 "S3 error uploading file",
                 extra={"bucket": bucket_name, "object": object_name, "error_code": e.code}
@@ -398,7 +362,6 @@ class MinioManager(MinioManagerInterface):
             raise MinioUploadException(f"Failed to upload file '{object_name}': {e.code}") from e
 
         except Exception as e:
-            self._inc_errors()
             raise MinioUploadException(f"Failed to upload file '{object_name}'") from e
 
     async def _upload_data_core(
@@ -430,11 +393,6 @@ class MinioManager(MinioManagerInterface):
                 metadata=metadata
             )
 
-            with self._metrics_lock:
-                self._operation_count += 1
-                self._upload_count += 1
-                self._bytes_uploaded += data_length
-
             logger.info(
                 "Data uploaded successfully",
                 extra={
@@ -446,7 +404,6 @@ class MinioManager(MinioManagerInterface):
             )
 
         except S3Error as e:
-            self._inc_errors()
             logger.error(
                 "S3 error uploading data",
                 extra={"bucket": bucket_name, "object": object_name, "error_code": e.code}
@@ -454,7 +411,6 @@ class MinioManager(MinioManagerInterface):
             raise MinioUploadException(f"Failed to upload data to '{object_name}': {e.code}") from e
 
         except Exception as e:
-            self._inc_errors()
             raise MinioUploadException(f"Failed to upload data to '{object_name}'") from e
 
     async def _download_file_core(
@@ -470,10 +426,6 @@ class MinioManager(MinioManagerInterface):
             await asyncio.to_thread(client.fget_object, bucket_name, object_name, file_path)
 
             file_size = Path(file_path).stat().st_size
-            with self._metrics_lock:
-                self._operation_count += 1
-                self._download_count += 1
-                self._bytes_downloaded += file_size
 
             logger.info(
                 "File downloaded successfully",
@@ -481,7 +433,6 @@ class MinioManager(MinioManagerInterface):
             )
 
         except S3Error as e:
-            self._inc_errors()
             logger.error(
                 "S3 error downloading file",
                 extra={"bucket": bucket_name, "object": object_name, "error_code": e.code}
@@ -491,7 +442,6 @@ class MinioManager(MinioManagerInterface):
             ) from e
 
         except Exception as e:
-            self._inc_errors()
             raise MinioDownloadException(f"Failed to download file '{object_name}'") from e
 
     async def _download_data_core(self, bucket_name: str, object_name: str) -> bytes:
@@ -512,11 +462,6 @@ class MinioManager(MinioManagerInterface):
 
             data: bytes = await asyncio.to_thread(_read_response)
 
-            with self._metrics_lock:
-                self._operation_count += 1
-                self._download_count += 1
-                self._bytes_downloaded += len(data)
-
             logger.info(
                 "Data downloaded successfully",
                 extra={"bucket": bucket_name, "object": object_name, "size_bytes": len(data)}
@@ -524,7 +469,6 @@ class MinioManager(MinioManagerInterface):
             return data
 
         except S3Error as e:
-            self._inc_errors()
             logger.error(
                 "S3 error downloading data",
                 extra={"bucket": bucket_name, "object": object_name, "error_code": e.code},
@@ -534,7 +478,6 @@ class MinioManager(MinioManagerInterface):
             ) from e
 
         except Exception as e:
-            self._inc_errors()
             raise MinioDownloadException(f"Failed to download data from '{object_name}'") from e
 
     async def _delete_object_core(self, bucket_name: str, object_name: str) -> None:
@@ -546,7 +489,6 @@ class MinioManager(MinioManagerInterface):
             )
 
             await asyncio.to_thread(client.remove_object, bucket_name, object_name)
-            self._inc_operations()
 
             logger.info(
                 "Object deleted successfully",
@@ -554,7 +496,6 @@ class MinioManager(MinioManagerInterface):
             )
 
         except S3Error as e:
-            self._inc_errors()
             logger.error(
                 "S3 error deleting object",
                 extra={"bucket": bucket_name, "object": object_name, "error_code": e.code}
@@ -564,7 +505,6 @@ class MinioManager(MinioManagerInterface):
             ) from e
 
         except Exception as e:
-            self._inc_errors()
             raise MinioDeleteException(f"Failed to delete object '{object_name}'") from e
 
     async def _verify_connection(self) -> None:
@@ -584,14 +524,6 @@ class MinioManager(MinioManagerInterface):
             logger.info("MinIO connection verified successfully")
 
         await _attempt()
-
-    def _inc_operations(self) -> None:
-        with self._metrics_lock:
-            self._operation_count += 1
-
-    def _inc_errors(self) -> None:
-        with self._metrics_lock:
-            self._error_count += 1
 
 
 async def get_minio_manager(request: Request) -> MinioManagerInterface:

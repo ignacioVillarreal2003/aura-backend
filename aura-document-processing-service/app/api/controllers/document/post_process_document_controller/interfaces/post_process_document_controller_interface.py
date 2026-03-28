@@ -1,14 +1,17 @@
 from abc import ABC, abstractmethod
+from fastapi import Response
 
 from app.application.services.post_process_document_service.interfaces.post_process_document_service_interface import (
     PostProcessDocumentServiceInterface
 )
-from app.domain.dtos.post_process_document_controller.post_process_documents_request import (
+from app.domain.dtos.document.post_process_document_controller.post_process_document_start_response import (
+    PostProcessDocumentStartResponse
+)
+from app.domain.dtos.document.post_process_document_controller.post_process_documents_request import (
     PostProcessDocumentsRequest
 )
-from app.domain.dtos.post_process_document_controller.post_process_start_response import PostProcessStartResponse
-from app.domain.dtos.post_process_document_controller.post_process_status_response import PostProcessStatusResponse
-from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
+from app.domain.dtos.document.post_process_document_controller.post_process_document_status_response import PostProcessStatusResponse
+from app.domain.models.authenticated_user import AuthenticatedUser
 
 
 class PostProcessDocumentControllerInterface(ABC):
@@ -16,8 +19,8 @@ class PostProcessDocumentControllerInterface(ABC):
     async def start_all(
             self,
             post_process_document_service: PostProcessDocumentServiceInterface,
-            authenticated_user: AuthenticationResponse
-    ) -> PostProcessStartResponse:
+            authenticated_user: AuthenticatedUser
+    ) -> PostProcessDocumentStartResponse:
         pass
 
     @abstractmethod
@@ -25,15 +28,15 @@ class PostProcessDocumentControllerInterface(ABC):
             self,
             post_process_documents_request: PostProcessDocumentsRequest,
             post_process_document_service: PostProcessDocumentServiceInterface,
-            authenticated_user: AuthenticationResponse
-    ) -> PostProcessStartResponse:
+            authenticated_user: AuthenticatedUser
+    ) -> PostProcessDocumentStartResponse:
         pass
 
     @abstractmethod
     async def get_status(
             self,
             post_process_document_service: PostProcessDocumentServiceInterface,
-            authenticated_user: AuthenticationResponse
+            authenticated_user: AuthenticatedUser
     ) -> PostProcessStatusResponse:
         pass
 
@@ -41,6 +44,6 @@ class PostProcessDocumentControllerInterface(ABC):
     async def stop(
             self,
             post_process_document_service: PostProcessDocumentServiceInterface,
-            authenticated_user: AuthenticationResponse
-    ) -> None:
+            authenticated_user: AuthenticatedUser
+    ) -> Response:
         pass

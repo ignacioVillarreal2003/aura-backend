@@ -14,7 +14,7 @@ from app.application.services.delete_document_service.interfaces.delete_document
     DeleteDocumentServiceInterface
 )
 from app.domain.models.document import Document
-from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
+from app.infrastructure.http.authentication_provider.dtos.authenticated_user_response import AuthenticationResponse
 from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
     DocumentRepositoryInterface
 )

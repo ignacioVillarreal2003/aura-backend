@@ -11,7 +11,7 @@ from app.application.services.create_document_service.exceptions.create_document
     CreateDocumentSizeExceededException,
     CreateDocumentUnsupportedTypeException
 )
-from app.domain.dtos.create_document.create_document_request import CreateDocumentRequest
+from app.domain.dtos.document.create_document.create_document_request import CreateDocumentRequest
 
 logger = logging.getLogger(__name__)
 

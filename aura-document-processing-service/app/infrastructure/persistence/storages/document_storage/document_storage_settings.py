@@ -38,8 +38,6 @@ class DocumentStorageSettings(BaseSettings):
 
     presigned_url_expiry_seconds: int = Field(default=3600, gt=0, le=604_800)
 
-    metrics_enabled: bool = Field(default=True)
-
     @field_validator("bucket_name", mode="before")
     @classmethod
     def validate_bucket_name(cls, v: str) -> str:

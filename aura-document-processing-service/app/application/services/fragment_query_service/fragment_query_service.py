@@ -22,11 +22,11 @@ from app.application.services.fragment_query_service.exceptions.fragment_query_s
 from app.application.services.fragment_query_service.interfaces.fragment_query_service_interface import (
     FragmentQueryServiceInterface
 )
-from app.domain.dtos.document_query_controller.context_fragment_response import ContextFragmentListResponse
-from app.domain.dtos.document_query_controller.question_context_fragments_request import QuestionContextFragmentsRequest
-from app.domain.dtos.fragment_query_controller.documents_context_fragments_request import DocumentsContextFragmentsRequest
+from app.domain.dtos.fragment.fragment_query_controller.fragment_response import ContextFragmentListResponse
+from app.domain.dtos.fragment.fragment_query_controller.question_context_fragments_request import QuestionContextFragmentsRequest
+from app.domain.dtos.fragment.fragment_query_controller import DocumentsContextFragmentsRequest
 from app.domain.models.document import Document
-from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
+from app.infrastructure.http.authentication_provider.dtos.authenticated_user_response import AuthenticationResponse
 from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
     DocumentRepositoryInterface
 )
