@@ -125,7 +125,7 @@ class DocumentStorage(DocumentStorageInterface):
             raise
 
         except Exception as e:
-            raise DocumentUploadException(f"Failed to upload document: {e}") from e
+            raise DocumentUploadException(f"Failed to upload document_controllers: {e}") from e
 
     async def download_document(self, object_name: str) -> bytes:
         start_time = time.monotonic()
@@ -151,12 +151,12 @@ class DocumentStorage(DocumentStorageInterface):
             if self._is_not_found_error(e):
                 raise DocumentNotFoundException(f"Document '{object_name}' not found") from e
             raise DocumentDownloadException(
-                f"Failed to download document '{object_name}': {e}"
+                f"Failed to download document_controllers '{object_name}': {e}"
             ) from e
 
         except Exception as e:
             raise DocumentDownloadException(
-                f"Failed to download document '{object_name}': {e}"
+                f"Failed to download document_controllers '{object_name}': {e}"
             ) from e
 
     async def download_document_to_file(self, object_name: str, file_path: str) -> None:
@@ -184,7 +184,7 @@ class DocumentStorage(DocumentStorageInterface):
 
         except Exception as e:
             raise DocumentDownloadException(
-                f"Failed to download document '{object_name}' to file: {e}"
+                f"Failed to download document_controllers '{object_name}' to file: {e}"
             ) from e
 
     async def delete_document(self, object_name: str) -> None:
@@ -200,12 +200,12 @@ class DocumentStorage(DocumentStorageInterface):
             if self._is_not_found_error(e):
                 raise DocumentNotFoundException(f"Document '{object_name}' not found") from e
             raise DocumentDeleteException(
-                f"Failed to delete document '{object_name}': {e}"
+                f"Failed to delete document_controllers '{object_name}': {e}"
             ) from e
 
         except Exception as e:
             raise DocumentDeleteException(
-                f"Failed to delete document '{object_name}': {e}"
+                f"Failed to delete document_controllers '{object_name}': {e}"
             ) from e
 
     async def document_exists(self, object_name: str) -> bool:

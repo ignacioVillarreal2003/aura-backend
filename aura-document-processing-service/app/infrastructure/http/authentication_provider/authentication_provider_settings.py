@@ -12,7 +12,6 @@ class AuthenticationProviderSettings(BaseSettings):
     )
 
     authentication_url: str = Field(...)
-    internal_service_api_key: str = Field(...)
 
     @field_validator("authentication_url", mode="before")
     @classmethod

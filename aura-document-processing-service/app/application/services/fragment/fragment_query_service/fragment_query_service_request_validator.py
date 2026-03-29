@@ -1,15 +1,14 @@
 import logging
 
-from app.application.services.document.document_query_service.document_query_service_settings import (
-    DocumentQueryServiceSettings
-)
 from app.application.services.document.document_query_service.exceptions.document_query_service_exception import (
     DocumentQueryInvalidRequestException
 )
-from app.application.services.fragment.fragment_query_service.fragment_query_service_settings import \
+from app.application.services.fragment.fragment_query_service.fragment_query_service_settings import (
     FragmentQueryServiceSettings
-from app.domain.dtos.fragment.fragment_query_controller.documents_context_fragments_request import \
+)
+from app.domain.dtos.fragment.fragment_query_controller.documents_context_fragments_request import (
     DocumentsContextFragmentsRequest
+)
 from app.domain.dtos.fragment.fragment_query_controller.question_context_fragments_request import QuestionContextFragmentsRequest
 
 logger = logging.getLogger(__name__)

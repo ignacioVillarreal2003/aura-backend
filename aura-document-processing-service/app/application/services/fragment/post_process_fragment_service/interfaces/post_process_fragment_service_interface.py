@@ -1,13 +1,13 @@
 from abc import ABC, abstractmethod
 from typing import List
 
-from app.domain.dtos.fragment.post_process_fragment_controller.post_process_fragment_start_response import (
+from app.domain.dtos.fragment.post_process_fragment_controller.post_process_fragments_start_response import (
     PostProcessFragmentStartResponse
 )
-from app.domain.dtos.fragment.post_process_fragment_controller.post_process_fragment_status_response import (
+from app.domain.dtos.fragment.post_process_fragment_controller.post_process_fragments_status_response import (
     PostProcessFragmentStatusResponse
 )
-from app.domain.models.authenticated_user import AuthenticatedUser
+from app.domain.authentication.authenticated_user import AuthenticatedUser
 
 
 class PostProcessFragmentServiceInterface(ABC):

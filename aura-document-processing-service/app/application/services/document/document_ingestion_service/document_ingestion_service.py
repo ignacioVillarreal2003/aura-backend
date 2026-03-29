@@ -12,12 +12,12 @@ from app.application.services.document.document_ingestion_service.document_inges
     DocumentIngestionServiceSettings
 )
 from app.application.services.document.document_ingestion_service.exceptions.document_ingestion_service_exception import (
-    DocumentIngestionCleanException,
-    DocumentIngestionEmbedException,
-    DocumentIngestionPersistenceException,
-    DocumentIngestionReadException,
+    DocumentIngestionServiceCleanException,
+    DocumentIngestionServiceEmbedException,
+    DocumentIngestionServicePersistenceException,
+    DocumentIngestionServiceReadException,
     DocumentIngestionServiceException,
-    DocumentIngestionSplitException
+    DocumentIngestionServiceSplitException
 )
 from app.application.services.document.document_ingestion_service.interfaces.document_ingestion_service_interface import (
     DocumentIngestionServiceInterface
@@ -40,11 +40,11 @@ logger = logging.getLogger(__name__)
 
 class DocumentIngestionService(DocumentIngestionServiceInterface):
     _PIPELINE_EXCEPTIONS = (
-        DocumentIngestionReadException,
-        DocumentIngestionCleanException,
-        DocumentIngestionSplitException,
-        DocumentIngestionEmbedException,
-        DocumentIngestionPersistenceException,
+        DocumentIngestionServiceReadException,
+        DocumentIngestionServiceCleanException,
+        DocumentIngestionServiceSplitException,
+        DocumentIngestionServiceEmbedException,
+        DocumentIngestionServicePersistenceException,
     )
 
     def __init__(
@@ -103,11 +103,11 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
         except Exception as e:
             await self._mark_document_as_failed(document)
             logger.exception(
-                "Unexpected error during document ingestion",
+                "Unexpected error during document_controllers ingestion",
                 extra={"document_id": document.id}
             )
             raise DocumentIngestionServiceException(
-                f"Document ingestion failed for document {document.id}: {e}"
+                f"Document ingestion failed for document_controllers {document.id}: {e}"
             ) from e
 
         finally:
@@ -121,12 +121,12 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             raw_text: str = await asyncio.to_thread(reader.read, local_file_path)
 
             if not raw_text or not raw_text.strip():
-                raise DocumentIngestionReadException(
+                raise DocumentIngestionServiceReadException(
                     f"Document {document.id} produced empty text after reading."
                 )
 
             if len(raw_text) > self._settings.max_raw_text_length:
-                raise DocumentIngestionReadException(
+                raise DocumentIngestionServiceReadException(
                     f"Document {document.id} raw text ({len(raw_text)} chars) exceeds "
                     f"the maximum allowed ({self._settings.max_raw_text_length})."
                 )
@@ -140,11 +140,11 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             )
             return raw_text
 
-        except DocumentIngestionReadException:
+        except DocumentIngestionServiceReadException:
             raise
         except Exception as e:
-            raise DocumentIngestionReadException(
-                f"Failed to read document {document.id}: {e}"
+            raise DocumentIngestionServiceReadException(
+                f"Failed to read document_controllers {document.id}: {e}"
             ) from e
 
     async def _clean_text(self, document: Document, raw_text: str) -> str:
@@ -154,7 +154,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             clean_text: str = await asyncio.to_thread(cleaner.clean_text, raw_text)
 
             if not clean_text or not clean_text.strip():
-                raise DocumentIngestionCleanException(
+                raise DocumentIngestionServiceCleanException(
                     f"Document {document.id} produced empty text after cleaning."
                 )
 
@@ -168,11 +168,11 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             )
             return clean_text
 
-        except DocumentIngestionCleanException:
+        except DocumentIngestionServiceCleanException:
             raise
         except Exception as e:
-            raise DocumentIngestionCleanException(
-                f"Failed to clean text for document {document.id}: {e}"
+            raise DocumentIngestionServiceCleanException(
+                f"Failed to clean text for document_controllers {document.id}: {e}"
             ) from e
 
     async def _split_text(self, document: Document, clean_text: str) -> list[str]:
@@ -182,7 +182,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             chunks: list[str] = await asyncio.to_thread(splitter.split_text, clean_text)
 
             if len(chunks) < self._settings.min_chunks_required:
-                raise DocumentIngestionSplitException(
+                raise DocumentIngestionServiceSplitException(
                     f"Document {document.id} produced {len(chunks)} chunk(s), "
                     f"minimum required is {self._settings.min_chunks_required}."
                 )
@@ -196,11 +196,11 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             )
             return chunks
 
-        except DocumentIngestionSplitException:
+        except DocumentIngestionServiceSplitException:
             raise
         except Exception as e:
-            raise DocumentIngestionSplitException(
-                f"Failed to split text for document {document.id}: {e}"
+            raise DocumentIngestionServiceSplitException(
+                f"Failed to split text for document_controllers {document.id}: {e}"
             ) from e
 
     async def _embed_chunks(self, document: Document, chunks: list[str]) -> list[list[float]]:
@@ -209,7 +209,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             embeddings: list[list[float]] = await embedder.aembed_documents(chunks)
 
             if len(embeddings) != len(chunks):
-                raise DocumentIngestionEmbedException(
+                raise DocumentIngestionServiceEmbedException(
                     f"Document {document.id}: embedding count ({len(embeddings)}) "
                     f"does not match chunk count ({len(chunks)})."
                 )
@@ -224,11 +224,11 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             )
             return embeddings
 
-        except DocumentIngestionEmbedException:
+        except DocumentIngestionServiceEmbedException:
             raise
         except Exception as e:
-            raise DocumentIngestionEmbedException(
-                f"Failed to generate embeddings for document {document.id}: {e}"
+            raise DocumentIngestionServiceEmbedException(
+                f"Failed to generate embeddings for document_controllers {document.id}: {e}"
             ) from e
 
     def _build_fragments(
@@ -284,7 +284,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                 )
 
             logger.info(
-                "Fragments and document status persisted",
+                "Fragments and document_controllers status persisted",
                 extra={
                     "document_id": document.id,
                     "fragment_count": len(fragments),
@@ -295,8 +295,8 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             )
 
         except Exception as e:
-            raise DocumentIngestionPersistenceException(
-                f"Failed to persist fragments for document {document.id}: {e}"
+            raise DocumentIngestionServicePersistenceException(
+                f"Failed to persist fragments for document_controllers {document.id}: {e}"
             ) from e
 
     async def _mark_document_as_failed(self, document: Document) -> None:
@@ -319,7 +319,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
 
         except Exception as e:
             logger.error(
-                "Failed to mark document as failed",
+                "Failed to mark document_controllers as failed",
                 extra={"document_id": document.id, "error": str(e)}
             )
 
@@ -338,7 +338,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
 
 async def get_document_ingestion_service(request: Request) -> DocumentIngestionServiceInterface:
     try:
-        return request.app.state.document_ingestion_service
+        return request.app.state.ingestion_pipeline
     except AttributeError:
         logger.error("DocumentIngestionService not found in application state")
         raise HTTPException(

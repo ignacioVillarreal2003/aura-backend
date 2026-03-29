@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
-from app.domain.models.authenticated_user import AuthenticatedUser
+from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.authentication_provider.exceptions.authentication_provider_exception import (
     AuthenticationProviderException,
     AuthenticationProviderInvalidTokenException,

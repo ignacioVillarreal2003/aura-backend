@@ -86,7 +86,7 @@ class HuggingFaceEmbedder(EmbedderInterface):
 
     def _embed_single_batch(self, texts: list[str]) -> list[list[float]]:
         logger.debug(
-            "Generating document embeddings",
+            "Generating document_controllers embeddings",
             extra={
                 "count": len(texts),
                 "avg_length": sum(len(t) for t in texts) // len(texts) if texts else 0
@@ -101,7 +101,7 @@ class HuggingFaceEmbedder(EmbedderInterface):
             return embeddings
         except Exception as e:
             raise EmbedDocumentsException(
-                f"HuggingFaceEmbedder failed to generate document embeddings: {e}"
+                f"HuggingFaceEmbedder failed to generate document_controllers embeddings: {e}"
             ) from e
 
     def _embed_in_batches(self, texts: list[str]) -> list[list[float]]:

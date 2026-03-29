@@ -12,11 +12,14 @@ from app.application.services.fragment.post_process_fragment_service.exceptions.
 from app.application.services.fragment.post_process_fragment_service.interfaces.post_process_fragment_service_interface import (
     PostProcessFragmentServiceInterface
 )
-from app.domain.dtos.fragment.post_process_fragment_controller.post_process_fragment_start_response import \
-    PostProcessFragmentStartResponse
-from app.domain.dtos.fragment.post_process_fragment_controller.post_process_fragment_status_response import \
-    PostProcessFragmentError, PostProcessFragmentStatusResponse
-from app.domain.models.authenticated_user import AuthenticatedUser
+from app.domain.dtos.fragment.post_process_fragment_controller.post_process_fragments_start_response import (
+    PostProcessFragmentsStartResponse
+)
+from app.domain.dtos.fragment.post_process_fragment_controller.post_process_fragments_status_response import (
+    PostProcessFragmentError,
+    PostProcessFragmentsStatusResponse
+)
+from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.models.fragment import Fragment
 from app.infrastructure.http.llm_provider.interfaces.llm_provider_interface import LlmProviderInterface
 from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
@@ -55,14 +58,14 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
     async def start_all(
             self,
             authenticated_user: AuthenticatedUser
-    ) -> PostProcessFragmentStartResponse:
+    ) -> PostProcessFragmentsStartResponse:
         if self._is_running:
             raise PostProcessFragmentAlreadyRunningException(
                 "Fragment post-processing is already running"
             )
 
         logger.info(
-            "Starting fragment post-processing for all fragments missing metadata",
+            "Starting fragment_controllers post-processing for all fragments missing metadata",
             extra={"user_id": authenticated_user.id}
         )
 
@@ -73,14 +76,14 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
             fragment_ids = [f.id for f in fragments]
 
         if not fragment_ids:
-            return PostProcessFragmentStartResponse(
+            return PostProcessFragmentsStartResponse(
                 message="No fragments found missing metadata",
                 total_fragments=0
             )
 
         self._launch_background_task(fragment_ids=fragment_ids, authenticated_user=authenticated_user)
 
-        return PostProcessFragmentStartResponse(
+        return PostProcessFragmentsStartResponse(
             message="Fragment post-processing started",
             total_fragments=len(fragment_ids)
         )
@@ -89,14 +92,14 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
             self,
             document_ids: List[int],
             authenticated_user: AuthenticatedUser
-    ) -> PostProcessFragmentStartResponse:
+    ) -> PostProcessFragmentsStartResponse:
         if self._is_running:
             raise PostProcessFragmentAlreadyRunningException(
                 "Fragment post-processing is already running"
             )
 
         logger.info(
-            "Starting fragment post-processing for specific documents",
+            "Starting fragment_controllers post-processing for specific documents",
             extra={"user_id": authenticated_user.id, "document_ids": document_ids}
         )
 
@@ -108,20 +111,20 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
             fragment_ids = [f.id for f in fragments]
 
         if not fragment_ids:
-            return PostProcessFragmentStartResponse(
+            return PostProcessFragmentsStartResponse(
                 message="No fragments found missing metadata for the given documents",
                 total_fragments=0
             )
 
         self._launch_background_task(fragment_ids=fragment_ids, authenticated_user=authenticated_user)
 
-        return PostProcessFragmentStartResponse(
+        return PostProcessFragmentsStartResponse(
             message="Fragment post-processing started for selected documents",
             total_fragments=len(fragment_ids)
         )
 
-    def get_status(self) -> PostProcessFragmentStatusResponse:
-        return PostProcessFragmentStatusResponse(
+    def get_status(self) -> PostProcessFragmentsStatusResponse:
+        return PostProcessFragmentsStatusResponse(
             is_running=self._is_running,
             total_fragments=self._total_fragments,
             processed_fragments=self._processed_fragments,
@@ -138,7 +141,7 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
                 "Fragment post-processing is not running"
             )
 
-        logger.info("Stop signal sent for fragment post-processing")
+        logger.info("Stop signal sent for fragment_controllers post-processing")
         self._stop_event.set()
 
     def _launch_background_task(
@@ -168,7 +171,7 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
             authenticated_user: AuthenticatedUser
     ) -> None:
         logger.info(
-            "Background fragment post-processing started",
+            "Background fragment_controllers post-processing started",
             extra={"total_fragments": len(fragment_ids), "user_id": authenticated_user.id}
         )
 
@@ -203,13 +206,13 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
                         )
                     )
                     logger.error(
-                        "Failed to post-process fragment",
+                        "Failed to post-process fragment_controllers",
                         extra={"fragment_id": fragment_id, "error": str(e)}
                     )
 
         except Exception as e:
             logger.exception(
-                "Unexpected error in background fragment post-processing",
+                "Unexpected error in background fragment_controllers post-processing",
                 extra={"error": str(e)}
             )
 
@@ -219,7 +222,7 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
             self._finished_at = datetime.now(timezone.utc)
 
             logger.info(
-                "Background fragment post-processing finished",
+                "Background fragment_controllers post-processing finished",
                 extra={
                     "processed": self._processed_fragments,
                     "failed": self._failed_fragments,
@@ -269,9 +272,7 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
             )
 
 
-async def get_post_process_fragment_service(
-        request: Request
-) -> PostProcessFragmentServiceInterface:
+async def get_post_process_fragment_service(request: Request) -> PostProcessFragmentServiceInterface:
     try:
         return request.app.state.post_process_fragment_service
     except AttributeError:

@@ -11,13 +11,14 @@ from app.application.services.document.post_process_document_service.exceptions.
 from app.application.services.document.post_process_document_service.interfaces.post_process_document_service_interface import (
     PostProcessDocumentServiceInterface
 )
-from app.domain.dtos.document.post_process_document_controller.post_process_document_start_response import \
-    PostProcessDocumentStartResponse
-from app.domain.dtos.document.post_process_document_controller.post_process_document_status_response import (
-    PostProcessDocumentError,
-    PostProcessStatusResponse
+from app.domain.dtos.document.post_process_document_controller.post_process_documents_start_response import (
+    PostProcessDocumentsStartResponse
 )
-from app.domain.models.authenticated_user import AuthenticatedUser
+from app.domain.dtos.document.post_process_document_controller.post_process_documents_status_response import (
+    PostProcessDocumentError,
+    PostProcessDocumentsStatusResponse
+)
+from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.llm_provider.interfaces.llm_provider_interface import LlmProviderInterface
 from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
     DatabaseManagerInterface
@@ -60,7 +61,7 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
     async def start_all(
             self,
             authenticated_user: AuthenticatedUser
-    ) -> PostProcessDocumentStartResponse:
+    ) -> PostProcessDocumentsStartResponse:
         if self._is_running:
             raise PostProcessAlreadyRunningException(
                 "Post-processing is already running"
@@ -76,14 +77,14 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
             document_ids = [doc.id for doc in documents]
 
         if not document_ids:
-            return PostProcessDocumentStartResponse(
+            return PostProcessDocumentsStartResponse(
                 message="No documents found missing metadata",
                 total_documents=0
             )
 
         self._launch_background_task(document_ids=document_ids, authenticated_user=authenticated_user)
 
-        return PostProcessDocumentStartResponse(
+        return PostProcessDocumentsStartResponse(
             message="Post-processing started",
             total_documents=len(document_ids)
         )
@@ -92,7 +93,7 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
             self,
             document_ids: List[int],
             authenticated_user: AuthenticatedUser
-    ) -> PostProcessDocumentStartResponse:
+    ) -> PostProcessDocumentsStartResponse:
         if self._is_running:
             raise PostProcessAlreadyRunningException(
                 "Post-processing is already running"
@@ -105,13 +106,13 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
 
         self._launch_background_task(document_ids=document_ids, authenticated_user=authenticated_user)
 
-        return PostProcessDocumentStartResponse(
+        return PostProcessDocumentsStartResponse(
             message="Post-processing started for selected documents",
             total_documents=len(document_ids)
         )
 
-    def get_status(self) -> PostProcessStatusResponse:
-        return PostProcessStatusResponse(
+    def get_status(self) -> PostProcessDocumentsStatusResponse:
+        return PostProcessDocumentsStatusResponse(
             is_running=self._is_running,
             total_documents=self._total_documents,
             processed_documents=self._processed_documents,
@@ -193,7 +194,7 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
                         )
                     )
                     logger.error(
-                        "Failed to post-process document",
+                        "Failed to post-process document_controllers",
                         extra={"document_id": document_id, "error": str(e)}
                     )
 
@@ -239,7 +240,7 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
             )
 
             if not fragments:
-                logger.warning("No fragments found for document, skipping",
+                logger.warning("No fragments found for document_controllers, skipping",
                                extra={"document_id": document_id})
                 return
 
@@ -270,9 +271,7 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
             )
 
 
-async def get_post_process_document_service(
-        request: Request
-) -> PostProcessDocumentServiceInterface:
+async def get_post_process_document_service(request: Request) -> PostProcessDocumentServiceInterface:
     try:
         return request.app.state.post_process_document_service
     except AttributeError:

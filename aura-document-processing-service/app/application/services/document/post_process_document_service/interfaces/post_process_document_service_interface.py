@@ -1,11 +1,11 @@
 from abc import ABC, abstractmethod
 from typing import List
 
-from app.domain.dtos.document.post_process_document_controller.post_process_document_start_response import (
-    PostProcessDocumentStartResponse
+from app.domain.dtos.document.post_process_document_controller.post_process_documents_start_response import (
+    PostProcessDocumentsStartResponse
 )
-from app.domain.dtos.document.post_process_document_controller.post_process_document_status_response import PostProcessStatusResponse
-from app.domain.models.authenticated_user import AuthenticatedUser
+from app.domain.dtos.document.post_process_document_controller.post_process_documents_status_response import PostProcessStatusResponse
+from app.domain.authentication.authenticated_user import AuthenticatedUser
 
 
 class PostProcessDocumentServiceInterface(ABC):
@@ -13,7 +13,7 @@ class PostProcessDocumentServiceInterface(ABC):
     async def start_all(
             self,
             authenticated_user: AuthenticatedUser
-    ) -> PostProcessDocumentStartResponse:
+    ) -> PostProcessDocumentsStartResponse:
         pass
 
     @abstractmethod
@@ -21,7 +21,7 @@ class PostProcessDocumentServiceInterface(ABC):
             self,
             document_ids: List[int],
             authenticated_user: AuthenticatedUser
-    ) -> PostProcessDocumentStartResponse:
+    ) -> PostProcessDocumentsStartResponse:
         pass
 
     @abstractmethod

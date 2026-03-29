@@ -26,7 +26,7 @@ from app.domain.dtos.fragment.fragment_query_controller.documents_context_fragme
 )
 from app.domain.dtos.fragment.fragment_query_controller.fragment_list_response import FragmentListResponse
 from app.domain.dtos.fragment.fragment_query_controller.question_context_fragments_request import QuestionContextFragmentsRequest
-from app.domain.models.authenticated_user import AuthenticatedUser
+from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.models.document import Document
 from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
     DocumentRepositoryInterface
@@ -180,7 +180,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
 
         if missing:
             logger.warning(
-                "Insufficient permissions for fragment query operation",
+                "Insufficient permissions for fragment_controllers query operation",
                 extra={
                     "user_id": authenticated_user.id,
                     "missing_permissions": sorted(missing),
@@ -199,7 +199,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
     ) -> None:
         if not FragmentQueryService._has_any_role(authenticated_user, allowed_roles):
             logger.warning(
-                "Insufficient role for fragment query operation",
+                "Insufficient role for fragment_controllers query operation",
                 extra={
                     "user_id": authenticated_user.id,
                     "user_roles": sorted(authenticated_user.roles),
@@ -216,7 +216,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
     def _require_ownership(document: Document, authenticated_user: AuthenticatedUser) -> None:
         if document.created_by != authenticated_user.id:
             logger.warning(
-                "Unauthorized document access attempt",
+                "Unauthorized document_controllers access attempt",
                 extra={
                     "document_id": document.id,
                     "owner_id": document.created_by,
@@ -224,7 +224,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 }
             )
             raise FragmentQueryUnauthorizedException(
-                f"User {authenticated_user.id} is not authorized to access document {document.id}"
+                f"User {authenticated_user.id} is not authorized to access document_controllers {document.id}"
             )
 
     @staticmethod
@@ -299,7 +299,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             return fragments
         except Exception as e:
             raise FragmentQueryRetrievalException(
-                f"Failed to retrieve fragments for document {document_id}: {e}"
+                f"Failed to retrieve fragments for document_controllers {document_id}: {e}"
             ) from e
 
 

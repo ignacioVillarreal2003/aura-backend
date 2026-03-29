@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
-from fastapi import BackgroundTasks, UploadFile
+from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.dtos.document.create_document.create_document_request import CreateDocumentRequest
 from app.domain.dtos.document.create_document.create_document_response import CreateDocumentResponse
-from app.domain.models.authenticated_user import AuthenticatedUser
+from app.domain.authentication.authenticated_user import AuthenticatedUser
 
 
 class CreateDocumentServiceInterface(ABC):
@@ -13,7 +13,6 @@ class CreateDocumentServiceInterface(ABC):
             self,
             create_document_request: CreateDocumentRequest,
             raw_document: UploadFile,
-            background_tasks: BackgroundTasks,
             database_session: AsyncSession,
             authenticated_user: AuthenticatedUser,
     ) -> CreateDocumentResponse:

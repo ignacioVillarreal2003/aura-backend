@@ -13,7 +13,7 @@ from app.application.services.document.delete_document_service.exceptions.delete
 from app.application.services.document.delete_document_service.interfaces.delete_document_service_interface import (
     DeleteDocumentServiceInterface
 )
-from app.domain.models.authenticated_user import AuthenticatedUser
+from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.models.document import Document
 from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
     DocumentRepositoryInterface
@@ -69,7 +69,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             authenticated_user: AuthenticatedUser,
     ) -> None:
         logger.info(
-            "Soft delete document initiated",
+            "Soft delete document_controllers initiated",
             extra={"document_id": document_id, "user_id": authenticated_user.id}
         )
 
@@ -83,16 +83,16 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             await self._soft_delete_document(document.id, authenticated_user.id, database_session)
 
             logger.info(
-                "Soft delete document completed",
+                "Soft delete document_controllers completed",
                 extra={"document_id": document_id, "user_id": authenticated_user.id}
             )
 
         except self._KNOWN_EXCEPTIONS:
             raise
         except Exception as e:
-            logger.exception("Unexpected error during soft delete document", extra={"document_id": document_id})
+            logger.exception("Unexpected error during soft delete document_controllers", extra={"document_id": document_id})
             raise DeleteDocumentServiceException(
-                f"Unexpected error during soft delete of document {document_id}"
+                f"Unexpected error during soft delete of document_controllers {document_id}"
             ) from e
 
     async def soft_delete_documents_by_chat(
@@ -144,7 +144,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             authenticated_user: AuthenticatedUser
     ) -> None:
         logger.info(
-            "Hard delete document initiated",
+            "Hard delete document_controllers initiated",
             extra={"document_id": document_id, "user_id": authenticated_user.id}
         )
 
@@ -160,16 +160,16 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             await self._delete_from_storage(document.storage_url)
 
             logger.info(
-                "Hard delete document completed",
+                "Hard delete document_controllers completed",
                 extra={"document_id": document_id, "user_id": authenticated_user.id}
             )
 
         except self._KNOWN_EXCEPTIONS:
             raise
         except Exception as e:
-            logger.exception("Unexpected error during hard delete document", extra={"document_id": document_id})
+            logger.exception("Unexpected error during hard delete document_controllers", extra={"document_id": document_id})
             raise DeleteDocumentServiceException(
-                f"Unexpected error during hard delete of document {document_id}"
+                f"Unexpected error during hard delete of document_controllers {document_id}"
             ) from e
 
     async def hard_delete_documents_by_chat(
@@ -323,7 +323,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             logger.debug("Fragments soft deleted", extra={"document_id": document_id})
         except Exception as e:
             raise DeleteFragmentsFailedException(
-                f"Failed to soft delete fragments for document {document_id}"
+                f"Failed to soft delete fragments for document_controllers {document_id}"
             ) from e
 
     async def _hard_delete_fragments(
@@ -339,7 +339,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             logger.debug("Fragments hard deleted", extra={"document_id": document_id})
         except Exception as e:
             raise DeleteFragmentsFailedException(
-                f"Failed to hard delete fragments for document {document_id}"
+                f"Failed to hard delete fragments for document_controllers {document_id}"
             ) from e
 
     async def _soft_delete_document(
@@ -357,7 +357,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             logger.debug("Document record soft deleted", extra={"document_id": document_id})
         except Exception as e:
             raise DeleteDocumentFailedException(
-                f"Failed to soft delete document record {document_id}"
+                f"Failed to soft delete document_controllers record {document_id}"
             ) from e
 
     async def _hard_delete_document(
@@ -373,7 +373,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             logger.debug("Document record hard deleted", extra={"document_id": document_id})
         except Exception as e:
             raise DeleteDocumentFailedException(
-                f"Failed to hard delete document record {document_id}"
+                f"Failed to hard delete document_controllers record {document_id}"
             ) from e
 
     async def _delete_from_storage(self, storage_url: str) -> None:
@@ -389,7 +389,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
 
         except DocumentStorageException as e:
             logger.critical(
-                "Failed to delete document from storage after DB record was removed — manual cleanup required",
+                "Failed to delete document_controllers from storage after DB record was removed — manual cleanup required",
                 extra={"storage_url": storage_url, "error": str(e)}
             )
             raise DeleteDocumentStorageException(

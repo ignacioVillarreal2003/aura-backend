@@ -1,7 +1,8 @@
 import logging
 from typing import Optional
 
-from app.domain.models.authenticated_user import AuthenticatedUser
+from app.configuration.environment_variables import environment_variables
+from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.http_client.exceptions.http_client_exceptions import (
     HttpClientCircuitBreakerException,
     HttpClientConnectionException,
@@ -34,8 +35,9 @@ class LlmProvider(LlmProviderInterface):
         self._http_client = http_client
         self._settings = llm_provider_settings or LlmProviderSettings()
 
-    def _build_headers(self, authenticated_user: Optional[AuthenticatedUser] = None) -> dict:
-        headers = {"X-Service-Api-Key": self._settings.service_api_key}
+    @staticmethod
+    def _build_headers(authenticated_user: Optional[AuthenticatedUser] = None) -> dict:
+        headers = {"X-Service-Api-Key": environment_variables.service_api_key}
         if authenticated_user is not None:
             headers["X-User-Id"] = str(authenticated_user.id)
             headers["X-User-Roles"] = ",".join(authenticated_user.roles)
@@ -49,7 +51,7 @@ class LlmProvider(LlmProviderInterface):
             authenticated_user: Optional[AuthenticatedUser] = None
     ) -> ClassifyDocumentResponse:
         logger.info(
-            "Classifying document via LLM service",
+            "Classifying document_controllers via LLM service",
             extra={"document_name": document_name}
         )
 
@@ -81,11 +83,11 @@ class LlmProvider(LlmProviderInterface):
 
         except HttpClientTimeoutException as e:
             logger.error(
-                "Timeout classifying document",
+                "Timeout classifying document_controllers",
                 extra={"document_name": document_name}
             )
             raise LlmProviderTimeoutException(
-                f"Timeout classifying document: {document_name}"
+                f"Timeout classifying document_controllers: {document_name}"
             ) from e
 
         except (HttpClientConnectionException, HttpClientCircuitBreakerException) as e:
@@ -99,11 +101,11 @@ class LlmProvider(LlmProviderInterface):
 
         except HttpClientException as e:
             logger.error(
-                "HTTP error classifying document",
+                "HTTP error classifying document_controllers",
                 extra={"document_name": document_name, "error": str(e)}
             )
             raise LlmProviderException(
-                f"Error classifying document: {document_name}"
+                f"Error classifying document_controllers: {document_name}"
             ) from e
 
         except (ValueError, KeyError, TypeError) as e:
@@ -112,7 +114,7 @@ class LlmProvider(LlmProviderInterface):
                 extra={"document_name": document_name, "error": str(e)}
             )
             raise LlmProviderInvalidResponseException(
-                f"Invalid response from LLM service for document: {document_name}"
+                f"Invalid response from LLM service for document_controllers: {document_name}"
             ) from e
 
         except LlmProviderException:
@@ -120,11 +122,11 @@ class LlmProvider(LlmProviderInterface):
 
         except Exception as e:
             logger.exception(
-                "Unexpected error classifying document",
+                "Unexpected error classifying document_controllers",
                 extra={"document_name": document_name}
             )
             raise LlmProviderException(
-                f"Unexpected error classifying document: {document_name}"
+                f"Unexpected error classifying document_controllers: {document_name}"
             ) from e
 
     async def enrich_fragment(
@@ -132,7 +134,7 @@ class LlmProvider(LlmProviderInterface):
             content: str,
             authenticated_user: Optional[AuthenticatedUser] = None
     ) -> EnrichFragmentResponse:
-        logger.info("Enriching fragment via LLM service")
+        logger.info("Enriching fragment_controllers via LLM service")
 
         request_body = EnrichFragmentRequest(content=content)
 
@@ -154,40 +156,40 @@ class LlmProvider(LlmProviderInterface):
             return enrich_response
 
         except HttpClientTimeoutException as e:
-            logger.error("Timeout enriching fragment")
+            logger.error("Timeout enriching fragment_controllers")
             raise LlmProviderTimeoutException(
-                "Timeout enriching fragment"
+                "Timeout enriching fragment_controllers"
             ) from e
 
         except (HttpClientConnectionException, HttpClientCircuitBreakerException) as e:
-            logger.error("LLM service unavailable during fragment enrichment")
+            logger.error("LLM service unavailable during fragment_controllers enrichment")
             raise LlmProviderUnavailableException(
                 "LLM service is unavailable"
             ) from e
 
         except HttpClientException as e:
             logger.error(
-                "HTTP error enriching fragment",
+                "HTTP error enriching fragment_controllers",
                 extra={"error": str(e)}
             )
             raise LlmProviderException(
-                "Error enriching fragment"
+                "Error enriching fragment_controllers"
             ) from e
 
         except (ValueError, KeyError, TypeError) as e:
             logger.error(
-                "Invalid response from LLM service for fragment enrichment",
+                "Invalid response from LLM service for fragment_controllers enrichment",
                 extra={"error": str(e)}
             )
             raise LlmProviderInvalidResponseException(
-                "Invalid response from LLM service for fragment enrichment"
+                "Invalid response from LLM service for fragment_controllers enrichment"
             ) from e
 
         except LlmProviderException:
             raise
 
         except Exception as e:
-            logger.exception("Unexpected error enriching fragment")
+            logger.exception("Unexpected error enriching fragment_controllers")
             raise LlmProviderException(
-                "Unexpected error enriching fragment"
+                "Unexpected error enriching fragment_controllers"
             ) from e

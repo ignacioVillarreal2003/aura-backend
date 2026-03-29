@@ -64,7 +64,7 @@ class ScannedDOCXReader(ReaderInterface):
 
         if not self.can_handle(file_path):
             raise UnsupportedScannedDOCXFormatException(
-                "The DOCX file is not a supported scanned document format for OCR processing."
+                "The DOCX file is not a supported scanned document_controllers format for OCR processing."
             )
 
         logger.info(

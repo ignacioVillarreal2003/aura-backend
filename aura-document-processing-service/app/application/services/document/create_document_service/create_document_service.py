@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
-from fastapi import BackgroundTasks, HTTPException, Request, UploadFile, status
+from fastapi import HTTPException, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.services.document.create_document_service.create_document_service_request_validator import (
@@ -14,7 +14,8 @@ from app.application.services.document.create_document_service.create_document_s
 from app.application.services.document.create_document_service.create_document_service_settings import (
     CreateDocumentServiceSettings
 )
-from app.application.services.document.create_document_service.create_document_service_utils import CreateDocumentServiceUtils
+from app.application.services.document.create_document_service.create_document_service_utils import \
+    CreateDocumentServiceUtils
 from app.application.services.document.create_document_service.exceptions.create_document_service_exception import (
     CreateDocumentPersistenceException,
     CreateDocumentServiceException,
@@ -24,15 +25,17 @@ from app.application.services.document.create_document_service.exceptions.create
 from app.application.services.document.create_document_service.interfaces.create_document_service_interface import (
     CreateDocumentServiceInterface
 )
-from app.application.services.document.document_ingestion_service.interfaces.document_ingestion_service_interface import (
-    DocumentIngestionServiceInterface
-)
 from app.domain.constants.document.document_mime_type import DocumentMimeType
 from app.domain.constants.document.document_status import DocumentStatus
 from app.domain.dtos.document.create_document.create_document_request import CreateDocumentRequest
 from app.domain.dtos.document.create_document.create_document_response import CreateDocumentResponse
-from app.domain.models.authenticated_user import AuthenticatedUser
+from app.infrastructure.messaging.rabbitmq.dtos.commands.document_ingestion_command import DocumentIngestionCommand
+from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
+from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.models.document import Document
+from app.infrastructure.messaging.rabbitmq.exceptions.rabbitmq_manager_exception import RabbitMQPublishException
+from app.infrastructure.messaging.rabbitmq.interfaces.rabbitmq_manager_interface import RabbitMQManagerInterface
+from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_settings import RabbitMQManagerSettings
 from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
     DocumentRepositoryInterface
 )
@@ -67,20 +70,16 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             self,
             document_repository: DocumentRepositoryInterface,
             document_storage: DocumentStorageInterface,
-            document_ingestion_service: DocumentIngestionServiceInterface,
-            create_document_service_settings: Optional[CreateDocumentServiceSettings] = None
+            rabbitmq_manager: RabbitMQManagerInterface,
+            create_document_service_settings: Optional[CreateDocumentServiceSettings] = None,
     ) -> None:
         self._document_repository = document_repository
         self._document_storage = document_storage
-        self._document_ingestion_service = document_ingestion_service
+        self._rabbitmq_manager = rabbitmq_manager
         self._settings = create_document_service_settings or CreateDocumentServiceSettings()
 
-        self._validator = CreateDocumentServiceRequestValidator(
-            create_document_service_settings=self._settings
-        )
-        self._utils = CreateDocumentServiceUtils(
-            create_document_service_settings=self._settings
-        )
+        self._validator = CreateDocumentServiceRequestValidator(create_document_service_settings=self._settings)
+        self._utils = CreateDocumentServiceUtils(create_document_service_settings=self._settings)
 
         self._deduplication_lock = asyncio.Lock()
         self._recent_hashes: dict[str, datetime] = {}
@@ -89,13 +88,11 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             self,
             create_document_request: CreateDocumentRequest,
             raw_document: UploadFile,
-            background_tasks: BackgroundTasks,
             database_session: AsyncSession,
             authenticated_user: AuthenticatedUser
     ) -> CreateDocumentResponse:
         temp_path: Optional[Path] = None
         object_name: Optional[str] = None
-        background_task_registered = False
 
         logger.info(
             "Document creation initiated",
@@ -128,7 +125,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 file_hash = await self._utils.compute_file_hash(raw_document)
                 if await self._is_duplicate(file_hash):
                     raise CreateDocumentValidationException(
-                        "Duplicate document detected. This file was recently uploaded."
+                        "Duplicate document_controllers detected. This file was recently uploaded."
                     )
 
             temp_path = await self._save_temp_file_streaming(raw_document)
@@ -143,7 +140,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 )
             except DocumentStorageException as e:
                 raise CreateDocumentUploadException(
-                    f"Failed to upload document to storage: {e}"
+                    f"Failed to upload document_controllers to storage: {e}"
                 ) from e
 
             now = datetime.now(timezone.utc)
@@ -172,40 +169,57 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             except DatabaseException as e:
                 await self._cleanup_storage(object_name)
                 raise CreateDocumentPersistenceException(
-                    f"Failed to persist document to database: {e}"
+                    f"Failed to persist document_controllers to database: {e}"
                 ) from e
 
             if self._settings.deduplication_enabled and file_hash:
                 await self._register_hash(file_hash)
 
-            background_tasks.add_task(
-                self._process_document_background,
-                document=database_document,
-                local_file_path=temp_path,
+            await self._cleanup_temp_file(temp_path)
+            temp_path = None
+
+            command = DocumentIngestionCommand(
+                document_id=database_document.id,
+                storage_url=object_name,
+                filename=raw_document.filename,
+                mime_type=raw_document.content_type or "",
+                created_by=authenticated_user.id,
             )
-            background_task_registered = True
+            envelope = MessageEnvelope.wrap(command)
+
+            try:
+                await self._rabbitmq_manager.publish(
+                    routing_key=self._rabbitmq_manager.settings.ingestion_queue,
+                    body=envelope.to_bytes(),
+                    headers={"message_id": envelope.message_id},
+                )
+            except Exception as e:
+                raise RabbitMQPublishException(
+                    f"Failed to enqueue document ingestion for document {database_document.id}: {e}"
+                ) from e
 
             logger.info(
-                "Document creation completed — ingestion enqueued",
+                "Document creation completed — ingestion message published",
                 extra={
                     "document_id": database_document.id,
                     "status": database_document.status.value,
+                    "message_id": envelope.message_id,
                 },
             )
 
             return CreateDocumentResponse.model_validate(database_document)
 
         except self._KNOWN_EXCEPTIONS:
-            if not background_task_registered and temp_path is not None:
+            if temp_path is not None:
                 await self._cleanup_temp_file(temp_path)
             raise
 
         except Exception as e:
             logger.exception(
-                "Unexpected error during document creation",
+                "Unexpected error during document_controllers creation",
                 extra={"document_filename": raw_document.filename}
             )
-            if not background_task_registered and temp_path is not None:
+            if temp_path is not None:
                 await self._cleanup_temp_file(temp_path)
             raise CreateDocumentServiceException(f"Document creation failed: {e}") from e
 
@@ -215,7 +229,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
 
         if missing:
             logger.warning(
-                "Insufficient permissions for document creation",
+                "Insufficient permissions for document_controllers creation",
                 extra={
                     "user_id": authenticated_user.id,
                     "missing_permissions": sorted(missing),
@@ -229,7 +243,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
     def _require_roles(self, authenticated_user: AuthenticatedUser) -> None:
         if not bool(set(authenticated_user.roles) & self._ALL_ALLOWED_ROLES):
             logger.warning(
-                "Insufficient role for document creation",
+                "Insufficient role for document_controllers creation",
                 extra={
                     "user_id": authenticated_user.id,
                     "user_roles": sorted(authenticated_user.roles),
@@ -237,7 +251,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 },
             )
             raise CreateDocumentValidationException(
-                f"User {authenticated_user.id} does not have the required role for document creation. "
+                f"User {authenticated_user.id} does not have the required role for document_controllers creation. "
                 f"Allowed roles: {sorted(self._ALL_ALLOWED_ROLES)}"
             )
 
@@ -304,33 +318,13 @@ class CreateDocumentService(CreateDocumentServiceInterface):
         try:
             await self._document_storage.delete_document(object_name)
             logger.info(
-                "Compensating action: document deleted from storage",
+                "Compensating action: document_controllers deleted from storage",
                 extra={"object_name": object_name}
             )
         except Exception as e:
             logger.error(
                 "Compensating storage delete failed — manual cleanup may be required",
                 extra={"object_name": object_name, "error": str(e)}
-            )
-
-    async def _process_document_background(
-            self,
-            document: Document,
-            local_file_path: Path
-    ) -> None:
-        logger.info("Background processing initiated", extra={"document_id": document.id})
-
-        try:
-            await self._document_ingestion_service.process_document(
-                document=document,
-                local_file_path=local_file_path
-            )
-            logger.info("Background processing completed", extra={"document_id": document.id})
-
-        except Exception as e:
-            logger.exception(
-                "Background processing failed",
-                extra={"document_id": document.id, "error": str(e)}
             )
 
 

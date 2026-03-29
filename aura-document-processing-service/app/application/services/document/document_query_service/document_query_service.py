@@ -23,7 +23,7 @@ from app.application.services.document.document_query_service.interfaces.documen
 )
 from app.domain.dtos.document.document_query_controller.document_list_response import DocumentListResponse
 from app.domain.dtos.document.document_query_controller.document_response import DocumentResponse
-from app.domain.models.authenticated_user import AuthenticatedUser
+from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.models.document import Document
 from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
     DocumentRepositoryInterface
@@ -68,7 +68,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             authenticated_user: AuthenticatedUser
     ) -> DocumentResponse:
         logger.info(
-            "Get document initiated",
+            "Get document_controllers initiated",
             extra={"document_id": document_id, "user_id": authenticated_user.id}
         )
 
@@ -82,7 +82,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
                 self._require_ownership(document, authenticated_user)
 
             logger.info(
-                "Get document completed",
+                "Get document_controllers completed",
                 extra={"document_id": document_id, "user_id": authenticated_user.id}
             )
             return DocumentResponse.model_validate(document)
@@ -90,9 +90,9 @@ class DocumentQueryService(DocumentQueryServiceInterface):
         except self._KNOWN_EXCEPTIONS:
             raise
         except Exception as e:
-            logger.exception("Unexpected error during get document", extra={"document_id": document_id})
+            logger.exception("Unexpected error during get document_controllers", extra={"document_id": document_id})
             raise DocumentQueryServiceException(
-                f"Unexpected error retrieving document {document_id}"
+                f"Unexpected error retrieving document_controllers {document_id}"
             ) from e
 
     async def get_documents(
@@ -196,7 +196,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
     def _require_ownership(document: Document, authenticated_user: AuthenticatedUser) -> None:
         if document.created_by != authenticated_user.id:
             logger.warning(
-                "Unauthorized document access attempt",
+                "Unauthorized document_controllers access attempt",
                 extra={
                     "document_id": document.id,
                     "owner_id": document.created_by,
@@ -204,7 +204,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
                 }
             )
             raise DocumentQueryUnauthorizedException(
-                f"User {authenticated_user.id} is not authorized to access document {document.id}"
+                f"User {authenticated_user.id} is not authorized to access document_controllers {document.id}"
             )
 
     @staticmethod

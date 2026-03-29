@@ -1,0 +1,74 @@
+import logging
+from typing import Optional
+from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
+
+
+class RabbitMQManagerSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="RABBITMQ_MANAGER_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    url: SecretStr = Field(...)
+
+    tcp_connect_timeout_seconds: float = Field(default=10.0, gt=0, le=60.0)
+
+    retry_max_attempts: int = Field(default=3, ge=1, le=10)
+    retry_backoff_min_seconds: float = Field(default=1.0, gt=0, le=30.0)
+    retry_backoff_max_seconds: float = Field(default=10.0, gt=0, le=60.0)
+
+    prefetch_count: int = Field(default=5, ge=1, le=100)
+
+    max_delivery_attempts: int = Field(default=3, ge=1, le=20)
+
+    consumer_reconnect_delay_seconds: float = Field(default=5.0, gt=0, le=60.0)
+
+    message_ttl_ms: Optional[int] = Field(default=None, ge=1000)
+
+    ingestion_exchange: str = Field(default="document.ingestion")
+    ingestion_queue: str = Field(default="document.ingestion.pending")
+    dlx_exchange: str = Field(default="document.ingestion.dlx")
+    dlq_queue: str = Field(default="document.ingestion.dead")
+
+    @field_validator("url", mode="before")
+    @classmethod
+    def validate_url(cls, v: str) -> str:
+        v = str(v).strip()
+        if not v:
+            raise ValueError("RabbitMQ URL cannot be empty")
+        if not (v.startswith("amqp://") or v.startswith("amqps://")):
+            raise ValueError("RabbitMQ URL must start with amqp:// or amqps://")
+        return v
+
+    @field_validator("ingestion_exchange", "ingestion_queue", "dlx_exchange", "dlq_queue", mode="before")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Exchange/queue name cannot be empty")
+        return v
+
+    @model_validator(mode="after")
+    def validate_backoff(self) -> "RabbitMQManagerSettings":
+        if self.retry_backoff_min_seconds >= self.retry_backoff_max_seconds:
+            raise ValueError(
+                f"retry_backoff_min_seconds ({self.retry_backoff_min_seconds}s) must be "
+                f"strictly less than retry_backoff_max_seconds ({self.retry_backoff_max_seconds}s)"
+            )
+        return self
+
+    @property
+    def url_safe(self) -> str:
+        raw = self.url.get_secret_value()
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(raw)
+            return f"{parsed.scheme}://***:***@{parsed.hostname}:{parsed.port}{parsed.path}"
+        except Exception:
+            return "amqp://<redacted>"

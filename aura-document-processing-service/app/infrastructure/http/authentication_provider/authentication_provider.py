@@ -3,7 +3,8 @@ import secrets
 from typing import NoReturn, Optional
 from fastapi import HTTPException, Request, status
 
-from app.domain.models.authenticated_user import AuthenticatedUser
+from app.configuration.environment_variables import environment_variables
+from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.authentication_provider.authentication_provider_settings import (
     AuthenticationProviderSettings,
 )
@@ -47,10 +48,10 @@ class AuthenticationProvider(AuthenticationProviderInterface):
     def __init__(
         self,
         http_client: HttpClientInterface,
-        settings: Optional[AuthenticationProviderSettings] = None,
+        authentication_provider_settings: Optional[AuthenticationProviderSettings] = None,
     ) -> None:
         self._http_client = http_client
-        self._settings = settings or AuthenticationProviderSettings()
+        self._settings = authentication_provider_settings or AuthenticationProviderSettings()
 
     def evaluate_service_auth(self, request: Request) -> Optional[AuthenticatedUser]:
         raw_key = request.headers.get(self.HEADER_SERVICE_API_KEY)
@@ -65,7 +66,7 @@ class AuthenticationProvider(AuthenticationProviderInterface):
                 detail={"detail": "Service API key required", "error": "missing_service_key"},
             )
 
-        if not secrets.compare_digest(api_key, self._settings.internal_service_api_key):
+        if not secrets.compare_digest(api_key, environment_variables.service_api_key):
             logger.warning("S2S auth: invalid X-Service-Api-Key", extra={"path": request.url.path})
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -182,11 +183,11 @@ class AuthenticationProvider(AuthenticationProviderInterface):
 
 
 def get_authenticated_user(request: Request) -> AuthenticatedUser:
-    user: Optional[AuthenticatedUser] = getattr(request.state, "authenticated_user", None)
-    if user is None:
+    authenticated_user: Optional[AuthenticatedUser] = getattr(request.state, "authenticated_user", None)
+    if authenticated_user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return user
+    return authenticated_user

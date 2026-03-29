@@ -5,21 +5,21 @@ class DocumentIngestionServiceException(AppException):
     pass
 
 
-class DocumentIngestionReadException(DocumentIngestionServiceException):
+class DocumentIngestionServiceReadException(DocumentIngestionServiceException):
     pass
 
 
-class DocumentIngestionCleanException(DocumentIngestionServiceException):
+class DocumentIngestionServiceCleanException(DocumentIngestionServiceException):
     pass
 
 
-class DocumentIngestionSplitException(DocumentIngestionServiceException):
+class DocumentIngestionServiceSplitException(DocumentIngestionServiceException):
     pass
 
 
-class DocumentIngestionEmbedException(DocumentIngestionServiceException):
+class DocumentIngestionServiceEmbedException(DocumentIngestionServiceException):
     pass
 
 
-class DocumentIngestionPersistenceException(DocumentIngestionServiceException):
+class DocumentIngestionServicePersistenceException(DocumentIngestionServiceException):
     pass

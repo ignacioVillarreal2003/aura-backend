@@ -6,7 +6,7 @@ from app.domain.dtos.fragment.fragment_query_controller.documents_context_fragme
 )
 from app.domain.dtos.fragment.fragment_query_controller.fragment_list_response import FragmentListResponse
 from app.domain.dtos.fragment.fragment_query_controller.question_context_fragments_request import QuestionContextFragmentsRequest
-from app.domain.models.authenticated_user import AuthenticatedUser
+from app.domain.authentication.authenticated_user import AuthenticatedUser
 
 
 class FragmentQueryServiceInterface(ABC):

@@ -14,13 +14,11 @@ class LlmProviderSettings(BaseSettings):
         extra="ignore"
     )
 
-    base_url: str = Field(...)
-    classify_document_path: str = Field(default="/api/document-classify")
-    enrich_fragment_path: str = Field(default="/api/fragment-enrich")
-    service_api_key: str = Field(...)
+    classify_document_url: str = Field(...)
+    enrich_fragment_url: str = Field(...)
     timeout_seconds: float = Field(default=120.0)
 
-    @field_validator("base_url", mode="before")
+    @field_validator("classify_document_url", "enrich_fragment_url", mode="before")
     @classmethod
     def validate_base_url(cls, v: str) -> str:
         v = v.strip().rstrip("/")
@@ -29,11 +27,3 @@ class LlmProviderSettings(BaseSettings):
                 f"base_url must start with http:// or https://, got: '{v}'"
             )
         return v
-
-    @property
-    def classify_document_url(self) -> str:
-        return f"{self.base_url}{self.classify_document_path}"
-
-    @property
-    def enrich_fragment_url(self) -> str:
-        return f"{self.base_url}{self.enrich_fragment_path}"

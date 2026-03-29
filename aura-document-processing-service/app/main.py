@@ -4,8 +4,8 @@ import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import router
-from app.api.exception_handlers.exception_handlers import register_exception_handlers
+from app.api.controllers import router
+from app.api.handlers.exception_handlers import register_exception_handlers
 from app.configuration.dependencies import (
     startup_dependencies,
     shutdown_dependencies

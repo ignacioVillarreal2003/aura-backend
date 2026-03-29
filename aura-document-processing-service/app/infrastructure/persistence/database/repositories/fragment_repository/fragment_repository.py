@@ -52,7 +52,7 @@ class FragmentRepository(FragmentRepositoryInterface):
     ) -> List[Fragment]:
         try:
             logger.debug(
-                "Fetching fragments by document ID", extra={"document_id": document_id}
+                "Fetching fragments by document_controllers ID", extra={"document_id": document_id}
             )
 
             result = await database_session.execute(
@@ -72,7 +72,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             return fragments
 
         except Exception as e:
-            raise DatabaseException("Error fetching fragments by document ID") from e
+            raise DatabaseException("Error fetching fragments by document_controllers ID") from e
 
     async def get_most_similar_fragments(
             self,
@@ -116,7 +116,7 @@ class FragmentRepository(FragmentRepositoryInterface):
                        deleted_by,
                        deleted_at,
                        1 - (vector <=> :query_vector) AS cosine_similarity
-                FROM fragment
+                FROM fragment_controllers
                 WHERE vector IS NOT NULL
                   AND deleted_at IS NULL
                   AND 1 - (vector <=> :query_vector) >= :threshold
@@ -174,7 +174,7 @@ class FragmentRepository(FragmentRepositoryInterface):
     ) -> int:
         try:
             logger.debug(
-                "Hard-deleting fragments by document ID",
+                "Hard-deleting fragments by document_controllers ID",
                 extra={"document_id": document_id}
             )
 
@@ -230,7 +230,7 @@ class FragmentRepository(FragmentRepositoryInterface):
     ) -> List[Fragment]:
         try:
             logger.debug(
-                "Fetching fragments missing metadata by document IDs",
+                "Fetching fragments missing metadata by document_controllers IDs",
                 extra={"document_ids": document_ids}
             )
 
@@ -248,14 +248,14 @@ class FragmentRepository(FragmentRepositoryInterface):
             fragments = list(result.scalars().all())
 
             logger.debug(
-                "Fragments missing metadata by document IDs fetched",
+                "Fragments missing metadata by document_controllers IDs fetched",
                 extra={"document_ids": document_ids, "count": len(fragments)}
             )
             return fragments
 
         except Exception as e:
             raise DatabaseException(
-                "Error fetching fragments missing metadata by document IDs"
+                "Error fetching fragments missing metadata by document_controllers IDs"
             ) from e
 
     async def update_fragment(
@@ -264,7 +264,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             database_session: AsyncSession
     ) -> Fragment:
         try:
-            logger.debug("Updating fragment", extra={"fragment_id": fragment.id})
+            logger.debug("Updating fragment_controllers", extra={"fragment_id": fragment.id})
 
             updated_fragment = await database_session.merge(fragment)
             await database_session.flush()
@@ -278,10 +278,10 @@ class FragmentRepository(FragmentRepositoryInterface):
 
         except IntegrityError as e:
             raise DatabaseConstraintViolationException(
-                "Constraint violation updating fragment"
+                "Constraint violation updating fragment_controllers"
             ) from e
         except Exception as e:
-            raise DatabaseException("Error updating fragment in the database") from e
+            raise DatabaseException("Error updating fragment_controllers in the database") from e
 
     async def soft_delete_fragments_by_document_id(
             self,
@@ -291,7 +291,7 @@ class FragmentRepository(FragmentRepositoryInterface):
     ) -> int:
         try:
             logger.debug(
-                "Soft-deleting fragments by document ID",
+                "Soft-deleting fragments by document_controllers ID",
                 extra={"document_id": document_id, "user_id": user_id}
             )
 

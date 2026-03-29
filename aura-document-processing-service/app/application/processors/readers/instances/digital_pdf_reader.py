@@ -83,7 +83,7 @@ class DigitalPDFReader(ReaderInterface):
             if not text_parts:
                 raise PDFHasNoExtractableTextException(
                     "The PDF file does not contain extractable text. "
-                    "It may be a scanned document requiring OCR."
+                    "It may be a scanned document_controllers requiring OCR."
                 )
 
             logger.info(

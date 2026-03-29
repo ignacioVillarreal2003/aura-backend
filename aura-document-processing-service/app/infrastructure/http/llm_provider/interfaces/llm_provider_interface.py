@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from app.domain.models.authenticated_user import AuthenticatedUser
+from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.llm_provider.dtos.classify_document_response import ClassifyDocumentResponse
 from app.infrastructure.http.llm_provider.dtos.enrich_fragment_response import EnrichFragmentResponse
 
