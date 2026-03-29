@@ -8,8 +8,8 @@ from app.api.controllers.controller_logging import log_controller
 from app.api.controllers.document.document_query_controller.interfaces.document_query_controller_interface import (
     DocumentQueryControllerInterface
 )
-from app.application.services.document_query_service.document_query_service import get_document_query_service
-from app.application.services.document_query_service.interfaces.document_query_service_interface import (
+from app.application.services.document.document_query_service.document_query_service import get_document_query_service
+from app.application.services.document.document_query_service.interfaces.document_query_service_interface import (
     DocumentQueryServiceInterface
 )
 from app.domain.constants.document.document_type import DocumentType

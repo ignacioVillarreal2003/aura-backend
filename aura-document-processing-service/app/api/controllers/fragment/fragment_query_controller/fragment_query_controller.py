@@ -6,8 +6,8 @@ from app.api.controllers.controller_logging import log_controller
 from app.api.controllers.fragment.fragment_query_controller.interfaces.fragment_query_controller_interface import (
     FragmentQueryControllerInterface
 )
-from app.application.services.fragment_query_service.fragment_query_service import get_fragment_query_service
-from app.application.services.fragment_query_service.interfaces.fragment_query_service_interface import (
+from app.application.services.fragment.fragment_query_service.fragment_query_service import get_fragment_query_service
+from app.application.services.fragment.fragment_query_service.interfaces.fragment_query_service_interface import (
     FragmentQueryServiceInterface
 )
 from app.domain.dtos.fragment.fragment_query_controller.documents_context_fragments_request import (

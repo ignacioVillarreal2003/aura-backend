@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from fastapi import Response
 
-from app.application.services.post_process_document_service.interfaces.post_process_document_service_interface import (
+from app.application.services.document.post_process_document_service.interfaces.post_process_document_service_interface import (
     PostProcessDocumentServiceInterface
 )
 from app.domain.dtos.document.post_process_document_controller.post_process_document_start_response import (

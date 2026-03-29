@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from app.application.services.post_process_fragment_service.interfaces.post_process_fragment_service_interface import (
+from app.application.services.fragment.post_process_fragment_service.interfaces.post_process_fragment_service_interface import (
     PostProcessFragmentServiceInterface
 )
 from app.domain.dtos.fragment.post_process_fragment_controller.post_process_fragment_start_response import (

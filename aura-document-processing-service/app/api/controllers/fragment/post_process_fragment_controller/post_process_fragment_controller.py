@@ -5,10 +5,10 @@ from app.api.controllers.controller_logging import log_controller
 from app.api.controllers.fragment.post_process_fragment_controller.interfaces.post_process_fragment_controller_interface import (
     PostProcessFragmentControllerInterface
 )
-from app.application.services.post_process_fragment_service.interfaces.post_process_fragment_service_interface import (
+from app.application.services.fragment.post_process_fragment_service.interfaces.post_process_fragment_service_interface import (
     PostProcessFragmentServiceInterface
 )
-from app.application.services.post_process_fragment_service.post_process_fragment_service import (
+from app.application.services.fragment.post_process_fragment_service.post_process_fragment_service import (
     get_post_process_fragment_service
 )
 from app.domain.dtos.fragment.post_process_fragment_controller.post_process_fragment_start_response import (

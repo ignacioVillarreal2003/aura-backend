@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from fastapi import Response
 
-from app.application.services.delete_document_service.interfaces.delete_document_service_interface import (
+from app.application.services.document.delete_document_service.interfaces.delete_document_service_interface import (
     DeleteDocumentServiceInterface
 )
 from app.domain.models.authenticated_user import AuthenticatedUser

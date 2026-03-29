@@ -5,10 +5,10 @@ from app.api.controllers.controller_logging import log_controller
 from app.api.controllers.document.post_process_document_controller.interfaces.post_process_document_controller_interface import (
     PostProcessDocumentControllerInterface
 )
-from app.application.services.post_process_document_service.interfaces.post_process_document_service_interface import (
+from app.application.services.document.post_process_document_service.interfaces.post_process_document_service_interface import (
     PostProcessDocumentServiceInterface
 )
-from app.application.services.post_process_document_service.post_process_document_service import (
+from app.application.services.document.post_process_document_service.post_process_document_service import (
     get_post_process_document_service
 )
 from app.domain.dtos.document.post_process_document_controller.post_process_document_start_response import \

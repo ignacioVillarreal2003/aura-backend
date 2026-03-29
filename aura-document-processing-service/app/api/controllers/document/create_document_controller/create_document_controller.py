@@ -6,8 +6,8 @@ from app.api.controllers.controller_logging import log_controller
 from app.api.controllers.document.create_document_controller.interfaces.create_document_controller_interface import (
     CreateDocumentControllerInterface
 )
-from app.application.services.create_document_service.create_document_service import get_create_document_service
-from app.application.services.create_document_service.interfaces.create_document_service_interface import (
+from app.application.services.document.create_document_service.create_document_service import get_create_document_service
+from app.application.services.document.create_document_service.interfaces.create_document_service_interface import (
     CreateDocumentServiceInterface
 )
 from app.domain.dtos.document.create_document.create_document_request import CreateDocumentRequest

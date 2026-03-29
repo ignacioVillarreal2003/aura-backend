@@ -1,6 +1,7 @@
 import logging
 from typing import Optional
 
+from app.domain.models.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.http_client.exceptions.http_client_exceptions import (
     HttpClientCircuitBreakerException,
     HttpClientConnectionException,
@@ -18,7 +19,6 @@ from app.infrastructure.http.llm_provider.exceptions.llm_provider_exception impo
     LlmProviderTimeoutException,
     LlmProviderUnavailableException
 )
-from app.infrastructure.http.authentication_provider.dtos.authenticated_user_response import AuthenticationResponse
 from app.infrastructure.http.llm_provider.interfaces.llm_provider_interface import LlmProviderInterface
 from app.infrastructure.http.llm_provider.llm_provider_settings import LlmProviderSettings
 
@@ -34,7 +34,7 @@ class LlmProvider(LlmProviderInterface):
         self._http_client = http_client
         self._settings = llm_provider_settings or LlmProviderSettings()
 
-    def _build_headers(self, authenticated_user: Optional[AuthenticationResponse] = None) -> dict:
+    def _build_headers(self, authenticated_user: Optional[AuthenticatedUser] = None) -> dict:
         headers = {"X-Service-Api-Key": self._settings.service_api_key}
         if authenticated_user is not None:
             headers["X-User-Id"] = str(authenticated_user.id)
@@ -46,7 +46,7 @@ class LlmProvider(LlmProviderInterface):
             self,
             document_name: str,
             content: str,
-            authenticated_user: Optional[AuthenticationResponse] = None
+            authenticated_user: Optional[AuthenticatedUser] = None
     ) -> ClassifyDocumentResponse:
         logger.info(
             "Classifying document via LLM service",
@@ -130,7 +130,7 @@ class LlmProvider(LlmProviderInterface):
     async def enrich_fragment(
             self,
             content: str,
-            authenticated_user: Optional[AuthenticationResponse] = None
+            authenticated_user: Optional[AuthenticatedUser] = None
     ) -> EnrichFragmentResponse:
         logger.info("Enriching fragment via LLM service")
 

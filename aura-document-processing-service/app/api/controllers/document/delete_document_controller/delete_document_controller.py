@@ -6,8 +6,8 @@ from app.api.controllers.controller_logging import log_controller
 from app.api.controllers.document.delete_document_controller.interfaces.delete_document_controller_interface import (
     DeleteDocumentControllerInterface
 )
-from app.application.services.delete_document_service.delete_document_service import get_delete_document_service
-from app.application.services.delete_document_service.interfaces.delete_document_service_interface import (
+from app.application.services.document.delete_document_service.delete_document_service import get_delete_document_service
+from app.application.services.document.delete_document_service.interfaces.delete_document_service_interface import (
     DeleteDocumentServiceInterface
 )
 from app.domain.models.authenticated_user import AuthenticatedUser

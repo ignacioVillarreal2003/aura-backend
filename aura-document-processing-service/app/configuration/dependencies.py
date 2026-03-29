@@ -5,18 +5,17 @@ from app.application.processors.embedders.embedder_factory import EmbedderFactor
 from app.application.processors.readers.reader_factory import ReaderFactory
 from app.application.processors.text_cleaners.text_cleaner_factory import TextCleanerFactory
 from app.application.processors.text_splitters.text_splitter_factory import TextSplitterFactory
-from app.application.services.create_document_service.create_document_service import CreateDocumentService
-from app.application.services.delete_document_service.delete_document_service import DeleteDocumentService
-from app.application.services.document_ingestion_service.document_ingestion_service import DocumentIngestionService
-from app.application.services.document_query_service.document_query_service import DocumentQueryService
-from app.application.services.fragment_query_service.fragment_query_service import FragmentQueryService
-from app.application.services.post_process_document_service.post_process_document_service import (
+from app.application.services.document.create_document_service.create_document_service import CreateDocumentService
+from app.application.services.document.delete_document_service.delete_document_service import DeleteDocumentService
+from app.application.services.document.document_ingestion_service.document_ingestion_service import DocumentIngestionService
+from app.application.services.document.document_query_service.document_query_service import DocumentQueryService
+from app.application.services.fragment.fragment_query_service.fragment_query_service import FragmentQueryService
+from app.application.services.document.post_process_document_service.post_process_document_service import (
     PostProcessDocumentService
 )
-from app.application.services.post_process_fragment_service.post_process_fragment_service import (
+from app.application.services.fragment.post_process_fragment_service.post_process_fragment_service import (
     PostProcessFragmentService
 )
-from app.application.services.update_document_service.update_document_service import UpdateDocumentService
 from app.infrastructure.http.authentication_provider.authentication_provider import AuthenticationProvider
 from app.infrastructure.http.http_client.http_client import HttpClient
 from app.infrastructure.http.llm_provider.llm_provider import LlmProvider
@@ -29,9 +28,7 @@ from app.infrastructure.persistence.storages.minio_manager.minio_manager import 
 logger = logging.getLogger(__name__)
 
 
-async def startup_dependencies(
-        app: FastAPI
-) -> None:
+async def startup_dependencies(app: FastAPI) -> None:
     try:
         logger.info("Starting up dependencies")
 
@@ -75,11 +72,6 @@ async def startup_dependencies(
 
         text_splitter_factory = TextSplitterFactory()
         app.state.text_splitter_factory = text_splitter_factory
-
-        update_document_service = UpdateDocumentService(
-            document_repository=document_repository
-        )
-        app.state.update_document_service = update_document_service
 
         document_query_service = DocumentQueryService(
             document_repository=document_repository
