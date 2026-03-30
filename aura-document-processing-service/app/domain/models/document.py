@@ -9,7 +9,7 @@ from app.domain.models.base import Base
 
 
 class Document(Base):
-    __tablename__ = "document_controllers"
+    __tablename__ = "document"
 
     id = Column(
         BigInteger,

@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 
 
 class RabbitMQManager(RabbitMQManagerInterface):
-    def __init__(self, settings: Optional[RabbitMQManagerSettings] = None) -> None:
-        self._settings = settings or RabbitMQManagerSettings()
+    def __init__(self, rabbit_mq_manager_settings: Optional[RabbitMQManagerSettings] = None) -> None:
+        self._settings = rabbit_mq_manager_settings or RabbitMQManagerSettings()
         self._connection: Optional[aio_pika.abc.AbstractRobustConnection] = None
         self._channel: Optional[aio_pika.abc.AbstractChannel] = None
         self._exchanges: Dict[str, aio_pika.abc.AbstractExchange] = {}
@@ -92,7 +92,7 @@ class RabbitMQManager(RabbitMQManagerInterface):
     ) -> None:
         self._assert_started()
 
-        target_exchange = exchange_name or self._settings.ingestion_exchange
+        target_exchange = exchange_name or self._settings.exchange
 
         @retry(
             stop=stop_after_attempt(self._settings.retry_max_attempts),
@@ -226,8 +226,8 @@ class RabbitMQManager(RabbitMQManagerInterface):
             dlq = await self._channel.declare_queue(self._settings.dlq_queue, durable=True)
             await dlq.bind(dlx_exchange, routing_key=self._settings.dlq_queue)
 
-            ingestion_exchange = await self._channel.declare_exchange(
-                self._settings.ingestion_exchange,
+            exchange = await self._channel.declare_exchange(
+                self._settings.exchange,
                 aio_pika.ExchangeType.DIRECT,
                 durable=True,
             )
@@ -239,21 +239,21 @@ class RabbitMQManager(RabbitMQManagerInterface):
             if self._settings.message_ttl_ms is not None:
                 queue_args["x-message-ttl"] = self._settings.message_ttl_ms
 
-            ingestion_queue = await self._channel.declare_queue(
-                self._settings.ingestion_queue,
+            document_ingestion_queue = await self._channel.declare_queue(
+                self._settings.document_ingestion_queue,
                 durable=True,
                 arguments=queue_args,
             )
-            await ingestion_queue.bind(ingestion_exchange, routing_key=self._settings.ingestion_queue)
+            await document_ingestion_queue.bind(exchange, routing_key=self._settings.document_ingestion_queue)
 
-            self._exchanges[self._settings.ingestion_exchange] = ingestion_exchange
+            self._exchanges[self._settings.exchange] = exchange
             self._exchanges[self._settings.dlx_exchange] = dlx_exchange
 
             logger.info(
                 "RabbitMQ topology declared",
                 extra={
-                    "ingestion_exchange": self._settings.ingestion_exchange,
-                    "ingestion_queue": self._settings.ingestion_queue,
+                    "exchange": self._settings.exchange,
+                    "document_ingestion_queue": self._settings.document_ingestion_queue,
                     "dlx_exchange": self._settings.dlx_exchange,
                     "dlq_queue": self._settings.dlq_queue,
                 },

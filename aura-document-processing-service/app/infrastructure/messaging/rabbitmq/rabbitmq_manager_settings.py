@@ -31,10 +31,11 @@ class RabbitMQManagerSettings(BaseSettings):
 
     message_ttl_ms: Optional[int] = Field(default=None, ge=1000)
 
-    ingestion_exchange: str = Field(default="document.ingestion")
-    ingestion_queue: str = Field(default="document.ingestion.pending")
-    dlx_exchange: str = Field(default="document.ingestion.dlx")
-    dlq_queue: str = Field(default="document.ingestion.dead")
+    exchange: str = Field(default="aura")
+    dlx_exchange: str = Field(default="aura.dlx")
+    dlq_queue: str = Field(default="aura.dead")
+
+    document_ingestion_queue: str = Field(default="document.ingestion")
 
     @field_validator("url", mode="before")
     @classmethod
@@ -46,7 +47,7 @@ class RabbitMQManagerSettings(BaseSettings):
             raise ValueError("RabbitMQ URL must start with amqp:// or amqps://")
         return v
 
-    @field_validator("ingestion_exchange", "ingestion_queue", "dlx_exchange", "dlq_queue", mode="before")
+    @field_validator("exchange", "document_ingestion_queue", "dlx_exchange", "dlq_queue", mode="before")
     @classmethod
     def validate_name(cls, v: str) -> str:
         v = v.strip()

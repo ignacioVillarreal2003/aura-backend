@@ -19,9 +19,9 @@ class DocumentIngestionPublisher(DocumentIngestionPublisherInterface):
         message_envelope = MessageEnvelope.wrap(document_ingestion_command)
 
         await self._manager.publish(
-            routing_key=self._settings.ingestion_queue,
+            routing_key=self._settings.document_ingestion_queue,
             body=message_envelope.to_bytes(),
-            exchange_name=self._settings.ingestion_exchange,
+            exchange_name=self._settings.exchange,
             headers={
                 "message_id": message_envelope.message_id,
                 "version": str(message_envelope.version),
@@ -33,7 +33,6 @@ class DocumentIngestionPublisher(DocumentIngestionPublisherInterface):
             extra={
                 "message_id": message_envelope.message_id,
                 "document_id": document_ingestion_command.document_id,
-                "correlation_id": document_ingestion_command.correlation_id,
                 "filename": document_ingestion_command.filename,
             },
         )

@@ -2,10 +2,10 @@ from abc import ABC, abstractmethod
 from typing import List
 
 from app.domain.dtos.fragment.post_process_fragment_controller.post_process_fragments_start_response import (
-    PostProcessFragmentStartResponse
+    PostProcessFragmentsStartResponse
 )
 from app.domain.dtos.fragment.post_process_fragment_controller.post_process_fragments_status_response import (
-    PostProcessFragmentStatusResponse
+    PostProcessFragmentsStatusResponse
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 
@@ -15,7 +15,7 @@ class PostProcessFragmentServiceInterface(ABC):
     async def start_all(
             self,
             authenticated_user: AuthenticatedUser
-    ) -> PostProcessFragmentStartResponse:
+    ) -> PostProcessFragmentsStartResponse:
         pass
 
     @abstractmethod
@@ -23,11 +23,11 @@ class PostProcessFragmentServiceInterface(ABC):
             self,
             document_ids: List[int],
             authenticated_user: AuthenticatedUser
-    ) -> PostProcessFragmentStartResponse:
+    ) -> PostProcessFragmentsStartResponse:
         pass
 
     @abstractmethod
-    def get_status(self) -> PostProcessFragmentStatusResponse:
+    def get_status(self) -> PostProcessFragmentsStatusResponse:
         pass
 
     @abstractmethod

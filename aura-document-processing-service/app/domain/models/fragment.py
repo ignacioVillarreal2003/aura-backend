@@ -10,7 +10,7 @@ _fragment_settings = FragmentSettings()
 
 
 class Fragment(Base):
-    __tablename__ = "fragment_controllers"
+    __tablename__ = "fragment"
 
     id = Column(
         BigInteger,
@@ -21,7 +21,7 @@ class Fragment(Base):
     document_id = Column(
         BigInteger,
         ForeignKey(
-            "document_controllers.id",
+            "document.id",
             ondelete="CASCADE"
         ),
         nullable=False

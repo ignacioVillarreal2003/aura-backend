@@ -41,12 +41,12 @@ class DocumentIngestionConsumer:
 
     async def start(self) -> None:
         await self._manager.start_consumer(
-            queue_name=self._settings.ingestion_queue,
+            queue_name=self._settings.document_ingestion_queue,
             callback=self._handle_message,
         )
         logger.info(
             "DocumentIngestionConsumer registered",
-            extra={"queue": self._settings.ingestion_queue},
+            extra={"queue": self._settings.document_ingestion_queue},
         )
 
     async def _handle_message(self, message: aio_pika.abc.AbstractIncomingMessage) -> None:
@@ -84,7 +84,6 @@ class DocumentIngestionConsumer:
                 extra={
                     "message_id": message_envelope.message_id,
                     "document_id": message_envelope.command.document_id,
-                    "correlation_id": message_envelope.command.correlation_id,
                     "retry_count": retry_count,
                 },
             )

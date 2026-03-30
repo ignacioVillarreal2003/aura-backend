@@ -10,7 +10,7 @@ from app.domain.dtos.document.post_process_document_controller.post_process_docu
 from app.domain.dtos.document.post_process_document_controller.post_process_documents_request import (
     PostProcessDocumentsRequest
 )
-from app.domain.dtos.document.post_process_document_controller.post_process_documents_status_response import PostProcessStatusResponse
+from app.domain.dtos.document.post_process_document_controller.post_process_documents_status_response import PostProcessDocumentsStatusResponse
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 
 
@@ -37,7 +37,7 @@ class PostProcessDocumentControllerInterface(ABC):
             self,
             post_process_document_service: PostProcessDocumentServiceInterface,
             authenticated_user: AuthenticatedUser
-    ) -> PostProcessStatusResponse:
+    ) -> PostProcessDocumentsStatusResponse:
         pass
 
     @abstractmethod

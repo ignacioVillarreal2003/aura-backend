@@ -12,9 +12,7 @@ from app.configuration.dependencies import (
 )
 from app.configuration.logging_configuration import configure_logging
 from app.configuration.environment_variables import environment_variables
-from app.infrastructure.authentication_provider.authentication_provider_middleware import (
-    AuthenticationMiddleware
-)
+from app.infrastructure.authentication_provider.authentication_provider_middleware import AuthenticationMiddleware
 
 configure_logging(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -102,11 +100,7 @@ def add_middleware(app: FastAPI) -> None:
 
 
 def include_routers(app: FastAPI) -> None:
-    app.include_router(
-        router,
-        prefix="/api"
-    )
-
+    app.include_router(router,prefix="/api")
     logger.debug("Routers included")
 
 
