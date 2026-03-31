@@ -9,6 +9,7 @@ from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+from app.application.exceptions.app_exception import AppException
 from app.infrastructure.persistence.database.database_manager.database_manager_settings import (
     DatabaseManagerSettings
 )
@@ -123,6 +124,12 @@ class DatabaseManager(DatabaseManagerInterface):
         except DatabaseNotInitializedException:
             raise
         except HTTPException:
+            raise
+        except AppException:
+            try:
+                await db_session.rollback()
+            except Exception:
+                logger.exception("Failed to rollback session after error")
             raise
         except Exception as e:
             try:
@@ -324,3 +331,6 @@ async def get_database_session(request: Request):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="A database error occurred"
         )
+
+    except AppException:
+        raise

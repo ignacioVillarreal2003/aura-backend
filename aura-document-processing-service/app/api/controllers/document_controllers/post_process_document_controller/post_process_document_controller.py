@@ -63,7 +63,7 @@ class PostProcessDocumentController(PostProcessDocumentControllerInterface):
         )
 
         post_process_documents_start_response = await post_process_document_service.start_for_documents(
-            document_ids=post_process_documents_request.document_ids,
+            post_process_documents_request=post_process_documents_request,
             authenticated_user=authenticated_user
         )
 

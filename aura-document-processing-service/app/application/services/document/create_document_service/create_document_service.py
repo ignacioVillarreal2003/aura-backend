@@ -8,17 +8,22 @@ from typing import Optional
 from fastapi import HTTPException, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.services.document.create_document_service.create_document_service_request_validator import (
-    CreateDocumentServiceRequestValidator
+from app.application.services.document.create_document_service.create_document_service_authorizer import (
+    CreateDocumentServiceAuthorizer,
 )
 from app.application.services.document.create_document_service.create_document_service_settings import (
     CreateDocumentServiceSettings
 )
-from app.application.services.document.create_document_service.create_document_service_utils import \
+from app.application.services.document.create_document_service.create_document_service_utils import (
     CreateDocumentServiceUtils
+)
+from app.application.services.document.create_document_service.create_document_service_validator import (
+    CreateDocumentServiceValidator
+)
 from app.application.services.document.create_document_service.exceptions.create_document_service_exception import (
     CreateDocumentPersistenceException,
     CreateDocumentServiceException,
+    CreateDocumentUnauthorizedException,
     CreateDocumentUploadException,
     CreateDocumentValidationException
 )
@@ -27,6 +32,7 @@ from app.application.services.document.create_document_service.interfaces.create
 )
 from app.domain.constants.document.document_mime_type import DocumentMimeType
 from app.domain.constants.document.document_status import DocumentStatus
+from app.domain.constants.user.user_roles import ALL_ROLES
 from app.domain.dtos.document.create_document.create_document_request import CreateDocumentRequest
 from app.domain.dtos.document.create_document.create_document_response import CreateDocumentResponse
 from app.infrastructure.messaging.rabbitmq.dtos.commands.document_ingestion_command import DocumentIngestionCommand
@@ -35,7 +41,6 @@ from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.models.document import Document
 from app.infrastructure.messaging.rabbitmq.exceptions.rabbitmq_manager_exception import RabbitMQPublishException
 from app.infrastructure.messaging.rabbitmq.interfaces.rabbitmq_manager_interface import RabbitMQManagerInterface
-from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_settings import RabbitMQManagerSettings
 from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
     DocumentRepositoryInterface
 )
@@ -51,16 +56,8 @@ logger = logging.getLogger(__name__)
 
 
 class CreateDocumentService(CreateDocumentServiceInterface):
-    _ROLE_USER = "user"
-    _ROLE_ADMIN = "admin"
-    _ROLE_SUPERADMIN = "superadmin"
-
-    _ALL_ALLOWED_ROLES = {_ROLE_USER, _ROLE_ADMIN, _ROLE_SUPERADMIN}
-
-    _PERMISSION_DOCUMENT_CREATE = "DOCUMENT_CREATE"
-    _REQUIRED_PERMISSIONS = {_PERMISSION_DOCUMENT_CREATE}
-
     _KNOWN_EXCEPTIONS = (
+        CreateDocumentUnauthorizedException,
         CreateDocumentValidationException,
         CreateDocumentUploadException,
         CreateDocumentPersistenceException
@@ -78,7 +75,8 @@ class CreateDocumentService(CreateDocumentServiceInterface):
         self._rabbitmq_manager = rabbitmq_manager
         self._settings = create_document_service_settings or CreateDocumentServiceSettings()
 
-        self._validator = CreateDocumentServiceRequestValidator(create_document_service_settings=self._settings)
+        self._validator = CreateDocumentServiceValidator(create_document_service_settings=self._settings)
+        self._authorizer = CreateDocumentServiceAuthorizer()
         self._utils = CreateDocumentServiceUtils(create_document_service_settings=self._settings)
 
         self._deduplication_lock = asyncio.Lock()
@@ -105,7 +103,10 @@ class CreateDocumentService(CreateDocumentServiceInterface):
 
         try:
             self._require_permissions(authenticated_user)
-            self._require_roles(authenticated_user)
+            self._authorizer.require_roles(
+                authenticated_user=authenticated_user,
+                allowed_roles=ALL_ROLES,
+            )
 
             try:
                 await self._validator.validate_create_document_request(
@@ -125,7 +126,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 file_hash = await self._utils.compute_file_hash(raw_document)
                 if await self._is_duplicate(file_hash):
                     raise CreateDocumentValidationException(
-                        "Duplicate document_controllers detected. This file was recently uploaded."
+                        "Duplicate document detected. This file was recently uploaded."
                     )
 
             temp_path = await self._save_temp_file_streaming(raw_document)
@@ -140,7 +141,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 )
             except DocumentStorageException as e:
                 raise CreateDocumentUploadException(
-                    f"Failed to upload document_controllers to storage: {e}"
+                    f"Failed to upload document to storage: {e}"
                 ) from e
 
             now = datetime.now(timezone.utc)
@@ -169,7 +170,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             except DatabaseException as e:
                 await self._cleanup_storage(object_name)
                 raise CreateDocumentPersistenceException(
-                    f"Failed to persist document_controllers to database: {e}"
+                    f"Failed to persist document to database: {e}"
                 ) from e
 
             if self._settings.deduplication_enabled and file_hash:
@@ -189,7 +190,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
 
             try:
                 await self._rabbitmq_manager.publish(
-                    routing_key=self._rabbitmq_manager.settings.ingestion_queue,
+                    routing_key=self._rabbitmq_manager.settings.document_ingestion_queue,
                     body=envelope.to_bytes(),
                     headers={"message_id": envelope.message_id},
                 )
@@ -216,7 +217,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
 
         except Exception as e:
             logger.exception(
-                "Unexpected error during document_controllers creation",
+                "Unexpected error during document creation",
                 extra={"document_filename": raw_document.filename}
             )
             if temp_path is not None:
@@ -224,36 +225,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             raise CreateDocumentServiceException(f"Document creation failed: {e}") from e
 
     def _require_permissions(self, authenticated_user: AuthenticatedUser) -> None:
-        user_permissions = set(authenticated_user.permissions)
-        missing = self._REQUIRED_PERMISSIONS - user_permissions
-
-        if missing:
-            logger.warning(
-                "Insufficient permissions for document_controllers creation",
-                extra={
-                    "user_id": authenticated_user.id,
-                    "missing_permissions": sorted(missing),
-                    "user_permissions": sorted(user_permissions),
-                },
-            )
-            raise CreateDocumentValidationException(
-                f"User {authenticated_user.id} is missing required permissions: {sorted(missing)}"
-            )
-
-    def _require_roles(self, authenticated_user: AuthenticatedUser) -> None:
-        if not bool(set(authenticated_user.roles) & self._ALL_ALLOWED_ROLES):
-            logger.warning(
-                "Insufficient role for document_controllers creation",
-                extra={
-                    "user_id": authenticated_user.id,
-                    "user_roles": sorted(authenticated_user.roles),
-                    "allowed_roles": sorted(self._ALL_ALLOWED_ROLES),
-                },
-            )
-            raise CreateDocumentValidationException(
-                f"User {authenticated_user.id} does not have the required role for document_controllers creation. "
-                f"Allowed roles: {sorted(self._ALL_ALLOWED_ROLES)}"
-            )
+        self._authorizer.require_permissions(authenticated_user)
 
     async def _is_duplicate(self, file_hash: str) -> bool:
         now = datetime.now(timezone.utc)
@@ -318,7 +290,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
         try:
             await self._document_storage.delete_document(object_name)
             logger.info(
-                "Compensating action: document_controllers deleted from storage",
+                "Compensating action: document deleted from storage",
                 extra={"object_name": object_name}
             )
         except Exception as e:

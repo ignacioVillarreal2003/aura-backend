@@ -41,6 +41,85 @@ class DocumentRepository(DocumentRepositoryInterface):
         except Exception as e:
             raise DatabaseException("Error fetching document by IDs from the database") from e
 
+    async def get_documents_missing_metadata(
+            self,
+            database_session: AsyncSession
+    ) -> List[Document]:
+        try:
+            logger.debug("Fetching documents missing metadata")
+
+            result = await database_session.execute(
+                select(Document).where(
+                    Document.deleted_at.is_(None),
+                    or_(
+                        Document.type.is_(None),
+                        Document.category.is_(None),
+                        Document.description.is_(None)
+                    )
+                )
+            )
+            documents = list(result.scalars().all())
+
+            logger.debug(
+                "Documents missing metadata fetched",
+                extra={"count": len(documents)}
+            )
+            return documents
+
+        except Exception as e:
+            raise DatabaseException(
+                "Error fetching documents missing metadata from the database"
+            ) from e
+
+    async def get_document_by_id(
+            self,
+            document_id: int,
+            database_session: AsyncSession
+    ) -> Optional[Document]:
+        try:
+            logger.debug("Fetching document by ID", extra={"document_id": document_id})
+
+            result = await database_session.execute(
+                select(Document).where(Document.id == document_id)
+            )
+            document = result.scalars().first()
+
+            logger.debug(
+                "Document lookup completed",
+                extra={"document_id": document_id, "found": document is not None}
+            )
+            return document
+
+        except Exception as e:
+            raise DatabaseException("Error fetching document from the database") from e
+
+    async def update_document(
+            self,
+            document: Document,
+            database_session: AsyncSession
+    ) -> Document:
+        try:
+            logger.debug("Updating document", extra={"document_id": document.id})
+
+            updated_document = await database_session.merge(document)
+            await database_session.flush()
+            await database_session.refresh(updated_document)
+
+            logger.info(
+                "Document updated successfully",
+                extra={"document_id": updated_document.id}
+            )
+            return updated_document
+
+        except IntegrityError as e:
+            raise DatabaseConstraintViolationException(
+                "Constraint violation updating document"
+            ) from e
+        except Exception as e:
+            raise DatabaseException("Error updating document in the database") from e
+
+
+
 
 
 
@@ -68,27 +147,6 @@ class DocumentRepository(DocumentRepositoryInterface):
             logger.exception("Failed to create document in database")
             raise DatabaseException("Error creating document in the database") from e
 
-    async def get_document_by_id(
-            self,
-            document_id: int,
-            database_session: AsyncSession
-    ) -> Optional[Document]:
-        try:
-            logger.debug("Fetching document by ID", extra={"document_id": document_id})
-
-            result = await database_session.execute(
-                select(Document).where(Document.id == document_id)
-            )
-            document = result.scalars().first()
-
-            logger.debug(
-                "Document lookup completed",
-                extra={"document_id": document_id, "found": document is not None}
-            )
-            return document
-
-        except Exception as e:
-            raise DatabaseException("Error fetching document from the database") from e
 
     async def get_documents_by_chat_id(
             self,
@@ -171,30 +229,6 @@ class DocumentRepository(DocumentRepositoryInterface):
         except Exception as e:
             raise DatabaseException("Error searching documents in the database") from e
 
-    async def update_document(
-            self,
-            document: Document,
-            database_session: AsyncSession
-    ) -> Document:
-        try:
-            logger.debug("Updating document", extra={"document_id": document.id})
-
-            updated_document = await database_session.merge(document)
-            await database_session.flush()
-            await database_session.refresh(updated_document)
-
-            logger.info(
-                "Document updated successfully",
-                extra={"document_id": updated_document.id}
-            )
-            return updated_document
-
-        except IntegrityError as e:
-            raise DatabaseConstraintViolationException(
-                "Constraint violation updating document"
-            ) from e
-        except Exception as e:
-            raise DatabaseException("Error updating document in the database") from e
 
     async def hard_delete_document_by_id(
             self,
@@ -224,36 +258,6 @@ class DocumentRepository(DocumentRepositoryInterface):
 
         except Exception as e:
             raise DatabaseException("Error deleting document from the database") from e
-
-    async def get_documents_missing_metadata(
-            self,
-            database_session: AsyncSession
-    ) -> List[Document]:
-        try:
-            logger.debug("Fetching documents missing metadata")
-
-            result = await database_session.execute(
-                select(Document).where(
-                    Document.deleted_at.is_(None),
-                    or_(
-                        Document.type.is_(None),
-                        Document.category.is_(None),
-                        Document.description.is_(None)
-                    )
-                )
-            )
-            documents = list(result.scalars().all())
-
-            logger.debug(
-                "Documents missing metadata fetched",
-                extra={"count": len(documents)}
-            )
-            return documents
-
-        except Exception as e:
-            raise DatabaseException(
-                "Error fetching documents missing metadata from the database"
-            ) from e
 
     async def soft_delete_document_by_id(
             self,

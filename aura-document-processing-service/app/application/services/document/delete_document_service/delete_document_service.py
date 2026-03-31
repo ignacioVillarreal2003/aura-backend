@@ -1,19 +1,32 @@
 import logging
+from typing import Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, Request, status
 
 from app.application.services.document.delete_document_service.exceptions.delete_document_service_exception import (
     DeleteDocumentFailedException,
+    DeleteDocumentInvalidRequestException,
     DeleteDocumentNotFoundException,
     DeleteDocumentServiceException,
     DeleteDocumentStorageException,
     DeleteDocumentUnauthorizedException,
     DeleteFragmentsFailedException
 )
+from app.application.services.document.delete_document_service.delete_document_service_authorizer import (
+    DeleteDocumentServiceAuthorizer,
+)
+from app.application.services.document.delete_document_service.delete_document_service_settings import (
+    DeleteDocumentServiceSettings,
+)
+from app.application.services.document.delete_document_service.delete_document_service_validator import (
+    DeleteDocumentServiceValidator,
+)
 from app.application.services.document.delete_document_service.interfaces.delete_document_service_interface import (
     DeleteDocumentServiceInterface
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
+from app.domain.constants.user.user_roles import ADMIN_ROLES, ALL_ROLES
 from app.domain.models.document import Document
 from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
     DocumentRepositoryInterface
@@ -33,18 +46,8 @@ logger = logging.getLogger(__name__)
 
 
 class DeleteDocumentService(DeleteDocumentServiceInterface):
-    _ROLE_USER = "user"
-    _ROLE_ADMIN = "admin"
-    _ROLE_SUPERADMIN = "superadmin"
-
-    _ADMIN_ROLES = {_ROLE_ADMIN, _ROLE_SUPERADMIN}
-    _ALL_ALLOWED_ROLES = {_ROLE_USER, _ROLE_ADMIN, _ROLE_SUPERADMIN}
-
-    _PERMISSION_DOCUMENT_DELETE = "DOCUMENT_DELETE"
-    _PERMISSION_FRAGMENT_DELETE = "FRAGMENT_DELETE"
-    _REQUIRED_PERMISSIONS = {_PERMISSION_DOCUMENT_DELETE, _PERMISSION_FRAGMENT_DELETE}
-
     _KNOWN_EXCEPTIONS = (
+        DeleteDocumentInvalidRequestException,
         DeleteDocumentNotFoundException,
         DeleteDocumentUnauthorizedException,
         DeleteFragmentsFailedException,
@@ -57,10 +60,14 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             document_repository: DocumentRepositoryInterface,
             fragment_repository: FragmentRepositoryInterface,
             document_storage: DocumentStorageInterface,
+            delete_document_service_settings: Optional[DeleteDocumentServiceSettings] = None,
     ) -> None:
         self._document_repository = document_repository
         self._fragment_repository = fragment_repository
         self._document_storage = document_storage
+        self._settings = delete_document_service_settings or DeleteDocumentServiceSettings()
+        self._validator = DeleteDocumentServiceValidator(self._settings)
+        self._authorizer = DeleteDocumentServiceAuthorizer()
 
     async def soft_delete_document(
             self,
@@ -69,13 +76,14 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             authenticated_user: AuthenticatedUser,
     ) -> None:
         logger.info(
-            "Soft delete document_controllers initiated",
+            "Soft delete document initiated",
             extra={"document_id": document_id, "user_id": authenticated_user.id}
         )
 
         try:
-            self._require_permissions(authenticated_user)
-            self._require_roles(authenticated_user, self._ADMIN_ROLES, context=f"soft_delete_document({document_id})")
+            self._validator.validate_document_id(document_id)
+            self._authorizer.require_permissions(authenticated_user)
+            self._authorizer.require_roles(authenticated_user=authenticated_user, allowed_roles=ADMIN_ROLES)
 
             document = await self._get_document_or_raise(document_id, database_session)
 
@@ -83,16 +91,17 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             await self._soft_delete_document(document.id, authenticated_user.id, database_session)
 
             logger.info(
-                "Soft delete document_controllers completed",
+                "Soft delete document completed",
                 extra={"document_id": document_id, "user_id": authenticated_user.id}
             )
 
         except self._KNOWN_EXCEPTIONS:
             raise
         except Exception as e:
-            logger.exception("Unexpected error during soft delete document_controllers", extra={"document_id": document_id})
+            logger.exception("Unexpected error during soft delete document",
+                             extra={"document_id": document_id})
             raise DeleteDocumentServiceException(
-                f"Unexpected error during soft delete of document_controllers {document_id}"
+                f"Unexpected error during soft delete of document {document_id}"
             ) from e
 
     async def soft_delete_documents_by_chat(
@@ -107,16 +116,18 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
         )
 
         try:
-            self._require_permissions(authenticated_user)
-            self._require_roles(authenticated_user, self._ALL_ALLOWED_ROLES, context=f"soft_delete_documents_by_chat({chat_id})")
+            self._validator.validate_chat_id(chat_id)
+            self._authorizer.require_permissions(authenticated_user)
+            self._authorizer.require_roles(authenticated_user=authenticated_user, allowed_roles=ALL_ROLES)
 
             documents = await self._get_documents_by_chat(chat_id, database_session)
+            self._validator.validate_documents_count(len(documents))
 
             if not documents:
                 logger.info("No documents found for chat — nothing to delete", extra={"chat_id": chat_id})
                 return
 
-            is_admin = self._has_any_role(authenticated_user, self._ADMIN_ROLES)
+            is_admin = authenticated_user.has_any_role(ADMIN_ROLES)
             if not is_admin:
                 documents = self._filter_owned_or_raise(documents, authenticated_user, chat_id)
 
@@ -144,13 +155,14 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             authenticated_user: AuthenticatedUser
     ) -> None:
         logger.info(
-            "Hard delete document_controllers initiated",
+            "Hard delete document initiated",
             extra={"document_id": document_id, "user_id": authenticated_user.id}
         )
 
         try:
-            self._require_permissions(authenticated_user)
-            self._require_roles(authenticated_user, self._ADMIN_ROLES, context=f"hard_delete_document({document_id})")
+            self._validator.validate_document_id(document_id)
+            self._authorizer.require_permissions(authenticated_user)
+            self._authorizer.require_roles(authenticated_user=authenticated_user, allowed_roles=ADMIN_ROLES)
 
             document = await self._get_document_or_raise(document_id, database_session)
 
@@ -160,16 +172,17 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             await self._delete_from_storage(document.storage_url)
 
             logger.info(
-                "Hard delete document_controllers completed",
+                "Hard delete document completed",
                 extra={"document_id": document_id, "user_id": authenticated_user.id}
             )
 
         except self._KNOWN_EXCEPTIONS:
             raise
         except Exception as e:
-            logger.exception("Unexpected error during hard delete document_controllers", extra={"document_id": document_id})
+            logger.exception("Unexpected error during hard delete document",
+                             extra={"document_id": document_id})
             raise DeleteDocumentServiceException(
-                f"Unexpected error during hard delete of document_controllers {document_id}"
+                f"Unexpected error during hard delete of document {document_id}"
             ) from e
 
     async def hard_delete_documents_by_chat(
@@ -184,10 +197,12 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
         )
 
         try:
-            self._require_permissions(authenticated_user)
-            self._require_roles(authenticated_user, self._ADMIN_ROLES, context=f"hard_delete_documents_by_chat({chat_id})")
+            self._validator.validate_chat_id(chat_id)
+            self._authorizer.require_permissions(authenticated_user)
+            self._authorizer.require_roles(authenticated_user=authenticated_user, allowed_roles=ADMIN_ROLES)
 
             documents = await self._get_documents_by_chat(chat_id, database_session)
+            self._validator.validate_documents_count(len(documents))
 
             if not documents:
                 logger.info("No documents found for chat — nothing to delete", extra={"chat_id": chat_id})
@@ -210,48 +225,6 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             raise DeleteDocumentServiceException(
                 f"Unexpected error during hard delete of documents for chat {chat_id}"
             ) from e
-
-    def _require_permissions(self, authenticated_user: AuthenticatedUser) -> None:
-        user_permissions = set(authenticated_user.permissions)
-        missing = self._REQUIRED_PERMISSIONS - user_permissions
-
-        if missing:
-            logger.warning(
-                "Insufficient permissions for delete operation",
-                extra={
-                    "user_id": authenticated_user.id,
-                    "missing_permissions": sorted(missing),
-                    "user_permissions": sorted(user_permissions)
-                }
-            )
-            raise DeleteDocumentUnauthorizedException(
-                f"User {authenticated_user.id} is missing required permissions: {sorted(missing)}"
-            )
-
-    @staticmethod
-    def _require_roles(
-            authenticated_user: AuthenticatedUser,
-            allowed_roles: set[str],
-            context: str
-    ) -> None:
-        if not DeleteDocumentService._has_any_role(authenticated_user, allowed_roles):
-            logger.warning(
-                "Insufficient role for delete operation",
-                extra={
-                    "user_id": authenticated_user.id,
-                    "user_roles": sorted(authenticated_user.roles),
-                    "allowed_roles": sorted(allowed_roles),
-                    "context": context
-                }
-            )
-            raise DeleteDocumentUnauthorizedException(
-                f"User {authenticated_user.id} does not have the required role for {context}. "
-                f"Allowed roles: {sorted(allowed_roles)}"
-            )
-
-    @staticmethod
-    def _has_any_role(authenticated_user: AuthenticatedUser, roles: set[str]) -> bool:
-        return bool(set(authenticated_user.roles) & roles)
 
     @staticmethod
     def _filter_owned_or_raise(
@@ -323,7 +296,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             logger.debug("Fragments soft deleted", extra={"document_id": document_id})
         except Exception as e:
             raise DeleteFragmentsFailedException(
-                f"Failed to soft delete fragments for document_controllers {document_id}"
+                f"Failed to soft delete fragments for document {document_id}"
             ) from e
 
     async def _hard_delete_fragments(
@@ -339,7 +312,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             logger.debug("Fragments hard deleted", extra={"document_id": document_id})
         except Exception as e:
             raise DeleteFragmentsFailedException(
-                f"Failed to hard delete fragments for document_controllers {document_id}"
+                f"Failed to hard delete fragments for document {document_id}"
             ) from e
 
     async def _soft_delete_document(
@@ -357,7 +330,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             logger.debug("Document record soft deleted", extra={"document_id": document_id})
         except Exception as e:
             raise DeleteDocumentFailedException(
-                f"Failed to soft delete document_controllers record {document_id}"
+                f"Failed to soft delete document record {document_id}"
             ) from e
 
     async def _hard_delete_document(
@@ -373,7 +346,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             logger.debug("Document record hard deleted", extra={"document_id": document_id})
         except Exception as e:
             raise DeleteDocumentFailedException(
-                f"Failed to hard delete document_controllers record {document_id}"
+                f"Failed to hard delete document record {document_id}"
             ) from e
 
     async def _delete_from_storage(self, storage_url: str) -> None:
@@ -389,7 +362,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
 
         except DocumentStorageException as e:
             logger.critical(
-                "Failed to delete document_controllers from storage after DB record was removed — manual cleanup required",
+                "Failed to delete document from storage after DB record was removed — manual cleanup required",
                 extra={"storage_url": storage_url, "error": str(e)}
             )
             raise DeleteDocumentStorageException(

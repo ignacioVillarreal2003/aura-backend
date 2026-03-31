@@ -13,27 +13,17 @@ Modelo de embeddings basado en la serie Qwen3.
 
 **Modelos disponibles**
 
-| Model | Size | Context |
-|------|------|------|
-| qwen3-embedding:0.6b | 639MB | 32K |
-| qwen3-embedding:4b | 2.5GB | 40K |
-| qwen3-embedding:8b | 4.7GB | 40K |
-
-**Embedding dimension**
-
-- configurable hasta **4096**
-
-**Instalación**
-
-```bash
-ollama pull qwen3-embedding
-````
+| Model                | Size  | Context | Dimensions |
+| -------------------- | ----- | ------- | ---------- |
+| qwen3-embedding:0.6b | 639MB | 32K     | 1024       |
+| qwen3-embedding:4b   | 2.5GB | 40K     | 2560       |
+| qwen3-embedding:8b   | 4.7GB | 40K     | 4096       |
 
 ---
 
 ## nomic-embed-text-v2-moe
 
-Modelo moderno de embeddings optimizado para **multilingual retrieval**.
+Modelo de embeddings optimizado para **multilingual retrieval**.
 
 **Características principales**
 
@@ -45,18 +35,12 @@ Modelo moderno de embeddings optimizado para **multilingual retrieval**.
 **Especificaciones**
 
 | Feature             | Value           |
-| ------------------- | --------------- |
+| ------------------- |-----------------|
 | Parameters          | 475M            |
 | Active params       | 305M            |
 | Context             | 512 tokens      |
-| Embedding dimension | 768 → 256       |
+| Embedding dimension | 768             |
 | Architecture        | MoE (8 experts) |
-
-**Instalación**
-
-```bash
-ollama pull nomic-embed-text-v2-moe
-```
 
 ---
 
@@ -72,17 +56,10 @@ Modelo clásico de embeddings de Nomic.
 
 **Especificaciones**
 
-| Feature  | Value                        |
-| -------- | ---------------------------- |
-| Size     | 274MB                        |
-| Context  | 2K tokens                    |
-| Use case | prototipos y pruebas rápidas |
+| Model            | Size  | Context | Dimensions |
+| ---------------- | ----- | ------- | ---------- |
+| nomic-embed-text | 274MB | 2K      | **768**    |
 
-**Instalación**
-
-```bash
-ollama pull nomic-embed-text
-```
 
 # Resultados
 

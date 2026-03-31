@@ -8,8 +8,20 @@ from app.application.services.document.post_process_document_service.exceptions.
     PostProcessAlreadyRunningException,
     PostProcessNotRunningException
 )
+from app.application.services.document.post_process_document_service.post_process_document_service_authorizer import (
+    PostProcessDocumentServiceAuthorizer,
+)
 from app.application.services.document.post_process_document_service.interfaces.post_process_document_service_interface import (
     PostProcessDocumentServiceInterface
+)
+from app.application.services.document.post_process_document_service.post_process_document_service_settings import (
+    PostProcessDocumentServiceSettings,
+)
+from app.application.services.document.post_process_document_service.post_process_document_service_validator import (
+    PostProcessDocumentServiceValidator,
+)
+from app.domain.dtos.document.post_process_document_controller.post_process_documents_request import (
+    PostProcessDocumentsRequest,
 )
 from app.domain.dtos.document.post_process_document_controller.post_process_documents_start_response import (
     PostProcessDocumentsStartResponse
@@ -19,6 +31,7 @@ from app.domain.dtos.document.post_process_document_controller.post_process_docu
     PostProcessDocumentsStatusResponse
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
+from app.domain.constants.user.user_roles import ADMIN_ROLES
 from app.infrastructure.http.llm_provider.interfaces.llm_provider_interface import LlmProviderInterface
 from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
     DatabaseManagerInterface
@@ -39,15 +52,20 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
             database_manager: DatabaseManagerInterface,
             document_repository: DocumentRepositoryInterface,
             fragment_repository: FragmentRepositoryInterface,
-            llm_provider: LlmProviderInterface
+            llm_provider: LlmProviderInterface,
+            post_process_document_service_settings: Optional[PostProcessDocumentServiceSettings] = None,
     ) -> None:
         self._database_manager = database_manager
         self._document_repository = document_repository
         self._fragment_repository = fragment_repository
         self._llm_provider = llm_provider
+        self._settings = post_process_document_service_settings or PostProcessDocumentServiceSettings()
+        self._authorizer = PostProcessDocumentServiceAuthorizer()
+        self._validator = PostProcessDocumentServiceValidator(post_process_document_service_settings=self._settings)
 
         self._task: Optional[asyncio.Task] = None
         self._stop_event: asyncio.Event = asyncio.Event()
+        self._lifecycle_lock = asyncio.Lock()
 
         self._is_running: bool = False
         self._total_documents: int = 0
@@ -62,54 +80,70 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
             self,
             authenticated_user: AuthenticatedUser
     ) -> PostProcessDocumentsStartResponse:
-        if self._is_running:
-            raise PostProcessAlreadyRunningException(
-                "Post-processing is already running"
-            )
-
-        logger.info("Starting post-processing for all documents missing metadata",
-                     extra={"user_id": authenticated_user.id})
-
-        async with self._database_manager.session() as session:
-            documents = await self._document_repository.get_documents_missing_metadata(
-                database_session=session
-            )
-            document_ids = [doc.id for doc in documents]
-
-        if not document_ids:
-            return PostProcessDocumentsStartResponse(
-                message="No documents found missing metadata",
-                total_documents=0
-            )
-
-        self._launch_background_task(document_ids=document_ids, authenticated_user=authenticated_user)
-
-        return PostProcessDocumentsStartResponse(
-            message="Post-processing started",
-            total_documents=len(document_ids)
+        self._authorizer.require_permissions(authenticated_user)
+        self._authorizer.require_roles(
+            authenticated_user=authenticated_user,
+            allowed_roles=ADMIN_ROLES,
         )
+
+        async with self._lifecycle_lock:
+            if self._is_running:
+                raise PostProcessAlreadyRunningException(
+                    "Post-processing is already running"
+                )
+
+            logger.info("Starting post-processing for all documents missing metadata",
+                        extra={"user_id": authenticated_user.id})
+
+            async with self._database_manager.session() as session:
+                documents = await self._document_repository.get_documents_missing_metadata(
+                    database_session=session
+                )
+                document_ids = [doc.id for doc in documents]
+
+            if not document_ids:
+                return PostProcessDocumentsStartResponse(
+                    message="No documents found missing metadata",
+                    total_documents=0
+                )
+
+            self._launch_background_task(document_ids=document_ids, authenticated_user=authenticated_user)
+
+            return PostProcessDocumentsStartResponse(
+                message="Post-processing started",
+                total_documents=len(document_ids)
+            )
 
     async def start_for_documents(
             self,
-            document_ids: List[int],
+            post_process_documents_request: PostProcessDocumentsRequest,
             authenticated_user: AuthenticatedUser
     ) -> PostProcessDocumentsStartResponse:
-        if self._is_running:
-            raise PostProcessAlreadyRunningException(
-                "Post-processing is already running"
+        self._authorizer.require_permissions(authenticated_user)
+        self._authorizer.require_roles(
+            authenticated_user=authenticated_user,
+            allowed_roles=ADMIN_ROLES,
+        )
+        self._validator.validate_documents_request(post_process_documents_request)
+        document_ids = post_process_documents_request.document_ids
+
+        async with self._lifecycle_lock:
+            if self._is_running:
+                raise PostProcessAlreadyRunningException(
+                    "Post-processing is already running"
+                )
+
+            logger.info(
+                "Starting post-processing for specific documents",
+                extra={"user_id": authenticated_user.id, "document_ids_count": len(document_ids)}
             )
 
-        logger.info(
-            "Starting post-processing for specific documents",
-            extra={"user_id": authenticated_user.id, "document_ids": document_ids}
-        )
+            self._launch_background_task(document_ids=document_ids, authenticated_user=authenticated_user)
 
-        self._launch_background_task(document_ids=document_ids, authenticated_user=authenticated_user)
-
-        return PostProcessDocumentsStartResponse(
-            message="Post-processing started for selected documents",
-            total_documents=len(document_ids)
-        )
+            return PostProcessDocumentsStartResponse(
+                message="Post-processing started for selected documents",
+                total_documents=len(document_ids)
+            )
 
     def get_status(self) -> PostProcessDocumentsStatusResponse:
         return PostProcessDocumentsStatusResponse(
@@ -124,13 +158,14 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
         )
 
     async def stop(self) -> None:
-        if not self._is_running:
-            raise PostProcessNotRunningException(
-                "Post-processing is not running"
-            )
+        async with self._lifecycle_lock:
+            if not self._is_running:
+                raise PostProcessNotRunningException(
+                    "Post-processing is not running"
+                )
 
-        logger.info("Stop signal sent for post-processing")
-        self._stop_event.set()
+            logger.info("Stop signal sent for post-processing")
+            self._stop_event.set()
 
     def _launch_background_task(
             self,
@@ -187,14 +222,9 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
 
                 except Exception as e:
                     self._failed_documents += 1
-                    self._errors.append(
-                        PostProcessDocumentError(
-                            document_id=document_id,
-                            error=str(e)
-                        )
-                    )
+                    self._append_error(document_id=document_id, error=str(e))
                     logger.error(
-                        "Failed to post-process document_controllers",
+                        "Failed to post-process document",
                         extra={"document_id": document_id, "error": str(e)}
                     )
 
@@ -205,9 +235,10 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
             )
 
         finally:
-            self._is_running = False
-            self._current_document_id = None
-            self._finished_at = datetime.now(timezone.utc)
+            async with self._lifecycle_lock:
+                self._is_running = False
+                self._current_document_id = None
+                self._finished_at = datetime.now(timezone.utc)
 
             logger.info(
                 "Background post-processing finished",
@@ -230,8 +261,10 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
             )
 
             if document is None:
-                logger.warning("Document not found, skipping",
-                               extra={"document_id": document_id})
+                logger.warning(
+                    "Document not found, skipping",
+                    extra={"document_id": document_id}
+                )
                 return
 
             fragments = await self._fragment_repository.get_fragments_by_document_id(
@@ -240,7 +273,7 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
             )
 
             if not fragments:
-                logger.warning("No fragments found for document_controllers, skipping",
+                logger.warning("No fragments found for document, skipping",
                                extra={"document_id": document_id})
                 return
 
@@ -253,10 +286,13 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
                                extra={"document_id": document_id})
                 return
 
-            classify_response = await self._llm_provider.classify_document(
-                document_name=document.name,
-                content=content,
-                authenticated_user=authenticated_user
+            classify_response = await asyncio.wait_for(
+                self._llm_provider.classify_document(
+                    document_name=document.name,
+                    content=content,
+                    authenticated_user=authenticated_user
+                ),
+                timeout=self._settings.llm_timeout_seconds,
             )
 
             document.type = classify_response.type
@@ -269,6 +305,16 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
                 document=document,
                 database_session=session
             )
+
+    def _append_error(self, document_id: int, error: str) -> None:
+        if len(self._errors) >= self._settings.max_errors_in_status:
+            return
+        self._errors.append(
+            PostProcessDocumentError(
+                document_id=document_id,
+                error=error
+            )
+        )
 
 
 async def get_post_process_document_service(request: Request) -> PostProcessDocumentServiceInterface:

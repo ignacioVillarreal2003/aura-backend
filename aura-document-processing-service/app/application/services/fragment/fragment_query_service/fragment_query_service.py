@@ -3,7 +3,6 @@ from typing import Optional
 from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.helpers.authentication_helper import has_any_role
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
 from app.application.services.fragment.fragment_query_service.exceptions.fragment_query_service_exception import (
     FragmentQueryEmbeddingException,
@@ -25,7 +24,7 @@ from app.application.services.fragment.fragment_query_service.fragment_query_ser
 from app.application.services.fragment.fragment_query_service.interfaces.fragment_query_service_interface import (
     FragmentQueryServiceInterface
 )
-from app.domain.authentication.user_roles import ADMIN_ROLES
+from app.domain.constants.user.user_roles import ADMIN_ROLES, ALL_ROLES
 from app.domain.dtos.fragment.fragment_query_controller.documents_context_fragments_request import (
     DocumentsContextFragmentsRequest
 )
@@ -85,8 +84,8 @@ class FragmentQueryService(FragmentQueryServiceInterface):
         try:
             self._authorizer.require_permissions(authenticated_user=authenticated_user)
             self._authorizer.require_roles(
-                authenticated_user,
-                context="retrieve_context_fragments_by_question"
+                authenticated_user=authenticated_user,
+                allowed_roles=ALL_ROLES,
             )
 
             self._validator.validate_question_context_fragments_request(question_context_fragments_request)
@@ -135,13 +134,13 @@ class FragmentQueryService(FragmentQueryServiceInterface):
         try:
             self._authorizer.require_permissions(authenticated_user=authenticated_user)
             self._authorizer.require_roles(
-                authenticated_user,
-                context="retrieve_context_fragments_by_documents"
+                authenticated_user=authenticated_user,
+                allowed_roles=ALL_ROLES,
             )
 
             self._validator.validate_documents_context_fragments_request(documents_context_fragments_request)
 
-            if not has_any_role(authenticated_user, ADMIN_ROLES):
+            if not authenticated_user.has_any_role(ADMIN_ROLES):
                 documents = await self._get_documents_by_ids_or_raise(
                     document_ids=document_ids,
                     database_session=database_session

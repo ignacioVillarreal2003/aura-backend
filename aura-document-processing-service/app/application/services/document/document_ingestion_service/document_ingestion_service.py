@@ -103,11 +103,11 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
         except Exception as e:
             await self._mark_document_as_failed(document)
             logger.exception(
-                "Unexpected error during document_controllers ingestion",
+                "Unexpected error during document ingestion",
                 extra={"document_id": document.id}
             )
             raise DocumentIngestionServiceException(
-                f"Document ingestion failed for document_controllers {document.id}: {e}"
+                f"Document ingestion failed for document {document.id}: {e}"
             ) from e
 
         finally:
@@ -144,7 +144,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             raise
         except Exception as e:
             raise DocumentIngestionServiceReadException(
-                f"Failed to read document_controllers {document.id}: {e}"
+                f"Failed to read document {document.id}: {e}"
             ) from e
 
     async def _clean_text(self, document: Document, raw_text: str) -> str:
@@ -172,7 +172,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             raise
         except Exception as e:
             raise DocumentIngestionServiceCleanException(
-                f"Failed to clean text for document_controllers {document.id}: {e}"
+                f"Failed to clean text for document {document.id}: {e}"
             ) from e
 
     async def _split_text(self, document: Document, clean_text: str) -> list[str]:
@@ -200,7 +200,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             raise
         except Exception as e:
             raise DocumentIngestionServiceSplitException(
-                f"Failed to split text for document_controllers {document.id}: {e}"
+                f"Failed to split text for document {document.id}: {e}"
             ) from e
 
     async def _embed_chunks(self, document: Document, chunks: list[str]) -> list[list[float]]:
@@ -228,7 +228,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             raise
         except Exception as e:
             raise DocumentIngestionServiceEmbedException(
-                f"Failed to generate embeddings for document_controllers {document.id}: {e}"
+                f"Failed to generate embeddings for document {document.id}: {e}"
             ) from e
 
     def _build_fragments(
@@ -284,7 +284,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                 )
 
             logger.info(
-                "Fragments and document_controllers status persisted",
+                "Fragments and document status persisted",
                 extra={
                     "document_id": document.id,
                     "fragment_count": len(fragments),
@@ -296,7 +296,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
 
         except Exception as e:
             raise DocumentIngestionServicePersistenceException(
-                f"Failed to persist fragments for document_controllers {document.id}: {e}"
+                f"Failed to persist fragments for document {document.id}: {e}"
             ) from e
 
     async def _mark_document_as_failed(self, document: Document) -> None:
@@ -319,7 +319,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
 
         except Exception as e:
             logger.error(
-                "Failed to mark document_controllers as failed",
+                "Failed to mark document as failed",
                 extra={"document_id": document.id, "error": str(e)}
             )
 

@@ -15,3 +15,11 @@ class PostProcessNotRunningException(PostProcessDocumentServiceException):
 
 class PostProcessDocumentFailedException(PostProcessDocumentServiceException):
     pass
+
+
+class PostProcessDocumentUnauthorizedException(PostProcessDocumentServiceException):
+    pass
+
+
+class PostProcessDocumentInvalidRequestException(PostProcessDocumentServiceException):
+    pass

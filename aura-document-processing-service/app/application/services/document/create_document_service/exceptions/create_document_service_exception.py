@@ -17,6 +17,10 @@ class CreateDocumentPersistenceException(CreateDocumentServiceException):
     pass
 
 
+class CreateDocumentUnauthorizedException(CreateDocumentServiceException):
+    pass
+
+
 class CreateDocumentUnsupportedTypeException(CreateDocumentValidationException):
     pass
 

@@ -32,6 +32,7 @@ from app.domain.dtos.fragment.post_process_fragment_controller.post_process_frag
     PostProcessFragmentsStatusResponse
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
+from app.domain.constants.user.user_roles import ADMIN_ROLES
 from app.domain.models.fragment import Fragment
 from app.infrastructure.http.llm_provider.interfaces.llm_provider_interface import LlmProviderInterface
 from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
@@ -75,9 +76,9 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
 
     async def start_all(self, authenticated_user: AuthenticatedUser) -> PostProcessFragmentsStartResponse:
         self._authorizer.require_permissions(authenticated_user)
-        self._authorizer.require_admin_role(
+        self._authorizer.require_roles(
             authenticated_user=authenticated_user,
-            context="post_process_fragments.start_all"
+            allowed_roles=ADMIN_ROLES,
         )
 
         async with self._lifecycle_lock:
@@ -85,7 +86,7 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
             self._reset_progress(total=0)
 
         logger.info(
-            "Starting fragment_controllers post-processing for all fragments missing metadata",
+            "Starting fragment post-processing for all fragments missing metadata",
             extra={"user_id": authenticated_user.id}
         )
 
@@ -122,9 +123,9 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
             authenticated_user: AuthenticatedUser,
     ) -> PostProcessFragmentsStartResponse:
         self._authorizer.require_permissions(authenticated_user)
-        self._authorizer.require_admin_role(
+        self._authorizer.require_roles(
             authenticated_user=authenticated_user,
-            context="post_process_fragments.start_for_documents"
+            allowed_roles=ADMIN_ROLES,
         )
         self._validator.validate_post_process_fragments_request(post_process_fragments_request)
 
@@ -135,7 +136,7 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
             self._reset_progress(total=0)
 
         logger.info(
-            "Starting fragment_controllers post-processing for specific documents",
+            "Starting fragment post-processing for specific documents",
             extra={"user_id": authenticated_user.id, "document_ids": document_ids}
         )
 
@@ -186,7 +187,7 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
                     "Fragment post-processing is not running"
                 )
 
-        logger.info("Stop signal sent for fragment_controllers post-processing")
+        logger.info("Stop signal sent for fragment post-processing")
         self._stop_event.set()
 
     def _launch_background_task(
@@ -221,7 +222,7 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
             document_ids: Optional[List[int]] = None
     ) -> None:
         logger.info(
-            "Background fragment_controllers post-processing started",
+            "Background fragment post-processing started",
             extra={
                 "total_fragments": self._total_fragments,
                 "user_id": authenticated_user.id,
@@ -284,7 +285,7 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
                             self._failed_fragments += 1
                             self._append_error(fragment_id=fragment_id, error=str(e))
                             logger.error(
-                                "Failed to post-process fragment_controllers",
+                                "Failed to post-process fragment",
                                 extra={"fragment_id": fragment_id, "error": str(e)}
                             )
 
@@ -293,7 +294,7 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
 
         except Exception as e:
             logger.exception(
-                "Unexpected error in background fragment_controllers post-processing",
+                "Unexpected error in background fragment post-processing",
                 extra={"error": str(e)}
             )
 
@@ -304,7 +305,7 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
                 self._finished_at = datetime.now(timezone.utc)
 
             logger.info(
-                "Background fragment_controllers post-processing finished",
+                "Background fragment post-processing finished",
                 extra={
                     "processed": self._processed_fragments,
                     "failed": self._failed_fragments,

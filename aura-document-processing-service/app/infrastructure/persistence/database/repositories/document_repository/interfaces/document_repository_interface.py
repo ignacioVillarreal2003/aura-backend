@@ -16,6 +16,30 @@ class DocumentRepositoryInterface(ABC):
     ) -> List[Document]:
         pass
 
+    @abstractmethod
+    async def get_documents_missing_metadata(
+            self,
+            database_session: AsyncSession
+    ) -> List[Document]:
+        pass
+
+    @abstractmethod
+    async def get_document_by_id(
+            self,
+            document_id: int,
+            database_session: AsyncSession
+    ) -> Optional[Document]:
+        pass
+
+    @abstractmethod
+    async def update_document(
+            self,
+            document: Document,
+            database_session: AsyncSession
+    ) -> Document:
+        pass
+
+
 
 
 
@@ -28,13 +52,8 @@ class DocumentRepositoryInterface(ABC):
     ) -> Document:
         pass
 
-    @abstractmethod
-    async def get_document_by_id(
-            self,
-            document_id: int,
-            database_session: AsyncSession
-    ) -> Optional[Document]:
-        pass
+
+
 
     @abstractmethod
     async def get_documents(
@@ -51,6 +70,7 @@ class DocumentRepositoryInterface(ABC):
     ) -> List[Document]:
         pass
 
+    @abstractmethod
     async def get_documents_by_chat_id(
             self,
             chat_id: int,
@@ -58,13 +78,7 @@ class DocumentRepositoryInterface(ABC):
     ) -> List[Document]:
         pass
 
-    @abstractmethod
-    async def update_document(
-            self,
-            document: Document,
-            database_session: AsyncSession
-    ) -> Document:
-        pass
+
 
     @abstractmethod
     async def hard_delete_document_by_id(
@@ -83,9 +97,4 @@ class DocumentRepositoryInterface(ABC):
     ) -> bool:
         pass
 
-    @abstractmethod
-    async def get_documents_missing_metadata(
-            self,
-            database_session: AsyncSession
-    ) -> List[Document]:
-        pass
+

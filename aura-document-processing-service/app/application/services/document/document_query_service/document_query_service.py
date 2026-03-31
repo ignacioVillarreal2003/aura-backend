@@ -4,14 +4,18 @@ from typing import Optional
 from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.services.document.document_query_service.document_query_service_authorizer import (
+    DocumentQueryServiceAuthorizer,
+)
 from app.application.services.document.document_query_service.document_query_service_settings import (
     DocumentQueryServiceSettings
 )
+from app.application.services.document.document_query_service.document_query_service_validator import (
+    DocumentQueryServiceValidator,
+)
+from app.domain.constants.user.user_roles import ADMIN_ROLES, ALL_ROLES
 from app.domain.constants.document.document_type import DocumentType
 
-from app.application.services.document.document_query_service.document_query_service_request_validator import (
-    DocumentQueryServiceRequestValidator
-)
 from app.application.services.document.document_query_service.exceptions.document_query_service_exception import (
     DocumentQueryInvalidRequestException,
     DocumentQueryNotFoundException,
@@ -33,16 +37,6 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentQueryService(DocumentQueryServiceInterface):
-    _ROLE_USER = "user"
-    _ROLE_ADMIN = "admin"
-    _ROLE_SUPERADMIN = "superadmin"
-
-    _ADMIN_ROLES = {_ROLE_ADMIN, _ROLE_SUPERADMIN}
-    _ALL_ALLOWED_ROLES = {_ROLE_USER, _ROLE_ADMIN, _ROLE_SUPERADMIN}
-
-    _PERMISSION_DOCUMENT_GET = "DOCUMENT_GET"
-    _REQUIRED_PERMISSIONS = {_PERMISSION_DOCUMENT_GET}
-
     _KNOWN_EXCEPTIONS = (
         DocumentQueryNotFoundException,
         DocumentQueryUnauthorizedException,
@@ -56,10 +50,10 @@ class DocumentQueryService(DocumentQueryServiceInterface):
     ) -> None:
         self._document_repository = document_repository
         self._settings = document_query_service_settings or DocumentQueryServiceSettings()
-
-        self._validator = DocumentQueryServiceRequestValidator(
+        self._validator = DocumentQueryServiceValidator(
             document_query_service_settings=self._settings
         )
+        self._authorizer = DocumentQueryServiceAuthorizer()
 
     async def get_document(
             self,
@@ -68,21 +62,22 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             authenticated_user: AuthenticatedUser
     ) -> DocumentResponse:
         logger.info(
-            "Get document_controllers initiated",
+            "Get document initiated",
             extra={"document_id": document_id, "user_id": authenticated_user.id}
         )
 
         try:
-            self._require_permissions(authenticated_user)
-            self._require_roles(authenticated_user, self._ALL_ALLOWED_ROLES, context=f"get_document({document_id})")
+            self._validator.validate_document_id(document_id)
+            self._authorizer.require_permissions(authenticated_user)
+            self._authorizer.require_roles(authenticated_user=authenticated_user, allowed_roles=ALL_ROLES)
 
             document = await self._get_document_or_raise(document_id, database_session)
 
-            if not self._has_any_role(authenticated_user, self._ADMIN_ROLES):
-                self._require_ownership(document, authenticated_user)
+            if not authenticated_user.has_any_role(ADMIN_ROLES):
+                self._authorizer.require_ownership(document, authenticated_user)
 
             logger.info(
-                "Get document_controllers completed",
+                "Get document completed",
                 extra={"document_id": document_id, "user_id": authenticated_user.id}
             )
             return DocumentResponse.model_validate(document)
@@ -90,9 +85,9 @@ class DocumentQueryService(DocumentQueryServiceInterface):
         except self._KNOWN_EXCEPTIONS:
             raise
         except Exception as e:
-            logger.exception("Unexpected error during get document_controllers", extra={"document_id": document_id})
+            logger.exception("Unexpected error during get document", extra={"document_id": document_id})
             raise DocumentQueryServiceException(
-                f"Unexpected error retrieving document_controllers {document_id}"
+                f"Unexpected error retrieving document {document_id}"
             ) from e
 
     async def get_documents(
@@ -116,9 +111,16 @@ class DocumentQueryService(DocumentQueryServiceInterface):
         )
 
         try:
-            self._require_permissions(authenticated_user)
-            self._require_roles(authenticated_user, self._ADMIN_ROLES, context="get_documents")
+            self._authorizer.require_permissions(authenticated_user)
+            self._authorizer.require_roles(authenticated_user=authenticated_user,allowed_roles=ADMIN_ROLES)
             self._validator.validate_pagination(page, size)
+            self._validator.validate_filters(
+                name=name,
+                description=description,
+                category=category,
+                created_from=created_from,
+                created_to=created_to,
+            )
 
             if has_filters:
                 documents: list[Document] = await self._document_repository.get_documents(
@@ -153,63 +155,6 @@ class DocumentQueryService(DocumentQueryServiceInterface):
         except Exception as e:
             logger.exception("Unexpected error during get documents", extra={"page": page, "size": size})
             raise DocumentQueryServiceException("Unexpected error retrieving documents") from e
-
-    def _require_permissions(self, authenticated_user: AuthenticatedUser) -> None:
-        user_permissions = set(authenticated_user.permissions)
-        missing = self._REQUIRED_PERMISSIONS - user_permissions
-
-        if missing:
-            logger.warning(
-                "Insufficient permissions for query operation",
-                extra={
-                    "user_id": authenticated_user.id,
-                    "missing_permissions": sorted(missing),
-                    "user_permissions": sorted(user_permissions)
-                }
-            )
-            raise DocumentQueryUnauthorizedException(
-                f"User {authenticated_user.id} is missing required permissions: {sorted(missing)}"
-            )
-
-    @staticmethod
-    def _require_roles(
-            authenticated_user: AuthenticatedUser,
-            allowed_roles: set[str],
-            context: str
-    ) -> None:
-        if not DocumentQueryService._has_any_role(authenticated_user, allowed_roles):
-            logger.warning(
-                "Insufficient role for query operation",
-                extra={
-                    "user_id": authenticated_user.id,
-                    "user_roles": sorted(authenticated_user.roles),
-                    "allowed_roles": sorted(allowed_roles),
-                    "context": context
-                }
-            )
-            raise DocumentQueryUnauthorizedException(
-                f"User {authenticated_user.id} does not have the required role for {context}. "
-                f"Allowed roles: {sorted(allowed_roles)}"
-            )
-
-    @staticmethod
-    def _require_ownership(document: Document, authenticated_user: AuthenticatedUser) -> None:
-        if document.created_by != authenticated_user.id:
-            logger.warning(
-                "Unauthorized document_controllers access attempt",
-                extra={
-                    "document_id": document.id,
-                    "owner_id": document.created_by,
-                    "user_id": authenticated_user.id
-                }
-            )
-            raise DocumentQueryUnauthorizedException(
-                f"User {authenticated_user.id} is not authorized to access document_controllers {document.id}"
-            )
-
-    @staticmethod
-    def _has_any_role(authenticated_user: AuthenticatedUser, roles: set[str]) -> bool:
-        return bool(set(authenticated_user.roles) & roles)
 
     async def _get_document_or_raise(
             self,

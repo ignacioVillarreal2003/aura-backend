@@ -138,92 +138,6 @@ class FragmentRepository(FragmentRepositoryInterface):
         except Exception as e:
             raise DatabaseException("Error fetching fragments by document IDs") from e
 
-
-
-
-
-    async def create_fragments(
-            self,
-            fragments: List[Fragment],
-            database_session: AsyncSession
-    ) -> List[Fragment]:
-        if not fragments:
-            return []
-
-        try:
-            logger.debug("Creating fragments in database", extra={"count": len(fragments)})
-
-            database_session.add_all(fragments)
-            await database_session.flush()
-
-            for fragment in fragments:
-                await database_session.refresh(fragment)
-
-            logger.info("Fragments created successfully", extra={"count": len(fragments)})
-            return fragments
-
-        except IntegrityError as e:
-            raise DatabaseConstraintViolationException(
-                "Constraint violation creating fragments"
-            ) from e
-        except Exception as e:
-            raise DatabaseException("Error creating fragments in the database") from e
-
-    async def get_fragments_by_document_id(
-            self,
-            document_id: int,
-            database_session: AsyncSession
-    ) -> List[Fragment]:
-        try:
-            logger.debug(
-                "Fetching fragments by document ID", extra={"document_id": document_id}
-            )
-
-            result = await database_session.execute(
-                select(Fragment)
-                .where(
-                    Fragment.document_id == document_id,
-                    Fragment.deleted_at.is_(None)
-                )
-                .order_by(Fragment.fragment_index)
-            )
-            fragments = list(result.scalars().all())
-
-            logger.debug(
-                "Fragments fetched successfully",
-                extra={"document_id": document_id, "count": len(fragments)}
-            )
-            return fragments
-
-        except Exception as e:
-            raise DatabaseException("Error fetching fragments by document ID") from e
-
-    async def hard_delete_fragments_by_document_id(
-            self,
-            document_id: int,
-            database_session: AsyncSession
-    ) -> int:
-        try:
-            logger.debug(
-                "Hard-deleting fragments by document ID",
-                extra={"document_id": document_id}
-            )
-
-            result = await database_session.execute(
-                delete(Fragment).where(Fragment.document_id == document_id)
-            )
-            deleted_count: int = result.rowcount
-            await database_session.flush()
-
-            logger.info(
-                "Fragments hard-deleted successfully",
-                extra={"document_id": document_id, "deleted_count": deleted_count}
-            )
-            return deleted_count
-
-        except Exception as e:
-            raise DatabaseException("Error deleting fragments from the database") from e
-
     async def count_fragments_missing_metadata(
             self,
             database_session: AsyncSession
@@ -354,6 +268,93 @@ class FragmentRepository(FragmentRepositoryInterface):
             ) from e
         except Exception as e:
             raise DatabaseException("Error updating fragment in the database") from e
+
+    async def get_fragments_by_document_id(
+            self,
+            document_id: int,
+            database_session: AsyncSession
+    ) -> List[Fragment]:
+        try:
+            logger.debug(
+                "Fetching fragments by document ID", extra={"document_id": document_id}
+            )
+
+            result = await database_session.execute(
+                select(Fragment)
+                .where(
+                    Fragment.document_id == document_id,
+                    Fragment.deleted_at.is_(None)
+                )
+                .order_by(Fragment.fragment_index)
+            )
+            fragments = list(result.scalars().all())
+
+            logger.debug(
+                "Fragments fetched successfully",
+                extra={"document_id": document_id, "count": len(fragments)}
+            )
+            return fragments
+
+        except Exception as e:
+            raise DatabaseException("Error fetching fragments by document ID") from e
+
+
+
+
+
+
+    async def create_fragments(
+            self,
+            fragments: List[Fragment],
+            database_session: AsyncSession
+    ) -> List[Fragment]:
+        if not fragments:
+            return []
+
+        try:
+            logger.debug("Creating fragments in database", extra={"count": len(fragments)})
+
+            database_session.add_all(fragments)
+            await database_session.flush()
+
+            for fragment in fragments:
+                await database_session.refresh(fragment)
+
+            logger.info("Fragments created successfully", extra={"count": len(fragments)})
+            return fragments
+
+        except IntegrityError as e:
+            raise DatabaseConstraintViolationException(
+                "Constraint violation creating fragments"
+            ) from e
+        except Exception as e:
+            raise DatabaseException("Error creating fragments in the database") from e
+
+    async def hard_delete_fragments_by_document_id(
+            self,
+            document_id: int,
+            database_session: AsyncSession
+    ) -> int:
+        try:
+            logger.debug(
+                "Hard-deleting fragments by document ID",
+                extra={"document_id": document_id}
+            )
+
+            result = await database_session.execute(
+                delete(Fragment).where(Fragment.document_id == document_id)
+            )
+            deleted_count: int = result.rowcount
+            await database_session.flush()
+
+            logger.info(
+                "Fragments hard-deleted successfully",
+                extra={"document_id": document_id, "deleted_count": deleted_count}
+            )
+            return deleted_count
+
+        except Exception as e:
+            raise DatabaseException("Error deleting fragments from the database") from e
 
     async def soft_delete_fragments_by_document_id(
             self,
