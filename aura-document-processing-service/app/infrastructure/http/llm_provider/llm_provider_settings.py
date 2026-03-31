@@ -16,7 +16,7 @@ class LlmProviderSettings(BaseSettings):
 
     classify_document_url: str = Field(...)
     enrich_fragment_url: str = Field(...)
-    timeout_seconds: float = Field(default=120.0)
+    timeout_seconds: float = Field(default=120.0, gt=0, le=600.0)
 
     @field_validator("classify_document_url", "enrich_fragment_url", mode="before")
     @classmethod

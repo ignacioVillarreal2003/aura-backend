@@ -39,12 +39,15 @@ class PostProcessFragmentController(PostProcessFragmentControllerInterface):
         )
 
         post_process_fragments_start_response = await post_process_fragment_service.start_all(
-            authenticated_user=authenticated_user)
+            authenticated_user=authenticated_user
+        )
 
         logger.info(
             "Post-process all fragments completed successfully",
-            extra={"user_id": authenticated_user.id,
-                   "total_fragments": post_process_fragments_start_response.total_fragments},
+            extra={
+                "user_id": authenticated_user.id,
+                "total_fragments": post_process_fragments_start_response.total_fragments
+            },
         )
 
         return post_process_fragments_start_response
@@ -63,14 +66,16 @@ class PostProcessFragmentController(PostProcessFragmentControllerInterface):
         )
 
         post_process_fragments_start_response = await post_process_fragment_service.start_for_documents(
-            document_ids=post_process_fragments_request.document_ids,
-            authenticated_user=authenticated_user
+            post_process_fragments_request=post_process_fragments_request,
+            authenticated_user=authenticated_user,
         )
 
         logger.info(
             "Post-process fragments for selected documents completed successfully",
-            extra={"user_id": authenticated_user.id,
-                   "total_fragments": post_process_fragments_start_response.total_fragments},
+            extra={
+                "user_id": authenticated_user.id,
+                "total_fragments": post_process_fragments_start_response.total_fragments
+            },
         )
 
         return post_process_fragments_start_response

@@ -19,13 +19,39 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentRepository(DocumentRepositoryInterface):
+    async def get_documents_by_ids(
+            self,
+            document_ids: List[int],
+            database_session: AsyncSession
+    ) -> List[Document]:
+        try:
+            logger.debug(
+                "Fetching document by IDs",
+                extra={"document_ids_count": len(document_ids)}
+            )
+            result = await database_session.execute(
+                select(Document).where(Document.id.in_(document_ids))
+            )
+            documents = list(result.scalars().all())
+            logger.debug(
+                "Documents by IDs lookup completed",
+                extra={"document_ids_count": len(document_ids), "found_count": len(documents)}
+            )
+            return documents
+        except Exception as e:
+            raise DatabaseException("Error fetching document by IDs from the database") from e
+
+
+
+
+
     async def create_document(
             self,
             document: Document,
             database_session: AsyncSession
     ) -> Document:
         try:
-            logger.debug("Creating document_controllers in database")
+            logger.debug("Creating document in database")
 
             database_session.add(document)
             await database_session.flush()
@@ -36,11 +62,11 @@ class DocumentRepository(DocumentRepositoryInterface):
 
         except IntegrityError as e:
             raise DatabaseConstraintViolationException(
-                "Constraint violation creating document_controllers"
+                "Constraint violation creating document"
             ) from e
         except Exception as e:
-            logger.exception("Failed to create document_controllers in database")
-            raise DatabaseException("Error creating document_controllers in the database") from e
+            logger.exception("Failed to create document in database")
+            raise DatabaseException("Error creating document in the database") from e
 
     async def get_document_by_id(
             self,
@@ -48,7 +74,7 @@ class DocumentRepository(DocumentRepositoryInterface):
             database_session: AsyncSession
     ) -> Optional[Document]:
         try:
-            logger.debug("Fetching document_controllers by ID", extra={"document_id": document_id})
+            logger.debug("Fetching document by ID", extra={"document_id": document_id})
 
             result = await database_session.execute(
                 select(Document).where(Document.id == document_id)
@@ -62,7 +88,7 @@ class DocumentRepository(DocumentRepositoryInterface):
             return document
 
         except Exception as e:
-            raise DatabaseException("Error fetching document_controllers from the database") from e
+            raise DatabaseException("Error fetching document from the database") from e
 
     async def get_documents_by_chat_id(
             self,
@@ -151,7 +177,7 @@ class DocumentRepository(DocumentRepositoryInterface):
             database_session: AsyncSession
     ) -> Document:
         try:
-            logger.debug("Updating document_controllers", extra={"document_id": document.id})
+            logger.debug("Updating document", extra={"document_id": document.id})
 
             updated_document = await database_session.merge(document)
             await database_session.flush()
@@ -165,10 +191,10 @@ class DocumentRepository(DocumentRepositoryInterface):
 
         except IntegrityError as e:
             raise DatabaseConstraintViolationException(
-                "Constraint violation updating document_controllers"
+                "Constraint violation updating document"
             ) from e
         except Exception as e:
-            raise DatabaseException("Error updating document_controllers in the database") from e
+            raise DatabaseException("Error updating document in the database") from e
 
     async def hard_delete_document_by_id(
             self,
@@ -176,7 +202,7 @@ class DocumentRepository(DocumentRepositoryInterface):
             database_session: AsyncSession
     ) -> bool:
         try:
-            logger.debug("Hard-deleting document_controllers", extra={"document_id": document_id})
+            logger.debug("Hard-deleting document", extra={"document_id": document_id})
 
             result = await database_session.execute(
                 select(Document).where(Document.id == document_id)
@@ -197,7 +223,7 @@ class DocumentRepository(DocumentRepositoryInterface):
             return True
 
         except Exception as e:
-            raise DatabaseException("Error deleting document_controllers from the database") from e
+            raise DatabaseException("Error deleting document from the database") from e
 
     async def get_documents_missing_metadata(
             self,
@@ -237,7 +263,7 @@ class DocumentRepository(DocumentRepositoryInterface):
     ) -> bool:
         try:
             logger.debug(
-                "Soft-deleting document_controllers",
+                "Soft-deleting document",
                 extra={"document_id": document_id, "user_id": user_id}
             )
 
@@ -269,4 +295,4 @@ class DocumentRepository(DocumentRepositoryInterface):
             return True
 
         except Exception as e:
-            raise DatabaseException("Error soft-deleting document_controllers from the database") from e
+            raise DatabaseException("Error soft-deleting document from the database") from e

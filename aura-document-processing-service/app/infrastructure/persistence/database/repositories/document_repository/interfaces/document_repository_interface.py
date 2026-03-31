@@ -9,6 +9,18 @@ from app.domain.models.document import Document
 
 class DocumentRepositoryInterface(ABC):
     @abstractmethod
+    async def get_documents_by_ids(
+            self,
+            document_ids: List[int],
+            database_session: AsyncSession
+    ) -> List[Document]:
+        pass
+
+
+
+
+
+    @abstractmethod
     async def create_document(
             self,
             document: Document,

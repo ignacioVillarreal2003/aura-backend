@@ -35,13 +35,8 @@ from app.infrastructure.persistence.storages.minio_manager.minio_manager import 
 
 logger = logging.getLogger(__name__)
 
-_app_ref: FastAPI | None = None
-
 
 async def startup_dependencies(app: FastAPI) -> None:
-    global _app_ref
-    _app_ref = app
-
     try:
         logger.info("Starting up dependencies")
 
@@ -164,16 +159,27 @@ async def startup_dependencies(app: FastAPI) -> None:
         raise
 
 
-async def shutdown_dependencies() -> None:
-    try:
-        logger.info("Shutting down dependencies")
+async def shutdown_dependencies(app: FastAPI) -> None:
+    logger.info("Shutting down dependencies")
 
-        if _app_ref is not None:
-            if rabbitmq_manager := getattr(_app_ref.state, "rabbitmq_manager", None):
-                await rabbitmq_manager.stop()
+    state = app.state
 
-        logger.info("All dependencies shut down successfully")
+    async def _safe_stop(name: str, coro) -> None:
+        try:
+            await coro
+        except Exception:
+            logger.exception("Error while shutting down %s", name)
 
-    except Exception:
-        logger.error("Error during dependency shutdown")
-        raise
+    if rabbitmq_manager := getattr(state, "rabbitmq_manager", None):
+        await _safe_stop("RabbitMQManager", rabbitmq_manager.stop())
+
+    if http_client := getattr(state, "http_client", None):
+        await _safe_stop("HttpClient", http_client.stop())
+
+    if minio_manager := getattr(state, "minio_manager", None):
+        await _safe_stop("MinioManager", minio_manager.stop())
+
+    if db_manager := getattr(state, "db_manager", None):
+        await _safe_stop("DatabaseManager", db_manager.dispose())
+
+    logger.info("All dependencies shut down successfully")

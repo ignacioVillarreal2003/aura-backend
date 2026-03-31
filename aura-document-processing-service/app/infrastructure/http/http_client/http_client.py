@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 from datetime import timedelta
@@ -29,97 +30,89 @@ class HttpClient(HttpClientInterface):
         self._attempt_with_retry: Optional[Callable] = None
         self._is_started: bool = False
 
+        self._lifecycle_lock = asyncio.Lock()
+
     async def start(self) -> None:
-        if self._is_started:
-            logger.warning("HttpClient already started — skipping")
-            return
+        async with self._lifecycle_lock:
+            if self._is_started:
+                logger.debug("HttpClient already started — skipping")
+                return
 
-        logger.info(
-            "Starting HttpClient",
-            extra={
-                "timeout_seconds": self._settings.timeout_seconds,
-                "retry_max_attempts": self._settings.retry_max_attempts,
-                "connection_pool_max_size": self._settings.connection_pool_max_size,
-                "ssl_verify_certificates": self._settings.ssl_verify_certificates
-            }
-        )
-
-        try:
-            self._breaker = CircuitBreaker(
-                fail_max=self._settings.circuit_breaker_failure_threshold,
-                timeout_duration=timedelta(
-                    seconds=self._settings.circuit_breaker_recovery_timeout_seconds
-                ),
-                name="HttpClient"
+            logger.info(
+                "Starting HttpClient",
+                extra={
+                    "timeout_seconds": self._settings.timeout_seconds,
+                    "retry_max_attempts": self._settings.retry_max_attempts,
+                    "connection_pool_max_size": self._settings.connection_pool_max_size,
+                    "ssl_verify_certificates": self._settings.ssl_verify_certificates
+                }
             )
 
-            self._client = httpx.AsyncClient(
-                timeout=httpx.Timeout(
-                    self._settings.timeout_seconds,
-                    **
-                    self._settings.get_httpx_timeout()
-                ),
-                limits=httpx.Limits(**self._settings.get_httpx_limits()),
-                headers=self._settings.merged_request_headers,
-                verify=self._settings.ssl_verify_certificates,
-                follow_redirects=self._settings.follow_http_redirects
-            )
-
-            def _on_retry(retry_state) -> None:
-                logger.warning(
-                    "Retrying HTTP request",
-                    extra={
-                        "attempt": retry_state.attempt_number,
-                        "wait_seconds": round(retry_state.next_action.sleep, 2)
-                    }
+            try:
+                self._breaker = CircuitBreaker(
+                    fail_max=self._settings.circuit_breaker_failure_threshold,
+                    timeout_duration=timedelta(
+                        seconds=self._settings.circuit_breaker_recovery_timeout_seconds
+                    ),
+                    name="HttpClient"
                 )
 
-            retry_decorator = retry(
-                stop=stop_after_attempt(self._settings.retry_max_attempts),
-                wait=wait_exponential(
-                    min=self._settings.retry_backoff_min_seconds,
-                    max=self._settings.retry_backoff_max_seconds
-                ),
-                retry=retry_if_exception_type((
-                    httpx.TimeoutException,
-                    httpx.ConnectError,
-                    httpx.NetworkError,
-                    httpx.RemoteProtocolError,
-                    HttpClientTimeoutException,
-                    HttpClientConnectionException
-                )),
-                before_sleep=_on_retry,
-                reraise=True
-            )
-            self._attempt_with_retry = retry_decorator(self._single_attempt)
+                self._client = httpx.AsyncClient(
+                    timeout=httpx.Timeout(
+                        self._settings.timeout_seconds,
+                        **self._settings.get_httpx_timeout()
+                    ),
+                    limits=httpx.Limits(**self._settings.get_httpx_limits()),
+                    headers=self._settings.merged_request_headers,
+                    verify=self._settings.ssl_verify_certificates,
+                    follow_redirects=self._settings.follow_http_redirects
+                )
 
-            self._is_started = True
-            logger.info("HttpClient started successfully")
+                def _on_retry(retry_state) -> None:
+                    logger.warning(
+                        "Retrying HTTP request",
+                        extra={
+                            "attempt": retry_state.attempt_number,
+                            "wait_seconds": round(retry_state.next_action.sleep, 2)
+                        }
+                    )
 
-        except Exception as e:
-            logger.exception("Failed to start HttpClient")
-            await self.stop()
-            raise HttpClientException(f"Failed to start HTTP client: {e}") from e
+                retry_decorator = retry(
+                    stop=stop_after_attempt(self._settings.retry_max_attempts),
+                    wait=wait_exponential(
+                        min=self._settings.retry_backoff_min_seconds,
+                        max=self._settings.retry_backoff_max_seconds
+                    ),
+                    retry=retry_if_exception_type((
+                        httpx.TimeoutException,
+                        httpx.ConnectError,
+                        httpx.NetworkError,
+                        httpx.RemoteProtocolError,
+                        HttpClientTimeoutException,
+                        HttpClientConnectionException
+                    )),
+                    before_sleep=_on_retry,
+                    reraise=True
+                )
+                self._attempt_with_retry = retry_decorator(self._single_attempt)
+
+                self._is_started = True
+                logger.info("HttpClient started successfully")
+
+            except Exception as e:
+                await self._cleanup_resources()
+                logger.exception("Failed to start HttpClient")
+                raise HttpClientException(f"Failed to start HTTP client: {e}") from e
 
     async def stop(self) -> None:
-        if not self._is_started:
-            logger.debug("HttpClient already stopped — skipping")
-            return
+        async with self._lifecycle_lock:
+            if not self._is_started:
+                logger.debug("HttpClient already stopped — skipping")
+                return
 
-        logger.info("Stopping HttpClient")
-
-        try:
-            if self._client:
-                await self._client.aclose()
-        except Exception:
-            logger.exception("Error closing HttpClient connections")
-        finally:
-            self._client = None
-            self._breaker = None
-            self._attempt_with_retry = None
-            self._is_started = False
-
-        logger.info("HttpClient stopped successfully")
+            logger.info("Stopping HttpClient")
+            await self._cleanup_resources()
+            logger.info("HttpClient stopped successfully")
 
     @property
     def is_started(self) -> bool:
@@ -175,15 +168,6 @@ class HttpClient(HttpClientInterface):
                 "Service temporarily unavailable (circuit breaker open)"
             ) from e
 
-        except (HttpClientTimeoutException, HttpClientConnectionException):
-            raise
-
-        except HttpClientException:
-            raise
-
-        except Exception:
-            raise
-
     async def get(self, url: str, **kwargs) -> httpx.Response:
         return await self.request("GET", url, **kwargs)
 
@@ -232,6 +216,18 @@ class HttpClient(HttpClientInterface):
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         await self.stop()
+
+    async def _cleanup_resources(self) -> None:
+        if self._client:
+            try:
+                await self._client.aclose()
+            except Exception:
+                logger.exception("Error closing HttpClient connections")
+
+        self._client = None
+        self._breaker = None
+        self._attempt_with_retry = None
+        self._is_started = False
 
     async def _single_attempt(self, method: str, url: str, **kwargs) -> httpx.Response:
         start_time = time.monotonic()
@@ -287,9 +283,9 @@ class HttpClient(HttpClientInterface):
                 status_code=status_code
             ) from e
 
-    def _record_elapsed(self, start_time: float) -> float:
-        elapsed_ms = round((time.monotonic() - start_time) * 1000, 2)
-        return elapsed_ms
+    @staticmethod
+    def _record_elapsed(start_time: float) -> float:
+        return round((time.monotonic() - start_time) * 1000, 2)
 
 
 async def get_http_client(request: Request) -> HttpClientInterface:

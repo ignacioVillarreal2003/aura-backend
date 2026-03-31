@@ -1,11 +1,32 @@
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models.fragment import Fragment
 
 
 class FragmentRepositoryInterface(ABC):
+    @abstractmethod
+    async def get_most_similar_fragments(
+            self,
+            query_vector: List[float],
+            database_session: AsyncSession,
+            k: int = 3,
+            threshold: float = 0.3
+    ) -> List[Fragment]:
+        pass
+
+    @abstractmethod
+    async def get_fragments_by_document_ids(
+            self,
+            document_ids: List[int],
+            database_session: AsyncSession
+    ) -> List[Fragment]:
+        pass
+
+
+
+
     @abstractmethod
     async def create_fragments(
             self,
@@ -22,15 +43,7 @@ class FragmentRepositoryInterface(ABC):
     ) -> List[Fragment]:
         pass
 
-    @abstractmethod
-    async def get_most_similar_fragments(
-            self,
-            query_vector: List[float],
-            database_session: AsyncSession,
-            k: int = 3,
-            threshold: float = 0.3
-    ) -> List[Fragment]:
-        pass
+
 
     @abstractmethod
     async def hard_delete_fragments_by_document_id(
@@ -50,18 +63,37 @@ class FragmentRepositoryInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_fragments_missing_metadata(
+    async def count_fragments_missing_metadata(
             self,
             database_session: AsyncSession
-    ) -> List[Fragment]:
+    ) -> int:
         pass
 
     @abstractmethod
-    async def get_fragments_missing_metadata_by_document_ids(
+    async def count_fragments_missing_metadata_by_document_ids(
             self,
             document_ids: List[int],
             database_session: AsyncSession
-    ) -> List[Fragment]:
+    ) -> int:
+        pass
+
+    @abstractmethod
+    async def get_fragment_ids_missing_metadata(
+            self,
+            database_session: AsyncSession,
+            limit: int,
+            last_fragment_id: Optional[int] = None
+    ) -> List[int]:
+        pass
+
+    @abstractmethod
+    async def get_fragment_ids_missing_metadata_by_document_ids(
+            self,
+            document_ids: List[int],
+            database_session: AsyncSession,
+            limit: int,
+            last_fragment_id: Optional[int] = None
+    ) -> List[int]:
         pass
 
     @abstractmethod

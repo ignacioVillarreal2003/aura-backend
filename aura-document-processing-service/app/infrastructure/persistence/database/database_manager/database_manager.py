@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 from contextlib import asynccontextmanager
@@ -31,6 +32,8 @@ class DatabaseManager(DatabaseManagerInterface):
         self._session_factory: Optional[async_sessionmaker[AsyncSession]] = None
         self._is_initialized: bool = False
 
+        self._lifecycle_lock = asyncio.Lock()
+
     @property
     def settings(self) -> DatabaseManagerSettings:
         return self._settings
@@ -40,77 +43,71 @@ class DatabaseManager(DatabaseManagerInterface):
         return self._is_initialized
 
     async def initialize(self) -> None:
-        if self._is_initialized:
-            logger.warning("DatabaseManager already initialized — skipping")
-            return
+        async with self._lifecycle_lock:
+            if self._is_initialized:
+                logger.debug("DatabaseManager already initialized — skipping")
+                return
 
-        logger.info(
-            "Initializing database connection",
-            extra={
-                "url": self._settings.url_safe,
-                "pool_persistent_connections": self._settings.pool_persistent_connections,
-                "pool_overflow_connections": self._settings.pool_overflow_connections
-            }
-        )
-
-        try:
-            self._engine = create_async_engine(
-                self._settings.url,
-                echo=self._settings.echo_sql,
-                pool_size=self._settings.pool_persistent_connections,
-                max_overflow=self._settings.pool_overflow_connections,
-                pool_recycle=self._settings.pool_recycle_seconds,
-                pool_pre_ping=self._settings.pool_liveness_probe,
-                pool_timeout=self._settings.pool_checkout_timeout_seconds,
-                pool_reset_on_return="rollback",
-                isolation_level="READ COMMITTED",
-                connect_args=self._settings.get_connect_args(),
-                echo_pool=self._settings.echo_sql
-            )
-
-            self._setup_event_listeners()
-
-            self._session_factory = async_sessionmaker(
-                bind=self._engine,
-                class_=AsyncSession,
-                expire_on_commit=False,
-                autoflush=False,
-                autocommit=False
-            )
-
-            await self._verify_connection_with_retry()
-
-            self._is_initialized = True
             logger.info(
-                "Database initialized successfully",
+                "Initializing database connection",
                 extra={
+                    "url": self._settings.url_safe,
                     "pool_persistent_connections": self._settings.pool_persistent_connections,
-                    "pool_overflow_connections": self._settings.pool_overflow_connections,
-                    "ssl_enabled": self._settings.ssl_enabled
+                    "pool_overflow_connections": self._settings.pool_overflow_connections
                 }
             )
 
-        except Exception as e:
-            logger.exception("Failed to initialize database")
-            await self.dispose()
-            raise DatabaseManagerException(f"Failed to initialize database: {e}") from e
+            try:
+                self._engine = create_async_engine(
+                    self._settings.url,
+                    echo=self._settings.echo_sql,
+                    pool_size=self._settings.pool_persistent_connections,
+                    max_overflow=self._settings.pool_overflow_connections,
+                    pool_recycle=self._settings.pool_recycle_seconds,
+                    pool_pre_ping=self._settings.pool_liveness_probe,
+                    pool_timeout=self._settings.pool_checkout_timeout_seconds,
+                    pool_reset_on_return="rollback",
+                    isolation_level="READ COMMITTED",
+                    connect_args=self._settings.get_connect_args(),
+                    echo_pool=self._settings.echo_sql
+                )
+
+                self._setup_event_listeners()
+
+                self._session_factory = async_sessionmaker(
+                    bind=self._engine,
+                    class_=AsyncSession,
+                    expire_on_commit=False,
+                    autoflush=False,
+                    autocommit=False
+                )
+
+                await self._verify_connection_with_retry()
+
+                self._is_initialized = True
+                logger.info(
+                    "Database initialized successfully",
+                    extra={
+                        "pool_persistent_connections": self._settings.pool_persistent_connections,
+                        "pool_overflow_connections": self._settings.pool_overflow_connections,
+                        "ssl_enabled": self._settings.ssl_enabled
+                    }
+                )
+
+            except Exception as e:
+                logger.exception("Failed to initialize database")
+                await self._cleanup_resources()
+                raise DatabaseManagerException(f"Failed to initialize database: {e}") from e
 
     async def dispose(self) -> None:
-        if not self._engine:
-            logger.debug("DatabaseManager already disposed — skipping")
-            return
+        async with self._lifecycle_lock:
+            if not self._is_initialized:
+                logger.debug("DatabaseManager already disposed — skipping")
+                return
 
-        logger.info("Disposing database engine")
-
-        try:
-            await self._engine.dispose()
+            logger.info("Disposing database engine")
+            await self._cleanup_resources()
             logger.info("Database engine disposed successfully")
-        except Exception:
-            logger.exception("Error disposing database engine")
-        finally:
-            self._engine = None
-            self._session_factory = None
-            self._is_initialized = False
 
     @asynccontextmanager
     async def session(self) -> AsyncIterator[AsyncSession]:
@@ -190,8 +187,11 @@ class DatabaseManager(DatabaseManagerInterface):
             raise RuntimeError("Engine not initialised before connection verification")
 
         @retry(
-            stop=stop_after_attempt(3),
-            wait=wait_exponential(multiplier=1, min=2, max=10),
+            stop=stop_after_attempt(self._settings.retry_max_attempts),
+            wait=wait_exponential(
+                min=self._settings.retry_backoff_min_seconds,
+                max=self._settings.retry_backoff_max_seconds,
+            ),
             retry=retry_if_exception_type((DBAPIError, SQLAlchemyError)),
             before_sleep=before_sleep_log(logger, logging.WARNING),
             reraise=True,
@@ -271,6 +271,17 @@ class DatabaseManager(DatabaseManagerInterface):
 
         return parameters
 
+    async def _cleanup_resources(self) -> None:
+        if self._engine and not self._engine.is_disposed:
+            try:
+                await self._engine.dispose()
+            except Exception:
+                logger.exception("Error disposing database engine")
+
+        self._engine = None
+        self._session_factory = None
+        self._is_initialized = False
+
 
 async def get_database_manager(request: Request) -> DatabaseManagerInterface:
     try:
@@ -291,7 +302,7 @@ async def get_database_manager(request: Request) -> DatabaseManagerInterface:
 
 
 async def get_database_session(request: Request):
-    database_manager = await get_database_manager(request)
+    database_manager: DatabaseManagerInterface = await get_database_manager(request)
 
     try:
         async with database_manager.session() as session:

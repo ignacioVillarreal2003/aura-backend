@@ -84,7 +84,10 @@ class AuthenticationProvider(AuthenticationProviderInterface):
         try:
             user_id = int(raw_user_id)
         except ValueError:
-            logger.warning("S2S auth: non-integer X-User-Id", extra={"path": request.url.path, "value": raw_user_id})
+            logger.warning(
+                "S2S auth: non-integer X-User-Id",
+                extra={"path": request.url.path, "value": raw_user_id}
+            )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={"detail": "X-User-Id must be a valid integer", "error": "invalid_user_id"},
@@ -119,6 +122,7 @@ class AuthenticationProvider(AuthenticationProviderInterface):
 
         except self._KNOWN_HTTP_EXCEPTIONS as e:
             self._handle_http_error(e, operation="token validation")
+            raise
 
         except AuthenticationProviderInvalidTokenException:
             raise
@@ -176,14 +180,19 @@ class AuthenticationProvider(AuthenticationProviderInterface):
             logger.warning("User not found", extra={"operation": operation})
             raise AuthenticationProviderUserNotFoundException("User not found") from error
 
-        logger.error("Unexpected HTTP error", extra={"operation": operation, "status_code": status_code})
+        logger.error(
+            "Unexpected HTTP error",
+            extra={"operation": operation, "status_code": status_code}
+        )
         raise AuthenticationProviderServiceUnavailableException(
             f"Authentication service error (HTTP {status_code})"
         ) from error
 
 
 def get_authenticated_user(request: Request) -> AuthenticatedUser:
-    authenticated_user: Optional[AuthenticatedUser] = getattr(request.state, "authenticated_user", None)
+    authenticated_user: Optional[AuthenticatedUser] = getattr(
+        request.state, "authenticated_user", None
+    )
     if authenticated_user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

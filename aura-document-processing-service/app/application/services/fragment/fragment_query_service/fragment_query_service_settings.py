@@ -15,6 +15,7 @@ class FragmentQueryServiceSettings(BaseSettings):
     )
 
     max_fragments: int = Field(default=20, ge=1, le=100)
+    max_document_ids: int = Field(default=50, ge=1, le=500)
     min_question_length: int = Field(default=1, ge=1)
     max_question_length: int = Field(default=10_000, ge=1, le=100_000)
 

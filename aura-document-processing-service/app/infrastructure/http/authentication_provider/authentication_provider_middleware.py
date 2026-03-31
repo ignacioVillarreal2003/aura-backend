@@ -13,6 +13,9 @@ from app.infrastructure.http.authentication_provider.exceptions.authentication_p
     AuthenticationProviderUnauthorizedException,
     AuthenticationProviderUserNotFoundException,
 )
+from app.infrastructure.http.authentication_provider.interfaces.authentication_provider_interface import (
+    AuthenticationProviderInterface,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,12 +39,18 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         try:
-            provider = request.app.state.authentication_provider
+            provider: AuthenticationProviderInterface = request.app.state.authentication_provider
         except AttributeError:
-            logger.error("authentication_provider not found in app.state", extra={"path": request.url.path})
+            logger.error(
+                "authentication_provider not found in app.state",
+                extra={"path": request.url.path}
+            )
             return JSONResponse(
                 status_code=503,
-                content={"detail": "Authentication service not configured", "error": "service_not_configured"},
+                content={
+                    "detail": "Authentication service not configured",
+                    "error": "service_not_configured"
+                },
             )
 
         try:
@@ -64,18 +73,29 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                     content={"detail": "Authentication required", "error": "missing_token"},
                     headers=self._WWW_AUTH,
                 )
-            logger.debug("No credentials, continuing unauthenticated", extra={"path": request.url.path})
+            logger.debug(
+                "No credentials, continuing unauthenticated",
+                extra={"path": request.url.path}
+            )
             request.state.authenticated_user = None
             return await call_next(request)
 
-        return await self._validate_jwt(request, call_next, token)
+        return await self._validate_jwt(request, call_next, token, provider)
 
-    async def _validate_jwt(self, request: Request, call_next: Callable, token: str) -> Response:
+    async def _validate_jwt(
+        self,
+        request: Request,
+        call_next: Callable,
+        token: str,
+        provider: AuthenticationProviderInterface,
+    ) -> Response:
         try:
-            provider = request.app.state.authentication_provider
             authenticated_user = await provider.validate_token(token)
             request.state.authenticated_user = AuthenticatedUser.model_validate(authenticated_user)
-            logger.debug("JWT auth accepted", extra={"user_id": authenticated_user.id, "path": request.url.path})
+            logger.debug(
+                "JWT auth accepted",
+                extra={"user_id": authenticated_user.id, "path": request.url.path}
+            )
             return await call_next(request)
 
         except AuthenticationProviderInvalidTokenException as e:
@@ -87,22 +107,43 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             )
         except AuthenticationProviderUnauthorizedException as e:
             logger.warning("Forbidden", extra={"path": request.url.path, "error": str(e)})
-            return JSONResponse(status_code=403, content={"detail": "Access forbidden", "error": "unauthorized"})
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "Access forbidden", "error": "unauthorized"}
+            )
         except AuthenticationProviderUserNotFoundException as e:
             logger.warning("User not found", extra={"path": request.url.path, "error": str(e)})
-            return JSONResponse(status_code=404, content={"detail": "User not found", "error": "user_not_found"})
+            return JSONResponse(
+                status_code=404,
+                content={"detail": "User not found", "error": "user_not_found"}
+            )
         except AuthenticationProviderServiceUnavailableException as e:
-            logger.error("Auth service unavailable", extra={"path": request.url.path, "error": str(e)})
+            logger.error(
+                "Auth service unavailable",
+                extra={"path": request.url.path, "error": str(e)}
+            )
             return JSONResponse(
                 status_code=503,
-                content={"detail": "Authentication service temporarily unavailable", "error": "service_unavailable"},
+                content={
+                    "detail": "Authentication service temporarily unavailable",
+                    "error": "service_unavailable"
+                },
             )
         except AuthenticationProviderException as e:
-            logger.exception("Auth provider error", extra={"path": request.url.path, "error": str(e)})
-            return JSONResponse(status_code=500, content={"detail": "Authentication error", "error": "authentication_error"})
+            logger.exception(
+                "Auth provider error",
+                extra={"path": request.url.path, "error": str(e)}
+            )
+            return JSONResponse(
+                status_code=500,
+                content={"detail": "Authentication error", "error": "authentication_error"}
+            )
         except Exception:
             logger.exception("Unexpected middleware error", extra={"path": request.url.path})
-            return JSONResponse(status_code=500, content={"detail": "Internal server error", "error": "internal_error"})
+            return JSONResponse(
+                status_code=500,
+                content={"detail": "Internal server error", "error": "internal_error"}
+            )
 
     def _is_excluded(self, path: str) -> bool:
         normalised = path.rstrip("/")

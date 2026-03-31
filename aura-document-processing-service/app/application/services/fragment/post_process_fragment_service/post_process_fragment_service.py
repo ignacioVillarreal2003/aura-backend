@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import HTTPException, Request, status
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.services.fragment.post_process_fragment_service.exceptions.post_process_fragment_service_exception import (
     PostProcessFragmentAlreadyRunningException,
@@ -12,6 +13,17 @@ from app.application.services.fragment.post_process_fragment_service.exceptions.
 from app.application.services.fragment.post_process_fragment_service.interfaces.post_process_fragment_service_interface import (
     PostProcessFragmentServiceInterface
 )
+from app.application.services.fragment.post_process_fragment_service.post_process_fragment_service_authorizer import (
+    PostProcessFragmentServiceAuthorizer,
+)
+from app.application.services.fragment.post_process_fragment_service.post_process_fragment_service_settings import (
+    PostProcessFragmentServiceSettings
+)
+from app.application.services.fragment.post_process_fragment_service.post_process_fragment_service_validator import (
+    PostProcessFragmentServiceValidator,
+)
+from app.domain.dtos.fragment.post_process_fragment_controller.post_process_fragments_request import \
+    PostProcessFragmentsRequest
 from app.domain.dtos.fragment.post_process_fragment_controller.post_process_fragments_start_response import (
     PostProcessFragmentsStartResponse
 )
@@ -37,14 +49,19 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
             self,
             database_manager: DatabaseManagerInterface,
             fragment_repository: FragmentRepositoryInterface,
-            llm_provider: LlmProviderInterface
+            llm_provider: LlmProviderInterface,
+            post_process_fragment_service_settings: Optional[PostProcessFragmentServiceSettings] = None
     ) -> None:
         self._database_manager = database_manager
         self._fragment_repository = fragment_repository
         self._llm_provider = llm_provider
+        self._settings = post_process_fragment_service_settings or PostProcessFragmentServiceSettings()
+        self._authorizer = PostProcessFragmentServiceAuthorizer()
+        self._validator = PostProcessFragmentServiceValidator(self._settings)
 
         self._task: Optional[asyncio.Task] = None
         self._stop_event: asyncio.Event = asyncio.Event()
+        self._lifecycle_lock: asyncio.Lock = asyncio.Lock()
 
         self._is_running: bool = False
         self._total_fragments: int = 0
@@ -54,73 +71,100 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
         self._started_at: Optional[datetime] = None
         self._finished_at: Optional[datetime] = None
         self._errors: List[PostProcessFragmentError] = []
+        self._errors_truncated: bool = False
 
-    async def start_all(
-            self,
-            authenticated_user: AuthenticatedUser
-    ) -> PostProcessFragmentsStartResponse:
-        if self._is_running:
-            raise PostProcessFragmentAlreadyRunningException(
-                "Fragment post-processing is already running"
-            )
+    async def start_all(self, authenticated_user: AuthenticatedUser) -> PostProcessFragmentsStartResponse:
+        self._authorizer.require_permissions(authenticated_user)
+        self._authorizer.require_admin_role(
+            authenticated_user=authenticated_user,
+            context="post_process_fragments.start_all"
+        )
+
+        async with self._lifecycle_lock:
+            self._ensure_not_running()
+            self._reset_progress(total=0)
 
         logger.info(
             "Starting fragment_controllers post-processing for all fragments missing metadata",
             extra={"user_id": authenticated_user.id}
         )
 
-        async with self._database_manager.session() as session:
-            fragments = await self._fragment_repository.get_fragments_missing_metadata(
-                database_session=session
-            )
-            fragment_ids = [f.id for f in fragments]
+        try:
+            async with self._database_manager.session() as session:
+                total = await self._fragment_repository.count_fragments_missing_metadata(
+                    database_session=session
+                )
+        except Exception:
+            await self._mark_not_running_after_setup_failure()
+            raise
 
-        if not fragment_ids:
+        if total == 0:
+            await self._mark_not_running_no_work()
             return PostProcessFragmentsStartResponse(
                 message="No fragments found missing metadata",
                 total_fragments=0
             )
 
-        self._launch_background_task(fragment_ids=fragment_ids, authenticated_user=authenticated_user)
+        self._launch_background_task(
+            total=total,
+            authenticated_user=authenticated_user,
+            document_ids=None
+        )
 
         return PostProcessFragmentsStartResponse(
             message="Fragment post-processing started",
-            total_fragments=len(fragment_ids)
+            total_fragments=total
         )
 
     async def start_for_documents(
             self,
-            document_ids: List[int],
-            authenticated_user: AuthenticatedUser
+            post_process_fragments_request: PostProcessFragmentsRequest,
+            authenticated_user: AuthenticatedUser,
     ) -> PostProcessFragmentsStartResponse:
-        if self._is_running:
-            raise PostProcessFragmentAlreadyRunningException(
-                "Fragment post-processing is already running"
-            )
+        self._authorizer.require_permissions(authenticated_user)
+        self._authorizer.require_admin_role(
+            authenticated_user=authenticated_user,
+            context="post_process_fragments.start_for_documents"
+        )
+        self._validator.validate_post_process_fragments_request(post_process_fragments_request)
+
+        document_ids = post_process_fragments_request.document_ids
+
+        async with self._lifecycle_lock:
+            self._ensure_not_running()
+            self._reset_progress(total=0)
 
         logger.info(
             "Starting fragment_controllers post-processing for specific documents",
             extra={"user_id": authenticated_user.id, "document_ids": document_ids}
         )
 
-        async with self._database_manager.session() as session:
-            fragments = await self._fragment_repository.get_fragments_missing_metadata_by_document_ids(
-                document_ids=document_ids,
-                database_session=session
-            )
-            fragment_ids = [f.id for f in fragments]
+        try:
+            async with self._database_manager.session() as session:
+                total = await self._fragment_repository.count_fragments_missing_metadata_by_document_ids(
+                    document_ids=document_ids,
+                    database_session=session
+                )
+        except Exception:
+            await self._mark_not_running_after_setup_failure()
+            raise
 
-        if not fragment_ids:
+        if total == 0:
+            await self._mark_not_running_no_work()
             return PostProcessFragmentsStartResponse(
                 message="No fragments found missing metadata for the given documents",
                 total_fragments=0
             )
 
-        self._launch_background_task(fragment_ids=fragment_ids, authenticated_user=authenticated_user)
+        self._launch_background_task(
+            total=total,
+            authenticated_user=authenticated_user,
+            document_ids=document_ids
+        )
 
         return PostProcessFragmentsStartResponse(
             message="Fragment post-processing started for selected documents",
-            total_fragments=len(fragment_ids)
+            total_fragments=total
         )
 
     def get_status(self) -> PostProcessFragmentsStatusResponse:
@@ -136,23 +180,28 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
         )
 
     async def stop(self) -> None:
-        if not self._is_running:
-            raise PostProcessFragmentNotRunningException(
-                "Fragment post-processing is not running"
-            )
+        async with self._lifecycle_lock:
+            if not self._is_running:
+                raise PostProcessFragmentNotRunningException(
+                    "Fragment post-processing is not running"
+                )
 
         logger.info("Stop signal sent for fragment_controllers post-processing")
         self._stop_event.set()
 
     def _launch_background_task(
             self,
-            fragment_ids: List[int],
-            authenticated_user: AuthenticatedUser
+            total: int,
+            authenticated_user: AuthenticatedUser,
+            document_ids: Optional[List[int]] = None
     ) -> None:
-        self._reset_progress(total=len(fragment_ids))
+        self._total_fragments = total
         self._stop_event.clear()
         self._task = asyncio.create_task(
-            self._run_post_processing(fragment_ids=fragment_ids, authenticated_user=authenticated_user)
+            self._run_post_processing(
+                authenticated_user=authenticated_user,
+                document_ids=document_ids
+            )
         )
 
     def _reset_progress(self, total: int) -> None:
@@ -164,51 +213,83 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
         self._started_at = datetime.now(timezone.utc)
         self._finished_at = None
         self._errors = []
+        self._errors_truncated = False
 
     async def _run_post_processing(
             self,
-            fragment_ids: List[int],
-            authenticated_user: AuthenticatedUser
+            authenticated_user: AuthenticatedUser,
+            document_ids: Optional[List[int]] = None
     ) -> None:
         logger.info(
             "Background fragment_controllers post-processing started",
-            extra={"total_fragments": len(fragment_ids), "user_id": authenticated_user.id}
+            extra={
+                "total_fragments": self._total_fragments,
+                "user_id": authenticated_user.id,
+                "document_ids": document_ids,
+                "batch_size": self._settings.batch_size
+            }
         )
 
+        last_fragment_id: Optional[int] = None
+
         try:
-            for fragment_id in fragment_ids:
-                if self._stop_event.is_set():
-                    logger.info("Fragment post-processing stopped by user request")
+            while not self._stop_event.is_set():
+                if (self._processed_fragments + self._failed_fragments) >= self._total_fragments:
                     break
 
-                self._current_fragment_id = fragment_id
-
-                try:
-                    await self._process_single_fragment(
-                        fragment_id=fragment_id,
-                        authenticated_user=authenticated_user
-                    )
-                    self._processed_fragments += 1
-                    logger.info(
-                        "Fragment post-processed successfully",
-                        extra={
-                            "fragment_id": fragment_id,
-                            "progress": f"{self._processed_fragments}/{self._total_fragments}"
-                        }
-                    )
-
-                except Exception as e:
-                    self._failed_fragments += 1
-                    self._errors.append(
-                        PostProcessFragmentError(
-                            fragment_id=fragment_id,
-                            error=str(e)
+                async with self._database_manager.session() as session:
+                    if document_ids is None:
+                        fragment_ids = await self._fragment_repository.get_fragment_ids_missing_metadata(
+                            database_session=session,
+                            limit=self._settings.batch_size,
+                            last_fragment_id=last_fragment_id
                         )
-                    )
-                    logger.error(
-                        "Failed to post-process fragment_controllers",
-                        extra={"fragment_id": fragment_id, "error": str(e)}
-                    )
+                    else:
+                        fragment_ids = await self._fragment_repository.get_fragment_ids_missing_metadata_by_document_ids(
+                            document_ids=document_ids,
+                            database_session=session,
+                            limit=self._settings.batch_size,
+                            last_fragment_id=last_fragment_id
+                        )
+
+                    if not fragment_ids:
+                        break
+
+                    last_fragment_id = fragment_ids[-1]
+
+                    for fragment_id in fragment_ids:
+                        if self._stop_event.is_set():
+                            logger.info("Fragment post-processing stopped by user request")
+                            break
+                        if (self._processed_fragments + self._failed_fragments) >= self._total_fragments:
+                            break
+
+                        self._current_fragment_id = fragment_id
+
+                        try:
+                            await self._process_single_fragment(
+                                fragment_id=fragment_id,
+                                authenticated_user=authenticated_user,
+                                database_session=session
+                            )
+                            self._processed_fragments += 1
+                            logger.info(
+                                "Fragment post-processed successfully",
+                                extra={
+                                    "fragment_id": fragment_id,
+                                    "progress": f"{self._processed_fragments}/{self._total_fragments}"
+                                }
+                            )
+                        except Exception as e:
+                            self._failed_fragments += 1
+                            self._append_error(fragment_id=fragment_id, error=str(e))
+                            logger.error(
+                                "Failed to post-process fragment_controllers",
+                                extra={"fragment_id": fragment_id, "error": str(e)}
+                            )
+
+                if self._stop_event.is_set():
+                    break
 
         except Exception as e:
             logger.exception(
@@ -217,9 +298,10 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
             )
 
         finally:
-            self._is_running = False
-            self._current_fragment_id = None
-            self._finished_at = datetime.now(timezone.utc)
+            async with self._lifecycle_lock:
+                self._is_running = False
+                self._current_fragment_id = None
+                self._finished_at = datetime.now(timezone.utc)
 
             logger.info(
                 "Background fragment_controllers post-processing finished",
@@ -233,43 +315,84 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
     async def _process_single_fragment(
             self,
             fragment_id: int,
-            authenticated_user: AuthenticatedUser
+            authenticated_user: AuthenticatedUser,
+            database_session: AsyncSession
     ) -> None:
-        async with self._database_manager.session() as session:
-            result = await session.execute(
-                select(Fragment).where(Fragment.id == fragment_id)
-            )
-            fragment = result.scalars().first()
+        result = await database_session.execute(
+            select(Fragment).where(Fragment.id == fragment_id)
+        )
+        fragment = result.scalars().first()
 
-            if fragment is None:
-                logger.warning(
-                    "Fragment not found, skipping",
-                    extra={"fragment_id": fragment_id}
+        if fragment is None:
+            logger.warning(
+                "Fragment not found, skipping",
+                extra={"fragment_id": fragment_id}
+            )
+            return
+
+        if not fragment.content or not fragment.content.strip():
+            logger.warning(
+                "Fragment has no text content, skipping",
+                extra={"fragment_id": fragment_id}
+            )
+            return
+
+        try:
+            enrich_response = await asyncio.wait_for(
+                self._llm_provider.enrich_fragment(
+                    content=fragment.content,
+                    authenticated_user=authenticated_user
+                ),
+                timeout=self._settings.llm_timeout_seconds
+            )
+        except TimeoutError as e:
+            raise TimeoutError(
+                f"LLM enrichment timed out after {self._settings.llm_timeout_seconds}s"
+            ) from e
+
+        fragment.summary = enrich_response.summary
+        fragment.entities = enrich_response.entities
+        fragment.topics = enrich_response.topics
+        fragment.updated_by = authenticated_user.id
+        fragment.updated_at = datetime.now(timezone.utc)
+
+        await self._fragment_repository.update_fragment(
+            fragment=fragment,
+            database_session=database_session
+        )
+
+    def _append_error(self, fragment_id: int, error: str) -> None:
+        if len(self._errors) < self._settings.max_errors_in_status:
+            self._errors.append(
+                PostProcessFragmentError(
+                    fragment_id=fragment_id,
+                    error=error
                 )
-                return
+            )
+            return
 
-            if not fragment.content or not fragment.content.strip():
-                logger.warning(
-                    "Fragment has no text content, skipping",
-                    extra={"fragment_id": fragment_id}
-                )
-                return
+        if not self._errors_truncated:
+            logger.warning(
+                "Error list reached max_errors_in_status; truncating further errors",
+                extra={"max_errors_in_status": self._settings.max_errors_in_status}
+            )
+            self._errors_truncated = True
 
-            enrich_response = await self._llm_provider.enrich_fragment(
-                content=fragment.content,
-                authenticated_user=authenticated_user
+    def _ensure_not_running(self) -> None:
+        if self._is_running:
+            raise PostProcessFragmentAlreadyRunningException(
+                "Fragment post-processing is already running"
             )
 
-            fragment.summary = enrich_response.summary
-            fragment.entities = enrich_response.entities
-            fragment.topics = enrich_response.topics
-            fragment.updated_by = authenticated_user.id
-            fragment.updated_at = datetime.now(timezone.utc)
+    async def _mark_not_running_after_setup_failure(self) -> None:
+        async with self._lifecycle_lock:
+            self._is_running = False
+            self._finished_at = datetime.now(timezone.utc)
 
-            await self._fragment_repository.update_fragment(
-                fragment=fragment,
-                database_session=session
-            )
+    async def _mark_not_running_no_work(self) -> None:
+        async with self._lifecycle_lock:
+            self._is_running = False
+            self._finished_at = datetime.now(timezone.utc)
 
 
 async def get_post_process_fragment_service(request: Request) -> PostProcessFragmentServiceInterface:

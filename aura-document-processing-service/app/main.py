@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
 
     logger.info("Shutting down application")
     try:
-        await shutdown_dependencies()
+        await shutdown_dependencies(app=app)
         logger.info("Application shut down successfully")
     except Exception:
         logger.error("Error during application shutdown")

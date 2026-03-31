@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 from fastapi import HTTPException, Request, status
 import urllib3
+from urllib3.exceptions import HTTPError as Urllib3HTTPError
 from minio import Minio
 from minio.error import InvalidResponseError, S3Error
 from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -95,18 +96,8 @@ class MinioManager(MinioManagerInterface):
                 self._is_started = True
                 logger.info("MinioManager started successfully")
 
-            except S3Error as e:
-                self._client = None
-                logger.error(
-                    "S3 error during MinioManager startup",
-                    extra={"error_code": e.code}
-                )
-                raise MinioConnectionException(
-                    f"Failed to connect to MinIO: {e.code}"
-                ) from e
-
             except Exception as e:
-                self._client = None
+                self._cleanup_resources()
                 logger.exception("Failed to start MinioManager")
                 raise MinioConnectionException("Failed to start MinIO client") from e
 
@@ -117,16 +108,7 @@ class MinioManager(MinioManagerInterface):
                 return
 
             logger.info("Stopping MinioManager")
-
-            self._client = None
-            self._ensure_bucket_retried = None
-            self._upload_file_retried = None
-            self._upload_data_retried = None
-            self._download_file_retried = None
-            self._download_data_retried = None
-            self._delete_object_retried = None
-            self._is_started = False
-
+            self._cleanup_resources()
             logger.info("MinioManager stopped successfully")
 
     @property
@@ -181,8 +163,6 @@ class MinioManager(MinioManagerInterface):
         except S3Error as e:
             if e.code == "NoSuchKey":
                 return False
-            raise
-        except Exception:
             raise
 
     async def get_presigned_url(
@@ -292,6 +272,38 @@ class MinioManager(MinioManagerInterface):
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         await self.stop()
 
+    def _cleanup_resources(self) -> None:
+        self._client = None
+        self._ensure_bucket_retried = None
+        self._upload_file_retried = None
+        self._upload_data_retried = None
+        self._download_file_retried = None
+        self._download_data_retried = None
+        self._delete_object_retried = None
+        self._is_started = False
+
+    async def _verify_connection(self) -> None:
+        if not self._client:
+            raise RuntimeError("Client not initialised before connection verification")
+
+        @retry(
+            stop=stop_after_attempt(self._settings.retry_max_attempts),
+            wait=wait_exponential(
+                multiplier=self._settings.retry_backoff_multiplier,
+                min=self._settings.retry_backoff_min_seconds,
+                max=self._settings.retry_backoff_max_seconds,
+            ),
+            retry=retry_if_exception_type((S3Error, InvalidResponseError, Urllib3HTTPError)),
+            before_sleep=before_sleep_log(logger, logging.WARNING),
+            reraise=True
+        )
+        async def _attempt() -> None:
+            logger.info("Verifying MinIO connection")
+            await asyncio.to_thread(self._client.list_buckets)
+            logger.info("MinIO connection verified successfully")
+
+        await _attempt()
+
     async def _ensure_bucket_core(self, bucket_name: str) -> None:
         client = self.client
         try:
@@ -304,7 +316,6 @@ class MinioManager(MinioManagerInterface):
                 logger.info("Bucket created successfully", extra={"bucket": bucket_name})
             else:
                 logger.debug("Bucket already exists", extra={"bucket": bucket_name})
-
 
         except S3Error as e:
             logger.error(
@@ -331,7 +342,7 @@ class MinioManager(MinioManagerInterface):
             logger.debug("Uploading file to MinIO", extra={"bucket": bucket_name, "object": object_name})
 
             if self._settings.auto_create_bucket_if_missing:
-                await self._ensure_bucket_core(bucket_name)
+                await self._ensure_bucket_retried(bucket_name)
 
             result = await asyncio.to_thread(
                 client.fput_object,
@@ -381,7 +392,7 @@ class MinioManager(MinioManagerInterface):
             )
 
             if self._settings.auto_create_bucket_if_missing:
-                await self._ensure_bucket_core(bucket_name)
+                await self._ensure_bucket_retried(bucket_name)
 
             result = await asyncio.to_thread(
                 client.put_object,
@@ -506,24 +517,6 @@ class MinioManager(MinioManagerInterface):
 
         except Exception as e:
             raise MinioDeleteException(f"Failed to delete object '{object_name}'") from e
-
-    async def _verify_connection(self) -> None:
-        if not self._client:
-            raise RuntimeError("Client not initialised before connection verification")
-
-        @retry(
-            stop=stop_after_attempt(3),
-            wait=wait_exponential(multiplier=1, min=1, max=10),
-            retry=retry_if_exception_type((S3Error, InvalidResponseError)),
-            before_sleep=before_sleep_log(logger, logging.WARNING),
-            reraise=True
-        )
-        async def _attempt() -> None:
-            logger.info("Verifying MinIO connection")
-            await asyncio.to_thread(self._client.list_buckets)
-            logger.info("MinIO connection verified successfully")
-
-        await _attempt()
 
 
 async def get_minio_manager(request: Request) -> MinioManagerInterface:

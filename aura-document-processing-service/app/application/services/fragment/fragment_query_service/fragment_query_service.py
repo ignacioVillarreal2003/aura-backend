@@ -3,6 +3,7 @@ from typing import Optional
 from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.helpers.authentication_helper import has_any_role
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
 from app.application.services.fragment.fragment_query_service.exceptions.fragment_query_service_exception import (
     FragmentQueryEmbeddingException,
@@ -12,8 +13,11 @@ from app.application.services.fragment.fragment_query_service.exceptions.fragmen
     FragmentQueryServiceException,
     FragmentQueryUnauthorizedException,
 )
-from app.application.services.fragment.fragment_query_service.fragment_query_service_request_validator import (
-    FragmentQueryServiceRequestValidator
+from app.application.services.fragment.fragment_query_service.fragment_query_service_authorizer import (
+    FragmentQueryServiceAuthorizer
+)
+from app.application.services.fragment.fragment_query_service.fragment_query_service_validator import (
+    FragmentQueryServiceValidator
 )
 from app.application.services.fragment.fragment_query_service.fragment_query_service_settings import (
     FragmentQueryServiceSettings
@@ -21,13 +25,16 @@ from app.application.services.fragment.fragment_query_service.fragment_query_ser
 from app.application.services.fragment.fragment_query_service.interfaces.fragment_query_service_interface import (
     FragmentQueryServiceInterface
 )
+from app.domain.authentication.user_roles import ADMIN_ROLES
 from app.domain.dtos.fragment.fragment_query_controller.documents_context_fragments_request import (
     DocumentsContextFragmentsRequest
 )
 from app.domain.dtos.fragment.fragment_query_controller.fragment_list_response import FragmentListResponse
-from app.domain.dtos.fragment.fragment_query_controller.question_context_fragments_request import QuestionContextFragmentsRequest
+from app.domain.dtos.fragment.fragment_query_controller.question_context_fragments_request import (
+    QuestionContextFragmentsRequest
+)
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.models.document import Document
+from app.domain.models import Document
 from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
     DocumentRepositoryInterface
 )
@@ -39,16 +46,6 @@ logger = logging.getLogger(__name__)
 
 
 class FragmentQueryService(FragmentQueryServiceInterface):
-    _ROLE_USER = "user"
-    _ROLE_ADMIN = "admin"
-    _ROLE_SUPERADMIN = "superadmin"
-
-    _ADMIN_ROLES = {_ROLE_ADMIN, _ROLE_SUPERADMIN}
-    _ALL_ALLOWED_ROLES = {_ROLE_USER, _ROLE_ADMIN, _ROLE_SUPERADMIN}
-
-    _PERMISSION_DOCUMENT_GET = "DOCUMENT_GET"
-    _REQUIRED_PERMISSIONS = {_PERMISSION_DOCUMENT_GET}
-
     _KNOWN_EXCEPTIONS = (
         FragmentQueryNotFoundException,
         FragmentQueryUnauthorizedException,
@@ -68,10 +65,8 @@ class FragmentQueryService(FragmentQueryServiceInterface):
         self._fragment_repository = fragment_repository
         self._embedder_factory = embedder_factory
         self._settings = fragment_query_service_settings or FragmentQueryServiceSettings()
-
-        self._validator = FragmentQueryServiceRequestValidator(
-            fragment_query_service_settings=self._settings
-        )
+        self._validator = FragmentQueryServiceValidator(fragment_query_service_settings=self._settings)
+        self._authorizer = FragmentQueryServiceAuthorizer()
 
     async def retrieve_context_fragments_by_question(
             self,
@@ -88,15 +83,13 @@ class FragmentQueryService(FragmentQueryServiceInterface):
         )
 
         try:
-            self._require_permissions(authenticated_user)
-            self._require_roles(
-                authenticated_user, self._ALL_ALLOWED_ROLES,
+            self._authorizer.require_permissions(authenticated_user=authenticated_user)
+            self._authorizer.require_roles(
+                authenticated_user,
                 context="retrieve_context_fragments_by_question"
             )
 
-            self._validator.validate_question_context_fragments_request(
-                question_context_fragments_request
-            )
+            self._validator.validate_question_context_fragments_request(question_context_fragments_request)
 
             query_vector = await self._get_query_embedding(question)
             fragments = await self._retrieve_similar_fragments(
@@ -132,34 +125,38 @@ class FragmentQueryService(FragmentQueryServiceInterface):
 
         logger.info(
             "Retrieve context fragments by documents initiated",
-            extra={"document_ids": document_ids, "user_id": authenticated_user.id}
+            extra={"document_ids_count": len(document_ids), "user_id": authenticated_user.id}
+        )
+        logger.debug(
+            "Retrieve context fragments by documents IDs payload",
+            extra={"document_ids": document_ids}
         )
 
         try:
-            self._require_permissions(authenticated_user)
-            self._require_roles(
-                authenticated_user, self._ALL_ALLOWED_ROLES,
-                context=f"retrieve_context_fragments_by_documents({document_ids})"
+            self._authorizer.require_permissions(authenticated_user=authenticated_user)
+            self._authorizer.require_roles(
+                authenticated_user,
+                context="retrieve_context_fragments_by_documents"
             )
 
-            self._validate_document_ids(document_ids)
+            self._validator.validate_documents_context_fragments_request(documents_context_fragments_request)
 
-            if not self._has_any_role(authenticated_user, self._ADMIN_ROLES):
-                for document_id in document_ids:
-                    document = await self._get_document_or_raise(document_id, database_session)
-                    self._require_ownership(document, authenticated_user)
-
-            all_fragments = []
-            for document_id in document_ids:
-                fragments = await self._retrieve_document_fragments(
-                    database_session=database_session,
-                    document_id=document_id
+            if not has_any_role(authenticated_user, ADMIN_ROLES):
+                documents = await self._get_documents_by_ids_or_raise(
+                    document_ids=document_ids,
+                    database_session=database_session
                 )
-                all_fragments.extend(fragments)
+                for document in documents:
+                    self._authorizer.require_ownership(document, authenticated_user)
+
+            all_fragments = await self._retrieve_documents_fragments(
+                database_session=database_session,
+                document_ids=document_ids
+            )
 
             logger.info(
                 "Retrieve context fragments by documents completed",
-                extra={"document_ids": document_ids, "fragment_count": len(all_fragments)}
+                extra={"document_ids_count": len(document_ids), "fragment_count": len(all_fragments)}
             )
             return FragmentListResponse(fragments=all_fragments)
 
@@ -168,89 +165,28 @@ class FragmentQueryService(FragmentQueryServiceInterface):
         except Exception as e:
             logger.exception(
                 "Unexpected error during retrieve context fragments by documents",
-                extra={"document_ids": document_ids}
+                extra={"document_ids_count": len(document_ids)}
             )
             raise FragmentQueryServiceException(
-                f"Unexpected error retrieving context fragments for documents {document_ids}"
+                "Unexpected error retrieving context fragments for documents"
             ) from e
 
-    def _require_permissions(self, authenticated_user: AuthenticatedUser) -> None:
-        user_permissions = set(authenticated_user.permissions)
-        missing = self._REQUIRED_PERMISSIONS - user_permissions
-
-        if missing:
-            logger.warning(
-                "Insufficient permissions for fragment_controllers query operation",
-                extra={
-                    "user_id": authenticated_user.id,
-                    "missing_permissions": sorted(missing),
-                    "user_permissions": sorted(user_permissions)
-                }
-            )
-            raise FragmentQueryUnauthorizedException(
-                f"User {authenticated_user.id} is missing required permissions: {sorted(missing)}"
-            )
-
-    @staticmethod
-    def _require_roles(
-            authenticated_user: AuthenticatedUser,
-            allowed_roles: set[str],
-            context: str
-    ) -> None:
-        if not FragmentQueryService._has_any_role(authenticated_user, allowed_roles):
-            logger.warning(
-                "Insufficient role for fragment_controllers query operation",
-                extra={
-                    "user_id": authenticated_user.id,
-                    "user_roles": sorted(authenticated_user.roles),
-                    "allowed_roles": sorted(allowed_roles),
-                    "context": context
-                }
-            )
-            raise FragmentQueryUnauthorizedException(
-                f"User {authenticated_user.id} does not have the required role for {context}. "
-                f"Allowed roles: {sorted(allowed_roles)}"
-            )
-
-    @staticmethod
-    def _require_ownership(document: Document, authenticated_user: AuthenticatedUser) -> None:
-        if document.created_by != authenticated_user.id:
-            logger.warning(
-                "Unauthorized document_controllers access attempt",
-                extra={
-                    "document_id": document.id,
-                    "owner_id": document.created_by,
-                    "user_id": authenticated_user.id
-                }
-            )
-            raise FragmentQueryUnauthorizedException(
-                f"User {authenticated_user.id} is not authorized to access document_controllers {document.id}"
-            )
-
-    @staticmethod
-    def _has_any_role(authenticated_user: AuthenticatedUser, roles: set[str]) -> bool:
-        return bool(set(authenticated_user.roles) & roles)
-
-    def _validate_document_ids(self, document_ids: list[int]) -> None:
-        for document_id in document_ids:
-            if document_id is None or document_id <= 0:
-                raise FragmentQueryInvalidRequestException(
-                    f"document_id must be a positive integer, got: {document_id!r}"
-                )
-
-    async def _get_document_or_raise(
+    async def _get_documents_by_ids_or_raise(
             self,
-            document_id: int,
+            document_ids: list[int],
             database_session: AsyncSession
-    ) -> Document:
-        document = await self._document_repository.get_document_by_id(
-            document_id=document_id,
+    ) -> list[Document]:
+        documents = await self._document_repository.get_documents_by_ids(
+            document_ids=document_ids,
             database_session=database_session
         )
-        if document is None:
-            logger.warning("Document not found", extra={"document_id": document_id})
-            raise FragmentQueryNotFoundException(f"Document {document_id} not found")
-        return document
+        found_ids = {document.id for document in documents}
+        requested_ids = set(document_ids)
+        not_found = sorted(requested_ids - found_ids)
+        if not_found:
+            logger.warning("Some documents not found", extra={"not_found_document_ids": not_found})
+            raise FragmentQueryNotFoundException(f"Documents not found: {not_found}")
+        return documents
 
     async def _get_query_embedding(self, question: str) -> list[float]:
         try:
@@ -282,24 +218,24 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 f"Failed to retrieve similar fragments: {e}"
             ) from e
 
-    async def _retrieve_document_fragments(
+    async def _retrieve_documents_fragments(
             self,
             database_session: AsyncSession,
-            document_id: int
+            document_ids: list[int]
     ) -> list:
         try:
-            fragments = await self._fragment_repository.get_fragments_by_document_id(
-                document_id=document_id,
+            fragments = await self._fragment_repository.get_fragments_by_document_ids(
+                document_ids=document_ids,
                 database_session=database_session
             )
             logger.debug(
-                "Document fragments retrieved",
-                extra={"document_id": document_id, "fragment_count": len(fragments)}
+                "Documents fragments retrieved",
+                extra={"document_ids_count": len(document_ids), "fragment_count": len(fragments)}
             )
             return fragments
         except Exception as e:
             raise FragmentQueryRetrievalException(
-                f"Failed to retrieve fragments for document_controllers {document_id}: {e}"
+                f"Failed to retrieve fragments for documents: {e}"
             ) from e
 
 

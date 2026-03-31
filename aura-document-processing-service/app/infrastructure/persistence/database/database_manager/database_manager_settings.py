@@ -34,14 +34,18 @@ class DatabaseManagerSettings(BaseSettings):
     tcp_connect_timeout_seconds: int = Field(default=10, gt=0, le=60)
     query_execution_timeout_seconds: int = Field(default=30, gt=0, le=300)
 
+    # Retry settings — now configurable per environment (was hardcoded in manager)
+    retry_max_attempts: int = Field(default=3, ge=1, le=10)
+    retry_backoff_min_seconds: float = Field(default=2.0, gt=0, le=30.0)
+    retry_backoff_max_seconds: float = Field(default=10.0, gt=0, le=60.0)
+
     echo_sql: bool = Field(default=False)
     query_logging_enabled: bool = Field(default=False)
     pg_application_name: str = Field(default="app")
 
     ssl_enabled: bool = Field(default=False)
     ssl_verify_server_certificate: bool = Field(default=True)
-    ssl_client_cert_path: Optional[Path] = Field(default=None
-    )
+    ssl_client_cert_path: Optional[Path] = Field(default=None)
     ssl_client_key_path: Optional[Path] = Field(default=None)
     ssl_ca_cert_path: Optional[Path] = Field(default=None)
 
@@ -94,6 +98,12 @@ class DatabaseManagerSettings(BaseSettings):
                     "pool_checkout_timeout_seconds": self.pool_checkout_timeout_seconds,
                     "tcp_connect_timeout_seconds": self.tcp_connect_timeout_seconds
                 }
+            )
+
+        if self.retry_backoff_min_seconds >= self.retry_backoff_max_seconds:
+            raise ValueError(
+                f"retry_backoff_min_seconds ({self.retry_backoff_min_seconds}s) must be "
+                f"strictly less than retry_backoff_max_seconds ({self.retry_backoff_max_seconds}s)"
             )
 
         if self.ssl_enabled:

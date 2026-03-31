@@ -15,3 +15,11 @@ class PostProcessFragmentNotRunningException(PostProcessFragmentServiceException
 
 class PostProcessFragmentFailedException(PostProcessFragmentServiceException):
     pass
+
+
+class PostProcessFragmentUnauthorizedException(PostProcessFragmentServiceException):
+    pass
+
+
+class PostProcessFragmentInvalidRequestException(PostProcessFragmentServiceException):
+    pass

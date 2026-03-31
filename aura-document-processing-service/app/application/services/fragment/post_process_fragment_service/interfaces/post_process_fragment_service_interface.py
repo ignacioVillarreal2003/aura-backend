@@ -1,6 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import List
+from typing import Optional
 
+from app.domain.dtos.fragment.post_process_fragment_controller.post_process_fragments_request import (
+    PostProcessFragmentsRequest
+)
 from app.domain.dtos.fragment.post_process_fragment_controller.post_process_fragments_start_response import (
     PostProcessFragmentsStartResponse
 )
@@ -14,15 +17,15 @@ class PostProcessFragmentServiceInterface(ABC):
     @abstractmethod
     async def start_all(
             self,
-            authenticated_user: AuthenticatedUser
+            authenticated_user: AuthenticatedUser,
     ) -> PostProcessFragmentsStartResponse:
         pass
 
     @abstractmethod
     async def start_for_documents(
             self,
-            document_ids: List[int],
-            authenticated_user: AuthenticatedUser
+            post_process_fragments_request: PostProcessFragmentsRequest,
+            authenticated_user: AuthenticatedUser,
     ) -> PostProcessFragmentsStartResponse:
         pass
 
