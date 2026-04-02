@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Optional
 
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.llm_provider.dtos.classify_document_response import ClassifyDocumentResponse
@@ -12,7 +11,7 @@ class LlmProviderInterface(ABC):
             self,
             document_name: str,
             content: str,
-            authenticated_user: Optional[AuthenticatedUser] = None
+            authenticated_user: AuthenticatedUser
     ) -> ClassifyDocumentResponse:
         pass
 
@@ -20,6 +19,6 @@ class LlmProviderInterface(ABC):
     async def enrich_fragment(
             self,
             content: str,
-            authenticated_user: Optional[AuthenticatedUser] = None
+            authenticated_user: AuthenticatedUser
     ) -> EnrichFragmentResponse:
         pass

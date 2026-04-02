@@ -8,9 +8,15 @@ from app.infrastructure.http.authentication_provider.dtos.authenticated_user_res
 
 class AuthenticationProviderInterface(ABC):
     @abstractmethod
-    async def validate_token(self, token: str) -> AuthenticatedUserResponse:
+    async def validate_token(
+            self,
+            token: str
+    ) -> AuthenticatedUserResponse:
         pass
 
     @abstractmethod
-    def evaluate_service_auth(self, request: Request) -> Optional[AuthenticatedUser]:
+    def evaluate_service_auth(
+            self,
+            request: Request
+    ) -> Optional[AuthenticatedUser]:
         pass

@@ -11,71 +11,102 @@ from app.infrastructure.http.authentication_provider.exceptions.authentication_p
     AuthenticationProviderInvalidTokenException,
     AuthenticationProviderServiceUnavailableException,
     AuthenticationProviderUnauthorizedException,
-    AuthenticationProviderUserNotFoundException,
+    AuthenticationProviderUserNotFoundException
 )
 from app.infrastructure.http.authentication_provider.interfaces.authentication_provider_interface import (
-    AuthenticationProviderInterface,
+    AuthenticationProviderInterface
 )
 
 logger = logging.getLogger(__name__)
 
+WWW_AUTH = {
+    "WWW-Authenticate": "Bearer"
+}
 
 class AuthenticationMiddleware(BaseHTTPMiddleware):
-    _WWW_AUTH = {"WWW-Authenticate": "Bearer"}
-
     def __init__(
         self,
         app: ASGIApp,
         excluded_paths: Optional[List[str]] = None,
-        require_auth: bool = True,
+        require_auth: bool = True
     ) -> None:
         super().__init__(app)
         self.excluded_paths: List[str] = excluded_paths or []
         self.require_auth = require_auth
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(
+            self,
+            request: Request,
+            call_next: Callable
+    ) -> Response:
         if self._is_excluded(request.url.path):
-            logger.debug("Path excluded from auth", extra={"path": request.url.path})
+            logger.debug(
+                "Skipping authentication for this path.",
+                extra={
+                    "path": request.url.path
+                }
+            )
             return await call_next(request)
 
         try:
             provider: AuthenticationProviderInterface = request.app.state.authentication_provider
         except AttributeError:
             logger.error(
-                "authentication_provider not found in app.state",
-                extra={"path": request.url.path}
+                "Authentication provider is not configured on the application.",
+                extra={
+                    "path": request.url.path
+                }
             )
             return JSONResponse(
                 status_code=503,
                 content={
                     "detail": "Authentication service not configured",
                     "error": "service_not_configured"
-                },
+                }
             )
 
         try:
-            s2s_user = provider.evaluate_service_auth(request)
+            authenticated_user = provider.evaluate_service_auth(request)
         except HTTPException as e:
-            return JSONResponse(status_code=e.status_code, content=e.detail)
+            return JSONResponse(
+                status_code=e.status_code,
+                content=e.detail
+            )
 
-        if s2s_user is not None:
-            request.state.authenticated_user = s2s_user
-            logger.debug("S2S auth accepted", extra={"user_id": s2s_user.id, "path": request.url.path})
+        if authenticated_user is not None:
+            request.state.authenticated_user = authenticated_user
+            logger.debug(
+                "Request authenticated with service credentials.",
+                extra={
+                    "user_id": authenticated_user.id,
+                    "path": request.url.path
+                }
+            )
             return await call_next(request)
 
         token = self._extract_token(request)
 
         if not token:
             if self.require_auth:
-                logger.warning("No credentials on protected path", extra={"path": request.url.path})
+                logger.warning(
+                    "Protected route called without credentials.",
+                    extra={
+                        "path": request.url.path
+                    }
+                )
                 return JSONResponse(
                     status_code=401,
-                    content={"detail": "Authentication required", "error": "missing_token"},
-                    headers=self._WWW_AUTH,
+                    content={
+                        "detail": "Authentication required",
+                        "error": "missing_token"
+                    },
+                    headers=WWW_AUTH
                 )
             logger.debug(
-                "No credentials, continuing unauthenticated",
-                extra={"path": request.url.path}
+                "No credentials provided; continuing without a signed-in user.",
+                extra={
+                    "path": request.url.path
+                }
             )
             request.state.authenticated_user = None
             return await call_next(request)
@@ -87,65 +118,115 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         request: Request,
         call_next: Callable,
         token: str,
-        provider: AuthenticationProviderInterface,
+        authentication_provider: AuthenticationProviderInterface
     ) -> Response:
         try:
-            authenticated_user = await provider.validate_token(token)
+            authenticated_user = await authentication_provider.validate_token(token)
             request.state.authenticated_user = AuthenticatedUser.model_validate(authenticated_user)
             logger.debug(
-                "JWT auth accepted",
-                extra={"user_id": authenticated_user.id, "path": request.url.path}
+                "Request authenticated with a valid bearer token.",
+                extra={
+                    "user_id": authenticated_user.id,
+                    "path": request.url.path
+                }
             )
             return await call_next(request)
 
         except AuthenticationProviderInvalidTokenException as e:
-            logger.warning("Invalid token", extra={"path": request.url.path, "error": str(e)})
+            logger.warning(
+                "Bearer token is invalid or has expired.",
+                extra={
+                    "path": request.url.path,
+                    "error": str(e)
+                }
+            )
             return JSONResponse(
                 status_code=401,
-                content={"detail": "Invalid or expired token", "error": "invalid_token"},
-                headers=self._WWW_AUTH,
+                content={
+                    "detail": "Invalid or expired token",
+                    "error": "invalid_token"
+                },
+                headers=WWW_AUTH
             )
         except AuthenticationProviderUnauthorizedException as e:
-            logger.warning("Forbidden", extra={"path": request.url.path, "error": str(e)})
+            logger.warning(
+                "Access was forbidden by the authentication service.",
+                extra={
+                    "path": request.url.path,
+                    "error": str(e)
+                }
+            )
             return JSONResponse(
                 status_code=403,
-                content={"detail": "Access forbidden", "error": "unauthorized"}
+                content={
+                    "detail": "Access forbidden",
+                    "error": "unauthorized"
+                }
             )
         except AuthenticationProviderUserNotFoundException as e:
-            logger.warning("User not found", extra={"path": request.url.path, "error": str(e)})
+            logger.warning(
+                "No user was found for this token.",
+                extra={
+                    "path": request.url.path,
+                    "error": str(e)
+                }
+            )
             return JSONResponse(
                 status_code=404,
-                content={"detail": "User not found", "error": "user_not_found"}
+                content={
+                    "detail": "User not found",
+                    "error": "user_not_found"
+                }
             )
         except AuthenticationProviderServiceUnavailableException as e:
             logger.error(
-                "Auth service unavailable",
-                extra={"path": request.url.path, "error": str(e)}
+                "Authentication service is unavailable.",
+                extra={
+                    "path": request.url.path,
+                    "error": str(e)
+                }
             )
             return JSONResponse(
                 status_code=503,
                 content={
                     "detail": "Authentication service temporarily unavailable",
                     "error": "service_unavailable"
-                },
+                }
             )
         except AuthenticationProviderException as e:
             logger.exception(
-                "Auth provider error",
-                extra={"path": request.url.path, "error": str(e)}
+                "Authentication failed with an unexpected provider error.",
+                extra={
+                    "path": request.url.path,
+                    "error": str(e)
+                }
             )
             return JSONResponse(
                 status_code=500,
-                content={"detail": "Authentication error", "error": "authentication_error"}
+                content={
+                    "detail": "Authentication error",
+                    "error": "authentication_error"
+                }
             )
         except Exception:
-            logger.exception("Unexpected middleware error", extra={"path": request.url.path})
+            logger.exception(
+                "Unexpected error while processing authentication.",
+                extra={
+                    "path": request.url.path
+                }
+            )
             return JSONResponse(
                 status_code=500,
-                content={"detail": "Internal server error", "error": "internal_error"}
+                content={
+                    "detail": "Internal server error",
+                    "error": "internal_error"
+                }
             )
 
-    def _is_excluded(self, path: str) -> bool:
+    def _is_excluded(
+            self,
+            path: str
+    ) -> bool:
         normalised = path.rstrip("/")
         for rule in self.excluded_paths:
             rule = rule.rstrip("/")
@@ -157,11 +238,18 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         return False
 
     @staticmethod
-    def _extract_token(request: Request) -> Optional[str]:
+    def _extract_token(
+            request: Request
+    ) -> Optional[str]:
         auth = request.headers.get("Authorization", "")
         parts = auth.split()
         if len(parts) == 2 and parts[0].lower() == "bearer":
             return parts[1]
         if auth:
-            logger.warning("Malformed Authorization header", extra={"path": request.url.path})
+            logger.warning(
+                "Authorization header is present but not in Bearer format.",
+                extra={
+                    "path": request.url.path
+                }
+            )
         return None

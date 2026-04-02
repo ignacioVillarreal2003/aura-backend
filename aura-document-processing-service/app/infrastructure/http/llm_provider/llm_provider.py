@@ -36,7 +36,7 @@ class LlmProvider(LlmProviderInterface):
         self._settings = llm_provider_settings or LlmProviderSettings()
 
     @staticmethod
-    def _build_headers(authenticated_user: Optional[AuthenticatedUser] = None) -> dict:
+    def _build_headers(authenticated_user: AuthenticatedUser) -> dict:
         headers = {"X-Service-Api-Key": environment_variables.service_api_key}
         if authenticated_user is not None:
             headers["X-User-Id"] = str(authenticated_user.id)
@@ -49,14 +49,14 @@ class LlmProvider(LlmProviderInterface):
             self,
             document_name: str,
             content: str,
-            authenticated_user: Optional[AuthenticatedUser] = None
+            authenticated_user: AuthenticatedUser
     ) -> ClassifyDocumentResponse:
         logger.info(
             "Classifying document via LLM service",
             extra={"document_name": document_name}
         )
 
-        request_body = ClassifyDocumentRequest(
+        classify_document_request = ClassifyDocumentRequest(
             document_name=document_name,
             content=content
         )
@@ -64,23 +64,23 @@ class LlmProvider(LlmProviderInterface):
         try:
             response = await self._http_client.post(
                 url=self._settings.classify_document_url,
-                json=request_body.model_dump(),
+                json=classify_document_request.model_dump(),
                 headers=self._build_headers(authenticated_user),
                 timeout=self._settings.timeout_seconds
             )
 
-            classify_response = ClassifyDocumentResponse.model_validate(response.json())
+            classify_document_response = ClassifyDocumentResponse.model_validate(response.json())
 
             logger.info(
                 "Document classified successfully",
                 extra={
                     "document_name": document_name,
-                    "type": classify_response.type.value,
-                    "category": classify_response.category
+                    "type": classify_document_response.type.value,
+                    "category": classify_document_response.category
                 }
             )
 
-            return classify_response
+            return classify_document_response
 
         except HttpClientTimeoutException as e:
             logger.error(
@@ -133,28 +133,28 @@ class LlmProvider(LlmProviderInterface):
     async def enrich_fragment(
             self,
             content: str,
-            authenticated_user: Optional[AuthenticatedUser] = None
+            authenticated_user: AuthenticatedUser
     ) -> EnrichFragmentResponse:
         logger.info("Enriching fragment via LLM service")
 
-        request_body = EnrichFragmentRequest(content=content)
+        enrich_fragment_request = EnrichFragmentRequest(content=content)
 
         try:
             response = await self._http_client.post(
                 url=self._settings.enrich_fragment_url,
-                json=request_body.model_dump(),
+                json=enrich_fragment_request.model_dump(),
                 headers=self._build_headers(authenticated_user),
                 timeout=self._settings.timeout_seconds
             )
 
-            enrich_response = EnrichFragmentResponse.model_validate(response.json())
+            enrich_fragment_response = EnrichFragmentResponse.model_validate(response.json())
 
             logger.info(
                 "Fragment enriched successfully",
-                extra={"topics_count": len(enrich_response.topics)}
+                extra={"topics_count": len(enrich_fragment_response.topics)}
             )
 
-            return enrich_response
+            return enrich_fragment_response
 
         except HttpClientTimeoutException as e:
             logger.error("Timeout enriching fragment")
