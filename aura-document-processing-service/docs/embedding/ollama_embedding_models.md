@@ -14,7 +14,7 @@ Modelo de embeddings basado en la serie Qwen3.
 **Modelos disponibles**
 
 | Model                | Size  | Context | Dimensions |
-| -------------------- | ----- | ------- | ---------- |
+|----------------------|-------|---------|------------|
 | qwen3-embedding:0.6b | 639MB | 32K     | 1024       |
 | qwen3-embedding:4b   | 2.5GB | 40K     | 2560       |
 | qwen3-embedding:8b   | 4.7GB | 40K     | 4096       |
@@ -35,7 +35,7 @@ Modelo de embeddings optimizado para **multilingual retrieval**.
 **Especificaciones**
 
 | Feature             | Value           |
-| ------------------- |-----------------|
+|---------------------|-----------------|
 | Parameters          | 475M            |
 | Active params       | 305M            |
 | Context             | 512 tokens      |
@@ -57,14 +57,7 @@ Modelo clásico de embeddings de Nomic.
 **Especificaciones**
 
 | Model            | Size  | Context | Dimensions |
-| ---------------- | ----- | ------- | ---------- |
+|------------------|-------|---------|------------|
 | nomic-embed-text | 274MB | 2K      | **768**    |
 
-
-# Resultados
-
-Resultados de pruebas internas de recuperación semántica.
-
-- **qwen3-embedding**: El modelo con mejores resultados en recuperación semántica, aunque requiere mayor consumo de recursos.
-- **nomic-embed-text-v2-moe**: Ofrece resultados aceptables para pruebas y entornos con recursos limitados, pero presenta algunas limitaciones en calidad de recuperación.
-- **nomic-embed-text**: Modelo funcional para pruebas básicas, pero su desempeño es inferior y no resulta suficiente para escenarios más exigentes.
+---

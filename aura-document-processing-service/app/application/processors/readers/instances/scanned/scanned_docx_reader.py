@@ -10,18 +10,18 @@ from app.application.processors.readers.exceptions.reader_exception import (
     ReaderInitializationException,
     ScannedDOCXOCRExtractionException,
     ScannedDOCXReadException,
-    UnsupportedScannedDOCXFormatException
+    UnsupportedScannedDOCXFormatException,
 )
-from app.application.processors.readers.interfaces.reader_interface import ReaderInterface
+from app.application.processors.readers.instances.base_reader import BaseReader
 from app.application.processors.readers.reader_settings import ReaderSettings
 
 logger = logging.getLogger(__name__)
 
+_DOCX_MAGIC = b"PK\x03\x04"
+_SUPPORTED_IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".gif"})
 
-class ScannedDOCXReader(ReaderInterface):
-    _DOCX_MAGIC = b"PK\x03\x04"
-    _SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".gif"}
 
+class ScannedDOCXReader(BaseReader):
     def __init__(self, reader_settings: ReaderSettings) -> None:
         self._settings = reader_settings
 
@@ -38,8 +38,8 @@ class ScannedDOCXReader(ReaderInterface):
                 extra={
                     "tesseract_path": self._settings.tesseract_path,
                     "lang": self._settings.tesseract_lang,
-                    "timeout": self._settings.tesseract_timeout
-                }
+                    "timeout": self._settings.tesseract_timeout,
+                },
             )
         except Exception as e:
             logger.exception("Failed to initialize ScannedDOCXReader")
@@ -51,25 +51,23 @@ class ScannedDOCXReader(ReaderInterface):
         if file_path.suffix.lower() != ".docx":
             return False
 
-        if not self._is_valid_docx(file_path):
+        if not self._check_magic_bytes(file_path, _DOCX_MAGIC, 4):
             return False
 
         return self._has_images(file_path)
 
     def read(self, file_path: Path) -> str:
-        if not file_path.exists():
-            raise ReaderFileNotFoundException(
-                "The specified DOCX file does not exist or cannot be accessed."
-            )
+        self._validate_file_exists(file_path)
+        self._validate_file_size(file_path)
 
         if not self.can_handle(file_path):
             raise UnsupportedScannedDOCXFormatException(
-                "The DOCX file is not a supported scanned document_controllers format for OCR processing."
+                "The DOCX file is not a supported scanned document format for OCR processing."
             )
 
         logger.info(
             "Reading scanned DOCX",
-            extra={"file": file_path.name, "lang": self._settings.tesseract_lang}
+            extra={"file": file_path.name, "lang": self._settings.tesseract_lang},
         )
 
         images: list[Image.Image] = []
@@ -80,7 +78,7 @@ class ScannedDOCXReader(ReaderInterface):
 
             logger.info(
                 "Extracted images from DOCX",
-                extra={"file": file_path.name, "images": len(images)}
+                extra={"file": file_path.name, "images": len(images)},
             )
 
             for i, image in enumerate(images, start=1):
@@ -90,20 +88,21 @@ class ScannedDOCXReader(ReaderInterface):
 
             if not all_text:
                 raise ScannedDOCXOCRExtractionException(
-                    "OCR processing completed but no extractable text was found in the scanned DOCX file."
+                    "OCR processing completed but no extractable text was found "
+                    "in the scanned DOCX file."
                 )
 
             logger.info(
                 "Scanned DOCX read successfully",
-                extra={"file": file_path.name, "images_with_text": len(all_text)}
+                extra={"file": file_path.name, "images_with_text": len(all_text)},
             )
 
             return "\n\n".join(all_text)
 
         except (
-                ReaderFileNotFoundException,
-                UnsupportedScannedDOCXFormatException,
-                ScannedDOCXOCRExtractionException,
+            ReaderFileNotFoundException,
+            UnsupportedScannedDOCXFormatException,
+            ScannedDOCXOCRExtractionException,
         ):
             raise
         except Exception as e:
@@ -123,30 +122,39 @@ class ScannedDOCXReader(ReaderInterface):
             )
             return text.strip() if text else ""
         except pytesseract.TesseractError as e:
-            logger.warning("Tesseract error on image", extra={"image_num": page_num, "error": str(e)})
+            logger.warning(
+                "Tesseract error on image",
+                extra={"image_num": page_num, "error": str(e)},
+            )
             return ""
         except RuntimeError as e:
             if "timeout" in str(e).lower():
                 logger.warning(
                     "OCR timeout on image",
-                    extra={"image_num": page_num, "timeout": self._settings.tesseract_timeout}
+                    extra={"image_num": page_num, "timeout": self._settings.tesseract_timeout},
                 )
                 return ""
             raise
         except Exception as e:
-            logger.warning("OCR failed for image — skipping", extra={"image_num": page_num, "error": str(e)})
+            logger.warning(
+                "OCR failed for image — skipping",
+                extra={"image_num": page_num, "error": str(e)},
+            )
             return ""
 
     def _has_images(self, file_path: Path) -> bool:
         try:
             with ZipFile(file_path, "r") as zf:
                 return any(
-                    Path(name).suffix.lower() in self._SUPPORTED_IMAGE_EXTENSIONS
+                    Path(name).suffix.lower() in _SUPPORTED_IMAGE_EXTENSIONS
                     for name in zf.namelist()
                     if name.startswith("word/media/")
                 )
         except Exception as e:
-            logger.debug("Error checking images in DOCX", extra={"file": file_path.name, "error": str(e)})
+            logger.debug(
+                "Error checking images in DOCX",
+                extra={"file": file_path.name, "error": str(e)},
+            )
             return False
 
     def _extract_images(self, file_path: Path) -> list[Image.Image]:
@@ -156,27 +164,23 @@ class ScannedDOCXReader(ReaderInterface):
                 for name in zf.namelist():
                     if not name.startswith("word/media/"):
                         continue
-                    if Path(name).suffix.lower() not in self._SUPPORTED_IMAGE_EXTENSIONS:
+                    if Path(name).suffix.lower() not in _SUPPORTED_IMAGE_EXTENSIONS:
                         continue
                     try:
                         images.append(Image.open(io.BytesIO(zf.read(name))))
                     except Exception as e:
                         logger.warning(
                             "Failed to extract image from DOCX",
-                            extra={"image_name": name, "error": str(e)}
+                            extra={"image_name": name, "error": str(e)},
                         )
             return images
         except Exception as e:
             _close_images(images)
-            logger.error("Failed to extract images from DOCX", extra={"file": file_path.name, "error": str(e)})
+            logger.error(
+                "Failed to extract images from DOCX",
+                extra={"file": file_path.name, "error": str(e)},
+            )
             raise
-
-    def _is_valid_docx(self, file_path: Path) -> bool:
-        try:
-            with open(file_path, "rb") as f:
-                return f.read(4).startswith(self._DOCX_MAGIC)
-        except Exception:
-            return False
 
 
 def _close_images(images: list[Image.Image]) -> None:

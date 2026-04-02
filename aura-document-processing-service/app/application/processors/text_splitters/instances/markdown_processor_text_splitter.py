@@ -1,7 +1,6 @@
 import logging
 from typing import Optional
-from langchain_experimental.text_splitter import SemanticChunker
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_text_splitters import MarkdownTextSplitter
 
 from app.application.processors.text_splitters.exceptions.text_splitter_exception import (
     TextSplitterInitializationException,
@@ -13,43 +12,32 @@ from app.application.processors.text_splitters.text_splitter_settings import Tex
 logger = logging.getLogger(__name__)
 
 
-class HuggingFaceTextSplitter(BaseTextSplitter):
+class MarkdownProcessorTextSplitter(BaseTextSplitter):
     def __init__(self, text_splitter_settings: TextSplitterSettings) -> None:
         self._settings = text_splitter_settings
         self._max_text_length = self._settings.max_text_length
-        self._splitter: Optional[SemanticChunker] = None
+        self._splitter: Optional[MarkdownTextSplitter] = None
 
         try:
-            embeddings = HuggingFaceEmbeddings(
-                model_name=self._settings.huggingface_model,
-                model_kwargs={"device": self._settings.huggingface_device},
+            self._splitter = MarkdownTextSplitter.from_tiktoken_encoder(
+                encoding_name=self._settings.markdown_processor_encoding_name,
+                chunk_size=self._settings.markdown_processor_split_size,
+                chunk_overlap=self._settings.markdown_processor_split_overlap,
             )
 
-            splitter_kwargs: dict = {
-                "breakpoint_threshold_type": self._settings.huggingface_breakpoint_threshold_type,
-            }
-
-            if self._settings.huggingface_breakpoint_threshold_amount is not None:
-                splitter_kwargs["breakpoint_threshold_amount"] = (
-                    self._settings.huggingface_breakpoint_threshold_amount
-                )
-
-            self._splitter = SemanticChunker(embeddings, **splitter_kwargs)
-
             logger.info(
-                "HuggingFaceTextSplitter initialized successfully",
+                "MarkdownTextSplitter initialized successfully",
                 extra={
-                    "model": self._settings.huggingface_model,
-                    "device": self._settings.huggingface_device,
-                    "breakpoint_type": self._settings.huggingface_breakpoint_threshold_type,
-                    "breakpoint_amount": self._settings.huggingface_breakpoint_threshold_amount,
+                    "encoding": self._settings.markdown_processor_encoding_name,
+                    "split_size": self._settings.markdown_processor_split_size,
+                    "split_overlap": self._settings.markdown_processor_split_overlap,
                 },
             )
 
         except Exception as e:
-            logger.exception("Failed to initialize HuggingFaceTextSplitter")
+            logger.exception("Failed to initialize MarkdownTextSplitter")
             raise TextSplitterInitializationException(
-                f"HuggingFaceTextSplitter initialization failed: {e}"
+                f"MarkdownTextSplitter initialization failed: {e}"
             ) from e
 
     def split_text(self, text: str) -> list[str]:
@@ -60,10 +48,11 @@ class HuggingFaceTextSplitter(BaseTextSplitter):
         self._validate_text(text)
 
         logger.debug(
-            "Splitting text semantically",
+            "Splitting markdown text",
             extra={
                 "text_length": len(text),
-                "breakpoint_type": self._settings.huggingface_breakpoint_threshold_type,
+                "split_size": self._settings.markdown_processor_split_size,
+                "split_overlap": self._settings.markdown_processor_split_overlap,
             },
         )
 
@@ -84,9 +73,12 @@ class HuggingFaceTextSplitter(BaseTextSplitter):
             raise
         except Exception as e:
             logger.exception(
-                "Failed to split text semantically",
-                extra={"model": self._settings.huggingface_model},
+                "Failed to split markdown text",
+                extra={
+                    "split_size": self._settings.markdown_processor_split_size,
+                    "split_overlap": self._settings.markdown_processor_split_overlap,
+                },
             )
             raise TextSplitterExecutionException(
-                f"HuggingFaceTextSplitter failed to split text: {e}"
+                f"MarkdownTextSplitter failed to split text: {e}"
             ) from e

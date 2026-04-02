@@ -17,14 +17,13 @@ class TextCleanerSettings(BaseSettings):
     )
 
     active_type: TextCleanerType = Field(default=TextCleanerType.simple)
-
     max_text_length: int = Field(default=10_000_000, gt=0)
 
-    simple_remove_urls: bool = Field(default=True)
-    simple_remove_emojis: bool = Field(default=True)
-    simple_remove_markdown: bool = Field(default=True)
-    simple_normalize_whitespace: bool = Field(default=True)
-    simple_remove_noise_lines: bool = Field(default=True)
+    simple_remove_urls: bool = Field(default=False)
+    simple_remove_emojis: bool = Field(default=False)
+    simple_remove_markdown: bool = Field(default=False)
+    simple_normalize_whitespace: bool = Field(default=False)
+    simple_remove_noise_lines: bool = Field(default=False)
 
     @model_validator(mode="after")
     def validate_active_cleaner_settings(self) -> "TextCleanerSettings":

@@ -185,6 +185,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 filename=raw_document.filename,
                 mime_type=raw_document.content_type or "",
                 created_by=authenticated_user.id,
+                prefer_docling=create_document_request.prefer_docling,
             )
             envelope = MessageEnvelope.wrap(command)
 

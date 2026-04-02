@@ -70,18 +70,22 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
     async def process_document(
             self,
             document: Document,
-            local_file_path: Path
+            local_file_path: Path,
+            prefer_docling: bool = False,
     ) -> None:
         logger.info(
             "Document ingestion initiated",
             extra={
                 "document_id": document.id,
-                "file_path": str(local_file_path)
+                "file_path": str(local_file_path),
+                "prefer_docling": prefer_docling,
             }
         )
 
         try:
-            raw_text = await self._read_document(document, local_file_path)
+            raw_text = await self._read_document(
+                document, local_file_path, prefer_docling=prefer_docling
+            )
             clean_text = await self._clean_text(document, raw_text)
             chunks = await self._split_text(document, clean_text)
             embeddings = await self._embed_chunks(document, chunks)
@@ -113,9 +117,18 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
         finally:
             await self._cleanup_temp_file(local_file_path)
 
-    async def _read_document(self, document: Document, local_file_path: Path) -> str:
+    async def _read_document(
+            self,
+            document: Document,
+            local_file_path: Path,
+            *,
+            prefer_docling: bool = False,
+    ) -> str:
         try:
-            reader = self._reader_factory.get_reader(file_path=local_file_path)
+            reader = self._reader_factory.get_reader(
+                local_file_path,
+                prefer_docling=prefer_docling,
+            )
 
             import asyncio
             raw_text: str = await asyncio.to_thread(reader.read, local_file_path)

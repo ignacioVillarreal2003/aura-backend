@@ -9,6 +9,7 @@ class DocumentIngestionServiceInterface(ABC):
     async def process_document(
             self,
             document: Document,
-            local_file_path: Path
+            local_file_path: Path,
+            prefer_docling: bool = False,
     ) -> None:
         pass

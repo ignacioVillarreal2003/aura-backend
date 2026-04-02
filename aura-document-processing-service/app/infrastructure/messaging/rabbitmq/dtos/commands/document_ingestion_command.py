@@ -1,4 +1,4 @@
-﻿from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field
 
 
 class DocumentIngestionCommand(BaseModel):
@@ -7,3 +7,4 @@ class DocumentIngestionCommand(BaseModel):
     filename: str = Field(...)
     mime_type: str = Field(...)
     created_by: int = Field(...)
+    prefer_docling: bool = Field(default=False)

@@ -55,3 +55,35 @@ class ScannedPDFOCRExtractionException(ReaderException):
 
 class ScannedPDFReadException(ReaderException):
     pass
+
+
+class DoclingPDFInitializationException(ReaderInitializationException):
+    pass
+
+
+class UnsupportedDoclingPDFFormatException(ReaderException):
+    pass
+
+
+class DoclingPDFExtractionException(ReaderException):
+    pass
+
+
+class DoclingPDFReadException(ReaderException):
+    pass
+
+
+class DoclingExtractionException(ReaderException):
+    pass
+
+
+class DoclingInitializationException(ReaderException):
+    pass
+
+
+class DoclingReadException(ReaderException):
+    pass
+
+
+class UnsupportedDoclingFormatException(ReaderException):
+    pass

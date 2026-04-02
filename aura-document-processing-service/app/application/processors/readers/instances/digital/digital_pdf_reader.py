@@ -7,18 +7,18 @@ from app.application.processors.readers.exceptions.reader_exception import (
     DigitalPDFReadException,
     PDFHasNoExtractableTextException,
     ReaderFileNotFoundException,
-    ReaderInitializationException
+    ReaderInitializationException,
 )
-from app.application.processors.readers.interfaces.reader_interface import ReaderInterface
+from app.application.processors.readers.instances.base_reader import BaseReader
 from app.application.processors.readers.reader_settings import ReaderSettings
 
 logger = logging.getLogger(__name__)
 
+_PDF_MAGIC = b"%PDF"
+_CAN_HANDLE_PAGES_TO_PROBE = 3
 
-class DigitalPDFReader(ReaderInterface):
-    _PDF_MAGIC = b"%PDF"
-    _CAN_HANDLE_PAGES_TO_PROBE = 3
 
+class DigitalPDFReader(BaseReader):
     def __init__(self, reader_settings: Optional[ReaderSettings] = None) -> None:
         self._settings = reader_settings or ReaderSettings()
 
@@ -34,7 +34,7 @@ class DigitalPDFReader(ReaderInterface):
         if file_path.suffix.lower() != ".pdf":
             return False
 
-        if not self._is_valid_pdf(file_path):
+        if not self._check_magic_bytes(file_path, _PDF_MAGIC, 5):
             return False
 
         try:
@@ -44,7 +44,7 @@ class DigitalPDFReader(ReaderInterface):
                 if len(reader.pages) == 0:
                     return False
 
-                pages_to_probe = min(len(reader.pages), self._CAN_HANDLE_PAGES_TO_PROBE)
+                pages_to_probe = min(len(reader.pages), _CAN_HANDLE_PAGES_TO_PROBE)
                 for i in range(pages_to_probe):
                     text = reader.pages[i].extract_text()
                     if text and text.strip():
@@ -56,14 +56,15 @@ class DigitalPDFReader(ReaderInterface):
             logger.debug("PDF read error during can_handle", extra={"file": file_path.name})
             return False
         except Exception as e:
-            logger.debug("Unexpected error during can_handle", extra={"file": file_path.name, "error": str(e)})
+            logger.debug(
+                "Unexpected error during can_handle",
+                extra={"file": file_path.name, "error": str(e)},
+            )
             return False
 
     def read(self, file_path: Path) -> str:
-        if not file_path.exists():
-            raise ReaderFileNotFoundException(
-                "The specified PDF file does not exist or cannot be accessed."
-            )
+        self._validate_file_exists(file_path)
+        self._validate_file_size(file_path)
 
         logger.info("Reading digital PDF", extra={"file": file_path.name})
 
@@ -83,7 +84,7 @@ class DigitalPDFReader(ReaderInterface):
             if not text_parts:
                 raise PDFHasNoExtractableTextException(
                     "The PDF file does not contain extractable text. "
-                    "It may be a scanned document_controllers requiring OCR."
+                    "It may be a scanned document requiring OCR."
                 )
 
             logger.info(
@@ -108,11 +109,3 @@ class DigitalPDFReader(ReaderInterface):
             raise DigitalPDFReadException(
                 "An unexpected error occurred while reading the digital PDF file."
             ) from e
-
-    def _is_valid_pdf(self, file_path: Path) -> bool:
-        try:
-            with open(file_path, "rb") as f:
-                return f.read(5).startswith(self._PDF_MAGIC)
-        except Exception as e:
-            logger.debug("Failed to validate PDF magic bytes", extra={"file": file_path.name, "error": str(e)})
-            return False

@@ -7,17 +7,17 @@ from app.application.processors.readers.exceptions.reader_exception import (
     DigitalDOCXReadException,
     DOCXHasNoExtractableTextException,
     ReaderFileNotFoundException,
-    ReaderInitializationException
+    ReaderInitializationException,
 )
-from app.application.processors.readers.interfaces.reader_interface import ReaderInterface
+from app.application.processors.readers.instances.base_reader import BaseReader
 from app.application.processors.readers.reader_settings import ReaderSettings
 
 logger = logging.getLogger(__name__)
 
+_DOCX_MAGIC = b"PK\x03\x04"
 
-class DigitalDOCXReader(ReaderInterface):
-    _DOCX_MAGIC = b"PK\x03\x04"
 
+class DigitalDOCXReader(BaseReader):
     def __init__(self, reader_settings: Optional[ReaderSettings] = None) -> None:
         self._settings = reader_settings or ReaderSettings()
 
@@ -33,7 +33,7 @@ class DigitalDOCXReader(ReaderInterface):
         if file_path.suffix.lower() != ".docx":
             return False
 
-        if not self._is_valid_docx(file_path):
+        if not self._check_magic_bytes(file_path, _DOCX_MAGIC, 4):
             return False
 
         try:
@@ -48,14 +48,15 @@ class DigitalDOCXReader(ReaderInterface):
             return has_paragraph_text or has_table_text
 
         except Exception as e:
-            logger.debug("Error during can_handle", extra={"file": file_path.name, "error": str(e)})
+            logger.debug(
+                "Error during can_handle",
+                extra={"file": file_path.name, "error": str(e)},
+            )
             return False
 
     def read(self, file_path: Path) -> str:
-        if not file_path.exists():
-            raise ReaderFileNotFoundException(
-                "The specified DOCX file does not exist or cannot be accessed."
-            )
+        self._validate_file_exists(file_path)
+        self._validate_file_size(file_path)
 
         logger.info("Reading digital DOCX", extra={"file": file_path.name})
 
@@ -70,7 +71,7 @@ class DigitalDOCXReader(ReaderInterface):
 
             logger.info(
                 "Digital DOCX read successfully",
-                extra={"file": file_path.name, "parts": len(text_parts)}
+                extra={"file": file_path.name, "parts": len(text_parts)},
             )
 
             return "\n\n".join(text_parts)
@@ -101,11 +102,3 @@ class DigitalDOCXReader(ReaderInterface):
                     text_parts.append(row_text)
 
         return text_parts
-
-    def _is_valid_docx(self, file_path: Path) -> bool:
-        try:
-            with open(file_path, "rb") as f:
-                return f.read(4).startswith(self._DOCX_MAGIC)
-        except Exception as e:
-            logger.debug("Failed to validate DOCX magic bytes", extra={"file": file_path.name, "error": str(e)})
-            return False

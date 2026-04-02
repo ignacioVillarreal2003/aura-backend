@@ -170,6 +170,7 @@ class DocumentIngestionConsumer:
         await self._document_ingestion_service.process_document(
             document=document,
             local_file_path=temp_path,
+            prefer_docling=document_ingestion_command.prefer_docling,
         )
 
         logger.info(
