@@ -16,9 +16,7 @@ from app.infrastructure.http.llm_provider.dtos.enrich_fragment_request import En
 from app.infrastructure.http.llm_provider.dtos.enrich_fragment_response import EnrichFragmentResponse
 from app.infrastructure.http.llm_provider.exceptions.llm_provider_exception import (
     LlmProviderException,
-    LlmProviderInvalidResponseException,
-    LlmProviderTimeoutException,
-    LlmProviderUnavailableException
+    LlmProviderInvalidResponseException
 )
 from app.infrastructure.http.llm_provider.interfaces.llm_provider_interface import LlmProviderInterface
 from app.infrastructure.http.llm_provider.llm_provider_settings import LlmProviderSettings
@@ -36,7 +34,9 @@ class LlmProvider(LlmProviderInterface):
         self._settings = llm_provider_settings or LlmProviderSettings()
 
     @staticmethod
-    def _build_headers(authenticated_user: AuthenticatedUser) -> dict:
+    def _build_headers(
+            authenticated_user: AuthenticatedUser
+    ) -> dict:
         headers = {"X-Service-Api-Key": environment_variables.service_api_key}
         if authenticated_user is not None:
             headers["X-User-Id"] = str(authenticated_user.id)
@@ -52,8 +52,10 @@ class LlmProvider(LlmProviderInterface):
             authenticated_user: AuthenticatedUser
     ) -> ClassifyDocumentResponse:
         logger.info(
-            "Classifying document via LLM service",
-            extra={"document_name": document_name}
+            "Sending a document to the LLM service for classification.",
+            extra={
+                "user_id": authenticated_user.id
+            }
         )
 
         classify_document_request = ClassifyDocumentRequest(
@@ -72,9 +74,9 @@ class LlmProvider(LlmProviderInterface):
             classify_document_response = ClassifyDocumentResponse.model_validate(response.json())
 
             logger.info(
-                "Document classified successfully",
+                "The LLM service classified the document successfully.",
                 extra={
-                    "document_name": document_name,
+                    "user_id": authenticated_user.id,
                     "type": classify_document_response.type.value,
                     "category": classify_document_response.category
                 }
@@ -82,40 +84,48 @@ class LlmProvider(LlmProviderInterface):
 
             return classify_document_response
 
-        except HttpClientTimeoutException as e:
+        except HttpClientTimeoutException:
             logger.error(
-                "Timeout classifying document",
-                extra={"document_name": document_name}
+                "The request to classify a document timed out before the LLM service responded.",
+                extra={
+                    "user_id": authenticated_user.id
+                }
             )
-            raise LlmProviderTimeoutException(
-                f"Timeout classifying document: {document_name}"
-            ) from e
+            raise
 
-        except (HttpClientConnectionException, HttpClientCircuitBreakerException) as e:
+        except (HttpClientConnectionException, HttpClientCircuitBreakerException):
             logger.error(
-                "LLM service unavailable",
-                extra={"document_name": document_name}
+                "The LLM service could not be reached or is temporarily rejecting requests.",
+                extra={
+                    "user_id": authenticated_user.id
+                }
             )
-            raise LlmProviderUnavailableException(
-                "LLM service is unavailable"
-            ) from e
+            raise
 
         except HttpClientException as e:
             logger.error(
-                "HTTP error classifying document",
-                extra={"document_name": document_name, "error": str(e)}
+                "The LLM service returned an HTTP error while classifying a document.",
+                extra={
+                    "user_id": authenticated_user.id,
+                    "http_status_code": getattr(e, "status_code", None)
+                }
             )
-            raise LlmProviderException(
-                f"Error classifying document: {document_name}"
-            ) from e
+            raise
 
-        except (ValueError, KeyError, TypeError) as e:
+        except (
+                ValueError,
+                KeyError,
+                TypeError
+        ) as e:
             logger.error(
-                "Invalid response from LLM service",
-                extra={"document_name": document_name, "error": str(e)}
+                "The LLM service returned a response that could not be validated for classification.",
+                extra={
+                    "user_id": authenticated_user.id,
+                    "reason": "response_validation_failed"
+                }
             )
             raise LlmProviderInvalidResponseException(
-                f"Invalid response from LLM service for document: {document_name}"
+                "The LLM service returned a response that could not be validated.",
             ) from e
 
         except LlmProviderException:
@@ -123,21 +133,31 @@ class LlmProvider(LlmProviderInterface):
 
         except Exception as e:
             logger.exception(
-                "Unexpected error classifying document",
-                extra={"document_name": document_name}
+                "An unexpected error occurred while classifying a document through the LLM service.",
+                extra={
+                    "user_id": authenticated_user.id
+                }
             )
             raise LlmProviderException(
-                f"Unexpected error classifying document: {document_name}"
+                "An unexpected error occurred while classifying the document.",
+                status_code=500
             ) from e
 
     async def enrich_fragment(
             self,
             content: str,
-            authenticated_user: AuthenticatedUser
+            authenticated_user: AuthenticatedUser,
     ) -> EnrichFragmentResponse:
-        logger.info("Enriching fragment via LLM service")
+        logger.info(
+            "Sending a fragment to the LLM service for enrichment.",
+            extra={
+                "user_id": authenticated_user.id
+            }
+        )
 
-        enrich_fragment_request = EnrichFragmentRequest(content=content)
+        enrich_fragment_request = EnrichFragmentRequest(
+            content=content
+        )
 
         try:
             response = await self._http_client.post(
@@ -150,47 +170,70 @@ class LlmProvider(LlmProviderInterface):
             enrich_fragment_response = EnrichFragmentResponse.model_validate(response.json())
 
             logger.info(
-                "Fragment enriched successfully",
-                extra={"topics_count": len(enrich_fragment_response.topics)}
+                "The LLM service enriched the fragment successfully.",
+                extra={
+                    "user_id": authenticated_user.id,
+                    "topics_count": len(enrich_fragment_response.topics)
+                }
             )
 
             return enrich_fragment_response
 
-        except HttpClientTimeoutException as e:
-            logger.error("Timeout enriching fragment")
-            raise LlmProviderTimeoutException(
-                "Timeout enriching fragment"
-            ) from e
+        except HttpClientTimeoutException:
+            logger.error(
+                "The request to enrich a fragment timed out before the LLM service responded.",
+                extra={
+                    "user_id": authenticated_user.id
+                }
+            )
+            raise
 
-        except (HttpClientConnectionException, HttpClientCircuitBreakerException) as e:
-            logger.error("LLM service unavailable during fragment enrichment")
-            raise LlmProviderUnavailableException(
-                "LLM service is unavailable"
-            ) from e
+        except (HttpClientConnectionException, HttpClientCircuitBreakerException):
+            logger.error(
+                "The LLM service could not be reached or is temporarily rejecting requests.",
+                extra={
+                    "user_id": authenticated_user.id
+                }
+            )
+            raise
 
         except HttpClientException as e:
             logger.error(
-                "HTTP error enriching fragment",
-                extra={"error": str(e)}
+                "The LLM service returned an HTTP error while enriching a fragment.",
+                extra={
+                    "user_id": authenticated_user.id,
+                    "http_status_code": getattr(e, "status_code", None)
+                }
             )
-            raise LlmProviderException(
-                "Error enriching fragment"
-            ) from e
+            raise
 
-        except (ValueError, KeyError, TypeError) as e:
+        except (
+                ValueError,
+                KeyError,
+                TypeError
+        ) as e:
             logger.error(
-                "Invalid response from LLM service for fragment enrichment",
-                extra={"error": str(e)}
+                "The LLM service returned a response that could not be validated for fragment enrichment.",
+                extra={
+                    "user_id": authenticated_user.id,
+                    "reason": "response_validation_failed"
+                }
             )
             raise LlmProviderInvalidResponseException(
-                "Invalid response from LLM service for fragment enrichment"
+                "The LLM service returned a response that could not be validated."
             ) from e
 
         except LlmProviderException:
             raise
 
         except Exception as e:
-            logger.exception("Unexpected error enriching fragment")
+            logger.exception(
+                "An unexpected error occurred while enriching a fragment through the LLM service.",
+                extra={
+                    "user_id": authenticated_user.id
+                }
+            )
             raise LlmProviderException(
-                "Unexpected error enriching fragment"
+                "An unexpected error occurred while enriching the fragment.",
+                status_code=500
             ) from e

@@ -23,16 +23,14 @@ WWW_AUTH = {
     "WWW-Authenticate": "Bearer"
 }
 
-class AuthenticationMiddleware(BaseHTTPMiddleware):
+class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
     def __init__(
         self,
         app: ASGIApp,
         excluded_paths: Optional[List[str]] = None,
-        require_auth: bool = True
     ) -> None:
         super().__init__(app)
         self.excluded_paths: List[str] = excluded_paths or []
-        self.require_auth = require_auth
 
     async def dispatch(
             self,
@@ -87,29 +85,20 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         token = self._extract_token(request)
 
         if not token:
-            if self.require_auth:
-                logger.warning(
-                    "Protected route called without credentials.",
-                    extra={
-                        "path": request.url.path
-                    }
-                )
-                return JSONResponse(
-                    status_code=401,
-                    content={
-                        "detail": "Authentication required",
-                        "error": "missing_token"
-                    },
-                    headers=WWW_AUTH
-                )
-            logger.debug(
-                "No credentials provided; continuing without a signed-in user.",
+            logger.warning(
+                "Protected route called without credentials.",
                 extra={
                     "path": request.url.path
                 }
             )
-            request.state.authenticated_user = None
-            return await call_next(request)
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "detail": "Authentication required",
+                    "error": "missing_token"
+                },
+                headers=WWW_AUTH
+            )
 
         return await self._validate_jwt(request, call_next, token, provider)
 

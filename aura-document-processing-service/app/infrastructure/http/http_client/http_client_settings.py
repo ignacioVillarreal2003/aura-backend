@@ -59,21 +59,22 @@ class HttpClientSettings(BaseSettings):
 
         if self.tcp_connect_timeout_seconds >= self.socket_read_timeout_seconds:
             logger.warning(
-                "tcp_connect_timeout_seconds is not less than socket_read_timeout_seconds",
+                "Connect timeout is not shorter than read timeout; slow reads may be cut off "
+                "before the connection phase would suggest.",
                 extra={
-                    "tcp_connect": self.tcp_connect_timeout_seconds,
-                    "socket_read": self.socket_read_timeout_seconds
-                }
+                    "tcp_connect_timeout_seconds": self.tcp_connect_timeout_seconds,
+                    "socket_read_timeout_seconds": self.socket_read_timeout_seconds,
+                },
             )
 
         if self.socket_read_timeout_seconds >= self.socket_write_timeout_seconds:
             logger.warning(
-                "socket_read_timeout_seconds is not less than socket_write_timeout_seconds "
-                "— large request bodies may time out",
+                "Read timeout meets or exceeds write timeout; uploading large payloads may hit "
+                "the read limit before the write limit.",
                 extra={
-                    "socket_read": self.socket_read_timeout_seconds,
-                    "socket_write": self.socket_write_timeout_seconds
-                }
+                    "socket_read_timeout_seconds": self.socket_read_timeout_seconds,
+                    "socket_write_timeout_seconds": self.socket_write_timeout_seconds,
+                },
             )
 
         return self

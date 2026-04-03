@@ -1,8 +1,5 @@
-import logging
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-logger = logging.getLogger(__name__)
 
 
 class LlmProviderSettings(BaseSettings):
@@ -18,12 +15,17 @@ class LlmProviderSettings(BaseSettings):
     enrich_fragment_url: str = Field(...)
     timeout_seconds: float = Field(default=120.0, gt=0, le=600.0)
 
-    @field_validator("classify_document_url", "enrich_fragment_url", mode="before")
+    @field_validator(
+        "classify_document_url",
+        "enrich_fragment_url",
+        mode="before"
+    )
     @classmethod
-    def validate_base_url(cls, v: str) -> str:
+    def validate_http_url(
+            cls,
+            v: str
+    ) -> str:
         v = v.strip().rstrip("/")
         if not v.startswith(("http://", "https://")):
-            raise ValueError(
-                f"base_url must start with http:// or https://, got: '{v}'"
-            )
+            raise ValueError(f"URL must start with http:// or https://, got: '{v}'")
         return v

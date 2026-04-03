@@ -5,13 +5,6 @@ class LlmProviderException(AppException):
     pass
 
 
-class LlmProviderTimeoutException(LlmProviderException):
-    pass
-
-
-class LlmProviderUnavailableException(LlmProviderException):
-    pass
-
-
 class LlmProviderInvalidResponseException(LlmProviderException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=502)
