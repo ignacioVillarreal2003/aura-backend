@@ -24,5 +24,5 @@ class AuthenticationProviderSettings(BaseSettings):
     ) -> str:
         v = v.strip().rstrip("/")
         if not v.startswith(("http://", "https://")):
-            raise ValueError(f"authentication_url must start with http:// or https://, got: '{v}'")
+            raise ValueError("The authentication service URL must start with http:// or https://.")
         return v

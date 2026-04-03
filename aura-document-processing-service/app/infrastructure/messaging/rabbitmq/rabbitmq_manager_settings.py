@@ -1,9 +1,7 @@
-import logging
 from typing import Optional
+
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-logger = logging.getLogger(__name__)
 
 
 class RabbitMQManagerSettings(BaseSettings):
@@ -37,38 +35,57 @@ class RabbitMQManagerSettings(BaseSettings):
 
     document_ingestion_queue: str = Field(default="document.ingestion")
 
-    @field_validator("url", mode="before")
+    @field_validator(
+        "url",
+        mode="before"
+    )
     @classmethod
-    def validate_url(cls, v: str) -> str:
+    def validate_url(
+            cls,
+            v: str
+    ) -> str:
         v = str(v).strip()
         if not v:
-            raise ValueError("RabbitMQ URL cannot be empty")
+            raise ValueError("The RabbitMQ URL cannot be empty.")
         if not (v.startswith("amqp://") or v.startswith("amqps://")):
-            raise ValueError("RabbitMQ URL must start with amqp:// or amqps://")
+            raise ValueError(
+                "The RabbitMQ URL must start with amqp:// for plain connections or amqps:// for TLS."
+            )
         return v
 
-    @field_validator("exchange", "document_ingestion_queue", "dlx_exchange", "dlq_queue", mode="before")
+    @field_validator(
+        "exchange",
+        "document_ingestion_queue",
+        "dlx_exchange",
+        "dlq_queue",
+        mode="before"
+    )
     @classmethod
-    def validate_name(cls, v: str) -> str:
+    def validate_name(
+            cls,
+            v: str
+    ) -> str:
         v = v.strip()
         if not v:
-            raise ValueError("Exchange/queue name cannot be empty")
+            raise ValueError("Exchange and queue names cannot be empty.")
         return v
 
-    @model_validator(mode="after")
+    @model_validator(
+        mode="after"
+    )
     def validate_backoff(self) -> "RabbitMQManagerSettings":
         if self.retry_backoff_min_seconds >= self.retry_backoff_max_seconds:
-            raise ValueError(
-                f"retry_backoff_min_seconds ({self.retry_backoff_min_seconds}s) must be "
-                f"strictly less than retry_backoff_max_seconds ({self.retry_backoff_max_seconds}s)"
-            )
+            raise ValueError("The shortest retry wait must be less than the longest retry wait.")
         return self
 
     @property
-    def url_safe(self) -> str:
+    def url_safe(
+            self
+    ) -> str:
         raw = self.url.get_secret_value()
         try:
             from urllib.parse import urlparse
+
             parsed = urlparse(raw)
             return f"{parsed.scheme}://***:***@{parsed.hostname}:{parsed.port}{parsed.path}"
         except Exception:

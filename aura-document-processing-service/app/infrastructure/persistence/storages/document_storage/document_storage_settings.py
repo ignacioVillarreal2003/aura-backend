@@ -10,6 +10,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
+_BUCKET_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9.\-]*[a-z0-9]$")
+_BUCKET_INVALID_CONSECUTIVE_RE = re.compile(r"\.\.|\.[-]|[-]\.")
+_OBJECT_KEY_PREFIX_RE = re.compile(r"^[a-zA-Z0-9/_-]+$")
+
 
 class DocumentStorageSettings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -38,34 +42,44 @@ class DocumentStorageSettings(BaseSettings):
 
     presigned_url_expiry_seconds: int = Field(default=3600, gt=0, le=604_800)
 
-    @field_validator("bucket_name", mode="before")
+    object_key_log_suffix_chars: int = Field(default=48, ge=1, le=512)
+    file_path_log_suffix_chars: int = Field(default=48, ge=1, le=512)
+    list_prefix_log_suffix_chars: int = Field(default=32, ge=1, le=512)
+
+    @field_validator(
+        "bucket_name",
+        mode="before"
+    )
     @classmethod
-    def validate_bucket_name(cls, v: str) -> str:
+    def validate_bucket_name(
+            cls,
+            v: str
+    ) -> str:
         v = v.strip()
 
         if not (3 <= len(v) <= 63):
-            raise ValueError(
-                f"Bucket name must be between 3 and 63 characters, got {len(v)}"
-            )
+            raise ValueError("The bucket name length must be between 3 and 63 characters.")
 
-        _BUCKET_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9.\-]*[a-z0-9]$")
         if not _BUCKET_NAME_RE.match(v):
             raise ValueError(
-                "Bucket name may only contain lowercase letters, numbers, hyphens and dots, "
-                "and must start/end with a letter or number"
+                "Use only lowercase letters, numbers, dots, and hyphens in the bucket name, "
+                "and start and end with a letter or number."
             )
 
-        _BUCKET_INVALID_CONSECUTIVE_RE = re.compile(r"\.\.|\.[-]|[-]\.")
         if _BUCKET_INVALID_CONSECUTIVE_RE.search(v):
-            raise ValueError(
-                "Bucket name cannot contain consecutive special characters ('..', '.-', '-.')"
-            )
+            raise ValueError("The bucket name cannot use consecutive dots or mix dots and hyphens in invalid ways.")
 
         return v
 
-    @field_validator("object_key_prefix", mode="before")
+    @field_validator(
+        "object_key_prefix",
+        mode="before"
+    )
     @classmethod
-    def validate_object_key_prefix(cls, v: Optional[str]) -> Optional[str]:
+    def validate_object_key_prefix(
+            cls,
+            v: Optional[str]
+    ) -> Optional[str]:
         if v is None:
             return v
 
@@ -73,18 +87,20 @@ class DocumentStorageSettings(BaseSettings):
         if not v:
             return None
 
-        _OBJECT_KEY_PREFIX_RE = re.compile(r"^[a-zA-Z0-9/_-]+$")
         if not _OBJECT_KEY_PREFIX_RE.match(v):
-            raise ValueError(
-                "object_key_prefix may only contain alphanumeric characters, "
-                "forward slashes, hyphens and underscores"
-            )
+            raise ValueError("The object key prefix may only use letters, numbers, slashes, hyphens, and underscores.")
 
         return v
 
-    @field_validator("allowed_file_extensions", mode="before")
+    @field_validator(
+        "allowed_file_extensions",
+        mode="before"
+    )
     @classmethod
-    def normalise_allowed_file_extensions(cls, v: Optional[list[str]]) -> Optional[list[str]]:
+    def normalise_allowed_file_extensions(
+            cls,
+            v: Optional[list[str]]
+    ) -> Optional[list[str]]:
         if v is None:
             return None
 
@@ -98,17 +114,21 @@ class DocumentStorageSettings(BaseSettings):
         ]
         return normalised or None
 
-    @model_validator(mode="after")
-    def validate_coherence(self) -> "DocumentStorageSettings":
+    @model_validator(
+        mode="after"
+    )
+    def validate_coherence(
+            self
+    ) -> "DocumentStorageSettings":
         if (self.max_file_size_bytes is not None
                 and self.min_file_size_bytes >= self.max_file_size_bytes):
-            raise ValueError(
-                f"min_file_size_bytes ({self.min_file_size_bytes}) must be "
-                f"less than max_file_size_bytes ({self.max_file_size_bytes})"
-            )
+            raise ValueError("The minimum file size must be less than the maximum file size.")
         return self
 
-    def is_extension_allowed(self, filename: str) -> bool:
+    def is_extension_allowed(
+            self,
+            filename: str
+    ) -> bool:
         if self.allowed_file_extensions is None:
             return True
         ext = Path(filename).suffix.lower().lstrip(".")
@@ -147,7 +167,9 @@ class DocumentStorageSettings(BaseSettings):
         return "/".join(parts + [f"{stem}{ext}"])
 
     @staticmethod
-    def sanitize_metadata_value(value: str) -> str:
+    def sanitize_metadata_value(
+            value: str
+    ) -> str:
         return (
             unicodedata.normalize("NFKD", value)
             .encode("ascii", "ignore")

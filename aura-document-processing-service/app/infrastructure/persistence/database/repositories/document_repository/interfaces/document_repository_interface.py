@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.constants.document.document_type import DocumentType
@@ -8,21 +8,6 @@ from app.domain.models.document import Document
 
 
 class DocumentRepositoryInterface(ABC):
-    @abstractmethod
-    async def get_documents_by_ids(
-            self,
-            document_ids: List[int],
-            database_session: AsyncSession
-    ) -> List[Document]:
-        pass
-
-    @abstractmethod
-    async def get_documents_missing_metadata(
-            self,
-            database_session: AsyncSession
-    ) -> List[Document]:
-        pass
-
     @abstractmethod
     async def get_document_by_id(
             self,
@@ -32,28 +17,27 @@ class DocumentRepositoryInterface(ABC):
         pass
 
     @abstractmethod
-    async def update_document(
+    async def get_documents_by_chat_id(
             self,
-            document: Document,
+            chat_id: int,
             database_session: AsyncSession
-    ) -> Document:
+    ) -> list[Document]:
         pass
-
-
-
-
-
 
     @abstractmethod
-    async def create_document(
+    async def get_documents_by_ids(
             self,
-            document: Document,
+            document_ids: list[int],
             database_session: AsyncSession
-    ) -> Document:
+    ) -> list[Document]:
         pass
 
-
-
+    @abstractmethod
+    async def get_documents_missing_metadata(
+            self,
+            database_session: AsyncSession
+    ) -> list[Document]:
+        pass
 
     @abstractmethod
     async def get_documents(
@@ -66,19 +50,25 @@ class DocumentRepositoryInterface(ABC):
             category: Optional[str] = None,
             type: Optional[DocumentType] = None,
             created_from: Optional[datetime] = None,
-            created_to: Optional[datetime] = None,
-    ) -> List[Document]:
+            created_to: Optional[datetime] = None
+    ) -> list[Document]:
         pass
 
     @abstractmethod
-    async def get_documents_by_chat_id(
+    async def create_document(
             self,
-            chat_id: int,
+            document: Document,
             database_session: AsyncSession
-    ) -> List[Document]:
+    ) -> Document:
         pass
 
-
+    @abstractmethod
+    async def update_document(
+            self,
+            document: Document,
+            database_session: AsyncSession
+    ) -> Document:
+        pass
 
     @abstractmethod
     async def hard_delete_document_by_id(
@@ -96,5 +86,3 @@ class DocumentRepositoryInterface(ABC):
             database_session: AsyncSession
     ) -> bool:
         pass
-
-

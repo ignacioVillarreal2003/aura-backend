@@ -6,20 +6,25 @@ class RabbitMQManagerException(AppException):
 
 
 class RabbitMQNotStartedException(RabbitMQManagerException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=503)
 
 
 class RabbitMQConnectionException(RabbitMQManagerException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=503)
 
 
 class RabbitMQPublishException(RabbitMQManagerException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=502)
 
 
 class RabbitMQConsumerException(RabbitMQManagerException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=503)
 
 
 class RabbitMQTopologyException(RabbitMQManagerException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=500)

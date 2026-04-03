@@ -11,11 +11,17 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentIngestionPublisher(DocumentIngestionPublisherInterface):
-    def __init__(self, rabbitmq_manager: RabbitMQManagerInterface) -> None:
+    def __init__(
+            self,
+            rabbitmq_manager: RabbitMQManagerInterface
+    ) -> None:
         self._manager = rabbitmq_manager
         self._settings = rabbitmq_manager.settings
 
-    async def publish(self, document_ingestion_command: DocumentIngestionCommand) -> str:
+    async def publish(
+            self,
+            document_ingestion_command: DocumentIngestionCommand
+    ) -> str:
         message_envelope = MessageEnvelope.wrap(document_ingestion_command)
 
         await self._manager.publish(
@@ -24,17 +30,16 @@ class DocumentIngestionPublisher(DocumentIngestionPublisherInterface):
             exchange_name=self._settings.exchange,
             headers={
                 "message_id": message_envelope.message_id,
-                "version": str(message_envelope.version),
-            },
+                "version": str(message_envelope.version)
+            }
         )
 
         logger.info(
-            "Document ingestion command published",
+            "A document ingestion command was published to the queue.",
             extra={
                 "message_id": message_envelope.message_id,
-                "document_id": document_ingestion_command.document_id,
-                "filename": document_ingestion_command.filename,
-            },
+                "document_id": document_ingestion_command.document_id
+            }
         )
 
         return message_envelope.message_id

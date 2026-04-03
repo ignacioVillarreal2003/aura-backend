@@ -2,32 +2,39 @@ from app.application.exceptions.app_exception import AppException
 
 
 class DocumentStorageException(AppException):
-    pass
+    def __init__(self, message: str, *, status_code: int = 502) -> None:
+        super().__init__(message, status_code=status_code)
 
 
 class DocumentValidationException(DocumentStorageException):
-    pass
-
-
-class DocumentSizeLimitException(DocumentValidationException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=400)
 
 
 class DocumentExtensionException(DocumentValidationException):
     pass
 
 
+class DocumentSizeLimitException(DocumentValidationException):
+    def __init__(self, message: str) -> None:
+        super(DocumentValidationException, self).__init__(message, status_code=413)
+
+
 class DocumentUploadException(DocumentStorageException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=502)
 
 
 class DocumentDownloadException(DocumentStorageException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=502)
 
 
 class DocumentDeleteException(DocumentStorageException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=502)
 
 
 class DocumentNotFoundException(DocumentStorageException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=404)

@@ -1,5 +1,5 @@
 import logging
-from typing import Callable, List, Optional
+from typing import Callable, Optional
 from fastapi import HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -27,10 +27,10 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
     def __init__(
         self,
         app: ASGIApp,
-        excluded_paths: Optional[List[str]] = None,
+        excluded_paths: Optional[list[str]] = None,
     ) -> None:
         super().__init__(app)
-        self.excluded_paths: List[str] = excluded_paths or []
+        self.excluded_paths: list[str] = excluded_paths or []
 
     async def dispatch(
             self,

@@ -11,13 +11,13 @@ from app.infrastructure.messaging.rabbitmq.dtos.commands.document_ingestion_comm
 from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
 from app.infrastructure.messaging.rabbitmq.interfaces.rabbitmq_manager_interface import RabbitMQManagerInterface
 from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
-    DatabaseManagerInterface,
+    DatabaseManagerInterface
 )
 from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
-    DocumentRepositoryInterface,
+    DocumentRepositoryInterface
 )
 from app.infrastructure.persistence.storages.document_storage.interfaces.document_storage_interface import (
-    DocumentStorageInterface,
+    DocumentStorageInterface
 )
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ class DocumentIngestionConsumer:
             document_storage: DocumentStorageInterface,
             database_manager: DatabaseManagerInterface,
             document_repository: DocumentRepositoryInterface,
-            document_ingestion_service: DocumentIngestionServiceInterface,
+            document_ingestion_service: DocumentIngestionServiceInterface
     ) -> None:
         self._manager = rabbitmq_manager
         self._settings = rabbitmq_manager.settings
@@ -39,27 +39,34 @@ class DocumentIngestionConsumer:
         self._document_repository = document_repository
         self._document_ingestion_service = document_ingestion_service
 
-    async def start(self) -> None:
+    async def start(
+            self
+    ) -> None:
         await self._manager.start_consumer(
             queue_name=self._settings.document_ingestion_queue,
-            callback=self._handle_message,
+            callback=self._handle_message
         )
         logger.info(
-            "DocumentIngestionConsumer registered",
-            extra={"queue": self._settings.document_ingestion_queue},
+            "The document ingestion consumer was registered on the queue.",
+            extra={
+                "queue": self._settings.document_ingestion_queue
+            }
         )
 
-    async def _handle_message(self, message: aio_pika.abc.AbstractIncomingMessage) -> None:
+    async def _handle_message(
+            self,
+            message: aio_pika.abc.AbstractIncomingMessage
+    ) -> None:
         retry_count = self._extract_retry_count(message)
 
         if retry_count >= self._settings.max_delivery_attempts:
             logger.error(
-                "Message exceeded max delivery attempts — discarding permanently",
+                "A message exceeded the maximum delivery attempts and will be discarded.",
                 extra={
                     "retry_count": retry_count,
                     "max_delivery_attempts": self._settings.max_delivery_attempts,
-                    "message_id": (message.headers or {}).get("message_id", "unknown"),
-                },
+                    "message_id": (message.headers or {}).get("message_id", "unknown")
+                }
             )
             await message.nack(requeue=False)
             return
@@ -68,48 +75,49 @@ class DocumentIngestionConsumer:
             message_envelope = MessageEnvelope.from_bytes(
                 data=message.body,
                 command_type=DocumentIngestionCommand,
-                retry_count=retry_count,
+                retry_count=retry_count
             )
         except Exception:
             logger.exception(
-                "Failed to deserialise message — discarding (malformed payload cannot be retried)",
-                extra={"body_preview": message.body[:200]},
+                "The message body could not be deserialized; discarding it because it cannot be retried safely."
             )
             await message.nack(requeue=False)
             return
 
         try:
             logger.debug(
-                "Dispatching message to handler",
+                "Dispatching a queue message to the ingestion handler.",
                 extra={
                     "message_id": message_envelope.message_id,
                     "document_id": message_envelope.command.document_id,
-                    "retry_count": retry_count,
-                },
+                    "retry_count": retry_count
+                }
             )
             await self.handle(message_envelope)
             await message.ack()
             logger.info(
-                "Message processed successfully",
+                "The queue message was processed successfully.",
                 extra={
                     "message_id": message_envelope.message_id,
-                    "document_id": message_envelope.command.document_id,
-                },
+                    "document_id": message_envelope.command.document_id
+                }
             )
 
         except Exception:
             logger.exception(
-                "Handler raised an error — NACKing for DLX retry",
+                "The ingestion handler failed; the message will be negative-acknowledged for dead-letter retry.",
                 extra={
                     "message_id": message_envelope.message_id,
                     "document_id": message_envelope.command.document_id,
-                    "retry_count": retry_count,
-                },
+                    "retry_count": retry_count
+                }
             )
             await message.nack(requeue=False)
 
     @staticmethod
-    def _extract_retry_count(message: aio_pika.abc.AbstractIncomingMessage) -> int:
+    def _extract_retry_count(
+            message: aio_pika.abc.AbstractIncomingMessage
+    ) -> int:
         if not message.headers:
             return 0
         x_death = message.headers.get("x-death")
@@ -118,19 +126,22 @@ class DocumentIngestionConsumer:
         try:
             return int(sum(entry.get("count", 0) for entry in x_death))
         except Exception:
-            logger.warning("Could not parse x-death header", extra={"x_death": str(x_death)})
+            logger.warning("The x-death header could not be parsed; treating retry count as zero.")
             return 0
 
-    async def handle(self, message_envelope: MessageEnvelope[DocumentIngestionCommand]) -> None:
+    async def handle(
+            self,
+            message_envelope: MessageEnvelope[DocumentIngestionCommand]
+    ) -> None:
         document_ingestion_command = message_envelope.command
         document_id = document_ingestion_command.document_id
 
         logger.info(
-            "Handling document ingestion from queue",
+            "Starting document ingestion for a message from the queue.",
             extra={
                 "message_id": message_envelope.message_id,
-                "document_id": document_id,
-            },
+                "document_id": document_id
+            }
         )
 
         temp_dir = Path(tempfile.gettempdir()) / "doc_ingestion"
@@ -140,21 +151,20 @@ class DocumentIngestionConsumer:
 
         await self._document_storage.download_document_to_file(
             object_name=document_ingestion_command.storage_url,
-            file_path=str(temp_path),
+            file_path=str(temp_path)
         )
 
         logger.info(
-            "Document downloaded from storage for ingestion",
+            "The document file was downloaded from object storage for ingestion.",
             extra={
-                "document_id": document_id,
-                "storage_url": document_ingestion_command.storage_url,
-            },
+                "document_id": document_id
+            }
         )
 
         async with self._database_manager.session() as db_session:
             document = await self._document_repository.get_document_by_id(
                 document_id=document_id,
-                database_session=db_session,
+                database_session=db_session
             )
             if document is not None:
                 await db_session.refresh(document)
@@ -162,18 +172,22 @@ class DocumentIngestionConsumer:
 
         if document is None:
             logger.error(
-                "Document not found in database — acknowledging to drop poison message",
-                extra={"document_id": document_id},
+                "No document row was found for the given id; acknowledging to drop a poison message.",
+                extra={
+                    "document_id": document_id
+                }
             )
             return
 
         await self._document_ingestion_service.process_document(
             document=document,
             local_file_path=temp_path,
-            prefer_docling=document_ingestion_command.prefer_docling,
+            prefer_docling=document_ingestion_command.prefer_docling
         )
 
         logger.info(
-            "Document ingestion pipeline finished",
-            extra={"document_id": document_id},
+            "The document ingestion pipeline finished successfully.",
+            extra={
+                "document_id": document_id
+            }
         )

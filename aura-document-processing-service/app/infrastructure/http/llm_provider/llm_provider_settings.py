@@ -27,5 +27,5 @@ class LlmProviderSettings(BaseSettings):
     ) -> str:
         v = v.strip().rstrip("/")
         if not v.startswith(("http://", "https://")):
-            raise ValueError(f"URL must start with http:// or https://, got: '{v}'")
+            raise ValueError("Each LLM URL must start with http:// or https://.")
         return v

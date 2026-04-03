@@ -6,9 +6,14 @@ from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import
 
 class DocumentIngestionConsumerInterface(ABC):
     @abstractmethod
-    async def start(self) -> None:
+    async def start(
+            self
+    ) -> None:
         pass
 
     @abstractmethod
-    async def handle(self, message_envelope: MessageEnvelope[DocumentIngestionCommand]) -> None:
+    async def handle(
+            self,
+            message_envelope: MessageEnvelope[DocumentIngestionCommand]
+    ) -> None:
         pass

@@ -5,5 +5,8 @@ from app.infrastructure.messaging.rabbitmq.dtos.commands.document_ingestion_comm
 
 class DocumentIngestionPublisherInterface(ABC):
     @abstractmethod
-    async def publish(self, document_ingestion_command: DocumentIngestionCommand) -> str:
+    async def publish(
+            self,
+            document_ingestion_command: DocumentIngestionCommand
+    ) -> str:
         pass

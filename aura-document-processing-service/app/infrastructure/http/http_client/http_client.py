@@ -2,7 +2,7 @@ import asyncio
 import logging
 import time
 from datetime import timedelta
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Callable, Optional, Union
 from urllib.parse import urlparse
 import httpx
 from aiobreaker import CircuitBreaker, CircuitBreakerError
@@ -40,7 +40,7 @@ class HttpClient(HttpClientInterface):
     def _request_log_context(
             method: str,
             url: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         parsed = urlparse(url)
         return {
             "method": method,
@@ -159,10 +159,10 @@ class HttpClient(HttpClientInterface):
             self,
             method: str,
             url: str,
-            params: Optional[Dict[str, Any]] = None,
-            json: Optional[Dict[str, Any]] = None,
-            data: Optional[Union[Dict[str, Any], bytes]] = None,
-            headers: Optional[Dict[str, str]] = None,
+            params: Optional[dict[str, Any]] = None,
+            json: Optional[dict[str, Any]] = None,
+            data: Optional[Union[dict[str, Any], bytes]] = None,
+            headers: Optional[dict[str, str]] = None,
             timeout: Optional[float] = None,
             **kwargs
     ) -> httpx.Response:
@@ -253,7 +253,7 @@ class HttpClient(HttpClientInterface):
 
     async def health_check(
             self
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         if not self._is_started or not self._client or not self._breaker:
             return {
                 "status": "unhealthy",

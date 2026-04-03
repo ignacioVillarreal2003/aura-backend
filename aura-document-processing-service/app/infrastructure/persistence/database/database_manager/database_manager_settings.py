@@ -34,7 +34,6 @@ class DatabaseManagerSettings(BaseSettings):
     tcp_connect_timeout_seconds: int = Field(default=10, gt=0, le=60)
     query_execution_timeout_seconds: int = Field(default=30, gt=0, le=300)
 
-    # Retry settings — now configurable per environment (was hardcoded in manager)
     retry_max_attempts: int = Field(default=3, ge=1, le=10)
     retry_backoff_min_seconds: float = Field(default=2.0, gt=0, le=30.0)
     retry_backoff_max_seconds: float = Field(default=10.0, gt=0, le=60.0)
@@ -49,16 +48,20 @@ class DatabaseManagerSettings(BaseSettings):
     ssl_client_key_path: Optional[Path] = Field(default=None)
     ssl_ca_cert_path: Optional[Path] = Field(default=None)
 
-    @field_validator("driver", mode="before")
+    @field_validator(
+        "driver",
+        mode="before"
+    )
     @classmethod
-    def normalise_driver(cls, v: str) -> str:
+    def normalise_driver(
+            cls,
+            v: str
+    ) -> str:
         if v == "postgresql":
             return "postgresql+asyncpg"
         if v == "postgresql+asyncpg":
             return v
-        raise ValueError(
-            f"Unsupported driver '{v}'. Only 'postgresql' / 'postgresql+asyncpg' are supported."
-        )
+        raise ValueError("Only PostgreSQL is supported. Use driver postgresql or postgresql+asyncpg.")
 
     @field_validator(
         "ssl_client_cert_path",
@@ -67,33 +70,41 @@ class DatabaseManagerSettings(BaseSettings):
         mode="before"
     )
     @classmethod
-    def validate_ssl_file_exists(cls, v: Optional[Path]) -> Optional[Path]:
+    def validate_ssl_file_exists(
+            cls,
+            v: Optional[Path]
+    ) -> Optional[Path]:
         if isinstance(v, str) and not v.strip():
             return None
         if v is not None:
             path = Path(v)
             if not path.exists():
-                raise ValueError(f"SSL file not found: {path}")
+                raise ValueError("The SSL file path you configured does not exist on disk.")
             return path
         return v
 
-    @model_validator(mode="after")
-    def validate_coherence(self) -> "DatabaseManagerSettings":
+    @model_validator(
+        mode="after"
+    )
+    def validate_coherence(
+            self
+    ) -> "DatabaseManagerSettings":
         total = self.pool_persistent_connections + self.pool_overflow_connections
         if total > 100:
             logger.warning(
-                "Total connection limit may exceed recommended PostgreSQL defaults",
+                "The connection pool is configured with many connections; you may need to raise "
+                "PostgreSQL max_connections or the app could hit limits under load.",
                 extra={
-                    "persistent": self.pool_persistent_connections,
-                    "overflow": self.pool_overflow_connections,
-                    "total": total
+                    "pool_persistent_connections": self.pool_persistent_connections,
+                    "pool_overflow_connections": self.pool_overflow_connections,
+                    "pool_total": total
                 }
             )
 
         if self.pool_checkout_timeout_seconds < self.tcp_connect_timeout_seconds:
             logger.warning(
-                "pool_checkout_timeout_seconds is shorter than tcp_connect_timeout_seconds "
-                "— pool may give up before the TCP handshake completes",
+                "The pool checkout timeout is shorter than the TCP connect timeout, so clients "
+                "may stop waiting for a pool connection before the network handshake finishes.",
                 extra={
                     "pool_checkout_timeout_seconds": self.pool_checkout_timeout_seconds,
                     "tcp_connect_timeout_seconds": self.tcp_connect_timeout_seconds
@@ -101,32 +112,34 @@ class DatabaseManagerSettings(BaseSettings):
             )
 
         if self.retry_backoff_min_seconds >= self.retry_backoff_max_seconds:
-            raise ValueError(
-                f"retry_backoff_min_seconds ({self.retry_backoff_min_seconds}s) must be "
-                f"strictly less than retry_backoff_max_seconds ({self.retry_backoff_max_seconds}s)"
-            )
+            raise ValueError("The shortest retry wait must be less than the longest retry wait.")
 
         if self.ssl_enabled:
             mutual_tls = [self.ssl_client_cert_path, self.ssl_client_key_path]
             if any(mutual_tls) and not all(mutual_tls):
                 raise ValueError(
-                    "Incomplete mutual-TLS configuration: "
-                    "ssl_client_cert_path and ssl_client_key_path must both be set."
+                    "For mutual TLS, both the client certificate path and the client key path must be set."
                 )
 
         return self
 
     @property
-    def url(self) -> str:
+    def url(
+            self
+    ) -> str:
         password = quote_plus(self.password.get_secret_value())
         return f"{self.driver}://{self.user}:{password}@{self.host}:{self.port}/{self.name}"
 
     @property
-    def url_safe(self) -> str:
+    def url_safe(
+            self
+    ) -> str:
         ssl_suffix = " (SSL)" if self.ssl_enabled else ""
-        return f"{self.driver}://{self.user}:***@{self.host}:{self.port}/{self.name}{ssl_suffix}"
+        return f"{self.driver}://***:***@{self.host}:{self.port}/{self.name}{ssl_suffix}"
 
-    def get_connect_args(self) -> dict:
+    def get_connect_args(
+            self
+    ) -> dict:
         args: dict = {
             "timeout": self.tcp_connect_timeout_seconds,
             "command_timeout": self.query_execution_timeout_seconds,
@@ -139,7 +152,9 @@ class DatabaseManagerSettings(BaseSettings):
             args["ssl"] = self._build_ssl_context()
         return args
 
-    def _build_ssl_context(self) -> ssl.SSLContext:
+    def _build_ssl_context(
+            self
+    ) -> ssl.SSLContext:
         if self.ssl_ca_cert_path:
             ctx = ssl.create_default_context(
                 purpose=ssl.Purpose.SERVER_AUTH,
