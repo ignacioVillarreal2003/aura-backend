@@ -27,9 +27,13 @@ class PostProcessDocumentServiceInterface(ABC):
         pass
 
     @abstractmethod
-    def get_status(self) -> PostProcessDocumentsStatusResponse:
+    def get_status(
+            self
+    ) -> PostProcessDocumentsStatusResponse:
         pass
 
     @abstractmethod
-    async def stop(self) -> None:
+    async def stop(
+            self
+    ) -> None:
         pass

@@ -7,7 +7,7 @@ from app.application.processors.readers.exceptions.reader_exception import (
     DigitalPDFReadException,
     PDFHasNoExtractableTextException,
     ReaderFileNotFoundException,
-    ReaderInitializationException,
+    ReaderInitializationException
 )
 from app.application.processors.readers.instances.base_reader import BaseReader
 from app.application.processors.readers.reader_settings import ReaderSettings
@@ -19,18 +19,22 @@ _CAN_HANDLE_PAGES_TO_PROBE = 3
 
 
 class DigitalPDFReader(BaseReader):
-    def __init__(self, reader_settings: Optional[ReaderSettings] = None) -> None:
+    def __init__(
+            self,
+            reader_settings: Optional[ReaderSettings] = None
+    ) -> None:
         self._settings = reader_settings or ReaderSettings()
 
         try:
-            logger.info("DigitalPDFReader initialized successfully")
+            logger.info("The digital PDF reader was initialized successfully.")
         except Exception as e:
-            logger.exception("Failed to initialize DigitalPDFReader")
-            raise ReaderInitializationException(
-                f"DigitalPDFReader initialization failed: {e}"
-            ) from e
+            logger.exception("Failed to initialize the digital PDF reader.")
+            raise ReaderInitializationException("Failed to initialize the digital PDF reader.") from e
 
-    def can_handle(self, file_path: Path) -> bool:
+    def can_handle(
+            self,
+            file_path: Path
+    ) -> bool:
         if file_path.suffix.lower() != ".pdf":
             return False
 
@@ -53,20 +57,36 @@ class DigitalPDFReader(BaseReader):
                 return False
 
         except pypdf.errors.PdfReadError:
-            logger.debug("PDF read error during can_handle", extra={"file": file_path.name})
+            logger.debug(
+                "A PDF read error occurred while checking whether the file can be handled.",
+                extra={
+                    "file_name": file_path.name
+                }
+            )
             return False
         except Exception as e:
             logger.debug(
-                "Unexpected error during can_handle",
-                extra={"file": file_path.name, "error": str(e)},
+                "An unexpected error occurred while checking whether the PDF can be handled.",
+                extra={
+                    "file_name": file_path.name,
+                    "exception_type": type(e).__name__
+                }
             )
             return False
 
-    def read(self, file_path: Path) -> str:
+    def read(
+            self,
+            file_path: Path
+    ) -> str:
         self._validate_file_exists(file_path)
         self._validate_file_size(file_path)
 
-        logger.info("Reading digital PDF", extra={"file": file_path.name})
+        logger.info(
+            "Reading a digital PDF.",
+            extra={
+                "file_name": file_path.name
+            }
+        )
 
         text_parts: list[str] = []
         total_pages = 0
@@ -88,24 +108,28 @@ class DigitalPDFReader(BaseReader):
                 )
 
             logger.info(
-                "Digital PDF read successfully",
+                "The digital PDF was read successfully.",
                 extra={
-                    "file": file_path.name,
+                    "file_name": file_path.name,
                     "total_pages": total_pages,
-                    "pages_with_text": len(text_parts),
-                },
+                    "pages_with_text": len(text_parts)
+                }
             )
 
             return "\n\n".join(text_parts)
 
-        except (ReaderFileNotFoundException, PDFHasNoExtractableTextException):
+        except (
+                ReaderFileNotFoundException,
+                PDFHasNoExtractableTextException
+        ):
             raise
         except pypdf.errors.PdfReadError as e:
-            raise DigitalPDFReadException(
-                "Failed to read the digital PDF file due to a parsing error."
-            ) from e
+            raise DigitalPDFReadException("Failed to read the digital PDF file due to a parsing error.") from e
         except Exception as e:
-            logger.exception("Unexpected error reading digital PDF", extra={"file": file_path.name})
-            raise DigitalPDFReadException(
-                "An unexpected error occurred while reading the digital PDF file."
-            ) from e
+            logger.exception(
+                "An unexpected error occurred while reading the digital PDF.",
+                extra={
+                    "file_name": file_path.name
+                }
+            )
+            raise DigitalPDFReadException("An unexpected error occurred while reading the digital PDF file.") from e

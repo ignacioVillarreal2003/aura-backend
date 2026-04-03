@@ -2,24 +2,30 @@ from app.application.exceptions.app_exception import AppException
 
 
 class PostProcessDocumentServiceException(AppException):
-    pass
+    def __init__(self, message: str, *, status_code: int = 500) -> None:
+        super().__init__(message, status_code=status_code)
 
 
 class PostProcessAlreadyRunningException(PostProcessDocumentServiceException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=409)
 
 
 class PostProcessNotRunningException(PostProcessDocumentServiceException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=400)
 
 
 class PostProcessDocumentFailedException(PostProcessDocumentServiceException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=500)
 
 
 class PostProcessDocumentUnauthorizedException(PostProcessDocumentServiceException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=403)
 
 
 class PostProcessDocumentInvalidRequestException(PostProcessDocumentServiceException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=400)

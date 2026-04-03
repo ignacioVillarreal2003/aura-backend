@@ -7,29 +7,30 @@ from app.domain.authentication.authenticated_user import AuthenticatedUser
 
 logger = logging.getLogger(__name__)
 
+_PERMISSION_DOCUMENT_DELETE = "DOCUMENT_DELETE"
+_PERMISSION_FRAGMENT_DELETE = "FRAGMENT_DELETE"
+_REQUIRED_PERMISSIONS = {_PERMISSION_DOCUMENT_DELETE, _PERMISSION_FRAGMENT_DELETE}
+
 
 class DeleteDocumentServiceAuthorizer:
-    _PERMISSION_DOCUMENT_DELETE = "DOCUMENT_DELETE"
-    _PERMISSION_FRAGMENT_DELETE = "FRAGMENT_DELETE"
-    _REQUIRED_PERMISSIONS = {_PERMISSION_DOCUMENT_DELETE, _PERMISSION_FRAGMENT_DELETE}
-
-    def require_permissions(self, authenticated_user: AuthenticatedUser) -> None:
-        if authenticated_user.has_all_permissions(self._REQUIRED_PERMISSIONS):
+    @staticmethod
+    def require_permissions(
+            authenticated_user: AuthenticatedUser
+    ) -> None:
+        if authenticated_user.has_all_permissions(_REQUIRED_PERMISSIONS):
             return
 
         user_permissions = set(authenticated_user.permissions)
-        missing = self._REQUIRED_PERMISSIONS - user_permissions
+        missing = _REQUIRED_PERMISSIONS - user_permissions
         logger.warning(
-            "Insufficient permissions for delete operation",
+            "Insufficient permissions for the delete operation.",
             extra={
                 "user_id": authenticated_user.id,
                 "missing_permissions": sorted(missing),
-                "user_permissions": sorted(user_permissions),
+                "user_permissions": sorted(user_permissions)
             },
         )
-        raise DeleteDocumentUnauthorizedException(
-            f"User {authenticated_user.id} is missing required permissions: {sorted(missing)}"
-        )
+        raise DeleteDocumentUnauthorizedException("You do not have permission to delete documents or fragments.")
 
     @staticmethod
     def require_roles(
@@ -40,14 +41,11 @@ class DeleteDocumentServiceAuthorizer:
             return
 
         logger.warning(
-            "Insufficient role for delete operation",
+            "Insufficient role for the delete operation.",
             extra={
                 "user_id": authenticated_user.id,
                 "user_roles": sorted(authenticated_user.roles),
-                "allowed_roles": sorted(allowed_roles),
+                "allowed_roles": sorted(allowed_roles)
             }
         )
-        raise DeleteDocumentUnauthorizedException(
-            f"User {authenticated_user.id} does not have the required role. "
-            f"Allowed roles: {sorted(allowed_roles)}"
-        )
+        raise DeleteDocumentUnauthorizedException("You do not have the required role for this delete operation.")

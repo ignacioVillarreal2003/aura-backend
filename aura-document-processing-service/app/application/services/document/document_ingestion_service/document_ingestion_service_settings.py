@@ -17,8 +17,12 @@ class DocumentIngestionServiceSettings(BaseSettings):
     max_raw_text_length: int = Field(default=50_000_000, gt=0)
     min_chunks_required: int = Field(default=1, ge=1)
 
-    @model_validator(mode="after")
-    def validate_coherence(self) -> "DocumentIngestionServiceSettings":
+    @model_validator(
+        mode="after"
+    )
+    def validate_coherence(
+            self
+    ) -> "DocumentIngestionServiceSettings":
         if self.min_chunks_required < 1:
             raise ValueError("min_chunks_required must be at least 1")
         return self

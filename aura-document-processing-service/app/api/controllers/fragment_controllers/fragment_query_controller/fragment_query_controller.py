@@ -34,9 +34,8 @@ class FragmentQueryController(FragmentQueryControllerInterface):
         logger.info(
             "Handling retrieve fragments by question request",
             extra={
-                "user_id": authenticated_user.id,
-                "question_length": len(question_context_fragments_request.query or ""),
-            },
+                "user_id": authenticated_user.id
+            }
         )
 
         fragment_list_response = await fragment_query_service.retrieve_context_fragments_by_question(
@@ -48,9 +47,8 @@ class FragmentQueryController(FragmentQueryControllerInterface):
         logger.info(
             "Retrieve fragments by question completed successfully",
             extra={
-                "user_id": authenticated_user.id,
-                "fragment_count": len(fragment_list_response.context_fragments),
-            },
+                "user_id": authenticated_user.id
+            }
         )
 
         return fragment_list_response
@@ -64,7 +62,9 @@ class FragmentQueryController(FragmentQueryControllerInterface):
     ) -> FragmentListResponse:
         logger.info(
             "Handling retrieve fragments by documents request",
-            extra={"user_id": authenticated_user.id, "document_ids": documents_context_fragments_request.document_ids},
+            extra={
+                "user_id": authenticated_user.id
+            }
         )
 
         fragment_list_response = await fragment_query_service.retrieve_context_fragments_by_documents(
@@ -76,10 +76,8 @@ class FragmentQueryController(FragmentQueryControllerInterface):
         logger.info(
             "Retrieve fragments by documents completed successfully",
             extra={
-                "user_id": authenticated_user.id,
-                "document_ids": documents_context_fragments_request.document_ids,
-                "fragment_count": len(fragment_list_response.context_fragments),
-            },
+                "user_id": authenticated_user.id
+            }
         )
 
         return fragment_list_response
@@ -88,10 +86,12 @@ class FragmentQueryController(FragmentQueryControllerInterface):
 router = APIRouter()
 fragment_query_controller = FragmentQueryController()
 
-router.post("/by-question", response_model=FragmentListResponse)(
-    fragment_query_controller.retrieve_context_fragments_by_question
-)
+router.post(
+    "/by-question",
+    response_model=FragmentListResponse
+)(fragment_query_controller.retrieve_context_fragments_by_question)
 
-router.post("/by-documents", response_model=FragmentListResponse)(
-    fragment_query_controller.retrieve_context_fragments_by_documents
-)
+router.post(
+    "/by-documents",
+    response_model=FragmentListResponse
+)(fragment_query_controller.retrieve_context_fragments_by_documents)

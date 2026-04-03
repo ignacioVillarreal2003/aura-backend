@@ -13,7 +13,7 @@ from app.application.processors.readers.exceptions.reader_exception import (
     ReaderInitializationException,
     ScannedPDFOCRExtractionException,
     ScannedPDFReadException,
-    UnsupportedScannedPDFFormatException,
+    UnsupportedScannedPDFFormatException
 )
 from app.application.processors.readers.instances.base_reader import BaseReader
 from app.application.processors.readers.reader_settings import ReaderSettings
@@ -24,7 +24,7 @@ _PDF_MAGIC = b"%PDF"
 
 
 def _ocr_page_worker(
-    args: Tuple[bytes, int, str, int],
+        args: Tuple[bytes, int, str, int],
 ) -> Tuple[int, str, Optional[str]]:
     import io
     import pytesseract
@@ -37,17 +37,19 @@ def _ocr_page_worker(
         image.close()
         return (page_num, text.strip() if text else "", None)
     except Exception as e:
-        return (page_num, "", str(e))
+        return (page_num, "", type(e).__name__)
 
 
 class ScannedPDFReader(BaseReader):
-    def __init__(self, reader_settings: ReaderSettings) -> None:
+    def __init__(
+            self,
+            reader_settings: ReaderSettings
+    ) -> None:
         self._settings = reader_settings
 
         if not self._settings.tesseract_path:
             raise ReaderInitializationException(
-                "ScannedPDFReader requires a resolved tesseract_path. "
-                "Install tesseract-ocr or set READER_TESSERACT_PATH."
+                "The scanned PDF reader needs Tesseract. Install tesseract-ocr or set READER_TESSERACT_PATH."
             )
 
         try:
@@ -60,27 +62,31 @@ class ScannedPDFReader(BaseReader):
             )
 
             logger.info(
-                "ScannedPDFReader initialized successfully",
+                "The scanned PDF reader was initialized successfully.",
                 extra={
                     "tesseract_path": self._settings.tesseract_path,
                     "lang": self._settings.tesseract_lang,
                     "dpi": self._settings.pdf_dpi,
                     "parallel": self._settings.pdf_use_parallel,
-                    "max_workers": self._max_workers,
-                },
+                    "max_workers": self._max_workers
+                }
             )
         except Exception as e:
-            logger.exception("Failed to initialize ScannedPDFReader")
-            raise ReaderInitializationException(
-                f"ScannedPDFReader initialization failed: {e}"
-            ) from e
+            logger.exception("Failed to initialize the scanned PDF reader.")
+            raise ReaderInitializationException("Failed to initialize the scanned PDF reader.") from e
 
-    def can_handle(self, file_path: Path) -> bool:
+    def can_handle(
+            self,
+            file_path: Path
+    ) -> bool:
         if file_path.suffix.lower() != ".pdf":
             return False
         return self._check_magic_bytes(file_path, _PDF_MAGIC, 5)
 
-    def read(self, file_path: Path) -> str:
+    def read(
+            self,
+            file_path: Path
+    ) -> str:
         self._validate_file_exists(file_path)
         self._validate_file_size(file_path)
 
@@ -90,13 +96,13 @@ class ScannedPDFReader(BaseReader):
             )
 
         logger.info(
-            "Reading scanned PDF",
+            "Reading a scanned PDF with OCR.",
             extra={
-                "file": file_path.name,
+                "file_name": file_path.name,
                 "dpi": self._settings.pdf_dpi,
                 "lang": self._settings.tesseract_lang,
-                "parallel": self._settings.pdf_use_parallel,
-            },
+                "parallel": self._settings.pdf_use_parallel
+            }
         )
 
         pages: list[Image.Image] = []
@@ -104,11 +110,14 @@ class ScannedPDFReader(BaseReader):
             pages = self._convert_to_images(file_path)
 
             if not pages:
-                raise ScannedPDFOCRExtractionException(
-                    "PDF could not be converted to images — no pages found."
-                )
+                raise ScannedPDFOCRExtractionException("The PDF could not be converted to images; no pages were found.")
 
-            logger.debug("PDF converted to images", extra={"pages": len(pages)})
+            logger.debug(
+                "The PDF was converted to images.",
+                extra={
+                    "pages": len(pages)
+                }
+            )
 
             all_text = (
                 self._process_parallel(pages)
@@ -123,38 +132,47 @@ class ScannedPDFReader(BaseReader):
                 )
 
             logger.info(
-                "Scanned PDF read successfully",
+                "The scanned PDF was read successfully.",
                 extra={
-                    "file": file_path.name,
+                    "file_name": file_path.name,
                     "total_pages": len(pages),
-                    "pages_with_text": len(all_text),
-                },
+                    "pages_with_text": len(all_text)
+                }
             )
 
             return "\n\n".join(all_text)
 
         except (
-            ReaderFileNotFoundException,
-            UnsupportedScannedPDFFormatException,
-            ScannedPDFOCRExtractionException,
+                ReaderFileNotFoundException,
+                UnsupportedScannedPDFFormatException,
+                ScannedPDFOCRExtractionException,
         ):
             raise
         except Exception as e:
-            logger.exception("Failed to read scanned PDF", extra={"file": str(file_path)})
-            raise ScannedPDFReadException(
-                "An unexpected error occurred while processing the scanned PDF file."
-            ) from e
+            logger.exception(
+                "Failed to read the scanned PDF.",
+                extra={
+                    "file_name": file_path.name
+                }
+            )
+            raise ScannedPDFReadException("An unexpected error occurred while processing the scanned PDF file.") from e
         finally:
             _close_images(pages)
 
-    def _convert_to_images(self, file_path: Path) -> list[Image.Image]:
+    def _convert_to_images(
+            self,
+            file_path: Path
+    ) -> list[Image.Image]:
         return convert_from_path(
             str(file_path),
             dpi=self._settings.pdf_dpi,
-            poppler_path=self._settings.poppler_path,
+            poppler_path=self._settings.poppler_path
         )
 
-    def _process_sequential(self, pages: list[Image.Image]) -> list[str]:
+    def _process_sequential(
+            self,
+            pages: list[Image.Image]
+    ) -> list[str]:
         all_text: list[str] = []
 
         for i, page in enumerate(pages, start=1):
@@ -162,35 +180,52 @@ class ScannedPDFReader(BaseReader):
                 text = pytesseract.image_to_string(
                     page,
                     lang=self._settings.tesseract_lang,
-                    timeout=self._settings.tesseract_timeout,
+                    timeout=self._settings.tesseract_timeout
                 )
                 if text and text.strip():
                     all_text.append(text.strip())
                 else:
-                    logger.debug("Page produced no text", extra={"page_num": i})
+                    logger.debug(
+                        "A page produced no text.",
+                        extra={
+                            "page_num": i
+                        }
+                    )
 
             except pytesseract.TesseractError as e:
                 logger.warning(
-                    "Tesseract error on page",
-                    extra={"page_num": i, "error": str(e)},
+                    "Tesseract reported an error on a page.",
+                    extra={
+                        "page_num": i,
+                        "exception_type": type(e).__name__
+                    }
                 )
             except RuntimeError as e:
                 if "timeout" in str(e).lower():
                     logger.warning(
-                        "OCR timeout on page",
-                        extra={"page_num": i, "timeout": self._settings.tesseract_timeout},
+                        "OCR timed out on a page.",
+                        extra={
+                            "page_num": i,
+                            "timeout": self._settings.tesseract_timeout
+                        }
                     )
                 else:
                     raise
             except Exception as e:
                 logger.warning(
-                    "OCR failed for page — skipping",
-                    extra={"page_num": i, "error": str(e)},
+                    "OCR failed for a page; skipping that page.",
+                    extra={
+                        "page_num": i,
+                        "exception_type": type(e).__name__
+                    }
                 )
 
         return all_text
 
-    def _process_parallel(self, pages: list[Image.Image]) -> list[str]:
+    def _process_parallel(
+            self,
+            pages: list[Image.Image]
+    ) -> list[str]:
         all_text: list[Optional[str]] = [None] * len(pages)
         page_args: list[Tuple[bytes, int, str, int]] = []
 
@@ -202,12 +237,15 @@ class ScannedPDFReader(BaseReader):
                     buf.getvalue(),
                     i,
                     self._settings.tesseract_lang,
-                    self._settings.tesseract_timeout,
+                    self._settings.tesseract_timeout
                 ))
             except Exception as e:
                 logger.warning(
-                    "Failed to serialize page for parallel processing",
-                    extra={"page_num": i + 1, "error": str(e)},
+                    "Failed to serialize a page for parallel OCR.",
+                    extra={
+                        "page_num": i + 1,
+                        "exception_type": type(e).__name__
+                    }
                 )
 
         with ProcessPoolExecutor(max_workers=self._max_workers) as executor:
@@ -224,29 +262,36 @@ class ScannedPDFReader(BaseReader):
                     )
                     if error:
                         logger.warning(
-                            "OCR worker error",
-                            extra={"page_num": result_page_num + 1, "error": error},
+                            "The OCR worker reported a problem for a page.",
+                            extra={
+                                "page_num": result_page_num + 1
+                            }
                         )
                     elif text:
                         all_text[result_page_num] = text
                 except TimeoutError:
                     logger.warning(
-                        "OCR timeout for page",
+                        "OCR timed out for a page.",
                         extra={
                             "page_num": page_num + 1,
-                            "timeout": self._settings.tesseract_timeout,
-                        },
+                            "timeout": self._settings.tesseract_timeout
+                        }
                     )
                 except Exception as e:
                     logger.warning(
-                        "OCR failed for page",
-                        extra={"page_num": page_num + 1, "error": str(e)},
+                        "OCR failed for a page.",
+                        extra={
+                            "page_num": page_num + 1,
+                            "exception_type": type(e).__name__
+                        }
                     )
 
         return [t for t in all_text if t]
 
 
-def _close_images(images: list[Image.Image]) -> None:
+def _close_images(
+        images: list[Image.Image]
+) -> None:
     for img in images:
         try:
             img.close()

@@ -17,7 +17,10 @@ logger = logging.getLogger(__name__)
 
 
 class FragmentQueryServiceValidator:
-    def __init__(self, fragment_query_service_settings: FragmentQueryServiceSettings) -> None:
+    def __init__(
+            self,
+            fragment_query_service_settings: FragmentQueryServiceSettings
+    ) -> None:
         self._settings = fragment_query_service_settings
 
     def validate_question_context_fragments_request(
@@ -33,47 +36,39 @@ class FragmentQueryServiceValidator:
     ) -> None:
         self._validate_document_ids(documents_context_fragments_request.document_ids)
 
-    def _validate_question(self, question: str) -> None:
+    def _validate_question(
+            self,
+            question: str
+    ) -> None:
         if not question or not question.strip():
-            raise FragmentQueryInvalidRequestException("Question cannot be empty")
+            raise FragmentQueryInvalidRequestException("The question cannot be empty.")
 
         length = len(question)
         if length < self._settings.min_question_length:
-            raise FragmentQueryInvalidRequestException(
-                f"Question length ({length}) is below the minimum "
-                f"({self._settings.min_question_length})"
-            )
+            raise FragmentQueryInvalidRequestException("The question is shorter than the minimum allowed length.")
         if length > self._settings.max_question_length:
-            raise FragmentQueryInvalidRequestException(
-                f"Question length ({length}) exceeds the maximum "
-                f"({self._settings.max_question_length})"
-            )
+            raise FragmentQueryInvalidRequestException("The question exceeds the maximum allowed length.")
 
     def _validate_max_fragments(self, max_fragments: int) -> None:
         if max_fragments < 1:
-            raise FragmentQueryInvalidRequestException(
-                "max_context_fragments must be at least 1"
-            )
+            raise FragmentQueryInvalidRequestException("The maximum number of context fragments must be at least one.")
         if max_fragments > self._settings.max_fragments:
             raise FragmentQueryInvalidRequestException(
-                f"max_context_fragments ({max_fragments}) exceeds the configured limit "
-                f"({self._settings.max_fragments})"
+                "The maximum number of context fragments exceeds the configured limit."
             )
 
-    def _validate_document_ids(self, document_ids: list[int]) -> None:
+    def _validate_document_ids(
+            self,
+            document_ids: list[int]
+    ) -> None:
         if not document_ids:
-            raise FragmentQueryInvalidRequestException("document_ids cannot be empty")
+            raise FragmentQueryInvalidRequestException("At least one document identifier is required.")
         if len(document_ids) > self._settings.max_document_ids:
             raise FragmentQueryInvalidRequestException(
-                f"document_ids length ({len(document_ids)}) exceeds the configured limit "
-                f"({self._settings.max_document_ids})"
+                "The number of document identifiers exceeds the configured limit."
             )
         for document_id in document_ids:
             if document_id is None or document_id <= 0:
-                raise FragmentQueryInvalidRequestException(
-                    f"document_id must be a positive integer, got: {document_id!r}"
-                )
+                raise FragmentQueryInvalidRequestException("Each document identifier must be a positive integer.")
         if len(set(document_ids)) != len(document_ids):
-            raise FragmentQueryInvalidRequestException(
-                "document_ids contains duplicate values"
-            )
+            raise FragmentQueryInvalidRequestException("Document identifiers must not contain duplicates.")

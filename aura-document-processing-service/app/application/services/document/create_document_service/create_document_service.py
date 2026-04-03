@@ -9,7 +9,7 @@ from fastapi import HTTPException, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.services.document.create_document_service.create_document_service_authorizer import (
-    CreateDocumentServiceAuthorizer,
+    CreateDocumentServiceAuthorizer
 )
 from app.application.services.document.create_document_service.create_document_service_settings import (
     CreateDocumentServiceSettings
@@ -56,13 +56,6 @@ logger = logging.getLogger(__name__)
 
 
 class CreateDocumentService(CreateDocumentServiceInterface):
-    _KNOWN_EXCEPTIONS = (
-        CreateDocumentUnauthorizedException,
-        CreateDocumentValidationException,
-        CreateDocumentUploadException,
-        CreateDocumentPersistenceException
-    )
-
     def __init__(
             self,
             document_repository: DocumentRepositoryInterface,
@@ -75,9 +68,13 @@ class CreateDocumentService(CreateDocumentServiceInterface):
         self._rabbitmq_manager = rabbitmq_manager
         self._settings = create_document_service_settings or CreateDocumentServiceSettings()
 
-        self._validator = CreateDocumentServiceValidator(create_document_service_settings=self._settings)
+        self._validator = CreateDocumentServiceValidator(
+            create_document_service_settings=self._settings
+        )
         self._authorizer = CreateDocumentServiceAuthorizer()
-        self._utils = CreateDocumentServiceUtils(create_document_service_settings=self._settings)
+        self._utils = CreateDocumentServiceUtils(
+            create_document_service_settings=self._settings
+        )
 
         self._deduplication_lock = asyncio.Lock()
         self._recent_hashes: dict[str, datetime] = {}
@@ -93,7 +90,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
         object_name: Optional[str] = None
 
         logger.info(
-            "Document creation initiated",
+            "Document creation was initiated.",
             extra={
                 "document_filename": raw_document.filename,
                 "content_type": raw_document.content_type,
@@ -105,7 +102,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             self._require_permissions(authenticated_user)
             self._authorizer.require_roles(
                 authenticated_user=authenticated_user,
-                allowed_roles=ALL_ROLES,
+                allowed_roles=ALL_ROLES
             )
 
             try:
@@ -117,9 +114,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                     raw_document=raw_document
                 )
             except Exception as e:
-                raise CreateDocumentValidationException(
-                    f"Document validation failed: {e}"
-                ) from e
+                raise CreateDocumentValidationException("The document could not be validated.") from e
 
             file_hash: Optional[str] = None
             if self._settings.deduplication_enabled:
@@ -134,15 +129,18 @@ class CreateDocumentService(CreateDocumentServiceInterface):
 
             try:
                 await raw_document.seek(0)
-                object_name = await self._document_storage.upload_document(file=raw_document)
+                object_name = await self._document_storage.upload_document(
+                    file=raw_document
+                )
                 logger.info(
-                    "Document uploaded to storage",
-                    extra={"object_name": object_name, "size_bytes": file_size}
+                    "The document was uploaded to storage.",
+                    extra={
+                        "object_name": object_name,
+                        "size_bytes": file_size
+                    }
                 )
             except DocumentStorageException as e:
-                raise CreateDocumentUploadException(
-                    f"Failed to upload document to storage: {e}"
-                ) from e
+                raise CreateDocumentUploadException("Failed to upload the document to storage.") from e
 
             now = datetime.now(timezone.utc)
             document = Document(
@@ -164,14 +162,14 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 )
                 await database_session.commit()
                 logger.info(
-                    "Document persisted to database",
-                    extra={"document_id": database_document.id}
+                    "The document was saved to the database.",
+                    extra={
+                        "document_id": database_document.id
+                    }
                 )
             except DatabaseException as e:
                 await self._cleanup_storage(object_name)
-                raise CreateDocumentPersistenceException(
-                    f"Failed to persist document to database: {e}"
-                ) from e
+                raise CreateDocumentPersistenceException("Failed to save the document to the database.") from e
 
             if self._settings.deduplication_enabled and file_hash:
                 await self._register_hash(file_hash)
@@ -185,7 +183,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 filename=raw_document.filename,
                 mime_type=raw_document.content_type or "",
                 created_by=authenticated_user.id,
-                prefer_docling=create_document_request.prefer_docling,
+                prefer_docling=create_document_request.prefer_docling
             )
             envelope = MessageEnvelope.wrap(command)
 
@@ -193,42 +191,55 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 await self._rabbitmq_manager.publish(
                     routing_key=self._rabbitmq_manager.settings.document_ingestion_queue,
                     body=envelope.to_bytes(),
-                    headers={"message_id": envelope.message_id},
+                    headers={
+                        "message_id": envelope.message_id
+                    }
                 )
             except Exception as e:
-                raise RabbitMQPublishException(
-                    f"Failed to enqueue document ingestion for document {database_document.id}: {e}"
-                ) from e
+                raise RabbitMQPublishException("Failed to enqueue the document for ingestion.") from e
 
             logger.info(
-                "Document creation completed — ingestion message published",
+                "Document creation completed and the ingestion message was published.",
                 extra={
                     "document_id": database_document.id,
                     "status": database_document.status.value,
-                    "message_id": envelope.message_id,
-                },
+                    "message_id": envelope.message_id
+                }
             )
 
             return CreateDocumentResponse.model_validate(database_document)
 
-        except self._KNOWN_EXCEPTIONS:
+        except (
+                CreateDocumentUnauthorizedException,
+                CreateDocumentValidationException,
+                CreateDocumentUploadException,
+                CreateDocumentPersistenceException
+        ):
             if temp_path is not None:
                 await self._cleanup_temp_file(temp_path)
             raise
 
         except Exception as e:
             logger.exception(
-                "Unexpected error during document creation",
-                extra={"document_filename": raw_document.filename}
+                "An unexpected error occurred during document creation.",
+                extra={
+                    "document_filename": raw_document.filename
+                }
             )
             if temp_path is not None:
                 await self._cleanup_temp_file(temp_path)
-            raise CreateDocumentServiceException(f"Document creation failed: {e}") from e
+            raise CreateDocumentServiceException("Document creation failed.") from e
 
-    def _require_permissions(self, authenticated_user: AuthenticatedUser) -> None:
+    def _require_permissions(
+            self,
+            authenticated_user: AuthenticatedUser
+    ) -> None:
         self._authorizer.require_permissions(authenticated_user)
 
-    async def _is_duplicate(self, file_hash: str) -> bool:
+    async def _is_duplicate(
+            self,
+            file_hash: str
+    ) -> bool:
         now = datetime.now(timezone.utc)
         cutoff_seconds = self._settings.deduplication_window_hours * 3600
 
@@ -240,11 +251,17 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             }
             return file_hash in self._recent_hashes
 
-    async def _register_hash(self, file_hash: str) -> None:
+    async def _register_hash(
+            self,
+            file_hash: str
+    ) -> None:
         async with self._deduplication_lock:
             self._recent_hashes[file_hash] = datetime.now(timezone.utc)
 
-    async def _save_temp_file_streaming(self, file: UploadFile) -> Path:
+    async def _save_temp_file_streaming(
+            self,
+            file: UploadFile
+    ) -> Path:
         try:
             temp_dir = Path(tempfile.gettempdir()) / self._settings.temp_dir_prefix
             temp_dir.mkdir(parents=True, exist_ok=True)
@@ -267,46 +284,70 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             await file.seek(0)
 
             logger.debug(
-                "Temporary file saved",
-                extra={"path": str(temp_path), "size_bytes": temp_path.stat().st_size}
+                "The temporary file was saved.",
+                extra={
+                    "path": str(temp_path),
+                    "size_bytes": temp_path.stat().st_size
+                }
             )
             return temp_path
 
         except Exception as e:
-            logger.exception("Failed to save temporary file")
-            raise IOError(f"Failed to save temporary file: {e}") from e
+            logger.exception("Failed to save the temporary file.")
+            raise IOError("Failed to save the temporary file.") from e
 
-    async def _cleanup_temp_file(self, temp_path: Path) -> None:
+    async def _cleanup_temp_file(
+            self,
+            temp_path: Path
+    ) -> None:
         try:
             if await asyncio.to_thread(temp_path.exists):
                 await asyncio.to_thread(temp_path.unlink)
-                logger.debug("Temporary file deleted", extra={"path": str(temp_path)})
+                logger.debug(
+                    "The temporary file was deleted.",
+                    extra={
+                        "path": str(temp_path)
+                    }
+                )
         except Exception as e:
             logger.warning(
-                "Failed to delete temporary file",
-                extra={"path": str(temp_path), "error": str(e)}
+                "Failed to delete the temporary file.",
+                extra={
+                    "path": str(temp_path),
+                    "exception_type": type(e).__name__
+                }
             )
 
-    async def _cleanup_storage(self, object_name: str) -> None:
+    async def _cleanup_storage(
+            self,
+            object_name: str
+    ) -> None:
         try:
             await self._document_storage.delete_document(object_name)
             logger.info(
-                "Compensating action: document deleted from storage",
-                extra={"object_name": object_name}
+                "A compensating action removed the document from storage.",
+                extra={
+                    "object_name": object_name
+                }
             )
         except Exception as e:
             logger.error(
-                "Compensating storage delete failed — manual cleanup may be required",
-                extra={"object_name": object_name, "error": str(e)}
+                "The compensating storage delete failed. Manual cleanup may be required.",
+                extra={
+                    "object_name": object_name,
+                    "exception_type": type(e).__name__
+                }
             )
 
 
-async def get_create_document_service(request: Request) -> CreateDocumentServiceInterface:
+async def get_create_document_service(
+        request: Request
+) -> CreateDocumentServiceInterface:
     try:
         return request.app.state.create_document_service
     except AttributeError:
-        logger.error("CreateDocumentService not found in application state")
+        logger.error("CreateDocumentService is not registered on the application state.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="CreateDocumentService is not available"
+            detail="CreateDocumentService is not registered on the application state."
         )

@@ -17,11 +17,13 @@ _TEXT_CLEANER_REGISTRY: dict[TextCleanerType, str] = {
     TextCleanerType.simple: (
         "app.application.processors.text_cleaners.instances"
         ".simple_text_cleaner.SimpleTextCleaner"
-    ),
+    )
 }
 
 
-def _import_cleaner_class(dotted_path: str) -> type[TextCleanerInterface]:
+def _import_cleaner_class(
+        dotted_path: str
+) -> type[TextCleanerInterface]:
     module_path, class_name = dotted_path.rsplit(".", 1)
     module = importlib.import_module(module_path)
     cls = getattr(module, class_name)
@@ -29,7 +31,10 @@ def _import_cleaner_class(dotted_path: str) -> type[TextCleanerInterface]:
 
 
 class TextCleanerFactory:
-    def __init__(self, text_cleaner_settings: TextCleanerSettings | None = None) -> None:
+    def __init__(
+            self,
+            text_cleaner_settings: TextCleanerSettings | None = None
+    ) -> None:
         self._settings = text_cleaner_settings or TextCleanerSettings()
         self._active_type = self._settings.active_type
 
@@ -38,15 +43,17 @@ class TextCleanerFactory:
         self._instances: dict[TextCleanerType, TextCleanerInterface] = {}
 
         logger.info(
-            "TextCleanerFactory created",
+            "The text cleaner factory was created.",
             extra={
                 "active_type": self._active_type,
-                "available_types": [t.value for t in _TEXT_CLEANER_REGISTRY],
-            },
+                "available_types": [t.value for t in _TEXT_CLEANER_REGISTRY]
+            }
         )
 
     @property
-    def cleaner(self) -> TextCleanerInterface:
+    def cleaner(
+            self
+    ) -> TextCleanerInterface:
         if self._cleaner is not None:
             return self._cleaner
 
@@ -56,12 +63,12 @@ class TextCleanerFactory:
 
         return self._cleaner
 
-    def get_by_type(self, cleaner_type: TextCleanerType) -> TextCleanerInterface:
+    def get_by_type(
+            self,
+            cleaner_type: TextCleanerType
+    ) -> TextCleanerInterface:
         if cleaner_type not in _TEXT_CLEANER_REGISTRY:
-            raise UnsupportedTextCleanerTypeException(
-                f"Unsupported text cleaner type: '{cleaner_type}'. "
-                f"Available: {[t.value for t in _TEXT_CLEANER_REGISTRY]}"
-            )
+            raise UnsupportedTextCleanerTypeException("That text cleaner type is not supported.")
 
         if cleaner_type in self._instances:
             return self._instances[cleaner_type]
@@ -72,21 +79,27 @@ class TextCleanerFactory:
 
         return self._instances[cleaner_type]
 
-    def get_active_type(self) -> TextCleanerType:
+    def get_active_type(
+            self
+    ) -> TextCleanerType:
         return self._active_type
 
-    def is_supported(self, text_cleaner_type: TextCleanerType) -> bool:
+    def is_supported(
+            self,
+            text_cleaner_type: TextCleanerType
+    ) -> bool:
         return text_cleaner_type in _TEXT_CLEANER_REGISTRY
 
-    def available_types(self) -> list[TextCleanerType]:
+    def available_types(
+            self
+    ) -> list[TextCleanerType]:
         return list(_TEXT_CLEANER_REGISTRY.keys())
 
-    def _build_cleaner(self) -> TextCleanerInterface:
+    def _build_cleaner(
+            self
+    ) -> TextCleanerInterface:
         if self._active_type not in _TEXT_CLEANER_REGISTRY:
-            raise UnsupportedTextCleanerTypeException(
-                f"Unsupported text cleaner type: '{self._active_type}'. "
-                f"Available: {[t.value for t in _TEXT_CLEANER_REGISTRY]}"
-            )
+            raise UnsupportedTextCleanerTypeException("That text cleaner type is not supported.")
 
         dotted_path = _TEXT_CLEANER_REGISTRY[self._active_type]
 
@@ -94,22 +107,28 @@ class TextCleanerFactory:
             cleaner_class = _import_cleaner_class(dotted_path)
             instance = cleaner_class(text_cleaner_settings=self._settings)
             logger.info(
-                "Text cleaner initialized and cached",
-                extra={"type": self._active_type},
+                "The text cleaner was initialized and cached.",
+                extra={
+                    "cleaner_type": self._active_type
+                }
             )
             return instance
         except TextCleanerInitializationException:
             raise
         except Exception as e:
             logger.error(
-                "Unexpected error during text cleaner initialization",
-                extra={"type": self._active_type, "error": str(e)},
+                "An unexpected error occurred while initializing the text cleaner.",
+                extra={
+                    "cleaner_type": self._active_type,
+                    "exception_type": type(e).__name__
+                }
             )
-            raise TextCleanerInitializationException(
-                f"Failed to initialize text cleaner '{self._active_type}': {e}"
-            ) from e
+            raise TextCleanerInitializationException("Failed to initialize the text cleaner.") from e
 
-    def _build_by_type(self, cleaner_type: TextCleanerType) -> TextCleanerInterface:
+    def _build_by_type(
+            self,
+            cleaner_type: TextCleanerType
+    ) -> TextCleanerInterface:
         dotted_path = _TEXT_CLEANER_REGISTRY[cleaner_type]
 
         try:
@@ -117,8 +136,10 @@ class TextCleanerFactory:
             instance = cleaner_class(text_cleaner_settings=self._settings)
 
             logger.info(
-                "Text cleaner initialized",
-                extra={"type": cleaner_type},
+                "The text cleaner was initialized.",
+                extra={
+                    "cleaner_type": cleaner_type
+                }
             )
             return instance
 
@@ -126,20 +147,23 @@ class TextCleanerFactory:
             raise
         except Exception as e:
             logger.error(
-                "Unexpected error during text cleaner initialization",
-                extra={"type": cleaner_type, "error": str(e)},
+                "An unexpected error occurred while initializing the text cleaner.",
+                extra={
+                    "cleaner_type": cleaner_type,
+                    "exception_type": type(e).__name__
+                }
             )
-            raise TextCleanerInitializationException(
-                f"Failed to initialize text cleaner '{cleaner_type}': {e}"
-            ) from e
+            raise TextCleanerInitializationException("Failed to initialize the text cleaner.") from e
 
 
-async def get_text_cleaner_factory(request: Request) -> TextCleanerFactory:
+async def get_text_cleaner_factory(
+        request: Request
+) -> TextCleanerFactory:
     try:
         return request.app.state.text_cleaner_factory
     except AttributeError:
-        logger.error("TextCleanerFactory not found in application state")
+        logger.error("The text cleaner factory was not registered on the application state.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="TextCleanerFactory is not available",
+            detail="Text cleaner factory is not configured"
         )

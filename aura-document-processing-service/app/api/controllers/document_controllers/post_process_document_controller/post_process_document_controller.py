@@ -35,16 +35,20 @@ class PostProcessDocumentController(PostProcessDocumentControllerInterface):
     ) -> PostProcessDocumentsStartResponse:
         logger.info(
             "Handling post-process all documents request",
-            extra={"user_id": authenticated_user.id},
+            extra={
+                "user_id": authenticated_user.id
+            }
         )
 
         post_process_documents_start_response = await post_process_document_service.start_all(
-            authenticated_user=authenticated_user)
+            authenticated_user=authenticated_user
+        )
 
         logger.info(
             "Post-process all documents completed successfully",
-            extra={"user_id": authenticated_user.id,
-                   "total_documents": post_process_documents_start_response.total_documents},
+            extra={
+                "user_id": authenticated_user.id
+            }
         )
 
         return post_process_documents_start_response
@@ -59,7 +63,9 @@ class PostProcessDocumentController(PostProcessDocumentControllerInterface):
     ) -> PostProcessDocumentsStartResponse:
         logger.info(
             "Handling post-process selected documents request",
-            extra={"user_id": authenticated_user.id, "document_ids": post_process_documents_request.document_ids},
+            extra={
+                "user_id": authenticated_user.id
+            }
         )
 
         post_process_documents_start_response = await post_process_document_service.start_for_documents(
@@ -69,8 +75,9 @@ class PostProcessDocumentController(PostProcessDocumentControllerInterface):
 
         logger.info(
             "Post-process selected documents completed successfully",
-            extra={"user_id": authenticated_user.id,
-                   "total_documents": post_process_documents_start_response.total_documents},
+            extra={
+                "user_id": authenticated_user.id
+            }
         )
 
         return post_process_documents_start_response
@@ -84,7 +91,9 @@ class PostProcessDocumentController(PostProcessDocumentControllerInterface):
     ) -> PostProcessDocumentsStatusResponse:
         logger.info(
             "Handling document post-processing status request",
-            extra={"user_id": authenticated_user.id},
+            extra={
+                "user_id": authenticated_user.id
+            }
         )
 
         post_process_documents_status_response = post_process_document_service.get_status()
@@ -93,11 +102,7 @@ class PostProcessDocumentController(PostProcessDocumentControllerInterface):
             "Document post-processing status retrieved successfully",
             extra={
                 "user_id": authenticated_user.id,
-                "is_running": post_process_documents_status_response.is_running,
-                "total_documents": post_process_documents_status_response.total_documents,
-                "processed_documents": post_process_documents_status_response.processed_documents,
-                "failed_documents": post_process_documents_status_response.failed_documents,
-            },
+            }
         )
 
         return post_process_documents_status_response
@@ -111,28 +116,44 @@ class PostProcessDocumentController(PostProcessDocumentControllerInterface):
     ) -> Response:
         logger.info(
             "Handling document post-processing stop request",
-            extra={"user_id": authenticated_user.id},
+            extra={
+                "user_id": authenticated_user.id
+            }
         )
 
         await post_process_document_service.stop()
 
         logger.info(
             "Document post-processing stop completed successfully",
-            extra={"user_id": authenticated_user.id},
+            extra={
+                "user_id": authenticated_user.id
+            }
         )
 
-        return Response(status_code=status.HTTP_204_NO_CONTENT)
+        return Response(
+            status_code=status.HTTP_204_NO_CONTENT
+        )
 
 
 router = APIRouter()
 post_process_document_controller = PostProcessDocumentController()
 
-router.post("/start", response_model=PostProcessDocumentsStartResponse)(post_process_document_controller.start_all)
+router.post(
+    "/start",
+    response_model=PostProcessDocumentsStartResponse
+)(post_process_document_controller.start_all)
 
-router.post("/documents", response_model=PostProcessDocumentsStartResponse)(
-    post_process_document_controller.start_for_documents
-)
+router.post(
+    "/documents",
+    response_model=PostProcessDocumentsStartResponse
+)(post_process_document_controller.start_for_documents)
 
-router.get("/status", response_model=PostProcessDocumentsStatusResponse)(post_process_document_controller.get_status)
+router.get(
+    "/status",
+    response_model=PostProcessDocumentsStatusResponse
+)(post_process_document_controller.get_status)
 
-router.post("/stop")(post_process_document_controller.stop)
+router.post(
+    "/stop",
+    response_model=None
+)(post_process_document_controller.stop)

@@ -31,7 +31,9 @@ class DocumentQueryController(DocumentQueryControllerInterface):
     ) -> DocumentResponse:
         logger.info(
             "Handling get document request",
-            extra={"user_id": authenticated_user.id, "document_id": document_id},
+            extra={
+                "user_id": authenticated_user.id
+            }
         )
 
         document_response = await document_query_service.get_document(
@@ -42,7 +44,9 @@ class DocumentQueryController(DocumentQueryControllerInterface):
 
         logger.info(
             "Get document completed successfully",
-            extra={"user_id": authenticated_user.id, "document_id": document_id},
+            extra={
+                "user_id": authenticated_user.id
+            }
         )
 
         return document_response
@@ -64,16 +68,8 @@ class DocumentQueryController(DocumentQueryControllerInterface):
         logger.info(
             "Handling list documents request",
             extra={
-                "user_id": authenticated_user.id,
-                "page": page,
-                "size": size,
-                "name_filter": name,
-                "description_filter": description,
-                "category_filter": category,
-                "document_type": type,
-                "created_from": created_from,
-                "created_to": created_to,
-            },
+                "user_id": authenticated_user.id
+            }
         )
 
         document_list_response = await document_query_service.get_documents(
@@ -86,17 +82,14 @@ class DocumentQueryController(DocumentQueryControllerInterface):
             category=category,
             type=type,
             created_from=created_from,
-            created_to=created_to,
+            created_to=created_to
         )
 
         logger.info(
             "List documents completed successfully",
             extra={
-                "user_id": authenticated_user.id,
-                "page": page,
-                "size": size,
-                "result_count": len(document_list_response.documents),
-            },
+                "user_id": authenticated_user.id
+            }
         )
 
         return document_list_response
@@ -105,8 +98,12 @@ class DocumentQueryController(DocumentQueryControllerInterface):
 router = APIRouter()
 document_query_controller = DocumentQueryController()
 
-router.get("/document_controllers/{document_id}", response_model=DocumentResponse)(
-    document_query_controller.get_document
-)
+router.get(
+    "/document_controllers/{document_id}",
+    response_model=DocumentResponse
+)(document_query_controller.get_document)
 
-router.get("/documents", response_model=DocumentListResponse)(document_query_controller.get_documents)
+router.get(
+    "/documents",
+    response_model=DocumentListResponse
+)(document_query_controller.get_documents)

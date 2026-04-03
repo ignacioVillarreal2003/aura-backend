@@ -164,22 +164,16 @@ async def shutdown_dependencies(app: FastAPI) -> None:
 
     state = app.state
 
-    async def _safe_stop(name: str, coro) -> None:
-        try:
-            await coro
-        except Exception:
-            logger.exception("Error while shutting down %s", name)
-
     if rabbitmq_manager := getattr(state, "rabbitmq_manager", None):
-        await _safe_stop("RabbitMQManager", rabbitmq_manager.stop())
+        await rabbitmq_manager.stop()
 
     if http_client := getattr(state, "http_client", None):
-        await _safe_stop("HttpClient", http_client.stop())
+        await http_client.stop()
 
     if minio_manager := getattr(state, "minio_manager", None):
-        await _safe_stop("MinioManager", minio_manager.stop())
+        await minio_manager.stop()
 
     if db_manager := getattr(state, "db_manager", None):
-        await _safe_stop("DatabaseManager", db_manager.dispose())
+        await db_manager.dispose()
 
     logger.info("All dependencies shut down successfully")

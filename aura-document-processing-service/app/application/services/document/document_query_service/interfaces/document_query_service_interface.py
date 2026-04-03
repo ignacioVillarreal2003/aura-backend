@@ -31,6 +31,6 @@ class DocumentQueryServiceInterface(ABC):
             category: Optional[str] = None,
             type: Optional[DocumentType] = None,
             created_from: Optional[datetime] = None,
-            created_to: Optional[datetime] = None,
+            created_to: Optional[datetime] = None
     ) -> DocumentListResponse:
         pass

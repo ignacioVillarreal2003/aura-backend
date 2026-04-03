@@ -16,7 +16,7 @@ class EmbedderSettings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
-        extra="ignore",
+        extra="ignore"
     )
 
     active_type: EmbedderType = Field(default=EmbedderType.ollama)
@@ -36,46 +36,49 @@ class EmbedderSettings(BaseSettings):
     huggingface_device: str = Field(default="cpu")
     huggingface_normalize_embeddings: bool = Field(default=True)
 
-    @model_validator(mode="after")
-    def validate_active_embedder_settings(self) -> "EmbedderSettings":
+    @model_validator(
+        mode="after"
+    )
+    def validate_active_embedder_settings(
+            self
+    ) -> "EmbedderSettings":
         if self.active_type == EmbedderType.ollama:
             self._validate_ollama()
         elif self.active_type == EmbedderType.huggingface:
             self._validate_huggingface()
         return self
 
-    def _validate_ollama(self) -> None:
-        if not self.ollama_model or not self.ollama_model.strip():
-            raise ValueError("ollama_model cannot be empty")
+    def _validate_ollama(
+            self
+    ) -> None:
+        if (not self.ollama_model or
+                not self.ollama_model.strip()):
+            raise ValueError("The Ollama model name cannot be empty.")
 
         if not self.ollama_url.startswith(("http://", "https://")):
-            raise ValueError("ollama_url must start with http:// or https://")
+            raise ValueError("The Ollama URL must start with http:// or https://.")
 
         self.ollama_url = self.ollama_url.rstrip("/")
 
         if self.retry_max_delay < self.retry_delay:
-            raise ValueError(
-                f"retry_max_delay ({self.retry_max_delay}) "
-                f"must be >= retry_delay ({self.retry_delay})"
-            )
+            raise ValueError("The maximum retry delay must be greater than or equal to the initial retry delay.")
 
-    def _validate_huggingface(self) -> None:
+    def _validate_huggingface(
+            self
+    ) -> None:
         if not self.huggingface_model or not self.huggingface_model.strip():
-            raise ValueError("huggingface_model cannot be empty")
+            raise ValueError("The Hugging Face model name cannot be empty.")
 
         device = self.huggingface_device.lower()
 
         if not _DEVICE_PATTERN.match(device):
             raise ValueError(
-                f"huggingface_device must be 'cpu' or 'cuda', "
-                f"got '{self.huggingface_device}'"
+                "The device must be cpu or cuda for the Hugging Face embedder. "
+                f"The value '{self.huggingface_device}' is not supported."
             )
 
         if self.retry_max_delay < self.retry_delay:
-            raise ValueError(
-                f"retry_max_delay ({self.retry_max_delay}) "
-                f"must be >= retry_delay ({self.retry_delay})"
-            )
+            raise ValueError("The maximum retry delay must be greater than or equal to the initial retry delay.")
 
         self.huggingface_device = device
         self.huggingface_model = self.huggingface_model.strip()

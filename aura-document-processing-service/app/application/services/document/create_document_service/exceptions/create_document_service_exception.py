@@ -2,31 +2,38 @@ from app.application.exceptions.app_exception import AppException
 
 
 class CreateDocumentServiceException(AppException):
-    pass
+    def __init__(self, message: str, *, status_code: int = 500) -> None:
+        super().__init__(message, status_code=status_code)
 
 
 class CreateDocumentValidationException(CreateDocumentServiceException):
-    pass
+    def __init__(self, message: str, *, status_code: int = 400) -> None:
+        super().__init__(message, status_code=status_code)
 
 
 class CreateDocumentUploadException(CreateDocumentServiceException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=502)
 
 
 class CreateDocumentPersistenceException(CreateDocumentServiceException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=500)
 
 
 class CreateDocumentUnauthorizedException(CreateDocumentServiceException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=403)
 
 
 class CreateDocumentUnsupportedTypeException(CreateDocumentValidationException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=415)
 
 
 class CreateDocumentSizeExceededException(CreateDocumentValidationException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=413)
 
 
 class CreateDocumentInvalidException(CreateDocumentValidationException):

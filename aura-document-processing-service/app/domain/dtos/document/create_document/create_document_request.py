@@ -10,6 +10,9 @@ class CreateDocumentRequest(BaseModel):
     def as_form(
             cls,
             chat_id: int = Form(...),
-            prefer_docling: bool = Form(False),
+            prefer_docling: bool = Form(False)
     ):
-        return cls(chat_id=chat_id, prefer_docling=prefer_docling)
+        return cls(
+            chat_id=chat_id,
+            prefer_docling=prefer_docling
+        )

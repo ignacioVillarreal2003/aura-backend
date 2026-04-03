@@ -34,12 +34,15 @@ _EMOJI_PATTERN = re.compile(
 
 
 class SimpleTextCleaner(TextCleanerInterface):
-    def __init__(self, text_cleaner_settings: TextCleanerSettings) -> None:
+    def __init__(
+            self,
+            text_cleaner_settings: TextCleanerSettings
+    ) -> None:
         self._settings = text_cleaner_settings
 
         try:
             logger.info(
-                "SimpleTextCleaner initialized successfully",
+                "The simple text cleaner was initialized successfully.",
                 extra={
                     "remove_urls": self._settings.simple_remove_urls,
                     "remove_emojis": self._settings.simple_remove_emojis,
@@ -49,20 +52,18 @@ class SimpleTextCleaner(TextCleanerInterface):
                 }
             )
         except Exception as e:
-            logger.exception("Failed to initialize SimpleTextCleaner")
-            raise TextCleanerInitializationException(
-                f"SimpleTextCleaner initialization failed: {e}"
-            ) from e
+            logger.exception("Failed to initialize the simple text cleaner.")
+            raise TextCleanerInitializationException("Failed to initialize the simple text cleaner.") from e
 
-    def clean_text(self, text: str) -> str:
+    def clean_text(
+            self,
+            text: str
+    ) -> str:
         if not isinstance(text, str) or not text.strip():
             return ""
 
         if len(text) > self._settings.max_text_length:
-            raise TextCleanerExecutionException(
-                f"Text length ({len(text)}) exceeds maximum allowed "
-                f"({self._settings.max_text_length})"
-            )
+            raise TextCleanerExecutionException("The text exceeds the maximum allowed length.")
 
         try:
             text = text.replace("\r\n", "\n").replace("\r", "\n")
@@ -79,8 +80,11 @@ class SimpleTextCleaner(TextCleanerInterface):
             result = text.strip()
 
             logger.debug(
-                "Text cleaned successfully",
-                extra={"input_length": len(text), "output_length": len(result)}
+                "The text was cleaned successfully.",
+                extra={
+                    "input_length": len(text),
+                    "output_length": len(result)
+                }
             )
 
             return result
@@ -88,29 +92,39 @@ class SimpleTextCleaner(TextCleanerInterface):
         except TextCleanerExecutionException:
             raise
         except Exception as e:
-            logger.exception("Failed to clean text")
-            raise TextCleanerExecutionException(
-                f"SimpleTextCleaner failed to clean text: {e}"
-            ) from e
+            logger.exception("Failed to clean the text.")
+            raise TextCleanerExecutionException("Failed to clean the text.") from e
 
-    def _remove_emojis(self, text: str) -> str:
+    def _remove_emojis(
+            self,
+            text: str
+    ) -> str:
         if self._settings.simple_remove_emojis:
             text = _EMOJI_PATTERN.sub("", text)
         return text
 
-    def _remove_markdown(self, text: str) -> str:
+    def _remove_markdown(
+            self,
+            text: str
+    ) -> str:
         if self._settings.simple_remove_markdown:
             text = _MARKDOWN_BOLD_ITALIC.sub(r"\1", text)
             text = _MARKDOWN_CODE_INLINE.sub(r"\1", text)
             text = _MARKDOWN_LINK.sub(r"\1", text)
         return text
 
-    def _remove_urls(self, text: str) -> str:
+    def _remove_urls(
+            self,
+            text: str
+    ) -> str:
         if self._settings.simple_remove_urls:
             text = _URL_PATTERN.sub("", text)
         return text
 
-    def _remove_noise_lines(self, text: str) -> str:
+    def _remove_noise_lines(
+            self,
+            text: str
+    ) -> str:
         if self._settings.simple_remove_noise_lines:
             lines = text.split("\n")
             cleaned: list[str] = []
@@ -136,7 +150,10 @@ class SimpleTextCleaner(TextCleanerInterface):
             return "\n".join(cleaned)
         return text
 
-    def _remove_normalize_whitespace(self, text: str) -> str:
+    def _remove_normalize_whitespace(
+            self,
+            text: str
+    ) -> str:
         if self._settings.simple_normalize_whitespace:
             text = _MULTI_SPACE_PATTERN.sub(" ", text)
             text = _MULTI_NEWLINE_PATTERN.sub("\n", text)

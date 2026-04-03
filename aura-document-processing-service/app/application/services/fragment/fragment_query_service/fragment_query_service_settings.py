@@ -19,11 +19,12 @@ class FragmentQueryServiceSettings(BaseSettings):
     min_question_length: int = Field(default=1, ge=1)
     max_question_length: int = Field(default=10_000, ge=1, le=100_000)
 
-    @model_validator(mode="after")
-    def validate_coherence(self) -> "FragmentQueryServiceSettings":
+    @model_validator(
+        mode="after"
+    )
+    def validate_coherence(
+            self
+    ) -> "FragmentQueryServiceSettings":
         if self.min_question_length >= self.max_question_length:
-            raise ValueError(
-                f"min_question_length ({self.min_question_length}) "
-                f"must be strictly less than max_question_length ({self.max_question_length})"
-            )
+            raise ValueError("The minimum question length must be strictly less than the maximum question length.")
         return self

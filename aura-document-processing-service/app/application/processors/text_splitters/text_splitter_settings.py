@@ -18,7 +18,7 @@ class TextSplitterSettings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
-        extra="ignore",
+        extra="ignore"
     )
 
     active_type: TextSplitterType = Field(default=TextSplitterType.recursive)
@@ -37,8 +37,12 @@ class TextSplitterSettings(BaseSettings):
     markdown_processor_split_overlap: int = Field(default=50, ge=0, le=8192)
     markdown_processor_encoding_name: str = Field(default="cl100k_base")
 
-    @model_validator(mode="after")
-    def validate_active_splitter_settings(self) -> "TextSplitterSettings":
+    @model_validator(
+        mode="after"
+    )
+    def validate_active_splitter_settings(
+            self
+    ) -> "TextSplitterSettings":
         if self.active_type == TextSplitterType.recursive:
             self._validate_recursive()
         elif self.active_type == TextSplitterType.huggingface:
@@ -47,22 +51,23 @@ class TextSplitterSettings(BaseSettings):
             self._validate_markdown_processor()
         return self
 
-    def _validate_recursive(self) -> None:
+    def _validate_recursive(
+            self
+    ) -> None:
         if self.recursive_split_overlap >= self.recursive_split_size:
-            raise ValueError(
-                f"recursive_split_overlap ({self.recursive_split_overlap}) "
-                f"must be strictly less than recursive_split_size ({self.recursive_split_size})"
-            )
+            raise ValueError("Chunk overlap must be strictly smaller than chunk size for the recursive splitter.")
 
         if self.recursive_encoding_name not in _ALLOWED_ENCODINGS:
             raise ValueError(
-                f"recursive_encoding_name must be one of {_ALLOWED_ENCODINGS}, "
-                f"got '{self.recursive_encoding_name}'"
+                "The tokenizer encoding must be cl100k_base or gpt2 for the recursive splitter. "
+                f"The value '{self.recursive_encoding_name}' is not supported."
             )
 
-    def _validate_huggingface(self) -> None:
+    def _validate_huggingface(
+            self
+    ) -> None:
         if not self.huggingface_model or not self.huggingface_model.strip():
-            raise ValueError("huggingface_model cannot be empty")
+            raise ValueError("The Hugging Face model name cannot be empty.")
 
         self.huggingface_model = self.huggingface_model.strip()
 
@@ -70,33 +75,30 @@ class TextSplitterSettings(BaseSettings):
 
         if not _DEVICE_PATTERN.match(device):
             raise ValueError(
-                f"huggingface_device must be one of 'cpu', 'cuda', or 'mps', "
-                f"got '{self.huggingface_device}'"
+                "The device must be cpu, cuda, or mps for the Hugging Face splitter. "
+                f"The value '{self.huggingface_device}' is not supported."
             )
 
         self.huggingface_device = device
 
         if self.huggingface_breakpoint_threshold_type not in _ALLOWED_BREAKPOINT_TYPES:
             raise ValueError(
-                f"huggingface_breakpoint_threshold_type must be one of {_ALLOWED_BREAKPOINT_TYPES}, "
-                f"got '{self.huggingface_breakpoint_threshold_type}'"
+                "The semantic breakpoint type must be percentile, standard_deviation, "
+                "interquartile, or gradient. "
+                f"The value '{self.huggingface_breakpoint_threshold_type}' is not supported."
             )
 
         if (self.huggingface_breakpoint_threshold_amount is not None
                 and self.huggingface_breakpoint_threshold_amount <= 0):
-            raise ValueError(
-                "huggingface_breakpoint_threshold_amount must be positive "
-                f"if provided, got {self.huggingface_breakpoint_threshold_amount}"
-            )
+            raise ValueError("The semantic breakpoint amount must be a positive number when it is set.")
 
-    def _validate_markdown_processor(self) -> None:
+    def _validate_markdown_processor(
+            self
+    ) -> None:
         if self.markdown_processor_split_overlap >= self.markdown_processor_split_size:
-            raise ValueError(
-                f"markdown_processor_split_overlap ({self.markdown_processor_split_overlap}) "
-                f"must be strictly less than markdown_processor_split_size ({self.markdown_processor_split_size})"
-            )
+            raise ValueError("Chunk overlap must be strictly smaller than chunk size for the markdown splitter.")
         if self.markdown_processor_encoding_name not in _ALLOWED_ENCODINGS:
             raise ValueError(
-                f"markdown_processor_encoding_name must be one of {_ALLOWED_ENCODINGS}, "
-                f"got '{self.markdown_processor_encoding_name}'"
+                "The tokenizer encoding must be cl100k_base or gpt2 for the markdown splitter. "
+                f"The value '{self.markdown_processor_encoding_name}' is not supported."
             )

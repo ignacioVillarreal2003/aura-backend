@@ -14,7 +14,7 @@ class ReaderSettings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
-        extra="ignore",
+        extra="ignore"
     )
 
     docling_enabled: bool = Field(default=False)
@@ -27,19 +27,27 @@ class ReaderSettings(BaseSettings):
     pdf_use_parallel: bool = Field(default=True)
     pdf_max_workers: Optional[int] = Field(default=None, ge=1, le=16)
 
-    @model_validator(mode="after")
-    def validate_reader_settings(self) -> "ReaderSettings":
+    @model_validator(
+        mode="after"
+    )
+    def validate_reader_settings(
+            self
+    ) -> "ReaderSettings":
         if self.tesseract_path is not None:
             self._validate_tesseract()
         return self
 
-    def _validate_tesseract(self) -> None:
+    def _validate_tesseract(
+            self
+    ) -> None:
         if self.tesseract_lang not in _SUPPORTED_TESSERACT_LANGS:
             raise ValueError(
-                f"tesseract_lang must be one of {_SUPPORTED_TESSERACT_LANGS}, "
-                f"got '{self.tesseract_lang}'"
+                "The OCR language must be spa, eng, or spa+eng. "
+                f"The value '{self.tesseract_lang}' is not supported."
             )
 
     @property
-    def ocr_enabled(self) -> bool:
+    def ocr_enabled(
+            self
+    ) -> bool:
         return self.tesseract_path is not None

@@ -6,7 +6,7 @@ from app.application.processors.readers.exceptions.reader_exception import (
     DoclingInitializationException,
     DoclingReadException,
     ReaderFileNotFoundException,
-    UnsupportedDoclingFormatException,
+    UnsupportedDoclingFormatException
 )
 from app.application.processors.readers.instances.base_reader import BaseReader
 from app.application.processors.readers.reader_settings import ReaderSettings
@@ -19,31 +19,34 @@ _DOCX_MAGIC = b"PK\x03\x04"
 
 
 class DoclingReader(BaseReader):
-    def __init__(self, reader_settings: ReaderSettings) -> None:
+    def __init__(
+            self,
+            reader_settings: ReaderSettings
+    ) -> None:
         self._settings = reader_settings
 
         try:
             from docling.document_converter import DocumentConverter
         except ImportError as e:
-            logger.exception("Docling is not installed or cannot be imported")
-            raise DoclingInitializationException(
-                "DoclingReader requires the 'docling' package. "
-                "Install it and ensure project requirements include docling."
-            ) from e
+            logger.exception("Docling is not installed or could not be imported.", )
+            raise DoclingInitializationException("The Docling reader needs the docling package installed.") from e
 
         try:
             self._converter = DocumentConverter()
             logger.info(
-                "DoclingReader initialized successfully",
-                extra={"supported_formats": list(_SUPPORTED_SUFFIXES)},
+                "The Docling reader was initialized successfully.",
+                extra={
+                    "supported_formats": list(_SUPPORTED_SUFFIXES)
+                }
             )
         except Exception as e:
-            logger.exception("Failed to initialize DoclingReader")
-            raise DoclingInitializationException(
-                f"DoclingReader initialization failed: {e}"
-            ) from e
+            logger.exception("Failed to initialize the Docling reader.")
+            raise DoclingInitializationException("Failed to initialize the Docling reader.") from e
 
-    def can_handle(self, file_path: Path) -> bool:
+    def can_handle(
+            self,
+            file_path: Path
+    ) -> bool:
         suffix = file_path.suffix.lower()
 
         if suffix not in _SUPPORTED_SUFFIXES:
@@ -57,18 +60,22 @@ class DoclingReader(BaseReader):
 
         return False
 
-    def read(self, file_path: Path) -> str:
+    def read(
+            self,
+            file_path: Path
+    ) -> str:
         self._validate_file_exists(file_path)
         self._validate_file_size(file_path)
 
         if not self.can_handle(file_path):
-            raise UnsupportedDoclingFormatException(
-                f"DoclingReader does not support this file format: {file_path.suffix}"
-            )
+            raise UnsupportedDoclingFormatException("This file format is not supported by the Docling reader.")
 
         logger.info(
-            "Reading file with Docling",
-            extra={"file": file_path.name, "format": file_path.suffix.lower()},
+            "Reading the file with Docling.",
+            extra={
+                "file_name": file_path.name,
+                "format": file_path.suffix.lower()
+            }
         )
 
         try:
@@ -76,26 +83,23 @@ class DoclingReader(BaseReader):
             document = getattr(result, "document", None)
 
             if document is None:
-                raise DoclingReadException(
-                    "Docling conversion returned no document payload."
-                )
+                raise DoclingReadException("Docling returned no document after conversion.")
 
             if not hasattr(document, "export_to_markdown"):
-                raise DoclingReadException(
-                    "Docling document does not support export_to_markdown."
-                )
+                raise DoclingReadException("The Docling document cannot be exported to Markdown.")
 
             markdown = document.export_to_markdown()
             text = (markdown or "").strip()
 
             if not text:
-                raise DoclingExtractionException(
-                    "Docling completed but no extractable text was produced from the file."
-                )
+                raise DoclingExtractionException("Docling finished but produced no extractable text.")
 
             logger.info(
-                "File read successfully with Docling",
-                extra={"file": file_path.name, "chars": len(text)},
+                "The file was read successfully with Docling.",
+                extra={
+                    "file_name": file_path.name,
+                    "chars": len(text)
+                }
             )
             return text
 
@@ -103,14 +107,14 @@ class DoclingReader(BaseReader):
                 ReaderFileNotFoundException,
                 UnsupportedDoclingFormatException,
                 DoclingExtractionException,
-                DoclingReadException,
+                DoclingReadException
         ):
             raise
         except Exception as e:
             logger.exception(
-                "Failed to read file with Docling",
-                extra={"file": str(file_path)},
+                "Failed to read the file with Docling.",
+                extra={
+                    "file_name": file_path.name
+                }
             )
-            raise DoclingReadException(
-                "An unexpected error occurred while processing the file with Docling."
-            ) from e
+            raise DoclingReadException("An unexpected error occurred while processing the file with Docling.") from e

@@ -32,10 +32,8 @@ class CreateDocumentController(CreateDocumentControllerInterface):
         logger.info(
             "Handling create document request",
             extra={
-                "user_id": authenticated_user.id,
-                "document_filename": raw_document.filename,
-                "content_type": raw_document.content_type,
-            },
+                "user_id": authenticated_user.id
+            }
         )
 
         create_document_response = await create_document_service.create_document(
@@ -47,7 +45,9 @@ class CreateDocumentController(CreateDocumentControllerInterface):
 
         logger.info(
             "Create document completed successfully",
-            extra={"user_id": authenticated_user.id, "document_id": create_document_response.id},
+            extra={
+                "user_id": authenticated_user.id
+            }
         )
 
         return create_document_response
@@ -56,4 +56,7 @@ class CreateDocumentController(CreateDocumentControllerInterface):
 router = APIRouter()
 create_document_controller = CreateDocumentController()
 
-router.post("", response_model=CreateDocumentResponse)(create_document_controller.create_document)
+router.post(
+    "",
+    response_model=CreateDocumentResponse
+)(create_document_controller.create_document)

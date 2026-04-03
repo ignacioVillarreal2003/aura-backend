@@ -25,11 +25,17 @@ class TextCleanerSettings(BaseSettings):
     simple_normalize_whitespace: bool = Field(default=False)
     simple_remove_noise_lines: bool = Field(default=False)
 
-    @model_validator(mode="after")
-    def validate_active_cleaner_settings(self) -> "TextCleanerSettings":
+    @model_validator(
+        mode="after"
+    )
+    def validate_active_cleaner_settings(
+            self
+    ) -> "TextCleanerSettings":
         if self.active_type == TextCleanerType.simple:
             self._validate_simple()
         return self
 
-    def _validate_simple(self) -> None:
+    def _validate_simple(
+            self
+    ) -> None:
         pass

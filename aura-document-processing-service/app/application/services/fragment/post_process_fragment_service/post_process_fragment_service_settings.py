@@ -8,7 +8,7 @@ class PostProcessFragmentServiceSettings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
-        extra="ignore",
+        extra="ignore"
     )
 
     batch_size: int = Field(default=200, ge=1, le=5000)

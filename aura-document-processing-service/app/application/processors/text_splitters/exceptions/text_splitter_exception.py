@@ -2,15 +2,18 @@ from app.application.exceptions.app_exception import AppException
 
 
 class TextSplitterException(AppException):
-    pass
+    def __init__(self, message: str, *, status_code: int = 500) -> None:
+        super().__init__(message, status_code=status_code)
 
 
 class UnsupportedTextSplitterTypeException(TextSplitterException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=422)
 
 
 class TextSplitterInitializationException(TextSplitterException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=503)
 
 
 class TextSplitterExecutionException(TextSplitterException):

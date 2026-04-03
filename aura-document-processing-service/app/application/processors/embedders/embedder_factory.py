@@ -21,11 +21,13 @@ _EMBEDDER_REGISTRY: dict[EmbedderType, str] = {
     EmbedderType.huggingface: (
         "app.application.processors.embedders.instances"
         ".huggingface_embedder.HuggingFaceEmbedder"
-    ),
+    )
 }
 
 
-def _import_embedder_class(dotted_path: str) -> type[EmbedderInterface]:
+def _import_embedder_class(
+        dotted_path: str
+) -> type[EmbedderInterface]:
     module_path, class_name = dotted_path.rsplit(".", 1)
     module = importlib.import_module(module_path)
     cls = getattr(module, class_name)
@@ -33,7 +35,10 @@ def _import_embedder_class(dotted_path: str) -> type[EmbedderInterface]:
 
 
 class EmbedderFactory:
-    def __init__(self, embedder_settings: EmbedderSettings | None = None) -> None:
+    def __init__(
+            self,
+            embedder_settings: EmbedderSettings | None = None
+    ) -> None:
         self._settings = embedder_settings or EmbedderSettings()
         self._active_type = self._settings.active_type
 
@@ -42,15 +47,17 @@ class EmbedderFactory:
         self._instances: dict[EmbedderType, EmbedderInterface] = {}
 
         logger.info(
-            "EmbedderFactory created",
+            "The embedder factory was created.",
             extra={
                 "active_type": self._active_type,
-                "available_types": [t.value for t in _EMBEDDER_REGISTRY],
-            },
+                "available_types": [t.value for t in _EMBEDDER_REGISTRY]
+            }
         )
 
     @property
-    def embedder(self) -> EmbedderInterface:
+    def embedder(
+            self
+    ) -> EmbedderInterface:
         if self._embedder is not None:
             return self._embedder
 
@@ -60,12 +67,12 @@ class EmbedderFactory:
 
         return self._embedder
 
-    def get_by_type(self, embedder_type: EmbedderType) -> EmbedderInterface:
+    def get_by_type(
+            self,
+            embedder_type: EmbedderType
+    ) -> EmbedderInterface:
         if embedder_type not in _EMBEDDER_REGISTRY:
-            raise UnsupportedEmbedderTypeException(
-                f"Unsupported embedder type: '{embedder_type}'. "
-                f"Available: {[t.value for t in _EMBEDDER_REGISTRY]}"
-            )
+            raise UnsupportedEmbedderTypeException("That embedder type is not supported.")
 
         if embedder_type in self._instances:
             return self._instances[embedder_type]
@@ -76,21 +83,27 @@ class EmbedderFactory:
 
         return self._instances[embedder_type]
 
-    def get_active_type(self) -> EmbedderType:
+    def get_active_type(
+            self
+    ) -> EmbedderType:
         return self._active_type
 
-    def is_supported(self, embedder_type: EmbedderType) -> bool:
+    def is_supported(
+            self,
+            embedder_type: EmbedderType
+    ) -> bool:
         return embedder_type in _EMBEDDER_REGISTRY
 
-    def available_types(self) -> list[EmbedderType]:
+    def available_types(
+            self
+    ) -> list[EmbedderType]:
         return list(_EMBEDDER_REGISTRY.keys())
 
-    def _build_embedder(self) -> EmbedderInterface:
+    def _build_embedder(
+            self
+    ) -> EmbedderInterface:
         if self._active_type not in _EMBEDDER_REGISTRY:
-            raise UnsupportedEmbedderTypeException(
-                f"Unsupported embedder type: '{self._active_type}'. "
-                f"Available: {[t.value for t in _EMBEDDER_REGISTRY]}"
-            )
+            raise UnsupportedEmbedderTypeException("That embedder type is not supported.")
 
         dotted_path = _EMBEDDER_REGISTRY[self._active_type]
 
@@ -98,22 +111,30 @@ class EmbedderFactory:
             embedder_class = _import_embedder_class(dotted_path)
             instance = embedder_class(embedder_settings=self._settings)
             logger.info(
-                "Embedder initialized and cached",
-                extra={"type": self._active_type},
+                "The embedder was initialized and cached.",
+                extra={
+                    "embedder_type": self._active_type
+                }
             )
             return instance
         except EmbedderInitializationException:
             raise
         except Exception as e:
             logger.error(
-                "Unexpected error during embedder initialization",
-                extra={"type": self._active_type, "error": str(e)},
+                "An unexpected error occurred while initializing the embedder.",
+                extra={
+                    "embedder_type": self._active_type,
+                    "exception_type": type(e).__name__
+                }
             )
             raise EmbedderInitializationException(
-                f"Failed to initialize embedder '{self._active_type}': {e}"
+                "Failed to initialize the embedder."
             ) from e
 
-    def _build_by_type(self, embedder_type: EmbedderType) -> EmbedderInterface:
+    def _build_by_type(
+            self,
+            embedder_type: EmbedderType
+    ) -> EmbedderInterface:
         dotted_path = _EMBEDDER_REGISTRY[embedder_type]
 
         try:
@@ -121,8 +142,10 @@ class EmbedderFactory:
             instance = embedder_class(embedder_settings=self._settings)
 
             logger.info(
-                "Embedder initialized",
-                extra={"type": embedder_type},
+                "The embedder was initialized.",
+                extra={
+                    "embedder_type": embedder_type
+                }
             )
             return instance
 
@@ -130,20 +153,23 @@ class EmbedderFactory:
             raise
         except Exception as e:
             logger.error(
-                "Unexpected error during embedder initialization",
-                extra={"type": embedder_type, "error": str(e)},
+                "An unexpected error occurred while initializing the embedder.",
+                extra={
+                    "embedder_type": embedder_type,
+                    "exception_type": type(e).__name__
+                }
             )
-            raise EmbedderInitializationException(
-                f"Failed to initialize embedder '{embedder_type}': {e}"
-            ) from e
+            raise EmbedderInitializationException("Failed to initialize the embedder.") from e
 
 
-async def get_embedder_factory(request: Request) -> EmbedderFactory:
+async def get_embedder_factory(
+        request: Request
+) -> EmbedderFactory:
     try:
         return request.app.state.embedder_factory
     except AttributeError:
-        logger.error("EmbedderFactory not found in application state")
+        logger.error("The embedder factory was not registered on the application state.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="EmbedderFactory is not available",
+            detail="Embedder factory is not configured"
         )

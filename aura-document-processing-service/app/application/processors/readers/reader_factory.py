@@ -8,9 +8,9 @@ from fastapi import HTTPException, Request, status
 
 from app.application.processors.readers.constants.reader_type import ReaderType
 from app.application.processors.readers.exceptions.reader_exception import (
-    ReaderException,
+    ReaderFileNotFoundException,
     ReaderInitializationException,
-    UnsupportedReaderException,
+    UnsupportedReaderException
 )
 from app.application.processors.readers.interfaces.reader_interface import ReaderInterface
 from app.application.processors.readers.reader_settings import ReaderSettings
@@ -21,24 +21,27 @@ _BASE_READER_PRIORITY: list[ReaderType] = [
     ReaderType.digital_pdf,
     ReaderType.digital_docx,
     ReaderType.scanned_pdf,
-    ReaderType.scanned_docx,
+    ReaderType.scanned_docx
 ]
 
 _WINDOWS_TESSERACT_PATHS = [
     r"C:\Program Files\Tesseract-OCR\tesseract.exe",
-    r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+    r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"
 ]
 _WINDOWS_POPPLER_PATHS = [
     r"C:\Program Files\poppler-25.07.0\Library\bin",
     r"C:\Program Files\poppler\Library\bin",
     r"C:\Program Files\poppler\bin",
     r"C:\poppler\Library\bin",
-    r"C:\poppler\bin",
+    r"C:\poppler\bin"
 ]
 
 
 class ReaderFactory:
-    def __init__(self, reader_settings: Optional[ReaderSettings] = None) -> None:
+    def __init__(
+            self,
+            reader_settings: Optional[ReaderSettings] = None
+    ) -> None:
         self._settings = reader_settings or ReaderSettings()
         self._reader_cache: dict[ReaderType, ReaderInterface] = {}
         self._docling_lazy_failed: bool = False
@@ -49,7 +52,7 @@ class ReaderFactory:
         self._ocr_settings = self._settings.model_copy(
             update={
                 "tesseract_path": resolved_tesseract,
-                "poppler_path": resolved_poppler,
+                "poppler_path": resolved_poppler
             }
         )
 
@@ -58,30 +61,37 @@ class ReaderFactory:
         self._initialize_readers()
 
         logger.info(
-            "ReaderFactory initialized",
+            "The reader factory was initialized.",
             extra={
                 "registered_readers": [t.value for t in self._reader_cache],
                 "reader_priority": [t.value for t in self._reader_priority],
                 "ocr_available": self._ocr_settings.ocr_enabled,
-                "docling_enabled": self._settings.docling_enabled,
-            },
+                "docling_enabled": self._settings.docling_enabled
+            }
         )
 
-    def get_reader(self, file_path: Path, *, prefer_docling: bool = False) -> ReaderInterface:
+    def get_reader(
+            self,
+            file_path: Path,
+            *,
+            prefer_docling: bool = False
+    ) -> ReaderInterface:
         if not file_path.exists():
-            raise ReaderException(f"File not found: {file_path}")
+            raise ReaderFileNotFoundException("The file was not found.")
 
         if prefer_docling:
             self._ensure_docling_reader()
 
-        priority = self._effective_reader_priority(prefer_docling=prefer_docling)
+        priority = self._effective_reader_priority(
+            prefer_docling=prefer_docling
+        )
 
         logger.debug(
-            "Finding reader for file",
+            "Selecting a reader for the file.",
             extra={
-                "file": file_path.name,
-                "prefer_docling": prefer_docling,
-            },
+                "file_name": file_path.name,
+                "prefer_docling": prefer_docling
+            }
         )
 
         for reader_type in priority:
@@ -92,47 +102,63 @@ class ReaderFactory:
             try:
                 if reader.can_handle(file_path):
                     logger.info(
-                        "Reader selected",
+                        "A reader was selected for the file.",
                         extra={
-                            "file": file_path.name,
+                            "file_name": file_path.name,
                             "reader_type": reader_type,
-                            "prefer_docling": prefer_docling,
-                        },
+                            "prefer_docling": prefer_docling
+                        }
                     )
                     return reader
             except Exception as e:
                 logger.debug(
-                    "Reader cannot handle file",
+                    "The reader cannot handle this file.",
                     extra={
                         "reader_type": reader_type,
-                        "file": file_path.name,
-                        "error": str(e),
-                    },
+                        "file_name": file_path.name,
+                        "exception_type": type(e).__name__
+                    }
                 )
 
-        logger.error("No reader available for file", extra={"file": str(file_path)})
-        raise UnsupportedReaderException(f"No reader found for file: {file_path.name}")
+        logger.error(
+            "No reader could handle the file.",
+            extra={
+                "file_name": file_path.name
+            }
+        )
+        raise UnsupportedReaderException("No reader is available for this file.")
 
-    def is_supported(self, reader_type: ReaderType) -> bool:
+    def is_supported(
+            self,
+            reader_type: ReaderType
+    ) -> bool:
         return reader_type in self._reader_cache
 
-    def available_types(self) -> list[ReaderType]:
+    def available_types(
+            self
+    ) -> list[ReaderType]:
         return list(self._reader_cache.keys())
 
-    def _build_priority_list(self) -> list[ReaderType]:
+    def _build_priority_list(
+            self
+    ) -> list[ReaderType]:
         if self._settings.docling_enabled:
             return [ReaderType.docling] + _BASE_READER_PRIORITY
 
         return _BASE_READER_PRIORITY + [ReaderType.docling]
 
-    def _effective_reader_priority(self, *, prefer_docling: bool) -> list[ReaderType]:
+    def _effective_reader_priority(
+            self,
+            *,
+            prefer_docling: bool
+    ) -> list[ReaderType]:
         if not prefer_docling:
             return self._reader_priority
-        return [ReaderType.docling] + [
-            t for t in self._reader_priority if t != ReaderType.docling
-        ]
+        return [ReaderType.docling] + [t for t in self._reader_priority if t != ReaderType.docling]
 
-    def _ensure_docling_reader(self) -> None:
+    def _ensure_docling_reader(
+            self
+    ) -> None:
         if ReaderType.docling in self._reader_cache:
             return
         if self._docling_lazy_failed:
@@ -144,64 +170,89 @@ class ReaderFactory:
         if ReaderType.docling not in self._reader_cache:
             self._docling_lazy_failed = True
             logger.warning(
-                "Lazy Docling registration failed — prefer_docling will fall back to default priority",
+                "Lazy registration of the Docling reader failed; prefer_docling will use the default reader order.",
             )
         else:
-            logger.info("Docling reader registered on demand for prefer_docling")
+            logger.info("The Docling reader was registered on demand for prefer_docling.")
 
-    def _resolve_tesseract(self) -> Optional[str]:
+    def _resolve_tesseract(
+            self
+    ) -> Optional[str]:
         if self._settings.tesseract_path:
             if os.path.exists(self._settings.tesseract_path):
                 logger.debug(
-                    "Using configured tesseract path",
-                    extra={"path": self._settings.tesseract_path},
+                    "Using the configured Tesseract path.",
+                    extra={
+                        "path": self._settings.tesseract_path
+                    }
                 )
                 return self._settings.tesseract_path
             logger.warning(
-                "Configured tesseract path does not exist",
-                extra={"path": self._settings.tesseract_path},
+                "The configured Tesseract path does not exist.",
+                extra={
+                    "path": self._settings.tesseract_path
+                }
             )
 
         found = shutil.which("tesseract")
         if found:
-            logger.debug("Auto-detected tesseract on PATH", extra={"path": found})
+            logger.debug(
+                "Tesseract was auto-detected on PATH.",
+                extra={
+                    "path": found
+                }
+            )
             return found
 
         if platform.system() == "Windows":
             for path in _WINDOWS_TESSERACT_PATHS:
                 if os.path.exists(path):
                     logger.debug(
-                        "Found tesseract at Windows default path", extra={"path": path}
+                        "Tesseract was found at a Windows default path.",
+                        extra={
+                            "path": path
+                        }
                     )
                     return path
 
-        logger.info("Tesseract not found — OCR readers will be skipped")
+        logger.info("Tesseract was not found; OCR-based readers will be skipped.")
         return None
 
-    def _resolve_poppler(self) -> Optional[str]:
+    def _resolve_poppler(
+            self
+    ) -> Optional[str]:
         if self._settings.poppler_path:
             if os.path.exists(self._settings.poppler_path):
                 logger.debug(
-                    "Using configured poppler path",
-                    extra={"path": self._settings.poppler_path},
+                    "Using the configured Poppler path.",
+                    extra={
+                        "path": self._settings.poppler_path
+                    }
                 )
                 return self._settings.poppler_path
             logger.warning(
-                "Configured poppler path does not exist",
-                extra={"path": self._settings.poppler_path},
+                "The configured Poppler path does not exist.",
+                extra={
+                    "path": self._settings.poppler_path
+                }
             )
 
         if platform.system() == "Windows":
             for path in _WINDOWS_POPPLER_PATHS:
                 if os.path.exists(path):
                     logger.debug(
-                        "Found poppler at Windows default path", extra={"path": path}
+                        "Poppler was found at a Windows default path.",
+                        extra={
+                            "path": path
+                        }
                     )
                     return path
 
         return None
 
-    def _initialize_readers(self) -> None:
+    def _initialize_readers(
+            self
+    ) -> None:
         from app.application.processors.readers.instances.digital.digital_pdf_reader import DigitalPDFReader
         from app.application.processors.readers.instances.digital.digital_docx_reader import DigitalDOCXReader
 
@@ -213,18 +264,14 @@ class ReaderFactory:
             self._register(ReaderType.docling, DoclingReader, self._settings)
 
         if self._ocr_settings.ocr_enabled:
-            from app.application.processors.readers.instances.scanned.scanned_pdf_reader import (
-                ScannedPDFReader,
-            )
-            from app.application.processors.readers.instances.scanned.scanned_docx_reader import (
-                ScannedDOCXReader,
-            )
+            from app.application.processors.readers.instances.scanned.scanned_pdf_reader import ScannedPDFReader
+            from app.application.processors.readers.instances.scanned.scanned_docx_reader import ScannedDOCXReader
 
             self._register(ReaderType.scanned_pdf, ScannedPDFReader, self._ocr_settings)
             self._register(ReaderType.scanned_docx, ScannedDOCXReader, self._ocr_settings)
         else:
             logger.info(
-                "Skipping Tesseract OCR readers — tesseract not available. "
+                "Skipping Tesseract OCR readers because Tesseract is not available. "
                 "Install tesseract-ocr or set READER_TESSERACT_PATH."
             )
 
@@ -232,29 +279,42 @@ class ReaderFactory:
             self,
             reader_type: ReaderType,
             reader_class: type,
-            settings: ReaderSettings,
+            settings: ReaderSettings
     ) -> None:
         try:
             self._reader_cache[reader_type] = reader_class(reader_settings=settings)
-            logger.debug("Reader registered", extra={"reader_type": reader_type})
+            logger.debug(
+                "A reader was registered.",
+                extra={
+                    "reader_type": reader_type
+                }
+            )
         except ReaderInitializationException as e:
             logger.error(
-                "Failed to initialize reader",
-                extra={"reader_type": reader_type, "error": str(e)},
+                "Failed to initialize a reader.",
+                extra={
+                    "reader_type": reader_type,
+                    "exception_type": type(e).__name__
+                }
             )
         except Exception as e:
             logger.error(
-                "Unexpected error initializing reader",
-                extra={"reader_type": reader_type, "error": str(e)},
+                "An unexpected error occurred while initializing a reader.",
+                extra={
+                    "reader_type": reader_type,
+                    "exception_type": type(e).__name__
+                }
             )
 
 
-async def get_reader_factory(request: Request) -> ReaderFactory:
+async def get_reader_factory(
+        request: Request
+) -> ReaderFactory:
     try:
         return request.app.state.reader_factory
     except AttributeError:
-        logger.error("ReaderFactory not found in application state")
+        logger.error("The reader factory was not registered on the application state.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="ReaderFactory is not available",
+            detail="Reader factory is not configured"
         )

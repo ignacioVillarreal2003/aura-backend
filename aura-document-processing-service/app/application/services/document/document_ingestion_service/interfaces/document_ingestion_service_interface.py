@@ -10,6 +10,6 @@ class DocumentIngestionServiceInterface(ABC):
             self,
             document: Document,
             local_file_path: Path,
-            prefer_docling: bool = False,
+            prefer_docling: bool = False
     ) -> None:
         pass

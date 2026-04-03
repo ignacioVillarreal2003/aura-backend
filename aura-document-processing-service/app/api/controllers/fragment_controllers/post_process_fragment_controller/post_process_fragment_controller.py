@@ -35,7 +35,9 @@ class PostProcessFragmentController(PostProcessFragmentControllerInterface):
     ) -> PostProcessFragmentsStartResponse:
         logger.info(
             "Handling post-process all fragments request",
-            extra={"user_id": authenticated_user.id},
+            extra={
+                "user_id": authenticated_user.id
+            }
         )
 
         post_process_fragments_start_response = await post_process_fragment_service.start_all(
@@ -45,9 +47,8 @@ class PostProcessFragmentController(PostProcessFragmentControllerInterface):
         logger.info(
             "Post-process all fragments completed successfully",
             extra={
-                "user_id": authenticated_user.id,
-                "total_fragments": post_process_fragments_start_response.total_fragments
-            },
+                "user_id": authenticated_user.id
+            }
         )
 
         return post_process_fragments_start_response
@@ -62,20 +63,21 @@ class PostProcessFragmentController(PostProcessFragmentControllerInterface):
     ) -> PostProcessFragmentsStartResponse:
         logger.info(
             "Handling post-process fragments for selected documents request",
-            extra={"user_id": authenticated_user.id, "document_ids": post_process_fragments_request.document_ids},
+            extra={
+                "user_id": authenticated_user.id
+            }
         )
 
         post_process_fragments_start_response = await post_process_fragment_service.start_for_documents(
             post_process_fragments_request=post_process_fragments_request,
-            authenticated_user=authenticated_user,
+            authenticated_user=authenticated_user
         )
 
         logger.info(
             "Post-process fragments for selected documents completed successfully",
             extra={
-                "user_id": authenticated_user.id,
-                "total_fragments": post_process_fragments_start_response.total_fragments
-            },
+                "user_id": authenticated_user.id
+            }
         )
 
         return post_process_fragments_start_response
@@ -89,7 +91,9 @@ class PostProcessFragmentController(PostProcessFragmentControllerInterface):
     ) -> PostProcessFragmentsStatusResponse:
         logger.info(
             "Handling fragment post-processing status request",
-            extra={"user_id": authenticated_user.id},
+            extra={
+                "user_id": authenticated_user.id
+            }
         )
 
         post_process_fragments_status_response = post_process_fragment_service.get_status()
@@ -97,12 +101,8 @@ class PostProcessFragmentController(PostProcessFragmentControllerInterface):
         logger.info(
             "Fragment post-processing status retrieved successfully",
             extra={
-                "user_id": authenticated_user.id,
-                "is_running": post_process_fragments_status_response.is_running,
-                "total_fragments": post_process_fragments_status_response.total_fragments,
-                "processed_fragments": post_process_fragments_status_response.processed_fragments,
-                "failed_fragments": post_process_fragments_status_response.failed_fragments,
-            },
+                "user_id": authenticated_user.id
+            }
         )
 
         return post_process_fragments_status_response
@@ -116,28 +116,44 @@ class PostProcessFragmentController(PostProcessFragmentControllerInterface):
     ) -> Response:
         logger.info(
             "Handling fragment post-processing stop request",
-            extra={"user_id": authenticated_user.id},
+            extra={
+                "user_id": authenticated_user.id
+            }
         )
 
         await post_process_fragment_service.stop()
 
         logger.info(
             "Fragment post-processing stop completed successfully",
-            extra={"user_id": authenticated_user.id},
+            extra={
+                "user_id": authenticated_user.id
+            }
         )
 
-        return Response(status_code=status.HTTP_204_NO_CONTENT)
+        return Response(
+            status_code=status.HTTP_204_NO_CONTENT
+        )
 
 
 router = APIRouter()
 post_process_fragment_controller = PostProcessFragmentController()
 
-router.post("/start", response_model=PostProcessFragmentsStartResponse)(post_process_fragment_controller.start_all)
+router.post(
+    "/start",
+    response_model=PostProcessFragmentsStartResponse
+)(post_process_fragment_controller.start_all)
 
-router.post("/documents", response_model=PostProcessFragmentsStartResponse)(
-    post_process_fragment_controller.start_for_documents
-)
+router.post(
+    "/documents",
+    response_model=PostProcessFragmentsStartResponse
+)(post_process_fragment_controller.start_for_documents)
 
-router.get("/status", response_model=PostProcessFragmentsStatusResponse)(post_process_fragment_controller.get_status)
+router.get(
+    "/status",
+    response_model=PostProcessFragmentsStatusResponse
+)(post_process_fragment_controller.get_status)
 
-router.post("/stop")(post_process_fragment_controller.stop)
+router.post(
+    "/stop",
+    response_model=None
+)(post_process_fragment_controller.stop)

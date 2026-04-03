@@ -5,15 +5,18 @@ from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.services.document.document_query_service.document_query_service_authorizer import (
-    DocumentQueryServiceAuthorizer,
+    DocumentQueryServiceAuthorizer
 )
 from app.application.services.document.document_query_service.document_query_service_settings import (
     DocumentQueryServiceSettings
 )
 from app.application.services.document.document_query_service.document_query_service_validator import (
-    DocumentQueryServiceValidator,
+    DocumentQueryServiceValidator
 )
-from app.domain.constants.user.user_roles import ADMIN_ROLES, ALL_ROLES
+from app.domain.constants.user.user_roles import (
+    ADMIN_ROLES,
+    ALL_ROLES
+)
 from app.domain.constants.document.document_type import DocumentType
 
 from app.application.services.document.document_query_service.exceptions.document_query_service_exception import (
@@ -37,12 +40,6 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentQueryService(DocumentQueryServiceInterface):
-    _KNOWN_EXCEPTIONS = (
-        DocumentQueryNotFoundException,
-        DocumentQueryUnauthorizedException,
-        DocumentQueryInvalidRequestException,
-    )
-
     def __init__(
             self,
             document_repository: DocumentRepositoryInterface,
@@ -50,6 +47,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
     ) -> None:
         self._document_repository = document_repository
         self._settings = document_query_service_settings or DocumentQueryServiceSettings()
+
         self._validator = DocumentQueryServiceValidator(
             document_query_service_settings=self._settings
         )
@@ -62,14 +60,20 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             authenticated_user: AuthenticatedUser
     ) -> DocumentResponse:
         logger.info(
-            "Get document initiated",
-            extra={"document_id": document_id, "user_id": authenticated_user.id}
+            "Fetching a single document was initiated.",
+            extra={
+                "document_id": document_id,
+                "user_id": authenticated_user.id
+            }
         )
 
         try:
             self._validator.validate_document_id(document_id)
             self._authorizer.require_permissions(authenticated_user)
-            self._authorizer.require_roles(authenticated_user=authenticated_user, allowed_roles=ALL_ROLES)
+            self._authorizer.require_roles(
+                authenticated_user=authenticated_user,
+                allowed_roles=ALL_ROLES
+            )
 
             document = await self._get_document_or_raise(document_id, database_session)
 
@@ -77,18 +81,28 @@ class DocumentQueryService(DocumentQueryServiceInterface):
                 self._authorizer.require_ownership(document, authenticated_user)
 
             logger.info(
-                "Get document completed",
-                extra={"document_id": document_id, "user_id": authenticated_user.id}
+                "The document was fetched successfully.",
+                extra={
+                    "document_id": document_id,
+                    "user_id": authenticated_user.id
+                }
             )
             return DocumentResponse.model_validate(document)
 
-        except self._KNOWN_EXCEPTIONS:
+        except (
+                DocumentQueryNotFoundException,
+                DocumentQueryUnauthorizedException,
+                DocumentQueryInvalidRequestException,
+        ):
             raise
         except Exception as e:
-            logger.exception("Unexpected error during get document", extra={"document_id": document_id})
-            raise DocumentQueryServiceException(
-                f"Unexpected error retrieving document {document_id}"
-            ) from e
+            logger.exception(
+                "An unexpected error occurred while fetching the document.",
+                extra={
+                    "document_id": document_id
+                }
+            )
+            raise DocumentQueryServiceException("An unexpected error occurred while fetching the document.") from e
 
     async def get_documents(
             self,
@@ -101,25 +115,33 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             category: Optional[str] = None,
             type: Optional[DocumentType] = None,
             created_from: Optional[datetime] = None,
-            created_to: Optional[datetime] = None,
+            created_to: Optional[datetime] = None
     ) -> DocumentListResponse:
         has_filters = any(f is not None for f in (name, description, category, type, created_from, created_to))
 
         logger.info(
-            "Get documents initiated",
-            extra={"page": page, "size": size, "has_filters": has_filters, "user_id": authenticated_user.id}
+            "Fetching the document list was initiated.",
+            extra={
+                "page": page,
+                "size": size,
+                "has_filters": has_filters,
+                "user_id": authenticated_user.id
+            }
         )
 
         try:
             self._authorizer.require_permissions(authenticated_user)
-            self._authorizer.require_roles(authenticated_user=authenticated_user,allowed_roles=ADMIN_ROLES)
+            self._authorizer.require_roles(
+                authenticated_user=authenticated_user,
+                allowed_roles=ADMIN_ROLES
+            )
             self._validator.validate_pagination(page, size)
             self._validator.validate_filters(
                 name=name,
                 description=description,
                 category=category,
                 created_from=created_from,
-                created_to=created_to,
+                created_to=created_to
             )
 
             if has_filters:
@@ -132,7 +154,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
                     category=category,
                     type=type,
                     created_from=created_from,
-                    created_to=created_to,
+                    created_to=created_to
                 )
             else:
                 documents = await self._document_repository.get_documents(
@@ -142,19 +164,35 @@ class DocumentQueryService(DocumentQueryServiceInterface):
                 )
 
             logger.info(
-                "Get documents completed",
-                extra={"page": page, "size": size, "count": len(documents), "user_id": authenticated_user.id}
+                "The document list was fetched successfully.",
+                extra={
+                    "page": page,
+                    "size": size,
+                    "count": len(documents),
+                    "user_id": authenticated_user.id
+                }
             )
 
             return DocumentListResponse(
                 documents=[DocumentResponse.model_validate(d) for d in documents]
             )
 
-        except self._KNOWN_EXCEPTIONS:
+
+        except (
+                DocumentQueryNotFoundException,
+                DocumentQueryUnauthorizedException,
+                DocumentQueryInvalidRequestException,
+        ):
             raise
         except Exception as e:
-            logger.exception("Unexpected error during get documents", extra={"page": page, "size": size})
-            raise DocumentQueryServiceException("Unexpected error retrieving documents") from e
+            logger.exception(
+                "An unexpected error occurred while fetching documents.",
+                extra={
+                    "page": page,
+                    "size": size
+                }
+            )
+            raise DocumentQueryServiceException("An unexpected error occurred while fetching documents.") from e
 
     async def _get_document_or_raise(
             self,
@@ -166,17 +204,24 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             database_session=database_session
         )
         if document is None:
-            logger.warning("Document not found", extra={"document_id": document_id})
-            raise DocumentQueryNotFoundException(f"Document {document_id} not found")
+            logger.warning(
+                "The document was not found.",
+                extra={
+                    "document_id": document_id
+                }
+            )
+            raise DocumentQueryNotFoundException("The document was not found.")
         return document
 
 
-async def get_document_query_service(request: Request) -> DocumentQueryServiceInterface:
+async def get_document_query_service(
+        request: Request
+) -> DocumentQueryServiceInterface:
     try:
         return request.app.state.document_query_service
     except AttributeError:
-        logger.error("DocumentQueryService not found in application state")
+        logger.error("DocumentQueryService is not registered on the application state.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="DocumentQueryService is not available",
+            detail="DocumentQueryService is not registered on the application state."
         )

@@ -40,9 +40,15 @@ class CreateDocumentServiceSettings(BaseSettings):
         ]
     }
 
-    @field_validator("allowed_content_types", mode="before")
+    @field_validator(
+        "allowed_content_types",
+        mode="before"
+    )
     @classmethod
-    def validate_content_types(cls, v: list[str]) -> list[str]:
+    def validate_content_types(
+            cls,
+            v: list[str]
+    ) -> list[str]:
         if not v:
             raise ValueError("allowed_content_types cannot be empty")
         normalised = [ct.lower().strip() for ct in v]
@@ -50,9 +56,15 @@ class CreateDocumentServiceSettings(BaseSettings):
             raise ValueError("allowed_content_types contains duplicates")
         return normalised
 
-    @field_validator("temp_dir_prefix", mode="before")
+    @field_validator(
+        "temp_dir_prefix",
+        mode="before"
+    )
     @classmethod
-    def validate_temp_dir_prefix(cls, v: str) -> str:
+    def validate_temp_dir_prefix(
+            cls,
+            v: str
+    ) -> str:
         v = v.strip()
         if not v:
             raise ValueError("temp_dir_prefix cannot be empty")
@@ -61,7 +73,9 @@ class CreateDocumentServiceSettings(BaseSettings):
         return v
 
     @model_validator(mode="after")
-    def validate_coherence(self) -> "CreateDocumentServiceSettings":
+    def validate_coherence(
+            self
+    ) -> "CreateDocumentServiceSettings":
         if self.min_file_size_bytes >= self.max_file_size_bytes:
             raise ValueError(
                 f"min_file_size_bytes ({self.min_file_size_bytes}) must be "
@@ -70,14 +84,25 @@ class CreateDocumentServiceSettings(BaseSettings):
         return self
 
     @property
-    def max_file_size_bytes(self) -> int:
+    def max_file_size_bytes(
+            self
+    ) -> int:
         return self.max_file_size_mb * 1024 * 1024
 
-    def is_content_type_allowed(self, content_type: str) -> bool:
+    def is_content_type_allowed(
+            self,
+            content_type: str
+    ) -> bool:
         return content_type.lower() in self.allowed_content_types
 
-    def get_document_type(self, content_type: str) -> str | None:
+    def get_document_type(
+            self,
+            content_type: str
+    ) -> str | None:
         return self.content_type_mapping.get(content_type.lower())
 
-    def get_magic_numbers(self, content_type: str) -> list[bytes]:
+    def get_magic_numbers(
+            self,
+            content_type: str
+    ) -> list[bytes]:
         return self.magic_number_validation.get(content_type.lower(), [])
