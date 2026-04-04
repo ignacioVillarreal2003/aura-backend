@@ -8,3 +8,5 @@ python-dateutil==2.8.2
 django-filter==24.1
 PyJWT==2.8.0
 requests==2.32.3
+django-extensions
+drf-spectacular

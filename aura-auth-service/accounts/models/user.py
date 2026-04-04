@@ -33,6 +33,7 @@ class CustomUserManager(BaseUserManager):
                         email,
                         password,
                         status,
+                        enabled,
                         last_login,
                         account_non_expired,
                         account_non_locked,
@@ -49,7 +50,7 @@ class CustomUserManager(BaseUserManager):
                         deleted_at
                     ) VALUES (
                         nextval({seq_expr}),
-                        %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s,
                         %s, %s, %s, %s,
                         %s, %s, %s,
                         currval({seq_expr}),
@@ -62,6 +63,7 @@ class CustomUserManager(BaseUserManager):
                         email,
                         password_hash,
                         status,
+                        extra_fields.get('enabled', True),
                         extra_fields.get('last_login'),
                         extra_fields.get('account_non_expired', True),
                         extra_fields.get('account_non_locked', True),
@@ -151,6 +153,7 @@ class User(AbstractBaseUser):
         verbose_name='Contraseña',
         help_text="Hashed password",
     )
+    enabled = models.BooleanField(default=True)
     status = models.CharField(
         max_length=8,
         choices=UserStatus.choices,

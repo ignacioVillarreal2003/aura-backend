@@ -61,6 +61,7 @@ def issue_tokens_for_user(user: User) -> dict:
 	return {
 		'access_token': access_token,
 		'refresh_token': refresh.token,
+		'token_type': 'Bearer',
 	}
 
 
@@ -83,6 +84,7 @@ def rotate_refresh_token(refresh_token: uuid.UUID | str) -> dict | None:
 	return {
 		'access_token': access_token,
 		'refresh_token': new_refresh.token,
+		'token_type': 'Bearer',
 	}
 
 
@@ -129,4 +131,31 @@ def introspect_token(token: str) -> dict | None:
 		'roles': get_user_roles(user),
 		'permissions': get_user_permissions(user),
 		'is_super_admin': False,
+	}
+
+
+def get_user_info(token: str) -> dict | None:
+	try:
+		payload = jwt.decode(
+			token,
+			settings.JWT_SIGNING_KEY,
+			algorithms=[settings.JWT_ALGORITHM],
+		)
+	except jwt.PyJWTError:
+		return None
+
+	user_id = payload.get('user_id')
+	if not user_id:
+		return None
+	user = User.objects.filter(id=user_id).first()
+	if not user or user.is_deleted or user.status != 'active':
+		return None
+
+	permissions = ['*'] if user.is_superuser else get_user_permissions(user)
+
+	return {
+		'id': user.id,
+		'email': user.email,
+		'roles': get_user_roles(user),
+		'permissions': permissions,
 	}

@@ -36,7 +36,7 @@ echo   makemigrations    - Create database migrations
 echo   migrate           - Apply database migrations
 echo   setup             - Run full database setup (migrations + seed + superuser)
 echo   shell             - Open Django shell
-echo   runserver         - Start development server (http://localhost:8000)
+echo   runserver         - Start development server (http://localhost:3000)
 echo   createsuperuser   - Create a new superuser
 echo   check             - Check project configuration
 echo   clean             - Clean Python cache files
@@ -70,8 +70,8 @@ goto :eof
 
 :run_server
 echo Starting development server...
-echo Open http://localhost:8000/admin/ in your browser
-python manage.py runserver
+echo Open http://localhost:3000/admin/ in your browser
+python manage.py runserver 3000
 goto :eof
 
 :create_superuser
