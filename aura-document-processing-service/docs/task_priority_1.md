@@ -1,0 +1,1 @@
+- Cambiar roles por permisos en operaciones. TABLA_OPERACION

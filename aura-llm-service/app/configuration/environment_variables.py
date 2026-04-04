@@ -54,26 +54,6 @@ class EnvironmentVariables(BaseSettings):
         description="Allowed CORS origins"
     )
 
-    ollama_model_name: str = Field(
-        default="llama2",
-        description="Ollama model name to use"
-    )
-
-    ollama_base_url: str = Field(
-        default="http://localhost:11434",
-        description="Ollama service base URL"
-    )
-
-    question_context_fragments_url: str = Field(
-        default="http://localhost:8001/api/fragments/by-question",
-        description="Endpoint URL used to retrieve relevant context fragments based on a question"
-    )
-
-    document_context_fragments_url: str = Field(
-        default="http://localhost:8001/api/fragments/by-document",
-        description="Endpoint URL used to retrieve relevant context fragments for a specific document"
-    )
-
     @field_validator("log_level")
     @classmethod
     def validate_log_level(
@@ -87,21 +67,6 @@ class EnvironmentVariables(BaseSettings):
             raise ValueError(f"Invalid log_level: {v}. Must be one of {valid_levels}")
 
         return v_upper
-
-    @field_validator(
-        "ollama_base_url",
-        "question_context_fragments_url",
-        "document_context_fragments_url"
-    )
-    @classmethod
-    def validate_url(
-            cls,
-            v: str
-    ) -> str:
-        if not v.startswith(("http://", "https://")):
-            raise ValueError(f"URL must start with http:// or https://, got: {v}")
-
-        return v.rstrip("/")
 
     @field_validator(
         "cors_origins"

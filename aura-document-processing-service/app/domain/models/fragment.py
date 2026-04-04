@@ -1,22 +1,25 @@
 from pgvector.sqlalchemy import VECTOR
+from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 from sqlalchemy.sql import func
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, DateTime, Text, ForeignKey, BigInteger
 
-from app.configuration.environment_variables import environment_variables
 from app.domain.models.base import Base
+from app.domain.settings.fragment_settings import FragmentSettings
+
+_fragment_settings = FragmentSettings()
 
 
 class Fragment(Base):
     __tablename__ = "fragment"
 
     id = Column(
-        Integer,
+        BigInteger,
         primary_key=True,
         index=True
     )
 
     document_id = Column(
-        Integer,
+        BigInteger,
         ForeignKey(
             "document.id",
             ondelete="CASCADE"
@@ -24,14 +27,14 @@ class Fragment(Base):
         nullable=False
     )
 
-    vector = Column(
-        VECTOR(
-            dim=environment_variables.vector_dimension
-        ),
-        nullable=True
-    )
     content = Column(
         Text,
+        nullable=False
+    )
+    vector = Column(
+        VECTOR(
+            dim=_fragment_settings.vector_dimension
+        ),
         nullable=False
     )
     fragment_index = Column(
@@ -39,27 +42,41 @@ class Fragment(Base):
         nullable=False
     )
 
+    summary = Column(
+        Text,
+        nullable=True
+    )
+    entities = Column(
+        JSONB,
+        nullable=True
+    )
+    topics = Column(
+        ARRAY(Text),
+        nullable=True
+    )
+
     created_by = Column(
-        Integer,
+        BigInteger,
         nullable=False
     )
     created_at = Column(
-        DateTime,
-        server_default=func.now()
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False
     )
     updated_by = Column(
-        Integer,
+        BigInteger,
         nullable=True
     )
     updated_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=True
     )
     deleted_by = Column(
-        Integer,
+        BigInteger,
         nullable=True
     )
     deleted_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=True
     )

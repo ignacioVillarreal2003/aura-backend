@@ -1,7 +1,9 @@
-from sqlalchemy import Column, Integer, String, Enum, DateTime
+from sqlalchemy import Column, BigInteger, String, DateTime, Text, Integer, ForeignKey
 from sqlalchemy.sql import func
+from sqlalchemy.dialects.postgresql import ENUM
 
 from app.domain.constants.document_status import DocumentStatus
+from app.domain.constants.document_mime_type import DocumentMimeType
 from app.domain.constants.document_type import DocumentType
 from app.domain.models.base import Base
 
@@ -10,25 +12,63 @@ class Document(Base):
     __tablename__ = "document"
 
     id = Column(
-        Integer,
+        BigInteger,
         primary_key=True,
         index=True
+    )
+
+    chat_id = Column(
+        BigInteger,
+        ForeignKey(
+            "chat.id",
+            ondelete="CASCADE"
+        ),
+        nullable=True
     )
 
     name = Column(
         String(255),
         nullable=False
     )
-    type = Column(
-        Enum(DocumentType),
+    description = Column(
+        Text,
+        nullable=True
+    )
+    mime_type = Column(
+        ENUM(
+            DocumentMimeType,
+            name="document_mime_type",
+            create_type=False
+        ),
         nullable=False
     )
     status = Column(
-        Enum(DocumentStatus),
-        default=DocumentStatus.pending,
+        ENUM(
+            DocumentStatus,
+            name="document_status",
+            create_type=False
+        ),
+        default=DocumentStatus.uploaded,
         nullable=False
     )
-    path = Column(
+    storage_url = Column(
+        String(255),
+        nullable=False
+    )
+
+    file_size_bytes = Column(
+        BigInteger,
+        nullable=False
+    )
+
+    type = Column(
+        ENUM(
+            DocumentType,
+            name="document_type",
+            create_type=False),
+        nullable=True
+    )
+    category = Column(
         String(255),
         nullable=True
     )
@@ -54,28 +94,38 @@ class Document(Base):
         nullable=True
     )
 
+    processing_started_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False
+    )
+    processing_finished_at = Column(
+        DateTime(timezone=True),
+        nullable=True
+    )
+
     created_by = Column(
-        Integer,
+        BigInteger,
         nullable=False
     )
     created_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         server_default=func.now(),
         nullable=False
     )
     updated_by = Column(
-        Integer,
+        BigInteger,
         nullable=True
     )
     updated_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=True
     )
     deleted_by = Column(
-        Integer,
+        BigInteger,
         nullable=True
     )
     deleted_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=True
     )

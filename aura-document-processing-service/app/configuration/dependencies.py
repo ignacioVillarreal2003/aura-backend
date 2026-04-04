@@ -1,185 +1,123 @@
 import logging
+from fastapi import FastAPI
 
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
 from app.application.processors.readers.reader_factory import ReaderFactory
 from app.application.processors.text_cleaners.text_cleaner_factory import TextCleanerFactory
 from app.application.processors.text_splitters.text_splitter_factory import TextSplitterFactory
-from app.application.services.document_context_service.document_context_service import DocumentContextService
-from app.application.services.document_context_service.interfaces.document_context_service_interface import (
-    DocumentContextServiceInterface
-)
-from app.application.services.document_creation_service.document_creation_service import DocumentCreationService
-from app.application.services.document_creation_service.interfaces.document_creation_service_interface import (
-    DocumentCreationServiceInterface
-)
+from app.application.services.create_document_service.create_document_service import CreateDocumentService
+from app.application.services.delete_document_service.delete_document_service import DeleteDocumentService
 from app.application.services.document_ingestion_service.document_ingestion_service import DocumentIngestionService
-from app.application.services.document_ingestion_service.interfaces.document_ingestion_service_interface import (
-    DocumentIngestionServiceInterface
-)
-from app.infrastructure.persistence.repositories.database_client.database_client_factory import (
-    get_global_database_client,
-    shutdown_global_database_client
-)
-from app.infrastructure.persistence.repositories.database_client.interfaces.database_client_interface import (
-    DatabaseClientInterface
-)
-from app.infrastructure.persistence.repositories.document_repository.document_repository import DocumentRepository
-from app.infrastructure.persistence.repositories.document_repository.interfaces.document_repository_interface import (
-    DocumentRepositoryInterface
-)
-from app.infrastructure.persistence.repositories.fragment_repository.fragment_repository import FragmentRepository
-from app.infrastructure.persistence.repositories.fragment_repository.interfaces.fragment_repository_interface import (
-    FragmentRepositoryInterface
-)
+from app.application.services.document_query_service.document_query_service import DocumentQueryService
+from app.application.services.update_document_service.update_document_service import UpdateDocumentService
+from app.infrastructure.authentication_provider.authentication_provider import AuthenticationProvider
+from app.infrastructure.http_client.http_client import HttpClient
+from app.infrastructure.persistence.database.database_manager.database_manager import DatabaseManager
+from app.infrastructure.persistence.database.repositories.document_repository.document_repository import DocumentRepository
+from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository import FragmentRepository
 from app.infrastructure.persistence.storages.document_storage.document_storage import DocumentStorage
-from app.infrastructure.persistence.storages.document_storage.interfaces.document_storage_interface import (
-    DocumentStorageInterface
-)
-from app.configuration.environment_variables import environment_variables
-from app.infrastructure.persistence.storages.minio_client.interfaces.minio_client_interface import MinioClientInterface
-from app.infrastructure.persistence.storages.minio_client.minio_client_factory import (
-    get_global_minio_client,
-    shutdown_global_minio_client
-)
+from app.infrastructure.persistence.storages.minio_manager.minio_manager import MinioManager
 
 logger = logging.getLogger(__name__)
 
 
-async def get_database_client() -> DatabaseClientInterface:
-    return await get_global_database_client(
-        db_driver=environment_variables.db_driver,
-        db_user=environment_variables.db_user,
-        db_password=environment_variables.db_password,
-        db_host=environment_variables.db_host,
-        db_port=environment_variables.db_port,
-        db_name=environment_variables.db_name
-    )
-
-
-async def get_database_session():
-    database_client = await get_database_client()
-    session_generator = database_client.get_session()
-
+async def startup_dependencies(
+        app: FastAPI
+) -> None:
     try:
-        db = next(session_generator)
-        yield db
-    finally:
-        try:
-            next(session_generator)
-        except StopIteration:
-            pass
+        logger.info("Starting up dependencies")
 
+        database_manager = DatabaseManager()
+        await database_manager.initialize()
+        app.state.db_manager = database_manager
 
-def get_document_repository() -> DocumentRepositoryInterface:
-    return DocumentRepository()
+        minio_manager = MinioManager()
+        await minio_manager.start()
+        app.state.minio_manager = minio_manager
 
+        document_storage = DocumentStorage(
+            minio_manager=minio_manager
+        )
+        await document_storage.start()
+        app.state.document_storage = document_storage
 
-def get_fragment_repository() -> FragmentRepositoryInterface:
-    return FragmentRepository()
+        http_client = HttpClient()
+        await http_client.start()
+        app.state.http_client = http_client
 
+        authentication_provider = AuthenticationProvider(
+            http_client=http_client
+        )
+        app.state.authentication_provider = authentication_provider
 
-async def get_minio_client() -> MinioClientInterface:
-    return await get_global_minio_client(
-        minio_endpoint=environment_variables.minio_endpoint,
-        minio_access_key=environment_variables.minio_access_key,
-        minio_secret_key=environment_variables.minio_secret_key,
-        minio_secure=environment_variables.minio_secure
-    )
+        document_repository: DocumentRepository = DocumentRepository()
+        app.state.document_repository = document_repository
 
+        fragment_repository: FragmentRepository = FragmentRepository()
+        app.state.fragment_repository = fragment_repository
 
-async def get_document_storage() -> DocumentStorageInterface:
-    minio_client = await get_minio_client()
-    return DocumentStorage.create(
-        minio_client=minio_client
-    )
+        embedder_factory = EmbedderFactory()
+        app.state.embedder_factory = embedder_factory
 
+        reader_factory = ReaderFactory()
+        app.state.reader_factory = reader_factory
 
-def get_reader_factory() -> ReaderFactory:
-    return ReaderFactory()
+        text_cleaner_factory = TextCleanerFactory()
+        app.state.text_cleaner_factory = text_cleaner_factory
 
+        text_splitter_factory = TextSplitterFactory()
+        app.state.text_splitter_factory = text_splitter_factory
 
-def get_text_cleaner_factory() -> TextCleanerFactory:
-    return TextCleanerFactory()
+        update_document_service = UpdateDocumentService(
+            document_repository=document_repository
+        )
+        app.state.update_document_service = update_document_service
 
+        document_query_service = DocumentQueryService(
+            document_repository=document_repository,
+            fragment_repository=fragment_repository,
+            embedder_factory=embedder_factory
+        )
+        app.state.document_query_service = document_query_service
 
-def get_text_splitter_factory() -> TextSplitterFactory:
-    return TextSplitterFactory()
+        document_ingestion_service = DocumentIngestionService(
+            database_manager=database_manager,
+            document_repository=document_repository,
+            fragment_repository=fragment_repository,
+            reader_factory=reader_factory,
+            text_cleaner_factory=text_cleaner_factory,
+            text_splitter_factory=text_splitter_factory,
+            embedder_factory=embedder_factory
+        )
+        app.state.document_ingestion_service = document_ingestion_service
 
+        delete_document_service = DeleteDocumentService(
+            document_repository=document_repository,
+            fragment_repository=fragment_repository,
+            document_storage=document_storage
+        )
+        app.state.delete_document_service = delete_document_service
 
-def get_embedder_factory() -> EmbedderFactory:
-    return EmbedderFactory()
-
-
-def get_document_ingestion_service() -> DocumentIngestionServiceInterface:
-    document_repository = get_document_repository()
-    fragment_repository = get_fragment_repository()
-    reader_factory = get_reader_factory()
-    text_cleaner_factory = get_text_cleaner_factory()
-    text_splitter_factory = get_text_splitter_factory()
-    embedder_factory = get_embedder_factory()
-    return DocumentIngestionService.create(
-        document_repository=document_repository,
-        fragment_repository=fragment_repository,
-        reader_factory=reader_factory,
-        text_cleaner_factory=text_cleaner_factory,
-        text_splitter_factory=text_splitter_factory,
-        embedder_factory=embedder_factory,
-        text_cleaner_type=environment_variables.text_cleaner_type,
-        text_splitter_type=environment_variables.text_splitter_type,
-        embedder_type=environment_variables.embedder_type,
-        split_size=environment_variables.split_size,
-        split_overlap=environment_variables.split_overlap
-    )
-
-
-async def get_document_creation_service() -> DocumentCreationServiceInterface:
-    document_repository = get_document_repository()
-    document_storage = await get_document_storage()
-    document_ingestion_service = get_document_ingestion_service()
-    return DocumentCreationService.create(
-        document_repository=document_repository,
-        document_storage=document_storage,
-        document_ingestion_service=document_ingestion_service
-    )
-
-
-def get_document_context_service() -> DocumentContextServiceInterface:
-    fragment_repository = get_fragment_repository()
-    embedder_factory = get_embedder_factory()
-    return DocumentContextService.create(
-        fragment_repository=fragment_repository,
-        embedder_factory=embedder_factory,
-        embedder_type=environment_variables.embedder_type
-    )
-
-
-async def startup_dependencies() -> None:
-    try:
-        logger.info("Starting up application dependencies")
-
-        database_client = await get_database_client()
-        if not database_client.is_started:
-            await database_client.start()
-
-        minio_client = await get_minio_client()
-        if not minio_client.is_started:
-            await minio_client.start()
+        create_document_service = CreateDocumentService(
+            document_repository=document_repository,
+            document_storage=document_storage,
+            document_ingestion_service=document_ingestion_service
+        )
+        app.state.create_document_service = create_document_service
 
         logger.info("All dependencies started successfully")
 
     except Exception:
-        logger.critical("Failed to start dependencies")
+        logger.critical("Error during dependency starting up")
         raise
 
 
 async def shutdown_dependencies() -> None:
     try:
-        logger.info("Shutting down application dependencies")
-
-        await shutdown_global_database_client()
-        await shutdown_global_minio_client()
+        logger.info("Shutting down dependencies")
 
         logger.info("All dependencies shut down successfully")
 
     except Exception:
         logger.error("Error during dependency shutdown")
+        raise

@@ -1,20 +1,34 @@
 from fastapi import APIRouter
 
-from app.api import (
-    document_context_controller,
-    document_creation_controller
+from app.api.controllers import (
+    update_document_controller,
+    delete_document_controller,
+    create_document_controller,
+    document_query_controller
 )
 
 router = APIRouter()
 
 router.include_router(
-    document_context_controller.router,
-    prefix="/document-context",
-    tags=["DocumentContext"]
+    update_document_controller.router,
+    prefix="/update-document",
+    tags=["update-document"]
 )
 
 router.include_router(
-    document_creation_controller.router,
-    prefix="/document-creation",
-    tags=["DocumentCreation"]
+    delete_document_controller.router,
+    prefix="/delete-document",
+    tags=["delete-document"]
+)
+
+router.include_router(
+    create_document_controller.router,
+    prefix="/create-document",
+    tags=["create-document"]
+)
+
+router.include_router(
+    document_query_controller.router,
+    prefix="/document-query",
+    tags=["document-query"]
 )
