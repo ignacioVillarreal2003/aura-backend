@@ -1,15 +1,36 @@
 """
 Django Admin customization for document models.
 """
+import random
+import requests
+from django import forms
+from django.conf import settings
 from django.contrib import admin
+from django.core.exceptions import ValidationError
 from django.utils.html import format_html
-from .models import Document, DocumentRole
+from .models import Document
 
 
 def _apply_audit_fields(obj, username: str, is_create: bool):
     if is_create and not obj.created_by:
         obj.created_by = username
     obj.updated_by = username
+
+
+class DocumentUploadForm(forms.ModelForm):
+    description = forms.CharField(
+        label='Descripción',
+        required=False,
+        widget=forms.Textarea(attrs={'rows': 4}),
+    )
+    raw_collection = forms.FileField(
+        label='Documento',
+        required=True,
+    )
+
+    class Meta:
+        model = Document
+        fields = ('name', 'description', 'raw_collection')
 
 
 @admin.register(Document)
@@ -19,10 +40,10 @@ class DocumentAdmin(admin.ModelAdmin):
     """
     list_display = (
         'name',
+        'description',
         'size_display',
         'modified_date',
-        'created_at',
-        'is_deleted_badge',
+        'created_by_display',
     )
     list_filter = ('created_at', ('deleted_at', admin.EmptyFieldListFilter))
     search_fields = ('name', 'description')
@@ -35,6 +56,9 @@ class DocumentAdmin(admin.ModelAdmin):
         'deleted_at',
         'deleted_by',
     )
+
+    actions = None
+    actions_selection_counter = False
 
     fieldsets = (
         ('Información Básica', {
@@ -52,6 +76,20 @@ class DocumentAdmin(admin.ModelAdmin):
             'classes': ('collapse',),
         }),
     )
+
+    def get_fieldsets(self, request, obj=None):
+        if obj is None:
+            return (
+                ('Información Básica', {
+                    'fields': ('name', 'description', 'raw_collection'),
+                }),
+            )
+        return self.fieldsets
+
+    def get_form(self, request, obj=None, **kwargs):
+        if obj is None:
+            kwargs['form'] = DocumentUploadForm
+        return super().get_form(request, obj, **kwargs)
 
     def size_display(self, obj):
         if obj.size_bytes is None:
@@ -80,32 +118,52 @@ class DocumentAdmin(admin.ModelAdmin):
         return format_html('<span style="color: green;">Activo</span>')
     is_deleted_badge.short_description = 'Estado'
 
+    def created_by_display(self, obj):
+        return obj.created_by or '-'
+    created_by_display.short_description = 'Subido por'
+
     def save_model(self, request, obj, form, change):
-        _apply_audit_fields(obj, request.user.username, is_create=not change)
+        if change:
+            _apply_audit_fields(obj, request.user.username, is_create=False)
+            super().save_model(request, obj, form, change)
+            return
+
+        description = form.cleaned_data.get('description')
+        raw_collection = form.cleaned_data.get('raw_collection')
+        if not raw_collection:
+            raise ValidationError('Debe seleccionar un documento.')
+        chat_id = random.randint(100000, 999999)
+
+        files = {
+            'raw_document': (
+                raw_collection.name,
+                raw_collection,
+                raw_collection.content_type or 'application/octet-stream',
+            ),
+            'raw_collection': (
+                raw_collection.name,
+                raw_collection,
+                raw_collection.content_type or 'application/octet-stream',
+            ),
+        }
+        data = {
+            'chat_id': str(chat_id),
+        }
+
+        response = requests.post(
+            settings.DOCUMENT_PROCESSING_URL,
+            files=files,
+            data=data,
+            timeout=60,
+        )
+        if not response.ok:
+            raise ValidationError(
+                f'Error al enviar documento: {response.status_code} {response.text}'
+            )
+
+        obj.description = description
+        obj.size_bytes = raw_collection.size or 0
+        _apply_audit_fields(obj, request.user.username, is_create=True)
         super().save_model(request, obj, form, change)
 
 
-@admin.register(DocumentRole)
-class DocumentRoleAdmin(admin.ModelAdmin):
-    """
-    Admin for DocumentRole relationship.
-    """
-    list_display = ('document', 'role', 'assigned_at', 'assigned_by')
-    list_filter = ('role', 'assigned_at')
-    search_fields = ('document__name', 'role__name')
-    readonly_fields = ('id', 'assigned_at', 'assigned_by')
-
-    fieldsets = (
-        ('Asignación', {
-            'fields': ('id', 'document', 'role'),
-        }),
-        ('Metadatos', {
-            'fields': ('assigned_at', 'assigned_by'),
-            'classes': ('collapse',),
-        }),
-    )
-
-    def save_model(self, request, obj, form, change):
-        if not obj.assigned_by:
-            obj.assigned_by = request.user.username
-        super().save_model(request, obj, form, change)

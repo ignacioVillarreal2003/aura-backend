@@ -5,63 +5,80 @@ This module provides helper functions for common RBAC operations
 like checking permissions, assigning roles, etc.
 """
 
-from accounts.models import User, Role, Permission, UserRole, RolePermission
+from accounts.models import User, Role, Permission, UserRole, PermissionInRole
 
 
-def assign_role_to_user(user: User, role: Role, assigned_by: str = None) -> UserRole:
+def assign_role_to_user(user: User, role: Role, created_by: User) -> UserRole:
     """
     Assign a role to a user.
     
     Args:
         user: User instance
         role: Role instance
-        assigned_by: Username of who assigned the role
-        
+        created_by: User who assigned the role
+
     Returns:
         UserRole instance
     """
-    user_role, created = UserRole.objects.get_or_create(
+    user_role = UserRole.objects.filter(
         user=user,
         role=role,
-        defaults={'assigned_by': assigned_by}
+        deleted_at__isnull=True,
+    ).first()
+    if user_role:
+        return user_role
+
+    user_role = UserRole.objects.filter(
+        user=user,
+        role=role,
+        deleted_at__isnull=False,
+    ).first()
+    if user_role:
+        user_role.deleted_at = None
+        user_role.deleted_by = None
+        user_role.created_by = created_by
+        user_role.save(update_fields=['deleted_at', 'deleted_by', 'created_by'])
+        return user_role
+
+    return UserRole.objects.create(
+        user=user,
+        role=role,
+        created_by=created_by,
     )
-    return user_role
 
 
-def assign_permission_to_role(role: Role, permission: Permission, granted_by: str = None) -> RolePermission:
+def assign_permission_to_role(role: Role, permission: Permission) -> PermissionInRole:
     """
     Assign a permission to a role.
     
     Args:
         role: Role instance
         permission: Permission instance
-        granted_by: Username of who granted the permission
-        
+
     Returns:
-        RolePermission instance
+        PermissionInRole instance
     """
-    role_perm, created = RolePermission.objects.get_or_create(
+    role_perm, _ = PermissionInRole.objects.get_or_create(
         role=role,
         permission=permission,
-        defaults={'granted_by': granted_by}
     )
     return role_perm
 
 
-def user_has_permission(user: User, permission_code: str) -> bool:
+def user_has_permission(user: User, permission_name: str) -> bool:
     """
     Check if a user has a specific permission.
     
     Args:
         user: User instance
-        permission_code: Permission code (e.g., "user.create")
-        
+        permission_name: Permission name (e.g., "user.create")
+
     Returns:
         True if user has permission, False otherwise
     """
     return user.user_roles.filter(
-        role__role_permissions__permission__code=permission_code,
-        role__deleted_at__isnull=True
+        role__permission_links__permission__name=permission_name,
+        deleted_at__isnull=True,
     ).exists() or user.is_superuser
 
 
@@ -78,7 +95,7 @@ def user_has_role(user: User, role_name: str) -> bool:
     """
     return user.user_roles.filter(
         role__name=role_name,
-        role__deleted_at__isnull=True
+        deleted_at__isnull=True,
     ).exists() or user.is_superuser
 
 
@@ -90,17 +107,15 @@ def get_user_permissions(user: User) -> list:
         user: User instance
         
     Returns:
-        List of permission codes
+        List of permission names
     """
     if user.is_superuser:
-        return list(Permission.objects.filter(deleted_at__isnull=True).values_list('code', flat=True))
-    
+        return list(Permission.objects.values_list('name', flat=True))
+
     return list(
-        user.user_roles.filter(
-            role__deleted_at__isnull=True
-        ).values_list(
-            'role__role_permissions__permission__code',
-            flat=True
+        user.user_roles.filter(deleted_at__isnull=True).values_list(
+            'role__permission_links__permission__name',
+            flat=True,
         ).distinct()
     )
 
@@ -113,8 +128,6 @@ def get_user_roles(user: User) -> list:
         user: User instance
         
     Returns:
-        List of Role instances
+        List of role names
     """
-    return list(
-        user.user_roles.filter(role__deleted_at__isnull=True).values_list('role', flat=True)
-    )
+    return list(user.user_roles.filter(deleted_at__isnull=True).values_list('role__name', flat=True))
