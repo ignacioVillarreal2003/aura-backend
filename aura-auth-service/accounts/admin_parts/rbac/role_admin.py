@@ -2,18 +2,9 @@
 
 from django.contrib import admin
 from django.utils.html import format_html
-from accounts.models import Role, PermissionInRole
-from accounts.admin_parts.utils.mixins import HelpTextStripMixin, HelpTextStripInlineMixin
+from accounts.models import Role
+from accounts.admin_parts.utils.mixins import HelpTextStripMixin
 from accounts.admin_parts.utils.audit import _is_super_admin_user, _is_admin_or_super_user
-
-
-class PermissionInRoleInline(HelpTextStripInlineMixin, admin.TabularInline):
-    """Inline admin for assigning permissions to roles."""
-    model = PermissionInRole
-    extra = 1
-    fields = ('permission',)
-    verbose_name = 'Permiso'
-    verbose_name_plural = 'Permisos'
 
 
 @admin.register(Role)
@@ -30,8 +21,6 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
             'fields': ('id', 'name', 'description'),
         }),
     )
-
-    inlines = [PermissionInRoleInline]
 
     def has_module_permission(self, request):
         return _is_admin_or_super_user(request.user)

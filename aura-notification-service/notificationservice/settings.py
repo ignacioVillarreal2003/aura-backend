@@ -1,28 +1,21 @@
 """
-Django settings for authservice project.
+Django settings for notificationservice project.
 
 Environment-based configuration using python-decouple.
-Database: PostgreSQL 17
+Database: PostgreSQL (aura_db)
 Python: 3.13
 Django: 5.x
 """
 
 from pathlib import Path
 from decouple import config, Csv
-import os
 
-# Build paths inside the project
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-me-in-production')
-
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
-
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='127.0.0.1,localhost', cast=Csv())
 
-# Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -31,16 +24,14 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django_extensions',
-    
+
     # Third-party apps
     'corsheaders',
     'rest_framework',
     'django_filters',
     'drf_spectacular',
-    
+
     # Local apps
-    'accounts.apps.AccountsConfig',
-    'documents.apps.DocumentsConfig',
     'notifications.apps.NotificationsConfig',
 ]
 
@@ -55,7 +46,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'authservice.urls'
+ROOT_URLCONF = 'notificationservice.urls'
 
 TEMPLATES = [
     {
@@ -73,98 +64,38 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'authservice.wsgi.application'
-
-# Database Configuration
-# Default: PostgreSQL auth_db from docker-compose
+WSGI_APPLICATION = 'notificationservice.wsgi.application'
 
 DB_ENGINE = config('DB_ENGINE', default='django.db.backends.postgresql')
 
-if DB_ENGINE == 'django.db.backends.sqlite3':
-    DATABASES = {
-        'default': {
-            'ENGINE': DB_ENGINE,
-            'NAME': BASE_DIR / 'db.sqlite3',
+DATABASES = {
+    'default': {
+        'ENGINE': DB_ENGINE,
+        'NAME': config('DB_NAME', default='aura_db'),
+        'USER': config('DB_USER', default='aura_root'),
+        'PASSWORD': config('DB_PASSWORD', default='aura_password'),
+        'HOST': config('DB_HOST', default='localhost'),
+        'PORT': config('DB_PORT', default='5432'),
+        'CONN_MAX_AGE': 600,
+        'OPTIONS': {
+            'connect_timeout': 10,
+            'options': '-c statement_timeout=30000',
         },
-        'aura_db': {
-            'ENGINE': DB_ENGINE,
-            'NAME': BASE_DIR / 'aura_db.sqlite3',
-        },
-    }
-else:
-    DATABASES = {
-        'default': {
-            'ENGINE': DB_ENGINE,
-            'NAME': config('DB_NAME', default='auth_db'),
-            'USER': config('DB_USER', default='aura_root'),
-            'PASSWORD': config('DB_PASSWORD', default='aura_password'),
-            'HOST': config('DB_HOST', default='localhost'),
-            'PORT': config('DB_PORT', default='5433'),
-            'CONN_MAX_AGE': 600,
-            'OPTIONS': {
-                'connect_timeout': 10,
-                'options': '-c statement_timeout=30000'
-            }
-        },
-        'aura_db': {
-            'ENGINE': DB_ENGINE,
-            'NAME': config('AURA_DB_NAME', default='aura_db', cast=str),
-            'USER': config('AURA_DB_USER', default='aura_root', cast=str),
-            'PASSWORD': config('AURA_DB_PASSWORD', default='aura_password', cast=str),
-            'HOST': config('AURA_DB_HOST', default='localhost', cast=str),
-            'PORT': config('AURA_DB_PORT', default='5432', cast=str),
-            'CONN_MAX_AGE': 600,
-            'OPTIONS': {
-                'connect_timeout': 10,
-                'options': '-c statement_timeout=30000',
-                'client_encoding': 'UTF8',
-            }
-        }
-    }
+    },
+}
 
-# Password validation
-AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
-]
-
-# Internationalization
 LANGUAGE_CODE = 'es-es'
 TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-# Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# Media files
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
-
-# Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Custom User Model
-AUTH_USER_MODEL = 'accounts.User'
-
-# Database routers
-DATABASE_ROUTERS = ['authservice.db_routers.AuraDbRouter']
-
-# CORS Configuration
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000', cast=Csv())
 
-# REST Framework Configuration
 REST_FRAMEWORK = {
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
@@ -175,34 +106,24 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'Aura Auth Service API',
-    'DESCRIPTION': 'Authentication service: login, refresh, introspect and logout.',
+    'TITLE': 'Aura Notification Service API',
+    'DESCRIPTION': 'In-app notification service: create, list, and manage notifications per user.',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
 }
 
-# JWT Configuration
-JWT_ACCESS_LIFETIME_MINUTES = config('JWT_ACCESS_LIFETIME_MINUTES', default=15, cast=int)
-JWT_ALGORITHM = config('JWT_ALGORITHM', default='HS256')
-JWT_SIGNING_KEY = config('JWT_SIGNING_KEY', default=SECRET_KEY)
+# Auth Service integration (JWT introspection)
+AUTH_SERVICE_URL = config('AUTH_SERVICE_URL', default='http://localhost:8000')
 
-# Document Processing Service
-DOCUMENT_PROCESSING_URL = config(
-    'DOCUMENT_PROCESSING_URL',
-    default='http://localhost:8001/api/document-creation',
-)
-
-# Notification Service (used by Django admin notification flows)
-NOTIFICATION_SERVICE_URL = config(
-    'NOTIFICATION_SERVICE_URL',
-    default='http://localhost:8002',
-)
+# Internal API token used by trusted backend services (e.g. aura-auth-service admin)
 NOTIFICATION_INTERNAL_API_TOKEN = config(
     'NOTIFICATION_INTERNAL_API_TOKEN',
     default='dev-notification-internal-token',
 )
 
-# Logging Configuration
+# Days after soft-delete before hard-delete purge is eligible
+NOTIFICATION_HARD_DELETE_DAYS = config('NOTIFICATION_HARD_DELETE_DAYS', default=90, cast=int)
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -240,19 +161,13 @@ LOGGING = {
     },
 }
 
-# Create logs directory
 LOGS_DIR = BASE_DIR / 'logs'
 LOGS_DIR.mkdir(exist_ok=True)
 
-# Environment
 ENVIRONMENT = config('ENVIRONMENT', default='development')
 
-# Security Settings (for production)
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_BROWSER_XSS_FILTER = True
-    SECURE_CONTENT_SECURITY_POLICY = {
-        'default-src': ("'self'",),
-    }

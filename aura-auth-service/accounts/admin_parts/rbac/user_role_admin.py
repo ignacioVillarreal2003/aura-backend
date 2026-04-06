@@ -26,7 +26,7 @@ class UserRoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
     readonly_fields = ('id', 'created_at', 'created_by', 'deleted_at', 'deleted_by')
 
     def has_module_permission(self, request):
-        return _is_admin_or_super_user(request.user)
+        return False
 
     fieldsets = (
         ('Asignación', {

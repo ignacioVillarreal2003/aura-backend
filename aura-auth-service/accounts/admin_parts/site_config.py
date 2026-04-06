@@ -16,20 +16,22 @@ admin.site.unregister(Group)
 
 def _custom_get_app_list(self, request):
     app_list = admin.AdminSite.get_app_list(self, request)
-    desired_order = ['User', 'UserRole']
+    desired_order = ['User']
     if _is_super_admin_user(request.user) or _is_admin_user(request.user):
         desired_order = [
             'User',
             'CustomGroup',
             'Role',
-            'UserRole',
+            'FauRole',
             'Permission',
-            'PermissionInRole',
         ]
     order_map = {name: index for index, name in enumerate(desired_order)}
 
     documents_order = ['Document']
     documents_order_map = {name: index for index, name in enumerate(documents_order)}
+
+    notifications_order = ['IndividualNotification', 'GroupNotification', 'SystemNotification']
+    notifications_order_map = {name: index for index, name in enumerate(notifications_order)}
 
     placeholder_apps = [
         {
@@ -46,13 +48,7 @@ def _custom_get_app_list(self, request):
             'has_module_perms': True,
             'models': [],
         },
-        {
-            'app_label': 'notifications',
-            'name': 'Notificaciones',
-            'app_url': '',
-            'has_module_perms': True,
-            'models': [],
-        },
+        # 'notifications' placeholder removed — real models registered via notifications app
     ]
 
     if _is_super_admin_user(request.user):
@@ -80,7 +76,7 @@ def _custom_get_app_list(self, request):
             if not (_is_super_admin_user(request.user) or _is_admin_user(request.user)):
                 app['models'] = [
                     model for model in app['models']
-                    if model.get('object_name') in {'User', 'UserRole'}
+                    if model.get('object_name') in {'User'}
                 ]
             app['models'].sort(
                 key=lambda model: order_map.get(model.get('object_name'), len(order_map))
@@ -90,6 +86,13 @@ def _custom_get_app_list(self, request):
                 key=lambda model: documents_order_map.get(
                     model.get('object_name'),
                     len(documents_order_map)
+                )
+            )
+        if app.get('app_label') == 'notifications':
+            app['models'].sort(
+                key=lambda model: notifications_order_map.get(
+                    model.get('object_name'),
+                    len(notifications_order_map)
                 )
             )
     app_list = placeholder_apps[:1] + app_list + placeholder_apps[1:]

@@ -19,8 +19,8 @@ class Role(models.Model):
 
     class Meta:
         db_table = 'role'
-        verbose_name = 'Rol'
-        verbose_name_plural = 'Roles'
+        verbose_name = 'Rol de sistema'
+        verbose_name_plural = 'Roles de sistema'
 
     def __str__(self):
         return self.name
@@ -124,3 +124,19 @@ class PermissionInRole(models.Model):
 
     def __str__(self):
         return f"{self.role.name} -> {self.permission.name}"
+
+
+class FauRole(models.Model):
+    """FAU role catalog (e.g., General, Capitán, Cabo)."""
+
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=255, unique=True, verbose_name='Nombre')
+    description = models.CharField(max_length=255, blank=True, verbose_name='Descripción')
+
+    class Meta:
+        db_table = 'fau_role'
+        verbose_name = 'Rol FAU'
+        verbose_name_plural = 'Rol FAU'
+
+    def __str__(self):
+        return self.name

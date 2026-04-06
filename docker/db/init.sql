@@ -126,12 +126,17 @@ CREATE TABLE chat_membership (
 
 CREATE TABLE notification (
     id          BIGSERIAL PRIMARY KEY,
-    message     VARCHAR(255)        NOT NULL,
-    type        notification_type   NOT NULL,
-    read_date   TIMESTAMPTZ,
     receiver_id BIGINT              NOT NULL,
+    message     VARCHAR(500)        NOT NULL,
+    type        notification_type   NOT NULL,
+    target_scope VARCHAR(20)        NOT NULL DEFAULT 'individual',
+    target_label VARCHAR(255),
+    status      VARCHAR(20)         NOT NULL DEFAULT 'unread',
+    read_at     TIMESTAMPTZ,
     created_by  BIGINT,
     created_at  TIMESTAMPTZ         NOT NULL DEFAULT NOW(),
+    updated_by  BIGINT,
+    updated_at  TIMESTAMPTZ,
     deleted_by  BIGINT,
     deleted_at  TIMESTAMPTZ
 );
@@ -183,7 +188,10 @@ CREATE INDEX idx_chat_message_chat_id     ON chat_message(chat_id);
 CREATE INDEX idx_chat_membership_chat_id  ON chat_membership(chat_id);
 CREATE INDEX idx_chat_membership_member   ON chat_membership(member_id);
 
-CREATE INDEX idx_notification_receiver    ON notification(receiver_id);
+CREATE INDEX idx_notification_receiver          ON notification(receiver_id);
+CREATE INDEX idx_notification_receiver_status   ON notification(receiver_id, status);
+CREATE INDEX idx_notification_deleted_at        ON notification(deleted_at);
+CREATE INDEX idx_notification_target_scope      ON notification(target_scope);
 
 INSERT INTO chat (id, name, created_by)
 VALUES (12345, 'Chat inicial', 1)
