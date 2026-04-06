@@ -22,7 +22,7 @@ class TextCleanerSettings(BaseSettings):
     simple_remove_urls: bool = Field(default=False)
     simple_remove_emojis: bool = Field(default=False)
     simple_remove_markdown: bool = Field(default=False)
-    simple_normalize_whitespace: bool = Field(default=False)
+    simple_normalize_whitespace: bool = Field(default=True)
     simple_remove_noise_lines: bool = Field(default=False)
 
     @model_validator(

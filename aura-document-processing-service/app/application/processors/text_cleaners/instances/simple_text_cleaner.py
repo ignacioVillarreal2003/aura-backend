@@ -18,9 +18,9 @@ _MARKDOWN_LINK = re.compile(r"\[(.+?)\]\(.*?\)")
 
 _URL_PATTERN = re.compile(r"https?://\S+|www\.\S+")
 
-_SOFT_NEWLINE_PATTERN = re.compile(r"(?<![.\:\-\n])\n(?![0-9\-\*\•\n])")
 _MULTI_SPACE_PATTERN = re.compile(r"[ ]{2,}")
 _MULTI_NEWLINE_PATTERN = re.compile(r"\n{2,}")
+_BLANK_LINE_PATTERN = re.compile(r"\n[ \t]+\n")
 
 _EMOJI_PATTERN = re.compile(
     "["
@@ -67,8 +67,6 @@ class SimpleTextCleaner(TextCleanerInterface):
 
         try:
             text = text.replace("\r\n", "\n").replace("\r", "\n")
-
-            text = _SOFT_NEWLINE_PATTERN.sub(" ", text)
             text = text.replace("\t", " ")
 
             text = self._remove_emojis(text)
@@ -155,6 +153,8 @@ class SimpleTextCleaner(TextCleanerInterface):
             text: str
     ) -> str:
         if self._settings.simple_normalize_whitespace:
+            lines = [line.rstrip() for line in text.split("\n")]
+            text = "\n".join(lines)
             text = _MULTI_SPACE_PATTERN.sub(" ", text)
-            text = _MULTI_NEWLINE_PATTERN.sub("\n", text)
+            text = _MULTI_NEWLINE_PATTERN.sub("\n\n", text)
         return text

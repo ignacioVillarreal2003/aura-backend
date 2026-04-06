@@ -76,7 +76,7 @@ class OllamaEmbedder(BaseEmbedder):
                     "timeout": self._settings.ollama_request_timeout,
                     "max_retries": self._settings.max_retries,
                     "circuit_breaker_threshold": self._settings.circuit_breaker_threshold
-                },
+                }
             )
         except EmbedderInitializationException:
             raise

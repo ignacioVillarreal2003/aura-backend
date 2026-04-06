@@ -36,7 +36,7 @@ class HuggingFaceEmbedder(BaseEmbedder):
             ),
             retry=retry_if_exception_type((RuntimeError, OSError)),
             before_sleep=before_sleep_log(logger, logging.WARNING),
-            reraise=True,
+            reraise=True
         )
 
         self._circuit_breaker = AioBreaker(

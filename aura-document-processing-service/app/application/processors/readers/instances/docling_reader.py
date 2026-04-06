@@ -1,5 +1,8 @@
 import logging
 from pathlib import Path
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import AcceleratorDevice, PdfPipelineOptions, AcceleratorOptions
+from docling.document_converter import DocumentConverter, PdfFormatOption
 
 from app.application.processors.readers.exceptions.reader_exception import (
     DoclingExtractionException,
@@ -13,7 +16,6 @@ from app.application.processors.readers.reader_settings import ReaderSettings
 
 logger = logging.getLogger(__name__)
 
-_SUPPORTED_SUFFIXES = frozenset({".pdf", ".docx"})
 _PDF_MAGIC = b"%PDF"
 _DOCX_MAGIC = b"PK\x03\x04"
 
@@ -26,17 +28,34 @@ class DoclingReader(BaseReader):
         self._settings = reader_settings
 
         try:
-            from docling.document_converter import DocumentConverter
-        except ImportError as e:
-            logger.exception("Docling is not installed or could not be imported.", )
-            raise DoclingInitializationException("The Docling reader needs the docling package installed.") from e
+            device_map = {
+                "cuda": AcceleratorDevice.CUDA,
+                "mps": AcceleratorDevice.MPS,
+                "auto": AcceleratorDevice.AUTO,
+                "cpu": AcceleratorDevice.CPU,
+            }
+            device = device_map.get(
+                reader_settings.docling_device.lower(),
+                AcceleratorDevice.CPU
+            )
 
-        try:
-            self._converter = DocumentConverter()
+            pipeline_options = PdfPipelineOptions()
+            pipeline_options.accelerator_options = AcceleratorOptions(
+                num_threads=reader_settings.docling_num_threads,
+                device=device
+            )
+
+            self._converter = DocumentConverter(
+                format_options={
+                    InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+                }
+            )
+
             logger.info(
                 "The Docling reader was initialized successfully.",
                 extra={
-                    "supported_formats": list(_SUPPORTED_SUFFIXES)
+                    "device": reader_settings.docling_device,
+                    "num_threads": reader_settings.docling_num_threads
                 }
             )
         except Exception as e:
@@ -48,9 +67,6 @@ class DoclingReader(BaseReader):
             file_path: Path
     ) -> bool:
         suffix = file_path.suffix.lower()
-
-        if suffix not in _SUPPORTED_SUFFIXES:
-            return False
 
         if suffix == ".pdf":
             return self._check_magic_bytes(file_path, _PDF_MAGIC, 5)

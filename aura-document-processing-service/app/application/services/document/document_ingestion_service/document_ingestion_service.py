@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 from fastapi import HTTPException, Request, status
+import asyncio
 
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
 from app.application.processors.readers.reader_factory import ReaderFactory
@@ -130,7 +131,6 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                 prefer_docling=prefer_docling
             )
 
-            import asyncio
             raw_text: str = await asyncio.to_thread(reader.read, local_file_path)
 
             if not raw_text or not raw_text.strip():
@@ -159,7 +159,6 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             raw_text: str
     ) -> str:
         try:
-            import asyncio
             cleaner = self._cleaner_factory.cleaner
             clean_text: str = await asyncio.to_thread(cleaner.clean_text, raw_text)
 
