@@ -41,9 +41,13 @@ INSTALLED_APPS = [
     # Local apps
     'accounts.apps.AccountsConfig',
     'documents.apps.DocumentsConfig',
+    
+    # Observability
+    'django_prometheus',
 ]
 
 MIDDLEWARE = [
+    'django_prometheus.middleware.PrometheusBeforeMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -52,6 +56,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django_prometheus.middleware.PrometheusAfterMiddleware',
 ]
 
 ROOT_URLCONF = 'authservice.urls'
@@ -188,7 +193,6 @@ DOCUMENT_PROCESSING_URL = config(
     default='http://localhost:8001/api/document-creation',
 )
 
-# Logging Configuration
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -201,11 +205,19 @@ LOGGING = {
             'format': '{levelname} {asctime} {module} {message}',
             'style': '{',
         },
+        'json': {
+            '()': 'pythonjsonlogger.jsonlogger.JsonFormatter',
+            'format': '%(asctime)s %(levelname)s %(name)s %(message)s'
+        },
     },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
             'formatter': 'simple',
+        },
+        'console_json': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'json',
         },
         'file': {
             'class': 'logging.FileHandler',
@@ -214,12 +226,17 @@ LOGGING = {
         },
     },
     'root': {
-        'handlers': ['console', 'file'],
+        'handlers': ['console_json', 'file'] if not DEBUG else ['console', 'file'],
         'level': 'INFO',
     },
     'loggers': {
         'django': {
-            'handlers': ['console', 'file'],
+            'handlers': ['console_json', 'file'] if not DEBUG else ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'audit': {
+            'handlers': ['console_json'],
             'level': 'INFO',
             'propagate': False,
         },

@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.api import router
 from app.api.exception_handlers.exception_handlers import register_exception_handlers
@@ -56,6 +57,8 @@ def create_app() -> FastAPI:
     add_middleware(app)
     include_routers(app)
     register_exception_handlers(app)
+    
+    Instrumentator().instrument(app).expose(app)
 
     logger.info("FastAPI application configured")
 
