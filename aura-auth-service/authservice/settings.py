@@ -189,7 +189,16 @@ JWT_SIGNING_KEY = config('JWT_SIGNING_KEY', default=SECRET_KEY)
 # Document Processing Service
 DOCUMENT_PROCESSING_URL = config(
     'DOCUMENT_PROCESSING_URL',
-    default='http://localhost:8001/api/document-creation',
+    default='http://localhost:8003/api/create-document',
+)
+DOCUMENT_PROCESSING_INTERNAL_API_TOKEN = config(
+    'DOCUMENT_PROCESSING_INTERNAL_API_TOKEN',
+    default='dev-document-processing-internal-token',
+)
+DOCUMENT_PROCESSING_TIMEOUT_SECONDS = config(
+    'DOCUMENT_PROCESSING_TIMEOUT_SECONDS',
+    default=300,
+    cast=int,
 )
 
 # Notification Service (used by Django admin notification flows)
@@ -200,6 +209,11 @@ NOTIFICATION_SERVICE_URL = config(
 NOTIFICATION_INTERNAL_API_TOKEN = config(
     'NOTIFICATION_INTERNAL_API_TOKEN',
     default='dev-notification-internal-token',
+)
+NOTIFICATION_SERVICE_TIMEOUT_SECONDS = config(
+    'NOTIFICATION_SERVICE_TIMEOUT_SECONDS',
+    default=45,
+    cast=int,
 )
 
 # Logging Configuration

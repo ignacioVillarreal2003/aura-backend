@@ -209,6 +209,15 @@ class User(AbstractBaseUser):
         related_name='users',
         verbose_name='Grupos',
     )
+    fau_role = models.ForeignKey(
+        'FauRole',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='users',
+        db_column='fau_role_id',
+        verbose_name='Rol FAU',
+    )
 
     objects = CustomUserManager()
 

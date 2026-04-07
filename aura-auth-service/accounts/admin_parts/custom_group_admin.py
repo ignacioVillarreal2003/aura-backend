@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class CustomGroupAdmin(HelpTextStripMixin, admin.ModelAdmin):
     """Custom admin for Group model to manage groups."""
 
-    list_display = ('name', 'description_short', 'document_count')
+    list_display = ('name', 'description_short', 'member_count', 'document_count')
     list_filter = ('created_at',)
     search_fields = ('name',)
     filter_horizontal = ('documents',)
@@ -59,6 +59,14 @@ class CustomGroupAdmin(HelpTextStripMixin, admin.ModelAdmin):
         return '-'
     description_short.short_description = 'Descripción'
 
+    def member_count(self, obj):
+        count = obj.users.filter(deleted_at__isnull=True).count()
+        return format_html(
+            '<span style="background-color: #417690; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>',
+            count
+        )
+    member_count.short_description = 'Miembros'
+
     def document_count(self, obj):
         count = obj.documents.count()
         return format_html(
@@ -66,6 +74,15 @@ class CustomGroupAdmin(HelpTextStripMixin, admin.ModelAdmin):
             count
         )
     document_count.short_description = 'Documentos'
+
+    def get_fieldsets(self, request, obj=None):
+        if obj is None:
+            return (
+                ('Información Básica', {
+                    'fields': ('name', 'description', 'documents'),
+                }),
+            )
+        return self.fieldsets
 
     def has_module_permission(self, request):
         return _is_admin_or_super_user(request.user)

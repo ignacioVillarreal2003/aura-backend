@@ -132,11 +132,48 @@ class FauRole(models.Model):
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=255, unique=True, verbose_name='Nombre')
     description = models.CharField(max_length=255, blank=True, verbose_name='Descripción')
+    power = models.PositiveIntegerField(
+        unique=True,
+        null=True,
+        blank=True,
+        verbose_name='Nivel de poder',
+        help_text='Número único que define la jerarquía (mayor número = mayor poder).',
+    )
 
     class Meta:
         db_table = 'fau_role'
         verbose_name = 'Rol FAU'
-        verbose_name_plural = 'Rol FAU'
+        verbose_name_plural = 'Roles FAU'
+        ordering = ['power']
 
     def __str__(self):
         return self.name
+
+
+class PermissionInFauRole(models.Model):
+    """FAU role-permission relationship."""
+
+    id = models.AutoField(primary_key=True)
+    fau_role = models.ForeignKey(
+        FauRole,
+        on_delete=models.PROTECT,
+        related_name='permission_links',
+        db_column='fau_role_id',
+        verbose_name='Rol FAU',
+    )
+    permission = models.ForeignKey(
+        Permission,
+        on_delete=models.PROTECT,
+        related_name='fau_role_links',
+        db_column='permission_id',
+        verbose_name='Permiso',
+    )
+
+    class Meta:
+        db_table = 'permission_in_fau_role'
+        verbose_name = 'Permiso de Rol FAU'
+        verbose_name_plural = 'Permisos de Rol FAU'
+        unique_together = [('fau_role', 'permission')]
+
+    def __str__(self):
+        return f"{self.fau_role.name} -> {self.permission.name}"

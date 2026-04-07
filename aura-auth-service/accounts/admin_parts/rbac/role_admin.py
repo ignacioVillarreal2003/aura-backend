@@ -15,12 +15,19 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
     list_filter = ()
     search_fields = ('name', 'description')
     readonly_fields = ('id',)
+    actions = None
+    actions_selection_counter = False
 
     fieldsets = (
         ('Información Básica', {
             'fields': ('id', 'name', 'description'),
         }),
     )
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj:
+            return self.readonly_fields + ('name',)
+        return self.readonly_fields
 
     def has_module_permission(self, request):
         return _is_admin_or_super_user(request.user)
@@ -29,7 +36,7 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
         return _is_admin_or_super_user(request.user)
 
     def has_add_permission(self, request):
-        return _is_super_admin_user(request.user)
+        return False
 
     def has_change_permission(self, request, obj=None):
         return _is_super_admin_user(request.user)

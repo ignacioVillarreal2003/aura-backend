@@ -53,6 +53,10 @@ class EnvironmentVariables(BaseSettings):
         default="development",
         description="Application environment (development | production)"
     )
+    document_internal_api_token: str = Field(
+        default="dev-document-processing-internal-token",
+        description="Trusted internal token for admin-initiated document uploads"
+    )
 
     @field_validator("log_level")
     @classmethod

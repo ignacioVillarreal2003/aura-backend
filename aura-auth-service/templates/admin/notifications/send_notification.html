@@ -13,13 +13,47 @@
 {% endblock %}
 
 {% block content %}
-<h1>Enviar Notificación</h1>
+<h1>{{ title }}</h1>
 
 <form method="post">
     {% csrf_token %}
-    <div class="form-row">
-        {{ form.as_p }}
+    {{ form.media }}
+
+    {% if form.non_field_errors %}
+    <div class="messagelist">
+        {% for error in form.non_field_errors %}
+        <div class="errornote">{{ error }}</div>
+        {% endfor %}
     </div>
+    {% endif %}
+
+    {% for section in sections %}
+    <fieldset class="module aligned">
+        <h2>{{ section.title }}</h2>
+        {% for field in section.fields %}
+        <div class="form-row{% if field.errors %} errors{% endif %}">
+            <div>
+                {{ field.errors }}
+                {{ field.label_tag }}
+                {{ field }}
+                {% if field.help_text %}
+                <div class="help">{{ field.help_text }}</div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </fieldset>
+    {% endfor %}
+
+    <fieldset class="module aligned">
+        <h2>Cómo seleccionar destinatarios</h2>
+        <div class="help">
+            Usa el buscador del panel izquierdo para filtrar y mueve los seleccionados al panel derecho.
+            En individuales verás usuarios disponibles/seleccionados.
+            En grupales tendrás selectores dobles separados para grupos, roles de sistema y roles FAU.
+        </div>
+    </fieldset>
+
     <div class="submit-row">
         <input type="submit" value="Enviar" class="default">
         <a href="{% url opts|admin_urlname:'changelist' %}" class="button cancel-link">Cancelar</a>

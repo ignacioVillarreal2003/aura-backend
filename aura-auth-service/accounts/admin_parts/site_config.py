@@ -14,8 +14,8 @@ admin.site.index_title = 'Panel de Administración'
 admin.site.unregister(Group)
 
 
-def _custom_get_app_list(self, request):
-    app_list = admin.AdminSite.get_app_list(self, request)
+def _custom_get_app_list(self, request, app_label=None):
+    app_list = admin.AdminSite.get_app_list(self, request, app_label)
     desired_order = ['User']
     if _is_super_admin_user(request.user) or _is_admin_user(request.user):
         desired_order = [

@@ -2,7 +2,7 @@
 
 import uuid
 from django.db import models
-from accounts.models import AuditedModel, Role
+from accounts.models import AuditedModel, Role, FauRole
 
 
 class Document(AuditedModel):
@@ -25,7 +25,33 @@ class Document(AuditedModel):
         verbose_name='Tamaño (bytes)',
         help_text='Tamaño del archivo en bytes',
     )
-
+    external_document_id = models.BigIntegerField(
+        null=True,
+        blank=True,
+        unique=True,
+        verbose_name='ID externo',
+        help_text='Identificador del documento en document-processing.',
+    )
+    external_storage_url = models.CharField(
+        max_length=1000,
+        blank=True,
+        verbose_name='Storage URL externa',
+        help_text='Referencia devuelta por document-processing.',
+    )
+    visible_to_all = models.BooleanField(
+        default=False,
+        verbose_name='Disponible para todos',
+        help_text='Si está activo, el documento queda disponible para todos y no se restringe por grupos ni jerarquía FAU.',
+    )
+    minimum_fau_role = models.ForeignKey(
+        FauRole,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='document_minimum_access',
+        verbose_name='Rol FAU mínimo',
+        help_text='Este rol y cualquier rol con mayor poder pueden acceder al documento.',
+    )
     class Meta:
         db_table = 'documents'
         verbose_name = 'Documento'
@@ -37,6 +63,13 @@ class Document(AuditedModel):
 
     def __str__(self):
         return self.name
+
+    def access_scope_label(self):
+        if self.visible_to_all:
+            return 'Todos'
+        if self.minimum_fau_role_id:
+            return f'{self.minimum_fau_role.name} y superiores'
+        return 'Restringido'
 
 
 class DocumentRole(models.Model):
