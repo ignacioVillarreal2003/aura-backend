@@ -61,10 +61,10 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name='documentrole',
-            index=models.Index(fields=['document'], name='document_ro_document_50d0b6_idx'),
+            index=models.Index(fields=['document'], name='docrole_doc_50d0b6_idx'),
         ),
         migrations.AddIndex(
             model_name='documentrole',
-            index=models.Index(fields=['role'], name='document_ro_role_id_4a3c85_idx'),
+            index=models.Index(fields=['role'], name='docrole_role_4a3c85_idx'),
         ),
     ]

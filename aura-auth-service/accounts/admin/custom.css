@@ -1,0 +1,16 @@
+#toolbar {
+    display: flex !important;
+    justify-content: center !important;
+}
+
+#toolbar .object-tools {
+    float: none !important;
+}
+
+#toolbar .object-tools li {
+    float: none !important;
+}
+
+.selector-chosen h2 {
+    text-transform: capitalize;
+}

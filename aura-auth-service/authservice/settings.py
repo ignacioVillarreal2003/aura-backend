@@ -30,11 +30,13 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django_extensions',
     
     # Third-party apps
     'corsheaders',
     'rest_framework',
     'django_filters',
+    'drf_spectacular',
     
     # Local apps
     'accounts.apps.AccountsConfig',
@@ -73,33 +75,48 @@ TEMPLATES = [
 WSGI_APPLICATION = 'authservice.wsgi.application'
 
 # Database Configuration
-# Development: SQLite3 (default, no setup needed)
-# Production: PostgreSQL (set DB_ENGINE in .env)
+# Default: PostgreSQL auth_db from docker-compose
 
-DB_ENGINE = config('DB_ENGINE', default='django.db.backends.sqlite3')
+DB_ENGINE = config('DB_ENGINE', default='django.db.backends.postgresql')
 
 if DB_ENGINE == 'django.db.backends.sqlite3':
-    # SQLite3 Configuration (Development)
     DATABASES = {
         'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
+            'ENGINE': DB_ENGINE,
             'NAME': BASE_DIR / 'db.sqlite3',
-        }
+        },
+        'aura_db': {
+            'ENGINE': DB_ENGINE,
+            'NAME': BASE_DIR / 'aura_db.sqlite3',
+        },
     }
 else:
-    # PostgreSQL Configuration (Production)
     DATABASES = {
         'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': config('DB_NAME', default='aura_auth_db'),
-            'USER': config('DB_USER', default='postgres'),
-            'PASSWORD': config('DB_PASSWORD', default='postgres'),
+            'ENGINE': DB_ENGINE,
+            'NAME': config('DB_NAME', default='auth_db'),
+            'USER': config('DB_USER', default='aura_root'),
+            'PASSWORD': config('DB_PASSWORD', default='aura_password'),
             'HOST': config('DB_HOST', default='localhost'),
-            'PORT': config('DB_PORT', default='5432'),
-            'CONN_MAX_AGE': 600,  # Connection pooling
+            'PORT': config('DB_PORT', default='5433'),
+            'CONN_MAX_AGE': 600,
             'OPTIONS': {
                 'connect_timeout': 10,
-                'options': '-c statement_timeout=30000'  # 30 seconds
+                'options': '-c statement_timeout=30000'
+            }
+        },
+        'aura_db': {
+            'ENGINE': DB_ENGINE,
+            'NAME': config('AURA_DB_NAME', default='aura_db', cast=str),
+            'USER': config('AURA_DB_USER', default='aura_root', cast=str),
+            'PASSWORD': config('AURA_DB_PASSWORD', default='aura_password', cast=str),
+            'HOST': config('AURA_DB_HOST', default='localhost', cast=str),
+            'PORT': config('AURA_DB_PORT', default='5432', cast=str),
+            'CONN_MAX_AGE': 600,
+            'OPTIONS': {
+                'connect_timeout': 10,
+                'options': '-c statement_timeout=30000',
+                'client_encoding': 'UTF8',
             }
         }
     }
@@ -150,7 +167,26 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Aura Auth Service API',
+    'DESCRIPTION': 'Authentication service: login, refresh, introspect and logout.',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+}
+
+# JWT Configuration
+JWT_ACCESS_LIFETIME_MINUTES = config('JWT_ACCESS_LIFETIME_MINUTES', default=15, cast=int)
+JWT_ALGORITHM = config('JWT_ALGORITHM', default='HS256')
+JWT_SIGNING_KEY = config('JWT_SIGNING_KEY', default=SECRET_KEY)
+
+# Document Processing Service
+DOCUMENT_PROCESSING_URL = config(
+    'DOCUMENT_PROCESSING_URL',
+    default='http://localhost:8001/api/document-creation',
+)
 
 # Logging Configuration
 LOGGING = {
