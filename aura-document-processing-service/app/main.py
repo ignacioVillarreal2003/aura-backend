@@ -17,10 +17,14 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(
+        app: FastAPI
+):
     logger.info("Starting application")
     try:
-        await startup_dependencies(app=app)
+        await startup_dependencies(
+            app=app
+        )
     except Exception:
         logger.critical("Failed to start application")
         raise
@@ -29,7 +33,9 @@ async def lifespan(app: FastAPI):
 
     logger.info("Shutting down application")
     try:
-        await shutdown_dependencies(app=app)
+        await shutdown_dependencies(
+            app=app
+        )
         logger.info("Application shut down successfully")
     except Exception:
         logger.error("Error during application shutdown")
@@ -42,7 +48,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
         docs_url="/api/docs",
         redoc_url="/api/redoc",
-        openapi_url="/api/openapi.json",
+        openapi_url="/api/openapi.json"
     )
 
     configure_cors(app)
@@ -54,12 +60,16 @@ def create_app() -> FastAPI:
     return app
 
 
-def _add_middlewares(app: FastAPI) -> None:
+def _add_middlewares(
+        app: FastAPI
+) -> None:
     add_logging_middleware(app)
     add_authentication_middleware(app)
 
 
-def _include_routers(app: FastAPI) -> None:
+def _include_routers(
+        app: FastAPI
+) -> None:
     app.include_router(router, prefix="/api")
 
 

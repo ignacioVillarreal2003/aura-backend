@@ -4,7 +4,7 @@ from app.application.services.document.post_process_document_service.exceptions.
 from app.application.services.document.post_process_document_service.post_process_document_service_settings import (
     PostProcessDocumentServiceSettings
 )
-from app.domain.dtos.document.post_process_document_controller.post_process_documents_request import (
+from app.domain.dtos.document.post_process_document.post_process_documents_request import (
     PostProcessDocumentsRequest
 )
 

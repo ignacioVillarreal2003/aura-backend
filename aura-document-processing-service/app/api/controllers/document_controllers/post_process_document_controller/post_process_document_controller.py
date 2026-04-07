@@ -10,13 +10,13 @@ from app.application.services.document.post_process_document_service.interfaces.
 from app.application.services.document.post_process_document_service.post_process_document_service import (
     get_post_process_document_service
 )
-from app.domain.dtos.document.post_process_document_controller.post_process_documents_start_response import (
+from app.domain.dtos.document.post_process_document.post_process_documents_start_response import (
     PostProcessDocumentsStartResponse
 )
-from app.domain.dtos.document.post_process_document_controller.post_process_documents_request import (
+from app.domain.dtos.document.post_process_document.post_process_documents_request import (
     PostProcessDocumentsRequest
 )
-from app.domain.dtos.document.post_process_document_controller.post_process_documents_status_response import (
+from app.domain.dtos.document.post_process_document.post_process_documents_status_response import (
     PostProcessDocumentsStatusResponse
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser

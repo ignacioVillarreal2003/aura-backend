@@ -45,13 +45,13 @@ class RetrieveContextPlugin(DocumentQuestionPlugin):
         try:
             fragments = await resources.document_context_provider.retrieve_context_fragments_by_question(
                 question=query,
-                max_context_fragments=self._settings.max_fragments,
+                max_fragments=self._settings.max_fragments,
                 authenticated_user=state.authenticated_user,
             )
-            state.retrieved_fragments = fragments.context_fragments
+            state.retrieved_fragments = fragments.fragments
             logger.debug(
                 "Context fragments retrieved",
-                extra={"fragment_count": len(fragments.context_fragments), "max_fragments": self._settings.max_fragments},
+                extra={"fragment_count": len(fragments.fragments), "max_fragments": self._settings.max_fragments},
             )
         except DocumentQuestionServiceException:
             raise

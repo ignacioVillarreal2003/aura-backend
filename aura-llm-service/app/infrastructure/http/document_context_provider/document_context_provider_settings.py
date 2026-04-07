@@ -21,6 +21,9 @@ class DocumentContextProviderSettings(BaseSettings):
     max_chars_per_fragment: int = Field(default=10_000, ge=1_000, le=100_000)
     truncate_oversized_fragments: bool = Field(default=False)
     max_total_chars: int = Field(default=100_000, ge=10_000, le=1_000_000)
+    max_question_chars: int = Field(default=16_000, ge=256, le=500_000)
+    max_fragments_cap: int = Field(default=50, ge=1, le=500)
+    max_document_ids_per_request: int = Field(default=50, ge=1, le=500)
 
     @field_validator(
         "question_context_fragments_url",
@@ -28,23 +31,27 @@ class DocumentContextProviderSettings(BaseSettings):
         mode="before"
     )
     @classmethod
-    def validate_url(cls, v: str) -> str:
+    def validate_url(
+            cls,
+            v: str
+    ) -> str:
         if not isinstance(v, str) or not v.strip():
-            raise ValueError("URL must be a non-empty string")
+            raise ValueError("URL must be a non-empty string.")
         v = v.strip().rstrip("/")
         if not v.startswith(("http://", "https://")):
-            raise ValueError(f"URL must start with http:// or https://, got: '{v}'")
+            raise ValueError(f"URL must start with http:// or https://, got: '{v}'.")
         return v
 
-    @model_validator(mode="after")
-    def validate_coherence(self) -> "DocumentContextProviderSettings":
+    @model_validator(
+        mode="after"
+    )
+    def validate_limits_coherence(
+            self
+    ) -> "DocumentContextProviderSettings":
         if self.max_chars_per_fragment > self.max_total_chars:
-            logger.warning(
-                "max_total_chars is smaller than max_chars_per_fragment "
-                "— a single fragment may exhaust the available budget",
-                extra={
-                    "max_chars_per_fragment": self.max_chars_per_fragment,
-                    "max_total_chars": self.max_total_chars
-                }
+            raise ValueError(
+                f"max_chars_per_fragment ({self.max_chars_per_fragment:,}) cannot exceed "
+                f"max_total_chars ({self.max_total_chars:,}). "
+                "A single fragment would exhaust the entire character budget."
             )
         return self

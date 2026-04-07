@@ -4,13 +4,13 @@ from fastapi import Response
 from app.application.services.document.post_process_document_service.interfaces.post_process_document_service_interface import (
     PostProcessDocumentServiceInterface
 )
-from app.domain.dtos.document.post_process_document_controller.post_process_documents_start_response import (
+from app.domain.dtos.document.post_process_document.post_process_documents_start_response import (
     PostProcessDocumentsStartResponse
 )
-from app.domain.dtos.document.post_process_document_controller.post_process_documents_request import (
+from app.domain.dtos.document.post_process_document.post_process_documents_request import (
     PostProcessDocumentsRequest
 )
-from app.domain.dtos.document.post_process_document_controller.post_process_documents_status_response import PostProcessDocumentsStatusResponse
+from app.domain.dtos.document.post_process_document.post_process_documents_status_response import PostProcessDocumentsStatusResponse
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 
 

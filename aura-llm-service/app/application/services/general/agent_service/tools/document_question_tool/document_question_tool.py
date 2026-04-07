@@ -12,14 +12,14 @@ from app.application.services.general.document_question_service.interfaces.docum
 )
 from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.general.document_question.document_question_request import DocumentQuestionRequest
+from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.message import Message
-from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
 
 logger = logging.getLogger(__name__)
 
 
 class DocumentQuestionTool(BaseTool):
-    _TOOL_USER = AuthenticationResponse(id=0, email="tool@agent", roles=[], permissions=[])
+    _TOOL_USER = AuthenticatedUser(id=0, email="tool@agent", roles=[], permissions=[])
 
     name: str = "document_question_tool"
     description: str = (
@@ -68,8 +68,7 @@ class DocumentQuestionTool(BaseTool):
                         Message(role=MessageRole.human, content=question)
                     ]
                 ),
-                user=self._TOOL_USER,
-                authorization=self._authorization,
+                authenticated_user=self._TOOL_USER,
             )
 
             if not response.answer or not response.answer.strip():

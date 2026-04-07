@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from app.domain.dtos.fragment.fragment_query_controller.fragment_response import FragmentResponse
+from app.domain.dtos.fragment.fragment_query.fragment_response import FragmentResponse
 
 
 class FragmentListResponse(BaseModel):

@@ -21,9 +21,23 @@ class AgentController(AgentControllerInterface):
             agent_service: AgentServiceInterface = Depends(get_agent_service),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user)
     ) -> AgentResponse:
+        logger.info(
+            "Handling execute agent request",
+            extra={
+                "user_id": authenticated_user.id
+            }
+        )
+
         agent_response = await agent_service.execute_agent(
             agent_request=agent_request,
-            authenticated_user=authenticated_user,
+            authenticated_user=authenticated_user
+        )
+
+        logger.info(
+            "Execute agent completed successfully",
+            extra={
+                "user_id": authenticated_user.id
+            }
         )
 
         return agent_response

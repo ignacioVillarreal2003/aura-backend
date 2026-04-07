@@ -20,13 +20,13 @@ from app.application.services.document.post_process_document_service.post_proces
 from app.application.services.document.post_process_document_service.post_process_document_service_validator import (
     PostProcessDocumentServiceValidator
 )
-from app.domain.dtos.document.post_process_document_controller.post_process_documents_request import (
+from app.domain.dtos.document.post_process_document.post_process_documents_request import (
     PostProcessDocumentsRequest
 )
-from app.domain.dtos.document.post_process_document_controller.post_process_documents_start_response import (
+from app.domain.dtos.document.post_process_document.post_process_documents_start_response import (
     PostProcessDocumentsStartResponse
 )
-from app.domain.dtos.document.post_process_document_controller.post_process_documents_status_response import (
+from app.domain.dtos.document.post_process_document.post_process_documents_status_response import (
     PostProcessDocumentError,
     PostProcessDocumentsStatusResponse
 )

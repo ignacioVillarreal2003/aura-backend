@@ -14,6 +14,6 @@ class FragmentEnrichControllerInterface(ABC):
             self,
             enrich_fragment_request: EnrichFragmentRequest,
             fragment_enrich_service: FragmentEnrichServiceInterface,
-            authenticated_user: AuthenticatedUser,
+            authenticated_user: AuthenticatedUser
     ) -> EnrichFragmentResponse:
         pass

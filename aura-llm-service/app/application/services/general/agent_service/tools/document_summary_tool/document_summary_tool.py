@@ -10,15 +10,14 @@ from app.application.services.general.agent_service.tools.document_summary_tool.
 from app.application.services.document.document_summary_service.interfaces.document_summary_service_interface import (
     DocumentSummaryServiceInterface
 )
+from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.document.document_summary.document_summary_request import DocumentSummaryRequest
-from app.infrastructure.authentication_provider.dtos.authentication_response import AuthenticationResponse
 
 logger = logging.getLogger(__name__)
 
 
-
 class DocumentSummaryTool(BaseTool):
-    _TOOL_USER = AuthenticationResponse(id=0, email="tool@agent", roles=[], permissions=[])
+    _TOOL_USER = AuthenticatedUser(id=0, email="tool@agent", roles=[], permissions=[])
 
     name: str = "document_summary_tool"
     description: str = (
@@ -66,8 +65,7 @@ class DocumentSummaryTool(BaseTool):
         try:
             response = await self._document_summary_service.execute_document_summary(
                 document_summary_request=DocumentSummaryRequest(document_id=document_id),
-                user=self._TOOL_USER,
-                authorization=self._authorization
+                authenticated_user=self._TOOL_USER,
             )
 
             if not response.summary or not response.summary.strip():

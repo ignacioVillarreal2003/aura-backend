@@ -23,9 +23,23 @@ class DocumentSummaryController(DocumentSummaryControllerInterface):
             document_summary_service: DocumentSummaryServiceInterface = Depends(get_document_summary_service),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user)
     ) -> DocumentSummaryResponse:
+        logger.info(
+            "Handling document summary request",
+            extra={
+                "user_id": authenticated_user.id
+            }
+        )
+
         document_summary_response = await document_summary_service.execute_document_summary(
             document_summary_request=document_summary_request,
-            authenticated_user=authenticated_user,
+            authenticated_user=authenticated_user
+        )
+
+        logger.info(
+            "Document summary completed successfully",
+            extra={
+                "user_id": authenticated_user.id
+            }
         )
 
         return document_summary_response

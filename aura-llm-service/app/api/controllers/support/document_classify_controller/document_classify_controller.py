@@ -23,9 +23,23 @@ class DocumentClassifyController(DocumentClassifyControllerInterface):
             document_classify_service: DocumentClassifyServiceInterface = Depends(get_document_classify_service),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
     ) -> ClassifyDocumentResponse:
+        logger.info(
+            "Handling classify document request",
+            extra={
+                "user_id": authenticated_user.id
+            }
+        )
+
         classify_document_response = await document_classify_service.classify_document(
             classify_document_request=classify_document_request,
-            authenticated_user=authenticated_user,
+            authenticated_user=authenticated_user
+        )
+
+        logger.info(
+            "Classify document completed successfully",
+            extra={
+                "user_id": authenticated_user.id
+            }
         )
 
         return classify_document_response

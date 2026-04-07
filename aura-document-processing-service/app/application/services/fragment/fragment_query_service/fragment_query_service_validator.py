@@ -6,10 +6,10 @@ from app.application.services.fragment.fragment_query_service.exceptions.fragmen
 from app.application.services.fragment.fragment_query_service.fragment_query_service_settings import (
     FragmentQueryServiceSettings,
 )
-from app.domain.dtos.fragment.fragment_query_controller.documents_context_fragments_request import (
+from app.domain.dtos.fragment.fragment_query.documents_context_fragments_request import (
     DocumentsContextFragmentsRequest,
 )
-from app.domain.dtos.fragment.fragment_query_controller.question_context_fragments_request import (
+from app.domain.dtos.fragment.fragment_query.question_context_fragments_request import (
     QuestionContextFragmentsRequest,
 )
 

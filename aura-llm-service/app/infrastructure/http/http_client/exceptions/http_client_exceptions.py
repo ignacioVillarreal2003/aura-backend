@@ -6,16 +6,20 @@ class HttpClientException(AppException):
 
 
 class HttpClientNotStartedException(HttpClientException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=503)
 
 
 class HttpClientConnectionException(HttpClientException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=503)
 
 
 class HttpClientTimeoutException(HttpClientException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=504)
 
 
 class HttpClientCircuitBreakerException(HttpClientException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=503)

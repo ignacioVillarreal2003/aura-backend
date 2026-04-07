@@ -1,4 +1,4 @@
-POST http://localhost:8001/api/document-question
+POST http://localhost:8000/api/document-question
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -16,7 +16,7 @@ Authorization: Bearer user_token_123
 ###
 
 
-POST http://localhost:8001/api/document-question
+POST http://localhost:8000/api/document-question
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -34,7 +34,7 @@ Authorization: Bearer user_token_123
 ###
 
 
-POST http://localhost:8001/api/document-question
+POST http://localhost:8000/api/document-question
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -52,7 +52,7 @@ Authorization: Bearer user_token_123
 ###
 
 
-POST http://localhost:8001/api/document-question
+POST http://localhost:8000/api/document-question
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -70,7 +70,7 @@ Authorization: Bearer user_token_123
 ###
 
 
-POST http://localhost:8001/api/document-question
+POST http://localhost:8000/api/document-question
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -88,7 +88,7 @@ Authorization: Bearer user_token_123
 ###
 
 
-POST http://localhost:8001/api/document-question
+POST http://localhost:8000/api/document-question
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -106,7 +106,7 @@ Authorization: Bearer user_token_123
 ###
 
 
-POST http://localhost:8001/api/document-question
+POST http://localhost:8000/api/document-question
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123

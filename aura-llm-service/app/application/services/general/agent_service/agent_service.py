@@ -56,15 +56,14 @@ class AgentService(AgentServiceInterface):
     async def execute_agent(
             self,
             agent_request: AgentRequest,
-            user: AuthenticatedUser,
-            authorization: Optional[str] = None
+            authenticated_user: AuthenticatedUser,
     ) -> AgentResponse:
-        logger.info("Agent execution initiated", extra={"user_id": user.id})
+        logger.info("Agent execution initiated", extra={"user_id": authenticated_user.id})
 
         try:
             self._request_validator.validate_request(agent_request)
 
-            self._propagate_authorization(authorization)
+            self._propagate_authorization(None)
 
             await self._ensure_workflow_built()
 
@@ -74,7 +73,7 @@ class AgentService(AgentServiceInterface):
 
             final_state = await self._agent_workflow.invoke(initial_state)
 
-            logger.info("Agent execution completed successfully", extra={"user_id": user.id})
+            logger.info("Agent execution completed successfully", extra={"user_id": authenticated_user.id})
 
             return self._build_response(final_state)
 
@@ -83,7 +82,7 @@ class AgentService(AgentServiceInterface):
         except Exception as e:
             logger.exception(
                 "Unexpected error during agent execution",
-                extra={"user_id": user.id, "error_type": type(e).__name__},
+                extra={"user_id": authenticated_user.id, "error_type": type(e).__name__},
             )
             raise AgentServiceException(
                 message=f"Unexpected error executing the agent: {e}",

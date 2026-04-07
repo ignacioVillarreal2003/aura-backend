@@ -12,8 +12,8 @@ from app.application.services.document.document_query_service.interfaces.documen
     DocumentQueryServiceInterface
 )
 from app.domain.constants.document.document_type import DocumentType
-from app.domain.dtos.document.document_query_controller.document_list_response import DocumentListResponse
-from app.domain.dtos.document.document_query_controller.document_response import DocumentResponse
+from app.domain.dtos.document.document_query.document_list_response import DocumentListResponse
+from app.domain.dtos.document.document_query.document_response import DocumentResponse
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
@@ -99,7 +99,7 @@ router = APIRouter()
 document_query_controller = DocumentQueryController()
 
 router.get(
-    "/document_controllers/{document_id}",
+    "/document/{document_id}",
     response_model=DocumentResponse
 )(document_query_controller.get_document)
 

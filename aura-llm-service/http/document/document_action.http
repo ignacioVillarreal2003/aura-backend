@@ -1,6 +1,5 @@
-# Resumir un documento (con action predefinida)
 # @timeout 600
-POST http://localhost:8001/api/document-action
+POST http://localhost:8000/api/document-action
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -15,9 +14,8 @@ Authorization: Bearer user_token_123
 ###
 
 
-# Extraer puntos clave de un documento
 # @timeout 600
-POST http://localhost:8001/api/document-action
+POST http://localhost:8000/api/document-action
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -32,9 +30,8 @@ Authorization: Bearer user_token_123
 ###
 
 
-# Explicar un documento en términos simples
 # @timeout 600
-POST http://localhost:8001/api/document-action
+POST http://localhost:8000/api/document-action
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -49,9 +46,8 @@ Authorization: Bearer user_token_123
 ###
 
 
-# Generar un ensayo a partir del documento
 # @timeout 600
-POST http://localhost:8001/api/document-action
+POST http://localhost:8000/api/document-action
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -66,9 +62,8 @@ Authorization: Bearer user_token_123
 ###
 
 
-# Instrucción libre sin action (el texto guía al LLM)
 # @timeout 600
-POST http://localhost:8001/api/document-action
+POST http://localhost:8000/api/document-action
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -82,9 +77,8 @@ Authorization: Bearer user_token_123
 ###
 
 
-# Comparar dos documentos
 # @timeout 600
-POST http://localhost:8001/api/document-action
+POST http://localhost:8000/api/document-action
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -99,9 +93,8 @@ Authorization: Bearer user_token_123
 ###
 
 
-# Generar un reporte formal
 # @timeout 600
-POST http://localhost:8001/api/document-action
+POST http://localhost:8000/api/document-action
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -116,9 +109,8 @@ Authorization: Bearer user_token_123
 ###
 
 
-# Análisis detallado
 # @timeout 600
-POST http://localhost:8001/api/document-action
+POST http://localhost:8000/api/document-action
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123

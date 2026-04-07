@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from app.application.services.document.document_action_service.interfaces.document_action_service_interface import (
-    DocumentActionServiceInterface,
+    DocumentActionServiceInterface
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.document.document_action.document_action_request import DocumentActionRequest
@@ -14,6 +14,6 @@ class DocumentActionControllerInterface(ABC):
             self,
             document_action_request: DocumentActionRequest,
             document_action_service: DocumentActionServiceInterface,
-            authenticated_user: AuthenticatedUser,
+            authenticated_user: AuthenticatedUser
     ) -> DocumentActionResponse:
         pass

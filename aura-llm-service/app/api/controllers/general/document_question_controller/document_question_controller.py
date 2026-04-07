@@ -23,9 +23,23 @@ class DocumentQuestionController(DocumentQuestionControllerInterface):
             document_question_service: DocumentQuestionServiceInterface = Depends(get_document_question_service),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user)
     ) -> DocumentQuestionResponse:
+        logger.info(
+            "Handling document question request",
+            extra={
+                "user_id": authenticated_user.id
+            }
+        )
+
         document_question_response = await document_question_service.execute_document_question(
             document_question_request=document_question_request,
-            authenticated_user=authenticated_user,
+            authenticated_user=authenticated_user
+        )
+
+        logger.info(
+            "Document question completed successfully",
+            extra={
+                "user_id": authenticated_user.id
+            }
         )
 
         return document_question_response

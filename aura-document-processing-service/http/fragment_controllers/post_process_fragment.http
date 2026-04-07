@@ -1,4 +1,4 @@
-GET http://localhost:8000/api/document-query/document/29
+POST http://localhost:8000/api/post-process-fragment/start
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -7,34 +7,32 @@ Authorization: Bearer user_token_123
 ###
 
 
-GET http://localhost:8000/api/document-query/documents
-Accept: application/json
-Content-Type: application/json
-Authorization: Bearer user_token_123
-
-
-###
-
-
-POST http://localhost:8000/api/document-query/retrieve-context-fragments-by-document
+POST http://localhost:8000/api/post-process-fragment/documents
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
 
 {
-  "document_id": 32
+  "document_ids": [1, 2]
 }
 
 
 ###
 
 
-POST http://localhost:8000/api/document-query/retrieve-context-fragments-by-question
+GET http://localhost:8000/api/post-process-fragment/status
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
 
-{
-  "question": "El ninio que tiene una ballena",
-  "max_context_fragments": 5
-}
+
+###
+
+
+POST http://localhost:8000/api/post-process-fragment/stop
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+
+###

@@ -4,7 +4,7 @@ from app.application.services.fragment.post_process_fragment_service.exceptions.
 from app.application.services.fragment.post_process_fragment_service.post_process_fragment_service_settings import (
     PostProcessFragmentServiceSettings,
 )
-from app.domain.dtos.fragment.post_process_fragment_controller.post_process_fragments_request import (
+from app.domain.dtos.fragment.post_process_fragment.post_process_fragments_request import (
     PostProcessFragmentsRequest,
 )
 

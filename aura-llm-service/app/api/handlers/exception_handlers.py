@@ -1,6 +1,6 @@
 from fastapi import Request, status, FastAPI
 from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError, HTTPException
+from fastapi.exceptions import HTTPException, RequestValidationError
 import logging
 
 from app.application.exceptions.app_exception import AppException
@@ -16,18 +16,36 @@ async def app_exception_handler(
         "Application error occurred",
         extra={
             "error_code": exc.code,
-            "error_message": exc.message,
             "status_code": exc.status_code,
             "path": request.url.path
         }
     )
-
     return JSONResponse(
         status_code=exc.status_code,
         content={
             "error": exc.code,
-            "message": exc.message,
-            "details": None
+            "message": exc.message
+        }
+    )
+
+
+async def request_validation_exception_handler(
+        request: Request,
+        exc: RequestValidationError
+) -> JSONResponse:
+    logger.warning(
+        "Request validation failed",
+        extra={
+            "errors": exc.errors(),
+            "path": request.url.path
+        }
+    )
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "error": "ValidationError",
+            "message": "Request validation failed",
+            "detail": exc.errors()
         }
     )
 
@@ -40,42 +58,14 @@ async def http_exception_handler(
         "HTTP exception occurred",
         extra={
             "status_code": exc.status_code,
-            "detail": exc.detail,
             "path": request.url.path
         }
     )
-
     return JSONResponse(
         status_code=exc.status_code,
         content={
-            "error": "HTTPException",
-            "message": exc.detail,
-            "details": None
-        }
-    )
-
-
-async def validation_exception_handler(
-        request: Request,
-        exc: RequestValidationError
-) -> JSONResponse:
-    errors = exc.errors()
-
-    logger.warning(
-        "Request validation error",
-        extra={
-            "error_type": "RequestValidationError",
-            "errors": errors,
-            "path": request.url.path
-        }
-    )
-
-    return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={
-            "error": "RequestValidationError",
-            "message": "Request validation failed",
-            "details": errors
+            "error": "HttpError",
+            "message": exc.detail
         }
     )
 
@@ -91,21 +81,21 @@ async def general_exception_handler(
             "path": request.url.path
         }
     )
-
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
             "error": "InternalServerError",
-            "message": "An unexpected error occurred",
-            "details": None
+            "message": "An unexpected error occurred"
         }
     )
 
 
-def register_exception_handlers(app: FastAPI) -> None:
+def register_exception_handlers(
+        app: FastAPI
+) -> None:
     app.add_exception_handler(AppException, app_exception_handler)
+    app.add_exception_handler(RequestValidationError, request_validation_exception_handler)
     app.add_exception_handler(HTTPException, http_exception_handler)
-    app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(Exception, general_exception_handler)
 
     logger.info("Exception handlers registered successfully")

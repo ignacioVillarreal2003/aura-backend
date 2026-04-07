@@ -10,5 +10,5 @@ def configure_cors(app: FastAPI) -> None:
         allow_origins=environment_variables.cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
-        allow_headers=["*"],
+        allow_headers=["*"]
     )

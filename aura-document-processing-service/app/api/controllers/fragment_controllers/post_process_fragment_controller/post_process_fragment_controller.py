@@ -10,13 +10,13 @@ from app.application.services.fragment.post_process_fragment_service.interfaces.
 from app.application.services.fragment.post_process_fragment_service.post_process_fragment_service import (
     get_post_process_fragment_service
 )
-from app.domain.dtos.fragment.post_process_fragment_controller.post_process_fragments_start_response import (
+from app.domain.dtos.fragment.post_process_fragment.post_process_fragments_start_response import (
     PostProcessFragmentsStartResponse
 )
-from app.domain.dtos.fragment.post_process_fragment_controller.post_process_fragments_status_response import (
+from app.domain.dtos.fragment.post_process_fragment.post_process_fragments_status_response import (
     PostProcessFragmentsStatusResponse
 )
-from app.domain.dtos.fragment.post_process_fragment_controller.post_process_fragments_request import (
+from app.domain.dtos.fragment.post_process_fragment.post_process_fragments_request import (
     PostProcessFragmentsRequest
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser

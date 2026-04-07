@@ -14,6 +14,6 @@ class DocumentClassifyControllerInterface(ABC):
             self,
             classify_document_request: ClassifyDocumentRequest,
             document_classify_service: DocumentClassifyServiceInterface,
-            authenticated_user: AuthenticatedUser,
+            authenticated_user: AuthenticatedUser
     ) -> ClassifyDocumentResponse:
         pass

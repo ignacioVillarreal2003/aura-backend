@@ -55,7 +55,7 @@ class RetrieveFragmentsPlugin(DocumentActionPlugin):
             results = await asyncio.gather(
                 *[
                     resources.document_context_provider.retrieve_context_fragments_by_document(
-                        document_id=doc_id,
+                        document_ids=[doc_id],
                         authenticated_user=state.authenticated_user,
                     )
                     for doc_id in state.document_ids
@@ -80,7 +80,7 @@ class RetrieveFragmentsPlugin(DocumentActionPlugin):
                 fragments_by_document[doc_id] = []
                 continue
 
-            doc_fragments = result.context_fragments
+            doc_fragments = result.fragments
             fragments_by_document[doc_id] = doc_fragments
             all_fragments.extend(doc_fragments)
 

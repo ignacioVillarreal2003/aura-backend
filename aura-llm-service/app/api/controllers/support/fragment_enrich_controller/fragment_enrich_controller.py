@@ -1,5 +1,4 @@
 import logging
-
 from fastapi import APIRouter, Depends
 
 from app.api.controllers.support.fragment_enrich_controller.interfaces.fragment_enrich_controller_interface import (
@@ -7,7 +6,7 @@ from app.api.controllers.support.fragment_enrich_controller.interfaces.fragment_
 )
 from app.application.services.support.fragment_enrich_service.fragment_enrich_service import get_fragment_enrich_service
 from app.application.services.support.fragment_enrich_service.interfaces.fragment_enrich_service_interface import (
-    FragmentEnrichServiceInterface,
+    FragmentEnrichServiceInterface
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.support.fragment_enrich.enrich_fragment_request import EnrichFragmentRequest
@@ -24,9 +23,23 @@ class FragmentEnrichController(FragmentEnrichControllerInterface):
             fragment_enrich_service: FragmentEnrichServiceInterface = Depends(get_fragment_enrich_service),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
     ) -> EnrichFragmentResponse:
+        logger.info(
+            "Handling enrich fragment request",
+            extra={
+                "user_id": authenticated_user.id
+            }
+        )
+
         enrich_fragment_response = await fragment_enrich_service.enrich_fragment(
             enrich_fragment_request=enrich_fragment_request,
-            authenticated_user=authenticated_user,
+            authenticated_user=authenticated_user
+        )
+
+        logger.info(
+            "Enrich fragment completed successfully",
+            extra={
+                "user_id": authenticated_user.id
+            }
         )
 
         return enrich_fragment_response

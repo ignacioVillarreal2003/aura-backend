@@ -8,15 +8,21 @@ class AuthenticationProviderSettings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
-        extra="ignore",
+        extra="ignore"
     )
 
     authentication_url: str = Field(...)
 
-    @field_validator("authentication_url", mode="before")
+    @field_validator(
+        "authentication_url",
+        mode="before"
+    )
     @classmethod
-    def validate_url(cls, v: str) -> str:
+    def validate_url(
+            cls,
+            v: str
+    ) -> str:
         v = v.strip().rstrip("/")
         if not v.startswith(("http://", "https://")):
-            raise ValueError(f"authentication_url must start with http:// or https://, got: '{v}'")
+            raise ValueError("The authentication service URL must start with http:// or https://.")
         return v
