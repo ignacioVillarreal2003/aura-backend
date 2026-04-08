@@ -2,19 +2,28 @@ from app.application.exceptions.app_exception import AppException
 
 
 class ReaderException(AppException):
-    pass
+    def __init__(self, message: str, *, status_code: int = 500) -> None:
+        super().__init__(message, status_code=status_code)
 
 
 class UnsupportedReaderException(ReaderException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=415)
 
 
 class ReaderInitializationException(ReaderException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=503)
 
 
 class ReaderFileNotFoundException(ReaderException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=404)
+
+
+class UnsupportedReaderFormatException(ReaderException):
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=415)
 
 
 class DigitalDOCXReadException(ReaderException):
@@ -33,7 +42,7 @@ class PDFHasNoExtractableTextException(ReaderException):
     pass
 
 
-class UnsupportedScannedDOCXFormatException(ReaderException):
+class UnsupportedScannedDOCXFormatException(UnsupportedReaderFormatException):
     pass
 
 
@@ -45,7 +54,7 @@ class ScannedDOCXReadException(ReaderException):
     pass
 
 
-class UnsupportedScannedPDFFormatException(ReaderException):
+class UnsupportedScannedPDFFormatException(UnsupportedReaderFormatException):
     pass
 
 
@@ -54,4 +63,36 @@ class ScannedPDFOCRExtractionException(ReaderException):
 
 
 class ScannedPDFReadException(ReaderException):
+    pass
+
+
+class DoclingPDFInitializationException(ReaderInitializationException):
+    pass
+
+
+class UnsupportedDoclingPDFFormatException(UnsupportedReaderFormatException):
+    pass
+
+
+class DoclingPDFExtractionException(ReaderException):
+    pass
+
+
+class DoclingPDFReadException(ReaderException):
+    pass
+
+
+class DoclingExtractionException(ReaderException):
+    pass
+
+
+class DoclingInitializationException(ReaderInitializationException):
+    pass
+
+
+class DoclingReadException(ReaderException):
+    pass
+
+
+class UnsupportedDoclingFormatException(UnsupportedReaderFormatException):
     pass

@@ -1,11 +1,5 @@
 class AppException(Exception):
-    def __init__(
-            self,
-            message: str,
-            *,
-            status_code: int = 400,
-            code: str | None = None
-    ):
+    def __init__(self, message: str, *, status_code: int = 400, code: str | None = None):
         super().__init__(message)
         self.message = message
         self.status_code = status_code
@@ -13,15 +7,5 @@ class AppException(Exception):
 
 
 class RequestValidationException(AppException):
-    def __init__(
-            self,
-            message: str = "Valor invalido",
-            status_code: int = 400,
-            *,
-            code: str | None = None
-    ):
-        super().__init__(
-            message=message,
-            status_code=status_code,
-            code=code
-        )
+    def __init__(self, message: str, status_code: int = 400, *, code: str | None = None):
+        super().__init__(message=message, status_code=status_code, code=code)

@@ -1,11 +1,13 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 from fastapi import UploadFile
 
 
 class DocumentStorageInterface(ABC):
     @abstractmethod
-    async def start(self) -> None:
+    async def start(
+            self
+    ) -> None:
         pass
 
     @abstractmethod
@@ -13,24 +15,37 @@ class DocumentStorageInterface(ABC):
             self,
             file: UploadFile,
             document_id: Optional[str] = None,
-            additional_metadata: Optional[Dict[str, str]] = None
+            additional_metadata: Optional[dict[str, str]] = None
     ) -> str:
         pass
 
     @abstractmethod
-    async def download_document(self, object_name: str) -> bytes:
+    async def download_document(
+            self,
+            object_name: str
+    ) -> bytes:
         pass
 
     @abstractmethod
-    async def download_document_to_file(self, object_name: str, file_path: str) -> None:
+    async def download_document_to_file(
+            self,
+            object_name: str,
+            file_path: str
+    ) -> None:
         pass
 
     @abstractmethod
-    async def delete_document(self, object_name: str) -> None:
+    async def delete_document(
+            self,
+            object_name: str
+    ) -> None:
         pass
 
     @abstractmethod
-    async def document_exists(self, object_name: str) -> bool:
+    async def document_exists(
+            self,
+            object_name: str
+    ) -> bool:
         pass
 
     @abstractmethod
@@ -47,13 +62,11 @@ class DocumentStorageInterface(ABC):
             self,
             recursive: bool = True,
             prefix: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         pass
 
     @abstractmethod
-    async def health_check(self) -> Dict[str, Any]:
-        pass
-
-    @abstractmethod
-    def get_metrics(self) -> Dict[str, int]:
+    async def health_check(
+            self
+    ) -> dict[str, Any]:
         pass
