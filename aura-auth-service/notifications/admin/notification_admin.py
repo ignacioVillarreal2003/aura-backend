@@ -1,5 +1,6 @@
 ﻿"""Notification admin for aura-auth-service Django admin panel."""
 
+import json
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponseRedirect
@@ -146,15 +147,6 @@ class BaseNotificationAdmin(admin.ModelAdmin):
             extra_context['send_url'] = reverse(f'admin:notifications_{self.model._meta.model_name}_send')
         return super().changelist_view(request, extra_context=extra_context)
 
-    def build_form_sections(self, form, mapping):
-        return [
-            {
-                'title': title,
-                'fields': [form[field_name] for field_name in field_names if field_name in form.fields],
-            }
-            for title, field_names in mapping
-        ]
-
 
 @admin.register(IndividualNotification)
 class IndividualNotificationAdmin(BaseNotificationAdmin):
@@ -193,12 +185,19 @@ class IndividualNotificationAdmin(BaseNotificationAdmin):
         else:
             form = SendNotificationForm()
 
+        # Get all available users for the panel
+        available_users = User.objects.filter(deleted_at__isnull=True, status='active').order_by('username')
+        users_json = json.dumps([
+            {'id': str(user.pk), 'label': f"{user.username} ({user.email})"}
+            for user in available_users
+        ])
+
         context = {
             **self.admin_site.each_context(request),
-            'title': 'Crear notificaciones individuales',
             'form': form,
-            'sections': self.build_form_sections(form, [('Destinatario', ['recipients']), ('Mensaje', ['message'])]),
             'opts': self.model._meta,
+            'show_search': True,
+            'users_json': users_json,
         }
         return render(request, 'admin/notifications/send_notification.html', context)
 
@@ -239,15 +238,35 @@ class GroupNotificationAdmin(BaseNotificationAdmin):
         else:
             form = SendGroupNotificationForm()
 
+        # Prepare JSON data for groups/roles/fau_roles
+        from accounts.models import CustomGroup, Role, FauRole
+        
+        groups_data = CustomGroup.objects.filter(deleted_at__isnull=True).order_by('name')
+        groups_json = json.dumps([
+            {'id': str(group.pk), 'label': group.name}
+            for group in groups_data
+        ])
+        
+        roles_data = Role.objects.order_by('name')
+        roles_json = json.dumps([
+            {'id': str(role.pk), 'label': role.name}
+            for role in roles_data
+        ])
+        
+        fau_roles_data = FauRole.objects.order_by('power', 'name')
+        fau_roles_json = json.dumps([
+            {'id': str(role.pk), 'label': role.name}
+            for role in fau_roles_data
+        ])
+
         context = {
             **self.admin_site.each_context(request),
-            'title': 'Crear notificaciones grupales',
             'form': form,
-            'sections': self.build_form_sections(
-                form,
-                [('Destinatarios', ['groups', 'roles', 'fau_roles']), ('Mensaje', ['message'])],
-            ),
             'opts': self.model._meta,
+            'show_search': False,
+            'groups_json': groups_json,
+            'roles_json': roles_json,
+            'fau_roles_json': fau_roles_json,
         }
         return render(request, 'admin/notifications/send_notification.html', context)
 

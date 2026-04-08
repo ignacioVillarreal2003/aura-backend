@@ -210,6 +210,11 @@ NOTIFICATION_INTERNAL_API_TOKEN = config(
     'NOTIFICATION_INTERNAL_API_TOKEN',
     default='dev-notification-internal-token',
 )
+NOTIFICATION_SERVICE_TIMEOUT_SECONDS = config(
+    'NOTIFICATION_SERVICE_TIMEOUT_SECONDS',
+    default=30,
+    cast=int,
+)
 
 # Logging Configuration
 LOGGING = {
