@@ -1,0 +1,12 @@
+POST http://localhost:8000/api/document-classify
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "document_name": "ejemplo.pdf",
+  "content": "Texto o extracto del documento a clasificar."
+}
+
+
+###

@@ -6,19 +6,23 @@ class MinioManagerException(AppException):
 
 
 class MinioConnectionException(MinioManagerException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=503)
 
 
 class MinioManagerNotInitializedException(MinioManagerException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=503)
 
 
 class MinioBucketException(MinioManagerException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=502)
 
 
 class MinioOperationException(MinioManagerException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=502)
 
 
 class MinioUploadException(MinioOperationException):

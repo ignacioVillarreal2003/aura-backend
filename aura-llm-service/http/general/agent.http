@@ -1,0 +1,20 @@
+POST http://localhost:8000/api/agent
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "messages": [
+    {
+      "role": "human",
+      "content": ""
+    },
+        {
+      "role": "assistant",
+      "content": ""
+    }
+  ]
+}
+
+
+###

@@ -1,12 +1,15 @@
+from functools import lru_cache
 from pgvector.sqlalchemy import VECTOR
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 from sqlalchemy.sql import func
 from sqlalchemy import Column, Integer, DateTime, Text, ForeignKey, BigInteger
 
+from app.application.processors.embedders.embedder_settings import EmbedderSettings
 from app.domain.models.base import Base
-from app.domain.settings.fragment_settings import FragmentSettings
 
-_fragment_settings = FragmentSettings()
+@lru_cache(maxsize=1)
+def _get_vector_dimension() -> int:
+    return EmbedderSettings().vector_dimension
 
 
 class Fragment(Base):
@@ -33,7 +36,7 @@ class Fragment(Base):
     )
     vector = Column(
         VECTOR(
-            dim=_fragment_settings.vector_dimension
+            dim=_get_vector_dimension()
         ),
         nullable=False
     )

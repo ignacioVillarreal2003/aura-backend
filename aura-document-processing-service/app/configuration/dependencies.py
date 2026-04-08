@@ -5,25 +5,38 @@ from app.application.processors.embedders.embedder_factory import EmbedderFactor
 from app.application.processors.readers.reader_factory import ReaderFactory
 from app.application.processors.text_cleaners.text_cleaner_factory import TextCleanerFactory
 from app.application.processors.text_splitters.text_splitter_factory import TextSplitterFactory
-from app.application.services.create_document_service.create_document_service import CreateDocumentService
-from app.application.services.delete_document_service.delete_document_service import DeleteDocumentService
-from app.application.services.document_ingestion_service.document_ingestion_service import DocumentIngestionService
-from app.application.services.document_query_service.document_query_service import DocumentQueryService
-from app.application.services.update_document_service.update_document_service import UpdateDocumentService
-from app.infrastructure.authentication_provider.authentication_provider import AuthenticationProvider
-from app.infrastructure.http_client.http_client import HttpClient
+from app.application.services.document.create_document_service.create_document_service import CreateDocumentService
+from app.application.services.document.document_ingestion_service.document_ingestion_service import (
+    DocumentIngestionService
+)
+from app.application.services.document.delete_document_service.delete_document_service import DeleteDocumentService
+from app.application.services.document.document_query_service.document_query_service import DocumentQueryService
+from app.application.services.fragment.fragment_query_service.fragment_query_service import FragmentQueryService
+from app.application.services.document.post_process_document_service.post_process_document_service import (
+    PostProcessDocumentService
+)
+from app.application.services.fragment.post_process_fragment_service.post_process_fragment_service import (
+    PostProcessFragmentService
+)
+from app.infrastructure.http.authentication_provider.authentication_provider import AuthenticationProvider
+from app.infrastructure.http.http_client.http_client import HttpClient
+from app.infrastructure.http.llm_provider.llm_provider import LlmProvider
+from app.infrastructure.messaging.rabbitmq.consumer.document_ingestion_consumer import DocumentIngestionConsumer
+from app.infrastructure.messaging.rabbitmq.rabbitmq_manager import RabbitMQManager
 from app.infrastructure.persistence.database.database_manager.database_manager import DatabaseManager
-from app.infrastructure.persistence.database.repositories.document_repository.document_repository import DocumentRepository
-from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository import FragmentRepository
+from app.infrastructure.persistence.database.repositories.document_repository.document_repository import (
+    DocumentRepository
+)
+from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository import (
+    FragmentRepository
+)
 from app.infrastructure.persistence.storages.document_storage.document_storage import DocumentStorage
 from app.infrastructure.persistence.storages.minio_manager.minio_manager import MinioManager
 
 logger = logging.getLogger(__name__)
 
 
-async def startup_dependencies(
-        app: FastAPI
-) -> None:
+async def startup_dependencies(app: FastAPI) -> None:
     try:
         logger.info("Starting up dependencies")
 
@@ -68,17 +81,17 @@ async def startup_dependencies(
         text_splitter_factory = TextSplitterFactory()
         app.state.text_splitter_factory = text_splitter_factory
 
-        update_document_service = UpdateDocumentService(
+        document_query_service = DocumentQueryService(
             document_repository=document_repository
         )
-        app.state.update_document_service = update_document_service
+        app.state.document_query_service = document_query_service
 
-        document_query_service = DocumentQueryService(
+        fragment_query_service = FragmentQueryService(
             document_repository=document_repository,
             fragment_repository=fragment_repository,
             embedder_factory=embedder_factory
         )
-        app.state.document_query_service = document_query_service
+        app.state.fragment_query_service = fragment_query_service
 
         document_ingestion_service = DocumentIngestionService(
             database_manager=database_manager,
@@ -91,6 +104,20 @@ async def startup_dependencies(
         )
         app.state.document_ingestion_service = document_ingestion_service
 
+        rabbitmq_manager = RabbitMQManager()
+        await rabbitmq_manager.start()
+        app.state.rabbitmq_manager = rabbitmq_manager
+
+        document_ingestion_consumer = DocumentIngestionConsumer(
+            rabbitmq_manager=rabbitmq_manager,
+            document_storage=document_storage,
+            database_manager=database_manager,
+            document_repository=document_repository,
+            document_ingestion_service=document_ingestion_service,
+        )
+        await document_ingestion_consumer.start()
+        app.state.document_ingestion_consumer = document_ingestion_consumer
+
         delete_document_service = DeleteDocumentService(
             document_repository=document_repository,
             fragment_repository=fragment_repository,
@@ -101,9 +128,29 @@ async def startup_dependencies(
         create_document_service = CreateDocumentService(
             document_repository=document_repository,
             document_storage=document_storage,
-            document_ingestion_service=document_ingestion_service
+            rabbitmq_manager=rabbitmq_manager,
         )
         app.state.create_document_service = create_document_service
+
+        llm_provider = LlmProvider(
+            http_client=http_client
+        )
+        app.state.llm_provider = llm_provider
+
+        post_process_document_service = PostProcessDocumentService(
+            database_manager=database_manager,
+            document_repository=document_repository,
+            fragment_repository=fragment_repository,
+            llm_provider=llm_provider
+        )
+        app.state.post_process_document_service = post_process_document_service
+
+        post_process_fragment_service = PostProcessFragmentService(
+            database_manager=database_manager,
+            fragment_repository=fragment_repository,
+            llm_provider=llm_provider
+        )
+        app.state.post_process_fragment_service = post_process_fragment_service
 
         logger.info("All dependencies started successfully")
 
@@ -112,12 +159,21 @@ async def startup_dependencies(
         raise
 
 
-async def shutdown_dependencies() -> None:
-    try:
-        logger.info("Shutting down dependencies")
+async def shutdown_dependencies(app: FastAPI) -> None:
+    logger.info("Shutting down dependencies")
 
-        logger.info("All dependencies shut down successfully")
+    state = app.state
 
-    except Exception:
-        logger.error("Error during dependency shutdown")
-        raise
+    if rabbitmq_manager := getattr(state, "rabbitmq_manager", None):
+        await rabbitmq_manager.stop()
+
+    if http_client := getattr(state, "http_client", None):
+        await http_client.stop()
+
+    if minio_manager := getattr(state, "minio_manager", None):
+        await minio_manager.stop()
+
+    if db_manager := getattr(state, "db_manager", None):
+        await db_manager.dispose()
+
+    logger.info("All dependencies shut down successfully")

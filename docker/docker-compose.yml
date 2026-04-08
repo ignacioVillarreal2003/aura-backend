@@ -118,6 +118,16 @@ services:
     volumes:
       - llm_data:/root/.ollama
     restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      OLLAMA_GPU_OVERHEAD: 0
 
 volumes:
   db_data:

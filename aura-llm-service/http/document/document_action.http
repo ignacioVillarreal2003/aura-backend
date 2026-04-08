@@ -1,0 +1,125 @@
+# @timeout 600
+POST http://localhost:8000/api/document-action
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "document_ids": [10],
+  "instruction": "Resumime el contenido de este documento",
+  "action": "summarize"
+}
+
+
+###
+
+
+# @timeout 600
+POST http://localhost:8000/api/document-action
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "document_ids": [10],
+  "instruction": "Dame los puntos más importantes de este documento",
+  "action": "key_points"
+}
+
+
+###
+
+
+# @timeout 600
+POST http://localhost:8000/api/document-action
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "document_ids": [10],
+  "instruction": "Explicame este documento de forma sencilla",
+  "action": "explain"
+}
+
+
+###
+
+
+# @timeout 600
+POST http://localhost:8000/api/document-action
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "document_ids": [10],
+  "instruction": "Escribí un ensayo basado en el contenido de este documento",
+  "action": "essay"
+}
+
+
+###
+
+
+# @timeout 600
+POST http://localhost:8000/api/document-action
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "document_ids": [10],
+  "instruction": "Haceme una lista de todas las obligaciones y responsabilidades mencionadas en este documento"
+}
+
+
+###
+
+
+# @timeout 600
+POST http://localhost:8000/api/document-action
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "document_ids": [10, 11],
+  "instruction": "Compará estos dos documentos e identificá similitudes y diferencias",
+  "action": "compare"
+}
+
+
+###
+
+
+# @timeout 600
+POST http://localhost:8000/api/document-action
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "document_ids": [10],
+  "instruction": "Generá un reporte formal sobre el contenido de este documento",
+  "action": "report"
+}
+
+
+###
+
+
+# @timeout 600
+POST http://localhost:8000/api/document-action
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "document_ids": [10],
+  "instruction": "Hacé un análisis detallado de este documento",
+  "action": "analyze"
+}
+
+
+###
