@@ -1,4 +1,20 @@
 services:
+  aura-chat-service:
+    build: ../aura-chat-service
+    container_name: aura-chat-service
+    ports:
+      - "8003:8000"
+    env_file:
+      - ../aura-chat-service/.env.docker
+    depends_on:
+      db:
+        condition: service_healthy
+      memory_db:
+        condition: service_healthy
+      aura-llm-service:
+        condition: service_started
+    restart: on-failure
+
   aura-document-processing-service:
     build: ../aura-document-processing-service
     container_name: aura-document-processing-service
@@ -37,7 +53,7 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "5434:5432"
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "aura_root", "-d", "aura_db"]
       interval: 10s
@@ -113,8 +129,6 @@ services:
   llm:
     build: ./llm
     container_name: llm
-    ports:
-      - "11434:11434"
     volumes:
       - llm_data:/root/.ollama
     restart: unless-stopped
