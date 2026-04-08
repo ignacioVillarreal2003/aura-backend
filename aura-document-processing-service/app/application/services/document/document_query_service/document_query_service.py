@@ -28,8 +28,8 @@ from app.application.services.document.document_query_service.exceptions.documen
 from app.application.services.document.document_query_service.interfaces.document_query_service_interface import (
     DocumentQueryServiceInterface
 )
-from app.domain.dtos.document.document_query_controller.document_list_response import DocumentListResponse
-from app.domain.dtos.document.document_query_controller.document_response import DocumentResponse
+from app.domain.dtos.document.document_query.document_list_response import DocumentListResponse
+from app.domain.dtos.document.document_query.document_response import DocumentResponse
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.models.document import Document
 from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (

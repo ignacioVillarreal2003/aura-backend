@@ -28,7 +28,7 @@ class FragmentQueryServiceValidator:
             question_context_fragments_request: QuestionContextFragmentsRequest
     ) -> None:
         self._validate_question(question_context_fragments_request.question)
-        self._validate_max_fragments(question_context_fragments_request.max_context_fragments)
+        self._validate_max_fragments(question_context_fragments_request.max_fragments)
 
     def validate_documents_context_fragments_request(
             self,

@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from app.domain.dtos.document.document_query_controller.document_response import DocumentResponse
+from app.domain.dtos.document.document_query.document_response import DocumentResponse
 
 
 class DocumentListResponse(BaseModel):

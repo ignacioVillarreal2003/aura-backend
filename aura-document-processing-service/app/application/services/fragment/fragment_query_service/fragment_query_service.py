@@ -71,7 +71,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             authenticated_user: AuthenticatedUser
     ) -> FragmentListResponse:
         question = question_context_fragments_request.question
-        max_fragments = question_context_fragments_request.max_context_fragments
+        max_fragments = question_context_fragments_request.max_fragments
 
         logger.info(
             "Retrieving context fragments by question was initiated.",
