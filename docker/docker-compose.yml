@@ -53,7 +53,7 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
     ports:
-      - "5434:5432"
+      - "5432:5432"
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "aura_root", "-d", "aura_db"]
       interval: 10s
@@ -132,16 +132,6 @@ services:
     volumes:
       - llm_data:/root/.ollama
     restart: unless-stopped
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    environment:
-      NVIDIA_VISIBLE_DEVICES: all
-      OLLAMA_GPU_OVERHEAD: 0
 
 volumes:
   db_data:

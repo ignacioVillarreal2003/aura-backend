@@ -28,6 +28,7 @@ def create_document_from_admin(*, raw_document, chat_id, actor_user):
     """Create a document in document-processing using the trusted internal endpoint."""
 
     url = f"{settings.DOCUMENT_PROCESSING_URL.rstrip('/')}/internal"
+    timeout_seconds = getattr(settings, 'DOCUMENT_PROCESSING_TIMEOUT_SECONDS', 300)
     content_type = getattr(raw_document, 'content_type', None) or mimetypes.guess_type(raw_document.name)[0] or 'application/octet-stream'
     files = {
         'raw_document': (
@@ -48,12 +49,12 @@ def create_document_from_admin(*, raw_document, chat_id, actor_user):
             files=files,
             data=data,
             headers={'X-Internal-Token': settings.DOCUMENT_PROCESSING_INTERNAL_API_TOKEN},
-            timeout=(10, settings.DOCUMENT_PROCESSING_TIMEOUT_SECONDS),
+            timeout=(10, timeout_seconds),
         )
     except requests.ConnectionError as exc:
         raise DocumentProcessingServiceError(
             'No fue posible conectar con el servicio de procesamiento de documentos. '
-            'Verifica que el contenedor aura-document-processing-service esté activo en el puerto 8003.'
+            'Verifica que el contenedor aura-document-processing-service esté activo en el puerto 8000.'
         ) from exc
     except requests.ReadTimeout as exc:
         raise DocumentProcessingServiceError(

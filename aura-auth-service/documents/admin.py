@@ -79,7 +79,7 @@ class DocumentUploadForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if self.instance and self.instance.pk:
+        if self.instance and not self.instance._state.adding:
             self.fields['raw_collection'].required = False
             self.fields['groups'].initial = self.instance.groups.all()
 
