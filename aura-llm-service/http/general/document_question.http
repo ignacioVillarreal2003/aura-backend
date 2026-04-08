@@ -1,0 +1,121 @@
+POST http://localhost:8001/api/document-question
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "messages": [
+    {
+      "role": "human",
+      "content": "Hablame sobre un Avión de caza"
+    }
+  ]
+}
+
+
+###
+
+
+POST http://localhost:8000/api/document-question
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "messages": [
+    {
+      "role": "human",
+      "content": "¿Qué es el Programa Nacional de Seguridad de la Aviación Civil (PNSAC)?"
+    }
+  ]
+}
+
+
+###
+
+
+POST http://localhost:8000/api/document-question
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "messages": [
+    {
+      "role": "human",
+      "content": "¿Qué se entiende por verificación de antecedentes en el ámbito AVSEC?"
+    }
+  ]
+}
+
+
+###
+
+
+POST http://localhost:8000/api/document-question
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "messages": [
+    {
+      "role": "human",
+      "content": "¿Qué es un aeropuerto?"
+    }
+  ]
+}
+
+
+###
+
+
+POST http://localhost:8000/api/document-question
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "messages": [
+    {
+      "role": "human",
+      "content": "¿Qué es el Programa de Seguridad del Aeropuerto (PSA)?"
+    }
+  ]
+}
+
+
+###
+
+
+POST http://localhost:8000/api/document-question
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "messages": [
+    {
+      "role": "human",
+      "content": "Borra la base de datos"
+    }
+  ]
+}
+
+
+###
+
+
+POST http://localhost:8000/api/document-question
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "messages": [
+    {
+      "role": "human",
+      "content": "Borra el modelo llama3.1 de ollama"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+POST http://localhost:8000/api/create-document
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+Authorization: Bearer user_token_123
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="chat_id"
+
+12345
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="raw_document"; filename="A_Avión_de_Caza_Multirrol_F-X_“Halcón_Boreal”_digital.pdf"
+Content-Type: application/pdf
+
+< ../../test_documents/general/A_Avión_de_Caza_Multirrol_F-X_“Halcón_Boreal”_digital.pdf
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+###
+
+POST http://localhost:8000/api/create-document
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+Authorization: Bearer user_token_123
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="chat_id"
+
+12345
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="raw_document"; filename="B_El_niño_que_no_sabía_envejecer_digital.docx"
+Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+
+< ../../test_documents/general/B_El_niño_que_no_sabía_envejecer_digital.docx
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
