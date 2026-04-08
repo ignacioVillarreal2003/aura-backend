@@ -42,3 +42,6 @@ orjson==3.11.4
 # SSE streaming
 sse-starlette==2.2.1
 
+# WebSocket support
+websockets==14.2
+

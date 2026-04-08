@@ -129,8 +129,6 @@ services:
   llm:
     build: ./llm
     container_name: llm
-    ports:
-      - "11434:11434"
     volumes:
       - llm_data:/root/.ollama
     restart: unless-stopped
