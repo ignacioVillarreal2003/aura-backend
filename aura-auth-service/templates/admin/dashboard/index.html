@@ -1,0 +1,211 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  .dashboard-grid {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    margin: 14px 0 20px;
+  }
+  .dashboard-card {
+    background: #fff;
+    border: 1px solid #e6e9ef;
+    border-radius: 10px;
+    padding: 14px;
+    box-shadow: 0 1px 2px rgba(20, 28, 38, 0.06);
+  }
+  .dashboard-card h3 {
+    margin: 0;
+    color: #205067;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .dashboard-value {
+    margin-top: 10px;
+    font-size: 26px;
+    font-weight: 700;
+    color: #1e2430;
+  }
+  .dashboard-layout {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  }
+  .dashboard-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+  }
+  .dashboard-table th,
+  .dashboard-table td {
+    border-bottom: 1px solid #edf0f5;
+    padding: 8px 6px;
+    text-align: left;
+  }
+  .dashboard-table th {
+    font-size: 12px;
+    color: #4d5b6c;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .muted {
+    color: #697688;
+    font-size: 12px;
+  }
+  .badge {
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .badge-public {
+    color: #fff;
+    background: #17803d;
+  }
+  .badge-restricted {
+    color: #fff;
+    background: #365f90;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <h1>Dashboard Administrativo</h1>
+  <p class="muted">Generado: {{ generated_at|date:"d/m/Y H:i" }}</p>
+
+  <div class="dashboard-grid">
+    <section class="dashboard-card">
+      <h3>Usuarios activos</h3>
+      <div class="dashboard-value">{{ kpis.users_total }}</div>
+      <div class="muted">Habilitados: {{ kpis.users_enabled }}</div>
+    </section>
+    <section class="dashboard-card">
+      <h3>Usuarios nuevos (30d)</h3>
+      <div class="dashboard-value">{{ kpis.users_new_30 }}</div>
+    </section>
+    <section class="dashboard-card">
+      <h3>Documentos activos</h3>
+      <div class="dashboard-value">{{ kpis.documents_total }}</div>
+      <div class="muted">Nuevos (30d): {{ kpis.documents_new_30 }}</div>
+    </section>
+    <section class="dashboard-card">
+      <h3>Documentos publicos</h3>
+      <div class="dashboard-value">{{ kpis.documents_public }}</div>
+    </section>
+    <section class="dashboard-card">
+      <h3>Almacenamiento total</h3>
+      <div class="dashboard-value">{{ kpis.total_storage_bytes|filesizeformat }}</div>
+    </section>
+    <section class="dashboard-card">
+      <h3>Notificaciones (7d)</h3>
+      <div class="dashboard-value">{{ kpis.notifications_7d }}</div>
+      <div class="muted">Lectura: {{ kpis.notifications_read_rate_7d }}%</div>
+    </section>
+  </div>
+
+  <div class="dashboard-layout">
+    <section class="dashboard-card">
+      <h3>Usuarios por rol</h3>
+      <table class="dashboard-table">
+        <thead>
+          <tr>
+            <th>Rol</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in users_by_role %}
+            <tr>
+              <td>{{ item.role__name }}</td>
+              <td>{{ item.total }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="2">Sin datos</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="dashboard-card">
+      <h3>Grupos con mas usuarios</h3>
+      <table class="dashboard-table">
+        <thead>
+          <tr>
+            <th>Grupo</th>
+            <th>Usuarios</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in groups_by_user_count %}
+            <tr>
+              <td>{{ item.name }}</td>
+              <td>{{ item.total_users }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="2">Sin datos</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="dashboard-card">
+      <h3>Documentos mas pesados</h3>
+      <table class="dashboard-table">
+        <thead>
+          <tr>
+            <th>Documento</th>
+            <th>Tamano</th>
+            <th>Creador</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in largest_documents %}
+            <tr>
+              <td>{{ item.name }}</td>
+              <td>{{ item.size_bytes|filesizeformat }}</td>
+              <td>{{ item.created_by|default:"-" }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="3">Sin datos</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="dashboard-card">
+      <h3>Ultimos documentos cargados</h3>
+      <table class="dashboard-table">
+        <thead>
+          <tr>
+            <th>Documento</th>
+            <th>Fecha</th>
+            <th>Acceso</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in recent_documents %}
+            <tr>
+              <td>{{ item.name }}</td>
+              <td>{{ item.created_at|date:"d/m/Y H:i" }}</td>
+              <td>
+                {% if item.visible_to_all %}
+                  <span class="badge badge-public">Todos</span>
+                {% else %}
+                  <span class="badge badge-restricted">Restringido</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="3">Sin datos</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </div>
+</div>
+{% endblock %}

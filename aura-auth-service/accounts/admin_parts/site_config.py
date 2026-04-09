@@ -2,6 +2,7 @@
 
 from django.contrib import admin
 from django.contrib.auth.models import Group
+from django.urls import reverse
 from accounts.admin_parts.common import _is_super_admin_user, _is_admin_user
 
 
@@ -37,9 +38,16 @@ def _custom_get_app_list(self, request, app_label=None):
         {
             'app_label': 'dashboard',
             'name': 'Dashboard',
-            'app_url': '',
+            'app_url': reverse('admin:dashboard_overview'),
             'has_module_perms': True,
-            'models': [],
+            'models': [
+                {
+                    'name': 'Vista general',
+                    'object_name': 'DashboardOverview',
+                    'admin_url': reverse('admin:dashboard_overview'),
+                    'view_only': True,
+                }
+            ],
         },
         {
             'app_label': 'chats',
