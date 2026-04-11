@@ -34,7 +34,7 @@ class PermissionInFauRoleInline(admin.TabularInline):
 class FauRoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
     """Admin for FauRole model."""
 
-    list_display = ('power_badge', 'name', 'description')
+    list_display = ('name', 'power_badge', 'description')
     search_fields = ('name', 'description')
     readonly_fields = ()
     ordering = ('-power',)
@@ -71,7 +71,7 @@ class FauRoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
                 obj.power,
             )
         return format_html('<span style="color: #999;">-</span>')
-    power_badge.short_description = 'Poder'
+    power_badge.short_description = 'Nivel Jerárquico'
     power_badge.admin_order_field = 'power'
 
     def has_module_permission(self, request):

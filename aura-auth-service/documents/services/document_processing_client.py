@@ -1,9 +1,12 @@
 """Client for internal admin calls to aura-document-processing-service."""
 
+import logging
 import mimetypes
 
 import requests
 from django.conf import settings
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentProcessingServiceError(Exception):
@@ -43,6 +46,15 @@ def create_document_from_admin(*, raw_document, chat_id, actor_user):
         'actor_email': actor_user.email or f'{actor_user.username}@local',
     }
 
+    logger.info(
+        '[doc-processing] POST %s | file=%s size=%s bytes | chat_id=%s actor=%s',
+        url,
+        raw_document.name,
+        getattr(raw_document, 'size', '?'),
+        data['chat_id'],
+        data['actor_user_id'],
+    )
+
     try:
         response = requests.post(
             url,
@@ -65,6 +77,12 @@ def create_document_from_admin(*, raw_document, chat_id, actor_user):
         raise DocumentProcessingServiceError(
             'Ocurrió un error al enviar el documento al servicio de procesamiento.'
         ) from exc
+
+    logger.info(
+        '[doc-processing] response status=%s body=%s',
+        response.status_code,
+        response.text[:500],
+    )
 
     if not response.ok:
         raise DocumentProcessingServiceError(

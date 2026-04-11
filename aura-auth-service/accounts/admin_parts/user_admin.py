@@ -51,7 +51,6 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
     list_filter = (
         RoleFilter,
         ('fau_role', admin.RelatedOnlyFieldListFilter),
-        ('custom_groups', admin.RelatedOnlyFieldListFilter),
         StatusFilter,
         ('created_at', CreatedDateFilter),
     )
@@ -226,6 +225,37 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
         return queryset.prefetch_related('user_roles__role').order_by('deleted_at', 'username')
+
+    def save_related(self, request, form, formsets, change):
+        # custom_groups is excluded from Meta to prevent a cross-DB ORM JOIN
+        # (User in auth_db, auth_user_custom_groups in aura_db). super() handles
+        # all other relations; we write the M2M rows manually here.
+        super().save_related(request, form, formsets, change)
+        if 'custom_groups' not in form.cleaned_data:
+            return
+        from django.db import connections
+        user_id = form.instance.pk
+        selected_groups = list(form.cleaned_data['custom_groups'])
+        with connections['aura_db'].cursor() as cursor:
+            if selected_groups:
+                group_ids = [str(g.pk) for g in selected_groups]
+                placeholders = ','.join(['%s::uuid'] * len(group_ids))
+                cursor.execute(
+                    f'DELETE FROM auth_user_custom_groups '
+                    f'WHERE user_id = %s AND customgroup_id NOT IN ({placeholders})',
+                    [user_id] + group_ids,
+                )
+                for gid in group_ids:
+                    cursor.execute(
+                        'INSERT INTO auth_user_custom_groups (user_id, customgroup_id) '
+                        'VALUES (%s, %s::uuid) ON CONFLICT DO NOTHING',
+                        [user_id, gid],
+                    )
+            else:
+                cursor.execute(
+                    'DELETE FROM auth_user_custom_groups WHERE user_id = %s',
+                    [user_id],
+                )
 
     def has_add_permission(self, request):
         if _is_admin_or_super_user(request.user):

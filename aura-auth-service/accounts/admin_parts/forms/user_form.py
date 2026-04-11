@@ -2,6 +2,7 @@
 
 from django import forms
 from django.contrib.admin.widgets import FilteredSelectMultiple
+from django.db import connections
 from accounts.models import Role, CustomGroup, User, FauRole
 
 
@@ -36,7 +37,12 @@ class UserAdminForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = '__all__'
+        # Exclude custom_groups from Django's automatic M2M handling.
+        # User (auth_db) ↔ auth_user_custom_groups (aura_db) is cross-DB:
+        # ModelForm.__init__ would call value_from_object which forces a query
+        # on auth_db where neither custom_groups nor auth_user_custom_groups exist.
+        # We populate initial values via raw SQL and save via UserAdmin.save_related.
+        exclude = ['custom_groups']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -50,7 +56,15 @@ class UserAdminForm(forms.ModelForm):
                     user_assignments__deleted_at__isnull=True,
                 ).first()
             if 'custom_groups' in self.fields:
-                self.fields['custom_groups'].initial = self.instance.custom_groups.all()
+                # Cross-DB M2M: load current group membership via raw SQL on aura_db.
+                # Raw SQL: SELECT customgroup_id FROM auth_user_custom_groups WHERE user_id = %s
+                with connections['aura_db'].cursor() as cursor:
+                    cursor.execute(
+                        'SELECT customgroup_id FROM auth_user_custom_groups WHERE user_id = %s',
+                        [self.instance.pk],
+                    )
+                    group_ids = [row[0] for row in cursor.fetchall()]
+                self.initial['custom_groups'] = group_ids
         else:
             if 'roles' in self.fields:
                 self.fields['roles'].initial = Role.objects.filter(name='USER').first()

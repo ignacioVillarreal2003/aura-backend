@@ -44,6 +44,11 @@ INSTALLED_APPS = [
     'notifications.apps.NotificationsConfig',
 ]
 
+# Local apps whose tables are owned by docker/auth-db/init.sql or docker/aura-db/init.sql.
+# Setting to None disables Django migrations entirely for these apps.
+_LOCAL_APPS = ['accounts', 'documents', 'notifications']
+MIGRATION_MODULES = {app: None for app in _LOCAL_APPS}
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
@@ -185,6 +190,10 @@ SPECTACULAR_SETTINGS = {
 JWT_ACCESS_LIFETIME_MINUTES = config('JWT_ACCESS_LIFETIME_MINUTES', default=15, cast=int)
 JWT_ALGORITHM = config('JWT_ALGORITHM', default='HS256')
 JWT_SIGNING_KEY = config('JWT_SIGNING_KEY', default=SECRET_KEY)
+
+# ID of the shared admin chat in aura_db used for admin-initiated document uploads.
+# Must match the seed row in docker/aura-db/init.sql.
+ADMIN_CHAT_ID = config('ADMIN_CHAT_ID', default=12345, cast=int)
 
 # Document Processing Service
 DOCUMENT_PROCESSING_URL = config(

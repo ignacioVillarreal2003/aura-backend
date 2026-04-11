@@ -48,6 +48,7 @@ class RefreshToken(AuditedModel):
 
     class Meta:
         db_table = 'refresh_tokens'
+        managed = False
         verbose_name = 'Token de Refresco'
         verbose_name_plural = 'Tokens de Refresco'
         indexes = [

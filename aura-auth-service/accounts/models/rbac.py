@@ -19,6 +19,7 @@ class Role(models.Model):
 
     class Meta:
         db_table = 'role'
+        managed = False
         verbose_name = 'Rol de sistema'
         verbose_name_plural = 'Roles de sistema'
 
@@ -43,6 +44,7 @@ class Permission(models.Model):
 
     class Meta:
         db_table = 'permission'
+        managed = False
         verbose_name = 'Permiso'
         verbose_name_plural = 'Permisos'
 
@@ -89,6 +91,7 @@ class UserRole(models.Model):
 
     class Meta:
         db_table = 'auth_user_in_role'
+        managed = False
         verbose_name = 'Rol de Usuario'
         verbose_name_plural = 'Roles de Usuario'
 
@@ -119,6 +122,7 @@ class PermissionInRole(models.Model):
 
     class Meta:
         db_table = 'permission_in_role'
+        managed = False
         verbose_name = 'Permiso de Rol'
         verbose_name_plural = 'Permisos de Rol'
 
@@ -142,6 +146,7 @@ class FauRole(models.Model):
 
     class Meta:
         db_table = 'fau_role'
+        managed = False
         verbose_name = 'Rol FAU'
         verbose_name_plural = 'Roles FAU'
         ordering = ['power']
@@ -171,6 +176,7 @@ class PermissionInFauRole(models.Model):
 
     class Meta:
         db_table = 'permission_in_fau_role'
+        managed = False
         verbose_name = 'Permiso de Rol FAU'
         verbose_name_plural = 'Permisos de Rol FAU'
         unique_together = [('fau_role', 'permission')]

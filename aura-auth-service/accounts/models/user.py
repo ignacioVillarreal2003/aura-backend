@@ -226,6 +226,7 @@ class User(AbstractBaseUser):
 
     class Meta:
         db_table = 'auth_user'
+        managed = False
         verbose_name = 'Usuario'
         verbose_name_plural = 'Usuarios'
 

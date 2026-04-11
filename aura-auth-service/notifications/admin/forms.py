@@ -2,6 +2,7 @@
 
 from django import forms
 from django.contrib.admin.widgets import FilteredSelectMultiple
+from django.db import connections
 from accounts.models import User, CustomGroup, Role, UserRole, FauRole
 
 
@@ -69,12 +70,25 @@ class SendGroupNotificationForm(forms.Form):
 
         user_ids = set()
         if groups:
-            group_user_ids = User.objects.filter(
-                custom_groups__in=groups,
-                deleted_at__isnull=True,
-                status='active',
-            ).values_list('id', flat=True)
-            user_ids.update(group_user_ids)
+            # Cross-DB M2M: User (auth_db) ↔ auth_user_custom_groups (aura_db).
+            # ORM JOIN would fail; resolve user_ids via raw SQL on aura_db then
+            # filter active/non-deleted users from auth_db.
+            # Raw SQL: SELECT user_id FROM auth_user_custom_groups WHERE customgroup_id IN (...)
+            group_ids = [str(g.pk) for g in groups]
+            with connections['aura_db'].cursor() as cursor:
+                placeholders = ','.join(['%s::uuid'] * len(group_ids))
+                cursor.execute(
+                    f'SELECT DISTINCT user_id FROM auth_user_custom_groups WHERE customgroup_id IN ({placeholders})',
+                    group_ids,
+                )
+                raw_ids = [row[0] for row in cursor.fetchall()]
+            if raw_ids:
+                group_user_ids = User.objects.filter(
+                    pk__in=raw_ids,
+                    deleted_at__isnull=True,
+                    status='active',
+                ).values_list('id', flat=True)
+                user_ids.update(group_user_ids)
 
         if roles:
             role_user_ids = UserRole.objects.filter(

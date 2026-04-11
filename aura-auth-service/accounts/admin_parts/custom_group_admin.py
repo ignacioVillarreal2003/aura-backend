@@ -60,7 +60,14 @@ class CustomGroupAdmin(HelpTextStripMixin, admin.ModelAdmin):
     description_short.short_description = 'Descripción'
 
     def member_count(self, obj):
-        count = obj.users.filter(deleted_at__isnull=True).count()
+        # auth_user_custom_groups lives in aura_db; auth_user lives in auth_db.
+        # Cross-DB JOIN is impossible, so we count directly from the through table.
+        with connections['aura_db'].cursor() as cursor:
+            cursor.execute(
+                'SELECT COUNT(*) FROM auth_user_custom_groups WHERE customgroup_id = %s',
+                [str(obj.pk)],
+            )
+            count = cursor.fetchone()[0]
         return format_html(
             '<span style="background-color: #417690; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>',
             count

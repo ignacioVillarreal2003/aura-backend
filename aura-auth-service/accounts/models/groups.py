@@ -28,6 +28,7 @@ class CustomGroup(AuditedModel):
 
     class Meta:
         db_table = 'custom_groups'
+        managed = False
         verbose_name = 'Grupo'
         verbose_name_plural = 'Grupos'
         indexes = [

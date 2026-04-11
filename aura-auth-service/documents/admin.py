@@ -12,6 +12,7 @@ from django.db import connections, router, transaction
 from django.forms.formsets import all_valid
 from django.utils.translation import gettext as _
 from django.utils.html import format_html
+from django.conf import settings
 from accounts.models import CustomGroup, FauRole
 from documents.models import Document
 from documents.services.document_processing_client import (
@@ -20,18 +21,15 @@ from documents.services.document_processing_client import (
 )
 
 
-ADMIN_CHAT_ID = 12345
-
-
-def _apply_audit_fields(obj, username: str, is_create: bool):
+def _apply_audit_fields(obj, user_id: int, is_create: bool):
     if is_create and not obj.created_by:
-        obj.created_by = username
-    obj.updated_by = username
+        obj.created_by = user_id
+    obj.updated_by = user_id
 
 
 def _ensure_admin_chat(actor_user_id: int) -> int:
     """Ensure the shared admin chat exists in aura_db for document-processing."""
-
+    admin_chat_id = settings.ADMIN_CHAT_ID
     with connections['aura_db'].cursor() as cursor:
         cursor.execute(
             """
@@ -39,9 +37,9 @@ def _ensure_admin_chat(actor_user_id: int) -> int:
             VALUES (%s, %s, %s)
             ON CONFLICT (id) DO NOTHING
             """,
-            [ADMIN_CHAT_ID, 'Carga administrativa de documentos', actor_user_id],
+            [admin_chat_id, 'Carga administrativa de documentos', actor_user_id],
         )
-    return ADMIN_CHAT_ID
+    return admin_chat_id
 
 
 class DocumentUploadForm(forms.ModelForm):
@@ -82,6 +80,13 @@ class DocumentUploadForm(forms.ModelForm):
         if self.instance and not self.instance._state.adding:
             self.fields['raw_collection'].required = False
             self.fields['groups'].initial = self.instance.groups.all()
+            # minimum_fau_role is a form-only ModelChoiceField (cross-DB).
+            # Populate its initial value manually from the stored BigInt id.
+            if self.instance.minimum_fau_role_id:
+                from accounts.models import FauRole
+                self.fields['minimum_fau_role'].initial = (
+                    FauRole.objects.filter(pk=self.instance.minimum_fau_role_id).first()
+                )
 
     def clean(self):
         cleaned_data = super().clean()
@@ -164,7 +169,8 @@ class DocumentAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        return queryset.select_related('minimum_fau_role').prefetch_related('groups')
+        # minimum_fau_role is now a cross-DB BigInt — cannot use select_related.
+        return queryset.prefetch_related('groups')
 
     def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
         with transaction.atomic(using=router.db_for_write(self.model)):
@@ -303,9 +309,12 @@ class DocumentAdmin(admin.ModelAdmin):
         if obj.visible_to_all:
             return format_html('<span style="color: green; font-weight: bold;">Todos</span>')
         if obj.minimum_fau_role_id:
+            # Cross-DB lookup: FauRole lives in auth_db, Document in aura_db.
+            fau_role = FauRole.objects.filter(pk=obj.minimum_fau_role_id).first()
+            name = fau_role.name if fau_role else f'ID:{obj.minimum_fau_role_id}'
             return format_html(
                 '<span style="color: #417690; font-weight: bold;">{} y superiores</span>',
-                obj.minimum_fau_role.name,
+                name,
             )
         return '-'
     access_scope_display.short_description = 'Acceso'
@@ -313,8 +322,8 @@ class DocumentAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         if change:
             if obj.visible_to_all:
-                obj.minimum_fau_role = None
-            _apply_audit_fields(obj, request.user.username, is_create=False)
+                obj.minimum_fau_role_id = None
+            _apply_audit_fields(obj, request.user.pk, is_create=False)
             super().save_model(request, obj, form, change)
             if obj.visible_to_all:
                 obj.groups.clear()
@@ -339,8 +348,9 @@ class DocumentAdmin(admin.ModelAdmin):
         obj.external_document_id = response_payload.get('id')
         obj.external_storage_url = response_payload.get('storage_url', '')
         obj.visible_to_all = form.cleaned_data.get('visible_to_all', False)
-        obj.minimum_fau_role = None if obj.visible_to_all else form.cleaned_data.get('minimum_fau_role')
-        _apply_audit_fields(obj, request.user.username, is_create=True)
+        fau_role_obj = form.cleaned_data.get('minimum_fau_role')
+        obj.minimum_fau_role_id = None if obj.visible_to_all else (fau_role_obj.pk if fau_role_obj else None)
+        _apply_audit_fields(obj, request.user.pk, is_create=True)
         super().save_model(request, obj, form, change)
         if obj.visible_to_all:
             obj.groups.clear()
