@@ -104,7 +104,11 @@
     <section class="dashboard-card">
       <h3>Notificaciones (7d)</h3>
       <div class="dashboard-value">{{ kpis.notifications_7d }}</div>
-      <div class="muted">Lectura: {{ kpis.notifications_read_rate_7d }}%</div>
+      {% if kpis.notifications_available %}
+        <div class="muted">Lectura: {{ kpis.notifications_read_rate_7d }}%</div>
+      {% else %}
+        <div class="muted">Metrica no disponible (aura_db sin conexion).</div>
+      {% endif %}
     </section>
   </div>
 

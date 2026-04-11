@@ -1,9 +1,11 @@
 """Dashboard admin custom view with operational KPIs."""
 
 from datetime import timedelta
+import logging
 
 from django.contrib import admin
 from django.core.exceptions import PermissionDenied
+from django.db import OperationalError
 from django.db.models import Count, Sum
 from django.db.models.functions import Coalesce
 from django.template.response import TemplateResponse
@@ -14,6 +16,9 @@ from accounts.admin_parts.common import _is_admin_or_super_user
 from accounts.models import CustomGroup, User, UserRole
 from documents.models import Document
 from notifications.models import Notification
+
+
+logger = logging.getLogger(__name__)
 
 
 def _dashboard_overview_view(request):
@@ -41,14 +46,22 @@ def _dashboard_overview_view(request):
         total=Coalesce(Sum('size_bytes'), 0)
     )['total']
 
-    notifications_7d = notification_qs.filter(created_at__gte=last_7_days).count()
-    notifications_read_7d = notification_qs.filter(
-        created_at__gte=last_7_days,
-        status='read',
-    ).count()
+    notifications_7d = 0
     notifications_read_rate_7d = 0
-    if notifications_7d:
-        notifications_read_rate_7d = round((notifications_read_7d / notifications_7d) * 100, 1)
+    notifications_available = True
+    try:
+        notifications_7d = notification_qs.filter(created_at__gte=last_7_days).count()
+        notifications_read_7d = notification_qs.filter(
+            created_at__gte=last_7_days,
+            status='read',
+        ).count()
+        if notifications_7d:
+            notifications_read_rate_7d = round((notifications_read_7d / notifications_7d) * 100, 1)
+    except OperationalError:
+        notifications_available = False
+        logger.warning(
+            'Dashboard: notifications metrics unavailable because aura_db connection failed.'
+        )
 
     users_by_role = list(
         UserRole.objects.filter(deleted_at__isnull=True)
@@ -88,6 +101,7 @@ def _dashboard_overview_view(request):
             'notifications_7d': notifications_7d,
             'notifications_read_rate_7d': notifications_read_rate_7d,
             'total_storage_bytes': total_storage_bytes,
+            'notifications_available': notifications_available,
         },
         'users_by_role': users_by_role,
         'groups_by_user_count': groups_by_user_count,
