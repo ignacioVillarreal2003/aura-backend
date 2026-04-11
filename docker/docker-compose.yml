@@ -25,7 +25,7 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      - ../aura-document-processing-service/.env.docker.gpu
+      - ../aura-document-processing-service/.env.docker
     depends_on:
       aura_db:
         condition: service_healthy
@@ -43,7 +43,7 @@ services:
     ports:
       - "8001:8000"
     env_file:
-      - ../aura-llm-service/.env.docker.gpu
+      - ../aura-llm-service/.env.docker
     depends_on:
       llm:
         condition: service_healthy
