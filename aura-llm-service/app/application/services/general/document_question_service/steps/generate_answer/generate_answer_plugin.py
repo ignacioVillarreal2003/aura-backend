@@ -1,6 +1,5 @@
 import logging
 from typing import Optional
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from app.application.services.general.document_question_service.pipeline.document_question_pipeline_state import (
     DocumentQuestionPipelineState,
@@ -14,14 +13,12 @@ from app.application.services.general.document_question_service.interfaces.docum
 from app.application.services.general.document_question_service.exceptions.document_question_service_exceptions import (
     DocumentQuestionServiceException,
 )
+from app.application.services.general.document_question_service.steps.generate_answer.generate_answer_llm_input import (
+    build_generate_answer_llm_input,
+)
 from app.application.services.general.document_question_service.steps.generate_answer.generate_answer_settings import (
     GenerateAnswerSettings,
 )
-from app.application.services.general.document_question_service.steps.generate_answer.generate_answer_prompt import (
-    GENERATE_ANSWER_PROMPT,
-    LEARNING_GUIDELINES
-)
-from app.domain.constants.message_role import MessageRole
 
 logger = logging.getLogger(__name__)
 
@@ -39,18 +36,15 @@ class GenerateAnswerPlugin(DocumentQuestionPlugin):
             state: DocumentQuestionPipelineState,
             resources: DocumentQuestionPipelineResources,
     ) -> bool:
-        return bool(state.rerank_fragments or state.retrieved_fragments)
+        return bool(state.retrieved_fragments)
 
     async def run(
             self,
             state: DocumentQuestionPipelineState,
             resources: DocumentQuestionPipelineResources,
     ) -> None:
-        context_fragments = state.rerank_fragments or state.retrieved_fragments
-
-        context = "\n\n---\n\n".join(
-            f.content for f in context_fragments
-        )
+        context_fragments = state.retrieved_fragments
+        context = "\n\n---\n\n".join(f.content for f in context_fragments)
         logger.debug(
             "Generating answer",
             extra={
@@ -59,28 +53,10 @@ class GenerateAnswerPlugin(DocumentQuestionPlugin):
             },
         )
 
-        history_tail = (
-            state.history_messages[-self._settings.history_window:]
-            if self._settings.history_window > 0
-            else []
+        prompt = build_generate_answer_llm_input(
+            state,
+            self._settings.history_window,
         )
-        history_messages = []
-        for msg in history_tail:
-            if msg.role == MessageRole.human:
-                history_messages.append(HumanMessage(content=msg.content))
-            elif msg.role == MessageRole.assistant:
-                history_messages.append(AIMessage(content=msg.content))
-
-        prompt = [
-            SystemMessage(content=LEARNING_GUIDELINES),
-            *history_messages,
-            HumanMessage(
-                content=GENERATE_ANSWER_PROMPT.format(
-                    query=state.current_message.content,
-                    context=context,
-                )
-            ),
-        ]
 
         try:
             llm = await resources.ollama_llm_facade.get_llm_base()

@@ -1,3 +1,25 @@
+### Document question — SSE streaming (`text/event-stream`)
+### Read the body as SSE: each event is one line `data: <json>`. Types: meta, delta, complete, error (`type` field).
+### Use fetch + ReadableStream (or similar); EventSource cannot send Authorization headers unless proxied.
+
+POST http://localhost:8001/api/document-question/stream
+Accept: text/event-stream
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "messages": [
+    {
+      "role": "human",
+      "content": "Hablame sobre un Avión de caza"
+    }
+  ]
+}
+
+
+###
+
+
 # @timeout 600
 POST http://localhost:8001/api/document-question
 Accept: application/json

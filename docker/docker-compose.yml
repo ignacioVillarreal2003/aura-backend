@@ -7,7 +7,7 @@ services:
     env_file:
       - ../aura-chat-service/.env.docker
     depends_on:
-      db:
+      aura_db:
         condition: service_healthy
       memory_db:
         condition: service_healthy
@@ -18,16 +18,22 @@ services:
     restart: on-failure
 
   aura-document-processing-service:
-    build: ../aura-document-processing-service
+    build:
+      context: ../aura-document-processing-service
+      dockerfile: Dockerfile
     container_name: aura-document-processing-service
     ports:
       - "8000:8000"
     env_file:
-      - ../aura-document-processing-service/.env.docker
+      - ../aura-document-processing-service/.env.docker.gpu
     depends_on:
-      db:
+      aura_db:
         condition: service_healthy
       storage:
+        condition: service_healthy
+      queue:
+        condition: service_healthy
+      llm:
         condition: service_healthy
     restart: on-failure
   
@@ -37,25 +43,23 @@ services:
     ports:
       - "8001:8000"
     env_file:
-      - ../aura-llm-service/.env.docker
+      - ../aura-llm-service/.env.docker.gpu
+    depends_on:
+      llm:
+        condition: service_healthy
+    restart: on-failure
 
-  mock-auth:
-    build: ../mock-auth
-    container_name: mock-auth
-    ports:
-      - "8080:8000"
-
-  db:
-    build: ./db
-    container_name: db
+  aura_db:
+    build: ./aura-db
+    container_name: aura_db
     environment:
       POSTGRES_USER: aura_root
       POSTGRES_PASSWORD: aura_password
       POSTGRES_DB: aura_db
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - aura_db_data:/var/lib/postgresql/data
     ports:
-      - "5434:5432"
+      - "5432:5432"
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "aura_root", "-d", "aura_db"]
       interval: 10s
@@ -129,14 +133,16 @@ services:
       retries: 5
 
   llm:
-    build: ./llm
+    build:
+      context: ./llm
+      dockerfile: Dockerfile
     container_name: llm
     volumes:
       - llm_data:/root/.ollama
     restart: unless-stopped
 
 volumes:
-  db_data:
+  aura_db_data:
   auth_db_data:
   storage_data:
   memory_db_data:

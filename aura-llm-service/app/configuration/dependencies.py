@@ -20,6 +20,7 @@ from app.infrastructure.http.http_client.http_client import HttpClient
 from app.infrastructure.llm.ollama_llm.ollama_llm_facade import OllamaLLMFacade
 from app.infrastructure.llm.ollama_llm.ollama_llm_facade_settings import OllamaLLMFacadeSettings
 from app.infrastructure.llm.ollama_llm.ollama_llm_invoker import OllamaLLMInvoker
+from app.infrastructure.llm.ollama_llm.ollama_llm_streaming_invoker import OllamaLLMStreamingInvoker
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +45,13 @@ async def startup_dependencies(app: FastAPI) -> None:
         app.state.ollama_llm_facade_base = ollama_llm_facade_base
 
         ollama_llm_invoker = OllamaLLMInvoker()
+        ollama_llm_streaming_invoker = OllamaLLMStreamingInvoker()
 
         document_question_service = DocumentQuestionService(
             ollama_llm_facade=ollama_llm_facade_base,
             llm_invoker=ollama_llm_invoker,
             document_context_provider=document_context_provider,
+            ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
         )
         app.state.document_question_service = document_question_service
 

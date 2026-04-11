@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 
+from starlette.responses import StreamingResponse
+
 from app.application.services.general.document_question_service.interfaces.document_question_service_interface import (
     DocumentQuestionServiceInterface
 )
@@ -17,3 +19,12 @@ class DocumentQuestionControllerInterface(ABC):
             authenticated_user: AuthenticatedUser
     ) -> DocumentQuestionResponse:
         pass
+
+    @abstractmethod
+    async def execute_document_question_stream(
+            self,
+            document_question_request: DocumentQuestionRequest,
+            document_question_service: DocumentQuestionServiceInterface,
+            authenticated_user: AuthenticatedUser,
+    ) -> StreamingResponse:
+        ...

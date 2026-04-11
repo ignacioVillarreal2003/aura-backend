@@ -335,7 +335,7 @@ class DatabaseManager(DatabaseManagerInterface):
     async def _cleanup_resources(
             self
     ) -> None:
-        if self._engine and not self._engine.is_disposed:
+        if self._engine and not self._engine.sync_engine.is_disposed:
             try:
                 await self._engine.dispose()
             except Exception:

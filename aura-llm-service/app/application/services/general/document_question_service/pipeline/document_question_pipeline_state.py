@@ -14,7 +14,6 @@ class DocumentQuestionPipelineState:
 
     retrieval_query: Optional[str] = None
     retrieved_fragments: list[FragmentResponse] = field(default_factory=list)
-    rerank_fragments: list[FragmentResponse] = field(default_factory=list)
     answer: str = ""
 
     @classmethod

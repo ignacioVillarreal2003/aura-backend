@@ -16,7 +16,6 @@ class DocumentQuestionServiceSettings(BaseSettings):
             "validate_request",
             "rewrite_query",
             "retrieve_context",
-            "rerank_context",
             "generate_answer",
             "fallback_answer",
         ]

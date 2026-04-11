@@ -29,6 +29,47 @@ class DocumentContextProviderValidator:
                 status_code=400
             )
 
+    def validate_search_keywords(
+            self,
+            search_keywords: str
+    ) -> None:
+        stripped = search_keywords.strip()
+        if not stripped:
+            raise DocumentContextProviderError(
+                "search_keywords cannot be empty or whitespace-only when provided.",
+                status_code=400,
+            )
+        if len(stripped) > self._settings.max_question_chars:
+            raise DocumentContextProviderError(
+                f"search_keywords exceeds the maximum allowed length "
+                f"of {self._settings.max_question_chars:,} characters.",
+                status_code=400,
+            )
+
+    def validate_rerank_request_flags(
+            self,
+            *,
+            use_rerank: bool,
+            rerank_final_fragments: int | None,
+            max_fragments: int,
+    ) -> None:
+        if rerank_final_fragments is not None:
+            if not use_rerank:
+                raise DocumentContextProviderError(
+                    "rerank_final_fragments may only be set when use_rerank is true.",
+                    status_code=400,
+                )
+            if rerank_final_fragments < 1:
+                raise DocumentContextProviderError(
+                    "rerank_final_fragments must be at least one when set.",
+                    status_code=400,
+                )
+            if rerank_final_fragments > max_fragments:
+                raise DocumentContextProviderError(
+                    "rerank_final_fragments must not exceed max_fragments.",
+                    status_code=400,
+                )
+
     def validate_max_fragments(
             self,
             max_fragments: int

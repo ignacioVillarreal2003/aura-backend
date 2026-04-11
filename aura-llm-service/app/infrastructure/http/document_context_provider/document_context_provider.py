@@ -61,22 +61,45 @@ class DocumentContextProvider(DocumentContextProviderInterface):
             question: str,
             max_fragments: int,
             authenticated_user: Optional[AuthenticatedUser] = None,
+            *,
+            search_keywords: Optional[str] = None,
+            use_rerank: bool = False,
+            rerank_final_fragments: Optional[int] = None,
     ) -> FragmentListResponse:
         self._validator.validate_question(question)
         self._validator.validate_max_fragments(max_fragments)
+        if search_keywords is not None:
+            self._validator.validate_search_keywords(search_keywords)
+        self._validator.validate_rerank_request_flags(
+            use_rerank=use_rerank,
+            rerank_final_fragments=rerank_final_fragments,
+            max_fragments=max_fragments,
+        )
 
         op = "retrieve_by_question"
         logger.info(
             "Handling document context request by question",
-            extra=self._log_extra(op, authenticated_user, question_len=len(question)),
+            extra=self._log_extra(
+                op,
+                authenticated_user,
+                question_len=len(question),
+                use_rerank=use_rerank,
+                has_search_keywords=bool(search_keywords and search_keywords.strip()),
+            ),
         )
 
-        request_body = self._build_question_request(question, max_fragments)
+        request_body = self._build_question_request(
+            question=question,
+            max_fragments=max_fragments,
+            search_keywords=search_keywords,
+            use_rerank=use_rerank,
+            rerank_final_fragments=rerank_final_fragments,
+        )
 
         try:
             response = await self._http_client.post(
                 url=self._settings.question_context_fragments_url,
-                json=request_body.model_dump(),
+                json=request_body.model_dump(exclude_none=True),
                 headers=self._build_headers(authenticated_user),
                 timeout=self._settings.timeout_seconds,
             )
@@ -171,9 +194,22 @@ class DocumentContextProvider(DocumentContextProviderInterface):
         return headers
 
     @staticmethod
-    def _build_question_request(question: str, max_fragments: int) -> QuestionContextFragmentsRequest:
+    def _build_question_request(
+            *,
+            question: str,
+            max_fragments: int,
+            search_keywords: Optional[str],
+            use_rerank: bool,
+            rerank_final_fragments: Optional[int],
+    ) -> QuestionContextFragmentsRequest:
         try:
-            return QuestionContextFragmentsRequest(question=question, max_fragments=max_fragments)
+            return QuestionContextFragmentsRequest(
+                question=question,
+                max_fragments=max_fragments,
+                search_keywords=search_keywords,
+                use_rerank=True if use_rerank else None,
+                rerank_final_fragments=rerank_final_fragments if use_rerank else None,
+            )
         except Exception as e:
             logger.error("Question request DTO validation failed", extra={"error": str(e)}, exc_info=True)
             raise DocumentContextProviderError(
