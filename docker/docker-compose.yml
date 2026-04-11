@@ -47,6 +47,12 @@ services:
         condition: service_healthy
     restart: on-failure
 
+  mock-auth:
+    build: ../mock-auth
+    container_name: mock-auth
+    ports:
+      - "8080:8000"
+
   aura_db:
     build: ./aura-db
     container_name: aura_db
