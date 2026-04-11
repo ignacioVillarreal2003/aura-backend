@@ -1,7 +1,7 @@
 FROM ollama/ollama:latest
 
 RUN ollama serve & sleep 5 && \
-    ollama pull qwen3.5:0.8b && \
+    ollama pull llama3.2:3b && \
     pkill ollama
 
 CMD ["serve"]

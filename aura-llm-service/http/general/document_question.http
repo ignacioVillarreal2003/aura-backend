@@ -1,3 +1,4 @@
+# @timeout 600
 POST http://localhost:8001/api/document-question
 Accept: application/json
 Content-Type: application/json
