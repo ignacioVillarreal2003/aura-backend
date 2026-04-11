@@ -7,24 +7,27 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 
-def introspect_token(token: str) -> dict | None:
+def validate_token(token: str) -> dict | None:
     """
-    Call aura-auth-service /auth/introspect to validate a JWT.
+    Call aura-auth-service GET /auth/validate to validate a JWT.
 
-    Returns a dict with keys: user_id, roles, permissions, is_super_admin
+    Returns a dict with keys: id, email, username, roles, permissions
     or None if the token is invalid or the auth service is unreachable.
     """
     try:
-        response = requests.post(
-            f"{settings.AUTH_SERVICE_URL}/auth/introspect",
-            json={'token': token},
+        response = requests.get(
+            f"{settings.AUTH_SERVICE_URL}/auth/validate",
+            headers={'Authorization': f'Bearer {token}'},
             timeout=5,
         )
         if response.status_code == 200:
-            return response.json()
+            data = response.json()
+            # Normalize: notification views expect 'user_id' key
+            data.setdefault('user_id', data.get('id'))
+            return data
         return None
     except requests.RequestException as exc:
-        logger.error("Auth service introspect failed: %s", exc)
+        logger.error("Auth service validate failed: %s", exc)
         return None
 
 
@@ -38,4 +41,4 @@ def get_user_from_request(request) -> dict | None:
     if not auth_header.startswith('Bearer '):
         return None
     token = auth_header.split(' ', 1)[1]
-    return introspect_token(token)
+    return validate_token(token)

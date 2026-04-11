@@ -35,6 +35,11 @@ INSTALLED_APPS = [
     'notifications.apps.NotificationsConfig',
 ]
 
+# Local app tables are owned by docker/aura-db/init.sql.
+# Setting to None disables Django migrations entirely for these apps.
+_LOCAL_APPS = ['notifications']
+MIGRATION_MODULES = {app: None for app in _LOCAL_APPS}
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',

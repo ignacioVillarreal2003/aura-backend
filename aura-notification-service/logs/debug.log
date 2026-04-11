@@ -327,3 +327,14 @@ INFO 2026-04-10 16:09:04,747 autoreload 8400 8876 Watching for file changes with
 INFO 2026-04-10 16:19:12,532 basehttp 8400 2704 "POST /api/internal/notifications/admin-create/ HTTP/1.1" 201 264
 INFO 2026-04-10 16:19:16,742 basehttp 8400 16852 "POST /api/internal/notifications/admin-create/ HTTP/1.1" 201 264
 INFO 2026-04-10 16:19:36,152 basehttp 8400 15304 "POST /api/internal/notifications/admin-create/ HTTP/1.1" 201 2369
+INFO 2026-04-11 17:58:45,459 autoreload 4496 276 Watching for file changes with StatReloader
+WARNING 2026-04-11 18:00:52,285 log 4496 9864 Unauthorized: /api/notifications/
+WARNING 2026-04-11 18:00:52,286 basehttp 4496 9864 "GET /api/notifications/ HTTP/1.1" 401 38
+ERROR 2026-04-11 18:07:09,893 auth_client 4496 33388 Auth service introspect failed: HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=5)
+WARNING 2026-04-11 18:07:09,894 log 4496 33388 Unauthorized: /api/notifications/
+WARNING 2026-04-11 18:07:09,895 basehttp 4496 33388 "GET /api/notifications/ HTTP/1.1" 401 38
+INFO 2026-04-11 18:08:49,331 autoreload 31132 30176 Watching for file changes with StatReloader
+INFO 2026-04-11 18:09:29,632 basehttp 31132 32972 "POST /api/internal/notifications/admin-create/ HTTP/1.1" 201 682
+INFO 2026-04-11 18:10:00,705 basehttp 31132 13144 "POST /api/internal/notifications/admin-create/ HTTP/1.1" 201 1943
+INFO 2026-04-11 18:10:56,187 basehttp 31132 32344 "POST /api/internal/notifications/admin-create/ HTTP/1.1" 201 467
+INFO 2026-04-11 18:11:07,581 basehttp 31132 12440 "POST /api/internal/notifications/admin-create/ HTTP/1.1" 201 437
