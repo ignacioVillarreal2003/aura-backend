@@ -260,7 +260,8 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             fragments = await self._fragment_repository.get_most_similar_fragments(
                 query_vector=query_vector,
                 database_session=database_session,
-                k=k
+                k=k,
+                threshold=self._settings.similarity_threshold
             )
             logger.debug(
                 "Similar fragments were retrieved.",
