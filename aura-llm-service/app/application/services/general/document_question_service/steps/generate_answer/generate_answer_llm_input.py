@@ -14,7 +14,7 @@ def build_generate_answer_llm_input(
         state: DocumentQuestionPipelineState,
         history_window: int,
 ) -> list[BaseMessage]:
-    context_fragments = state.rerank_fragments or state.retrieved_fragments
+    context_fragments = state.retrieved_fragments
     context = "\n\n---\n\n".join(f.content for f in context_fragments)
 
     history_tail = (

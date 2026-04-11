@@ -11,7 +11,11 @@ class DocumentContextProviderInterface(ABC):
             self,
             question: str,
             max_fragments: int,
-            authenticated_user: Optional[AuthenticatedUser] = None
+            authenticated_user: Optional[AuthenticatedUser] = None,
+            *,
+            search_keywords: Optional[str] = None,
+            use_rerank: bool = False,
+            rerank_final_fragments: Optional[int] = None,
     ) -> FragmentListResponse:
         pass
 

@@ -28,7 +28,7 @@ class FallbackAnswerPlugin(DocumentQuestionPlugin):
             state: DocumentQuestionPipelineState,
             resources: DocumentQuestionPipelineResources,
     ) -> bool:
-        has_context = bool(state.rerank_fragments or state.retrieved_fragments)
+        has_context = bool(state.retrieved_fragments)
         has_answer = bool(state.answer and state.answer.strip())
         return not has_context or not has_answer
 
@@ -37,7 +37,7 @@ class FallbackAnswerPlugin(DocumentQuestionPlugin):
             state: DocumentQuestionPipelineState,
             resources: DocumentQuestionPipelineResources,
     ) -> None:
-        has_context = bool(state.rerank_fragments or state.retrieved_fragments)
+        has_context = bool(state.retrieved_fragments)
         reason = "no context retrieved" if not has_context else "generate_answer returned empty"
         logger.debug("Fallback triggered", extra={"reason": reason})
 

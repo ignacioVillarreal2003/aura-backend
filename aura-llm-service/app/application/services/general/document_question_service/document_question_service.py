@@ -55,9 +55,6 @@ from app.application.services.general.document_question_service.steps.rewrite_qu
 from app.application.services.general.document_question_service.steps.retrieve_context.retrieve_context_plugin import (
     RetrieveContextPlugin,
 )
-from app.application.services.general.document_question_service.steps.rerank_context.rerank_context_plugin import (
-    RerankContextPlugin,
-)
 from app.application.services.general.document_question_service.steps.generate_answer.generate_answer_llm_input import (
     build_generate_answer_llm_input,
 )
@@ -79,7 +76,6 @@ _STREAM_PRE_ANSWER_PLUGIN_NAMES: tuple[str, ...] = (
     "validate_request",
     "rewrite_query",
     "retrieve_context",
-    "rerank_context",
 )
 
 
@@ -133,7 +129,7 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
             return DocumentQuestionResponse(
                 question=state.current_message.content,
                 answer=state.answer,
-                fragments=state.rerank_fragments or state.retrieved_fragments
+                fragments=state.retrieved_fragments
             )
 
         except self._KNOWN_EXCEPTIONS:
@@ -164,7 +160,7 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
             )
             await self._stream_pre_answer_pipeline.run(state=state, resources=resources)
 
-            fragments = state.rerank_fragments or state.retrieved_fragments
+            fragments = state.retrieved_fragments
             yield DocumentQuestionStreamMeta(
                 question=state.current_message.content,
                 fragments=list(fragments),
@@ -243,7 +239,6 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
             "validate_request": ValidateRequestPlugin,
             "rewrite_query": RewriteQueryPlugin,
             "retrieve_context": RetrieveContextPlugin,
-            "rerank_context": RerankContextPlugin,
             "generate_answer": GenerateAnswerPlugin,
             "fallback_answer": FallbackAnswerPlugin,
         }
@@ -267,7 +262,6 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
             "validate_request": ValidateRequestPlugin,
             "rewrite_query": RewriteQueryPlugin,
             "retrieve_context": RetrieveContextPlugin,
-            "rerank_context": RerankContextPlugin,
         }
         plugins: list[DocumentQuestionPlugin] = []
         for name in _STREAM_PRE_ANSWER_PLUGIN_NAMES:

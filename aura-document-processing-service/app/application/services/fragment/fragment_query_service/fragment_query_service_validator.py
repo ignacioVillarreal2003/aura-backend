@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 from app.application.services.fragment.fragment_query_service.exceptions.fragment_query_service_exception import (
     FragmentQueryInvalidRequestException,
@@ -29,6 +30,8 @@ class FragmentQueryServiceValidator:
     ) -> None:
         self._validate_question(question_context_fragments_request.question)
         self._validate_max_fragments(question_context_fragments_request.max_fragments)
+        self._validate_search_keywords(question_context_fragments_request.search_keywords)
+        self._validate_rerank_fields(question_context_fragments_request)
 
     def validate_documents_context_fragments_request(
             self,
@@ -48,6 +51,52 @@ class FragmentQueryServiceValidator:
             raise FragmentQueryInvalidRequestException("The question is shorter than the minimum allowed length.")
         if length > self._settings.max_question_length:
             raise FragmentQueryInvalidRequestException("The question exceeds the maximum allowed length.")
+
+    def _validate_search_keywords(
+            self,
+            search_keywords: Optional[str]
+    ) -> None:
+        if search_keywords is None:
+            return
+        stripped = search_keywords.strip()
+        if not stripped:
+            return
+
+        length = len(stripped)
+        if length < self._settings.min_question_length:
+            raise FragmentQueryInvalidRequestException(
+                "The search keywords are shorter than the minimum allowed length."
+            )
+        if length > self._settings.max_question_length:
+            raise FragmentQueryInvalidRequestException(
+                "The search keywords exceed the maximum allowed length."
+            )
+
+    def _validate_rerank_fields(
+            self,
+            question_context_fragments_request: QuestionContextFragmentsRequest
+    ) -> None:
+        if question_context_fragments_request.use_rerank is not True:
+            if question_context_fragments_request.rerank_final_fragments is not None:
+                raise FragmentQueryInvalidRequestException(
+                    "rerank_final_fragments may only be set when use_rerank is true."
+                )
+            return
+
+        if not self._settings.rerank_enabled:
+            raise FragmentQueryInvalidRequestException("Reranking is disabled on this service.")
+
+        max_fragments = question_context_fragments_request.max_fragments
+        final_n = question_context_fragments_request.rerank_final_fragments
+        if final_n is not None:
+            if final_n < 1:
+                raise FragmentQueryInvalidRequestException(
+                    "rerank_final_fragments must be at least one when set."
+                )
+            if final_n > max_fragments:
+                raise FragmentQueryInvalidRequestException(
+                    "rerank_final_fragments must not exceed max_fragments."
+                )
 
     def _validate_max_fragments(self, max_fragments: int) -> None:
         if max_fragments < 1:

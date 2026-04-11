@@ -36,14 +36,14 @@ class GenerateAnswerPlugin(DocumentQuestionPlugin):
             state: DocumentQuestionPipelineState,
             resources: DocumentQuestionPipelineResources,
     ) -> bool:
-        return bool(state.rerank_fragments or state.retrieved_fragments)
+        return bool(state.retrieved_fragments)
 
     async def run(
             self,
             state: DocumentQuestionPipelineState,
             resources: DocumentQuestionPipelineResources,
     ) -> None:
-        context_fragments = state.rerank_fragments or state.retrieved_fragments
+        context_fragments = state.retrieved_fragments
         context = "\n\n---\n\n".join(f.content for f in context_fragments)
         logger.debug(
             "Generating answer",
