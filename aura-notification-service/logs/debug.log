@@ -323,3 +323,7 @@ INFO 2026-04-07 18:26:00,011 autoreload 27016 21380 Watching for file changes wi
 INFO 2026-04-08 18:13:43,384 autoreload 11132 34408 Watching for file changes with StatReloader
 INFO 2026-04-08 18:14:08,274 basehttp 11132 16736 "POST /api/internal/notifications/admin-create/ HTTP/1.1" 201 541
 INFO 2026-04-08 18:14:34,325 basehttp 11132 8860 "POST /api/internal/notifications/admin-create/ HTTP/1.1" 201 1777
+INFO 2026-04-10 16:09:04,747 autoreload 8400 8876 Watching for file changes with StatReloader
+INFO 2026-04-10 16:19:12,532 basehttp 8400 2704 "POST /api/internal/notifications/admin-create/ HTTP/1.1" 201 264
+INFO 2026-04-10 16:19:16,742 basehttp 8400 16852 "POST /api/internal/notifications/admin-create/ HTTP/1.1" 201 264
+INFO 2026-04-10 16:19:36,152 basehttp 8400 15304 "POST /api/internal/notifications/admin-create/ HTTP/1.1" 201 2369
