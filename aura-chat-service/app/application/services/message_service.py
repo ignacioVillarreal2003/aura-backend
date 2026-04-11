@@ -56,6 +56,9 @@ class MessageService:
             for msg in history
         ]
 
+        # Truncate to the last 4 messages to respect the LLM service limit
+        llm_messages = llm_messages[-4:]
+
         # Call aura-llm-service /api/agent
         llm_reply = await self.llm.call_agent(llm_messages, token)
 
