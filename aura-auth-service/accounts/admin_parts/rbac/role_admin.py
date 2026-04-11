@@ -46,7 +46,7 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
             return False
         if obj is None:
             return True
-        if obj.name in ['SUPER_ADMIN', 'ADMIN']:
+        if obj.name in ['superadmin', 'admin']:
             return False
         if request.user and obj.user_assignments.filter(
             user=request.user,
@@ -59,7 +59,7 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
         if not _is_super_admin_user(request.user):
             return
         protected = queryset.filter(
-            name__in=['SUPER_ADMIN', 'ADMIN']
+            name__in=['superadmin', 'admin']
         ) | queryset.filter(
             user_assignments__user=request.user,
             user_assignments__deleted_at__isnull=True,

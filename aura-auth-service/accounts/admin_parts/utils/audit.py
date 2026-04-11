@@ -38,7 +38,7 @@ def _has_role(user: User, role_name: str) -> bool:
 
 
 def _is_admin_user(user: User) -> bool:
-    return _has_role(user, 'ADMIN') and not _is_super_admin_user(user)
+    return _has_role(user, 'admin') and not _is_super_admin_user(user)
 
 
 def _is_admin_or_super_user(user: User) -> bool:

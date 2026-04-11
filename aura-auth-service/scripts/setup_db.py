@@ -33,12 +33,16 @@ def create_initial_roles():
     """Create initial roles for the system."""
     roles_data = [
         {
-            'name': 'SUPER_ADMIN',
+            'name': 'superadmin',
             'description': 'Super administrator with all permissions'
         },
         {
-            'name': 'USER',
+            'name': 'user',
             'description': 'Regular user with basic permissions'
+        },
+        {
+            'name': 'admin',
+            'description': 'Administrator role'
         },
     ]
     
@@ -89,23 +93,38 @@ def create_initial_permissions():
             print(f"• Permission already exists: {perm.name}")
 
 
+def normalize_existing_rbac_names():
+    """Normalize existing role/permission records to lowercase naming."""
+    for role in Role.objects.all():
+        normalized_name = (role.name or '').lower()
+        if normalized_name and role.name != normalized_name:
+            role.name = normalized_name
+            role.save(update_fields=['name'])
+
+    for permission in Permission.objects.all():
+        normalized_name = (permission.name or '').lower()
+        if normalized_name and permission.name != normalized_name:
+            permission.name = normalized_name
+            permission.save(update_fields=['name'])
+
+
 def assign_permissions_to_roles():
     """Assign permissions to initial roles."""
     try:
-        super_admin = Role.objects.get(name='SUPER_ADMIN')
-        user_role = Role.objects.get(name='USER')
+        super_admin = Role.objects.get(name='superadmin')
+        user_role = Role.objects.get(name='user')
         
-        # SUPER_ADMIN gets all permissions
+        # superadmin gets all permissions
         all_permissions = Permission.objects.all()
         for perm in all_permissions:
             PermissionInRole.objects.get_or_create(role=super_admin, permission=perm)
-        print(f"✓ Assigned {all_permissions.count()} permissions to SUPER_ADMIN")
+        print(f"✓ Assigned {all_permissions.count()} permissions to superadmin")
         
-        # USER gets only read permissions
+        # user gets only read permissions
         read_permissions = Permission.objects.filter(name__contains='read')
         for perm in read_permissions:
             PermissionInRole.objects.get_or_create(role=user_role, permission=perm)
-        print(f"✓ Assigned {read_permissions.count()} read permissions to USER")
+        print(f"✓ Assigned {read_permissions.count()} read permissions to user")
         
     except Role.DoesNotExist:
         print("✗ Roles not found. Please create them first.")
@@ -138,6 +157,7 @@ def main():
     # Step 3: Create initial roles
     print("Step 3: Creating initial roles...")
     try:
+        normalize_existing_rbac_names()
         create_initial_roles()
         print()
     except Exception as e:
@@ -188,7 +208,7 @@ def main():
             email=email,
             password=password,
         )
-        super_admin_role = Role.objects.get(name='SUPER_ADMIN')
+        super_admin_role = Role.objects.get(name='superadmin')
         UserRole.objects.get_or_create(
             user=superuser,
             role=super_admin_role,
@@ -197,7 +217,7 @@ def main():
         
         print(f"✓ Superuser '{username}' created successfully")
         print(f"  Email: {email}")
-        print(f"  Role: SUPER_ADMIN\n")
+        print(f"  Role: superadmin\n")
         
     except Exception as e:
         print(f"✗ Superuser creation failed: {e}\n")

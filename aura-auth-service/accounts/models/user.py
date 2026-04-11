@@ -121,7 +121,7 @@ class CustomUserManager(BaseUserManager):
         role_model = apps.get_model('accounts', 'Role')
         user_role_model = apps.get_model('accounts', 'UserRole')
         role, _ = role_model.objects.get_or_create(
-            name='SUPER_ADMIN',
+            name='superadmin',
             defaults={'description': 'Super admin role'},
         )
         user_role_model.objects.get_or_create(
@@ -249,7 +249,7 @@ class User(AbstractBaseUser):
         if not self.pk:
             return False
         return self.user_roles.filter(
-            role__name__in=['SUPER_ADMIN', 'ADMIN'],
+            role__name__in=['superadmin', 'admin'],
             deleted_at__isnull=True,
         ).exists()
 
@@ -257,7 +257,7 @@ class User(AbstractBaseUser):
     def is_superuser(self) -> bool:
         if not self.pk:
             return False
-        return self.user_roles.filter(role__name='SUPER_ADMIN', deleted_at__isnull=True).exists()
+        return self.user_roles.filter(role__name='superadmin', deleted_at__isnull=True).exists()
 
     def has_perm(self, perm, obj=None):
         return self.is_superuser

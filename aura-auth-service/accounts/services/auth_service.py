@@ -156,6 +156,7 @@ def get_user_info(token: str) -> dict | None:
 	return {
 		'id': user.id,
 		'email': user.email,
+		'username': user.username,
 		'roles': get_user_roles(user),
 		'permissions': permissions,
 	}

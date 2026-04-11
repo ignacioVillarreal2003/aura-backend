@@ -73,7 +73,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
 
     fieldsets = (
         ('Identidad', {
-            'fields': ('roles', 'username', 'email', 'password', 'active'),
+            'fields': ('roles', 'username', 'email', 'password', 'password2', 'active'),
         }),
         ('Grupos', {
             'fields': ('custom_groups',),
@@ -102,7 +102,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
         roles = obj.user_roles.filter(deleted_at__isnull=True).values_list('role__name', flat=True)
         labels = []
         for role in roles:
-            if role == 'USER':
+            if role == 'user':
                 labels.append('USUARIO')
             else:
                 labels.append(role)
@@ -189,7 +189,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             if field_name in form.base_fields:
                 form.base_fields[field_name].help_text = ''
         if obj:
-            for field_name in ('roles', 'password'):
+            for field_name in ('roles', 'password', 'password2'):
                 if field_name in form.base_fields:
                     form.base_fields.pop(field_name)
             audit_labels = {
@@ -207,11 +207,11 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
                     form.base_fields[field_name].label = label
         if _is_super_admin_user(request.user):
             if 'roles' in form.base_fields:
-                form.base_fields['roles'].queryset = Role.objects.exclude(name='SUPER_ADMIN')
+                form.base_fields['roles'].queryset = Role.objects.exclude(name='superadmin')
         else:
             if 'roles' in form.base_fields:
                 form.base_fields['roles'].queryset = Role.objects.exclude(
-                    name__in=['SUPER_ADMIN', 'ADMIN']
+                    name__in=['superadmin', 'admin']
                 )
         if 'fau_role' in form.base_fields:
             form.base_fields['fau_role'].queryset = FauRole.objects.order_by('-power', 'name')
@@ -311,7 +311,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
                 selected_roles.append(selected_role)
             if not _is_super_admin_user(request.user):
                 protected_roles = Role.objects.filter(
-                    name__in=['SUPER_ADMIN', 'ADMIN'],
+                    name__in=['superadmin', 'admin'],
                     user_assignments__user=obj,
                     user_assignments__deleted_at__isnull=True,
                 )

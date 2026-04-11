@@ -7,6 +7,18 @@ from accounts.models import Role, CustomGroup, User, FauRole
 
 
 class UserAdminForm(forms.ModelForm):
+    password = forms.CharField(
+        widget=forms.PasswordInput(render_value=False),
+        label='Contraseña',
+        required=False,
+    )
+
+    password2 = forms.CharField(
+        widget=forms.PasswordInput(render_value=False),
+        label='Confirmar contraseña',
+        required=False,
+    )
+
     active = forms.BooleanField(
         required=False,
         initial=True,
@@ -22,7 +34,7 @@ class UserAdminForm(forms.ModelForm):
     )
 
     roles = forms.ModelChoiceField(
-        queryset=Role.objects.filter(name__in=['ADMIN', 'USER']),
+        queryset=Role.objects.filter(name__in=['admin', 'user']),
         required=False,
         widget=forms.RadioSelect(),
         label='Rol',
@@ -67,13 +79,27 @@ class UserAdminForm(forms.ModelForm):
                 self.initial['custom_groups'] = group_ids
         else:
             if 'roles' in self.fields:
-                self.fields['roles'].initial = Role.objects.filter(name='USER').first()
+                self.fields['roles'].initial = Role.objects.filter(name='user').first()
         if self.instance and self.instance.pk:
             if 'fau_role' in self.fields:
                 self.fields['fau_role'].initial = self.instance.fau_role_id
         if 'roles' in self.fields:
             def _role_label(role):
-                if role.name == 'USER':
+                if role.name == 'user':
                     return 'USUARIO'
                 return role.name
             self.fields['roles'].label_from_instance = _role_label
+
+    def clean(self):
+        cleaned_data = super().clean()
+        password = cleaned_data.get('password')
+        password2 = cleaned_data.get('password2')
+        is_new = not (self.instance and self.instance.pk)
+        if is_new:
+            if not password:
+                self.add_error('password', 'Este campo es obligatorio.')
+            if not password2:
+                self.add_error('password2', 'Este campo es obligatorio.')
+        if password and password2 and password != password2:
+            self.add_error('password2', 'Las contraseñas no coinciden.')
+        return cleaned_data
