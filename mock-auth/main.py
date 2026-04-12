@@ -1,21 +1,19 @@
 from fastapi import FastAPI, Header, HTTPException, status
 from typing import Optional
+
 from prometheus_fastapi_instrumentator import Instrumentator
-import logging
 from pythonjsonlogger import jsonlogger
+import logging
+import sys
 
-mock_auth_app = FastAPI(title="Mock Auth Service", version="1.0.0")
-
-# Set up JSON logging
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-logHandler = logging.StreamHandler()
-formatter = jsonlogger.JsonFormatter(
-    '%(asctime)s %(levelname)s %(name)s %(message)s'
-)
+logHandler = logging.StreamHandler(sys.stdout)
+formatter = jsonlogger.JsonFormatter('%(asctime)s %(levelname)s %(name)s %(module)s %(message)s')
 logHandler.setFormatter(formatter)
 logger.addHandler(logHandler)
+logger.setLevel(logging.INFO)
 
+mock_auth_app = FastAPI(title="Mock Auth Service", version="1.0.0")
 Instrumentator().instrument(mock_auth_app).expose(mock_auth_app)
 
 MOCK_USERS = {
@@ -71,11 +69,7 @@ async def validate_token(authorization: str = Header(None)):
     token = extract_token(authorization)
     user = get_user_from_token(token)
 
-    logger.info("Token validated successfully", extra={
-        "audit_event": True,
-        "valid_token": True,
-        "email": user['email']
-    })
+    print(f"✅ Token validated: {token[:20]}... -> User: {user['email']}")
 
     return user
 

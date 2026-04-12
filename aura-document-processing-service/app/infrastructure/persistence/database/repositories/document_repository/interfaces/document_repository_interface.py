@@ -1,19 +1,13 @@
 from abc import ABC, abstractmethod
-from typing import Optional, List
+from datetime import datetime
+from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.constants.document.document_type import DocumentType
 from app.domain.models.document import Document
 
 
 class DocumentRepositoryInterface(ABC):
-    @abstractmethod
-    async def create_document(
-            self,
-            document: Document,
-            database_session: AsyncSession
-    ) -> Document:
-        pass
-
     @abstractmethod
     async def get_document_by_id(
             self,
@@ -23,19 +17,49 @@ class DocumentRepositoryInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_documents(
-            self,
-            database_session: AsyncSession,
-            page: Optional[int] = None,
-            size: Optional[int] = None
-    ) -> List[Document]:
-        pass
-
     async def get_documents_by_chat_id(
             self,
             chat_id: int,
             database_session: AsyncSession
-    ) -> List[Document]:
+    ) -> list[Document]:
+        pass
+
+    @abstractmethod
+    async def get_documents_by_ids(
+            self,
+            document_ids: list[int],
+            database_session: AsyncSession
+    ) -> list[Document]:
+        pass
+
+    @abstractmethod
+    async def get_documents_missing_metadata(
+            self,
+            database_session: AsyncSession
+    ) -> list[Document]:
+        pass
+
+    @abstractmethod
+    async def get_documents(
+            self,
+            database_session: AsyncSession,
+            page: Optional[int] = None,
+            size: Optional[int] = None,
+            name: Optional[str] = None,
+            description: Optional[str] = None,
+            category: Optional[str] = None,
+            type: Optional[DocumentType] = None,
+            created_from: Optional[datetime] = None,
+            created_to: Optional[datetime] = None
+    ) -> list[Document]:
+        pass
+
+    @abstractmethod
+    async def create_document(
+            self,
+            document: Document,
+            database_session: AsyncSession
+    ) -> Document:
         pass
 
     @abstractmethod

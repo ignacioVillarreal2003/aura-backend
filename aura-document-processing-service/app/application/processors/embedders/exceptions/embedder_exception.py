@@ -2,20 +2,25 @@ from app.application.exceptions.app_exception import AppException
 
 
 class EmbedderException(AppException):
-    pass
+    def __init__(self, message: str, *, status_code: int = 500) -> None:
+        super().__init__(message, status_code=status_code)
 
 
 class UnsupportedEmbedderTypeException(EmbedderException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=422)
 
 
 class EmbedderInitializationException(EmbedderException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=503)
 
 
 class EmbedDocumentsException(EmbedderException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=502)
 
 
 class EmbedQueryException(EmbedderException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=502)

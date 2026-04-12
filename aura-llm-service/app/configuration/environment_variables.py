@@ -1,60 +1,32 @@
 import logging
-from pathlib import Path
-from typing import List
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
-BASE_DIR = Path(__file__).resolve().parents[2]
-
 
 class EnvironmentVariables(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=BASE_DIR / ".env",
+        env_prefix="",
+        env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore"
     )
 
-    app_name: str = Field(
-        default="Aura llm service",
-        description="Application name"
-    )
+    app_name: str = Field(default="aura document processing service")
+    app_version: str = Field(default="1.0.0")
+    app_host: str = Field(default="0.0.0.0")
+    app_port: int = Field(default=8000, ge=1, le=65535)
+    app_reload: bool = Field(default=False)
+    log_level: str = Field(default="INFO")
+    cors_origins: list[str] = Field(default=["*"])
+    environment: str = Field(default="development")
+    service_api_key: str = Field(default="service_api_key")
 
-    app_version: str = Field(
-        default="1.0.0",
-        description="Application version"
+    @field_validator(
+        "log_level"
     )
-
-    app_host: str = Field(
-        default="0.0.0.0",
-        description="Host to bind the application"
-    )
-
-    app_port: int = Field(
-        default=8000,
-        ge=1,
-        le=65535,
-        description="Port to bind the application"
-    )
-
-    app_reload: bool = Field(
-        default=False,
-        description="Enable auto-reload for development"
-    )
-
-    log_level: str = Field(
-        default="INFO",
-        description="Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)"
-    )
-
-    cors_origins: List[str] = Field(
-        default=["*"],
-        description="Allowed CORS origins"
-    )
-
-    @field_validator("log_level")
     @classmethod
     def validate_log_level(
             cls,
@@ -74,8 +46,8 @@ class EnvironmentVariables(BaseSettings):
     @classmethod
     def validate_cors_origins(
             cls,
-            v: List[str]
-    ) -> List[str]:
+            v: list[str]
+    ) -> list[str]:
         if not v:
             raise ValueError("At least one CORS origin must be specified")
 
@@ -84,8 +56,6 @@ class EnvironmentVariables(BaseSettings):
     def log_configuration(
             self
     ) -> None:
-        logger.info("=" * 60)
-        logger.info("Application Configuration")
         logger.info("=" * 60)
         logger.info(f"App Name: {self.app_name}")
         logger.info(f"App Version: {self.app_version}")
@@ -97,7 +67,8 @@ class EnvironmentVariables(BaseSettings):
     def is_development(
             self
     ) -> bool:
-        return self.app_reload or self.log_level == "DEBUG"
+        return (self.app_reload or
+                self.log_level == "DEBUG")
 
     def is_production(
             self

@@ -6,8 +6,10 @@ class DatabaseManagerException(AppException):
 
 
 class DatabaseNotInitializedException(DatabaseManagerException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=503)
 
 
 class DatabaseSessionException(DatabaseManagerException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=500)

@@ -2,9 +2,9 @@ from sqlalchemy import Column, BigInteger, String, DateTime, Text, Integer, Fore
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import ENUM
 
-from app.domain.constants.document_status import DocumentStatus
-from app.domain.constants.document_mime_type import DocumentMimeType
-from app.domain.constants.document_type import DocumentType
+from app.domain.constants.document.document_status import DocumentStatus
+from app.domain.constants.document.document_mime_type import DocumentMimeType
+from app.domain.constants.document.document_type import DocumentType
 from app.domain.models.base import Base
 
 

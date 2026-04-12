@@ -1,0 +1,11 @@
+POST http://localhost:8000/api/fragment-enrich
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "content": "Fragmento de texto a enriquecer con contexto o metadatos."
+}
+
+
+###

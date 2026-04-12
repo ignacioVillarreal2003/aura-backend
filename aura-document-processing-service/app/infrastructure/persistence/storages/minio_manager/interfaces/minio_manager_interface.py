@@ -1,29 +1,40 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 from minio import Minio
 
 
 class MinioManagerInterface(ABC):
     @abstractmethod
-    async def start(self) -> None:
+    async def start(
+            self
+    ) -> None:
         pass
 
     @abstractmethod
-    async def stop(self) -> None:
+    async def stop(
+            self
+    ) -> None:
         pass
 
     @property
     @abstractmethod
-    def is_started(self) -> bool:
+    def is_started(
+            self
+    ) -> bool:
         pass
 
     @property
     @abstractmethod
-    def client(self) -> Minio:
+    def client(
+            self
+    ) -> Minio:
         pass
 
     @abstractmethod
-    async def ensure_bucket(self, bucket_name: str) -> None:
+    async def ensure_bucket(
+            self,
+            bucket_name: str
+    ) -> None:
         pass
 
     @abstractmethod
@@ -33,7 +44,7 @@ class MinioManagerInterface(ABC):
             object_name: str,
             file_path: str,
             content_type: Optional[str] = None,
-            metadata: Optional[Dict[str, str]] = None
+            metadata: Optional[dict[str, str]] = None
     ) -> None:
         pass
 
@@ -44,7 +55,7 @@ class MinioManagerInterface(ABC):
             object_name: str,
             data: bytes,
             content_type: Optional[str] = None,
-            metadata: Optional[Dict[str, str]] = None
+            metadata: Optional[dict[str, str]] = None
     ) -> None:
         pass
 
@@ -58,15 +69,27 @@ class MinioManagerInterface(ABC):
         pass
 
     @abstractmethod
-    async def download_data(self, bucket_name: str, object_name: str) -> bytes:
+    async def download_data(
+            self,
+            bucket_name: str,
+            object_name: str
+    ) -> bytes:
         pass
 
     @abstractmethod
-    async def delete_object(self, bucket_name: str, object_name: str) -> None:
+    async def delete_object(
+            self,
+            bucket_name: str,
+            object_name: str
+    ) -> None:
         pass
 
     @abstractmethod
-    async def object_exists(self, bucket_name: str, object_name: str) -> bool:
+    async def object_exists(
+            self,
+            bucket_name: str,
+            object_name: str
+    ) -> bool:
         pass
 
     @abstractmethod
@@ -85,13 +108,11 @@ class MinioManagerInterface(ABC):
             bucket_name: str,
             prefix: Optional[str] = None,
             recursive: bool = False
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         pass
 
     @abstractmethod
-    async def health_check(self) -> Dict[str, Any]:
-        pass
-
-    @abstractmethod
-    def get_metrics(self) -> Dict[str, int]:
+    async def health_check(
+            self
+    ) -> dict[str, Any]:
         pass

@@ -6,13 +6,14 @@ datasources:
     access: proxy
     url: http://prometheus:9090
     isDefault: true
+    editable: true
 
   - name: Elasticsearch
     type: elasticsearch
     access: proxy
-    database: "[filebeat-]8.12.0-*"
     url: http://elasticsearch:9200
+    database: "filebeat-*"
     jsonData:
-      interval: Daily
       timeField: "@timestamp"
-      esVersion: 8.0.0
+      esVersion: 8
+    editable: true

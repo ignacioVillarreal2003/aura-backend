@@ -1,0 +1,38 @@
+POST http://localhost:8000/api/post-process-fragment/start
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+
+###
+
+
+POST http://localhost:8000/api/post-process-fragment/documents
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "document_ids": [1, 2]
+}
+
+
+###
+
+
+GET http://localhost:8000/api/post-process-fragment/status
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+
+###
+
+
+POST http://localhost:8000/api/post-process-fragment/stop
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+
+###

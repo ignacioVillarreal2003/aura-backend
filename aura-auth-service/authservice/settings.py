@@ -20,7 +20,7 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-me-in-producti
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='127.0.0.1,localhost', cast=Csv())
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='127.0.0.1,localhost,host.docker.internal', cast=Csv())
 
 # Application definition
 INSTALLED_APPS = [
@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django_prometheus',
     'django_extensions',
     
     # Third-party apps
@@ -41,9 +42,6 @@ INSTALLED_APPS = [
     # Local apps
     'accounts.apps.AccountsConfig',
     'documents.apps.DocumentsConfig',
-    
-    # Observability
-    'django_prometheus',
 ]
 
 MIDDLEWARE = [
@@ -193,6 +191,7 @@ DOCUMENT_PROCESSING_URL = config(
     default='http://localhost:8001/api/document-creation',
 )
 
+# Logging Configuration
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -207,15 +206,11 @@ LOGGING = {
         },
         'json': {
             '()': 'pythonjsonlogger.jsonlogger.JsonFormatter',
-            'format': '%(asctime)s %(levelname)s %(name)s %(message)s'
+            'format': '%(asctime)s %(levelname)s %(name)s %(module)s %(message)s'
         },
     },
     'handlers': {
         'console': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'simple',
-        },
-        'console_json': {
             'class': 'logging.StreamHandler',
             'formatter': 'json',
         },
@@ -226,17 +221,12 @@ LOGGING = {
         },
     },
     'root': {
-        'handlers': ['console_json', 'file'] if not DEBUG else ['console', 'file'],
+        'handlers': ['console', 'file'],
         'level': 'INFO',
     },
     'loggers': {
         'django': {
-            'handlers': ['console_json', 'file'] if not DEBUG else ['console', 'file'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        'audit': {
-            'handlers': ['console_json'],
+            'handlers': ['console', 'file'],
             'level': 'INFO',
             'propagate': False,
         },

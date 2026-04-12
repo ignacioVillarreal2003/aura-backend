@@ -1,15 +1,39 @@
 services:
+  aura-chat-service:
+    build: ../aura-chat-service
+    container_name: aura-chat-service
+    ports:
+      - "8003:8000"
+    env_file:
+      - ../aura-chat-service/.env.docker
+    depends_on:
+      aura_db:
+        condition: service_healthy
+      memory_db:
+        condition: service_healthy
+      aura-llm-service:
+        condition: service_started
+      mock-auth:
+        condition: service_started
+    restart: on-failure
+
   aura-document-processing-service:
-    build: ../aura-document-processing-service
+    build:
+      context: ../aura-document-processing-service
+      dockerfile: Dockerfile
     container_name: aura-document-processing-service
     ports:
       - "8000:8000"
     env_file:
       - ../aura-document-processing-service/.env.docker
     depends_on:
-      db:
+      aura_db:
         condition: service_healthy
       storage:
+        condition: service_healthy
+      queue:
+        condition: service_healthy
+      llm:
         condition: service_healthy
     restart: on-failure
   
@@ -20,6 +44,10 @@ services:
       - "8001:8000"
     env_file:
       - ../aura-llm-service/.env.docker
+    depends_on:
+      llm:
+        condition: service_healthy
+    restart: on-failure
 
   mock-auth:
     build: ../mock-auth
@@ -27,15 +55,15 @@ services:
     ports:
       - "8080:8000"
 
-  db:
-    build: ./db
-    container_name: db
+  aura_db:
+    build: ./aura-db
+    container_name: aura_db
     environment:
       POSTGRES_USER: aura_root
       POSTGRES_PASSWORD: aura_password
       POSTGRES_DB: aura_db
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - aura_db_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
@@ -111,12 +139,31 @@ services:
       retries: 5
 
   llm:
-    build: ./llm
+    build:
+      context: ./llm
+      dockerfile: Dockerfile
     container_name: llm
-    ports:
-      - "11434:11434"
     volumes:
       - llm_data:/root/.ollama
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/:/etc/prometheus/
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
     restart: unless-stopped
 
   elasticsearch:
@@ -130,50 +177,40 @@ services:
       - "9200:9200"
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
+    restart: unless-stopped
 
   filebeat:
     image: docker.elastic.co/beats/filebeat:8.12.0
     container_name: filebeat
-    user: root
-    environment:
-      - strict.perms=false
+    user: root # Needed to read docker container logs and configuration file
     volumes:
       - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: filebeat -e -strict.perms=false
     depends_on:
       - elasticsearch
-
-  prometheus:
-    image: prom/prometheus:v2.45.0
-    container_name: prometheus
-    volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
-    ports:
-      - "9090:9090"
+    restart: unless-stopped
 
   grafana:
     image: grafana/grafana:10.2.3
     container_name: grafana
+    ports:
+      - "3001:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning
       - grafana_data:/var/lib/grafana
-    ports:
-      - "3001:3000"
-    depends_on:
-      - prometheus
-      - elasticsearch
+      - ./grafana/provisioning/:/etc/grafana/provisioning/
+    restart: unless-stopped
 
 volumes:
-  db_data:
+  aura_db_data:
   auth_db_data:
   storage_data:
   memory_db_data:
   queue_data:
   llm_data:
-  elasticsearch_data:
   prometheus_data:
+  elasticsearch_data:
   grafana_data:

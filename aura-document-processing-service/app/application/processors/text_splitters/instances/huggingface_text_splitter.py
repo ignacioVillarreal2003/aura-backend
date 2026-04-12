@@ -7,36 +7,40 @@ from app.application.processors.text_splitters.exceptions.text_splitter_exceptio
     TextSplitterInitializationException,
     TextSplitterExecutionException
 )
-from app.application.processors.text_splitters.interfaces.text_splitter_interface import TextSplitterInterface
+from app.application.processors.text_splitters.instances.base_text_splitter import BaseTextSplitter
 from app.application.processors.text_splitters.text_splitter_settings import TextSplitterSettings
 
 logger = logging.getLogger(__name__)
 
 
-class HuggingFaceTextSplitter(TextSplitterInterface):
-    def __init__(self, text_splitter_settings: TextSplitterSettings) -> None:
+class HuggingFaceTextSplitter(BaseTextSplitter):
+    def __init__(
+            self,
+            text_splitter_settings: TextSplitterSettings
+    ) -> None:
         self._settings = text_splitter_settings
+        self._max_text_length = self._settings.max_text_length
         self._splitter: Optional[SemanticChunker] = None
 
         try:
             embeddings = HuggingFaceEmbeddings(
                 model_name=self._settings.huggingface_model,
-                model_kwargs={"device": self._settings.huggingface_device}
+                model_kwargs={
+                    "device": self._settings.huggingface_device
+                }
             )
 
             splitter_kwargs: dict = {
-                "breakpoint_threshold_type": self._settings.huggingface_breakpoint_threshold_type,
+                "breakpoint_threshold_type": self._settings.huggingface_breakpoint_threshold_type
             }
 
             if self._settings.huggingface_breakpoint_threshold_amount is not None:
-                splitter_kwargs["breakpoint_threshold_amount"] = (
-                    self._settings.huggingface_breakpoint_threshold_amount
-                )
+                splitter_kwargs["breakpoint_threshold_amount"] = self._settings.huggingface_breakpoint_threshold_amount
 
             self._splitter = SemanticChunker(embeddings, **splitter_kwargs)
 
             logger.info(
-                "HuggingFaceTextSplitter initialized successfully",
+                "The Hugging Face semantic text splitter was initialized successfully.",
                 extra={
                     "model": self._settings.huggingface_model,
                     "device": self._settings.huggingface_device,
@@ -46,28 +50,22 @@ class HuggingFaceTextSplitter(TextSplitterInterface):
             )
 
         except Exception as e:
-            logger.exception("Failed to initialize HuggingFaceTextSplitter")
+            logger.exception("Failed to initialize the Hugging Face semantic text splitter.")
             raise TextSplitterInitializationException(
-                f"HuggingFaceTextSplitter initialization failed: {e}"
+                "Failed to initialize the Hugging Face semantic text splitter."
             ) from e
 
     def split_text(self, text: str) -> list[str]:
         if not text or not text.strip():
-            logger.debug("split_text received empty text, returning empty list")
+            logger.debug("split_text received empty text; returning an empty list.")
             return []
 
-        text_length = len(text)
-
-        if text_length > self._settings.max_text_length:
-            raise TextSplitterExecutionException(
-                f"Text length ({text_length}) exceeds maximum allowed "
-                f"({self._settings.max_text_length})"
-            )
+        self._validate_text(text)
 
         logger.debug(
-            "Splitting text semantically",
+            "Splitting text with semantic chunking.",
             extra={
-                "text_length": text_length,
+                "text_length": len(text),
                 "breakpoint_type": self._settings.huggingface_breakpoint_threshold_type
             }
         )
@@ -76,7 +74,7 @@ class HuggingFaceTextSplitter(TextSplitterInterface):
             splits = self._splitter.split_text(text)
 
             logger.info(
-                "Text split completed",
+                "The text was split successfully with semantic chunking.",
                 extra={
                     "splits_created": len(splits),
                     "avg_split_length": sum(len(c) for c in splits) // len(splits) if splits else 0
@@ -89,9 +87,9 @@ class HuggingFaceTextSplitter(TextSplitterInterface):
             raise
         except Exception as e:
             logger.exception(
-                "Failed to split text semantically",
-                extra={"model": self._settings.huggingface_model}
+                "Failed to split text with semantic chunking.",
+                extra={
+                    "model": self._settings.huggingface_model
+                }
             )
-            raise TextSplitterExecutionException(
-                f"HuggingFaceTextSplitter failed to split text: {e}"
-            ) from e
+            raise TextSplitterExecutionException("Failed to split the text with semantic chunking.") from e

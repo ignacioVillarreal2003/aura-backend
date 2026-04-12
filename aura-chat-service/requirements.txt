@@ -1,0 +1,11 @@
+django==4.2.21
+djangorestframework==3.15.2
+daphne==4.1.2
+psycopg2-binary==2.9.11
+httpx==0.28.1
+redis==5.0.8
+python-dotenv==1.2.1
+django-cors-headers==4.7.0
+dj-database-url==2.3.0
+django-prometheus
+python-json-logger

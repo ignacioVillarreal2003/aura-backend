@@ -1,0 +1,25 @@
+POST http://localhost:8000/api/fragment-query/by-question
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "question": "El ninio que tiene una ballena",
+  "max_fragments": 5
+}
+
+
+###
+
+
+POST http://localhost:8000/api/fragment-query/by-documents
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+{
+  "document_ids": [32]
+}
+
+
+###
