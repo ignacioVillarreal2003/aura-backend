@@ -41,10 +41,10 @@ def _candidate_base_urls(configured_url: str) -> list[str]:
     candidates = [base]
 
     if parsed.hostname in {'localhost', '127.0.0.1'}:
-        if parsed.port == 8002:
-            candidates.append(base.replace(':8002', ':8001'))
-        elif parsed.port == 8001:
-            candidates.append(base.replace(':8001', ':8002'))
+        if parsed.port == 8004:
+            candidates.append(base.replace(':8004', ':8005'))
+        elif parsed.port == 8005:
+            candidates.append(base.replace(':8005', ':8004'))
 
     # Keep order but remove duplicates.
     seen = set()
@@ -112,11 +112,11 @@ def create_notifications_from_admin(*, receiver_ids, message, notification_type,
     if last_response is None:
         if last_timeout_exc is not None:
             raise NotificationServiceError(
-                'El servicio de notificaciones no respondio a tiempo. Verifica que este activo en 8001 o 8002.'
+                'El servicio de notificaciones no respondio a tiempo. Verifica que este activo en 8004.'
             ) from last_timeout_exc
         if last_connection_exc is not None:
             raise NotificationServiceError(
-                'No se pudo conectar con el servicio de notificaciones. Verifica que este activo en 8001 o 8002.'
+                'No se pudo conectar con el servicio de notificaciones. Verifica que este activo en 8004.'
             ) from last_connection_exc
         raise NotificationServiceError('No fue posible contactar al servicio de notificaciones.')
 
