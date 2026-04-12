@@ -17,7 +17,7 @@ class FragmentQueryServiceSettings(BaseSettings):
     max_document_ids: int = Field(default=20, ge=1, le=100)
     min_question_length: int = Field(default=1, ge=1)
     max_question_length: int = Field(default=10_000, ge=1, le=100_000)
-    similarity_threshold: float = Field(default=0.3, ge=0.0, le=1.0)
+    similarity_threshold: float = Field(default=0.1, ge=0.0, le=1.0)
 
     rerank_enabled: bool = Field(default=False)
     rerank_model_name: str = Field(default="BAAI/bge-reranker-v2-m3")

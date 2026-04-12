@@ -30,7 +30,7 @@ Authorization: Bearer user_token_123
   "messages": [
     {
       "role": "human",
-      "content": "Hablame sobre un Avión de caza"
+      "content": "Perro Ballena"
     }
   ]
 }
