@@ -1,3 +1,25 @@
+"""
+WebSocket protocol for ``ws/chat/<chat_id>/?token=...``.
+
+Inbound (client → server):
+
+- ``{"type": "chat.message", "message": "<text>"}`` — persist user message and run
+  document-question streaming against the LLM service.
+- ``{"type": "chat.typing", "is_typing": true|false}`` — broadcast typing state.
+
+Outbound (server → client):
+
+- ``user_message`` — persisted user row (``id``, ``message``, ``sender_type``, …).
+- ``ai_meta`` — generation started for this chat (``chat_id``).
+- ``ai_context`` — RAG step finished (``question``, ``fragments``).
+- ``ai_delta`` — answer chunk (``delta`` string).
+- ``ai_complete`` — final answer (``answer``, ``question``, ``fragments``, optional
+  persisted assistant ``id``, ``created_at``, …).
+- ``ai_error`` — failure (``detail``; optional ``code``).
+- ``typing`` — another member’s typing indicator.
+"""
+
+import asyncio
 import logging
 
 from channels.db import database_sync_to_async
@@ -19,6 +41,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.chat_id: int | None = None
         self.group_name: str | None = None
         self.user: AuthenticatedUser | None = None
+        self._document_question_task: asyncio.Task | None = None
 
     async def connect(self):
         self.chat_id = int(self.scope["url_route"]["kwargs"]["chat_id"])
@@ -46,6 +69,20 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         )
 
     async def disconnect(self, close_code):
+        t = self._document_question_task
+        if t is not None and not t.done():
+            t.cancel()
+            try:
+                await t
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                logger.exception(
+                    "Error awaiting cancelled document-question task.",
+                    extra={"chat_id": self.chat_id},
+                )
+        self._document_question_task = None
+
         if self.group_name:
             await self.channel_layer.group_discard(
                 self.group_name, self.channel_name
@@ -95,7 +132,18 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             },
         )
 
-        await self._run_document_question()
+        self._document_question_task = asyncio.create_task(
+            self._run_document_question()
+        )
+        try:
+            await self._document_question_task
+        except asyncio.CancelledError:
+            logger.info(
+                "Document question cancelled (client disconnect or new scope).",
+                extra={"chat_id": self.chat_id, "user_id": self.user.id},
+            )
+        finally:
+            self._document_question_task = None
 
     async def _run_document_question(self):
         await self.channel_layer.group_send(
@@ -104,9 +152,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         )
 
         try:
-            result = await message_service.run_document_question(
+            async for payload in message_service.iter_document_question_stream_group_payloads(
                 self.user, self.chat_id
-            )
+            ):
+                await self.channel_layer.group_send(self.group_name, payload)
         except LLMServiceException:
             await self.channel_layer.group_send(
                 self.group_name,
@@ -115,10 +164,11 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                     "detail": "AI service is temporarily unavailable",
                 },
             )
-            return
+        except asyncio.CancelledError:
+            raise
         except Exception:
             logger.exception(
-                "Error running document-question.",
+                "Error running document-question stream.",
                 extra={"chat_id": self.chat_id},
             )
             await self.channel_layer.group_send(
@@ -128,23 +178,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                     "detail": "AI service is temporarily unavailable",
                 },
             )
-            return
-
-        event = {
-            "type": "ai_complete",
-            "message": result.answer,
-            "answer": result.answer,
-            "question": result.question,
-            "fragments": result.fragments,
-        }
-        if result.assistant_message:
-            am = result.assistant_message
-            event["id"] = am.id
-            event["sender_type"] = am.sender_type
-            event["created_by"] = am.created_by
-            event["created_at"] = am.created_at.isoformat()
-
-        await self.channel_layer.group_send(self.group_name, event)
 
     async def _handle_typing(self, content: dict):
         await self.channel_layer.group_send(
@@ -172,6 +205,13 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             "chat_id": event["chat_id"],
         })
 
+    async def ai_context(self, event):
+        await self.send_json({
+            "type": "ai_context",
+            "question": event.get("question", ""),
+            "fragments": event.get("fragments", []),
+        })
+
     async def ai_delta(self, event):
         await self.send_json({
             "type": "ai_delta",
@@ -194,10 +234,13 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         await self.send_json(payload)
 
     async def ai_error(self, event):
-        await self.send_json({
+        out = {
             "type": "ai_error",
             "detail": event["detail"],
-        })
+        }
+        if event.get("code") is not None:
+            out["code"] = event["code"]
+        await self.send_json(out)
 
     async def typing(self, event):
         if event["user_id"] != self.user.id:

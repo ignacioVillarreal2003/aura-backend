@@ -182,9 +182,18 @@ SPECTACULAR_SETTINGS = {
 
 LLM_DOCUMENT_QUESTION_URL = config(
     "LLM_DOCUMENT_QUESTION_URL",
-    default="http://aura-llm-service:8000/api/document-question",
+    default="http://localhost:8001/api/document-question",
+)
+# SSE streaming endpoint (chat service → LLM). Defaults to ``<LLM_DOCUMENT_QUESTION_URL>/stream``.
+LLM_DOCUMENT_QUESTION_STREAM_URL = config(
+    "LLM_DOCUMENT_QUESTION_STREAM_URL",
+    default=LLM_DOCUMENT_QUESTION_URL.rstrip("/") + "/stream",
 )
 LLM_SERVICE_TIMEOUT = config("LLM_SERVICE_TIMEOUT", default=120, cast=int)
+# Connect timeout for the streaming client; read timeout is unset (long generations).
+LLM_STREAM_CONNECT_TIMEOUT = config(
+    "LLM_STREAM_CONNECT_TIMEOUT", default=10.0, cast=float
+)
 
 # ──────────────────────────────────────────────
 # Internationalization

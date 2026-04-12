@@ -39,8 +39,21 @@ class AsyncHttpClient:
                     method, url, json=json, headers=headers
                 )
             if response.status_code >= 400:
+                await response.aread()
+                snippet = response.text[:1000] if response.text else ""
+                msg = f"HTTP {response.status_code}"
+                if snippet.strip():
+                    msg = f"{msg}: {snippet.strip()}"
+                logger.warning(
+                    "HTTP error response.",
+                    extra={
+                        "url": url,
+                        "status_code": response.status_code,
+                        "body_preview": snippet[:200],
+                    },
+                )
                 raise HttpClientException(
-                    f"HTTP {response.status_code}",
+                    msg,
                     status_code=response.status_code,
                 )
             return response

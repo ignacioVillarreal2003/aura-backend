@@ -51,8 +51,8 @@ def create_app() -> FastAPI:
         openapi_url="/api/openapi.json"
     )
 
-    configure_cors(app)
     _add_middlewares(app)
+    configure_cors(app)
     _include_routers(app)
     register_exception_handlers(app)
 
