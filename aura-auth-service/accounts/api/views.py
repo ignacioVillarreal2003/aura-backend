@@ -1,19 +1,18 @@
-"""Auth API views for login, refresh, introspect, and logout."""
+"""Auth API views for login, refresh, validate, and logout."""
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from drf_spectacular.utils import extend_schema
 from accounts.api.serializers import (
-    LoginSerializer, RefreshSerializer, IntrospectSerializer, LogoutSerializer,
-    TokenResponseSerializer, IntrospectResponseSerializer,
-    ErrorResponseSerializer, LogoutResponseSerializer, MeResponseSerializer,
+    LoginSerializer, RefreshSerializer, LogoutSerializer,
+    TokenResponseSerializer, ValidateResponseSerializer,
+    ErrorResponseSerializer, LogoutResponseSerializer,
 )
 from accounts.services.auth_service import (
     authenticate_user,
     issue_tokens_for_user,
     rotate_refresh_token,
-    introspect_token,
     revoke_refresh_token,
     get_user_info,
 )
@@ -69,29 +68,6 @@ class RefreshView(APIView):
         return Response(tokens, status=status.HTTP_200_OK)
 
 
-class IntrospectView(APIView):
-    authentication_classes = []
-    permission_classes = []
-
-    @extend_schema(
-        summary='Introspect token',
-        description='Validate an access token and return its payload (user info, roles, permissions).',
-        request=IntrospectSerializer,
-        responses={
-            200: IntrospectResponseSerializer,
-            401: ErrorResponseSerializer,
-        },
-        tags=['Auth'],
-    )
-    def post(self, request):
-        serializer = IntrospectSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        payload = introspect_token(serializer.validated_data['token'])
-        if not payload:
-            return Response({'detail': 'Invalid token.'}, status=status.HTTP_401_UNAUTHORIZED)
-        return Response(payload, status=status.HTTP_200_OK)
-
-
 class LogoutView(APIView):
     authentication_classes = []
     permission_classes = []
@@ -115,16 +91,16 @@ class LogoutView(APIView):
         return Response({'detail': 'Logged out.'}, status=status.HTTP_200_OK)
 
 
-class MeView(APIView):
+class ValidateView(APIView):
     authentication_classes = []
     permission_classes = []
 
     @extend_schema(
-        summary='Get current user info',
-        description='Returns the authenticated user info (id, email, roles, permissions) from the Bearer token.',
+        summary='Validate token',
+        description='Validate a Bearer token and return user info (id, email, username, roles, permissions).',
         request=None,
         responses={
-            200: MeResponseSerializer,
+            200: ValidateResponseSerializer,
             401: ErrorResponseSerializer,
         },
         tags=['Auth'],

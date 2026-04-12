@@ -41,7 +41,13 @@ INSTALLED_APPS = [
     # Local apps
     'accounts.apps.AccountsConfig',
     'documents.apps.DocumentsConfig',
+    'notifications.apps.NotificationsConfig',
 ]
+
+# Local apps whose tables are owned by docker/auth-db/init.sql or docker/aura-db/init.sql.
+# Setting to None disables Django migrations entirely for these apps.
+_LOCAL_APPS = ['accounts', 'documents', 'notifications']
+MIGRATION_MODULES = {app: None for app in _LOCAL_APPS}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -157,6 +163,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Custom User Model
 AUTH_USER_MODEL = 'accounts.User'
 
+# Database routers
+DATABASE_ROUTERS = ['authservice.db_routers.AuraDbRouter']
+
 # CORS Configuration
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000', cast=Csv())
 
@@ -182,10 +191,38 @@ JWT_ACCESS_LIFETIME_MINUTES = config('JWT_ACCESS_LIFETIME_MINUTES', default=15, 
 JWT_ALGORITHM = config('JWT_ALGORITHM', default='HS256')
 JWT_SIGNING_KEY = config('JWT_SIGNING_KEY', default=SECRET_KEY)
 
+# ID of the shared admin chat in aura_db used for admin-initiated document uploads.
+# Must match the seed row in docker/aura-db/init.sql.
+ADMIN_CHAT_ID = config('ADMIN_CHAT_ID', default=12345, cast=int)
+
 # Document Processing Service
 DOCUMENT_PROCESSING_URL = config(
     'DOCUMENT_PROCESSING_URL',
-    default='http://localhost:8001/api/document-creation',
+    default='http://localhost:8000/api/create-document',
+)
+DOCUMENT_PROCESSING_INTERNAL_API_TOKEN = config(
+    'DOCUMENT_PROCESSING_INTERNAL_API_TOKEN',
+    default='service_api_key',
+)
+DOCUMENT_PROCESSING_TIMEOUT_SECONDS = config(
+    'DOCUMENT_PROCESSING_TIMEOUT_SECONDS',
+    default=300,
+    cast=int,
+)
+
+# Notification Service (used by Django admin notification flows)
+NOTIFICATION_SERVICE_URL = config(
+    'NOTIFICATION_SERVICE_URL',
+    default='http://localhost:8002',
+)
+NOTIFICATION_INTERNAL_API_TOKEN = config(
+    'NOTIFICATION_INTERNAL_API_TOKEN',
+    default='dev-notification-internal-token',
+)
+NOTIFICATION_SERVICE_TIMEOUT_SECONDS = config(
+    'NOTIFICATION_SERVICE_TIMEOUT_SECONDS',
+    default=30,
+    cast=int,
 )
 
 # Logging Configuration

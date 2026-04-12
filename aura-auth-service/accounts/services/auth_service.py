@@ -42,8 +42,8 @@ def _create_refresh_token(user: User) -> RefreshToken:
 		token=str(token_value),
 		user=user,
 		expires_at=expires_at,
-		created_by=user.username,
-		updated_by=user.username,
+		created_by=user.pk,
+		updated_by=user.pk,
 	)
 	user.refresh_token = token_value
 	user.save(update_fields=['refresh_token', 'updated_at'])
@@ -53,7 +53,7 @@ def _create_refresh_token(user: User) -> RefreshToken:
 def issue_tokens_for_user(user: User) -> dict:
 	RefreshToken.objects.filter(user=user, is_revoked=False).update(
 		is_revoked=True,
-		updated_by=user.username,
+		updated_by=user.pk,
 		updated_at=timezone.now(),
 	)
 	refresh = _create_refresh_token(user)
@@ -72,12 +72,12 @@ def rotate_refresh_token(refresh_token: uuid.UUID | str) -> dict | None:
 		return None
 	if refresh.expires_at <= timezone.now():
 		refresh.is_revoked = True
-		refresh.updated_by = refresh.user.username
+		refresh.updated_by = refresh.user.pk
 		refresh.save(update_fields=['is_revoked', 'updated_by', 'updated_at'])
 		return None
 
 	refresh.is_revoked = True
-	refresh.updated_by = refresh.user.username
+	refresh.updated_by = refresh.user.pk
 	refresh.save(update_fields=['is_revoked', 'updated_by', 'updated_at'])
 	new_refresh = _create_refresh_token(refresh.user)
 	access_token = _build_access_token(refresh.user)
@@ -94,7 +94,7 @@ def revoke_refresh_token(refresh_token: uuid.UUID | str) -> bool:
 	if not refresh:
 		return False
 	refresh.is_revoked = True
-	refresh.updated_by = refresh.user.username
+	refresh.updated_by = refresh.user.pk
 	refresh.save(update_fields=['is_revoked', 'updated_by', 'updated_at'])
 	refresh.user.refresh_token = None
 	refresh.user.save(update_fields=['refresh_token', 'updated_at'])
@@ -156,6 +156,7 @@ def get_user_info(token: str) -> dict | None:
 	return {
 		'id': user.id,
 		'email': user.email,
+		'username': user.username,
 		'roles': get_user_roles(user),
 		'permissions': permissions,
 	}

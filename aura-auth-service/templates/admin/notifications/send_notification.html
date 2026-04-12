@@ -1,0 +1,402 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% load admin_urls %}
+
+{% block title %}Enviar Notificacion{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+    .notification-form-container {
+        background: #fafafa;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        margin-bottom: 20px;
+    }
+
+    .form-section {
+        padding: 20px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .form-section:last-child {
+        border-bottom: none;
+    }
+
+    .form-section h3 {
+        margin: 0 0 16px 0;
+        font-size: 15px;
+        font-weight: 600;
+        color: #333;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+    }
+
+    .selector-block {
+        margin-bottom: 20px;
+    }
+
+    .selector-block:last-child {
+        margin-bottom: 0;
+    }
+
+    .selector-label {
+        display: block;
+        margin: 0 0 8px 0;
+        font-weight: 600;
+        color: #333;
+        font-size: 13px;
+    }
+
+    .search-container {
+        margin-bottom: 12px;
+    }
+
+    .search-input {
+        width: 100%;
+        padding: 9px 12px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 13px;
+        box-sizing: border-box;
+        background: #fff;
+    }
+
+    .search-input:focus {
+        outline: none;
+        border-color: #417690;
+        box-shadow: 0 0 0 2px rgba(65, 118, 144, 0.12);
+    }
+
+    .dual-panel-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+    .panel {
+        display: flex;
+        flex-direction: column;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        background: #fff;
+        min-height: 220px;
+    }
+
+    .panel-header {
+        background: #f5f5f5;
+        padding: 10px 12px;
+        border-bottom: 1px solid #ddd;
+        font-weight: 600;
+        font-size: 12px;
+        color: #333;
+        text-transform: uppercase;
+        letter-spacing: 0.2px;
+    }
+
+    .panel-content {
+        flex: 1;
+        overflow-y: auto;
+    }
+
+    .panel-item {
+        padding: 9px 12px;
+        border-bottom: 1px solid #f0f0f0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .panel-item:last-child {
+        border-bottom: none;
+    }
+
+    .panel-item:hover {
+        background: #f8fbff;
+    }
+
+    .panel-item input[type="checkbox"] {
+        margin: 0;
+        cursor: pointer;
+    }
+
+    .panel-item label {
+        margin: 0;
+        cursor: pointer;
+        flex: 1;
+        font-size: 13px;
+    }
+
+    .message-section textarea {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 13px;
+        box-sizing: border-box;
+        resize: vertical;
+    }
+
+    .message-section textarea:focus {
+        outline: none;
+        border-color: #417690;
+        box-shadow: 0 0 0 2px rgba(65, 118, 144, 0.12);
+    }
+
+    .submit-row {
+        margin-top: 20px;
+    }
+
+    .error-messages {
+        background: #ffebee;
+        border: 1px solid #f5a5a5;
+        border-radius: 4px;
+        padding: 10px 12px;
+        margin-bottom: 16px;
+        color: #b71c1c;
+    }
+
+    .empty-panel {
+        padding: 12px;
+        color: #888;
+        font-size: 12px;
+    }
+
+    @media (max-width: 1024px) {
+        .dual-panel-container {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Inicio</a>
+    &rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+    &rsaquo; Crear nueva
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+    <h1>Crear {{ opts.verbose_name }}</h1>
+
+    <form method="post">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+        <div class="error-messages">
+            {% for error in form.non_field_errors %}
+            <div>{{ error }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="notification-form-container">
+            <div class="form-section">
+                <h3>Destinatarios</h3>
+
+                {% if form.recipients %}
+                <div style="display: none;">{{ form.recipients }}</div>
+                <div class="selector-block">
+                    <label class="selector-label" for="search-recipients">Usuarios</label>
+                    <div class="search-container">
+                        <input id="search-recipients" type="text" class="search-input" placeholder="Buscar usuario...">
+                    </div>
+                    <div class="dual-panel-container">
+                        <div class="panel">
+                            <div class="panel-header">Disponibles</div>
+                            <div class="panel-content" id="available-recipients"></div>
+                        </div>
+                        <div class="panel">
+                            <div class="panel-header">Seleccionados</div>
+                            <div class="panel-content" id="selected-recipients"></div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if form.groups %}
+                <div style="display: none;">{{ form.groups }}</div>
+                <div class="selector-block">
+                    <label class="selector-label" for="search-groups">Grupos</label>
+                    <div class="search-container">
+                        <input id="search-groups" type="text" class="search-input" placeholder="Buscar grupo...">
+                    </div>
+                    <div class="dual-panel-container">
+                        <div class="panel">
+                            <div class="panel-header">Disponibles</div>
+                            <div class="panel-content" id="available-groups"></div>
+                        </div>
+                        <div class="panel">
+                            <div class="panel-header">Seleccionados</div>
+                            <div class="panel-content" id="selected-groups"></div>
+                        </div>
+                    </div>
+                    {% if form.groups.errors %}
+                    <div class="error-messages" style="margin-top: 10px;">
+                        {% for error in form.groups.errors %}<div>{{ error }}</div>{% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                {% if form.roles %}
+                <div style="display: none;">{{ form.roles }}</div>
+                <div class="selector-block">
+                    <label class="selector-label" for="search-roles">Roles de sistema</label>
+                    <div class="search-container">
+                        <input id="search-roles" type="text" class="search-input" placeholder="Buscar rol de sistema...">
+                    </div>
+                    <div class="dual-panel-container">
+                        <div class="panel">
+                            <div class="panel-header">Disponibles</div>
+                            <div class="panel-content" id="available-roles"></div>
+                        </div>
+                        <div class="panel">
+                            <div class="panel-header">Seleccionados</div>
+                            <div class="panel-content" id="selected-roles"></div>
+                        </div>
+                    </div>
+                    {% if form.roles.errors %}
+                    <div class="error-messages" style="margin-top: 10px;">
+                        {% for error in form.roles.errors %}<div>{{ error }}</div>{% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                {% if form.fau_roles %}
+                <div style="display: none;">{{ form.fau_roles }}</div>
+                <div class="selector-block">
+                    <label class="selector-label" for="search-fau_roles">Roles FAU</label>
+                    <div class="search-container">
+                        <input id="search-fau_roles" type="text" class="search-input" placeholder="Buscar rol FAU...">
+                    </div>
+                    <div class="dual-panel-container">
+                        <div class="panel">
+                            <div class="panel-header">Disponibles</div>
+                            <div class="panel-content" id="available-fau_roles"></div>
+                        </div>
+                        <div class="panel">
+                            <div class="panel-header">Seleccionados</div>
+                            <div class="panel-content" id="selected-fau_roles"></div>
+                        </div>
+                    </div>
+                    {% if form.fau_roles.errors %}
+                    <div class="error-messages" style="margin-top: 10px;">
+                        {% for error in form.fau_roles.errors %}<div>{{ error }}</div>{% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="form-section">
+                <h3>Mensaje</h3>
+                <div class="message-section">
+                    {{ form.message.label_tag }}
+                    {{ form.message }}
+                    {% if form.message.errors %}
+                    <div class="error-messages" style="margin-top: 10px;">
+                        {% for error in form.message.errors %}<div>{{ error }}</div>{% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="submit-row">
+            <input type="submit" value="Enviar" class="default">
+            <a href="{% url opts|admin_urlname:'changelist' %}" class="button cancel-link">Cancelar</a>
+        </div>
+    </form>
+</div>
+
+<script>
+    window.recipients_data = {{ users_json|default:'[]'|safe }};
+    window.groups_data = {{ groups_json|default:'[]'|safe }};
+    window.roles_data = {{ roles_json|default:'[]'|safe }};
+    window.fau_roles_data = {{ fau_roles_json|default:'[]'|safe }};
+</script>
+<script>
+(function() {
+    function initDualSelector(fieldName) {
+        const selectField = document.getElementById(`id_${fieldName}`);
+        const availablePanel = document.getElementById(`available-${fieldName}`);
+        const selectedPanel = document.getElementById(`selected-${fieldName}`);
+        const searchInput = document.getElementById(`search-${fieldName}`);
+        const data = window[`${fieldName}_data`] || [];
+
+        if (!selectField || !availablePanel || !selectedPanel) {
+            return;
+        }
+
+        function render(filterText) {
+            const selectedIds = new Set(
+                Array.from(selectField.options)
+                    .filter(opt => opt.selected)
+                    .map(opt => String(opt.value))
+            );
+            const normalizedFilter = (filterText || '').toLowerCase().trim();
+
+            availablePanel.innerHTML = '';
+            selectedPanel.innerHTML = '';
+
+            data.forEach(item => {
+                const id = String(item.id);
+                const label = String(item.label || '');
+                const isSelected = selectedIds.has(id);
+                const matches = !normalizedFilter || label.toLowerCase().includes(normalizedFilter);
+
+                if (!isSelected && !matches) {
+                    return;
+                }
+
+                const row = document.createElement('div');
+                row.className = 'panel-item';
+                row.innerHTML = `
+                    <input type="checkbox" id="${fieldName}-${id}" value="${id}" ${isSelected ? 'checked' : ''}>
+                    <label for="${fieldName}-${id}"></label>
+                `;
+                row.querySelector('label').textContent = label;
+
+                row.querySelector('input').addEventListener('change', (e) => {
+                    const option = Array.from(selectField.options).find(opt => String(opt.value) === id);
+                    if (!option) {
+                        return;
+                    }
+                    option.selected = e.target.checked;
+                    render(searchInput ? searchInput.value : '');
+                });
+
+                if (isSelected) {
+                    selectedPanel.appendChild(row);
+                } else {
+                    availablePanel.appendChild(row);
+                }
+            });
+
+            if (!availablePanel.children.length) {
+                availablePanel.innerHTML = '<div class="empty-panel">Sin elementos disponibles</div>';
+            }
+            if (!selectedPanel.children.length) {
+                selectedPanel.innerHTML = '<div class="empty-panel">Sin elementos seleccionados</div>';
+            }
+        }
+
+        if (searchInput) {
+            searchInput.addEventListener('input', () => render(searchInput.value));
+        }
+
+        render('');
+    }
+
+    initDualSelector('recipients');
+    initDualSelector('groups');
+    initDualSelector('roles');
+    initDualSelector('fau_roles');
+})();
+</script>
+{% endblock %}

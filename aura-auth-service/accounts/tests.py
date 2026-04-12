@@ -95,12 +95,12 @@ class RoleModelTest(TestCase):
 
     def setUp(self):
         self.role = Role.objects.create(
-            name='ADMIN',
+            name='admin',
             description='Administrator role',
         )
 
     def test_create_role(self):
-        self.assertEqual(self.role.name, 'ADMIN')
+        self.assertEqual(self.role.name, 'admin')
         self.assertEqual(self.role.description, 'Administrator role')
 
     def test_role_has_int_pk(self):
@@ -148,7 +148,7 @@ class UserRoleRelationshipTest(TestCase):
         assign_role_to_user(self.user, self.role, created_by=self.bootstrap_user)
 
         self.assertTrue(user_has_role(self.user, 'MANAGER'))
-        self.assertFalse(user_has_role(self.user, 'USER'))
+        self.assertFalse(user_has_role(self.user, 'user'))
 
 
 class PermissionInRoleRelationshipTest(TestCase):

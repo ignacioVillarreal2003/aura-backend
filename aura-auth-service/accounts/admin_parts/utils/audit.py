@@ -6,16 +6,20 @@ from accounts.models import User
 def _apply_audit_fields(obj, actor, is_create: bool):
     if is_create:
         if hasattr(obj, 'created_by_id'):
+            # FK field (e.g. User.created_by → User): assign the object itself
             if not obj.created_by_id:
                 obj.created_by = actor
         else:
+            # BigInt field: store the user's pk
             if not obj.created_by:
-                obj.created_by = getattr(actor, 'username', actor)
+                obj.created_by = getattr(actor, 'pk', actor)
 
     if hasattr(obj, 'updated_by_id'):
+        # FK field
         obj.updated_by = actor
     else:
-        obj.updated_by = getattr(actor, 'username', actor)
+        # BigInt field
+        obj.updated_by = getattr(actor, 'pk', actor)
 
 
 def _is_super_admin_user(user: User) -> bool:
@@ -34,7 +38,7 @@ def _has_role(user: User, role_name: str) -> bool:
 
 
 def _is_admin_user(user: User) -> bool:
-    return _has_role(user, 'ADMIN') and not _is_super_admin_user(user)
+    return _has_role(user, 'admin') and not _is_super_admin_user(user)
 
 
 def _is_admin_or_super_user(user: User) -> bool:

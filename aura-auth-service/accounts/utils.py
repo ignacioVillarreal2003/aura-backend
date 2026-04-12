@@ -8,6 +8,11 @@ like checking permissions, assigning roles, etc.
 from accounts.models import User, Role, Permission, UserRole, PermissionInRole
 
 
+def _normalize_permission_name(permission_name: str) -> str:
+    """Normalize permission names to UPPER_SNAKE_CASE."""
+    return (permission_name or '').strip().replace('.', '_').upper()
+
+
 def assign_role_to_user(user: User, role: Role, created_by: User) -> UserRole:
     """
     Assign a role to a user.
@@ -76,10 +81,10 @@ def user_has_permission(user: User, permission_name: str) -> bool:
     Returns:
         True if user has permission, False otherwise
     """
-    return user.user_roles.filter(
-        role__permission_links__permission__name=permission_name,
-        deleted_at__isnull=True,
-    ).exists() or user.is_superuser
+    normalized_permission = _normalize_permission_name(permission_name)
+    if user.is_superuser:
+        return True
+    return normalized_permission in get_user_permissions(user)
 
 
 def user_has_role(user: User, role_name: str) -> bool:
@@ -88,13 +93,14 @@ def user_has_role(user: User, role_name: str) -> bool:
     
     Args:
         user: User instance
-        role_name: Role name (e.g., "SUPER_ADMIN")
+        role_name: Role name (e.g., "superadmin")
         
     Returns:
         True if user has role, False otherwise
     """
+    normalized_role = (role_name or '').lower()
     return user.user_roles.filter(
-        role__name=role_name,
+        role__name=normalized_role,
         deleted_at__isnull=True,
     ).exists() or user.is_superuser
 
@@ -110,14 +116,20 @@ def get_user_permissions(user: User) -> list:
         List of permission names
     """
     if user.is_superuser:
-        return list(Permission.objects.values_list('name', flat=True))
+        return [
+            _normalize_permission_name(name)
+            for name in Permission.objects.values_list('name', flat=True)
+            if name
+        ]
 
-    return list(
+    return [
+        _normalize_permission_name(name) for name in
         user.user_roles.filter(deleted_at__isnull=True).values_list(
             'role__permission_links__permission__name',
             flat=True,
         ).distinct()
-    )
+        if name
+    ]
 
 
 def get_user_roles(user: User) -> list:
@@ -130,4 +142,8 @@ def get_user_roles(user: User) -> list:
     Returns:
         List of role names
     """
-    return list(user.user_roles.filter(deleted_at__isnull=True).values_list('role__name', flat=True))
+    return [
+        name.lower() for name in
+        user.user_roles.filter(deleted_at__isnull=True).values_list('role__name', flat=True)
+        if name
+    ]
