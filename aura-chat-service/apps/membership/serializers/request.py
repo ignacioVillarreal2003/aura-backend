@@ -1,0 +1,13 @@
+from rest_framework import serializers
+
+
+class AddMemberRequest(serializers.Serializer):
+    member_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        min_length=1,
+        max_length=50,
+    )
+
+
+class UpdateMemberRequest(serializers.Serializer):
+    status = serializers.ChoiceField(choices=["active", "inactive", "pending"])
