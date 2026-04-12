@@ -118,7 +118,7 @@ SPECTACULAR_SETTINGS = {
 }
 
 # Auth Service integration (JWT introspection)
-AUTH_SERVICE_URL = config('AUTH_SERVICE_URL', default='http://localhost:8000')
+AUTH_SERVICE_URL = config('AUTH_SERVICE_URL', default='http://localhost:8002')
 
 # Internal API token used by trusted backend services (e.g. aura-auth-service admin)
 NOTIFICATION_INTERNAL_API_TOKEN = config(

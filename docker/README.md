@@ -15,6 +15,16 @@ docker compose -f docker-compose.gpu.yml up -d
 
 ## Descripción de servicios
 
+### aura-auth-service
+
+- Nombre del contenedor: `aura-auth-service`
+- Puerto expuesto: `8002`
+
+### aura-notification-service
+
+- Nombre del contenedor: `aura-notification-service`
+- Puerto expuesto: `8004`
+
 ### aura-document-processing-service
 
 - Nombre del contenedor: `aura-document-processing-service`

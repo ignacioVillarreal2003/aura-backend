@@ -97,21 +97,137 @@ CREATE INDEX refresh_tokens_expires_at_idx  ON refresh_tokens(expires_at);
 -- PERMISOS
 -- ============================================
 INSERT INTO permission (name, description) VALUES
-    ('documentos.ver',                  'Ver documentos del sistema'),
-    ('documentos.cargar',               'Cargar nuevos documentos'),
-    ('documentos.eliminar',             'Eliminar documentos'),
-    ('documentos.gestionar_colecciones','Gestionar colecciones de documentos'),
-    ('usuarios.ver',                    'Ver listado de usuarios'),
-    ('usuarios.crear',                  'Crear nuevos usuarios'),
-    ('usuarios.editar',                 'Editar usuarios existentes'),
-    ('usuarios.eliminar',               'Eliminar usuarios'),
-    ('chat.usar',                       'Usar el chat con el asistente'),
-    ('chat.ver_historial',              'Ver historial de conversaciones'),
-    ('chat.gestionar',                  'Gestionar salas de chat'),
-    ('notificaciones.ver',              'Ver notificaciones propias'),
-    ('notificaciones.enviar',           'Enviar notificaciones a usuarios'),
-    ('sistema.administrar',             'Administrar configuración del sistema'),
-    ('sistema.ver_auditoria',           'Ver logs y auditoría del sistema');
+-- fau_role
+('FAU_ROLE_CREATE', 'Permite crear registros de fau_role'),
+('FAU_ROLE_GET', 'Permite consultar registros de fau_role'),
+('FAU_ROLE_UPDATE', 'Permite actualizar registros de fau_role'),
+('FAU_ROLE_DELETE', 'Permite eliminar registros de fau_role'),
+
+-- auth_user
+('AUTH_USER_CREATE', 'Permite crear registros de auth_user'),
+('AUTH_USER_GET', 'Permite consultar registros de auth_user'),
+('AUTH_USER_UPDATE', 'Permite actualizar registros de auth_user'),
+('AUTH_USER_DELETE', 'Permite eliminar registros de auth_user'),
+
+-- role
+('ROLE_CREATE', 'Permite crear registros de role'),
+('ROLE_GET', 'Permite consultar registros de role'),
+('ROLE_UPDATE', 'Permite actualizar registros de role'),
+('ROLE_DELETE', 'Permite eliminar registros de role'),
+
+-- auth_user_in_role
+('AUTH_USER_IN_ROLE_CREATE', 'Permite crear registros de auth_user_in_role'),
+('AUTH_USER_IN_ROLE_GET', 'Permite consultar registros de auth_user_in_role'),
+('AUTH_USER_IN_ROLE_UPDATE', 'Permite actualizar registros de auth_user_in_role'),
+('AUTH_USER_IN_ROLE_DELETE', 'Permite eliminar registros de auth_user_in_role'),
+
+-- permission
+('PERMISSION_CREATE', 'Permite crear registros de permission'),
+('PERMISSION_GET', 'Permite consultar registros de permission'),
+('PERMISSION_UPDATE', 'Permite actualizar registros de permission'),
+('PERMISSION_DELETE', 'Permite eliminar registros de permission'),
+
+-- permission_in_role
+('PERMISSION_IN_ROLE_CREATE', 'Permite crear registros de permission_in_role'),
+('PERMISSION_IN_ROLE_GET', 'Permite consultar registros de permission_in_role'),
+('PERMISSION_IN_ROLE_UPDATE', 'Permite actualizar registros de permission_in_role'),
+('PERMISSION_IN_ROLE_DELETE', 'Permite eliminar registros de permission_in_role'),
+
+-- permission_in_fau_role
+('PERMISSION_IN_FAU_ROLE_CREATE', 'Permite crear registros de permission_in_fau_role'),
+('PERMISSION_IN_FAU_ROLE_GET', 'Permite consultar registros de permission_in_fau_role'),
+('PERMISSION_IN_FAU_ROLE_UPDATE', 'Permite actualizar registros de permission_in_fau_role'),
+('PERMISSION_IN_FAU_ROLE_DELETE', 'Permite eliminar registros de permission_in_fau_role'),
+
+-- refresh_tokens
+('REFRESH_TOKENS_CREATE', 'Permite crear registros de refresh_tokens'),
+('REFRESH_TOKENS_GET', 'Permite consultar registros de refresh_tokens'),
+('REFRESH_TOKENS_UPDATE', 'Permite actualizar registros de refresh_tokens'),
+('REFRESH_TOKENS_DELETE', 'Permite eliminar registros de refresh_tokens'),
+
+-- chat
+('CHAT_CREATE', 'Permite crear registros de chat'),
+('CHAT_GET', 'Permite consultar registros de chat'),
+('CHAT_UPDATE', 'Permite actualizar registros de chat'),
+('CHAT_DELETE', 'Permite eliminar registros de chat'),
+
+-- document
+('DOCUMENT_CREATE', 'Permite crear registros de document'),
+('DOCUMENT_GET', 'Permite consultar registros de document'),
+('DOCUMENT_UPDATE', 'Permite actualizar registros de document'),
+('DOCUMENT_DELETE', 'Permite eliminar registros de document'),
+
+-- fragment
+('FRAGMENT_CREATE', 'Permite crear registros de fragment'),
+('FRAGMENT_GET', 'Permite consultar registros de fragment'),
+('FRAGMENT_UPDATE', 'Permite actualizar registros de fragment'),
+('FRAGMENT_DELETE', 'Permite eliminar registros de fragment'),
+
+-- chat_message
+('CHAT_MESSAGE_CREATE', 'Permite crear registros de chat_message'),
+('CHAT_MESSAGE_GET', 'Permite consultar registros de chat_message'),
+('CHAT_MESSAGE_UPDATE', 'Permite actualizar registros de chat_message'),
+('CHAT_MESSAGE_DELETE', 'Permite eliminar registros de chat_message'),
+
+-- chat_membership
+('CHAT_MEMBERSHIP_CREATE', 'Permite crear registros de chat_membership'),
+('CHAT_MEMBERSHIP_GET', 'Permite consultar registros de chat_membership'),
+('CHAT_MEMBERSHIP_UPDATE', 'Permite actualizar registros de chat_membership'),
+('CHAT_MEMBERSHIP_DELETE', 'Permite eliminar registros de chat_membership'),
+
+-- notification
+('NOTIFICATION_CREATE', 'Permite crear registros de notification'),
+('NOTIFICATION_GET', 'Permite consultar registros de notification'),
+('NOTIFICATION_UPDATE', 'Permite actualizar registros de notification'),
+('NOTIFICATION_DELETE', 'Permite eliminar registros de notification'),
+
+-- document_collection
+('DOCUMENT_COLLECTION_CREATE', 'Permite crear registros de document_collection'),
+('DOCUMENT_COLLECTION_GET', 'Permite consultar registros de document_collection'),
+('DOCUMENT_COLLECTION_UPDATE', 'Permite actualizar registros de document_collection'),
+('DOCUMENT_COLLECTION_DELETE', 'Permite eliminar registros de document_collection'),
+
+-- document_in_document_collection
+('DOCUMENT_IN_DOCUMENT_COLLECTION_CREATE', 'Permite crear registros de document_in_document_collection'),
+('DOCUMENT_IN_DOCUMENT_COLLECTION_GET', 'Permite consultar registros de document_in_document_collection'),
+('DOCUMENT_IN_DOCUMENT_COLLECTION_UPDATE', 'Permite actualizar registros de document_in_document_collection'),
+('DOCUMENT_IN_DOCUMENT_COLLECTION_DELETE', 'Permite eliminar registros de document_in_document_collection'),
+
+-- user_in_document_collection
+('USER_IN_DOCUMENT_COLLECTION_CREATE', 'Permite crear registros de user_in_document_collection'),
+('USER_IN_DOCUMENT_COLLECTION_GET', 'Permite consultar registros de user_in_document_collection'),
+('USER_IN_DOCUMENT_COLLECTION_UPDATE', 'Permite actualizar registros de user_in_document_collection'),
+('USER_IN_DOCUMENT_COLLECTION_DELETE', 'Permite eliminar registros de user_in_document_collection'),
+
+-- custom_groups
+('CUSTOM_GROUPS_CREATE', 'Permite crear registros de custom_groups'),
+('CUSTOM_GROUPS_GET', 'Permite consultar registros de custom_groups'),
+('CUSTOM_GROUPS_UPDATE', 'Permite actualizar registros de custom_groups'),
+('CUSTOM_GROUPS_DELETE', 'Permite eliminar registros de custom_groups'),
+
+-- documents
+('DOCUMENTS_CREATE', 'Permite crear registros de documents'),
+('DOCUMENTS_GET', 'Permite consultar registros de documents'),
+('DOCUMENTS_UPDATE', 'Permite actualizar registros de documents'),
+('DOCUMENTS_DELETE', 'Permite eliminar registros de documents'),
+
+-- document_roles
+('DOCUMENT_ROLES_CREATE', 'Permite crear registros de document_roles'),
+('DOCUMENT_ROLES_GET', 'Permite consultar registros de document_roles'),
+('DOCUMENT_ROLES_UPDATE', 'Permite actualizar registros de document_roles'),
+('DOCUMENT_ROLES_DELETE', 'Permite eliminar registros de document_roles'),
+
+-- auth_user_custom_groups
+('AUTH_USER_CUSTOM_GROUPS_CREATE', 'Permite crear registros de auth_user_custom_groups'),
+('AUTH_USER_CUSTOM_GROUPS_GET', 'Permite consultar registros de auth_user_custom_groups'),
+('AUTH_USER_CUSTOM_GROUPS_UPDATE', 'Permite actualizar registros de auth_user_custom_groups'),
+('AUTH_USER_CUSTOM_GROUPS_DELETE', 'Permite eliminar registros de auth_user_custom_groups'),
+
+-- custom_groups_documents
+('CUSTOM_GROUPS_DOCUMENTS_CREATE', 'Permite crear registros de custom_groups_documents'),
+('CUSTOM_GROUPS_DOCUMENTS_GET', 'Permite consultar registros de custom_groups_documents'),
+('CUSTOM_GROUPS_DOCUMENTS_UPDATE', 'Permite actualizar registros de custom_groups_documents'),
+('CUSTOM_GROUPS_DOCUMENTS_DELETE', 'Permite eliminar registros de custom_groups_documents');
 
 -- ============================================
 -- FAU ROLES (rangos Fuerza Aérea)
@@ -169,61 +285,10 @@ AND p.name IN (
 );
 
 -- ============================================
--- PERMISOS POR FAU ROLE
--- ============================================
-
--- General de Brigada y Comodoro    : todos los permisos
-INSERT INTO permission_in_fau_role (fau_role_id, permission_id)
-SELECT fr.id, p.id
-FROM fau_role fr, permission p
-WHERE fr.name IN ('General de Brigada', 'Comodoro');
-
--- Mayor, Capitán, Vicecomodoro: gestión documental + chat completo
-INSERT INTO permission_in_fau_role (fau_role_id, permission_id)
-SELECT fr.id, p.id
-FROM fau_role fr, permission p
-WHERE fr.name IN ('Vicecomodoro', 'Mayor', 'Capitán')
-AND p.name IN (
-    'documentos.ver',
-    'documentos.cargar',
-    'documentos.gestionar_colecciones',
-    'chat.usar',
-    'chat.ver_historial',
-    'chat.gestionar',
-    'notificaciones.ver',
-    'notificaciones.enviar',
-    'sistema.ver_auditoria'
-);
-
--- Teniente Primero, Teniente, Subteniente: documentos + chat básico
-INSERT INTO permission_in_fau_role (fau_role_id, permission_id)
-SELECT fr.id, p.id
-FROM fau_role fr, permission p
-WHERE fr.name IN ('Teniente Primero', 'Teniente', 'Subteniente')
-AND p.name IN (
-    'documentos.ver',
-    'documentos.cargar',
-    'chat.usar',
-    'chat.ver_historial',
-    'notificaciones.ver'
-);
-
--- Suboficial Mayor, Cabo Primero, Cabo, Soldado: solo lectura
-INSERT INTO permission_in_fau_role (fau_role_id, permission_id)
-SELECT fr.id, p.id
-FROM fau_role fr, permission p
-WHERE fr.name IN ('Suboficial Mayor', 'Cabo Primero', 'Cabo', 'Soldado')
-AND p.name IN (
-    'documentos.ver',
-    'chat.usar',
-    'notificaciones.ver'
-);
-
--- ============================================
 -- USUARIOS
 -- ============================================
 -- NOTA: passwords hasheados con Django's PBKDF2SHA256
--- Todos tienen password: Aura2024!
+-- Todos tienen password: hola
 INSERT INTO auth_user (
     username, email, password, status,
     account_non_expired, account_non_locked, credentials_non_expired,

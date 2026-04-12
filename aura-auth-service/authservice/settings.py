@@ -213,7 +213,7 @@ DOCUMENT_PROCESSING_TIMEOUT_SECONDS = config(
 # Notification Service (used by Django admin notification flows)
 NOTIFICATION_SERVICE_URL = config(
     'NOTIFICATION_SERVICE_URL',
-    default='http://localhost:8002',
+    default='http://localhost:8004',
 )
 NOTIFICATION_INTERNAL_API_TOKEN = config(
     'NOTIFICATION_INTERNAL_API_TOKEN',
