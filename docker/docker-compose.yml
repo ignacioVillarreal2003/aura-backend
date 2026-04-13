@@ -210,7 +210,7 @@ services:
   filebeat:
     image: docker.elastic.co/beats/filebeat:8.12.0
     container_name: filebeat
-    user: root # Needed to read docker container logs and configuration file
+    user: root
     volumes:
       - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro

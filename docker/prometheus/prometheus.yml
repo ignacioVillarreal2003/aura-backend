@@ -33,3 +33,9 @@ scrape_configs:
     scrape_interval: 10s
     static_configs:
       - targets: ['mock-auth:8000']
+
+  - job_name: 'aura-notification-service'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['aura-notification-service:8000']
