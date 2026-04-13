@@ -25,3 +25,9 @@ pydantic-settings>=2.3.0
 python-dotenv>=1.2.0
 tenacity>=9.0.0
 aiobreaker>=1.2.0
+
+# ============================================
+# Monitoreo
+# ============================================
+prometheus-fastapi-instrumentator
+python-json-logger

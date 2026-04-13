@@ -10,3 +10,5 @@ PyJWT==2.8.0
 requests==2.32.3
 django-extensions
 drf-spectacular
+django-prometheus
+python-json-logger

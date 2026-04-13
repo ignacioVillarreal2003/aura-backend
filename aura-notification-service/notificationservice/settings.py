@@ -33,6 +33,7 @@ INSTALLED_APPS = [
 
     # Local apps
     'notifications.apps.NotificationsConfig',
+    'django_prometheus',
 ]
 
 # Local app tables are owned by docker/aura-db/init.sql.
@@ -41,6 +42,7 @@ _LOCAL_APPS = ['notifications']
 MIGRATION_MODULES = {app: None for app in _LOCAL_APPS}
 
 MIDDLEWARE = [
+    'django_prometheus.middleware.PrometheusBeforeMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -49,6 +51,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django_prometheus.middleware.PrometheusAfterMiddleware',
 ]
 
 ROOT_URLCONF = 'notificationservice.urls'
@@ -134,12 +137,12 @@ LOGGING = {
     'disable_existing_loggers': False,
     'formatters': {
         'verbose': {
-            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
-            'style': '{',
+            '()': 'pythonjsonlogger.jsonlogger.JsonFormatter',
+            'format': '%(asctime)s %(levelname)s %(name)s %(module)s %(process)d %(thread)d %(message)s'
         },
         'simple': {
-            'format': '{levelname} {asctime} {module} {message}',
-            'style': '{',
+             '()': 'pythonjsonlogger.jsonlogger.JsonFormatter',
+            'format': '%(asctime)s %(levelname)s %(name)s %(module)s %(message)s'
         },
     },
     'handlers': {

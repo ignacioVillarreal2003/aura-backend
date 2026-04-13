@@ -9,3 +9,5 @@ psycopg[binary]==3.2.6
 httpx==0.28.1
 python-decouple==3.8
 uvicorn[standard]==0.34.2
+django-prometheus
+python-json-logger

@@ -21,12 +21,14 @@ INSTALLED_APPS = [
     "django_filters",
     "drf_spectacular",
     "channels",
+    "django_prometheus",
     "apps.chat",
     "apps.message",
     "apps.membership",
 ]
 
 MIDDLEWARE = [
+    "django_prometheus.middleware.PrometheusBeforeMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -37,6 +39,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "django_prometheus.middleware.PrometheusAfterMiddleware",
 ]
 
 ROOT_URLCONF = "aura_chat_service.urls"
@@ -151,6 +154,7 @@ SERVICE_API_KEY = config("SERVICE_API_KEY", default="change-me")
 
 AUTHENTICATION_EXCLUDED_PATHS = [
     "/api/v1/health",
+    "/metrics",
     "/admin/*",
     "/api/schema*",
     "/api/docs*",
@@ -220,9 +224,8 @@ LOGGING = {
     "disable_existing_loggers": False,
     "formatters": {
         "verbose": {
-            "format": "[{asctime}] [{levelname}] [{name}] [cid:{correlation_id}] {message}",
-            "style": "{",
-            "defaults": {"correlation_id": "-"},
+            "()": "pythonjsonlogger.jsonlogger.JsonFormatter",
+            "format": "%(asctime)s %(levelname)s %(name)s %(correlation_id)s %(message)s"
         },
         "simple": {
             "format": "[{asctime}] [{levelname}] {message}",

@@ -1,7 +1,20 @@
 from fastapi import FastAPI, Header, HTTPException, status
 from typing import Optional
 
+from prometheus_fastapi_instrumentator import Instrumentator
+from pythonjsonlogger import jsonlogger
+import logging
+import sys
+
+logger = logging.getLogger()
+logHandler = logging.StreamHandler(sys.stdout)
+formatter = jsonlogger.JsonFormatter('%(asctime)s %(levelname)s %(name)s %(module)s %(message)s')
+logHandler.setFormatter(formatter)
+logger.addHandler(logHandler)
+logger.setLevel(logging.INFO)
+
 mock_auth_app = FastAPI(title="Mock Auth Service", version="1.0.0")
+Instrumentator().instrument(mock_auth_app).expose(mock_auth_app)
 
 MOCK_USERS = {
     "user_token_123": {

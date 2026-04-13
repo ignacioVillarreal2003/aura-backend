@@ -10,7 +10,8 @@ _EXCLUDED_PATHS = [
     "/api/docs",
     "/api/redoc",
     "/api/openapi.json",
-    "/api/create-document/internal"
+    "/api/create-document/internal",
+    "/metrics"
 ]
 
 
