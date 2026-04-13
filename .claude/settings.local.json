@@ -7,7 +7,29 @@
       "Bash(ls -la /c/Users/albin/Desktop/aura-backend/aura-chat-service/.env*)",
       "Bash(xargs grep:*)",
       "Bash(curl -s -X POST http://localhost:8003/api/v1/chats/ -H 'Authorization: Bearer user_token_123' -H 'Content-Type: application/json' -d '{\"name\": \"Test chat\"}')",
-      "Bash(python -m json.tool)"
+      "Bash(python -m json.tool)",
+      "Bash(python -c ':*)",
+      "Bash(python -m venv .)",
+      "Bash(ls scripts/)",
+      "Bash(C:/Users/albin/Desktop/aura-backend/aura-auth-service/Scripts/python.exe --version)",
+      "Bash(C:/Users/albin/Desktop/aura-backend/aura-auth-service/Scripts/python.exe -c ':*)",
+      "Bash(C:/Users/albin/Desktop/aura-backend/aura-auth-service/.venv/Scripts/python.exe:*)",
+      "Bash(python3 -m py_compile C:/Users/albin/Desktop/aura-backend/aura-auth-service/accounts/models/audit_log.py C:/Users/albin/Desktop/aura-backend/aura-auth-service/accounts/admin_parts/utils/audit.py C:/Users/albin/Desktop/aura-backend/aura-auth-service/accounts/admin_parts/audit_admin.py C:/Users/albin/Desktop/aura-backend/aura-auth-service/accounts/api/views.py C:/Users/albin/Desktop/aura-backend/aura-auth-service/accounts/admin_parts/user_admin.py C:/Users/albin/Desktop/aura-backend/aura-auth-service/accounts/admin_parts/custom_group_admin.py C:/Users/albin/Desktop/aura-backend/aura-auth-service/accounts/admin_parts/rbac/role_admin.py C:/Users/albin/Desktop/aura-backend/aura-auth-service/accounts/admin_parts/rbac/fau_role_admin.py C:/Users/albin/Desktop/aura-backend/aura-auth-service/accounts/admin_parts/rbac/permission_admin.py C:/Users/albin/Desktop/aura-backend/aura-auth-service/accounts/admin_parts/rbac/user_role_admin.py)",
+      "Bash(docker exec:*)",
+      "Bash(docker restart aura-auth-service:*)",
+      "Bash(cat C:/Users/albin/Desktop/aura-backend/aura-auth-service/documents/services/*.py)",
+      "Bash(curl -s -u aura_root:aura_password http://localhost:15672/api/queues/%2F/document.ingestion)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f'Messages ready: {d[\\\\\"messages_ready\\\\\"]}, unacked: {d[\\\\\"messages_unacknowledged\\\\\"]}, total: {d[\\\\\"messages\\\\\"]}'\\)\")",
+      "Bash(docker stop aura-document-processing-service:*)",
+      "Bash(curl -s -u aura_root:aura_password -X DELETE http://localhost:15672/api/queues/%2F/document.ingestion/contents)",
+      "Bash(curl -s -u aura_root:aura_password -X DELETE http://localhost:15672/api/queues/%2F/aura.dead/contents)",
+      "Bash(docker start aura-document-processing-service:*)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f'Cola: ready={d[\\\\\"messages_ready\\\\\"]}, unacked={d[\\\\\"messages_unacknowledged\\\\\"]}'\\)\")",
+      "Bash(python3 -m py_compile accounts/admin_parts/forms/user_form.py accounts/admin_parts/user_admin.py accounts/admin_parts/custom_group_admin.py accounts/admin_parts/rbac/role_admin.py accounts/admin_parts/rbac/fau_role_admin.py)",
+      "Bash(python3 -m py_compile accounts/models/user.py accounts/admin_parts/forms/user_form.py accounts/admin_parts/user_admin.py)",
+      "Bash(python3 -m py_compile accounts/models/rbac.py accounts/admin_parts/rbac_admin.py accounts/admin_parts/user_admin.py)",
+      "Bash(python3 -m py_compile documents/admin.py notifications/admin/notification_admin.py)",
+      "Bash(python3 -m py_compile accounts/admin_parts/dashboard_admin.py)"
     ]
   }
 }

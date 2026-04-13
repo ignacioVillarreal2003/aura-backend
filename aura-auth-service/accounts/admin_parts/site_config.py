@@ -71,9 +71,16 @@ def _custom_get_app_list(self, request, app_label=None):
             {
                 'app_label': 'auditoria',
                 'name': 'Auditoría',
-                'app_url': '',
+                'app_url': reverse('admin:auditoria_list'),
                 'has_module_perms': True,
-                'models': [],
+                'models': [
+                    {
+                        'name': 'Registro de acciones',
+                        'object_name': 'AuditoriaList',
+                        'admin_url': reverse('admin:auditoria_list'),
+                        'view_only': True,
+                    }
+                ],
             }
         )
 

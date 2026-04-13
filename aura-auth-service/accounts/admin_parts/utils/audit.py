@@ -1,6 +1,41 @@
 """Audit helpers for accounts admin."""
 
+import logging
+
 from accounts.models import User
+
+logger = logging.getLogger(__name__)
+
+
+def log_audit(actor, action: str, entity_type: str,
+              entity_id=None, entity_label: str = None,
+              details: dict = None, source: str = 'admin') -> None:
+    """
+    Append one row to audit_log.
+
+    :param actor:        User instance or None (system action).
+    :param action:       Verb in uppercase: CREATE, UPDATE, DELETE, LOGIN, LOGOUT, etc.
+    :param entity_type:  Logical name of the affected model (e.g. 'auth_user', 'role').
+    :param entity_id:    PK of the affected record (will be coerced to str).
+    :param entity_label: Human-readable identifier cached at write time (e.g. username).
+    :param details:      Optional dict with extra context (changed fields, old values, …).
+    :param source:       'admin' | 'api' — where the action originated.
+    """
+    from accounts.models import AuditLog
+    try:
+        AuditLog.objects.create(
+            actor_id=getattr(actor, 'pk', None) if actor else None,
+            actor_username=getattr(actor, 'username', str(actor)) if actor else None,
+            action=action.upper(),
+            entity_type=entity_type,
+            entity_id=str(entity_id) if entity_id is not None else None,
+            entity_label=entity_label,
+            details=details,
+            source=source,
+        )
+    except Exception as exc:
+        # Audit failures must NEVER break the main operation.
+        logger.error('log_audit failed: %s', exc, exc_info=True)
 
 
 def _apply_audit_fields(obj, actor, is_create: bool):

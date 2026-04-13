@@ -14,6 +14,7 @@ from django.utils.translation import gettext as _
 from django.utils.html import format_html
 from django.conf import settings
 from accounts.models import CustomGroup, FauRole
+from accounts.admin_parts.utils.audit import log_audit
 from documents.models import Document
 from documents.services.document_processing_client import (
     DocumentProcessingServiceError,
@@ -115,6 +116,7 @@ class DocumentAdmin(admin.ModelAdmin):
     search_fields = ('name', 'description')
     readonly_fields = (
         'id',
+        'size_display',
         'external_document_id',
         'external_storage_url',
         'created_at',
@@ -130,7 +132,7 @@ class DocumentAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ('Información Básica', {
-            'fields': ('id', 'name', 'description', 'size_bytes'),
+            'fields': ('id', 'name', 'description', 'size_display'),
         }),
         ('Acceso', {
             'fields': ('visible_to_all', 'minimum_fau_role', 'groups'),
@@ -329,6 +331,15 @@ class DocumentAdmin(admin.ModelAdmin):
                 obj.groups.clear()
             else:
                 obj.groups.set(form.cleaned_data.get('groups'))
+            log_audit(
+                actor=request.user,
+                action='UPDATE',
+                entity_type='Document',
+                entity_id=str(obj.pk),
+                entity_label=obj.name,
+                details={'changed_fields': form.changed_data} if form.changed_data else None,
+                source='admin',
+            )
             return
 
         description = form.cleaned_data.get('description')
@@ -356,5 +367,39 @@ class DocumentAdmin(admin.ModelAdmin):
             obj.groups.clear()
         else:
             obj.groups.set(form.cleaned_data.get('groups'))
+        log_audit(
+            actor=request.user,
+            action='CREATE',
+            entity_type='Document',
+            entity_id=str(obj.pk),
+            entity_label=obj.name,
+            details={'name': obj.name, 'size_bytes': obj.size_bytes},
+            source='admin',
+        )
+
+    def delete_model(self, request, obj):
+        obj.soft_delete(deleted_by=request.user.pk)
+        log_audit(
+            actor=request.user,
+            action='DELETE',
+            entity_type='Document',
+            entity_id=str(obj.pk),
+            entity_label=obj.name,
+            details={'deleted_at': str(obj.deleted_at)},
+            source='admin',
+        )
+
+    def delete_queryset(self, request, queryset):
+        for obj in queryset:
+            obj.soft_delete(deleted_by=request.user.pk)
+            log_audit(
+                actor=request.user,
+                action='DELETE',
+                entity_type='Document',
+                entity_id=str(obj.pk),
+                entity_label=obj.name,
+                details={'deleted_at': str(obj.deleted_at)},
+                source='admin',
+            )
 
 
