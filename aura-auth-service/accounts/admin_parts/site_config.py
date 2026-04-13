@@ -52,9 +52,16 @@ def _custom_get_app_list(self, request, app_label=None):
         {
             'app_label': 'chats',
             'name': 'Gestión de Chats',
-            'app_url': '',
+            'app_url': reverse('admin:chat_list'),
             'has_module_perms': True,
-            'models': [],
+            'models': [
+                {
+                    'name': 'Todos los chats',
+                    'object_name': 'ChatList',
+                    'admin_url': reverse('admin:chat_list'),
+                    'view_only': True,
+                }
+            ],
         },
         # 'notifications' placeholder removed — real models registered via notifications app
     ]

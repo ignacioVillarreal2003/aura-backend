@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker build:*)",
+      "Bash(docker compose up:*)",
+      "Bash(docker compose build:*)",
+      "Bash(ls -la /c/Users/albin/Desktop/aura-backend/aura-chat-service/.env*)",
+      "Bash(xargs grep:*)",
+      "Bash(curl -s -X POST http://localhost:8003/api/v1/chats/ -H 'Authorization: Bearer user_token_123' -H 'Content-Type: application/json' -d '{\"name\": \"Test chat\"}')",
+      "Bash(python -m json.tool)"
+    ]
+  }
+}
