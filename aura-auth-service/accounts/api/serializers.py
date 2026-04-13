@@ -12,10 +12,6 @@ class RefreshSerializer(serializers.Serializer):
     refresh_token = serializers.UUIDField()
 
 
-class IntrospectSerializer(serializers.Serializer):
-    token = serializers.CharField()
-
-
 class LogoutSerializer(serializers.Serializer):
     refresh_token = serializers.UUIDField()
 
@@ -27,11 +23,12 @@ class TokenResponseSerializer(serializers.Serializer):
     token_type = serializers.CharField(default='Bearer')
 
 
-class IntrospectResponseSerializer(serializers.Serializer):
-    user_id = serializers.IntegerField()
+class ValidateResponseSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    email = serializers.EmailField()
+    username = serializers.CharField()
     roles = serializers.ListField(child=serializers.CharField())
     permissions = serializers.ListField(child=serializers.CharField())
-    is_super_admin = serializers.BooleanField()
 
 
 class ErrorResponseSerializer(serializers.Serializer):
@@ -40,10 +37,3 @@ class ErrorResponseSerializer(serializers.Serializer):
 
 class LogoutResponseSerializer(serializers.Serializer):
     detail = serializers.CharField()
-
-
-class MeResponseSerializer(serializers.Serializer):
-    id = serializers.IntegerField()
-    email = serializers.EmailField()
-    roles = serializers.ListField(child=serializers.CharField())
-    permissions = serializers.ListField(child=serializers.CharField())

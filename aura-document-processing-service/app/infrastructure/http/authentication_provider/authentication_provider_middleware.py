@@ -37,6 +37,9 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
             request: Request,
             call_next: Callable
     ) -> Response:
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
         if self._is_excluded(request.url.path):
             logger.debug(
                 "Skipping authentication for this path.",

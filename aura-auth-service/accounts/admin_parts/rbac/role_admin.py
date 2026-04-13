@@ -2,18 +2,9 @@
 
 from django.contrib import admin
 from django.utils.html import format_html
-from accounts.models import Role, PermissionInRole
-from accounts.admin_parts.utils.mixins import HelpTextStripMixin, HelpTextStripInlineMixin
+from accounts.models import Role
+from accounts.admin_parts.utils.mixins import HelpTextStripMixin
 from accounts.admin_parts.utils.audit import _is_super_admin_user, _is_admin_or_super_user
-
-
-class PermissionInRoleInline(HelpTextStripInlineMixin, admin.TabularInline):
-    """Inline admin for assigning permissions to roles."""
-    model = PermissionInRole
-    extra = 1
-    fields = ('permission',)
-    verbose_name = 'Permiso'
-    verbose_name_plural = 'Permisos'
 
 
 @admin.register(Role)
@@ -24,6 +15,8 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
     list_filter = ()
     search_fields = ('name', 'description')
     readonly_fields = ('id',)
+    actions = None
+    actions_selection_counter = False
 
     fieldsets = (
         ('Información Básica', {
@@ -31,7 +24,10 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
         }),
     )
 
-    inlines = [PermissionInRoleInline]
+    def get_readonly_fields(self, request, obj=None):
+        if obj:
+            return self.readonly_fields + ('name',)
+        return self.readonly_fields
 
     def has_module_permission(self, request):
         return _is_admin_or_super_user(request.user)
@@ -40,7 +36,7 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
         return _is_admin_or_super_user(request.user)
 
     def has_add_permission(self, request):
-        return _is_super_admin_user(request.user)
+        return False
 
     def has_change_permission(self, request, obj=None):
         return _is_super_admin_user(request.user)
@@ -50,7 +46,7 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
             return False
         if obj is None:
             return True
-        if obj.name in ['SUPER_ADMIN', 'ADMIN']:
+        if obj.name in ['superadmin', 'admin']:
             return False
         if request.user and obj.user_assignments.filter(
             user=request.user,
@@ -63,7 +59,7 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
         if not _is_super_admin_user(request.user):
             return
         protected = queryset.filter(
-            name__in=['SUPER_ADMIN', 'ADMIN']
+            name__in=['superadmin', 'admin']
         ) | queryset.filter(
             user_assignments__user=request.user,
             user_assignments__deleted_at__isnull=True,

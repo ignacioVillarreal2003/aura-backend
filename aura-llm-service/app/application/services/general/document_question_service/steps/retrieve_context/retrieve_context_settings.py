@@ -13,7 +13,7 @@ class RetrieveContextSettings(BaseSettings):
         extra="ignore",
     )
 
-    max_fragments: int = Field(default=12, ge=1, le=50)
+    max_fragments: int = Field(default=3, ge=1, le=50)
 
     use_rerank: bool = Field(
         default=False,

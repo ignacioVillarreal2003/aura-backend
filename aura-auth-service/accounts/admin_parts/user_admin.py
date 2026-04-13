@@ -3,7 +3,7 @@
 from django.contrib import admin
 from django.utils import timezone
 from django.utils.html import format_html
-from accounts.models import User, Role, UserRole
+from accounts.models import User, Role, UserRole, FauRole
 from accounts.admin_parts.common import (
     StatusFilter,
     CreatedDateFilter,
@@ -42,6 +42,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
         'username',
         'email',
         'roles_display',
+        'fau_role_display',
         'status_badge',
         'created_date',
         'created_by_display',
@@ -49,6 +50,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
     )
     list_filter = (
         RoleFilter,
+        ('fau_role', admin.RelatedOnlyFieldListFilter),
         StatusFilter,
         ('created_at', CreatedDateFilter),
     )
@@ -71,11 +73,14 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
 
     fieldsets = (
         ('Identidad', {
-            'fields': ('roles', 'username', 'email', 'password', 'active'),
+            'fields': ('roles', 'username', 'email', 'password', 'password2', 'active'),
         }),
         ('Grupos', {
             'fields': ('custom_groups',),
             'classes': ('groups-section',),
+        }),
+        ('Rol FAU', {
+            'fields': ('fau_role',),
         }),
     )
 
@@ -97,14 +102,19 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
         roles = obj.user_roles.filter(deleted_at__isnull=True).values_list('role__name', flat=True)
         labels = []
         for role in roles:
-            if role == 'ADMIN':
-                labels.append('Administrador')
-            elif role == 'USER':
-                labels.append('Usuario')
+            if role == 'user':
+                labels.append('USUARIO')
             else:
                 labels.append(role)
         return ', '.join(labels) if labels else '-'
     roles_display.short_description = 'Rol'
+
+    def fau_role_display(self, obj):
+        if obj.fau_role:
+            return obj.fau_role.name
+        return '-'
+    fau_role_display.short_description = 'Rol FAU'
+    fau_role_display.admin_order_field = 'fau_role__name'
 
     def created_date(self, obj):
         if obj.created_at:
@@ -137,6 +147,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
     def get_fieldsets(self, request, obj=None):
         if obj is None:
             return self.fieldsets
+        fau_section = ('Rol FAU', {'fields': ('fau_role',)})
         if _is_super_admin_user(request.user):
             return (
                 ('Identidad', {
@@ -145,6 +156,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
                 ('Grupos', {
                     'fields': ('custom_groups',),
                 }),
+                fau_section,
                 ('Auditoría', {
                     'fields': (
                         'created_by',
@@ -165,6 +177,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             ('Grupos', {
                 'fields': ('custom_groups',),
             }),
+            fau_section,
         )
 
     def get_form(self, request, obj=None, **kwargs):
@@ -176,7 +189,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             if field_name in form.base_fields:
                 form.base_fields[field_name].help_text = ''
         if obj:
-            for field_name in ('roles', 'password'):
+            for field_name in ('roles', 'password', 'password2'):
                 if field_name in form.base_fields:
                     form.base_fields.pop(field_name)
             audit_labels = {
@@ -192,11 +205,16 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             for field_name, label in audit_labels.items():
                 if field_name in form.base_fields:
                     form.base_fields[field_name].label = label
-        if not _is_super_admin_user(request.user):
+        if _is_super_admin_user(request.user):
+            if 'roles' in form.base_fields:
+                form.base_fields['roles'].queryset = Role.objects.exclude(name='superadmin')
+        else:
             if 'roles' in form.base_fields:
                 form.base_fields['roles'].queryset = Role.objects.exclude(
-                    name__in=['SUPER_ADMIN', 'ADMIN']
+                    name__in=['superadmin', 'admin']
                 )
+        if 'fau_role' in form.base_fields:
+            form.base_fields['fau_role'].queryset = FauRole.objects.order_by('-power', 'name')
         return form
 
     def get_list_filter(self, request):
@@ -207,6 +225,37 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
         return queryset.prefetch_related('user_roles__role').order_by('deleted_at', 'username')
+
+    def save_related(self, request, form, formsets, change):
+        # custom_groups is excluded from Meta to prevent a cross-DB ORM JOIN
+        # (User in auth_db, auth_user_custom_groups in aura_db). super() handles
+        # all other relations; we write the M2M rows manually here.
+        super().save_related(request, form, formsets, change)
+        if 'custom_groups' not in form.cleaned_data:
+            return
+        from django.db import connections
+        user_id = form.instance.pk
+        selected_groups = list(form.cleaned_data['custom_groups'])
+        with connections['aura_db'].cursor() as cursor:
+            if selected_groups:
+                group_ids = [str(g.pk) for g in selected_groups]
+                placeholders = ','.join(['%s::uuid'] * len(group_ids))
+                cursor.execute(
+                    f'DELETE FROM auth_user_custom_groups '
+                    f'WHERE user_id = %s AND customgroup_id NOT IN ({placeholders})',
+                    [user_id] + group_ids,
+                )
+                for gid in group_ids:
+                    cursor.execute(
+                        'INSERT INTO auth_user_custom_groups (user_id, customgroup_id) '
+                        'VALUES (%s, %s::uuid) ON CONFLICT DO NOTHING',
+                        [user_id, gid],
+                    )
+            else:
+                cursor.execute(
+                    'DELETE FROM auth_user_custom_groups WHERE user_id = %s',
+                    [user_id],
+                )
 
     def has_add_permission(self, request):
         if _is_admin_or_super_user(request.user):
@@ -262,7 +311,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
                 selected_roles.append(selected_role)
             if not _is_super_admin_user(request.user):
                 protected_roles = Role.objects.filter(
-                    name__in=['SUPER_ADMIN', 'ADMIN'],
+                    name__in=['superadmin', 'admin'],
                     user_assignments__user=obj,
                     user_assignments__deleted_at__isnull=True,
                 )

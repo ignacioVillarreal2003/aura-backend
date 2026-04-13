@@ -1,0 +1,340 @@
+INFO 2026-04-04 18:30:38,257 autoreload 20840 13172 Watching for file changes with StatReloader
+WARNING 2026-04-04 18:39:48,048 log 20840 12068 Unauthorized: /api/notifications/
+WARNING 2026-04-04 18:39:48,050 basehttp 20840 12068 "GET /api/notifications/ HTTP/1.1" 401 38
+WARNING 2026-04-04 18:40:27,672 log 20840 12068 Unauthorized: /api/notifications/
+WARNING 2026-04-04 18:40:27,672 basehttp 20840 12068 "GET /api/notifications/ HTTP/1.1" 401 38
+WARNING 2026-04-04 18:43:17,458 log 20840 13612 Unauthorized: /api/notifications/
+WARNING 2026-04-04 18:43:17,458 basehttp 20840 13612 "POST /api/notifications/ HTTP/1.1" 401 38
+INFO 2026-04-04 20:45:18,692 autoreload 24072 28988 Watching for file changes with StatReloader
+INFO 2026-04-04 21:01:45,352 basehttp 24072 31972 "POST /api/notifications/ HTTP/1.1" 201 212
+INFO 2026-04-04 21:02:30,276 basehttp 24072 31972 "POST /api/notifications/ HTTP/1.1" 201 199
+INFO 2026-04-04 21:30:49,975 autoreload 24072 28988 C:\Users\albin\Desktop\aura-backend\aura-notification-service\notifications\models\notification.py changed, reloading.
+INFO 2026-04-04 21:30:51,401 autoreload 22568 1088 Watching for file changes with StatReloader
+INFO 2026-04-04 21:30:53,643 autoreload 22568 1088 C:\Users\albin\Desktop\aura-backend\aura-notification-service\notifications\models\preference.py changed, reloading.
+INFO 2026-04-04 21:30:54,476 autoreload 16548 35736 Watching for file changes with StatReloader
+INFO 2026-04-04 21:31:09,209 autoreload 16548 35736 C:\Users\albin\Desktop\aura-backend\aura-notification-service\notifications\migrations\0001_initial.py changed, reloading.
+INFO 2026-04-04 21:31:10,131 autoreload 8560 8076 Watching for file changes with StatReloader
+WARNING 2026-04-04 21:57:58,710 log 8560 35900 Unauthorized: /api/notifications/
+WARNING 2026-04-04 21:57:58,712 basehttp 8560 35900 "POST /api/notifications/ HTTP/1.1" 401 38
+WARNING 2026-04-04 21:58:48,526 log 8560 35900 Unauthorized: /api/notifications/
+WARNING 2026-04-04 21:58:48,528 basehttp 8560 35900 "POST /api/notifications/ HTTP/1.1" 401 38
+WARNING 2026-04-04 21:59:01,625 log 8560 35900 Unauthorized: /api/notifications/
+WARNING 2026-04-04 21:59:01,626 basehttp 8560 35900 "POST /api/notifications/ HTTP/1.1" 401 38
+INFO 2026-04-06 16:20:50,755 autoreload 31784 5176 Watching for file changes with StatReloader
+INFO 2026-04-06 16:21:24,776 autoreload 36856 5164 Watching for file changes with StatReloader
+WARNING 2026-04-06 16:21:58,538 log 36856 20432 Not Found: /
+WARNING 2026-04-06 16:21:58,538 basehttp 36856 20432 "GET / HTTP/1.1" 404 2824
+WARNING 2026-04-06 16:21:59,628 log 36856 20432 Not Found: /favicon.ico
+WARNING 2026-04-06 16:21:59,629 basehttp 36856 20432 "GET /favicon.ico HTTP/1.1" 404 2875
+INFO 2026-04-06 16:41:42,937 autoreload 36856 5164 C:\Users\albin\Desktop\aura-backend\aura-notification-service\notifications\models\__init__.py changed, reloading.
+INFO 2026-04-06 16:41:43,570 autoreload 6952 7140 Watching for file changes with StatReloader
+INFO 2026-04-06 16:41:49,129 autoreload 6952 7140 C:\Users\albin\Desktop\aura-backend\aura-notification-service\notifications\models\notification.py changed, reloading.
+INFO 2026-04-06 16:41:49,662 autoreload 21960 16516 Watching for file changes with StatReloader
+INFO 2026-04-06 16:45:22,801 autoreload 21960 16516 C:\Users\albin\Desktop\aura-backend\aura-notification-service\notifications\admin.py changed, reloading.
+INFO 2026-04-06 16:45:23,291 autoreload 29216 21916 Watching for file changes with StatReloader
+INFO 2026-04-06 16:55:47,832 autoreload 29216 21916 C:\Users\albin\Desktop\aura-backend\aura-notification-service\notificationservice\settings.py changed, reloading.
+INFO 2026-04-06 16:55:48,261 autoreload 12956 11728 Watching for file changes with StatReloader
+INFO 2026-04-06 16:56:09,179 autoreload 12956 11728 C:\Users\albin\Desktop\aura-backend\aura-notification-service\notifications\api\views.py changed, reloading.
+INFO 2026-04-06 16:56:09,682 autoreload 32508 14984 Watching for file changes with StatReloader
+INFO 2026-04-06 16:56:14,298 autoreload 32508 14984 C:\Users\albin\Desktop\aura-backend\aura-notification-service\notifications\api\urls.py changed, reloading.
+INFO 2026-04-06 16:56:14,761 autoreload 22728 18016 Watching for file changes with StatReloader
+INFO 2026-04-06 16:57:02,273 autoreload 22728 18016 C:\Users\albin\Desktop\aura-backend\aura-notification-service\notifications\api\serializers.py changed, reloading.
+INFO 2026-04-06 16:57:02,785 autoreload 9036 30280 Watching for file changes with StatReloader
+INFO 2026-04-06 16:57:06,399 autoreload 9036 30280 C:\Users\albin\Desktop\aura-backend\aura-notification-service\notifications\api\views.py changed, reloading.
+INFO 2026-04-06 16:57:06,869 autoreload 34444 20548 Watching for file changes with StatReloader
+INFO 2026-04-06 17:04:15,468 autoreload 2276 7524 Watching for file changes with StatReloader
+INFO 2026-04-06 17:06:28,235 basehttp 2276 10584 "POST /api/internal/notifications/admin-create/ HTTP/1.1" 201 248
+INFO 2026-04-06 17:07:31,608 autoreload 2276 7524 C:\Users\albin\Desktop\aura-backend\aura-notification-service\notifications\models\__init__.py changed, reloading.
+INFO 2026-04-06 17:07:32,034 autoreload 33296 35216 Watching for file changes with StatReloader
+INFO 2026-04-07 16:17:03,307 autoreload 24256 14660 Watching for file changes with StatReloader
+INFO 2026-04-07 16:23:23,918 autoreload 3728 21208 Watching for file changes with StatReloader
+WARNING 2026-04-07 16:23:27,087 log 3728 8468 Not Found: /
+WARNING 2026-04-07 16:23:27,088 basehttp 3728 8468 "GET / HTTP/1.1" 404 2824
+WARNING 2026-04-07 16:23:28,258 log 3728 8468 Not Found: /favicon.ico
+WARNING 2026-04-07 16:23:28,258 basehttp 3728 8468 "GET /favicon.ico HTTP/1.1" 404 2875
+INFO 2026-04-07 16:23:31,098 basehttp 3728 8468 "GET /api/docs HTTP/1.1" 301 0
+ERROR 2026-04-07 16:23:31,370 log 3728 33748 Internal Server Error: /api/docs/
+Traceback (most recent call last):
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\contrib\sessions\backends\base.py", line 244, in _get_session
+    return self._session_cache
+           ^^^^^^^^^^^^^^^^^^^
+AttributeError: 'SessionStore' object has no attribute '_session_cache'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\db\backends\utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedTable: relation "django_session" does not exist
+LINE 1: ...ession_data", "django_session"."expire_date" FROM "django_se...
+                                                             ^
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\views\generic\base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\rest_framework\views.py", line 497, in dispatch
+    self.initial(request, *args, **kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\rest_framework\views.py", line 414, in initial
+    self.perform_authentication(request)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\rest_framework\views.py", line 324, in perform_authentication
+    request.user
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\rest_framework\request.py", line 227, in user
+    self._authenticate()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\rest_framework\request.py", line 380, in _authenticate
+    user_auth_tuple = authenticator.authenticate(self)
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\rest_framework\authentication.py", line 127, in authenticate
+    if not user or not user.is_active:
+           ^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\utils\functional.py", line 251, in inner
+    self._setup()
+    ~~~~~~~~~~~^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\utils\functional.py", line 404, in _setup
+    self._wrapped = self._setupfunc()
+                    ~~~~~~~~~~~~~~~^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\contrib\auth\middleware.py", line 37, in <lambda>
+    request.user = SimpleLazyObject(lambda: get_user(request))
+                                            ~~~~~~~~^^^^^^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\contrib\auth\middleware.py", line 17, in get_user
+    request._cached_user = auth.get_user(request)
+                           ~~~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\contrib\auth\__init__.py", line 209, in get_user
+    user_id = _get_user_session_key(request)
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\contrib\auth\__init__.py", line 62, in _get_user_session_key
+    return get_user_model()._meta.pk.to_python(request.session[SESSION_KEY])
+                                               ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\contrib\sessions\backends\base.py", line 55, in __getitem__
+    return self._session[key]
+           ^^^^^^^^^^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\contrib\sessions\backends\base.py", line 249, in _get_session
+    self._session_cache = self.load()
+                          ~~~~~~~~~^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\contrib\sessions\backends\db.py", line 55, in load
+    s = self._get_session_from_db()
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\contrib\sessions\backends\db.py", line 34, in _get_session_from_db
+    return self.model.objects.get(
+           ~~~~~~~~~~~~~~~~~~~~~~^
+        session_key=self.session_key, expire_date__gt=timezone.now()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\db\models\manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\db\models\query.py", line 645, in get
+    num = len(clone)
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\db\models\query.py", line 382, in __len__
+    self._fetch_all()
+    ~~~~~~~~~~~~~~~^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\db\models\query.py", line 1928, in _fetch_all
+    self._result_cache = list(self._iterable_class(self))
+                         ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\db\models\query.py", line 91, in __iter__
+    results = compiler.execute_sql(
+        chunked_fetch=self.chunked_fetch, chunk_size=self.chunk_size
+    )
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\db\models\sql\compiler.py", line 1574, in execute_sql
+    cursor.execute(sql, params)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\db\backends\utils.py", line 122, in execute
+    return super().execute(sql, params)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\db\backends\utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        sql, params, many=False, executor=self._execute
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\db\backends\utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\db\backends\utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\db\utils.py", line 91, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\db\backends\utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+django.db.utils.ProgrammingError: relation "django_session" does not exist
+LINE 1: ...ession_data", "django_session"."expire_date" FROM "django_se...
+                                                             ^
+
+ERROR 2026-04-07 16:23:31,379 basehttp 3728 33748 "GET /api/docs/ HTTP/1.1" 500 225688
+INFO 2026-04-07 16:24:10,192 autoreload 8944 13956 Watching for file changes with StatReloader
+ERROR 2026-04-07 16:24:43,440 log 8944 35860 Internal Server Error: /api/docs/
+Traceback (most recent call last):
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\contrib\sessions\backends\base.py", line 244, in _get_session
+    return self._session_cache
+           ^^^^^^^^^^^^^^^^^^^
+AttributeError: 'SessionStore' object has no attribute '_session_cache'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\db\backends\utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.UndefinedTable: relation "django_session" does not exist
+LINE 1: ...ession_data", "django_session"."expire_date" FROM "django_se...
+                                                             ^
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\views\generic\base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\rest_framework\views.py", line 497, in dispatch
+    self.initial(request, *args, **kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\rest_framework\views.py", line 414, in initial
+    self.perform_authentication(request)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\rest_framework\views.py", line 324, in perform_authentication
+    request.user
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\rest_framework\request.py", line 227, in user
+    self._authenticate()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\rest_framework\request.py", line 380, in _authenticate
+    user_auth_tuple = authenticator.authenticate(self)
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\rest_framework\authentication.py", line 127, in authenticate
+    if not user or not user.is_active:
+           ^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\utils\functional.py", line 251, in inner
+    self._setup()
+    ~~~~~~~~~~~^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\utils\functional.py", line 404, in _setup
+    self._wrapped = self._setupfunc()
+                    ~~~~~~~~~~~~~~~^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\contrib\auth\middleware.py", line 37, in <lambda>
+    request.user = SimpleLazyObject(lambda: get_user(request))
+                                            ~~~~~~~~^^^^^^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\contrib\auth\middleware.py", line 17, in get_user
+    request._cached_user = auth.get_user(request)
+                           ~~~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\contrib\auth\__init__.py", line 209, in get_user
+    user_id = _get_user_session_key(request)
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\contrib\auth\__init__.py", line 62, in _get_user_session_key
+    return get_user_model()._meta.pk.to_python(request.session[SESSION_KEY])
+                                               ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\contrib\sessions\backends\base.py", line 55, in __getitem__
+    return self._session[key]
+           ^^^^^^^^^^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\contrib\sessions\backends\base.py", line 249, in _get_session
+    self._session_cache = self.load()
+                          ~~~~~~~~~^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\contrib\sessions\backends\db.py", line 55, in load
+    s = self._get_session_from_db()
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\contrib\sessions\backends\db.py", line 34, in _get_session_from_db
+    return self.model.objects.get(
+           ~~~~~~~~~~~~~~~~~~~~~~^
+        session_key=self.session_key, expire_date__gt=timezone.now()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\db\models\manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\db\models\query.py", line 645, in get
+    num = len(clone)
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\db\models\query.py", line 382, in __len__
+    self._fetch_all()
+    ~~~~~~~~~~~~~~~^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\db\models\query.py", line 1928, in _fetch_all
+    self._result_cache = list(self._iterable_class(self))
+                         ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\db\models\query.py", line 91, in __iter__
+    results = compiler.execute_sql(
+        chunked_fetch=self.chunked_fetch, chunk_size=self.chunk_size
+    )
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\db\models\sql\compiler.py", line 1574, in execute_sql
+    cursor.execute(sql, params)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\db\backends\utils.py", line 122, in execute
+    return super().execute(sql, params)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\db\backends\utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        sql, params, many=False, executor=self._execute
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\db\backends\utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\db\backends\utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\db\utils.py", line 91, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "C:\Users\albin\Desktop\aura-backend\aura-auth-service\.venv\Lib\site-packages\django\db\backends\utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+django.db.utils.ProgrammingError: relation "django_session" does not exist
+LINE 1: ...ession_data", "django_session"."expire_date" FROM "django_se...
+                                                             ^
+
+ERROR 2026-04-07 16:24:43,448 basehttp 8944 35860 "GET /api/docs/ HTTP/1.1" 500 225688
+WARNING 2026-04-07 16:24:44,631 log 8944 35860 Not Found: /favicon.ico
+WARNING 2026-04-07 16:24:44,632 basehttp 8944 35860 "GET /favicon.ico HTTP/1.1" 404 2875
+INFO 2026-04-07 16:31:59,351 autoreload 23796 31012 Watching for file changes with StatReloader
+WARNING 2026-04-07 16:32:07,580 log 23796 19544 Not Found: /
+WARNING 2026-04-07 16:32:07,581 basehttp 23796 19544 "GET / HTTP/1.1" 404 2824
+INFO 2026-04-07 16:32:25,746 basehttp 23796 19544 "GET /api/docs HTTP/1.1" 301 0
+INFO 2026-04-07 16:32:25,813 basehttp 23796 13956 "GET /api/docs/ HTTP/1.1" 200 4662
+INFO 2026-04-07 16:32:25,953 basehttp 23796 13956 "GET /api/schema/ HTTP/1.1" 200 21217
+INFO 2026-04-07 16:37:06,923 autoreload 7940 17288 Watching for file changes with StatReloader
+INFO 2026-04-07 18:26:00,011 autoreload 27016 21380 Watching for file changes with StatReloader
+INFO 2026-04-08 18:13:43,384 autoreload 11132 34408 Watching for file changes with StatReloader
+INFO 2026-04-08 18:14:08,274 basehttp 11132 16736 "POST /api/internal/notifications/admin-create/ HTTP/1.1" 201 541
+INFO 2026-04-08 18:14:34,325 basehttp 11132 8860 "POST /api/internal/notifications/admin-create/ HTTP/1.1" 201 1777
+INFO 2026-04-10 16:09:04,747 autoreload 8400 8876 Watching for file changes with StatReloader
+INFO 2026-04-10 16:19:12,532 basehttp 8400 2704 "POST /api/internal/notifications/admin-create/ HTTP/1.1" 201 264
+INFO 2026-04-10 16:19:16,742 basehttp 8400 16852 "POST /api/internal/notifications/admin-create/ HTTP/1.1" 201 264
+INFO 2026-04-10 16:19:36,152 basehttp 8400 15304 "POST /api/internal/notifications/admin-create/ HTTP/1.1" 201 2369
+INFO 2026-04-11 17:58:45,459 autoreload 4496 276 Watching for file changes with StatReloader
+WARNING 2026-04-11 18:00:52,285 log 4496 9864 Unauthorized: /api/notifications/
+WARNING 2026-04-11 18:00:52,286 basehttp 4496 9864 "GET /api/notifications/ HTTP/1.1" 401 38
+ERROR 2026-04-11 18:07:09,893 auth_client 4496 33388 Auth service introspect failed: HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=5)
+WARNING 2026-04-11 18:07:09,894 log 4496 33388 Unauthorized: /api/notifications/
+WARNING 2026-04-11 18:07:09,895 basehttp 4496 33388 "GET /api/notifications/ HTTP/1.1" 401 38
+INFO 2026-04-11 18:08:49,331 autoreload 31132 30176 Watching for file changes with StatReloader
+INFO 2026-04-11 18:09:29,632 basehttp 31132 32972 "POST /api/internal/notifications/admin-create/ HTTP/1.1" 201 682
+INFO 2026-04-11 18:10:00,705 basehttp 31132 13144 "POST /api/internal/notifications/admin-create/ HTTP/1.1" 201 1943
+INFO 2026-04-11 18:10:56,187 basehttp 31132 32344 "POST /api/internal/notifications/admin-create/ HTTP/1.1" 201 467
+INFO 2026-04-11 18:11:07,581 basehttp 31132 12440 "POST /api/internal/notifications/admin-create/ HTTP/1.1" 201 437

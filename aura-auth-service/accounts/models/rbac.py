@@ -19,8 +19,9 @@ class Role(models.Model):
 
     class Meta:
         db_table = 'role'
-        verbose_name = 'Rol'
-        verbose_name_plural = 'Roles'
+        managed = False
+        verbose_name = 'Rol de sistema'
+        verbose_name_plural = 'Roles de sistema'
 
     def __str__(self):
         return self.name
@@ -43,6 +44,7 @@ class Permission(models.Model):
 
     class Meta:
         db_table = 'permission'
+        managed = False
         verbose_name = 'Permiso'
         verbose_name_plural = 'Permisos'
 
@@ -89,6 +91,7 @@ class UserRole(models.Model):
 
     class Meta:
         db_table = 'auth_user_in_role'
+        managed = False
         verbose_name = 'Rol de Usuario'
         verbose_name_plural = 'Roles de Usuario'
 
@@ -119,8 +122,64 @@ class PermissionInRole(models.Model):
 
     class Meta:
         db_table = 'permission_in_role'
+        managed = False
         verbose_name = 'Permiso de Rol'
         verbose_name_plural = 'Permisos de Rol'
 
     def __str__(self):
         return f"{self.role.name} -> {self.permission.name}"
+
+
+class FauRole(models.Model):
+    """FAU role catalog (e.g., General, Capitán, Cabo)."""
+
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=255, unique=True, verbose_name='Nombre')
+    description = models.CharField(max_length=255, blank=True, verbose_name='Descripción')
+    power = models.PositiveIntegerField(
+        unique=True,
+        null=True,
+        blank=True,
+        verbose_name='Nivel de poder',
+        help_text='Número único que define la jerarquía (mayor número = mayor poder).',
+    )
+
+    class Meta:
+        db_table = 'fau_role'
+        managed = False
+        verbose_name = 'Rol FAU'
+        verbose_name_plural = 'Roles FAU'
+        ordering = ['power']
+
+    def __str__(self):
+        return self.name
+
+
+class PermissionInFauRole(models.Model):
+    """FAU role-permission relationship."""
+
+    id = models.AutoField(primary_key=True)
+    fau_role = models.ForeignKey(
+        FauRole,
+        on_delete=models.PROTECT,
+        related_name='permission_links',
+        db_column='fau_role_id',
+        verbose_name='Rol FAU',
+    )
+    permission = models.ForeignKey(
+        Permission,
+        on_delete=models.PROTECT,
+        related_name='fau_role_links',
+        db_column='permission_id',
+        verbose_name='Permiso',
+    )
+
+    class Meta:
+        db_table = 'permission_in_fau_role'
+        managed = False
+        verbose_name = 'Permiso de Rol FAU'
+        verbose_name_plural = 'Permisos de Rol FAU'
+        unique_together = [('fau_role', 'permission')]
+
+    def __str__(self):
+        return f"{self.fau_role.name} -> {self.permission.name}"

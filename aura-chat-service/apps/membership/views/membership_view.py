@@ -1,0 +1,148 @@
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
+from rest_framework import serializers, status
+from rest_framework.request import Request
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from apps.membership.serializers.request import AddMemberRequest, UpdateMemberRequest
+from apps.membership.serializers.response import MembershipResponse
+from apps.membership.services.membership_service import membership_service
+from core.pagination.pagination import StandardPagination
+
+
+class MemberListView(APIView):
+
+    @extend_schema(
+        tags=["Memberships"],
+        summary="List members",
+        parameters=[
+            OpenApiParameter(
+                name="chat_id",
+                type=int,
+                location=OpenApiParameter.PATH,
+                required=True,
+            ),
+        ],
+        responses={200: MembershipResponse(many=True)},
+    )
+    def get(self, request: Request, chat_id: int) -> Response:
+        members = membership_service.list_members(
+            user=request.user, chat_id=chat_id
+        )
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(members, request)
+        return paginator.get_paginated_response(
+            MembershipResponse(page, many=True).data
+        )
+
+    @extend_schema(
+        tags=["Memberships"],
+        summary="Invite members",
+        parameters=[
+            OpenApiParameter(
+                name="chat_id",
+                type=int,
+                location=OpenApiParameter.PATH,
+                required=True,
+            ),
+        ],
+        request=AddMemberRequest,
+        responses={201: MembershipResponse(many=True)},
+    )
+    def post(self, request: Request, chat_id: int) -> Response:
+        serializer = AddMemberRequest(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        memberships = membership_service.add_members(
+            user=request.user,
+            chat_id=chat_id,
+            member_ids=serializer.validated_data["member_ids"],
+        )
+        return Response(
+            MembershipResponse(memberships, many=True).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class MemberDetailView(APIView):
+
+    @extend_schema(
+        tags=["Memberships"],
+        summary="Update member status",
+        parameters=[
+            OpenApiParameter(
+                name="chat_id",
+                type=int,
+                location=OpenApiParameter.PATH,
+                required=True,
+            ),
+            OpenApiParameter(
+                name="member_id",
+                type=int,
+                location=OpenApiParameter.PATH,
+                required=True,
+            ),
+        ],
+        request=UpdateMemberRequest,
+        responses={200: MembershipResponse},
+    )
+    def patch(self, request: Request, chat_id: int, member_id: int) -> Response:
+        serializer = UpdateMemberRequest(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        membership = membership_service.update_member(
+            user=request.user,
+            chat_id=chat_id,
+            member_id=member_id,
+            new_status=serializer.validated_data["status"],
+        )
+        return Response(MembershipResponse(membership).data)
+
+    @extend_schema(
+        tags=["Memberships"],
+        summary="Remove member",
+        parameters=[
+            OpenApiParameter(
+                name="chat_id",
+                type=int,
+                location=OpenApiParameter.PATH,
+                required=True,
+            ),
+            OpenApiParameter(
+                name="member_id",
+                type=int,
+                location=OpenApiParameter.PATH,
+                required=True,
+            ),
+        ],
+        responses={204: OpenApiResponse(description="No content")},
+    )
+    def delete(self, request: Request, chat_id: int, member_id: int) -> Response:
+        membership_service.remove_member(
+            user=request.user,
+            chat_id=chat_id,
+            member_id=member_id,
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class LeaveChatView(APIView):
+    http_method_names = ["post"]
+    serializer_class = serializers.Serializer
+
+    @extend_schema(
+        tags=["Memberships"],
+        summary="Leave chat",
+        parameters=[
+            OpenApiParameter(
+                name="chat_id",
+                type=int,
+                location=OpenApiParameter.PATH,
+                required=True,
+            ),
+        ],
+        responses={204: OpenApiResponse(description="No content")},
+    )
+    def post(self, request: Request, chat_id: int) -> Response:
+        membership_service.leave_chat(user=request.user, chat_id=chat_id)
+        return Response(status=status.HTTP_204_NO_CONTENT)

@@ -26,7 +26,7 @@ class UserRoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
     readonly_fields = ('id', 'created_at', 'created_by', 'deleted_at', 'deleted_by')
 
     def has_module_permission(self, request):
-        return _is_admin_or_super_user(request.user)
+        return False
 
     fieldsets = (
         ('Asignación', {
@@ -78,7 +78,7 @@ class UserRoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
         if db_field.name == 'user' and not _is_super_admin_user(request.user):
             kwargs['queryset'] = User.objects.filter(status='active', deleted_at__isnull=True)
         if db_field.name == 'role' and not _is_super_admin_user(request.user):
-            kwargs['queryset'] = Role.objects.exclude(name__in=['SUPER_ADMIN', 'ADMIN'])
+            kwargs['queryset'] = Role.objects.exclude(name__in=['superadmin', 'admin'])
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     def save_model(self, request, obj, form, change):
