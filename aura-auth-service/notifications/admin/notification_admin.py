@@ -10,6 +10,7 @@ from django.utils.html import format_html
 
 from accounts.models import User
 from accounts.admin_parts.common import _is_admin_or_super_user, _is_super_admin_user
+from accounts.admin_parts.utils.audit import log_audit
 from notifications.models import (
     Notification,
     NotificationType,
@@ -123,10 +124,36 @@ class BaseNotificationAdmin(admin.ModelAdmin):
 
     def delete_model(self, request, obj):
         obj.soft_delete(deleted_by=request.user.pk)
+        log_audit(
+            actor=request.user,
+            action='DELETE',
+            entity_type='Notification',
+            entity_id=str(obj.pk),
+            entity_label=obj.message[:80],
+            details={
+                'receiver_id': obj.receiver_id,
+                'target_scope': obj.target_scope,
+                'deleted_at': str(obj.deleted_at),
+            },
+            source='admin',
+        )
 
     def delete_queryset(self, request, queryset):
         for obj in queryset:
             obj.soft_delete(deleted_by=request.user.pk)
+            log_audit(
+                actor=request.user,
+                action='DELETE',
+                entity_type='Notification',
+                entity_id=str(obj.pk),
+                entity_label=obj.message[:80],
+                details={
+                    'receiver_id': obj.receiver_id,
+                    'target_scope': obj.target_scope,
+                    'deleted_at': str(obj.deleted_at),
+                },
+                source='admin',
+            )
 
     def get_urls(self):
         urls = super().get_urls()
@@ -178,6 +205,20 @@ class IndividualNotificationAdmin(BaseNotificationAdmin):
                     self.message_user(
                         request,
                         f"Se enviaron {result.get('created', 0)} notificación(es) correctamente.",
+                    )
+                    log_audit(
+                        actor=request.user,
+                        action='CREATE',
+                        entity_type='Notification',
+                        entity_label=message[:80],
+                        details={
+                            'receiver_ids': receiver_ids,
+                            'message': message,
+                            'type': NotificationType.ADMIN,
+                            'target_scope': 'individual',
+                            'created': result.get('created', 0),
+                        },
+                        source='admin',
                     )
                     return HttpResponseRedirect(reverse('admin:notifications_individualnotification_changelist'))
                 except NotificationServiceError as exc:
@@ -231,6 +272,21 @@ class GroupNotificationAdmin(BaseNotificationAdmin):
                     self.message_user(
                         request,
                         f"Se enviaron {result.get('created', 0)} notificación(es) grupales.",
+                    )
+                    log_audit(
+                        actor=request.user,
+                        action='CREATE',
+                        entity_type='Notification',
+                        entity_label=message[:80],
+                        details={
+                            'target_label': target_label,
+                            'receiver_ids': target_user_ids,
+                            'message': message,
+                            'type': NotificationType.ADMIN,
+                            'target_scope': 'group',
+                            'created': result.get('created', 0),
+                        },
+                        source='admin',
                     )
                     return HttpResponseRedirect(reverse('admin:notifications_groupnotification_changelist'))
                 except NotificationServiceError as exc:

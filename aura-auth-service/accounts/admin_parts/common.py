@@ -6,6 +6,7 @@ from accounts.admin_parts.utils.audit import (
     _is_super_admin_user,
     _is_admin_user,
     _is_admin_or_super_user,
+    log_audit,
 )
 from accounts.admin_parts.utils.mixins import HelpTextStripInlineMixin, HelpTextStripMixin
 
@@ -16,6 +17,7 @@ __all__ = [
     '_is_super_admin_user',
     '_is_admin_user',
     '_is_admin_or_super_user',
+    'log_audit',
     'HelpTextStripInlineMixin',
     'HelpTextStripMixin',
 ]

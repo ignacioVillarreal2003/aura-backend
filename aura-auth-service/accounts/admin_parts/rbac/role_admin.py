@@ -1,16 +1,40 @@
 """Role admin configuration."""
 
+from django import forms
 from django.contrib import admin
+from django.contrib.admin.widgets import FilteredSelectMultiple
 from django.utils.html import format_html
-from accounts.models import Role
+from accounts.models import Role, Permission, PermissionInRole
 from accounts.admin_parts.utils.mixins import HelpTextStripMixin
-from accounts.admin_parts.utils.audit import _is_super_admin_user, _is_admin_or_super_user
+from accounts.admin_parts.utils.audit import _is_super_admin_user, _is_admin_or_super_user, log_audit
+
+
+class RoleAdminForm(forms.ModelForm):
+    permissions = forms.ModelMultipleChoiceField(
+        queryset=Permission.objects.order_by('name'),
+        required=False,
+        widget=FilteredSelectMultiple('Permisos', is_stacked=False),
+        label='Permisos',
+    )
+
+    class Meta:
+        model = Role
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            self.initial['permissions'] = list(
+                PermissionInRole.objects.filter(role=self.instance)
+                .values_list('permission_id', flat=True)
+            )
 
 
 @admin.register(Role)
 class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
     """Admin for Role model."""
 
+    form = RoleAdminForm
     list_display = ('name', 'description_short', 'permission_count')
     list_filter = ()
     search_fields = ('name', 'description')
@@ -21,6 +45,9 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
     fieldsets = (
         ('Información Básica', {
             'fields': ('id', 'name', 'description'),
+        }),
+        ('Permisos', {
+            'fields': ('permissions',),
         }),
     )
 
@@ -55,6 +82,45 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
             return False
         return True
 
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        if 'permissions' not in form.cleaned_data:
+            return
+        selected = {p.pk for p in form.cleaned_data['permissions']}
+        existing = set(
+            PermissionInRole.objects.filter(role=form.instance)
+            .values_list('permission_id', flat=True)
+        )
+        to_remove = existing - selected
+        to_add = selected - existing
+        if to_remove:
+            PermissionInRole.objects.filter(role=form.instance, permission_id__in=to_remove).delete()
+        for perm_id in to_add:
+            PermissionInRole.objects.create(role=form.instance, permission_id=perm_id)
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        action = 'UPDATE' if change else 'CREATE'
+        details = {'changed_fields': form.changed_data} if change and form.changed_data else None
+        log_audit(
+            actor=request.user,
+            action=action,
+            entity_type='role',
+            entity_id=obj.pk,
+            entity_label=obj.name,
+            details=details,
+        )
+
+    def delete_model(self, request, obj):
+        log_audit(
+            actor=request.user,
+            action='DELETE',
+            entity_type='role',
+            entity_id=obj.pk,
+            entity_label=obj.name,
+        )
+        super().delete_model(request, obj)
+
     def delete_queryset(self, request, queryset):
         if not _is_super_admin_user(request.user):
             return
@@ -65,6 +131,14 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
             user_assignments__deleted_at__isnull=True,
         )
         safe_queryset = queryset.exclude(id__in=protected.values_list('id', flat=True))
+        for obj in safe_queryset:
+            log_audit(
+                actor=request.user,
+                action='DELETE',
+                entity_type='role',
+                entity_id=obj.pk,
+                entity_label=obj.name,
+            )
         super().delete_queryset(request, safe_queryset)
 
     def description_short(self, obj):

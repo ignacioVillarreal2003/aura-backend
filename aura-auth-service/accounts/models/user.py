@@ -203,12 +203,6 @@ class User(AbstractBaseUser):
         verbose_name='Eliminado por',
     )
     deleted_at = models.DateTimeField(null=True, blank=True, verbose_name='Fecha eliminado')
-    custom_groups = models.ManyToManyField(
-        'CustomGroup',
-        blank=True,
-        related_name='users',
-        verbose_name='Grupos',
-    )
     fau_role = models.ForeignKey(
         'FauRole',
         on_delete=models.SET_NULL,

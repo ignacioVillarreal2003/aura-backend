@@ -11,6 +11,7 @@ from accounts.admin_parts.common import (
     _apply_audit_fields,
     _is_super_admin_user,
     _is_admin_or_super_user,
+    log_audit,
 )
 from accounts.admin_parts.forms.user_form import UserAdminForm
 
@@ -73,7 +74,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
 
     fieldsets = (
         ('Identidad', {
-            'fields': ('roles', 'username', 'email', 'password', 'password2', 'active'),
+            'fields': ('roles', 'username', 'email', 'password', 'active'),
         }),
         ('Grupos', {
             'fields': ('custom_groups',),
@@ -103,7 +104,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
         labels = []
         for role in roles:
             if role == 'user':
-                labels.append('USUARIO')
+                labels.append('user')
             else:
                 labels.append(role)
         return ', '.join(labels) if labels else '-'
@@ -189,7 +190,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             if field_name in form.base_fields:
                 form.base_fields[field_name].help_text = ''
         if obj:
-            for field_name in ('roles', 'password', 'password2'):
+            for field_name in ('roles', 'password'):
                 if field_name in form.base_fields:
                     form.base_fields.pop(field_name)
             audit_labels = {
@@ -224,12 +225,17 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        return queryset.prefetch_related('user_roles__role').order_by('deleted_at', 'username')
+        return (
+            queryset
+            .filter(deleted_at__isnull=True)
+            .prefetch_related('user_roles__role')
+            .order_by('username')
+        )
 
     def save_related(self, request, form, formsets, change):
-        # custom_groups is excluded from Meta to prevent a cross-DB ORM JOIN
-        # (User in auth_db, auth_user_custom_groups in aura_db). super() handles
-        # all other relations; we write the M2M rows manually here.
+        # custom_groups is a manual cross-DB form field (not a model field).
+        # User lives in auth_db; auth_user_custom_groups lives in aura_db.
+        # super() handles all other relations; we write those rows manually here.
         super().save_related(request, form, formsets, change)
         if 'custom_groups' not in form.cleaned_data:
             return
@@ -288,8 +294,6 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             return False
         return bool(request.user and request.user.is_staff)
 
-    filter_horizontal = ('custom_groups',)
-
     class Media:
         js = ('accounts/admin/user_password.js', 'accounts/admin/user_form.js')
 
@@ -304,6 +308,16 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             obj.status = 'active' if form.cleaned_data['active'] else 'inactive'
         _apply_audit_fields(obj, request.user, is_create=not change)
         super().save_model(request, obj, form, change)
+        action = 'UPDATE' if change else 'CREATE'
+        details = {'changed_fields': form.changed_data} if change and form.changed_data else None
+        log_audit(
+            actor=request.user,
+            action=action,
+            entity_type='auth_user',
+            entity_id=obj.pk,
+            entity_label=obj.username,
+            details=details,
+        )
         if 'roles' in form.cleaned_data:
             selected_roles = []
             selected_role = form.cleaned_data['roles']
@@ -338,8 +352,32 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
                 UserRole.objects.bulk_create(to_create)
 
     def delete_model(self, request, obj):
-        obj.soft_delete(deleted_by=request.user)
+        # Soft-delete active role assignments before soft-deleting the user.
+        UserRole.objects.filter(user=obj, deleted_at__isnull=True).update(
+            deleted_at=timezone.now(),
+            deleted_by_id=request.user.pk,
+        )
+        obj.soft_delete(deleted_by=request.user.pk)
+        log_audit(
+            actor=request.user,
+            action='DELETE',
+            entity_type='auth_user',
+            entity_id=obj.pk,
+            entity_label=obj.username,
+        )
 
     def delete_queryset(self, request, queryset):
+        now = timezone.now()
         for obj in queryset:
-            obj.soft_delete(deleted_by=request.user)
+            UserRole.objects.filter(user=obj, deleted_at__isnull=True).update(
+                deleted_at=now,
+                deleted_by_id=request.user.pk,
+            )
+            obj.soft_delete(deleted_by=request.user.pk)
+            log_audit(
+                actor=request.user,
+                action='DELETE',
+                entity_type='auth_user',
+                entity_id=obj.pk,
+                entity_label=obj.username,
+            )

@@ -69,6 +69,24 @@ CREATE TABLE permission_in_fau_role (
     CONSTRAINT permission_in_fau_role_unique UNIQUE (fau_role_id, permission_id)
 );
 
+CREATE TABLE audit_log (
+    id              BIGSERIAL       PRIMARY KEY,
+    timestamp       TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    actor_id        BIGINT,
+    actor_username  VARCHAR(255),
+    action          VARCHAR(20)     NOT NULL,
+    entity_type     VARCHAR(100)    NOT NULL,
+    entity_id       VARCHAR(255),
+    entity_label    VARCHAR(255),
+    details         JSONB,
+    source          VARCHAR(20)     NOT NULL DEFAULT 'admin'
+);
+
+CREATE INDEX audit_log_timestamp_idx    ON audit_log(timestamp DESC);
+CREATE INDEX audit_log_actor_id_idx     ON audit_log(actor_id);
+CREATE INDEX audit_log_entity_type_idx  ON audit_log(entity_type);
+CREATE INDEX audit_log_action_idx       ON audit_log(action);
+
 CREATE TABLE refresh_tokens (
     id          UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
     token       VARCHAR(255)    NOT NULL UNIQUE,

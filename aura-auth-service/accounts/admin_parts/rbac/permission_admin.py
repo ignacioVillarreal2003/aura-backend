@@ -4,7 +4,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from accounts.models import Permission, PermissionInRole, PermissionInFauRole
 from accounts.admin_parts.utils.mixins import HelpTextStripMixin
-from accounts.admin_parts.utils.audit import _is_super_admin_user, _is_admin_or_super_user
+from accounts.admin_parts.utils.audit import _is_super_admin_user, _is_admin_or_super_user, log_audit
 
 
 class PermissionInRoleInline(admin.TabularInline):
@@ -110,3 +110,37 @@ class PermissionAdmin(HelpTextStripMixin, admin.ModelAdmin):
             count
         )
     fau_role_count.short_description = 'Roles FAU'
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        action = 'UPDATE' if change else 'CREATE'
+        details = {'changed_fields': form.changed_data} if change and form.changed_data else None
+        log_audit(
+            actor=request.user,
+            action=action,
+            entity_type='permission',
+            entity_id=obj.pk,
+            entity_label=obj.name,
+            details=details,
+        )
+
+    def delete_model(self, request, obj):
+        log_audit(
+            actor=request.user,
+            action='DELETE',
+            entity_type='permission',
+            entity_id=obj.pk,
+            entity_label=obj.name,
+        )
+        super().delete_model(request, obj)
+
+    def delete_queryset(self, request, queryset):
+        for obj in queryset:
+            log_audit(
+                actor=request.user,
+                action='DELETE',
+                entity_type='permission',
+                entity_id=obj.pk,
+                entity_label=obj.name,
+            )
+        super().delete_queryset(request, queryset)
