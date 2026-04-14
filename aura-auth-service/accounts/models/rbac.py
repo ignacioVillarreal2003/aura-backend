@@ -105,7 +105,7 @@ class PermissionInRole(models.Model):
     id = models.AutoField(primary_key=True)
     role = models.ForeignKey(
         Role,
-        on_delete=models.PROTECT,
+        on_delete=models.CASCADE,
         related_name='permission_links',
         db_column='role_id',
         verbose_name='Rol',
@@ -113,7 +113,7 @@ class PermissionInRole(models.Model):
     )
     permission = models.ForeignKey(
         Permission,
-        on_delete=models.PROTECT,
+        on_delete=models.CASCADE,
         related_name='role_links',
         db_column='permission_id',
         verbose_name='Permiso',
@@ -161,14 +161,14 @@ class PermissionInFauRole(models.Model):
     id = models.AutoField(primary_key=True)
     fau_role = models.ForeignKey(
         FauRole,
-        on_delete=models.PROTECT,
+        on_delete=models.CASCADE,
         related_name='permission_links',
         db_column='fau_role_id',
         verbose_name='Rol FAU',
     )
     permission = models.ForeignKey(
         Permission,
-        on_delete=models.PROTECT,
+        on_delete=models.CASCADE,
         related_name='fau_role_links',
         db_column='permission_id',
         verbose_name='Permiso',

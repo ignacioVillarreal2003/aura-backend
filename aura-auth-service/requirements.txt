@@ -12,3 +12,4 @@ django-extensions
 drf-spectacular
 django-prometheus
 python-json-logger
+whitenoise
