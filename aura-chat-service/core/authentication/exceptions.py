@@ -3,16 +3,20 @@ class AuthenticationProviderException(Exception):
 
 
 class AuthenticationProviderInvalidTokenException(AuthenticationProviderException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=401)
 
 
 class AuthenticationProviderUnauthorizedException(AuthenticationProviderException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=403)
 
 
 class AuthenticationProviderUserNotFoundException(AuthenticationProviderException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=404)
 
 
 class AuthenticationProviderServiceUnavailableException(AuthenticationProviderException):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=503)

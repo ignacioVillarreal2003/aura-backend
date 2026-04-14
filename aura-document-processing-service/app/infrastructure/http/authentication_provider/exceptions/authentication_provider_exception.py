@@ -1,7 +1,4 @@
-from app.application.exceptions.app_exception import AppException
-
-
-class AuthenticationProviderException(AppException):
+class AuthenticationProviderException(Exception):
     pass
 
 
