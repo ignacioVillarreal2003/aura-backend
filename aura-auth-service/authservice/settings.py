@@ -42,11 +42,12 @@ INSTALLED_APPS = [
     'accounts.apps.AccountsConfig',
     'documents.apps.DocumentsConfig',
     'notifications.apps.NotificationsConfig',
+    'chat.apps.ChatConfig',
 ]
 
 # Local apps whose tables are owned by docker/auth-db/init.sql or docker/aura-db/init.sql.
 # Setting to None disables Django migrations entirely for these apps.
-_LOCAL_APPS = ['accounts', 'documents', 'notifications']
+_LOCAL_APPS = ['accounts', 'documents', 'notifications', 'chat']
 MIGRATION_MODULES = {app: None for app in _LOCAL_APPS}
 
 MIDDLEWARE = [

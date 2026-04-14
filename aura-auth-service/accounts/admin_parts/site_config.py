@@ -49,21 +49,8 @@ def _custom_get_app_list(self, request, app_label=None):
                 }
             ],
         },
-        {
-            'app_label': 'chats',
-            'name': 'Gestión de Chats',
-            'app_url': reverse('admin:chat_list'),
-            'has_module_perms': True,
-            'models': [
-                {
-                    'name': 'Todos los chats',
-                    'object_name': 'ChatList',
-                    'admin_url': reverse('admin:chat_list'),
-                    'view_only': True,
-                }
-            ],
-        },
-        # 'notifications' placeholder removed — real models registered via notifications app
+        # 'chat' is now a real registered app — no placeholder needed.
+        # 'notifications' placeholder removed — real models registered via notifications app.
     ]
 
     if _is_super_admin_user(request.user):
@@ -88,7 +75,7 @@ def _custom_get_app_list(self, request, app_label=None):
         'dashboard': 0,
         'accounts': 1,
         'documents': 2,
-        'chats': 3,
+        'chat': 3,
         'notifications': 4,
         'auditoria': 5,
     }
@@ -117,6 +104,9 @@ def _custom_get_app_list(self, request, app_label=None):
                     len(notifications_order_map)
                 )
             )
+    # placeholder_apps[0] = Dashboard (always first).
+    # placeholder_apps[1:] = Auditoría (super-admin only, appended above).
+    # Real apps (accounts, documents, chat, notifications) come from app_list.
     app_list = placeholder_apps[:1] + app_list + placeholder_apps[1:]
     app_list.sort(
         key=lambda app: app_order.get(app.get('app_label'), len(app_order))
