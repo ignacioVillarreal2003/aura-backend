@@ -12,6 +12,19 @@ from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_streaming_invoker_i
 
 logger = logging.getLogger(__name__)
 
+# Content block types we must not surface as user-visible streamed text.
+_SKIP_STREAM_BLOCK_TYPES = frozenset({
+    "reasoning",
+    "tool_call",
+    "tool_call_chunk",
+    "invalid_tool_call",
+    "server_tool_call",
+    "image",
+    "image_url",
+    "audio",
+    "refusal",
+})
+
 
 class OllamaLLMStreamingInvoker(OllamaLLMStreamingInvokerInterface):
     async def stream_llm_content(
@@ -48,19 +61,37 @@ class OllamaLLMStreamingInvoker(OllamaLLMStreamingInvokerInterface):
 
     @staticmethod
     def _chunk_to_text(chunk: Any) -> str:
-        content = getattr(chunk, "content", None)
-        if content is None:
-            return ""
+        """Extract token/delta text from astream chunks (shape varies by provider/LC version)."""
+        if isinstance(chunk, (tuple, list)) and chunk:
+            chunk = chunk[0]
 
-        if isinstance(content, list):
-            text_parts = [
-                block.get("text", "")
-                for block in content
-                if isinstance(block, dict) and block.get("type") == "text"
-            ]
-            return "".join(text_parts)
+        content = getattr(chunk, "content", None)
 
         if isinstance(content, str):
             return content
+
+        if not content:
+            return ""
+
+        if isinstance(content, list):
+            parts: list[str] = []
+            for block in content:
+                if isinstance(block, str):
+                    parts.append(block)
+                    continue
+                if not isinstance(block, dict):
+                    continue
+                btype = block.get("type")
+                if btype in _SKIP_STREAM_BLOCK_TYPES:
+                    continue
+                text_val = block.get("text")
+                if isinstance(text_val, str) and text_val:
+                    parts.append(text_val)
+                    continue
+                if btype in (None, "text", "text_delta"):
+                    alt = block.get("content")
+                    if isinstance(alt, str) and alt:
+                        parts.append(alt)
+            return "".join(parts)
 
         return ""

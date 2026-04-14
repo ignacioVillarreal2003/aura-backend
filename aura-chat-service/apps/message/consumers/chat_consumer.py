@@ -132,18 +132,34 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             },
         )
 
-        self._document_question_task = asyncio.create_task(
-            self._run_document_question()
-        )
-        try:
-            await self._document_question_task
-        except asyncio.CancelledError:
-            logger.info(
-                "Document question cancelled (client disconnect or new scope).",
-                extra={"chat_id": self.chat_id, "user_id": self.user.id},
-            )
-        finally:
-            self._document_question_task = None
+        prev = self._document_question_task
+        if prev is not None and not prev.done():
+            prev.cancel()
+
+        task = asyncio.create_task(self._run_document_question())
+
+        def _on_document_question_done(t: asyncio.Task) -> None:
+            if self._document_question_task is t:
+                self._document_question_task = None
+            if t.cancelled():
+                return
+            try:
+                exc = t.exception()
+            except Exception:
+                logger.exception(
+                    "Unexpected error reading document-question task result.",
+                    extra={"chat_id": self.chat_id},
+                )
+                return
+            if exc is not None:
+                logger.error(
+                    "Document-question task failed.",
+                    exc_info=exc,
+                    extra={"chat_id": self.chat_id, "user_id": self.user.id},
+                )
+
+        task.add_done_callback(_on_document_question_done)
+        self._document_question_task = task
 
     async def _run_document_question(self):
         await self.channel_layer.group_send(

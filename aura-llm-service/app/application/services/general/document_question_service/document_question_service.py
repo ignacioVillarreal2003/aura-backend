@@ -175,8 +175,8 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
                     state,
                     generate_settings.history_window,
                 )
+                llm = await self._ollama_llm_facade.get_llm_base()
                 try:
-                    llm = await self._ollama_llm_facade.get_llm_base()
                     async for delta in self._llm_streaming_invoker.stream_llm_content(
                             llm,
                             llm_input,
@@ -200,6 +200,41 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
                         code="StreamAnswerError",
                     )
                     return
+
+                # Same model + messages as sync `GenerateAnswerPlugin`; some LC/Ollama
+                # stream shapes yield no extractable text — fall back to non-stream invoke.
+                if not (state.answer and state.answer.strip()):
+                    logger.warning(
+                        "LLM stream produced no visible text; invoking same prompt without stream",
+                        extra={"fragment_count": len(fragments)},
+                    )
+                    try:
+                        fallback_answer = await self._llm_invoker.call_llm_content(
+                            llm=llm,
+                            llm_input=llm_input,
+                        )
+                        if fallback_answer and fallback_answer.strip():
+                            state.answer = fallback_answer.strip()
+                            yield DocumentQuestionStreamDelta(text=state.answer)
+                    except LLMInvocationError as e:
+                        logger.exception(
+                            "LLM non-stream fallback failed after empty stream",
+                        )
+                        yield DocumentQuestionStreamError(
+                            message=str(e),
+                            code=type(e).__name__,
+                        )
+                        return
+                    except Exception:
+                        logger.exception(
+                            "LLM non-stream fallback failed after empty stream",
+                            extra={"error_type": type(e).__name__},
+                        )
+                        yield DocumentQuestionStreamError(
+                            message="Error invoking the language model",
+                            code="StreamAnswerError",
+                        )
+                        return
 
             state.answer = state.answer.strip() if state.answer else ""
 

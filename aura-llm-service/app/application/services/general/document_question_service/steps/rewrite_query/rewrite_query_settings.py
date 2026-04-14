@@ -11,5 +11,5 @@ class QueryRewriteSettings(BaseSettings):
         extra="ignore",
     )
 
-    enabled: bool = Field(default=False)
+    enabled: bool = Field(default=True)
     history_window: int = Field(default=4, ge=1, le=20)

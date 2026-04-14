@@ -4,8 +4,8 @@ Content-Type: application/json
 Authorization: Bearer user_token_123
 
 {
-  "question": "El ninio que tiene una ballena",
-  "max_fragments": 5
+  "question": "Avion de caza",
+  "max_fragments": 3
 }
 
 

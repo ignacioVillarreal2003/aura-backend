@@ -73,6 +73,7 @@ class SimpleTextCleaner(TextCleanerInterface):
             text = self._remove_markdown(text)
             text = self._remove_urls(text)
             text = self._remove_noise_lines(text)
+            text = self._join_fragmented_lines(text)
             text = self._remove_normalize_whitespace(text)
 
             result = text.strip()
@@ -146,6 +147,49 @@ class SimpleTextCleaner(TextCleanerInterface):
                 i += 1
 
             return "\n".join(cleaned)
+        return text
+
+    def _join_fragmented_lines(
+            self,
+            text: str
+    ) -> str:
+        if self._settings.simple_join_fragmented_lines:
+            lines = text.split("\n")
+            output: list[str] = []
+
+            for raw in lines:
+                line = raw.strip()
+
+                if not line:
+                    output.append("")
+                    continue
+
+                words = line.split()
+                is_short_fragment = len(words) <= 2
+                starts_lowercase = line[0].islower()
+
+                if output:
+                    j = len(output) - 1
+                    while j >= 0 and output[j] == "":
+                        j -= 1
+
+                    if j >= 0:
+                        empty_count = (len(output) - 1) - j
+                        prev_ends_sentence = output[j][-1] in ".!?:;"
+
+                        should_merge = (
+                                (is_short_fragment and empty_count <= 1) or
+                                (starts_lowercase and not prev_ends_sentence and empty_count <= 1)
+                        )
+
+                        if should_merge:
+                            output[j] += " " + line
+                            del output[j + 1:]
+                            continue
+
+                output.append(line)
+
+            return "\n".join(output)
         return text
 
     def _remove_normalize_whitespace(

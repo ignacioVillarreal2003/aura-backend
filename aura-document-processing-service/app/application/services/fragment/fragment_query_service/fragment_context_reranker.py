@@ -15,8 +15,6 @@ logger = logging.getLogger(__name__)
 
 
 class FragmentContextReranker:
-    """Cross-encoder reranking for retrieved fragments (lazy-loaded model, process-wide singleton)."""
-
     _model: ClassVar[Optional[CrossEncoder]] = None
     _model_lock: ClassVar[Lock] = Lock()
 
