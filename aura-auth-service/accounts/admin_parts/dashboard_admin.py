@@ -5,7 +5,7 @@ import logging
 
 from django.contrib import admin
 from django.core.exceptions import PermissionDenied
-from django.db import OperationalError
+from django.db import OperationalError, connections
 from django.db.models import Count, Sum
 from django.db.models.functions import Coalesce
 from django.template.response import TemplateResponse
@@ -70,12 +70,30 @@ def _dashboard_overview_view(request):
         .order_by('-total')[:8]
     )
 
-    groups_by_user_count = list(
-        CustomGroup.objects.filter(deleted_at__isnull=True)
-        .annotate(total_users=Count('users', distinct=True))
-        .values('name', 'total_users')
-        .order_by('-total_users', 'name')[:8]
-    )
+    # auth_user_custom_groups lives in aura_db (cross-DB); cannot use ORM annotation.
+    # Fetch member counts via raw SQL then merge with group names from auth_db.
+    groups_by_user_count = []
+    try:
+        with connections['aura_db'].cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT customgroup_id::text, COUNT(DISTINCT user_id) AS total_users
+                FROM auth_user_custom_groups
+                GROUP BY customgroup_id
+                """
+            )
+            counts = {row[0]: row[1] for row in cursor.fetchall()}
+
+        groups_qs = CustomGroup.objects.filter(deleted_at__isnull=True).values('id', 'name')
+        merged = [
+            {'name': g['name'], 'total_users': counts.get(str(g['id']), 0)}
+            for g in groups_qs
+        ]
+        groups_by_user_count = sorted(
+            merged, key=lambda x: (-x['total_users'], x['name'])
+        )[:8]
+    except Exception:
+        logger.warning('Dashboard: groups_by_user_count unavailable (cross-DB query failed)')
 
     largest_documents = list(
         document_qs.values('name', 'size_bytes', 'created_by')

@@ -16,6 +16,7 @@ from accounts.services.auth_service import (
     revoke_refresh_token,
     get_user_info,
 )
+from accounts.admin_parts.utils.audit import log_audit
 
 
 class LoginView(APIView):
@@ -40,8 +41,24 @@ class LoginView(APIView):
             serializer.validated_data['password'],
         )
         if not user:
+            log_audit(
+                actor=None,
+                action='LOGIN_FAILED',
+                entity_type='auth_user',
+                entity_label=serializer.validated_data.get('username'),
+                details={'reason': 'Invalid credentials'},
+                source='api',
+            )
             return Response({'detail': 'Invalid credentials.'}, status=status.HTTP_401_UNAUTHORIZED)
         tokens = issue_tokens_for_user(user)
+        log_audit(
+            actor=user,
+            action='LOGIN',
+            entity_type='auth_user',
+            entity_id=user.pk,
+            entity_label=user.username,
+            source='api',
+        )
         return Response(tokens, status=status.HTTP_200_OK)
 
 
@@ -88,6 +105,12 @@ class LogoutView(APIView):
         revoked = revoke_refresh_token(serializer.validated_data['refresh_token'])
         if not revoked:
             return Response({'detail': 'Invalid refresh token.'}, status=status.HTTP_401_UNAUTHORIZED)
+        log_audit(
+            actor=None,
+            action='LOGOUT',
+            entity_type='auth_user',
+            source='api',
+        )
         return Response({'detail': 'Logged out.'}, status=status.HTTP_200_OK)
 
 

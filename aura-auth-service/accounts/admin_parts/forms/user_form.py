@@ -13,12 +13,6 @@ class UserAdminForm(forms.ModelForm):
         required=False,
     )
 
-    password2 = forms.CharField(
-        widget=forms.PasswordInput(render_value=False),
-        label='Confirmar contraseña',
-        required=False,
-    )
-
     active = forms.BooleanField(
         required=False,
         initial=True,
@@ -49,12 +43,10 @@ class UserAdminForm(forms.ModelForm):
 
     class Meta:
         model = User
-        # Exclude custom_groups from Django's automatic M2M handling.
-        # User (auth_db) ↔ auth_user_custom_groups (aura_db) is cross-DB:
-        # ModelForm.__init__ would call value_from_object which forces a query
-        # on auth_db where neither custom_groups nor auth_user_custom_groups exist.
-        # We populate initial values via raw SQL and save via UserAdmin.save_related.
-        exclude = ['custom_groups']
+        # custom_groups is not a model field — it is a manual cross-DB relation
+        # managed via raw SQL on aura_db (see UserAdmin.save_related).
+        # The form field below is declared explicitly and populated/saved manually.
+        exclude = []
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -86,20 +78,14 @@ class UserAdminForm(forms.ModelForm):
         if 'roles' in self.fields:
             def _role_label(role):
                 if role.name == 'user':
-                    return 'USUARIO'
+                    return 'user'
                 return role.name
             self.fields['roles'].label_from_instance = _role_label
 
     def clean(self):
         cleaned_data = super().clean()
         password = cleaned_data.get('password')
-        password2 = cleaned_data.get('password2')
         is_new = not (self.instance and self.instance.pk)
-        if is_new:
-            if not password:
-                self.add_error('password', 'Este campo es obligatorio.')
-            if not password2:
-                self.add_error('password2', 'Este campo es obligatorio.')
-        if password and password2 and password != password2:
-            self.add_error('password2', 'Las contraseñas no coinciden.')
+        if is_new and not password:
+            self.add_error('password', 'Este campo es obligatorio.')
         return cleaned_data

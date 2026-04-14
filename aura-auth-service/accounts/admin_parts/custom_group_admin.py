@@ -1,25 +1,56 @@
 """Custom group admin configuration."""
 
 import logging
+from django import forms
 from django.contrib import admin
+from django.contrib.admin.widgets import FilteredSelectMultiple
 from django.db import connections
 from django.utils import timezone
 from django.utils.html import format_html
-from accounts.models import CustomGroup
+from accounts.models import CustomGroup, User
 from accounts.admin_parts.common import (
     HelpTextStripMixin,
     _apply_audit_fields,
     _is_super_admin_user,
     _is_admin_or_super_user,
+    log_audit,
 )
 
 logger = logging.getLogger(__name__)
+
+
+class CustomGroupAdminForm(forms.ModelForm):
+    users = forms.ModelMultipleChoiceField(
+        queryset=User.objects.filter(deleted_at__isnull=True).order_by('username'),
+        required=False,
+        widget=FilteredSelectMultiple('Usuarios', is_stacked=False),
+        label='Usuarios',
+    )
+
+    class Meta:
+        model = CustomGroup
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            try:
+                with connections['aura_db'].cursor() as cursor:
+                    cursor.execute(
+                        'SELECT user_id FROM auth_user_custom_groups WHERE customgroup_id = %s::uuid',
+                        [str(self.instance.pk)],
+                    )
+                    user_ids = [row[0] for row in cursor.fetchall()]
+                self.initial['users'] = user_ids
+            except Exception:
+                logger.exception('Failed to load users for CustomGroupAdminForm')
 
 
 @admin.register(CustomGroup)
 class CustomGroupAdmin(HelpTextStripMixin, admin.ModelAdmin):
     """Custom admin for Group model to manage groups."""
 
+    form = CustomGroupAdminForm
     list_display = ('name', 'description_short', 'member_count', 'document_count')
     list_filter = ('created_at',)
     search_fields = ('name',)
@@ -30,6 +61,9 @@ class CustomGroupAdmin(HelpTextStripMixin, admin.ModelAdmin):
     fieldsets = (
         ('Información Básica', {
             'fields': ('id', 'name', 'description', 'documents'),
+        }),
+        ('Miembros', {
+            'fields': ('users',),
         }),
         ('Información de Auditoría', {
             'fields': (
@@ -87,6 +121,9 @@ class CustomGroupAdmin(HelpTextStripMixin, admin.ModelAdmin):
             return (
                 ('Información Básica', {
                     'fields': ('name', 'description', 'documents'),
+                }),
+                ('Miembros', {
+                    'fields': ('users',),
                 }),
             )
         return self.fieldsets
@@ -182,6 +219,36 @@ class CustomGroupAdmin(HelpTextStripMixin, admin.ModelAdmin):
         except Exception:
             logger.exception('Failed to soft-delete document_collection in aura_db')
 
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        if 'users' not in form.cleaned_data:
+            return
+        group_id = str(form.instance.pk)
+        selected_users = list(form.cleaned_data['users'])
+        try:
+            with connections['aura_db'].cursor() as cursor:
+                if selected_users:
+                    user_ids = [u.pk for u in selected_users]
+                    placeholders = ','.join(['%s'] * len(user_ids))
+                    cursor.execute(
+                        f'DELETE FROM auth_user_custom_groups '
+                        f'WHERE customgroup_id = %s::uuid AND user_id NOT IN ({placeholders})',
+                        [group_id] + user_ids,
+                    )
+                    for uid in user_ids:
+                        cursor.execute(
+                            'INSERT INTO auth_user_custom_groups (user_id, customgroup_id) '
+                            'VALUES (%s, %s::uuid) ON CONFLICT DO NOTHING',
+                            [uid, group_id],
+                        )
+                else:
+                    cursor.execute(
+                        'DELETE FROM auth_user_custom_groups WHERE customgroup_id = %s::uuid',
+                        [group_id],
+                    )
+        except Exception:
+            logger.exception('Failed to sync users for CustomGroup %s', group_id)
+
     def save_model(self, request, obj, form, change):
         old_name = None
         if obj.pk:
@@ -194,12 +261,36 @@ class CustomGroupAdmin(HelpTextStripMixin, admin.ModelAdmin):
             old_name=old_name,
             is_create=not change,
         )
+        action = 'UPDATE' if change else 'CREATE'
+        details = {'changed_fields': form.changed_data} if change and form.changed_data else None
+        log_audit(
+            actor=request.user,
+            action=action,
+            entity_type='custom_group',
+            entity_id=str(obj.pk),
+            entity_label=obj.name,
+            details=details,
+        )
 
     def delete_model(self, request, obj):
         self._sync_collection_delete(request, obj)
         super().delete_model(request, obj)
+        log_audit(
+            actor=request.user,
+            action='DELETE',
+            entity_type='custom_group',
+            entity_id=str(obj.pk),
+            entity_label=obj.name,
+        )
 
     def delete_queryset(self, request, queryset):
         for obj in queryset:
             self._sync_collection_delete(request, obj)
+            log_audit(
+                actor=request.user,
+                action='DELETE',
+                entity_type='custom_group',
+                entity_id=str(obj.pk),
+                entity_label=obj.name,
+            )
         super().delete_queryset(request, queryset)

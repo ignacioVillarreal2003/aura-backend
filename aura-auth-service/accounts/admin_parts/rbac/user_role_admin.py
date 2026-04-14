@@ -3,7 +3,7 @@
 from django.contrib import admin
 from accounts.models import User, Role, UserRole
 from accounts.admin_parts.utils.mixins import HelpTextStripMixin, HelpTextStripInlineMixin
-from accounts.admin_parts.utils.audit import _is_super_admin_user, _is_admin_or_super_user
+from accounts.admin_parts.utils.audit import _is_super_admin_user, _is_admin_or_super_user, log_audit
 
 
 class UserRoleInline(HelpTextStripInlineMixin, admin.TabularInline):
@@ -85,3 +85,32 @@ class UserRoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
         if not obj.created_by:
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
+        action = 'UPDATE' if change else 'CREATE'
+        log_audit(
+            actor=request.user,
+            action=action,
+            entity_type='user_role',
+            entity_id=obj.pk,
+            entity_label=f'{obj.user} → {obj.role}',
+        )
+
+    def delete_model(self, request, obj):
+        log_audit(
+            actor=request.user,
+            action='DELETE',
+            entity_type='user_role',
+            entity_id=obj.pk,
+            entity_label=f'{obj.user} → {obj.role}',
+        )
+        super().delete_model(request, obj)
+
+    def delete_queryset(self, request, queryset):
+        for obj in queryset:
+            log_audit(
+                actor=request.user,
+                action='DELETE',
+                entity_type='user_role',
+                entity_id=obj.pk,
+                entity_label=f'{obj.user} → {obj.role}',
+            )
+        super().delete_queryset(request, queryset)

@@ -16,7 +16,7 @@ auth_db schema is owned by docker/auth-db/init.sql — same rule for local apps.
 class AuraDbRouter:
 
     # Apps where every model lives in aura_db.
-    _aura_apps = {'notifications', 'documents'}
+    _aura_apps = {'notifications', 'documents', 'chat'}
 
     # Individual model names (lowercase) inside the accounts app that live in aura_db.
     _aura_account_models = {'customgroup'}

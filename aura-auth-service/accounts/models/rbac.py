@@ -58,7 +58,7 @@ class UserRole(models.Model):
     id = models.AutoField(primary_key=True)
     user = models.ForeignKey(
         User,
-        on_delete=models.PROTECT,
+        on_delete=models.DO_NOTHING,
         related_name='user_roles',
         db_column='auth_user_id',
         verbose_name='Usuario',
@@ -66,7 +66,7 @@ class UserRole(models.Model):
     )
     role = models.ForeignKey(
         Role,
-        on_delete=models.PROTECT,
+        on_delete=models.DO_NOTHING,
         related_name='user_assignments',
         db_column='role_id',
         verbose_name='Rol',
@@ -74,14 +74,14 @@ class UserRole(models.Model):
     )
     created_by = models.ForeignKey(
         User,
-        on_delete=models.PROTECT,
+        on_delete=models.DO_NOTHING,
         related_name='created_user_roles',
         db_column='created_by',
     )
     created_at = models.DateField(auto_now_add=True)
     deleted_by = models.ForeignKey(
         User,
-        on_delete=models.PROTECT,
+        on_delete=models.DO_NOTHING,
         related_name='deleted_user_roles',
         db_column='deleted_by',
         null=True,
