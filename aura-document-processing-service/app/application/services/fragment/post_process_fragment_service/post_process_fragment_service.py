@@ -6,21 +6,18 @@ from fastapi import HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.authorization.base_service_authorizer import BaseServiceAuthorizer
 from app.application.services.fragment.post_process_fragment_service.exceptions.post_process_fragment_service_exception import (
     PostProcessFragmentAlreadyRunningException,
-    PostProcessFragmentNotRunningException
+    PostProcessFragmentInvalidRequestException,
+    PostProcessFragmentNotRunningException,
+    PostProcessFragmentUnauthorizedException,
 )
 from app.application.services.fragment.post_process_fragment_service.interfaces.post_process_fragment_service_interface import (
     PostProcessFragmentServiceInterface
 )
-from app.application.services.fragment.post_process_fragment_service.post_process_fragment_service_authorizer import (
-    PostProcessFragmentServiceAuthorizer,
-)
 from app.application.services.fragment.post_process_fragment_service.post_process_fragment_service_settings import (
     PostProcessFragmentServiceSettings
-)
-from app.application.services.fragment.post_process_fragment_service.post_process_fragment_service_validator import (
-    PostProcessFragmentServiceValidator,
 )
 from app.domain.dtos.fragment.post_process_fragment.post_process_fragments_request import (
     PostProcessFragmentsRequest
@@ -58,9 +55,10 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
         self._fragment_repository = fragment_repository
         self._llm_provider = llm_provider
         self._settings = post_process_fragment_service_settings or PostProcessFragmentServiceSettings()
-        self._authorizer = PostProcessFragmentServiceAuthorizer()
-        self._validator = PostProcessFragmentServiceValidator(
-            post_process_fragment_service_settings=self._settings
+        self._authorizer = BaseServiceAuthorizer(
+            unauthorized_exception_class=PostProcessFragmentUnauthorizedException,
+            required_permissions=self._settings.REQUIRED_PERMISSIONS,
+            operation_label="fragment post-processing",
         )
 
         self._task: Optional[asyncio.Task] = None
@@ -135,7 +133,10 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
             authenticated_user=authenticated_user,
             allowed_roles=ADMIN_ROLES
         )
-        self._validator.validate_post_process_fragments_request(post_process_fragments_request)
+        if len(post_process_fragments_request.document_ids) > self._settings.max_document_ids:
+            raise PostProcessFragmentInvalidRequestException(
+                "The number of document identifiers exceeds the configured limit."
+            )
 
         document_ids = post_process_fragments_request.document_ids
 

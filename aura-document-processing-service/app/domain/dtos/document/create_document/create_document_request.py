@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 
 class CreateDocumentRequest(BaseModel):
-    chat_id: int = Field(...)
+    chat_id: int = Field(..., gt=0)
     prefer_docling: bool = Field(default=False)
 
     @classmethod

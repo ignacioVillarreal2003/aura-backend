@@ -6,7 +6,8 @@ class DocumentsContextFragmentsRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_document_ids(self) -> "DocumentsContextFragmentsRequest":
-        invalid_ids = [doc_id for doc_id in self.document_ids if doc_id <= 0]
-        if invalid_ids:
+        if any(doc_id <= 0 for doc_id in self.document_ids):
             raise ValueError("Each document identifier must be a positive integer.")
+        if len(self.document_ids) != len(set(self.document_ids)):
+            raise ValueError("Document identifiers must not contain duplicates.")
         return self

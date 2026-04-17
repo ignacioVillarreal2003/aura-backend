@@ -1,8 +1,11 @@
+from typing import ClassVar
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class PostProcessFragmentServiceSettings(BaseSettings):
+    REQUIRED_PERMISSIONS: ClassVar[frozenset[str]] = frozenset({"FRAGMENT_UPDATE"})
+
     model_config = SettingsConfigDict(
         env_prefix="POST_PROCESS_FRAGMENT_",
         env_file=".env",

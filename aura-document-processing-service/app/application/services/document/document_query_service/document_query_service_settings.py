@@ -1,4 +1,5 @@
 import logging
+from typing import ClassVar
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -6,6 +7,8 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentQueryServiceSettings(BaseSettings):
+    REQUIRED_PERMISSIONS: ClassVar[frozenset[str]] = frozenset({"DOCUMENT_GET"})
+
     model_config = SettingsConfigDict(
         env_prefix="DOCUMENT_QUERY_",
         env_file=".env",

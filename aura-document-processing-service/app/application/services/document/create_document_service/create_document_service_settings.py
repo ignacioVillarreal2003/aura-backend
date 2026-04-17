@@ -1,4 +1,5 @@
 import logging
+from typing import ClassVar
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -6,6 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 class CreateDocumentServiceSettings(BaseSettings):
+    REQUIRED_PERMISSIONS: ClassVar[frozenset[str]] = frozenset({"DOCUMENT_CREATE"})
     model_config = SettingsConfigDict(
         env_prefix="CREATE_DOCUMENT_",
         env_file=".env",

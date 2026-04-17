@@ -4,21 +4,18 @@ from datetime import datetime, timezone
 from typing import Optional
 from fastapi import HTTPException, Request, status
 
+from app.application.authorization.base_service_authorizer import BaseServiceAuthorizer
 from app.application.services.document.post_process_document_service.exceptions.post_process_document_service_exception import (
     PostProcessAlreadyRunningException,
-    PostProcessNotRunningException
-)
-from app.application.services.document.post_process_document_service.post_process_document_service_authorizer import (
-    PostProcessDocumentServiceAuthorizer
+    PostProcessDocumentInvalidRequestException,
+    PostProcessDocumentUnauthorizedException,
+    PostProcessNotRunningException,
 )
 from app.application.services.document.post_process_document_service.interfaces.post_process_document_service_interface import (
     PostProcessDocumentServiceInterface
 )
 from app.application.services.document.post_process_document_service.post_process_document_service_settings import (
     PostProcessDocumentServiceSettings
-)
-from app.application.services.document.post_process_document_service.post_process_document_service_validator import (
-    PostProcessDocumentServiceValidator
 )
 from app.domain.dtos.document.post_process_document.post_process_documents_request import (
     PostProcessDocumentsRequest
@@ -61,9 +58,10 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
         self._llm_provider = llm_provider
         self._settings = post_process_document_service_settings or PostProcessDocumentServiceSettings()
 
-        self._authorizer = PostProcessDocumentServiceAuthorizer()
-        self._validator = PostProcessDocumentServiceValidator(
-            post_process_document_service_settings=self._settings
+        self._authorizer = BaseServiceAuthorizer(
+            unauthorized_exception_class=PostProcessDocumentUnauthorizedException,
+            required_permissions=self._settings.REQUIRED_PERMISSIONS,
+            operation_label="document post-processing",
         )
 
         self._task: Optional[asyncio.Task] = None
@@ -132,7 +130,10 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
             authenticated_user=authenticated_user,
             allowed_roles=ADMIN_ROLES
         )
-        self._validator.validate_documents_request(post_process_documents_request)
+        if len(post_process_documents_request.document_ids) > self._settings.max_document_ids:
+            raise PostProcessDocumentInvalidRequestException(
+                "The number of document identifiers exceeds the maximum allowed."
+            )
         document_ids = post_process_documents_request.document_ids
 
         async with self._lifecycle_lock:

@@ -12,12 +12,7 @@ from app.application.services.fragment.fragment_query_service.exceptions.fragmen
     FragmentQueryServiceException,
     FragmentQueryUnauthorizedException
 )
-from app.application.services.fragment.fragment_query_service.fragment_query_service_authorizer import (
-    FragmentQueryServiceAuthorizer
-)
-from app.application.services.fragment.fragment_query_service.fragment_query_service_validator import (
-    FragmentQueryServiceValidator
-)
+from app.application.authorization.base_service_authorizer import BaseServiceAuthorizer
 from app.application.services.fragment.fragment_query_service.fragment_context_reranker import (
     FragmentContextReranker
 )
@@ -62,10 +57,11 @@ class FragmentQueryService(FragmentQueryServiceInterface):
         self._fragment_repository = fragment_repository
         self._embedder_factory = embedder_factory
         self._settings = fragment_query_service_settings or FragmentQueryServiceSettings()
-        self._validator = FragmentQueryServiceValidator(
-            fragment_query_service_settings=self._settings
+        self._authorizer = BaseServiceAuthorizer(
+            unauthorized_exception_class=FragmentQueryUnauthorizedException,
+            required_permissions=self._settings.REQUIRED_PERMISSIONS,
+            operation_label="fragment query",
         )
-        self._authorizer = FragmentQueryServiceAuthorizer()
         self._reranker = FragmentContextReranker(fragment_query_service_settings=self._settings)
 
     @staticmethod
@@ -114,9 +110,18 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 allowed_roles=ALL_ROLES
             )
 
-            self._validator.validate_question_context_fragments_request(
-                question_context_fragments_request=question_context_fragments_request
-            )
+            if question_context_fragments_request.question_max_fragments > self._settings.max_fragments:
+                raise FragmentQueryInvalidRequestException(
+                    "The maximum number of context fragments for the question exceeds the configured limit."
+                )
+            if (question_context_fragments_request.use_keywords is True
+                    and question_context_fragments_request.keywords_max_fragments is not None
+                    and question_context_fragments_request.keywords_max_fragments > self._settings.max_fragments):
+                raise FragmentQueryInvalidRequestException(
+                    "The maximum number of context fragments for keywords exceeds the configured limit."
+                )
+            if question_context_fragments_request.use_rerank is True and not self._settings.rerank_enabled:
+                raise FragmentQueryInvalidRequestException("Reranking is disabled on this service.")
 
             question_vector = await self._get_query_embedding(question)
             fragments_from_question = await self._retrieve_similar_fragments(
@@ -223,9 +228,10 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 allowed_roles=ALL_ROLES
             )
 
-            self._validator.validate_documents_context_fragments_request(
-                documents_context_fragments_request=documents_context_fragments_request
-            )
+            if len(documents_context_fragments_request.document_ids) > self._settings.max_document_ids:
+                raise FragmentQueryInvalidRequestException(
+                    "The number of document identifiers exceeds the configured limit."
+                )
 
             if not authenticated_user.has_any_role(ADMIN_ROLES):
                 documents = await self._get_documents_by_ids_or_raise(

@@ -8,24 +8,22 @@ from typing import Optional
 from fastapi import HTTPException, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.services.document.create_document_service.create_document_service_authorizer import (
-    CreateDocumentServiceAuthorizer
-)
+from app.application.authorization.base_service_authorizer import BaseServiceAuthorizer
 from app.application.services.document.create_document_service.create_document_service_settings import (
     CreateDocumentServiceSettings
 )
 from app.application.services.document.create_document_service.create_document_service_utils import (
     CreateDocumentServiceUtils
 )
-from app.application.services.document.create_document_service.create_document_service_validator import (
-    CreateDocumentServiceValidator
-)
 from app.application.services.document.create_document_service.exceptions.create_document_service_exception import (
+    CreateDocumentInvalidException,
     CreateDocumentPersistenceException,
     CreateDocumentServiceException,
+    CreateDocumentSizeExceededException,
     CreateDocumentUnauthorizedException,
+    CreateDocumentUnsupportedTypeException,
     CreateDocumentUploadException,
-    CreateDocumentValidationException
+    CreateDocumentValidationException,
 )
 from app.application.services.document.create_document_service.interfaces.create_document_service_interface import (
     CreateDocumentServiceInterface
@@ -68,10 +66,11 @@ class CreateDocumentService(CreateDocumentServiceInterface):
         self._rabbitmq_manager = rabbitmq_manager
         self._settings = create_document_service_settings or CreateDocumentServiceSettings()
 
-        self._validator = CreateDocumentServiceValidator(
-            create_document_service_settings=self._settings
+        self._authorizer = BaseServiceAuthorizer(
+            unauthorized_exception_class=CreateDocumentUnauthorizedException,
+            required_permissions=self._settings.REQUIRED_PERMISSIONS,
+            operation_label="document creation",
         )
-        self._authorizer = CreateDocumentServiceAuthorizer()
         self._utils = CreateDocumentServiceUtils(
             create_document_service_settings=self._settings
         )
@@ -106,10 +105,11 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             )
 
             try:
-                await self._validator.validate_create_document_request(
-                    raw_document=raw_document,
-                    create_document_request=create_document_request
-                )
+                self._validate_file_present(raw_document)
+                self._validate_filename(raw_document)
+                self._validate_content_type(raw_document)
+                self._validate_size(raw_document)
+                await self._validate_magic_numbers(raw_document)
                 document_mime_type: DocumentMimeType = self._utils.get_document_mime_type(
                     raw_document=raw_document
                 )
@@ -235,6 +235,77 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             authenticated_user: AuthenticatedUser
     ) -> None:
         self._authorizer.require_permissions(authenticated_user)
+
+    @staticmethod
+    def _validate_file_present(file: UploadFile) -> None:
+        if file is None:
+            raise CreateDocumentValidationException("No file was provided.")
+        if not file.filename:
+            raise CreateDocumentValidationException("The file must have a filename.")
+
+    @staticmethod
+    def _validate_filename(file: UploadFile) -> None:
+        filename = file.filename
+        if ".." in filename or "/" in filename or "\\" in filename:
+            raise CreateDocumentInvalidException(
+                "The filename contains invalid characters. Path separators are not allowed."
+            )
+        if "\x00" in filename:
+            raise CreateDocumentInvalidException("The filename contains null bytes.")
+        if len(filename) > 255:
+            raise CreateDocumentInvalidException("The filename is too long. The maximum length is 255 characters.")
+
+    def _validate_content_type(self, file: UploadFile) -> None:
+        content_type = file.content_type
+        if not content_type:
+            raise CreateDocumentInvalidException("The file content type was not provided.")
+        if not self._settings.is_content_type_allowed(content_type):
+            raise CreateDocumentUnsupportedTypeException(
+                "This file type is not supported. Please upload a supported document format."
+            )
+
+    def _validate_size(self, file: UploadFile) -> None:
+        file_size = self._get_file_size(file)
+        if file_size is None:
+            raise CreateDocumentInvalidException("The file size could not be determined.")
+        if file_size < self._settings.min_file_size_bytes:
+            raise CreateDocumentInvalidException("The file is smaller than the minimum allowed size.")
+        if file_size > self._settings.max_file_size_bytes:
+            raise CreateDocumentSizeExceededException("The file is larger than the maximum allowed size.")
+
+    async def _validate_magic_numbers(self, file: UploadFile) -> None:
+        content_type = file.content_type
+        magic_numbers = self._settings.get_magic_numbers(content_type)
+        if not magic_numbers:
+            return
+        try:
+            await file.seek(0)
+            header = await file.read(8)
+            await file.seek(0)
+            if not header:
+                raise CreateDocumentInvalidException("The file header could not be read.")
+            if not any(header.startswith(magic) for magic in magic_numbers):
+                raise CreateDocumentInvalidException(
+                    "The file content does not match the declared type. The file may be invalid or mislabeled."
+                )
+        except CreateDocumentInvalidException:
+            raise
+        except Exception as e:
+            raise CreateDocumentInvalidException("Failed to validate the file content.") from e
+
+    @staticmethod
+    def _get_file_size(file: UploadFile) -> Optional[int]:
+        file_size = getattr(file, "size", None)
+        if file_size is not None:
+            return file_size
+        try:
+            current_pos = file.file.tell()
+            file.file.seek(0, 2)
+            size = file.file.tell()
+            file.file.seek(current_pos)
+            return size
+        except Exception:
+            return None
 
     async def _is_duplicate(
             self,

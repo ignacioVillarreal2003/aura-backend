@@ -12,14 +12,9 @@ from app.application.services.document.delete_document_service.exceptions.delete
     DeleteDocumentUnauthorizedException,
     DeleteFragmentsFailedException
 )
-from app.application.services.document.delete_document_service.delete_document_service_authorizer import (
-    DeleteDocumentServiceAuthorizer
-)
+from app.application.authorization.base_service_authorizer import BaseServiceAuthorizer
 from app.application.services.document.delete_document_service.delete_document_service_settings import (
     DeleteDocumentServiceSettings
-)
-from app.application.services.document.delete_document_service.delete_document_service_validator import (
-    DeleteDocumentServiceValidator
 )
 from app.application.services.document.delete_document_service.interfaces.delete_document_service_interface import (
     DeleteDocumentServiceInterface
@@ -60,10 +55,11 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
         self._document_storage = document_storage
         self._settings = delete_document_service_settings or DeleteDocumentServiceSettings()
 
-        self._validator = DeleteDocumentServiceValidator(
-            delete_document_service_settings=self._settings
+        self._authorizer = BaseServiceAuthorizer(
+            unauthorized_exception_class=DeleteDocumentUnauthorizedException,
+            required_permissions=self._settings.REQUIRED_PERMISSIONS,
+            operation_label="document deletion",
         )
-        self._authorizer = DeleteDocumentServiceAuthorizer()
 
     async def soft_delete_document(
             self,
@@ -80,7 +76,8 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
         )
 
         try:
-            self._validator.validate_document_id(document_id)
+            if document_id <= 0:
+                raise DeleteDocumentInvalidRequestException("The document identifier must be a positive number.")
             self._authorizer.require_permissions(authenticated_user)
             self._authorizer.require_roles(
                 authenticated_user=authenticated_user,
@@ -135,7 +132,8 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
         )
 
         try:
-            self._validator.validate_chat_id(chat_id)
+            if chat_id <= 0:
+                raise DeleteDocumentInvalidRequestException("The chat identifier must be a positive number.")
             self._authorizer.require_permissions(authenticated_user)
             self._authorizer.require_roles(
                 authenticated_user=authenticated_user,
@@ -143,7 +141,10 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             )
 
             documents = await self._get_documents_by_chat(chat_id, database_session)
-            self._validator.validate_documents_count(len(documents))
+            if len(documents) > self._settings.max_ids_per_operation:
+                raise DeleteDocumentInvalidRequestException(
+                    "The number of documents exceeds the limit for a single operation."
+                )
 
             if not documents:
                 logger.info(
@@ -206,7 +207,8 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
         )
 
         try:
-            self._validator.validate_document_id(document_id)
+            if document_id <= 0:
+                raise DeleteDocumentInvalidRequestException("The document identifier must be a positive number.")
             self._authorizer.require_permissions(authenticated_user)
             self._authorizer.require_roles(
                 authenticated_user=authenticated_user,
@@ -263,7 +265,8 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
         )
 
         try:
-            self._validator.validate_chat_id(chat_id)
+            if chat_id <= 0:
+                raise DeleteDocumentInvalidRequestException("The chat identifier must be a positive number.")
             self._authorizer.require_permissions(authenticated_user)
             self._authorizer.require_roles(
                 authenticated_user=authenticated_user,
@@ -271,7 +274,10 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             )
 
             documents = await self._get_documents_by_chat(chat_id, database_session)
-            self._validator.validate_documents_count(len(documents))
+            if len(documents) > self._settings.max_ids_per_operation:
+                raise DeleteDocumentInvalidRequestException(
+                    "The number of documents exceeds the limit for a single operation."
+                )
 
             if not documents:
                 logger.info(

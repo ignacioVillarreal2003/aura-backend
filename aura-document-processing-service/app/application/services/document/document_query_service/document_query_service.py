@@ -4,14 +4,9 @@ from typing import Optional
 from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.services.document.document_query_service.document_query_service_authorizer import (
-    DocumentQueryServiceAuthorizer
-)
+from app.application.authorization.base_service_authorizer import BaseServiceAuthorizer
 from app.application.services.document.document_query_service.document_query_service_settings import (
     DocumentQueryServiceSettings
-)
-from app.application.services.document.document_query_service.document_query_service_validator import (
-    DocumentQueryServiceValidator
 )
 from app.domain.constants.user.user_roles import (
     ADMIN_ROLES,
@@ -48,10 +43,11 @@ class DocumentQueryService(DocumentQueryServiceInterface):
         self._document_repository = document_repository
         self._settings = document_query_service_settings or DocumentQueryServiceSettings()
 
-        self._validator = DocumentQueryServiceValidator(
-            document_query_service_settings=self._settings
+        self._authorizer = BaseServiceAuthorizer(
+            unauthorized_exception_class=DocumentQueryUnauthorizedException,
+            required_permissions=self._settings.REQUIRED_PERMISSIONS,
+            operation_label="document query",
         )
-        self._authorizer = DocumentQueryServiceAuthorizer()
 
     async def get_document(
             self,
@@ -68,7 +64,8 @@ class DocumentQueryService(DocumentQueryServiceInterface):
         )
 
         try:
-            self._validator.validate_document_id(document_id)
+            if document_id <= 0:
+                raise DocumentQueryInvalidRequestException("The document identifier must be a positive number.")
             self._authorizer.require_permissions(authenticated_user)
             self._authorizer.require_roles(
                 authenticated_user=authenticated_user,
@@ -135,14 +132,18 @@ class DocumentQueryService(DocumentQueryServiceInterface):
                 authenticated_user=authenticated_user,
                 allowed_roles=ADMIN_ROLES
             )
-            self._validator.validate_pagination(page, size)
-            self._validator.validate_filters(
-                name=name,
-                description=description,
-                category=category,
-                created_from=created_from,
-                created_to=created_to
-            )
+            if page is not None and page < 1:
+                raise DocumentQueryInvalidRequestException("The page number must be a positive integer.")
+            if size is not None:
+                if size < 1:
+                    raise DocumentQueryInvalidRequestException("The page size must be a positive integer.")
+                if size > self._settings.max_page_size:
+                    raise DocumentQueryInvalidRequestException("The page size exceeds the maximum allowed value.")
+            for _field_value in (name, description, category):
+                if _field_value is not None and len(_field_value) > self._settings.max_filter_length:
+                    raise DocumentQueryInvalidRequestException("A filter value exceeds the maximum allowed length.")
+            if created_from and created_to and created_from > created_to:
+                raise DocumentQueryInvalidRequestException("The start of the date range cannot be after the end.")
 
             if has_filters:
                 documents: list[Document] = await self._document_repository.get_documents(
