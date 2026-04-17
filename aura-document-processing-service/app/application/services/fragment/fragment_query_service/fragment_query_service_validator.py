@@ -1,4 +1,3 @@
-import logging
 from typing import Optional
 
 from app.application.services.fragment.fragment_query_service.exceptions.fragment_query_service_exception import (
@@ -14,8 +13,6 @@ from app.domain.dtos.fragment.fragment_query.question_context_fragments_request 
     QuestionContextFragmentsRequest,
 )
 
-logger = logging.getLogger(__name__)
-
 
 class FragmentQueryServiceValidator:
     def __init__(
@@ -28,9 +25,13 @@ class FragmentQueryServiceValidator:
             self,
             question_context_fragments_request: QuestionContextFragmentsRequest
     ) -> None:
-        self._validate_question(question_context_fragments_request.question)
-        self._validate_max_fragments(question_context_fragments_request.max_fragments)
-        self._validate_search_keywords(question_context_fragments_request.search_keywords)
+        self._validate_question_max_fragments(
+            question_context_fragments_request.question_max_fragments
+        )
+        if question_context_fragments_request.use_keywords is True:
+            self._validate_keywords_max_fragments(
+                question_context_fragments_request.keywords_max_fragments
+            )
         self._validate_rerank_fields(question_context_fragments_request)
 
     def validate_documents_context_fragments_request(
@@ -39,71 +40,40 @@ class FragmentQueryServiceValidator:
     ) -> None:
         self._validate_document_ids(documents_context_fragments_request.document_ids)
 
-    def _validate_question(
-            self,
-            question: str
-    ) -> None:
-        if not question or not question.strip():
-            raise FragmentQueryInvalidRequestException("The question cannot be empty.")
-
-        length = len(question)
-        if length < self._settings.min_question_length:
-            raise FragmentQueryInvalidRequestException("The question is shorter than the minimum allowed length.")
-        if length > self._settings.max_question_length:
-            raise FragmentQueryInvalidRequestException("The question exceeds the maximum allowed length.")
-
-    def _validate_search_keywords(
-            self,
-            search_keywords: Optional[str]
-    ) -> None:
-        if search_keywords is None:
-            return
-        stripped = search_keywords.strip()
-        if not stripped:
-            return
-
-        length = len(stripped)
-        if length < self._settings.min_question_length:
-            raise FragmentQueryInvalidRequestException(
-                "The search keywords are shorter than the minimum allowed length."
-            )
-        if length > self._settings.max_question_length:
-            raise FragmentQueryInvalidRequestException(
-                "The search keywords exceed the maximum allowed length."
-            )
-
     def _validate_rerank_fields(
             self,
             question_context_fragments_request: QuestionContextFragmentsRequest
     ) -> None:
         if question_context_fragments_request.use_rerank is not True:
-            if question_context_fragments_request.rerank_final_fragments is not None:
+            if question_context_fragments_request.rerank_max_fragments is not None:
                 raise FragmentQueryInvalidRequestException(
-                    "rerank_final_fragments may only be set when use_rerank is true."
+                    "rerank_max_fragments may only be set when use_rerank is true."
                 )
             return
 
         if not self._settings.rerank_enabled:
             raise FragmentQueryInvalidRequestException("Reranking is disabled on this service.")
 
-        max_fragments = question_context_fragments_request.max_fragments
-        final_n = question_context_fragments_request.rerank_final_fragments
-        if final_n is not None:
-            if final_n < 1:
-                raise FragmentQueryInvalidRequestException(
-                    "rerank_final_fragments must be at least one when set."
-                )
-            if final_n > max_fragments:
-                raise FragmentQueryInvalidRequestException(
-                    "rerank_final_fragments must not exceed max_fragments."
-                )
-
-    def _validate_max_fragments(self, max_fragments: int) -> None:
-        if max_fragments < 1:
-            raise FragmentQueryInvalidRequestException("The maximum number of context fragments must be at least one.")
-        if max_fragments > self._settings.max_fragments:
+    def _validate_question_max_fragments(self, question_max_fragments: int) -> None:
+        if question_max_fragments < 1:
             raise FragmentQueryInvalidRequestException(
-                "The maximum number of context fragments exceeds the configured limit."
+                "The maximum number of context fragments for the question must be at least one."
+            )
+        if question_max_fragments > self._settings.max_fragments:
+            raise FragmentQueryInvalidRequestException(
+                "The maximum number of context fragments for the question exceeds the configured limit."
+            )
+
+    def _validate_keywords_max_fragments(self, keywords_max_fragments: Optional[int]) -> None:
+        if keywords_max_fragments is None:
+            return
+        if keywords_max_fragments < 1:
+            raise FragmentQueryInvalidRequestException(
+                "The maximum number of context fragments for keywords must be at least one."
+            )
+        if keywords_max_fragments > self._settings.max_fragments:
+            raise FragmentQueryInvalidRequestException(
+                "The maximum number of context fragments for keywords exceeds the configured limit."
             )
 
     def _validate_document_ids(

@@ -68,6 +68,22 @@ class FragmentQueryService(FragmentQueryServiceInterface):
         self._authorizer = FragmentQueryServiceAuthorizer()
         self._reranker = FragmentContextReranker(fragment_query_service_settings=self._settings)
 
+    @staticmethod
+    def _merge_distinct_fragments(primary: list, secondary: list) -> list:
+        seen: set[int] = set()
+        merged: list = []
+        for fragment in primary:
+            fid = int(fragment.id)
+            if fid not in seen:
+                seen.add(fid)
+                merged.append(fragment)
+        for fragment in secondary:
+            fid = int(fragment.id)
+            if fid not in seen:
+                seen.add(fid)
+                merged.append(fragment)
+        return merged
+
     async def retrieve_context_fragments_by_question(
             self,
             question_context_fragments_request: QuestionContextFragmentsRequest,
@@ -75,21 +91,16 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             authenticated_user: AuthenticatedUser
     ) -> FragmentListResponse:
         question = question_context_fragments_request.question
-        max_fragments = question_context_fragments_request.max_fragments
-        search_keywords = question_context_fragments_request.search_keywords
-        text_for_vector = (
-            search_keywords.strip()
-            if search_keywords and search_keywords.strip()
-            else question
-        )
+        question_max_fragments = question_context_fragments_request.question_max_fragments
+        use_keywords = question_context_fragments_request.use_keywords is True
 
         logger.info(
             "Retrieving context fragments by question was initiated.",
             extra={
                 "question_length": len(question),
-                "max_fragments": max_fragments,
+                "question_max_fragments": question_max_fragments,
                 "user_id": authenticated_user.id,
-                "uses_search_keywords": text_for_vector != question,
+                "use_keywords": use_keywords,
                 "use_rerank": question_context_fragments_request.use_rerank is True,
             }
         )
@@ -107,12 +118,28 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 question_context_fragments_request=question_context_fragments_request
             )
 
-            query_vector = await self._get_query_embedding(text_for_vector)
-            fragments = await self._retrieve_similar_fragments(
+            question_vector = await self._get_query_embedding(question)
+            fragments_from_question = await self._retrieve_similar_fragments(
                 database_session=database_session,
-                query_vector=query_vector,
-                k=max_fragments
+                query_vector=question_vector,
+                k=question_max_fragments
             )
+
+            if use_keywords:
+                keywords = question_context_fragments_request.keywords
+                keywords_max_fragments = question_context_fragments_request.keywords_max_fragments
+                keywords_vector = await self._get_query_embedding(keywords)
+                fragments_from_keywords = await self._retrieve_similar_fragments(
+                    database_session=database_session,
+                    query_vector=keywords_vector,
+                    k=keywords_max_fragments
+                )
+                fragments = self._merge_distinct_fragments(
+                    fragments_from_question,
+                    fragments_from_keywords,
+                )
+            else:
+                fragments = fragments_from_question
 
             rerank_requested = (
                     self._settings.rerank_enabled
@@ -120,10 +147,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             )
             rerank_applied = False
             if rerank_requested and len(fragments) >= self._settings.rerank_min_fragments:
-                top_n = (
-                    question_context_fragments_request.rerank_final_fragments
-                    or self._settings.rerank_default_top_n
-                )
+                top_n = question_context_fragments_request.rerank_max_fragments
                 fragments = await self._reranker.rerank_fragments(
                     query=question,
                     fragments=fragments,

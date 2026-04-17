@@ -12,15 +12,18 @@ class DocumentQuestionPipelineState:
     authenticated_user: AuthenticatedUser
     messages: list[Message] = field(default_factory=list)
 
-    retrieval_query: Optional[str] = None
+    question_with_history: Optional[str] = None
+    retrieval_keywords: Optional[str] = None
+
     retrieved_fragments: list[FragmentResponse] = field(default_factory=list)
+
     answer: str = ""
 
     @classmethod
     def from_request(
-            cls,
-            request: DocumentQuestionRequest,
-            authenticated_user: AuthenticatedUser,
+        cls,
+        request: DocumentQuestionRequest,
+        authenticated_user: AuthenticatedUser
     ) -> "DocumentQuestionPipelineState":
         return cls(
             messages=request.messages,
@@ -28,9 +31,19 @@ class DocumentQuestionPipelineState:
         )
 
     @property
-    def current_message(self) -> Message:
+    def current_message(
+            self
+    ) -> Message:
         return self.messages[-1]
 
     @property
-    def history_messages(self) -> list[Message]:
+    def history_messages(
+            self
+    ) -> list[Message]:
         return self.messages[:-1]
+
+    @property
+    def effective_question(
+            self
+    ) -> str:
+        return self.question_with_history or self.current_message.content

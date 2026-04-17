@@ -7,7 +7,7 @@ Authorization: Bearer user_token_123
   "messages": [
     {
       "role": "human",
-      "content": "Hablame sobre un Avión de caza"
+      "content": "hablame de que es Sabotaje"
     }
   ]
 }
@@ -26,7 +26,7 @@ Authorization: Bearer user_token_123
   "messages": [
     {
       "role": "human",
-      "content": "Hablame sobre un Avión de caza"
+      "content": "Hablame de Caza Multirrol F-X"
     }
   ]
 }

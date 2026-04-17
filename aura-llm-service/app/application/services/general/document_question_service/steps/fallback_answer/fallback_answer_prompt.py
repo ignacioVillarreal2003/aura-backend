@@ -18,4 +18,5 @@ Redacta una respuesta breve y profesional que:
 - Indique que no se encontró información relevante en los documentos disponibles
 - Sugiera al usuario reformular con términos más específicos o indicar el área normativa de interés
 - No invente ni suponga información
+- Responde en formato markdown
 """
