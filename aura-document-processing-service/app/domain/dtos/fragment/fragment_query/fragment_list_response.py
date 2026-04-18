@@ -2,11 +2,12 @@ from pydantic import BaseModel, Field, model_validator
 
 from app.domain.dtos.fragment.fragment_query.fragment_response import FragmentResponse
 
+MAX_FRAGMENTS = 1_000
 MAX_TOTAL_CHARS = 300_000
 
 
 class FragmentListResponse(BaseModel):
-    fragments: list[FragmentResponse] = Field(default_factory=list)
+    fragments: list[FragmentResponse] = Field(default_factory=list, max_length=MAX_FRAGMENTS)
 
     model_config = {
         "from_attributes": True

@@ -21,7 +21,7 @@ MOCK_USERS = {
         "id": 12,
         "email": "user@example.com",
         "username": "john_doe",
-        "roles": ["user", "admin", "superadmin"],
+        "roles": ["USER", "ADMIN", "SUPERADMIN"],
         "permissions": [
             "DOCUMENT_CREATE",
             "DOCUMENT_UPDATE",

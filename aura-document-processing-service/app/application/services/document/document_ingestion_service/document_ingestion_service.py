@@ -362,7 +362,6 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                 }
             )
 
-
 async def get_document_ingestion_service(
         request: Request
 ) -> DocumentIngestionServiceInterface:
@@ -374,3 +373,4 @@ async def get_document_ingestion_service(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="DocumentIngestionService is not registered on the application state."
         )
+

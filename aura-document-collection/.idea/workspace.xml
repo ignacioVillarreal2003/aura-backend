@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="541f8908-7e23-4d18-b532-96aae5c81a7c" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/document/post_process_document/post_process_document_error.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/fragment/post_process_fragment/post_process_fragment_error.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/models/document_in_document_collection.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/models/user_in_document_collection.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/api/controllers/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/api/controllers/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/api/controllers/document_controllers/create_document_controller/create_document_controller.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/api/controllers/document_controllers/create_document_controller/create_document_controller.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/api/controllers/document_controllers/delete_document_controller/delete_document_controller.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/api/controllers/document_controllers/delete_document_controller/delete_document_controller.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/api/controllers/document_controllers/document_query_controller/document_query_controller.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/api/controllers/document_controllers/document_query_controller/document_query_controller.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/api/controllers/document_controllers/document_query_controller/interfaces/document_query_controller_interface.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/api/controllers/document_controllers/document_query_controller/interfaces/document_query_controller_interface.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/api/handlers/exception_handlers.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/api/handlers/exception_handlers.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/authorization/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/application/authorization/exceptions/autorization_exceptions.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/authorization/base_service_authorizer.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/application/authorization/authorizer.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/processors/readers/reader_factory.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/application/processors/readers/reader_factory.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/document/create_document_service/create_document_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/document/create_document_service/create_document_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/document/delete_document_service/delete_document_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/document/delete_document_service/delete_document_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/document/document_ingestion_service/document_ingestion_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/document/document_ingestion_service/document_ingestion_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/document/document_query_service/document_query_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/document/document_query_service/document_query_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/document/document_query_service/interfaces/document_query_service_interface.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/document/document_query_service/interfaces/document_query_service_interface.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/document/post_process_document_service/interfaces/post_process_document_service_interface.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/document/post_process_document_service/interfaces/post_process_document_service_interface.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/document/post_process_document_service/post_process_document_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/document/post_process_document_service/post_process_document_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/fragment/fragment_query_service/fragment_query_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/fragment/fragment_query_service/fragment_query_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/fragment/fragment_query_service/fragment_query_service_settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/fragment/fragment_query_service/fragment_query_service_settings.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/fragment/post_process_fragment_service/interfaces/post_process_fragment_service_interface.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/fragment/post_process_fragment_service/interfaces/post_process_fragment_service_interface.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/fragment/post_process_fragment_service/post_process_fragment_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/fragment/post_process_fragment_service/post_process_fragment_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/fragment/post_process_fragment_service/post_process_fragment_service_settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/fragment/post_process_fragment_service/post_process_fragment_service_settings.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/configuration/dependencies.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/configuration/dependencies.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/authentication/authenticated_user.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/authentication/authenticated_user.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/constants/user/user_roles.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/constants/user/user_roles.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/document/create_document/create_document_request.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/document/create_document/create_document_request.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/document/create_document/create_document_response.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/document/create_document/create_document_response.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/document/document_query/document_list_response.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/document/document_query/document_list_response.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/document/document_query/document_response.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/document/document_query/document_response.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/document/post_process_document/post_process_documents_request.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/document/post_process_document/post_process_documents_request.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/document/post_process_document/post_process_documents_start_response.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/document/post_process_document/post_process_documents_start_response.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/document/post_process_document/post_process_documents_status_response.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/document/post_process_document/post_process_documents_status_response.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/fragment/fragment_query/documents_context_fragments_request.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/fragment/fragment_query/documents_context_fragments_request.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/fragment/fragment_query/fragment_list_response.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/fragment/fragment_query/fragment_list_response.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/fragment/fragment_query/fragment_response.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/fragment/fragment_query/fragment_response.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/fragment/fragment_query/question_context_fragments_request.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/fragment/fragment_query/question_context_fragments_request.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/fragment/post_process_fragment/post_process_fragments_request.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/fragment/post_process_fragment/post_process_fragments_request.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/fragment/post_process_fragment/post_process_fragments_start_response.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/fragment/post_process_fragment/post_process_fragments_start_response.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/fragment/post_process_fragment/post_process_fragments_status_response.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/dtos/fragment/post_process_fragment/post_process_fragments_status_response.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/models/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/models/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/models/chat.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/models/chat.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/models/document.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/models/document.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/models/fragment.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/domain/models/fragment.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/docs/TASK.md" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/docs/TASK.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/http/document_controllers/create_document.http" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/http/document_controllers/create_document.http" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/http/document_controllers/document_query.http" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/http/document_controllers/document_query.http" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/test_documents/test.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../docker/docker-compose.yml" beforeDir="false" afterPath="$PROJECT_DIR$/../docker/docker-compose.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mock-auth/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/../mock-auth/main.py" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/.." />
+  </component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 8
+}]]></component>
+  <component name="ProjectId" id="3CXKPLSxX2UC6YQOyPoKJsjO6IZ" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.OpenDjangoStructureViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "git-widget-placeholder": "feature/mejora",
+    "nodejs_package_manager_path": "npm",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="RunManager">
+    <configuration name="aura-document-collection" type="Python.DjangoServer" factoryName="Django server">
+      <module name="aura-document-collection" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="RUN_TOOL" value="" />
+      <option name="launchJavascriptDebuger" value="false" />
+      <option name="port" value="8000" />
+      <option name="host" value="" />
+      <option name="additionalOptions" value="" />
+      <option name="browserUrl" value="" />
+      <option name="runTestServer" value="false" />
+      <option name="runNoReload" value="false" />
+      <option name="useCustomRunCommand" value="false" />
+      <option name="customRunCommand" value="" />
+      <method v="2" />
+    </configuration>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-c7e53b3be11b-JavaScript-PY-253.28294.336" />
+        <option value="bundled-python-sdk-0978a7220b69-9867c7d4c0a4-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-253.28294.336" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="541f8908-7e23-4d18-b532-96aae5c81a7c" name="Changes" comment="" />
+      <created>1776526450145</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1776526450145</updated>
+      <workItem from="1776526451190" duration="685000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+</project>

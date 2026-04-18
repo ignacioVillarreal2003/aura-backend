@@ -8,7 +8,11 @@ from typing import Optional
 from fastapi import HTTPException, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.authorization.base_service_authorizer import BaseServiceAuthorizer
+from app.application.authorization.authorizer import Authorizer
+from app.application.coordination.interfaces.content_deduplication_port_interface import (
+    ContentDeduplicationPortInterface,
+)
+from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
 from app.application.services.document.create_document_service.create_document_service_settings import (
     CreateDocumentServiceSettings
 )
@@ -20,7 +24,6 @@ from app.application.services.document.create_document_service.exceptions.create
     CreateDocumentPersistenceException,
     CreateDocumentServiceException,
     CreateDocumentSizeExceededException,
-    CreateDocumentUnauthorizedException,
     CreateDocumentUnsupportedTypeException,
     CreateDocumentUploadException,
     CreateDocumentValidationException,
@@ -59,6 +62,8 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             document_repository: DocumentRepositoryInterface,
             document_storage: DocumentStorageInterface,
             rabbitmq_manager: RabbitMQManagerInterface,
+            authorizer: Authorizer,
+            content_deduplication: ContentDeduplicationPortInterface,
             create_document_service_settings: Optional[CreateDocumentServiceSettings] = None,
     ) -> None:
         self._document_repository = document_repository
@@ -66,17 +71,11 @@ class CreateDocumentService(CreateDocumentServiceInterface):
         self._rabbitmq_manager = rabbitmq_manager
         self._settings = create_document_service_settings or CreateDocumentServiceSettings()
 
-        self._authorizer = BaseServiceAuthorizer(
-            unauthorized_exception_class=CreateDocumentUnauthorizedException,
-            required_permissions=self._settings.REQUIRED_PERMISSIONS,
-            operation_label="document creation",
-        )
+        self._authorizer = authorizer
+        self._content_deduplication = content_deduplication
         self._utils = CreateDocumentServiceUtils(
             create_document_service_settings=self._settings
         )
-
-        self._deduplication_lock = asyncio.Lock()
-        self._recent_hashes: dict[str, datetime] = {}
 
     async def create_document(
             self,
@@ -98,10 +97,13 @@ class CreateDocumentService(CreateDocumentServiceInterface):
         )
 
         try:
-            self._require_permissions(authenticated_user)
+            self._authorizer.require_permissions(
+                authenticated_user=authenticated_user,
+                required_permissions=self._settings.REQUIRED_PERMISSIONS,
+            )
             self._authorizer.require_roles(
                 authenticated_user=authenticated_user,
-                allowed_roles=ALL_ROLES
+                allowed_roles=ALL_ROLES,
             )
 
             try:
@@ -117,12 +119,15 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 raise CreateDocumentValidationException("The document could not be validated.") from e
 
             file_hash: Optional[str] = None
+            content_hash_claimed = False
             if self._settings.deduplication_enabled:
                 file_hash = await self._utils.compute_file_hash(raw_document)
-                if await self._is_duplicate(file_hash):
+                window_seconds = self._settings.deduplication_window_hours * 3600
+                if not await self._content_deduplication.try_claim_content_hash(file_hash, window_seconds):
                     raise CreateDocumentValidationException(
                         "Duplicate document detected. This file was recently uploaded."
                     )
+                content_hash_claimed = True
 
             temp_path = await self._save_temp_file_streaming(raw_document)
             file_size = temp_path.stat().st_size
@@ -140,6 +145,8 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                     }
                 )
             except DocumentStorageException as e:
+                if content_hash_claimed and file_hash:
+                    await self._content_deduplication.release_content_hash_claim(file_hash)
                 raise CreateDocumentUploadException("Failed to upload the document to storage.") from e
 
             now = datetime.now(timezone.utc)
@@ -169,10 +176,9 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 )
             except DatabaseException as e:
                 await self._cleanup_storage(object_name)
+                if content_hash_claimed and file_hash:
+                    await self._content_deduplication.release_content_hash_claim(file_hash)
                 raise CreateDocumentPersistenceException("Failed to save the document to the database.") from e
-
-            if self._settings.deduplication_enabled and file_hash:
-                await self._register_hash(file_hash)
 
             await self._cleanup_temp_file(temp_path)
             temp_path = None
@@ -196,6 +202,8 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                     }
                 )
             except Exception as e:
+                if content_hash_claimed and file_hash:
+                    await self._content_deduplication.release_content_hash_claim(file_hash)
                 raise RabbitMQPublishException("Failed to enqueue the document for ingestion.") from e
 
             logger.info(
@@ -210,7 +218,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             return CreateDocumentResponse.model_validate(database_document)
 
         except (
-                CreateDocumentUnauthorizedException,
+                UnauthorizedException,
                 CreateDocumentValidationException,
                 CreateDocumentUploadException,
                 CreateDocumentPersistenceException
@@ -229,12 +237,6 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             if temp_path is not None:
                 await self._cleanup_temp_file(temp_path)
             raise CreateDocumentServiceException("Document creation failed.") from e
-
-    def _require_permissions(
-            self,
-            authenticated_user: AuthenticatedUser
-    ) -> None:
-        self._authorizer.require_permissions(authenticated_user)
 
     @staticmethod
     def _validate_file_present(file: UploadFile) -> None:
@@ -306,28 +308,6 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             return size
         except Exception:
             return None
-
-    async def _is_duplicate(
-            self,
-            file_hash: str
-    ) -> bool:
-        now = datetime.now(timezone.utc)
-        cutoff_seconds = self._settings.deduplication_window_hours * 3600
-
-        async with self._deduplication_lock:
-            self._recent_hashes = {
-                h: ts
-                for h, ts in self._recent_hashes.items()
-                if (now - ts).total_seconds() < cutoff_seconds
-            }
-            return file_hash in self._recent_hashes
-
-    async def _register_hash(
-            self,
-            file_hash: str
-    ) -> None:
-        async with self._deduplication_lock:
-            self._recent_hashes[file_hash] = datetime.now(timezone.utc)
 
     async def _save_temp_file_streaming(
             self,

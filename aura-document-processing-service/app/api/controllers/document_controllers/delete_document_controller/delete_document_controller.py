@@ -148,7 +148,7 @@ router = APIRouter()
 delete_document_controller = DeleteDocumentController()
 
 router.delete(
-    "/soft/document_controllers/{document_id}",
+    "/soft/document/{document_id}",
     response_model=None
 )(delete_document_controller.soft_delete_document)
 
@@ -158,7 +158,7 @@ router.delete(
 )(delete_document_controller.soft_delete_documents_by_chat)
 
 router.delete(
-    "/hard/document_controllers/{document_id}",
+    "/hard/document/{document_id}",
     response_model=None
 )(delete_document_controller.hard_delete_document)
 

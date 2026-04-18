@@ -96,7 +96,9 @@ class PostProcessDocumentController(PostProcessDocumentControllerInterface):
             }
         )
 
-        post_process_documents_status_response = post_process_document_service.get_status()
+        post_process_documents_status_response = await post_process_document_service.get_status(
+            authenticated_user=authenticated_user,
+        )
 
         logger.info(
             "Document post-processing status retrieved successfully",
@@ -121,7 +123,7 @@ class PostProcessDocumentController(PostProcessDocumentControllerInterface):
             }
         )
 
-        await post_process_document_service.stop()
+        await post_process_document_service.stop(authenticated_user=authenticated_user)
 
         logger.info(
             "Document post-processing stop completed successfully",

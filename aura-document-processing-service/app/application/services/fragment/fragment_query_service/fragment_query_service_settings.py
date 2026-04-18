@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class FragmentQueryServiceSettings(BaseSettings):
-    REQUIRED_PERMISSIONS: ClassVar[frozenset[str]] = frozenset({"DOCUMENT_GET"})
+    REQUIRED_PERMISSIONS: ClassVar[frozenset[str]] = frozenset({"FRAGMENT_GET"})
 
     model_config = SettingsConfigDict(
         env_prefix="FRAGMENT_QUERY_",

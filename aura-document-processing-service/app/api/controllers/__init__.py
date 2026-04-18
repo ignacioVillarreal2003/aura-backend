@@ -8,6 +8,7 @@ from app.api.controllers.document_controllers import (
     create_document_controller,
     delete_document_controller,
     document_query_controller,
+    document_download_controller,
     post_process_document_controller
 )
 
@@ -29,6 +30,12 @@ router.include_router(
     document_query_controller.router,
     prefix="/document-query",
     tags=["document-query"]
+)
+
+router.include_router(
+    document_download_controller.router,
+    prefix="/document-download",
+    tags=["document-download"]
 )
 
 router.include_router(

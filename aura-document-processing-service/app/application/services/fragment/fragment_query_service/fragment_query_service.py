@@ -10,9 +10,9 @@ from app.application.services.fragment.fragment_query_service.exceptions.fragmen
     FragmentQueryNotFoundException,
     FragmentQueryRetrievalException,
     FragmentQueryServiceException,
-    FragmentQueryUnauthorizedException
 )
-from app.application.authorization.base_service_authorizer import BaseServiceAuthorizer
+from app.application.authorization.authorizer import Authorizer
+from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
 from app.application.services.fragment.fragment_query_service.fragment_context_reranker import (
     FragmentContextReranker
 )
@@ -34,7 +34,10 @@ from app.domain.dtos.fragment.fragment_query.question_context_fragments_request 
     QuestionContextFragmentsRequest
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.models import Document
+from app.domain.models import Document, Fragment
+from app.infrastructure.persistence.database.repositories.document_collection_repository.interfaces.document_collection_repository_interface import (
+    DocumentCollectionRepositoryInterface
+)
 from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
     DocumentRepositoryInterface
 )
@@ -51,17 +54,16 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             document_repository: DocumentRepositoryInterface,
             fragment_repository: FragmentRepositoryInterface,
             embedder_factory: EmbedderFactory,
+            authorizer: Authorizer,
+            document_collection_repository: DocumentCollectionRepositoryInterface,
             fragment_query_service_settings: Optional[FragmentQueryServiceSettings] = None
     ) -> None:
         self._document_repository = document_repository
         self._fragment_repository = fragment_repository
         self._embedder_factory = embedder_factory
         self._settings = fragment_query_service_settings or FragmentQueryServiceSettings()
-        self._authorizer = BaseServiceAuthorizer(
-            unauthorized_exception_class=FragmentQueryUnauthorizedException,
-            required_permissions=self._settings.REQUIRED_PERMISSIONS,
-            operation_label="fragment query",
-        )
+        self._authorizer = authorizer
+        self._document_collection_repository = document_collection_repository
         self._reranker = FragmentContextReranker(fragment_query_service_settings=self._settings)
 
     @staticmethod
@@ -103,11 +105,12 @@ class FragmentQueryService(FragmentQueryServiceInterface):
 
         try:
             self._authorizer.require_permissions(
-                authenticated_user=authenticated_user
+                authenticated_user=authenticated_user,
+                required_permissions=self._settings.REQUIRED_PERMISSIONS,
             )
             self._authorizer.require_roles(
                 authenticated_user=authenticated_user,
-                allowed_roles=ALL_ROLES
+                allowed_roles=ALL_ROLES,
             )
 
             if question_context_fragments_request.question_max_fragments > self._settings.max_fragments:
@@ -146,6 +149,14 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             else:
                 fragments = fragments_from_question
 
+            if not authenticated_user.has_any_role(ADMIN_ROLES):
+                fragments = await self._filter_accessible_fragments(
+                    fragments=fragments,
+                    user_id=authenticated_user.id,
+                    chat_id=question_context_fragments_request.chat_id,
+                    database_session=database_session
+                )
+
             rerank_requested = (
                     self._settings.rerank_enabled
                     and question_context_fragments_request.use_rerank is True
@@ -180,7 +191,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
 
         except (
                 FragmentQueryNotFoundException,
-                FragmentQueryUnauthorizedException,
+                UnauthorizedException,
                 FragmentQueryInvalidRequestException,
                 FragmentQueryEmbeddingException,
                 FragmentQueryRetrievalException
@@ -221,11 +232,12 @@ class FragmentQueryService(FragmentQueryServiceInterface):
 
         try:
             self._authorizer.require_permissions(
-                authenticated_user=authenticated_user
+                authenticated_user=authenticated_user,
+                required_permissions=self._settings.REQUIRED_PERMISSIONS,
             )
             self._authorizer.require_roles(
                 authenticated_user=authenticated_user,
-                allowed_roles=ALL_ROLES
+                allowed_roles=ALL_ROLES,
             )
 
             if len(documents_context_fragments_request.document_ids) > self._settings.max_document_ids:
@@ -239,9 +251,9 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                     database_session=database_session
                 )
                 for document in documents:
-                    self._authorizer.require_ownership(
+                    self._authorizer.require_document_ownership(
                         document=document,
-                        authenticated_user=authenticated_user
+                        authenticated_user=authenticated_user,
                     )
 
             all_fragments = await self._retrieve_documents_fragments(
@@ -262,7 +274,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
 
         except (
                 FragmentQueryNotFoundException,
-                FragmentQueryUnauthorizedException,
+                UnauthorizedException,
                 FragmentQueryInvalidRequestException,
                 FragmentQueryEmbeddingException,
                 FragmentQueryRetrievalException
@@ -278,6 +290,26 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             raise FragmentQueryServiceException(
                 "An unexpected error occurred while retrieving context fragments for the documents."
             ) from e
+
+    async def _filter_accessible_fragments(
+            self,
+            fragments: list[Fragment],
+            user_id: int,
+            chat_id: Optional[int],
+            database_session: AsyncSession
+    ) -> list:
+        document_ids = list({fragment.document_id for fragment in fragments})
+        if not document_ids:
+            return fragments
+
+        accessible_ids = await self._document_collection_repository.get_accessible_document_ids(
+            user_id=user_id,
+            document_ids=document_ids,
+            chat_id=chat_id,
+            database_session=database_session
+        )
+
+        return [f for f in fragments if f.document_id in accessible_ids]
 
     async def _get_documents_by_ids_or_raise(
             self,
@@ -323,7 +355,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             database_session: AsyncSession,
             query_vector: list[float],
             k: int
-    ) -> list:
+    ) -> list[Fragment]:
         try:
             fragments = await self._fragment_repository.get_most_similar_fragments(
                 query_vector=query_vector,

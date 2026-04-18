@@ -34,6 +34,8 @@ class RabbitMQManagerSettings(BaseSettings):
     dlq_queue: str = Field(default="aura.dead")
 
     document_ingestion_queue: str = Field(default="document.ingestion")
+    post_process_document_queue: str = Field(default="post_process.document")
+    post_process_fragment_queue: str = Field(default="post_process.fragment")
 
     @field_validator(
         "url",
@@ -56,6 +58,8 @@ class RabbitMQManagerSettings(BaseSettings):
     @field_validator(
         "exchange",
         "document_ingestion_queue",
+        "post_process_document_queue",
+        "post_process_fragment_queue",
         "dlx_exchange",
         "dlq_queue",
         mode="before"

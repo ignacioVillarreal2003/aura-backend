@@ -39,3 +39,13 @@ class DocumentQueryControllerInterface(ABC):
             authenticated_user: AuthenticatedUser
     ) -> DocumentListResponse:
         pass
+
+    @abstractmethod
+    async def get_documents_by_chat(
+            self,
+            chat_id: int,
+            document_query_service: DocumentQueryServiceInterface,
+            database_session: AsyncSession,
+            authenticated_user: AuthenticatedUser
+    ) -> DocumentListResponse:
+        pass

@@ -34,3 +34,12 @@ class DocumentQueryServiceInterface(ABC):
             created_to: Optional[datetime] = None
     ) -> DocumentListResponse:
         pass
+
+    @abstractmethod
+    async def get_documents_by_chat(
+            self,
+            chat_id: int,
+            database_session: AsyncSession,
+            authenticated_user: AuthenticatedUser
+    ) -> DocumentListResponse:
+        pass

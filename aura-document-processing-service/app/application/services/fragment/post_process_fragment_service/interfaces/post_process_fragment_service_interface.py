@@ -29,13 +29,15 @@ class PostProcessFragmentServiceInterface(ABC):
         pass
 
     @abstractmethod
-    def get_status(
-            self
+    async def get_status(
+            self,
+            authenticated_user: AuthenticatedUser
     ) -> PostProcessFragmentsStatusResponse:
         pass
 
     @abstractmethod
     async def stop(
-            self
+            self,
+            authenticated_user: AuthenticatedUser
     ) -> None:
         pass

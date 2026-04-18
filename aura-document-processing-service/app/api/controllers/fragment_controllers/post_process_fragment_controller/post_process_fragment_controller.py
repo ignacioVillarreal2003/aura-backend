@@ -96,7 +96,9 @@ class PostProcessFragmentController(PostProcessFragmentControllerInterface):
             }
         )
 
-        post_process_fragments_status_response = post_process_fragment_service.get_status()
+        post_process_fragments_status_response = await post_process_fragment_service.get_status(
+            authenticated_user=authenticated_user,
+        )
 
         logger.info(
             "Fragment post-processing status retrieved successfully",
@@ -121,7 +123,7 @@ class PostProcessFragmentController(PostProcessFragmentControllerInterface):
             }
         )
 
-        await post_process_fragment_service.stop()
+        await post_process_fragment_service.stop(authenticated_user=authenticated_user)
 
         logger.info(
             "Fragment post-processing stop completed successfully",

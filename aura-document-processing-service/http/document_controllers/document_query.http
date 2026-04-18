@@ -23,3 +23,12 @@ Authorization: Bearer user_token_123
 
 
 ###
+
+
+GET http://localhost:8000/api/document-query/documents/chat/12345
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer user_token_123
+
+
+###

@@ -28,7 +28,7 @@ class RabbitMQManager(RabbitMQManagerInterface):
         self._connection: Optional[aio_pika.abc.AbstractRobustConnection] = None
         self._channel: Optional[aio_pika.abc.AbstractChannel] = None
         self._exchanges: dict[str, aio_pika.abc.AbstractExchange] = {}
-        self._consumer_task: Optional[asyncio.Task] = None
+        self._consumer_tasks: list[asyncio.Task] = []
 
         self._lifecycle_lock = asyncio.Lock()
         self._is_started: bool = False
@@ -74,13 +74,14 @@ class RabbitMQManager(RabbitMQManagerInterface):
 
             logger.info("Stopping the RabbitMQ manager.")
 
-            if self._consumer_task and not self._consumer_task.done():
-                self._consumer_task.cancel()
-                try:
-                    await self._consumer_task
-                except asyncio.CancelledError:
-                    pass
-                self._consumer_task = None
+            for task in list(self._consumer_tasks):
+                if task and not task.done():
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+            self._consumer_tasks.clear()
 
             await self._cleanup_resources()
             self._is_started = False
@@ -205,9 +206,10 @@ class RabbitMQManager(RabbitMQManagerInterface):
                     )
                     await asyncio.sleep(self._settings.consumer_reconnect_delay_seconds)
 
-        self._consumer_task = asyncio.create_task(
+        task = asyncio.create_task(
             _consume_loop(), name=f"rabbitmq-consumer-{queue_name}"
         )
+        self._consumer_tasks.append(task)
         logger.info(
             "The consumer background task was created.",
             extra={
@@ -299,6 +301,24 @@ class RabbitMQManager(RabbitMQManagerInterface):
             )
             await document_ingestion_queue.bind(exchange, routing_key=self._settings.document_ingestion_queue)
 
+            post_process_document_queue = await self._channel.declare_queue(
+                self._settings.post_process_document_queue,
+                durable=True,
+                arguments=queue_args
+            )
+            await post_process_document_queue.bind(
+                exchange, routing_key=self._settings.post_process_document_queue
+            )
+
+            post_process_fragment_queue = await self._channel.declare_queue(
+                self._settings.post_process_fragment_queue,
+                durable=True,
+                arguments=queue_args
+            )
+            await post_process_fragment_queue.bind(
+                exchange, routing_key=self._settings.post_process_fragment_queue
+            )
+
             self._exchanges[self._settings.exchange] = exchange
             self._exchanges[self._settings.dlx_exchange] = dlx_exchange
 
@@ -307,6 +327,8 @@ class RabbitMQManager(RabbitMQManagerInterface):
                 extra={
                     "exchange": self._settings.exchange,
                     "document_ingestion_queue": self._settings.document_ingestion_queue,
+                    "post_process_document_queue": self._settings.post_process_document_queue,
+                    "post_process_fragment_queue": self._settings.post_process_fragment_queue,
                     "dlx_exchange": self._settings.dlx_exchange,
                     "dlq_queue": self._settings.dlq_queue
                 }

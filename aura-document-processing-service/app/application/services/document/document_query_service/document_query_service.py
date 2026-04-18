@@ -4,21 +4,18 @@ from typing import Optional
 from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.authorization.base_service_authorizer import BaseServiceAuthorizer
+from app.application.authorization.authorizer import Authorizer
+from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
 from app.application.services.document.document_query_service.document_query_service_settings import (
     DocumentQueryServiceSettings
 )
-from app.domain.constants.user.user_roles import (
-    ADMIN_ROLES,
-    ALL_ROLES
-)
+from app.domain.constants.user.user_roles import ADMIN_ROLES, ALL_ROLES
 from app.domain.constants.document.document_type import DocumentType
 
 from app.application.services.document.document_query_service.exceptions.document_query_service_exception import (
     DocumentQueryInvalidRequestException,
     DocumentQueryNotFoundException,
     DocumentQueryServiceException,
-    DocumentQueryUnauthorizedException
 )
 from app.application.services.document.document_query_service.interfaces.document_query_service_interface import (
     DocumentQueryServiceInterface
@@ -38,16 +35,13 @@ class DocumentQueryService(DocumentQueryServiceInterface):
     def __init__(
             self,
             document_repository: DocumentRepositoryInterface,
+            authorizer: Authorizer,
             document_query_service_settings: Optional[DocumentQueryServiceSettings] = None
     ) -> None:
         self._document_repository = document_repository
         self._settings = document_query_service_settings or DocumentQueryServiceSettings()
 
-        self._authorizer = BaseServiceAuthorizer(
-            unauthorized_exception_class=DocumentQueryUnauthorizedException,
-            required_permissions=self._settings.REQUIRED_PERMISSIONS,
-            operation_label="document query",
-        )
+        self._authorizer = authorizer
 
     async def get_document(
             self,
@@ -66,16 +60,16 @@ class DocumentQueryService(DocumentQueryServiceInterface):
         try:
             if document_id <= 0:
                 raise DocumentQueryInvalidRequestException("The document identifier must be a positive number.")
-            self._authorizer.require_permissions(authenticated_user)
+            self._authorizer.require_permissions(
+                authenticated_user=authenticated_user,
+                required_permissions=self._settings.REQUIRED_PERMISSIONS,
+            )
             self._authorizer.require_roles(
                 authenticated_user=authenticated_user,
-                allowed_roles=ALL_ROLES
+                allowed_roles=ADMIN_ROLES,
             )
 
             document = await self._get_document_or_raise(document_id, database_session)
-
-            if not authenticated_user.has_any_role(ADMIN_ROLES):
-                self._authorizer.require_ownership(document, authenticated_user)
 
             logger.info(
                 "The document was fetched successfully.",
@@ -88,7 +82,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
 
         except (
                 DocumentQueryNotFoundException,
-                DocumentQueryUnauthorizedException,
+                UnauthorizedException,
                 DocumentQueryInvalidRequestException,
         ):
             raise
@@ -127,10 +121,13 @@ class DocumentQueryService(DocumentQueryServiceInterface):
         )
 
         try:
-            self._authorizer.require_permissions(authenticated_user)
+            self._authorizer.require_permissions(
+                authenticated_user=authenticated_user,
+                required_permissions=self._settings.REQUIRED_PERMISSIONS,
+            )
             self._authorizer.require_roles(
                 authenticated_user=authenticated_user,
-                allowed_roles=ADMIN_ROLES
+                allowed_roles=ADMIN_ROLES,
             )
             if page is not None and page < 1:
                 raise DocumentQueryInvalidRequestException("The page number must be a positive integer.")
@@ -181,7 +178,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
 
         except (
                 DocumentQueryNotFoundException,
-                DocumentQueryUnauthorizedException,
+                UnauthorizedException,
                 DocumentQueryInvalidRequestException,
         ):
             raise
@@ -194,6 +191,67 @@ class DocumentQueryService(DocumentQueryServiceInterface):
                 }
             )
             raise DocumentQueryServiceException("An unexpected error occurred while fetching documents.") from e
+
+    async def get_documents_by_chat(
+            self,
+            chat_id: int,
+            database_session: AsyncSession,
+            authenticated_user: AuthenticatedUser
+    ) -> DocumentListResponse:
+        logger.info(
+            "Fetching documents by chat was initiated.",
+            extra={
+                "chat_id": chat_id,
+                "user_id": authenticated_user.id
+            }
+        )
+
+        try:
+            if chat_id <= 0:
+                raise DocumentQueryInvalidRequestException("The chat identifier must be a positive number.")
+            self._authorizer.require_permissions(
+                authenticated_user=authenticated_user,
+                required_permissions=self._settings.REQUIRED_PERMISSIONS,
+            )
+            self._authorizer.require_roles(
+                authenticated_user=authenticated_user,
+                allowed_roles=ALL_ROLES,
+            )
+
+            documents = await self._document_repository.get_documents_by_chat_id(
+                chat_id=chat_id,
+                database_session=database_session
+            )
+
+            logger.info(
+                "Documents by chat were fetched successfully.",
+                extra={
+                    "chat_id": chat_id,
+                    "count": len(documents),
+                    "user_id": authenticated_user.id
+                }
+            )
+
+            return DocumentListResponse(
+                documents=[DocumentResponse.model_validate(d) for d in documents]
+            )
+
+        except (
+                DocumentQueryNotFoundException,
+                UnauthorizedException,
+                DocumentQueryInvalidRequestException,
+        ):
+            raise
+        except Exception as e:
+            logger.exception(
+                "An unexpected error occurred while fetching documents by chat.",
+                extra={
+                    "chat_id": chat_id
+                }
+            )
+            raise DocumentQueryServiceException(
+                "An unexpected error occurred while fetching documents by chat."
+            ) from e
 
     async def _get_document_or_raise(
             self,

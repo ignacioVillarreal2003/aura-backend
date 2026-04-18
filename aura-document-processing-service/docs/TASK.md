@@ -1,3 +1,2 @@
 - Ver cola para operaciones de post procesado
 - Ver base de datos en memoria para algo
-- Documentar otros aparte de embedding

@@ -9,10 +9,10 @@ from app.application.services.document.delete_document_service.exceptions.delete
     DeleteDocumentNotFoundException,
     DeleteDocumentServiceException,
     DeleteDocumentStorageException,
-    DeleteDocumentUnauthorizedException,
     DeleteFragmentsFailedException
 )
-from app.application.authorization.base_service_authorizer import BaseServiceAuthorizer
+from app.application.authorization.authorizer import Authorizer
+from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
 from app.application.services.document.delete_document_service.delete_document_service_settings import (
     DeleteDocumentServiceSettings
 )
@@ -48,6 +48,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             document_repository: DocumentRepositoryInterface,
             fragment_repository: FragmentRepositoryInterface,
             document_storage: DocumentStorageInterface,
+            authorizer: Authorizer,
             delete_document_service_settings: Optional[DeleteDocumentServiceSettings] = None
     ) -> None:
         self._document_repository = document_repository
@@ -55,11 +56,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
         self._document_storage = document_storage
         self._settings = delete_document_service_settings or DeleteDocumentServiceSettings()
 
-        self._authorizer = BaseServiceAuthorizer(
-            unauthorized_exception_class=DeleteDocumentUnauthorizedException,
-            required_permissions=self._settings.REQUIRED_PERMISSIONS,
-            operation_label="document deletion",
-        )
+        self._authorizer = authorizer
 
     async def soft_delete_document(
             self,
@@ -78,10 +75,13 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
         try:
             if document_id <= 0:
                 raise DeleteDocumentInvalidRequestException("The document identifier must be a positive number.")
-            self._authorizer.require_permissions(authenticated_user)
+            self._authorizer.require_permissions(
+                authenticated_user=authenticated_user,
+                required_permissions=self._settings.REQUIRED_PERMISSIONS,
+            )
             self._authorizer.require_roles(
                 authenticated_user=authenticated_user,
-                allowed_roles=ADMIN_ROLES
+                allowed_roles=ADMIN_ROLES,
             )
 
             document = await self._get_document_or_raise(document_id, database_session)
@@ -100,7 +100,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
         except (
                 DeleteDocumentInvalidRequestException,
                 DeleteDocumentNotFoundException,
-                DeleteDocumentUnauthorizedException,
+                UnauthorizedException,
                 DeleteFragmentsFailedException,
                 DeleteDocumentFailedException,
                 DeleteDocumentStorageException
@@ -134,10 +134,13 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
         try:
             if chat_id <= 0:
                 raise DeleteDocumentInvalidRequestException("The chat identifier must be a positive number.")
-            self._authorizer.require_permissions(authenticated_user)
+            self._authorizer.require_permissions(
+                authenticated_user=authenticated_user,
+                required_permissions=self._settings.REQUIRED_PERMISSIONS,
+            )
             self._authorizer.require_roles(
                 authenticated_user=authenticated_user,
-                allowed_roles=ALL_ROLES
+                allowed_roles=ALL_ROLES,
             )
 
             documents = await self._get_documents_by_chat(chat_id, database_session)
@@ -175,7 +178,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
         except (
                 DeleteDocumentInvalidRequestException,
                 DeleteDocumentNotFoundException,
-                DeleteDocumentUnauthorizedException,
+                UnauthorizedException,
                 DeleteFragmentsFailedException,
                 DeleteDocumentFailedException,
                 DeleteDocumentStorageException
@@ -209,10 +212,13 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
         try:
             if document_id <= 0:
                 raise DeleteDocumentInvalidRequestException("The document identifier must be a positive number.")
-            self._authorizer.require_permissions(authenticated_user)
+            self._authorizer.require_permissions(
+                authenticated_user=authenticated_user,
+                required_permissions=self._settings.REQUIRED_PERMISSIONS,
+            )
             self._authorizer.require_roles(
                 authenticated_user=authenticated_user,
-                allowed_roles=ADMIN_ROLES
+                allowed_roles=ADMIN_ROLES,
             )
 
             document = await self._get_document_or_raise(document_id, database_session)
@@ -233,7 +239,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
         except (
                 DeleteDocumentInvalidRequestException,
                 DeleteDocumentNotFoundException,
-                DeleteDocumentUnauthorizedException,
+                UnauthorizedException,
                 DeleteFragmentsFailedException,
                 DeleteDocumentFailedException,
                 DeleteDocumentStorageException
@@ -267,10 +273,13 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
         try:
             if chat_id <= 0:
                 raise DeleteDocumentInvalidRequestException("The chat identifier must be a positive number.")
-            self._authorizer.require_permissions(authenticated_user)
+            self._authorizer.require_permissions(
+                authenticated_user=authenticated_user,
+                required_permissions=self._settings.REQUIRED_PERMISSIONS,
+            )
             self._authorizer.require_roles(
                 authenticated_user=authenticated_user,
-                allowed_roles=ADMIN_ROLES
+                allowed_roles=ADMIN_ROLES,
             )
 
             documents = await self._get_documents_by_chat(chat_id, database_session)
@@ -305,7 +314,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
         except (
                 DeleteDocumentInvalidRequestException,
                 DeleteDocumentNotFoundException,
-                DeleteDocumentUnauthorizedException,
+                UnauthorizedException,
                 DeleteFragmentsFailedException,
                 DeleteDocumentFailedException,
                 DeleteDocumentStorageException
@@ -340,7 +349,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
                     "document_ids": unauthorized_ids
                 }
             )
-            raise DeleteDocumentUnauthorizedException(
+            raise UnauthorizedException(
                 "You do not own any documents in this chat."
             )
 
