@@ -33,7 +33,7 @@ from app.application.services.document.create_document_service.interfaces.create
 )
 from app.domain.constants.document.document_mime_type import DocumentMimeType
 from app.domain.constants.document.document_status import DocumentStatus
-from app.domain.constants.user.user_roles import ALL_ROLES
+from app.domain.constants.document_processing_permissions import DocumentProcessingPermissions
 from app.domain.dtos.document.create_document.create_document_request import CreateDocumentRequest
 from app.domain.dtos.document.create_document.create_document_response import CreateDocumentResponse
 from app.infrastructure.messaging.rabbitmq.dtos.commands.document_ingestion_command import DocumentIngestionCommand
@@ -99,11 +99,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
         try:
             self._authorizer.require_permissions(
                 authenticated_user=authenticated_user,
-                required_permissions=self._settings.REQUIRED_PERMISSIONS,
-            )
-            self._authorizer.require_roles(
-                authenticated_user=authenticated_user,
-                allowed_roles=ALL_ROLES,
+                required_permissions=frozenset({DocumentProcessingPermissions.INGEST_DOCUMENT}),
             )
 
             try:

@@ -22,10 +22,7 @@ from app.application.services.fragment.fragment_query_service.fragment_query_ser
 from app.application.services.fragment.fragment_query_service.interfaces.fragment_query_service_interface import (
     FragmentQueryServiceInterface
 )
-from app.domain.constants.user.user_roles import (
-    ADMIN_ROLES,
-    ALL_ROLES
-)
+from app.domain.constants.document_processing_permissions import DocumentProcessingPermissions
 from app.domain.dtos.fragment.fragment_query.documents_context_fragments_request import (
     DocumentsContextFragmentsRequest
 )
@@ -106,11 +103,9 @@ class FragmentQueryService(FragmentQueryServiceInterface):
         try:
             self._authorizer.require_permissions(
                 authenticated_user=authenticated_user,
-                required_permissions=self._settings.REQUIRED_PERMISSIONS,
-            )
-            self._authorizer.require_roles(
-                authenticated_user=authenticated_user,
-                allowed_roles=ALL_ROLES,
+                required_permissions=frozenset({
+                    DocumentProcessingPermissions.LIST_CONTEXT_FRAGMENTS_BY_QUESTION,
+                }),
             )
 
             if question_context_fragments_request.question_max_fragments > self._settings.max_fragments:
@@ -149,7 +144,9 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             else:
                 fragments = fragments_from_question
 
-            if not authenticated_user.has_any_role(ADMIN_ROLES):
+            if not authenticated_user.has_permission(
+                    DocumentProcessingPermissions.ACCESS_ALL_PROCESSING_RESOURCES
+            ):
                 fragments = await self._filter_accessible_fragments(
                     fragments=fragments,
                     user_id=authenticated_user.id,
@@ -233,11 +230,9 @@ class FragmentQueryService(FragmentQueryServiceInterface):
         try:
             self._authorizer.require_permissions(
                 authenticated_user=authenticated_user,
-                required_permissions=self._settings.REQUIRED_PERMISSIONS,
-            )
-            self._authorizer.require_roles(
-                authenticated_user=authenticated_user,
-                allowed_roles=ALL_ROLES,
+                required_permissions=frozenset({
+                    DocumentProcessingPermissions.LIST_CONTEXT_FRAGMENTS_BY_DOCUMENTS,
+                }),
             )
 
             if len(documents_context_fragments_request.document_ids) > self._settings.max_document_ids:
@@ -245,7 +240,9 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                     "The number of document identifiers exceeds the configured limit."
                 )
 
-            if not authenticated_user.has_any_role(ADMIN_ROLES):
+            if not authenticated_user.has_permission(
+                    DocumentProcessingPermissions.ACCESS_ALL_PROCESSING_RESOURCES
+            ):
                 documents = await self._get_documents_by_ids_or_raise(
                     document_ids=document_ids,
                     database_session=database_session

@@ -1,0 +1,28 @@
+from dataclasses import dataclass, field
+
+
+@dataclass(frozen=True)
+class AuthenticatedUser:
+    id: int
+    email: str
+    roles: list[str] = field(default_factory=list)
+    permissions: list[str] = field(default_factory=list)
+
+    @property
+    def pk(self) -> int:
+        return self.id
+
+    @property
+    def is_authenticated(self) -> bool:
+        return True
+
+    def has_all_permissions(self, required: frozenset[str]) -> bool:
+        if not required:
+            return True
+        perms = set(self.permissions)
+        return required <= perms
+
+    def has_any_role(self, allowed: frozenset[str]) -> bool:
+        if not allowed:
+            return False
+        return bool(allowed & set(self.roles))

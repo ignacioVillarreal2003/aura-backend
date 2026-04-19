@@ -20,10 +20,7 @@ from app.application.services.document.delete_document_service.interfaces.delete
     DeleteDocumentServiceInterface
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.constants.user.user_roles import (
-    ADMIN_ROLES,
-    ALL_ROLES
-)
+from app.domain.constants.document_processing_permissions import DocumentProcessingPermissions
 from app.domain.models.document import Document
 from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
     DocumentRepositoryInterface
@@ -77,11 +74,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
                 raise DeleteDocumentInvalidRequestException("The document identifier must be a positive number.")
             self._authorizer.require_permissions(
                 authenticated_user=authenticated_user,
-                required_permissions=self._settings.REQUIRED_PERMISSIONS,
-            )
-            self._authorizer.require_roles(
-                authenticated_user=authenticated_user,
-                allowed_roles=ADMIN_ROLES,
+                required_permissions=frozenset({DocumentProcessingPermissions.SOFT_DELETE_DOCUMENT}),
             )
 
             document = await self._get_document_or_raise(document_id, database_session)
@@ -136,11 +129,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
                 raise DeleteDocumentInvalidRequestException("The chat identifier must be a positive number.")
             self._authorizer.require_permissions(
                 authenticated_user=authenticated_user,
-                required_permissions=self._settings.REQUIRED_PERMISSIONS,
-            )
-            self._authorizer.require_roles(
-                authenticated_user=authenticated_user,
-                allowed_roles=ALL_ROLES,
+                required_permissions=frozenset({DocumentProcessingPermissions.SOFT_DELETE_DOCUMENTS_BY_CHAT}),
             )
 
             documents = await self._get_documents_by_chat(chat_id, database_session)
@@ -158,8 +147,9 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
                 )
                 return
 
-            is_admin = authenticated_user.has_any_role(ADMIN_ROLES)
-            if not is_admin:
+            if not authenticated_user.has_permission(
+                    DocumentProcessingPermissions.ACCESS_ALL_PROCESSING_RESOURCES
+            ):
                 documents = self._filter_owned_or_raise(documents, authenticated_user, chat_id)
 
             for document in documents:
@@ -214,11 +204,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
                 raise DeleteDocumentInvalidRequestException("The document identifier must be a positive number.")
             self._authorizer.require_permissions(
                 authenticated_user=authenticated_user,
-                required_permissions=self._settings.REQUIRED_PERMISSIONS,
-            )
-            self._authorizer.require_roles(
-                authenticated_user=authenticated_user,
-                allowed_roles=ADMIN_ROLES,
+                required_permissions=frozenset({DocumentProcessingPermissions.HARD_DELETE_DOCUMENT}),
             )
 
             document = await self._get_document_or_raise(document_id, database_session)
@@ -275,11 +261,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
                 raise DeleteDocumentInvalidRequestException("The chat identifier must be a positive number.")
             self._authorizer.require_permissions(
                 authenticated_user=authenticated_user,
-                required_permissions=self._settings.REQUIRED_PERMISSIONS,
-            )
-            self._authorizer.require_roles(
-                authenticated_user=authenticated_user,
-                allowed_roles=ADMIN_ROLES,
+                required_permissions=frozenset({DocumentProcessingPermissions.HARD_DELETE_DOCUMENTS_BY_CHAT}),
             )
 
             documents = await self._get_documents_by_chat(chat_id, database_session)

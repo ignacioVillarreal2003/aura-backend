@@ -18,7 +18,7 @@ from app.application.services.document.document_download_service.interfaces.docu
     DocumentDownloadServiceInterface
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.constants.user.user_roles import ALL_ROLES
+from app.domain.constants.document_processing_permissions import DocumentProcessingPermissions
 from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
     DocumentRepositoryInterface
 )
@@ -65,11 +65,7 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
                 raise DocumentDownloadInvalidRequestException("The document identifier must be a positive number.")
             self._authorizer.require_permissions(
                 authenticated_user=authenticated_user,
-                required_permissions=self._settings.REQUIRED_PERMISSIONS,
-            )
-            self._authorizer.require_roles(
-                authenticated_user=authenticated_user,
-                allowed_roles=ALL_ROLES,
+                required_permissions=frozenset({DocumentProcessingPermissions.DOWNLOAD_DOCUMENT}),
             )
 
             document = await self._document_repository.get_document_by_id(

@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="541f8908-7e23-4d18-b532-96aae5c81a7c" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/.env.docker" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/.idea/aura-document-collection.iml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/.idea/inspectionProfiles/Project_Default.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/.idea/inspectionProfiles/profiles_settings.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/.idea/misc.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/.idea/modules.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/.idea/vcs.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/.idea/workspace.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/Dockerfile" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/apps/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/apps/document_collections/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/apps/document_collections/apps.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/apps/document_collections/exceptions.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/apps/document_collections/migrations/0001_initial.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/apps/document_collections/migrations/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/apps/document_collections/models.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/apps/document_collections/repositories/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/apps/document_collections/repositories/document_collection_repository.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/apps/document_collections/repositories/document_link_repository.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/apps/document_collections/repositories/document_read_repository.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/apps/document_collections/repositories/user_membership_repository.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/apps/document_collections/serializers/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/apps/document_collections/serializers/document_collection_serializers.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/apps/document_collections/serializers/request_serializers.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/apps/document_collections/services/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/apps/document_collections/services/document_collection_service.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/apps/document_collections/tests/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/apps/document_collections/tests/test_authentication_provider.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/apps/document_collections/tests/test_exception_handler.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/apps/document_collections/tests/test_health.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/apps/document_collections/tests/test_middleware_auth.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/apps/document_collections/urls.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/apps/document_collections/views/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/apps/document_collections/views/document_collection_viewset.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/aura_document_collection/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/aura_document_collection/asgi.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/aura_document_collection/settings/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/aura_document_collection/settings/base.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/aura_document_collection/settings/development.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/aura_document_collection/settings/production.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/aura_document_collection/urls.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/aura_document_collection/wsgi.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/core/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/core/authentication/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/core/authentication/authenticated_user.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/core/authentication/backends.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/core/authentication/exceptions.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/core/authentication/middleware.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/core/authentication/provider.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/core/exceptions/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/core/exceptions/base.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/core/exceptions/handler.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/core/middleware/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/core/middleware/correlation_id.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/core/middleware/request_logging.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/core/pagination/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/core/pagination/pagination.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/env.example" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/manage.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-collection/requirements.txt" beforeDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="DjangoConsoleOptions" custom-start-script="import sys; print('Python %s on %s' % (sys.version, sys.platform))&#10;import django; print('Django %s' % django.get_version())&#10;sys.path.extend([WORKING_DIR_AND_PYTHON_PATHS])&#10;if 'setup' in dir(django): django.setup()&#10;import django_manage_shell; django_manage_shell.run(PROJECT_ROOT)">
+    <option name="myCustomStartScript" value="import sys; print('Python %s on %s' % (sys.version, sys.platform))&#10;import django; print('Django %s' % django.get_version())&#10;sys.path.extend([WORKING_DIR_AND_PYTHON_PATHS])&#10;if 'setup' in dir(django): django.setup()&#10;import django_manage_shell; django_manage_shell.run(PROJECT_ROOT)" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/.." />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 8
+}</component>
+  <component name="ProjectId" id="3CXKPLSxX2UC6YQOyPoKJsjO6IZ" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Django Server.aura-document-collection.executor": "Run",
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.OpenDjangoStructureViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "git-widget-placeholder": "feature/mejora",
+    "last_opened_file_path": "C:/Users/ignac/Desktop/AURA/aura-backend/aura-document-collection-service",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable",
+    "vue.rearranger.settings.migration": "true"
+  },
+  "keyToStringList": {
+    "DatabaseDriversLRU": [
+      "postgresql"
+    ]
+  }
+}]]></component>
+  <component name="RunManager">
+    <configuration name="aura-document-collection" type="Python.DjangoServer" factoryName="Django server">
+      <module name="aura-document-collection-service" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="launchJavascriptDebuger" value="false" />
+      <option name="port" value="8000" />
+      <option name="host" value="" />
+      <option name="additionalOptions" value="" />
+      <option name="browserUrl" value="" />
+      <option name="runTestServer" value="false" />
+      <option name="runNoReload" value="false" />
+      <option name="useCustomRunCommand" value="false" />
+      <option name="customRunCommand" value="" />
+      <method v="2" />
+    </configuration>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-09060db00ec0-JavaScript-PY-251.26927.74" />
+        <option value="bundled-python-sdk-657d8234b839-64d779b69b7a-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-251.26927.74" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="541f8908-7e23-4d18-b532-96aae5c81a7c" name="Changes" comment="" />
+      <created>1776526450145</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1776526450145</updated>
+      <workItem from="1776526451190" duration="685000" />
+      <workItem from="1776539579321" duration="4009000" />
+      <workItem from="1776544217124" duration="12150000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+</project>

@@ -23,18 +23,41 @@ MOCK_USERS = {
         "username": "john_doe",
         "roles": ["USER", "ADMIN", "SUPERADMIN"],
         "permissions": [
-            "DOCUMENT_CREATE",
-            "DOCUMENT_UPDATE",
-            "DOCUMENT_DELETE",
-            "DOCUMENT_GET",
-            "FRAGMENT_CREATE",
-            "FRAGMENT_UPDATE",
-            "FRAGMENT_DELETE",
-            "FRAGMENT_GET"
+            "INGEST_DOCUMENT",
+            "GET_DOCUMENT",
+            "LIST_DOCUMENTS",
+            "LIST_DOCUMENTS_BY_CHAT",
+            "DOWNLOAD_DOCUMENT",
+            "SOFT_DELETE_DOCUMENT",
+            "SOFT_DELETE_DOCUMENTS_BY_CHAT",
+            "HARD_DELETE_DOCUMENT",
+            "HARD_DELETE_DOCUMENTS_BY_CHAT",
+            "POST_PROCESS_DOCUMENTS_START_ALL",
+            "POST_PROCESS_DOCUMENTS_START",
+            "POST_PROCESS_DOCUMENTS_STATUS",
+            "POST_PROCESS_DOCUMENTS_STOP",
+            "POST_PROCESS_FRAGMENTS_START_ALL",
+            "POST_PROCESS_FRAGMENTS_START",
+            "POST_PROCESS_FRAGMENTS_STATUS",
+            "POST_PROCESS_FRAGMENTS_STOP",
+            "LIST_CONTEXT_FRAGMENTS_BY_QUESTION",
+            "LIST_CONTEXT_FRAGMENTS_BY_DOCUMENTS",
+            "ACCESS_ALL_PROCESSING_RESOURCES",
+
+            "LIST_DOCUMENT_COLLECTIONS",
+            "CREATE_DOCUMENT_COLLECTION",
+            "GET_DOCUMENT_COLLECTION",
+            "UPDATE_DOCUMENT_COLLECTION",
+            "DELETE_DOCUMENT_COLLECTION",
+            "LIST_DOCUMENT_COLLECTION_USERS",
+            "ADD_DOCUMENT_COLLECTION_USER",
+            "REMOVE_DOCUMENT_COLLECTION_USER",
+            "LIST_DOCUMENT_COLLECTION_DOCUMENTS",
+            "ADD_DOCUMENT_COLLECTION_DOCUMENT",
+            "REMOVE_DOCUMENT_COLLECTION_DOCUMENT",
         ]
     },
 }
-
 
 def extract_token(authorization: Optional[str]) -> str:
     if not authorization:

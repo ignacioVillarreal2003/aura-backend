@@ -21,7 +21,7 @@ from app.application.services.document.post_process_document_service.post_proces
 )
 from app.configuration.prometheus_post_process_metrics import post_process_jobs_published
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.constants.user.user_roles import ADMIN_ROLES
+from app.domain.constants.document_processing_permissions import DocumentProcessingPermissions
 from app.domain.dtos.document.post_process_document.post_process_document_error import PostProcessDocumentError
 from app.domain.dtos.document.post_process_document.post_process_documents_request import PostProcessDocumentsRequest
 from app.domain.dtos.document.post_process_document.post_process_documents_start_response import (
@@ -68,11 +68,7 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
     ) -> PostProcessDocumentsStartResponse:
         self._authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=self._settings.REQUIRED_PERMISSIONS,
-        )
-        self._authorizer.require_roles(
-            authenticated_user=authenticated_user,
-            allowed_roles=ADMIN_ROLES,
+            required_permissions=frozenset({DocumentProcessingPermissions.POST_PROCESS_DOCUMENTS_START_ALL}),
         )
 
         logger.info(
@@ -106,11 +102,7 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
     ) -> PostProcessDocumentsStartResponse:
         self._authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=self._settings.REQUIRED_PERMISSIONS,
-        )
-        self._authorizer.require_roles(
-            authenticated_user=authenticated_user,
-            allowed_roles=ADMIN_ROLES,
+            required_permissions=frozenset({DocumentProcessingPermissions.POST_PROCESS_DOCUMENTS_START}),
         )
         if len(post_process_documents_request.document_ids) > self._settings.max_document_ids:
             raise PostProcessDocumentInvalidRequestException(
@@ -136,11 +128,7 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
     ) -> PostProcessDocumentsStatusResponse:
         self._authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=self._settings.REQUIRED_PERMISSIONS,
-        )
-        self._authorizer.require_roles(
-            authenticated_user=authenticated_user,
-            allowed_roles=ADMIN_ROLES,
+            required_permissions=frozenset({DocumentProcessingPermissions.POST_PROCESS_DOCUMENTS_STATUS}),
         )
         snapshot = await self._job_progress_store.get_document_job_snapshot()
         return self._document_status_from_snapshot(snapshot)
@@ -151,11 +139,7 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
     ) -> None:
         self._authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=self._settings.REQUIRED_PERMISSIONS,
-        )
-        self._authorizer.require_roles(
-            authenticated_user=authenticated_user,
-            allowed_roles=ADMIN_ROLES,
+            required_permissions=frozenset({DocumentProcessingPermissions.POST_PROCESS_DOCUMENTS_STOP}),
         )
         snapshot = await self._job_progress_store.get_document_job_snapshot()
         if snapshot is None or not snapshot.get("is_running"):

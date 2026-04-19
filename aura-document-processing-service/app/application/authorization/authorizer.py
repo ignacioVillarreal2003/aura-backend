@@ -29,24 +29,6 @@ class Authorizer:
         raise UnauthorizedException("You do not have permission to perform this action.")
 
     @staticmethod
-    def require_roles(
-            authenticated_user: AuthenticatedUser,
-            allowed_roles: set[str]
-    ) -> None:
-        if authenticated_user.has_any_role(allowed_roles):
-            return
-
-        logger.warning(
-            "Insufficient role for the operation.",
-            extra={
-                "user_id": authenticated_user.id,
-                "user_roles": sorted(authenticated_user.roles),
-                "allowed_roles": sorted(allowed_roles)
-            }
-        )
-        raise UnauthorizedException("You do not have the required role for this action.")
-
-    @staticmethod
     def require_document_ownership(
             document: Document,
             authenticated_user: AuthenticatedUser

@@ -1,11 +1,8 @@
-from typing import ClassVar
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class PostProcessDocumentServiceSettings(BaseSettings):
-    REQUIRED_PERMISSIONS: ClassVar[frozenset[str]] = frozenset({"DOCUMENT_UPDATE"})
-
     model_config = SettingsConfigDict(
         env_prefix="POST_PROCESS_DOCUMENT_",
         env_file=".env",

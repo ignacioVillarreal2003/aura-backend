@@ -1,12 +1,10 @@
-from typing import ClassVar, Optional
+from typing import Optional
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class FragmentQueryServiceSettings(BaseSettings):
-    REQUIRED_PERMISSIONS: ClassVar[frozenset[str]] = frozenset({"FRAGMENT_GET"})
-
     model_config = SettingsConfigDict(
         env_prefix="FRAGMENT_QUERY_",
         env_file=".env",

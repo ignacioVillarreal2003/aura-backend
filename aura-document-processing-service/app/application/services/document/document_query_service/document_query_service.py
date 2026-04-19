@@ -9,7 +9,7 @@ from app.application.authorization.exceptions.autorization_exceptions import Una
 from app.application.services.document.document_query_service.document_query_service_settings import (
     DocumentQueryServiceSettings
 )
-from app.domain.constants.user.user_roles import ADMIN_ROLES, ALL_ROLES
+from app.domain.constants.document_processing_permissions import DocumentProcessingPermissions
 from app.domain.constants.document.document_type import DocumentType
 
 from app.application.services.document.document_query_service.exceptions.document_query_service_exception import (
@@ -62,11 +62,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
                 raise DocumentQueryInvalidRequestException("The document identifier must be a positive number.")
             self._authorizer.require_permissions(
                 authenticated_user=authenticated_user,
-                required_permissions=self._settings.REQUIRED_PERMISSIONS,
-            )
-            self._authorizer.require_roles(
-                authenticated_user=authenticated_user,
-                allowed_roles=ADMIN_ROLES,
+                required_permissions=frozenset({DocumentProcessingPermissions.GET_DOCUMENT}),
             )
 
             document = await self._get_document_or_raise(document_id, database_session)
@@ -123,11 +119,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
         try:
             self._authorizer.require_permissions(
                 authenticated_user=authenticated_user,
-                required_permissions=self._settings.REQUIRED_PERMISSIONS,
-            )
-            self._authorizer.require_roles(
-                authenticated_user=authenticated_user,
-                allowed_roles=ADMIN_ROLES,
+                required_permissions=frozenset({DocumentProcessingPermissions.LIST_DOCUMENTS}),
             )
             if page is not None and page < 1:
                 raise DocumentQueryInvalidRequestException("The page number must be a positive integer.")
@@ -211,11 +203,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
                 raise DocumentQueryInvalidRequestException("The chat identifier must be a positive number.")
             self._authorizer.require_permissions(
                 authenticated_user=authenticated_user,
-                required_permissions=self._settings.REQUIRED_PERMISSIONS,
-            )
-            self._authorizer.require_roles(
-                authenticated_user=authenticated_user,
-                allowed_roles=ALL_ROLES,
+                required_permissions=frozenset({DocumentProcessingPermissions.LIST_DOCUMENTS_BY_CHAT}),
             )
 
             documents = await self._document_repository.get_documents_by_chat_id(
