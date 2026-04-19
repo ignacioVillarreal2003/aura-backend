@@ -251,18 +251,18 @@ INSERT INTO permission (name, description) VALUES
 -- FAU ROLES (rangos Fuerza Aérea)
 -- ============================================
 INSERT INTO fau_role (name, description, power) VALUES
-    ('General de Brigada',    'Máxima autoridad institucional',         600),
-    ('Comodoro',              'Alto mando operativo',                   500),
-    ('Vicecomodoro',          'Segundo al mando operativo',             400),
-    ('Mayor',                 'Oficial superior de área',               350),
-    ('Capitán',               'Oficial a cargo de unidad',              300),
-    ('Teniente Primero',      'Oficial de apoyo senior',                250),
-    ('Teniente',              'Oficial de apoyo',                       200),
-    ('Subteniente',           'Oficial en formación',                   150),
-    ('Suboficial Mayor',      'Suboficial de mayor jerarquía',          120),
-    ('Cabo Primero',          'Suboficial intermedio',                   80),
-    ('Cabo',                  'Suboficial básico',                       50),
-    ('Soldado',               'Personal de tropa',                       10);
+    ('General de Brigada',    'Máxima autoridad institucional',         12),
+    ('Comodoro',              'Alto mando operativo',                   11),
+    ('Vicecomodoro',          'Segundo al mando operativo',             10),
+    ('Mayor',                 'Oficial superior de área',                9),
+    ('Capitán',               'Oficial a cargo de unidad',               8),
+    ('Teniente Primero',      'Oficial de apoyo senior',                 7),
+    ('Teniente',              'Oficial de apoyo',                        6),
+    ('Subteniente',           'Oficial en formación',                    5),
+    ('Suboficial Mayor',      'Suboficial de mayor jerarquía',           4),
+    ('Cabo Primero',          'Suboficial intermedio',                   3),
+    ('Cabo',                  'Suboficial básico',                       2),
+    ('Soldado',               'Personal de tropa',                       1);
 
 -- ============================================
 -- ROLES DEL SISTEMA
@@ -306,7 +306,7 @@ AND p.name IN (
 -- USUARIOS
 -- ============================================
 -- NOTA: passwords hasheados con Django's PBKDF2SHA256
--- Todos tienen password: hola
+-- Todos tienen password: 
 INSERT INTO auth_user (
     username, email, password, status,
     account_non_expired, account_non_locked, credentials_non_expired,

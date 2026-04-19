@@ -6,7 +6,7 @@ from django.contrib.admin.widgets import FilteredSelectMultiple
 from django.utils.html import format_html
 from accounts.models import FauRole, PermissionInFauRole, Permission
 from accounts.admin_parts.utils.mixins import HelpTextStripMixin
-from accounts.admin_parts.utils.audit import _is_admin_or_super_user, _is_super_admin_user, log_audit
+from accounts.admin_parts.common import is_admin_or_super_user, is_super_admin_user, log_audit
 
 
 class FauRoleAdminForm(forms.ModelForm):
@@ -78,19 +78,19 @@ class FauRoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
     power_badge.admin_order_field = 'power'
 
     def has_module_permission(self, request):
-        return _is_admin_or_super_user(request.user)
+        return is_admin_or_super_user(request.user)
 
     def has_view_permission(self, request, obj=None):
-        return _is_admin_or_super_user(request.user)
+        return is_admin_or_super_user(request.user)
 
     def has_add_permission(self, request):
-        return _is_super_admin_user(request.user)
+        return is_super_admin_user(request.user)
 
     def has_change_permission(self, request, obj=None):
-        return _is_super_admin_user(request.user)
+        return is_super_admin_user(request.user)
 
     def has_delete_permission(self, request, obj=None):
-        return _is_super_admin_user(request.user)
+        return is_super_admin_user(request.user)
 
     def save_related(self, request, form, formsets, change):
         super().save_related(request, form, formsets, change)

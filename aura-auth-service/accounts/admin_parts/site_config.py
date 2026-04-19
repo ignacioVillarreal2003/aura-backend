@@ -3,7 +3,7 @@
 from django.contrib import admin
 from django.contrib.auth.models import Group
 from django.urls import reverse
-from accounts.admin_parts.common import _is_super_admin_user, _is_admin_user
+from accounts.admin_parts.common import is_super_admin_user, is_admin_user
 
 
 # Customize admin site
@@ -18,7 +18,7 @@ admin.site.unregister(Group)
 def _custom_get_app_list(self, request, app_label=None):
     app_list = admin.AdminSite.get_app_list(self, request, app_label)
     desired_order = ['User']
-    if _is_super_admin_user(request.user) or _is_admin_user(request.user):
+    if is_super_admin_user(request.user) or is_admin_user(request.user):
         desired_order = [
             'User',
             'CustomGroup',
@@ -53,7 +53,7 @@ def _custom_get_app_list(self, request, app_label=None):
         # 'notifications' placeholder removed — real models registered via notifications app.
     ]
 
-    if _is_super_admin_user(request.user):
+    if is_super_admin_user(request.user):
         placeholder_apps.append(
             {
                 'app_label': 'auditoria',
@@ -82,7 +82,7 @@ def _custom_get_app_list(self, request, app_label=None):
 
     for app in app_list:
         if app.get('app_label') == 'accounts':
-            if not (_is_super_admin_user(request.user) or _is_admin_user(request.user)):
+            if not (is_super_admin_user(request.user) or is_admin_user(request.user)):
                 app['models'] = [
                     model for model in app['models']
                     if model.get('object_name') in {'User'}
@@ -115,3 +115,18 @@ def _custom_get_app_list(self, request, app_label=None):
 
 
 admin.site.get_app_list = _custom_get_app_list.__get__(admin.site, admin.AdminSite)
+
+
+def _custom_get_urls(self):
+    from django.urls import path
+    from accounts.admin_parts.audit_admin import _audit_list_view
+    from accounts.admin_parts.dashboard_admin import _dashboard_overview_view
+    base_urls = admin.AdminSite.get_urls(self)
+    custom_urls = [
+        path('dashboard/', self.admin_view(_dashboard_overview_view), name='dashboard_overview'),
+        path('auditoria/', self.admin_view(_audit_list_view), name='auditoria_list'),
+    ]
+    return custom_urls + base_urls
+
+
+admin.site.get_urls = _custom_get_urls.__get__(admin.site, admin.AdminSite)

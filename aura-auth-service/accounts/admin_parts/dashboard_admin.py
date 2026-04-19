@@ -9,10 +9,9 @@ from django.db import OperationalError, connections
 from django.db.models import Count, Sum
 from django.db.models.functions import Coalesce
 from django.template.response import TemplateResponse
-from django.urls import path
 from django.utils import timezone
 
-from accounts.admin_parts.common import _is_admin_or_super_user
+from accounts.admin_parts.common import is_admin_or_super_user
 from accounts.models import CustomGroup, User, UserRole
 from documents.models import Document
 from notifications.models import Notification
@@ -24,7 +23,7 @@ logger = logging.getLogger(__name__)
 def _dashboard_overview_view(request):
     """Render a lightweight admin dashboard using existing project data."""
 
-    if not _is_admin_or_super_user(request.user):
+    if not is_admin_or_super_user(request.user):
         raise PermissionDenied
 
     now = timezone.now()
@@ -128,14 +127,3 @@ def _dashboard_overview_view(request):
         'generated_at': now,
     }
     return TemplateResponse(request, 'admin/dashboard/index.html', context)
-
-
-def _custom_get_urls(self):
-    urls = admin.AdminSite.get_urls(self)
-    custom_urls = [
-        path('dashboard/', self.admin_view(_dashboard_overview_view), name='dashboard_overview'),
-    ]
-    return custom_urls + urls
-
-
-admin.site.get_urls = _custom_get_urls.__get__(admin.site, admin.AdminSite)

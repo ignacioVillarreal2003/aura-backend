@@ -101,39 +101,6 @@ def revoke_refresh_token(refresh_token: uuid.UUID | str) -> bool:
 	return True
 
 
-def introspect_token(token: str) -> dict | None:
-	try:
-		payload = jwt.decode(
-			token,
-			settings.JWT_SIGNING_KEY,
-			algorithms=[settings.JWT_ALGORITHM],
-		)
-	except jwt.PyJWTError:
-		return None
-
-	user_id = payload.get('user_id')
-	if not user_id:
-		return None
-	user = User.objects.filter(id=user_id).first()
-	if not user or user.is_deleted or user.status != 'active':
-		return None
-
-	if user.is_superuser:
-		return {
-			'user_id': user.id,
-			'roles': get_user_roles(user),
-			'permissions': ['*'],
-			'is_super_admin': True,
-		}
-
-	return {
-		'user_id': user.id,
-		'roles': get_user_roles(user),
-		'permissions': get_user_permissions(user),
-		'is_super_admin': False,
-	}
-
-
 def get_user_info(token: str) -> dict | None:
 	try:
 		payload = jwt.decode(

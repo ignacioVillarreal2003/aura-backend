@@ -3,7 +3,7 @@
 from django.contrib import admin
 from accounts.models import Permission
 from accounts.admin_parts.utils.mixins import HelpTextStripMixin
-from accounts.admin_parts.utils.audit import _is_super_admin_user, _is_admin_or_super_user, log_audit
+from accounts.admin_parts.common import is_super_admin_user, is_admin_or_super_user, log_audit, truncate_description
 
 
 @admin.register(Permission)
@@ -27,24 +27,22 @@ class PermissionAdmin(HelpTextStripMixin, admin.ModelAdmin):
         return self.fieldsets
 
     def has_module_permission(self, request):
-        return _is_admin_or_super_user(request.user)
+        return is_admin_or_super_user(request.user)
 
     def has_view_permission(self, request, obj=None):
-        return _is_admin_or_super_user(request.user)
+        return is_admin_or_super_user(request.user)
 
     def has_add_permission(self, request):
-        return _is_super_admin_user(request.user)
+        return is_super_admin_user(request.user)
 
     def has_change_permission(self, request, obj=None):
-        return _is_super_admin_user(request.user)
+        return is_super_admin_user(request.user)
 
     def has_delete_permission(self, request, obj=None):
-        return _is_super_admin_user(request.user)
+        return is_super_admin_user(request.user)
 
     def description_short(self, obj):
-        if obj.description:
-            return obj.description[:50] + '...' if len(obj.description) > 50 else obj.description
-        return '-'
+        return truncate_description(obj.description)
     description_short.short_description = 'Descripción'
 
     def save_model(self, request, obj, form, change):

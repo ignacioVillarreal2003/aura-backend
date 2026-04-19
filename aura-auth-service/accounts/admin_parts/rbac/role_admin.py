@@ -3,10 +3,9 @@
 from django import forms
 from django.contrib import admin
 from django.contrib.admin.widgets import FilteredSelectMultiple
-from django.utils.html import format_html
 from accounts.models import Role, Permission, PermissionInRole
 from accounts.admin_parts.utils.mixins import HelpTextStripMixin
-from accounts.admin_parts.utils.audit import _is_super_admin_user, _is_admin_or_super_user, log_audit
+from accounts.admin_parts.common import is_super_admin_user, is_admin_or_super_user, log_audit, truncate_description, count_badge
 
 
 class RoleAdminForm(forms.ModelForm):
@@ -57,19 +56,19 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
         return self.readonly_fields
 
     def has_module_permission(self, request):
-        return _is_admin_or_super_user(request.user)
+        return is_admin_or_super_user(request.user)
 
     def has_view_permission(self, request, obj=None):
-        return _is_admin_or_super_user(request.user)
+        return is_admin_or_super_user(request.user)
 
     def has_add_permission(self, request):
         return False
 
     def has_change_permission(self, request, obj=None):
-        return _is_super_admin_user(request.user)
+        return is_super_admin_user(request.user)
 
     def has_delete_permission(self, request, obj=None):
-        if not _is_super_admin_user(request.user):
+        if not is_super_admin_user(request.user):
             return False
         if obj is None:
             return True
@@ -122,7 +121,7 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
         super().delete_model(request, obj)
 
     def delete_queryset(self, request, queryset):
-        if not _is_super_admin_user(request.user):
+        if not is_super_admin_user(request.user):
             return
         protected = queryset.filter(
             name__in=['superadmin', 'admin']
@@ -142,15 +141,9 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
         super().delete_queryset(request, safe_queryset)
 
     def description_short(self, obj):
-        if obj.description:
-            return obj.description[:50] + '...' if len(obj.description) > 50 else obj.description
-        return '-'
+        return truncate_description(obj.description)
     description_short.short_description = 'Descripción'
 
     def permission_count(self, obj):
-        count = obj.permission_links.count()
-        return format_html(
-            '<span style="background-color: #417690; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>',
-            count
-        )
+        return count_badge(obj.permission_links.count())
     permission_count.short_description = 'Permisos'

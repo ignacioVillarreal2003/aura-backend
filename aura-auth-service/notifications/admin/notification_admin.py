@@ -9,8 +9,7 @@ from django.urls import path, reverse
 from django.utils.html import format_html
 
 from accounts.models import User
-from accounts.admin_parts.common import _is_admin_or_super_user, _is_super_admin_user
-from accounts.admin_parts.utils.audit import log_audit
+from accounts.admin_parts.common import is_admin_or_super_user, is_super_admin_user, log_audit
 from notifications.models import (
     Notification,
     NotificationType,
@@ -111,16 +110,16 @@ class BaseNotificationAdmin(admin.ModelAdmin):
         return False
 
     def has_module_permission(self, request):
-        return _is_admin_or_super_user(request.user)
+        return is_admin_or_super_user(request.user)
 
     def has_view_permission(self, request, obj=None):
-        return _is_admin_or_super_user(request.user)
+        return is_admin_or_super_user(request.user)
 
     def has_change_permission(self, request, obj=None):
-        return _is_super_admin_user(request.user)
+        return is_super_admin_user(request.user)
 
     def has_delete_permission(self, request, obj=None):
-        return _is_admin_or_super_user(request.user)
+        return is_admin_or_super_user(request.user)
 
     def delete_model(self, request, obj):
         obj.soft_delete(deleted_by=request.user.pk)
@@ -183,7 +182,7 @@ class IndividualNotificationAdmin(BaseNotificationAdmin):
         return Notification.objects.filter(target_scope='individual').order_by('-created_at')
 
     def send_notification_view(self, request):
-        if not _is_admin_or_super_user(request.user):
+        if not is_admin_or_super_user(request.user):
             raise PermissionDenied
 
         if request.method == 'POST':
@@ -251,7 +250,7 @@ class GroupNotificationAdmin(BaseNotificationAdmin):
         return Notification.objects.filter(target_scope='group').order_by('-created_at')
 
     def send_notification_view(self, request):
-        if not _is_admin_or_super_user(request.user):
+        if not is_admin_or_super_user(request.user):
             raise PermissionDenied
 
         if request.method == 'POST':

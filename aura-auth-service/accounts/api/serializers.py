@@ -37,3 +37,13 @@ class ErrorResponseSerializer(serializers.Serializer):
 
 class LogoutResponseSerializer(serializers.Serializer):
     detail = serializers.CharField()
+
+
+class UserLookupRequestSerializer(serializers.Serializer):
+    ids = serializers.ListField(child=serializers.IntegerField(), min_length=1)
+
+
+class UserLookupItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    username = serializers.CharField()
+    email = serializers.EmailField()

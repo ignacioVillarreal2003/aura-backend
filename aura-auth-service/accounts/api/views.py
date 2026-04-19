@@ -8,7 +8,9 @@ from accounts.api.serializers import (
     LoginSerializer, RefreshSerializer, LogoutSerializer,
     TokenResponseSerializer, ValidateResponseSerializer,
     ErrorResponseSerializer, LogoutResponseSerializer,
+    UserLookupRequestSerializer, UserLookupItemSerializer,
 )
+from accounts.models import User
 from accounts.services.auth_service import (
     authenticate_user,
     issue_tokens_for_user,
@@ -16,7 +18,7 @@ from accounts.services.auth_service import (
     revoke_refresh_token,
     get_user_info,
 )
-from accounts.admin_parts.utils.audit import log_audit
+from accounts.services.audit_service import log_audit
 
 
 class LoginView(APIView):
@@ -137,3 +139,26 @@ class ValidateView(APIView):
         if not user_info:
             return Response({'detail': 'Invalid or expired token.'}, status=status.HTTP_401_UNAUTHORIZED)
         return Response(user_info, status=status.HTTP_200_OK)
+
+
+class UserBulkLookupView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    @extend_schema(
+        summary='Bulk user lookup',
+        description='Given a list of user IDs, returns id, username and email for each found user.',
+        request=UserLookupRequestSerializer,
+        responses={200: UserLookupItemSerializer(many=True), 400: ErrorResponseSerializer},
+        tags=['Users'],
+    )
+    def post(self, request):
+        serializer = UserLookupRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ids = serializer.validated_data['ids']
+        users = (
+            User.objects
+            .filter(pk__in=ids, deleted_at__isnull=True)
+            .values('id', 'username', 'email')
+        )
+        return Response(list(users), status=status.HTTP_200_OK)
