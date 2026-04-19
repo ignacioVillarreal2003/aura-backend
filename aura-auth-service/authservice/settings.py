@@ -60,6 +60,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'accounts.middleware.elevation_middleware.ElevationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django_prometheus.middleware.PrometheusAfterMiddleware',
@@ -195,6 +196,10 @@ SPECTACULAR_SETTINGS = {
 JWT_ACCESS_LIFETIME_MINUTES = config('JWT_ACCESS_LIFETIME_MINUTES', default=15, cast=int)
 JWT_ALGORITHM = config('JWT_ALGORITHM', default='HS256')
 JWT_SIGNING_KEY = config('JWT_SIGNING_KEY', default=SECRET_KEY)
+
+# Privilege elevation
+SUPERADMIN_USERNAME = config('SUPERADMIN_USERNAME', default='superadmin')
+ELEVATION_TIMEOUT_MINUTES = config('ELEVATION_TIMEOUT_MINUTES', default=60, cast=int)
 
 # ID of the shared admin chat in aura_db used for admin-initiated document uploads.
 # Must match the seed row in docker/aura-db/init.sql.

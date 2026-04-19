@@ -3,7 +3,7 @@
 from django.contrib import admin
 from django.contrib.auth.models import Group
 from django.urls import reverse
-from accounts.admin_parts.common import is_super_admin_user, is_admin_user
+from accounts.admin_parts.common import is_super_admin_user, is_admin_user, is_admin_or_super_user
 
 
 # Customize admin site
@@ -53,7 +53,9 @@ def _custom_get_app_list(self, request, app_label=None):
         # 'notifications' placeholder removed — real models registered via notifications app.
     ]
 
-    if is_super_admin_user(request.user):
+    is_elevated = getattr(request, 'is_elevated', False)
+
+    if is_super_admin_user(request.user) or is_elevated:
         placeholder_apps.append(
             {
                 'app_label': 'auditoria',
@@ -82,7 +84,7 @@ def _custom_get_app_list(self, request, app_label=None):
 
     for app in app_list:
         if app.get('app_label') == 'accounts':
-            if not (is_super_admin_user(request.user) or is_admin_user(request.user)):
+            if not (is_super_admin_user(request.user) or is_admin_user(request.user) or is_elevated):
                 app['models'] = [
                     model for model in app['models']
                     if model.get('object_name') in {'User'}
@@ -117,14 +119,28 @@ def _custom_get_app_list(self, request, app_label=None):
 admin.site.get_app_list = _custom_get_app_list.__get__(admin.site, admin.AdminSite)
 
 
+def _custom_each_context(self, request):
+    ctx = admin.AdminSite.each_context(self, request)
+    ctx['is_elevated'] = getattr(request, 'is_elevated', False)
+    ctx['real_user'] = getattr(request, 'real_user', None)
+    ctx['elevation_started_at'] = request.session.get('elevation_started_at') if hasattr(request, 'session') else None
+    return ctx
+
+
+admin.site.each_context = _custom_each_context.__get__(admin.site, admin.AdminSite)
+
+
 def _custom_get_urls(self):
     from django.urls import path
     from accounts.admin_parts.audit_admin import _audit_list_view
     from accounts.admin_parts.dashboard_admin import _dashboard_overview_view
+    from accounts.admin_parts.elevation_admin import _elevate_view, _drop_elevation_view
     base_urls = admin.AdminSite.get_urls(self)
     custom_urls = [
         path('dashboard/', self.admin_view(_dashboard_overview_view), name='dashboard_overview'),
         path('auditoria/', self.admin_view(_audit_list_view), name='auditoria_list'),
+        path('elevate/', self.admin_view(_elevate_view), name='elevate'),
+        path('drop-elevation/', self.admin_view(_drop_elevation_view), name='drop_elevation'),
     ]
     return custom_urls + base_urls
 

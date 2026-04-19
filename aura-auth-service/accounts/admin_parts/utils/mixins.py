@@ -17,6 +17,16 @@ class HelpTextStripMixin:
         return formfield
 
 
+class AuditedAdminMixin:
+    """Provides _get_audit_actor() to all ModelAdmin subclasses that mix it in."""
+
+    def _get_audit_actor(self, request):
+        """Returns (actor, elevated_by) for use in log_audit calls."""
+        if getattr(request, 'is_elevated', False):
+            return request.user, request.user.username
+        return request.user, None
+
+
 class HelpTextStripInlineMixin:
     """Remove help text from inline admin forms."""
 

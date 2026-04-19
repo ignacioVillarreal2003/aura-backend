@@ -2,7 +2,7 @@
 
 from accounts.admin_parts.utils.filters import CreatedDateFilter, StatusFilter
 from accounts.admin_parts.utils.html import count_badge, truncate_description
-from accounts.admin_parts.utils.mixins import HelpTextStripInlineMixin, HelpTextStripMixin
+from accounts.admin_parts.utils.mixins import AuditedAdminMixin, HelpTextStripInlineMixin, HelpTextStripMixin
 from accounts.admin_parts.utils.permissions import (
     is_admin_or_super_user,
     is_admin_user,
@@ -15,6 +15,7 @@ __all__ = [
     'StatusFilter',
     'count_badge',
     'truncate_description',
+    'AuditedAdminMixin',
     'HelpTextStripInlineMixin',
     'HelpTextStripMixin',
     'is_admin_or_super_user',

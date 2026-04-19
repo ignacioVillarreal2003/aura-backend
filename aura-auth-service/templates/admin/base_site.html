@@ -8,9 +8,8 @@
 <style>
 .change-list .object-tools a {
   position: relative;
-  top: 6px;   /* ajustá este valor */
+  top: 6px;
 }
-
 </style>
 {% endblock %}
 
@@ -18,4 +17,30 @@
 <h1 id="site-name"><a href="{% url 'admin:index' %}">{{ site_header|default:_('Django administration') }}</a></h1>
 {% endblock %}
 
-{% block nav-global %}{% endblock %}
+{% block nav-global %}
+{% if is_elevated %}
+<div style="background:#b91c1c; color:white; padding:8px 16px;
+            display:flex; justify-content:space-between; align-items:center;
+            font-size:0.9em;">
+  <span>
+    ⚠️ Modo Superadmin activo — operando como
+    <strong>{{ real_user.username }}</strong>
+    {% if elevation_started_at %}desde {{ elevation_started_at|slice:":19"|default:"" }}{% endif %}
+  </span>
+  <form method="post" action="{% url 'admin:drop_elevation' %}" style="margin:0;">
+    {% csrf_token %}
+    <button type="submit"
+            style="background:white; color:#b91c1c; border:none; padding:4px 12px;
+                   border-radius:4px; cursor:pointer; font-weight:600; font-size:0.85em;">
+      Salir de Superadmin
+    </button>
+  </form>
+</div>
+{% elif user.is_authenticated %}
+<div style="background:#1e3a5f; color:white; padding:6px 16px; text-align:right; font-size:0.85em;">
+  <a href="{% url 'admin:elevate' %}" style="color:#93c5fd; text-decoration:none;">
+    🔐 Acceder como Superadmin
+  </a>
+</div>
+{% endif %}
+{% endblock %}

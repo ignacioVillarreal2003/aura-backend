@@ -4,7 +4,9 @@ from django.contrib import admin
 from django.utils import timezone
 from django.utils.html import format_html
 from accounts.models import User, Role, FauRole
+from django.core.exceptions import PermissionDenied
 from accounts.admin_parts.common import (
+    AuditedAdminMixin,
     StatusFilter,
     CreatedDateFilter,
     HelpTextStripMixin,
@@ -19,7 +21,7 @@ from accounts.services.user_service import assign_roles_to_user
 
 
 @admin.register(User)
-class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
+class UserAdmin(AuditedAdminMixin, HelpTextStripMixin, admin.ModelAdmin):
     """Custom admin for User model."""
 
     class RoleFilter(admin.SimpleListFilter):
@@ -268,6 +270,11 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
         css = {'all': ('admin/custom.css',)}
 
     def save_model(self, request, obj, form, change):
+        actor, elevated_by = self._get_audit_actor(request)
+        selected_role = form.cleaned_data.get('roles') if 'roles' in form.cleaned_data else None
+        if selected_role and selected_role.name in ('admin', 'superadmin'):
+            if not (is_super_admin_user(request.user) or getattr(request, 'is_elevated', False)):
+                raise PermissionDenied('No tenés permiso para asignar este rol.')
         if 'password' in form.changed_data:
             obj.set_password(form.cleaned_data['password'])
         if 'active' in form.cleaned_data:
@@ -275,38 +282,42 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
         apply_audit_fields(obj, request.user, is_create=not change)
         super().save_model(request, obj, form, change)
         log_audit(
-            actor=request.user,
+            actor=actor,
             action='UPDATE' if change else 'CREATE',
             entity_type='auth_user',
             entity_id=obj.pk,
             entity_label=obj.username,
             details={'changed_fields': form.changed_data} if change and form.changed_data else None,
+            elevated_by=elevated_by,
         )
         if 'roles' in form.cleaned_data:
             assign_roles_to_user(
                 user=obj,
                 selected_role=form.cleaned_data['roles'],
                 actor=request.user,
-                protect_system_roles=not is_super_admin_user(request.user),
+                protect_system_roles=not (is_super_admin_user(request.user) or getattr(request, 'is_elevated', False)),
             )
 
     def delete_model(self, request, obj):
         from accounts.models import UserRole
+        actor, elevated_by = self._get_audit_actor(request)
         UserRole.objects.filter(user=obj, deleted_at__isnull=True).update(
             deleted_at=timezone.now(),
             deleted_by_id=request.user.pk,
         )
         obj.soft_delete(deleted_by=request.user.pk)
         log_audit(
-            actor=request.user,
+            actor=actor,
             action='DELETE',
             entity_type='auth_user',
             entity_id=obj.pk,
             entity_label=obj.username,
+            elevated_by=elevated_by,
         )
 
     def delete_queryset(self, request, queryset):
         from accounts.models import UserRole
+        actor, elevated_by = self._get_audit_actor(request)
         now = timezone.now()
         for obj in queryset:
             UserRole.objects.filter(user=obj, deleted_at__isnull=True).update(
@@ -315,9 +326,10 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             )
             obj.soft_delete(deleted_by=request.user.pk)
             log_audit(
-                actor=request.user,
+                actor=actor,
                 action='DELETE',
                 entity_type='auth_user',
                 entity_id=obj.pk,
                 entity_label=obj.username,
+                elevated_by=elevated_by,
             )

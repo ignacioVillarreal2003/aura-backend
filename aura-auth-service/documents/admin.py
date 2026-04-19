@@ -14,6 +14,7 @@ from django.utils.translation import gettext as _
 from django.utils.html import format_html
 from accounts.models import CustomGroup, FauRole
 from accounts.admin_parts.utils.html import count_badge
+from accounts.admin_parts.utils.mixins import AuditedAdminMixin
 from accounts.services.audit_service import log_audit, apply_audit_fields
 from documents.models import Document
 from documents.services.document_processing_client import DocumentProcessingServiceError
@@ -73,7 +74,7 @@ class DocumentUploadForm(forms.ModelForm):
 
 
 @admin.register(Document)
-class DocumentAdmin(admin.ModelAdmin):
+class DocumentAdmin(AuditedAdminMixin, admin.ModelAdmin):
     """Admin for Document model."""
 
     list_display = (
@@ -261,6 +262,7 @@ class DocumentAdmin(admin.ModelAdmin):
     access_scope_display.short_description = 'Acceso'
 
     def save_model(self, request, obj, form, change):
+        actor, elevated_by = self._get_audit_actor(request)
         if change:
             if obj.visible_to_all:
                 obj.minimum_fau_role_id = None
@@ -271,13 +273,14 @@ class DocumentAdmin(admin.ModelAdmin):
             else:
                 obj.groups.set(form.cleaned_data.get('groups'))
             log_audit(
-                actor=request.user,
+                actor=actor,
                 action='UPDATE',
                 entity_type='Document',
                 entity_id=str(obj.pk),
                 entity_label=obj.name,
                 details={'changed_fields': form.changed_data} if form.changed_data else None,
                 source='admin',
+                elevated_by=elevated_by,
             )
             return
 
@@ -304,36 +307,41 @@ class DocumentAdmin(admin.ModelAdmin):
         else:
             obj.groups.set(form.cleaned_data.get('groups'))
         log_audit(
-            actor=request.user,
+            actor=actor,
             action='CREATE',
             entity_type='Document',
             entity_id=str(obj.pk),
             entity_label=obj.name,
             details={'name': obj.name, 'size_bytes': obj.size_bytes},
             source='admin',
+            elevated_by=elevated_by,
         )
 
     def delete_model(self, request, obj):
+        actor, elevated_by = self._get_audit_actor(request)
         obj.soft_delete(deleted_by=request.user.pk)
         log_audit(
-            actor=request.user,
+            actor=actor,
             action='DELETE',
             entity_type='Document',
             entity_id=str(obj.pk),
             entity_label=obj.name,
             details={'deleted_at': str(obj.deleted_at)},
             source='admin',
+            elevated_by=elevated_by,
         )
 
     def delete_queryset(self, request, queryset):
+        actor, elevated_by = self._get_audit_actor(request)
         for obj in queryset:
             obj.soft_delete(deleted_by=request.user.pk)
             log_audit(
-                actor=request.user,
+                actor=actor,
                 action='DELETE',
                 entity_type='Document',
                 entity_id=str(obj.pk),
                 entity_label=obj.name,
                 details={'deleted_at': str(obj.deleted_at)},
                 source='admin',
+                elevated_by=elevated_by,
             )

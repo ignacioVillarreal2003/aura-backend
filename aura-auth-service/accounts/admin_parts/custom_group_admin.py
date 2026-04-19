@@ -7,6 +7,7 @@ from django.contrib.admin.widgets import FilteredSelectMultiple
 from django.utils.html import format_html
 from accounts.models import CustomGroup, User
 from accounts.admin_parts.common import (
+    AuditedAdminMixin,
     HelpTextStripMixin,
     apply_audit_fields,
     is_admin_or_super_user,
@@ -44,7 +45,7 @@ class CustomGroupAdminForm(forms.ModelForm):
 
 
 @admin.register(CustomGroup)
-class CustomGroupAdmin(HelpTextStripMixin, admin.ModelAdmin):
+class CustomGroupAdmin(AuditedAdminMixin, HelpTextStripMixin, admin.ModelAdmin):
     """Custom admin for Group model to manage groups."""
 
     form = CustomGroupAdminForm
@@ -136,6 +137,7 @@ class CustomGroupAdmin(HelpTextStripMixin, admin.ModelAdmin):
             logger.exception('Failed to sync users for CustomGroup %s', form.instance.pk)
 
     def save_model(self, request, obj, form, change):
+        actor, elevated_by = self._get_audit_actor(request)
         old_name = None
         if obj.pk:
             old_name = CustomGroup.objects.filter(pk=obj.pk).values_list('name', flat=True).first()
@@ -143,33 +145,38 @@ class CustomGroupAdmin(HelpTextStripMixin, admin.ModelAdmin):
         super().save_model(request, obj, form, change)
         sync_group_to_collection(obj, request.user.pk, old_name=old_name, is_create=not change)
         log_audit(
-            actor=request.user,
+            actor=actor,
             action='UPDATE' if change else 'CREATE',
             entity_type='custom_group',
             entity_id=str(obj.pk),
             entity_label=obj.name,
             details={'changed_fields': form.changed_data} if change and form.changed_data else None,
+            elevated_by=elevated_by,
         )
 
     def delete_model(self, request, obj):
+        actor, elevated_by = self._get_audit_actor(request)
         soft_delete_collection(obj, request.user.pk)
         super().delete_model(request, obj)
         log_audit(
-            actor=request.user,
+            actor=actor,
             action='DELETE',
             entity_type='custom_group',
             entity_id=str(obj.pk),
             entity_label=obj.name,
+            elevated_by=elevated_by,
         )
 
     def delete_queryset(self, request, queryset):
+        actor, elevated_by = self._get_audit_actor(request)
         for obj in queryset:
             soft_delete_collection(obj, request.user.pk)
             log_audit(
-                actor=request.user,
+                actor=actor,
                 action='DELETE',
                 entity_type='custom_group',
                 entity_id=str(obj.pk),
                 entity_label=obj.name,
+                elevated_by=elevated_by,
             )
         super().delete_queryset(request, queryset)

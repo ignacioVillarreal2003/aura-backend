@@ -5,7 +5,7 @@ from django.contrib import admin
 from django.contrib.admin.widgets import FilteredSelectMultiple
 from accounts.models import Role, Permission, PermissionInRole
 from accounts.admin_parts.utils.mixins import HelpTextStripMixin
-from accounts.admin_parts.common import is_super_admin_user, is_admin_or_super_user, log_audit, truncate_description, count_badge
+from accounts.admin_parts.common import AuditedAdminMixin, is_super_admin_user, is_admin_or_super_user, log_audit, truncate_description, count_badge
 
 
 class RoleAdminForm(forms.ModelForm):
@@ -30,7 +30,7 @@ class RoleAdminForm(forms.ModelForm):
 
 
 @admin.register(Role)
-class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
+class RoleAdmin(AuditedAdminMixin, HelpTextStripMixin, admin.ModelAdmin):
     """Admin for Role model."""
 
     form = RoleAdminForm
@@ -98,31 +98,35 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
             PermissionInRole.objects.create(role=form.instance, permission_id=perm_id)
 
     def save_model(self, request, obj, form, change):
+        actor, elevated_by = self._get_audit_actor(request)
         super().save_model(request, obj, form, change)
-        action = 'UPDATE' if change else 'CREATE'
         details = {'changed_fields': form.changed_data} if change and form.changed_data else None
         log_audit(
-            actor=request.user,
-            action=action,
+            actor=actor,
+            action='UPDATE' if change else 'CREATE',
             entity_type='role',
             entity_id=obj.pk,
             entity_label=obj.name,
             details=details,
+            elevated_by=elevated_by,
         )
 
     def delete_model(self, request, obj):
+        actor, elevated_by = self._get_audit_actor(request)
         log_audit(
-            actor=request.user,
+            actor=actor,
             action='DELETE',
             entity_type='role',
             entity_id=obj.pk,
             entity_label=obj.name,
+            elevated_by=elevated_by,
         )
         super().delete_model(request, obj)
 
     def delete_queryset(self, request, queryset):
-        if not is_super_admin_user(request.user):
+        if not (is_super_admin_user(request.user) or getattr(request, 'is_elevated', False)):
             return
+        actor, elevated_by = self._get_audit_actor(request)
         protected = queryset.filter(
             name__in=['superadmin', 'admin']
         ) | queryset.filter(
@@ -132,11 +136,12 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
         safe_queryset = queryset.exclude(id__in=protected.values_list('id', flat=True))
         for obj in safe_queryset:
             log_audit(
-                actor=request.user,
+                actor=actor,
                 action='DELETE',
                 entity_type='role',
                 entity_id=obj.pk,
                 entity_label=obj.name,
+                elevated_by=elevated_by,
             )
         super().delete_queryset(request, safe_queryset)
 

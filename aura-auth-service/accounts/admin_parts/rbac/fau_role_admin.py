@@ -6,7 +6,7 @@ from django.contrib.admin.widgets import FilteredSelectMultiple
 from django.utils.html import format_html
 from accounts.models import FauRole, PermissionInFauRole, Permission
 from accounts.admin_parts.utils.mixins import HelpTextStripMixin
-from accounts.admin_parts.common import is_admin_or_super_user, is_super_admin_user, log_audit
+from accounts.admin_parts.common import AuditedAdminMixin, is_admin_or_super_user, is_super_admin_user, log_audit
 
 
 class FauRoleAdminForm(forms.ModelForm):
@@ -31,7 +31,7 @@ class FauRoleAdminForm(forms.ModelForm):
 
 
 @admin.register(FauRole)
-class FauRoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
+class FauRoleAdmin(AuditedAdminMixin, HelpTextStripMixin, admin.ModelAdmin):
     """Admin for FauRole model."""
 
     form = FauRoleAdminForm
@@ -111,35 +111,40 @@ class FauRoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
             PermissionInFauRole.objects.create(fau_role=form.instance, permission_id=perm_id)
 
     def save_model(self, request, obj, form, change):
+        actor, elevated_by = self._get_audit_actor(request)
         super().save_model(request, obj, form, change)
-        action = 'UPDATE' if change else 'CREATE'
         details = {'changed_fields': form.changed_data} if change and form.changed_data else None
         log_audit(
-            actor=request.user,
-            action=action,
+            actor=actor,
+            action='UPDATE' if change else 'CREATE',
             entity_type='fau_role',
             entity_id=obj.pk,
             entity_label=obj.name,
             details=details,
+            elevated_by=elevated_by,
         )
 
     def delete_model(self, request, obj):
+        actor, elevated_by = self._get_audit_actor(request)
         log_audit(
-            actor=request.user,
+            actor=actor,
             action='DELETE',
             entity_type='fau_role',
             entity_id=obj.pk,
             entity_label=obj.name,
+            elevated_by=elevated_by,
         )
         super().delete_model(request, obj)
 
     def delete_queryset(self, request, queryset):
+        actor, elevated_by = self._get_audit_actor(request)
         for obj in queryset:
             log_audit(
-                actor=request.user,
+                actor=actor,
                 action='DELETE',
                 entity_type='fau_role',
                 entity_id=obj.pk,
                 entity_label=obj.name,
+                elevated_by=elevated_by,
             )
         super().delete_queryset(request, queryset)
