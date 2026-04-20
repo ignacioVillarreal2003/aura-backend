@@ -28,23 +28,3 @@ class DeleteDocumentControllerInterface(ABC):
             authenticated_user: AuthenticatedUser
     ) -> Response:
         pass
-
-    @abstractmethod
-    async def hard_delete_documents_by_chat(
-            self,
-            chat_id: int,
-            delete_document_service: DeleteDocumentServiceInterface,
-            database_session: AsyncSession,
-            authenticated_user: AuthenticatedUser
-    ) -> Response:
-        pass
-
-    @abstractmethod
-    async def hard_delete_document(
-            self,
-            document_id: int,
-            delete_document_service: DeleteDocumentServiceInterface,
-            database_session: AsyncSession,
-            authenticated_user: AuthenticatedUser
-    ) -> Response:
-        pass

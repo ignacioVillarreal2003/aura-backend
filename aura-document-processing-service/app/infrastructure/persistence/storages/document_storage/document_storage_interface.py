@@ -67,6 +67,7 @@ class DocumentStorageInterface(ABC):
 
     @abstractmethod
     async def health_check(
-            self
+            self,
+            detailed: bool = False,
     ) -> dict[str, Any]:
         pass

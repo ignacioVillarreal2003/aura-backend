@@ -15,6 +15,7 @@ from apps.document_collection.serializers.request_serializers import (
 from apps.document_collection.services.document_collection_user_service import (
     document_collection_user_service,
 )
+from core.authentication.authenticated_user import AuthenticatedUser
 from core.pagination.pagination import StandardPagination
 
 
@@ -33,7 +34,8 @@ class DocumentCollectionUserViewSet(ViewSet):
         paginator = StandardPagination()
         page = paginator.paginate_queryset(qs, request)
         user_ids = [row.user_id for row in page]
-        profiles = user_profile_client.fetch_by_ids(user_ids)
+        actor: AuthenticatedUser = request.user
+        profiles = user_profile_client.fetch_by_ids(user_ids, authenticated_user=actor)
         data = [
             user_membership_to_dict(
                 row,
@@ -58,7 +60,11 @@ class DocumentCollectionUserViewSet(ViewSet):
             document_collection_id_int,
             user_id=serializer.validated_data["user_id"],
         )
-        profiles = user_profile_client.fetch_by_ids([membership.user_id])
+        actor: AuthenticatedUser = request.user
+        profiles = user_profile_client.fetch_by_ids(
+            [membership.user_id],
+            authenticated_user=actor,
+        )
         profile = profiles.get(membership.user_id) or UserProfile(
             id=membership.user_id,
             email="",

@@ -23,6 +23,16 @@ _HEADER_USER_ROLES = "X-User-Roles"
 _HEADER_USER_PERMISSIONS = "X-User-Permissions"
 
 
+def build_service_user_headers(authenticated_user: Optional[AuthenticatedUser] = None) -> dict[str, str]:
+    headers: dict[str, str] = {_HEADER_SERVICE_API_KEY: str(settings.SERVICE_API_KEY)}
+    if authenticated_user is not None:
+        headers[_HEADER_USER_ID] = str(authenticated_user.id)
+        headers[_HEADER_USER_EMAIL] = str(authenticated_user.email)
+        headers[_HEADER_USER_ROLES] = ",".join(authenticated_user.roles)
+        headers[_HEADER_USER_PERMISSIONS] = ",".join(authenticated_user.permissions)
+    return headers
+
+
 class AuthenticationProvider:
     def evaluate_service_auth(self, request: HttpRequest) -> Optional[AuthenticatedUser]:
         raw_key = request.META.get(_HEADER_SERVICE_API_KEY)

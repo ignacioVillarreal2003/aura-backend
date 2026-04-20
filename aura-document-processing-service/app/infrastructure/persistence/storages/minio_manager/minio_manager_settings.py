@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import Optional
+from typing import Any, Optional
 from urllib.parse import urlparse
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -32,7 +32,7 @@ class MinioManagerSettings(BaseSettings):
     socket_read_timeout_seconds: float = Field(default=30.0, gt=0, le=300.0)
     socket_write_timeout_seconds: float = Field(default=60.0, gt=0, le=600.0)
 
-    retry_max_attempts: int = Field(default=3, ge=0, le=10)
+    retry_max_attempts: int = Field(default=3, ge=1, le=10)
     retry_backoff_multiplier: float = Field(default=1.0, gt=0, le=10.0)
     retry_backoff_min_seconds: float = Field(default=1.0, gt=0, le=30.0)
     retry_backoff_max_seconds: float = Field(default=10.0, gt=0, le=60.0)
@@ -200,7 +200,7 @@ class MinioManagerSettings(BaseSettings):
 
     def get_minio_config(
             self
-    ) -> dict:
+    ) -> dict[str, Any]:
         return {
             "endpoint": self.endpoint,
             "access_key": self.access_key,

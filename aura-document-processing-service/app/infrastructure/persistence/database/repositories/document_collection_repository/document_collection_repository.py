@@ -1,14 +1,16 @@
 import logging
 from typing import Optional
 from sqlalchemy import and_, or_, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import DocumentInDocumentCollection, UserInDocumentCollection
 from app.domain.models.document import Document
-from app.infrastructure.persistence.database.repositories.document_collection_repository.interfaces.document_collection_repository_interface import (
-    DocumentCollectionRepositoryInterface
+from app.infrastructure.persistence.database.repositories.document_collection_repository.document_collection_repository_interface import (
+    DocumentCollectionRepositoryInterface,
 )
-from app.infrastructure.persistence.database.repositories.exceptions.database_exceptions import DatabaseException
+from app.infrastructure.persistence.database.repositories.database_exceptions import DatabaseException
+from app.infrastructure.persistence.database.repositories.repository_query_utils import chunked_ids
 
 logger = logging.getLogger(__name__)
 
@@ -25,36 +27,40 @@ class DocumentCollectionRepository(DocumentCollectionRepositoryInterface):
             return set()
 
         try:
-            conditions = [Document.created_by == user_id]
-            if chat_id is not None:
-                conditions.append(Document.chat_id == chat_id)
+            accessible: set[int] = set()
 
-            simple_result = await database_session.execute(
-                select(Document.id).where(
-                    Document.id.in_(document_ids),
-                    Document.deleted_at.is_(None),
-                    or_(*conditions)
-                )
-            )
-            accessible: set[int] = {row[0] for row in simple_result}
+            for chunk in chunked_ids(document_ids):
+                conditions = [Document.created_by == user_id]
+                if chat_id is not None:
+                    conditions.append(Document.chat_id == chat_id)
 
-            remaining = [did for did in document_ids if did not in accessible]
-            if remaining:
-                collection_result = await database_session.execute(
-                    select(DocumentInDocumentCollection.document_id).join(
-                        UserInDocumentCollection,
-                        and_(
-                            UserInDocumentCollection.document_collection_id
-                            == DocumentInDocumentCollection.document_collection_id,
-                            UserInDocumentCollection.user_id == user_id,
-                            UserInDocumentCollection.deleted_at.is_(None)
-                        )
-                    ).where(
-                        DocumentInDocumentCollection.document_id.in_(remaining),
-                        DocumentInDocumentCollection.deleted_at.is_(None)
+                simple_result = await database_session.execute(
+                    select(Document.id).where(
+                        Document.id.in_(chunk),
+                        Document.deleted_at.is_(None),
+                        or_(*conditions)
                     )
                 )
-                accessible.update({row[0] for row in collection_result})
+                accessible.update(row[0] for row in simple_result)
+
+            remaining_ordered = [did for did in dict.fromkeys(document_ids) if did not in accessible]
+            if remaining_ordered:
+                for chunk in chunked_ids(remaining_ordered):
+                    collection_result = await database_session.execute(
+                        select(DocumentInDocumentCollection.document_id).join(
+                            UserInDocumentCollection,
+                            and_(
+                                UserInDocumentCollection.document_collection_id
+                                == DocumentInDocumentCollection.document_collection_id,
+                                UserInDocumentCollection.user_id == user_id,
+                                UserInDocumentCollection.deleted_at.is_(None)
+                            )
+                        ).where(
+                            DocumentInDocumentCollection.document_id.in_(chunk),
+                            DocumentInDocumentCollection.deleted_at.is_(None)
+                        )
+                    )
+                    accessible.update(row[0] for row in collection_result)
 
             logger.debug(
                 "Accessible document IDs resolved.",
@@ -66,5 +72,9 @@ class DocumentCollectionRepository(DocumentCollectionRepositoryInterface):
             )
             return accessible
 
-        except Exception as e:
+        except SQLAlchemyError as e:
+            logger.exception(
+                "Database error while resolving accessible document IDs.",
+                extra={"user_id": user_id, "requested_count": len(document_ids)},
+            )
             raise DatabaseException("Failed to resolve accessible document IDs.") from e

@@ -1,5 +1,4 @@
 from pathlib import Path
-
 from decouple import Csv, config
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -59,32 +58,25 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": config("DB_NAME", default="aura_db"),
-        "USER": config("DB_USER", default="aura_root"),
-        "PASSWORD": config("DB_PASSWORD", default="aura_password"),
-        "HOST": config("DB_HOST", default="localhost"),
-        "PORT": config("DB_PORT", default="5432"),
+        "NAME": config("DB_NAME"),
+        "USER": config("DB_USER"),
+        "PASSWORD": config("DB_PASSWORD"),
+        "HOST": config("DB_HOST"),
+        "PORT": config("DB_PORT"),
         "OPTIONS": {
             "connect_timeout": 5,
         },
     }
 }
 
-SERVICE_API_KEY = config("SERVICE_API_KEY", default="service_api_key")
+SERVICE_API_KEY = config("SERVICE_API_KEY")
 
-_auth_provider_url = config("AUTHENTICATION_PROVIDER_AUTHENTICATION_URL", default="").strip()
-AUTHENTICATION_PROVIDER_URL = _auth_provider_url or config(
-    "AUTHENTICATION_SERVICE_URL",
-    default="http://localhost:8080/auth/validate",
-).strip()
+AUTHENTICATION_PROVIDER_URL = config("AUTHENTICATION_SERVICE_URL").strip()
 
-USER_PROFILE_SERVICE_URL = config("USER_PROFILE_SERVICE_URL", default="").strip()
+USER_PROFILE_SERVICE_URL = config("USER_PROFILE_SERVICE_URL").strip()
 USER_PROFILE_SERVICE_TIMEOUT = float(config("USER_PROFILE_SERVICE_TIMEOUT", default="5.0"))
 
-RABBITMQ_MANAGER_URL = config(
-    "RABBITMQ_MANAGER_URL",
-    default="amqp://aura_root:aura_password@localhost:5672/",
-).strip()
+RABBITMQ_MANAGER_URL = config("RABBITMQ_MANAGER_URL").strip()
 
 AUTHENTICATION_EXCLUDED_PATHS = [
     "/api/v1/health",

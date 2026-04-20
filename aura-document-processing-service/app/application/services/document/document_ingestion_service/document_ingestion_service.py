@@ -26,13 +26,13 @@ from app.application.services.document.document_ingestion_service.interfaces.doc
 from app.domain.constants.document.document_status import DocumentStatus
 from app.domain.models.document import Document
 from app.domain.models.fragment import Fragment
-from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
+from app.infrastructure.persistence.database.database_manager.database_manager_interface import (
     DatabaseManagerInterface
 )
-from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
+from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
     DocumentRepositoryInterface
 )
-from app.infrastructure.persistence.database.repositories.fragment_repository.interfaces.fragment_repository_interface import (
+from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository_interface import (
     FragmentRepositoryInterface
 )
 

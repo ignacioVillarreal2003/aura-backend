@@ -2,21 +2,39 @@ import asyncio
 import logging
 import time
 from typing import Any, Awaitable, Callable, Optional
+
 import aio_pika
 import aio_pika.abc
+from aio_pika.exceptions import (
+    AMQPConnectionError,
+    ChannelClosed,
+    ChannelInvalidStateError,
+    ConnectionClosed,
+)
 from fastapi import HTTPException, Request, status
 from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from app.infrastructure.messaging.rabbitmq.exceptions.rabbitmq_manager_exception import (
+from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_exception import (
     RabbitMQConnectionException,
     RabbitMQNotStartedException,
     RabbitMQPublishException,
     RabbitMQTopologyException
 )
-from app.infrastructure.messaging.rabbitmq.interfaces.rabbitmq_manager_interface import RabbitMQManagerInterface
+from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
 from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_settings import RabbitMQManagerSettings
 
 logger = logging.getLogger(__name__)
+
+_PUBLISH_RETRY_EXCEPTIONS: tuple[type[BaseException], ...] = (
+    AMQPConnectionError,
+    ConnectionClosed,
+    ChannelClosed,
+    ChannelInvalidStateError,
+    asyncio.TimeoutError,
+    ConnectionResetError,
+    BrokenPipeError,
+    OSError,
+)
 
 
 class RabbitMQManager(RabbitMQManagerInterface):
@@ -27,11 +45,26 @@ class RabbitMQManager(RabbitMQManagerInterface):
         self._settings = rabbit_mq_manager_settings or RabbitMQManagerSettings()
         self._connection: Optional[aio_pika.abc.AbstractRobustConnection] = None
         self._channel: Optional[aio_pika.abc.AbstractChannel] = None
+        self._publish_channel: Optional[aio_pika.abc.AbstractChannel] = None
+        self._publish_lock = asyncio.Lock()
         self._exchanges: dict[str, aio_pika.abc.AbstractExchange] = {}
         self._consumer_tasks: list[asyncio.Task] = []
 
         self._lifecycle_lock = asyncio.Lock()
         self._is_started: bool = False
+
+    def _connect_robust_kwargs(
+            self
+    ) -> dict[str, Any]:
+        kwargs: dict[str, Any] = {
+            "heartbeat": self._settings.heartbeat_seconds,
+            "client_properties": {
+                "connection_name": self._settings.client_connection_name,
+            },
+        }
+        if self._settings.blocked_connection_timeout_seconds is not None:
+            kwargs["blocked_connection_timeout"] = self._settings.blocked_connection_timeout_seconds
+        return kwargs
 
     async def start(
             self
@@ -52,10 +85,12 @@ class RabbitMQManager(RabbitMQManagerInterface):
                 self._connection = await aio_pika.connect_robust(
                     self._settings.url.get_secret_value(),
                     timeout=self._settings.tcp_connect_timeout_seconds,
+                    **self._connect_robust_kwargs(),
                 )
                 self._channel = await self._connection.channel()
                 await self._channel.set_qos(prefetch_count=self._settings.prefetch_count)
                 await self._declare_topology()
+                self._publish_channel = await self._connection.channel()
                 self._is_started = True
                 logger.info("The RabbitMQ manager started successfully.")
 
@@ -108,6 +143,8 @@ class RabbitMQManager(RabbitMQManagerInterface):
             headers: Optional[dict[str, Any]] = None
     ) -> None:
         self._assert_started()
+        connection = self._connection
+        assert connection is not None
 
         target_exchange = exchange_name or self._settings.exchange
 
@@ -117,14 +154,18 @@ class RabbitMQManager(RabbitMQManagerInterface):
                 min=self._settings.retry_backoff_min_seconds,
                 max=self._settings.retry_backoff_max_seconds
             ),
-            retry=retry_if_exception_type(Exception),
+            retry=retry_if_exception_type(_PUBLISH_RETRY_EXCEPTIONS),
             before_sleep=before_sleep_log(logger, logging.WARNING),
             reraise=True
         )
         async def _publish_attempt() -> None:
-            channel = await self._connection.channel()
-            try:
-                exchange = await channel.get_exchange(target_exchange)
+            async with self._publish_lock:
+                if (
+                        self._publish_channel is None
+                        or self._publish_channel.is_closed
+                ):
+                    self._publish_channel = await connection.channel()
+                exchange = await self._publish_channel.get_exchange(target_exchange)
                 message = aio_pika.Message(
                     body=body,
                     delivery_mode=(
@@ -135,8 +176,6 @@ class RabbitMQManager(RabbitMQManagerInterface):
                     headers=headers or {}
                 )
                 await exchange.publish(message, routing_key=routing_key)
-            finally:
-                await channel.close()
 
         try:
             await _publish_attempt()
@@ -237,7 +276,8 @@ class RabbitMQManager(RabbitMQManagerInterface):
                 "status": "healthy",
                 "started": True,
                 "latency_ms": latency_ms,
-                "url": self._settings.url_safe
+                "url": self._settings.url_safe,
+                "topology_declared": True,
             }
         except Exception:
             logger.warning("The RabbitMQ health check failed.")
@@ -267,6 +307,19 @@ class RabbitMQManager(RabbitMQManagerInterface):
         if not self._is_started or not self._connection:
             raise RabbitMQNotStartedException("The RabbitMQ manager is not started; call start() first.", )
 
+    async def _declare_work_queue(
+            self,
+            exchange: aio_pika.abc.AbstractExchange,
+            queue_name: str,
+            queue_args: dict[str, Any],
+    ) -> None:
+        queue = await self._channel.declare_queue(
+            queue_name,
+            durable=True,
+            arguments=queue_args
+        )
+        await queue.bind(exchange, routing_key=queue_name)
+
     async def _declare_topology(
             self
     ) -> None:
@@ -294,30 +347,9 @@ class RabbitMQManager(RabbitMQManagerInterface):
             if self._settings.message_ttl_ms is not None:
                 queue_args["x-message-ttl"] = self._settings.message_ttl_ms
 
-            document_ingestion_queue = await self._channel.declare_queue(
-                self._settings.document_ingestion_queue,
-                durable=True,
-                arguments=queue_args
-            )
-            await document_ingestion_queue.bind(exchange, routing_key=self._settings.document_ingestion_queue)
-
-            post_process_document_queue = await self._channel.declare_queue(
-                self._settings.post_process_document_queue,
-                durable=True,
-                arguments=queue_args
-            )
-            await post_process_document_queue.bind(
-                exchange, routing_key=self._settings.post_process_document_queue
-            )
-
-            post_process_fragment_queue = await self._channel.declare_queue(
-                self._settings.post_process_fragment_queue,
-                durable=True,
-                arguments=queue_args
-            )
-            await post_process_fragment_queue.bind(
-                exchange, routing_key=self._settings.post_process_fragment_queue
-            )
+            await self._declare_work_queue(exchange, self._settings.document_ingestion_queue, queue_args)
+            await self._declare_work_queue(exchange, self._settings.post_process_document_queue, queue_args)
+            await self._declare_work_queue(exchange, self._settings.post_process_fragment_queue, queue_args)
 
             self._exchanges[self._settings.exchange] = exchange
             self._exchanges[self._settings.dlx_exchange] = dlx_exchange
@@ -340,6 +372,13 @@ class RabbitMQManager(RabbitMQManagerInterface):
             self
     ) -> None:
         self._exchanges.clear()
+
+        if self._publish_channel and not self._publish_channel.is_closed:
+            try:
+                await self._publish_channel.close()
+            except Exception:
+                pass
+        self._publish_channel = None
 
         if self._channel and not self._channel.is_closed:
             try:

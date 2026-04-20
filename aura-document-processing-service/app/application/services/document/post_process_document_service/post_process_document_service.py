@@ -19,7 +19,6 @@ from app.application.services.document.post_process_document_service.interfaces.
 from app.application.services.document.post_process_document_service.post_process_document_service_settings import (
     PostProcessDocumentServiceSettings,
 )
-from app.configuration.prometheus_post_process_metrics import post_process_jobs_published
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.document_processing_permissions import DocumentProcessingPermissions
 from app.domain.dtos.document.post_process_document.post_process_document_error import PostProcessDocumentError
@@ -30,16 +29,14 @@ from app.domain.dtos.document.post_process_document.post_process_documents_start
 from app.domain.dtos.document.post_process_document.post_process_documents_status_response import (
     PostProcessDocumentsStatusResponse,
 )
-from app.infrastructure.messaging.rabbitmq.dtos.commands.post_process_document_job_command import (
-    PostProcessDocumentJobCommand,
+from app.infrastructure.messaging.rabbitmq.publisher.interfaces.post_process_document_job_publisher_interface import (
+    PostProcessDocumentJobPublisherInterface,
 )
-from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
-from app.infrastructure.messaging.rabbitmq.exceptions.rabbitmq_manager_exception import RabbitMQPublishException
-from app.infrastructure.messaging.rabbitmq.interfaces.rabbitmq_manager_interface import RabbitMQManagerInterface
-from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
+from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_exception import RabbitMQPublishException
+from app.infrastructure.persistence.database.database_manager.database_manager_interface import (
     DatabaseManagerInterface,
 )
-from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
+from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
     DocumentRepositoryInterface,
 )
 logger = logging.getLogger(__name__)
@@ -50,15 +47,15 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
             self,
             database_manager: DatabaseManagerInterface,
             document_repository: DocumentRepositoryInterface,
-            rabbitmq_manager: RabbitMQManagerInterface,
             job_progress_store: PostProcessJobProgressStoreInterface,
+            post_process_document_job_publisher: PostProcessDocumentJobPublisherInterface,
             authorizer: Authorizer,
             post_process_document_service_settings: Optional[PostProcessDocumentServiceSettings] = None,
     ) -> None:
         self._database_manager = database_manager
         self._document_repository = document_repository
-        self._rabbitmq_manager = rabbitmq_manager
         self._job_progress_store = job_progress_store
+        self._job_publisher = post_process_document_job_publisher
         self._settings = post_process_document_service_settings or PostProcessDocumentServiceSettings()
         self._authorizer = authorizer
 
@@ -156,30 +153,21 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
     ) -> PostProcessDocumentsStartResponse:
         job_id = uuid.uuid4().hex
         total = len(document_ids)
-        begun = await self._job_progress_store.try_begin_document_job(job_id=job_id, total_documents=total)
+        begun = await self._job_progress_store.try_begin_document_job(
+            job_id=job_id,
+            total_documents=total,
+            document_ids=document_ids,
+            triggered_by=authenticated_user,
+        )
         if not begun:
             raise PostProcessAlreadyRunningException("Post-processing is already running.")
 
-        command = PostProcessDocumentJobCommand(
-            job_id=job_id,
-            document_ids=document_ids,
-            user_id=authenticated_user.id,
-            user_email=authenticated_user.email,
-            roles=list(authenticated_user.roles),
-            permissions=list(authenticated_user.permissions),
-        )
-        envelope = MessageEnvelope.wrap(command)
         try:
-            await self._rabbitmq_manager.publish(
-                routing_key=self._rabbitmq_manager.settings.post_process_document_queue,
-                body=envelope.to_bytes(),
-                headers={"message_id": envelope.message_id},
-            )
+            await self._job_publisher.publish_job(job_id)
         except Exception as e:
             await self._job_progress_store.abort_document_job(job_id)
             raise RabbitMQPublishException("Failed to enqueue the document post-processing job.") from e
 
-        post_process_jobs_published.labels("document").inc()
         return PostProcessDocumentsStartResponse(
             message=message,
             total_documents=total,

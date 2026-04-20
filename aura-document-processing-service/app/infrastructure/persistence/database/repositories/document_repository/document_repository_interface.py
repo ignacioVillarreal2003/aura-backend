@@ -71,14 +71,6 @@ class DocumentRepositoryInterface(ABC):
         pass
 
     @abstractmethod
-    async def hard_delete_document_by_id(
-            self,
-            document_id: int,
-            database_session: AsyncSession
-    ) -> bool:
-        pass
-
-    @abstractmethod
     async def soft_delete_document_by_id(
             self,
             document_id: int,

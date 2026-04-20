@@ -2,24 +2,30 @@ import asyncio
 import logging
 import time
 from datetime import timedelta
-from typing import Any, Callable, Optional, Union
+from typing import Any, Awaitable, Callable, Optional, Union
 from urllib.parse import urlparse
 import httpx
 from aiobreaker import CircuitBreaker, CircuitBreakerError
 from fastapi import HTTPException, Request, status
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from app.infrastructure.http.http_client.exceptions.http_client_exceptions import (
+from app.infrastructure.http.http_client.http_client_exceptions import (
     HttpClientCircuitBreakerException,
     HttpClientConnectionException,
     HttpClientException,
     HttpClientNotStartedException,
-    HttpClientTimeoutException
+    HttpClientTimeoutException,
 )
 from app.infrastructure.http.http_client.http_client_settings import HttpClientSettings
-from app.infrastructure.http.http_client.interfaces.http_client_interface import HttpClientInterface
+from app.infrastructure.http.http_client.http_client_interface import HttpClientInterface
 
 logger = logging.getLogger(__name__)
+
+_AttemptFn = Callable[..., Awaitable[httpx.Response]]
+
+
+def _circuit_breaker_ignore_upstream_client_errors(exc: BaseException) -> bool:
+    return isinstance(exc, HttpClientException) and 400 <= exc.status_code < 500
 
 
 class HttpClient(HttpClientInterface):
@@ -31,7 +37,7 @@ class HttpClient(HttpClientInterface):
 
         self._client: Optional[httpx.AsyncClient] = None
         self._breaker: Optional[CircuitBreaker] = None
-        self._attempt_with_retry: Optional[Callable] = None
+        self._attempt_with_retry: Optional[_AttemptFn] = None
         self._is_started: bool = False
 
         self._lifecycle_lock = asyncio.Lock()
@@ -62,7 +68,9 @@ class HttpClient(HttpClientInterface):
                     "timeout_seconds": self._settings.timeout_seconds,
                     "retry_max_attempts": self._settings.retry_max_attempts,
                     "connection_pool_max_size": self._settings.connection_pool_max_size,
-                    "ssl_verify_certificates": self._settings.ssl_verify_certificates
+                    "ssl_verify_certificates": self._settings.ssl_verify_certificates,
+                    "trust_env": self._settings.trust_env,
+                    "use_http2": self._settings.use_http2,
                 }
             )
 
@@ -72,7 +80,8 @@ class HttpClient(HttpClientInterface):
                     timeout_duration=timedelta(
                         seconds=self._settings.circuit_breaker_recovery_timeout_seconds
                     ),
-                    name="HttpClient"
+                    name="HttpClient",
+                    exclude=[_circuit_breaker_ignore_upstream_client_errors],
                 )
 
                 self._client = httpx.AsyncClient(
@@ -83,7 +92,9 @@ class HttpClient(HttpClientInterface):
                     limits=httpx.Limits(**self._settings.get_httpx_limits()),
                     headers=self._settings.merged_request_headers,
                     verify=self._settings.ssl_verify_certificates,
-                    follow_redirects=self._settings.follow_http_redirects
+                    follow_redirects=self._settings.follow_http_redirects,
+                    trust_env=self._settings.trust_env,
+                    http2=self._settings.use_http2,
                 )
 
                 def _on_retry(
@@ -97,8 +108,9 @@ class HttpClient(HttpClientInterface):
                         }
                     )
 
+                retry_attempt_cap = max(1, self._settings.retry_max_attempts)
                 retry_decorator = retry(
-                    stop=stop_after_attempt(self._settings.retry_max_attempts),
+                    stop=stop_after_attempt(retry_attempt_cap),
                     wait=wait_exponential(
                         min=self._settings.retry_backoff_min_seconds,
                         max=self._settings.retry_backoff_max_seconds
@@ -147,14 +159,6 @@ class HttpClient(HttpClientInterface):
     ) -> bool:
         return self._is_started
 
-    @property
-    def client(
-            self
-    ) -> httpx.AsyncClient:
-        if not self._is_started or not self._client:
-            raise HttpClientNotStartedException("The HTTP client is not started; call start() first.")
-        return self._client
-
     async def request(
             self,
             method: str,
@@ -168,15 +172,24 @@ class HttpClient(HttpClientInterface):
     ) -> httpx.Response:
         if not self._is_started or not self._client or not self._breaker:
             raise HttpClientNotStartedException("The HTTP client is not started; call start() first.")
+        if not self._attempt_with_retry:
+            raise HttpClientNotStartedException("The HTTP client is not started; call start() first.")
 
         if headers is not None:
             kwargs["headers"] = headers
         if timeout is not None:
             kwargs["timeout"] = httpx.Timeout(timeout)
 
+        method_upper = method.upper()
+        runner: _AttemptFn = (
+            self._attempt_with_retry
+            if method_upper in self._settings.retry_enabled_method_set
+            else self._single_attempt
+        )
+
         try:
-            response = await self._breaker.call(
-                self._attempt_with_retry,
+            return await self._breaker.call_async(
+                runner,
                 method,
                 url,
                 params=params,
@@ -184,7 +197,6 @@ class HttpClient(HttpClientInterface):
                 data=data,
                 **kwargs
             )
-            return response
 
         except CircuitBreakerError as e:
             log_ctx = self._request_log_context(method, url)
@@ -276,7 +288,10 @@ class HttpClient(HttpClientInterface):
                 "timeout_seconds": self._settings.timeout_seconds,
                 "retry_max_attempts": self._settings.retry_max_attempts,
                 "connection_pool_max_size": self._settings.connection_pool_max_size,
-                "ssl_verify_certificates": self._settings.ssl_verify_certificates
+                "ssl_verify_certificates": self._settings.ssl_verify_certificates,
+                "trust_env": self._settings.trust_env,
+                "use_http2": self._settings.use_http2,
+                "pool_acquire_timeout_seconds": self._settings.pool_acquire_timeout_seconds,
             }
         }
 
@@ -317,16 +332,20 @@ class HttpClient(HttpClientInterface):
         start_time = time.monotonic()
         log_ctx = self._request_log_context(method, url)
 
+        if not self._client:
+            raise HttpClientNotStartedException("The HTTP client is not started; call start() first.")
+
         try:
             logger.debug(
                 "Sending an outbound HTTP request.",
                 extra=log_ctx
             )
 
-            response = await self.client.request(method, url, **kwargs)
+            response = await self._client.request(method, url, **kwargs)
             response.raise_for_status()
 
-            elapsed_ms = self._record_elapsed(start_time)
+            elapsed = time.monotonic() - start_time
+            elapsed_ms = round(elapsed * 1000, 2)
             logger.debug(
                 "Outbound HTTP request completed successfully.",
                 extra={
@@ -338,7 +357,8 @@ class HttpClient(HttpClientInterface):
             return response
 
         except httpx.TimeoutException as e:
-            elapsed_ms = self._record_elapsed(start_time)
+            elapsed = time.monotonic() - start_time
+            elapsed_ms = round(elapsed * 1000, 2)
             logger.warning(
                 "The outbound HTTP request timed out.",
                 extra={
@@ -350,9 +370,11 @@ class HttpClient(HttpClientInterface):
 
         except (
                 httpx.ConnectError,
-                httpx.NetworkError
+                httpx.NetworkError,
+                httpx.RemoteProtocolError,
         ) as e:
-            elapsed_ms = self._record_elapsed(start_time)
+            elapsed = time.monotonic() - start_time
+            elapsed_ms = round(elapsed * 1000, 2)
             logger.warning(
                 "Could not reach the remote service for this HTTP request.",
                 extra={
@@ -363,7 +385,8 @@ class HttpClient(HttpClientInterface):
             raise HttpClientConnectionException("Could not reach the remote service.") from e
 
         except httpx.HTTPStatusError as e:
-            elapsed_ms = self._record_elapsed(start_time)
+            elapsed = time.monotonic() - start_time
+            elapsed_ms = round(elapsed * 1000, 2)
             status_code = e.response.status_code
             logger.error(
                 "The remote service returned an error HTTP status.",
@@ -377,12 +400,6 @@ class HttpClient(HttpClientInterface):
                 "Upstream service returned an error response.",
                 status_code=status_code
             ) from e
-
-    @staticmethod
-    def _record_elapsed(
-            start_time: float
-    ) -> float:
-        return round((time.monotonic() - start_time) * 1000, 2)
 
 
 async def get_http_client(

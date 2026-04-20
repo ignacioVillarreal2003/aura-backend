@@ -1,6 +1,8 @@
+import json
 import logging
 import secrets
 from typing import NoReturn, Optional
+from pydantic import ValidationError
 from fastapi import HTTPException, Request, status
 
 from app.configuration.environment_variables import environment_variables
@@ -11,22 +13,22 @@ from app.infrastructure.http.authentication_provider.authentication_provider_set
 from app.infrastructure.http.authentication_provider.dtos.authenticated_user_response import (
     AuthenticatedUserResponse
 )
-from app.infrastructure.http.authentication_provider.exceptions.authentication_provider_exception import (
+from app.infrastructure.http.authentication_provider.authentication_provider_exception import (
     AuthenticationProviderInvalidTokenException,
     AuthenticationProviderServiceUnavailableException,
     AuthenticationProviderUnauthorizedException,
     AuthenticationProviderUserNotFoundException
 )
-from app.infrastructure.http.authentication_provider.interfaces.authentication_provider_interface import (
+from app.infrastructure.http.authentication_provider.authentication_provider_interface import (
     AuthenticationProviderInterface,
 )
-from app.infrastructure.http.http_client.exceptions.http_client_exceptions import (
+from app.infrastructure.http.http_client.http_client_exceptions import (
     HttpClientCircuitBreakerException,
     HttpClientConnectionException,
     HttpClientException,
     HttpClientTimeoutException
 )
-from app.infrastructure.http.http_client.interfaces.http_client_interface import HttpClientInterface
+from app.infrastructure.http.http_client.http_client_interface import HttpClientInterface
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +62,7 @@ class AuthenticationProvider(AuthenticationProviderInterface):
 
         user_id = self._parse_required_user_id(request)
         email = self._parse_required_email(request)
+        self._assert_service_trust_header_raw_limits(request)
 
         logger.debug(
             "Service-to-service request authenticated successfully.",
@@ -153,8 +156,8 @@ class AuthenticationProvider(AuthenticationProviderInterface):
                 }
             ) from None
 
-    @staticmethod
     def _parse_required_email(
+            self,
             request: Request
     ) -> str:
         email = request.headers.get(_HEADER_USER_EMAIL, "").strip()
@@ -172,7 +175,64 @@ class AuthenticationProvider(AuthenticationProviderInterface):
                     "error": "missing_user_email"
                 }
             )
+        if len(email) > self._settings.max_service_user_email_length:
+            logger.warning(
+                "Service-to-service call included an oversized user email header.",
+                extra={
+                    "path": request.url.path,
+                    "error_code": "user_email_header_too_large",
+                },
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "detail": "X-User-Email header exceeds the maximum allowed length",
+                    "error": "user_email_header_too_large",
+                },
+            )
         return email
+
+    def _assert_service_trust_header_raw_limits(
+            self,
+            request: Request
+    ) -> None:
+        self._reject_header_if_too_long(
+            request,
+            header_name=_HEADER_USER_ROLES,
+            max_length=self._settings.max_service_roles_header_characters,
+            error_code="roles_header_too_large",
+        )
+        self._reject_header_if_too_long(
+            request,
+            header_name=_HEADER_USER_PERMISSIONS,
+            max_length=self._settings.max_service_permissions_header_characters,
+            error_code="permissions_header_too_large",
+        )
+
+    @staticmethod
+    def _reject_header_if_too_long(
+            request: Request,
+            header_name: str,
+            max_length: int,
+            error_code: str
+    ) -> None:
+        raw = request.headers.get(header_name)
+        if raw and len(raw) > max_length:
+            logger.warning(
+                "Service-to-service call included an oversized trust header.",
+                extra={
+                    "path": request.url.path,
+                    "header": header_name,
+                    "error_code": error_code,
+                },
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "detail": f"{header_name} header exceeds the maximum allowed length",
+                    "error": error_code,
+                },
+            )
 
     def _build_authenticated_user(
             self,
@@ -191,23 +251,24 @@ class AuthenticationProvider(AuthenticationProviderInterface):
             self,
             token: str
     ) -> AuthenticatedUserResponse:
+        stripped = token.strip()
+        if len(stripped) > self._settings.max_bearer_token_characters:
+            logger.warning(
+                "Rejected a bearer token that exceeds the configured maximum length.",
+                extra={"error_code": "token_too_long"},
+            )
+            raise AuthenticationProviderInvalidTokenException("Bearer token is too long.")
+
         logger.debug("Validating bearer token with the authentication service.")
         try:
             response = await self._http_client.get(
                 url=self._settings.authentication_url,
                 headers={
-                    "Authorization": self._format_bearer_token(token)
-                }
+                    "Authorization": self._format_bearer_token(stripped),
+                    "Accept": "application/json",
+                },
+                timeout=self._settings.request_timeout_seconds,
             )
-            authenticated_user = AuthenticatedUserResponse.model_validate(response.json())
-            logger.debug(
-                "Bearer token validated successfully.",
-                extra={
-                    "user_id": authenticated_user.id
-                }
-            )
-            return authenticated_user
-
         except (
                 HttpClientCircuitBreakerException,
                 HttpClientConnectionException,
@@ -217,16 +278,42 @@ class AuthenticationProvider(AuthenticationProviderInterface):
             self._handle_http_error(e, operation="token validation")
             raise
 
-        except AuthenticationProviderInvalidTokenException:
-            raise
+        try:
+            payload = response.json()
+        except json.JSONDecodeError as e:
+            logger.error(
+                "Authentication service returned a response that is not valid JSON.",
+                extra={
+                    "operation": "token validation",
+                    "reason": "invalid_json",
+                },
+            )
+            raise AuthenticationProviderInvalidTokenException(
+                "Invalid authentication response format",
+            ) from e
 
-        except ValueError as e:
-            logger.error("Authentication service returned a response that could not be parsed.")
-            raise AuthenticationProviderInvalidTokenException("Invalid authentication response format") from e
+        try:
+            authenticated_user = AuthenticatedUserResponse.model_validate(payload)
+        except ValidationError as e:
+            logger.error(
+                "Authentication service returned a response that failed schema validation.",
+                extra={
+                    "operation": "token validation",
+                    "reason": "response_validation_failed",
+                    "validation_error_count": len(e.errors()),
+                },
+            )
+            raise AuthenticationProviderServiceUnavailableException(
+                "Unexpected authentication response shape",
+            ) from e
 
-        except Exception as e:
-            logger.exception("Unexpected error while validating the bearer token.")
-            raise AuthenticationProviderServiceUnavailableException("Unexpected authentication error") from e
+        logger.debug(
+            "Bearer token validated successfully.",
+            extra={
+                "user_id": authenticated_user.id
+            }
+        )
+        return authenticated_user
 
     @staticmethod
     def _format_bearer_token(

@@ -19,14 +19,14 @@ from app.application.services.document.document_download_service.interfaces.docu
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.document_processing_permissions import DocumentProcessingPermissions
-from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
+from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
     DocumentRepositoryInterface
 )
-from app.infrastructure.persistence.storages.document_storage.exceptions.document_storage_exception import (
+from app.infrastructure.persistence.storages.document_storage.document_storage_exception import (
     DocumentNotFoundException,
     DocumentStorageException,
 )
-from app.infrastructure.persistence.storages.document_storage.interfaces.document_storage_interface import (
+from app.infrastructure.persistence.storages.document_storage.document_storage_interface import (
     DocumentStorageInterface
 )
 

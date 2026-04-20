@@ -13,12 +13,12 @@ from app.application.exceptions.app_exception import AppException
 from app.infrastructure.persistence.database.database_manager.database_manager_settings import (
     DatabaseManagerSettings
 )
-from app.infrastructure.persistence.database.database_manager.exceptions.database_manager_exception import (
+from app.infrastructure.persistence.database.database_manager.database_manager_exception import (
     DatabaseManagerException,
     DatabaseNotInitializedException,
     DatabaseSessionException
 )
-from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
+from app.infrastructure.persistence.database.database_manager.database_manager_interface import (
     DatabaseManagerInterface
 )
 
@@ -106,13 +106,17 @@ class DatabaseManager(DatabaseManagerInterface):
                     }
                 )
 
-            except Exception as e:
+            except (SQLAlchemyError, OSError) as e:
                 logger.exception("The database manager failed to initialize.")
                 await self._cleanup_resources()
                 raise DatabaseManagerException(
                     "Could not initialize the database connection.",
                     status_code=503
                 ) from e
+            except Exception:
+                logger.exception("The database manager failed to initialize.")
+                await self._cleanup_resources()
+                raise
 
     async def dispose(
             self
@@ -137,6 +141,8 @@ class DatabaseManager(DatabaseManagerInterface):
         try:
             yield db_session
             await db_session.commit()
+        except asyncio.CancelledError:
+            raise
         except DatabaseNotInitializedException:
             raise
         except HTTPException:
@@ -147,17 +153,24 @@ class DatabaseManager(DatabaseManagerInterface):
             except Exception:
                 logger.exception("The session could not be rolled back after an application error.", )
             raise
-        except Exception as e:
+        except (SQLAlchemyError, OSError) as e:
             try:
                 await db_session.rollback()
             except Exception:
                 logger.exception("The session could not be rolled back after an error.")
             raise DatabaseSessionException("A database error occurred while using the session.") from e
+        except Exception:
+            try:
+                await db_session.rollback()
+            except Exception:
+                logger.exception("The session could not be rolled back after an error.")
+            raise
         finally:
             await db_session.close()
 
     async def health_check(
-            self
+            self,
+            detailed: bool = False,
     ) -> dict[str, Any]:
         if not self._is_initialized or not self._engine:
             return {
@@ -173,27 +186,40 @@ class DatabaseManager(DatabaseManagerInterface):
                 row = result.scalar()
             latency_ms = round((time.monotonic() - start_time) * 1000, 2)
 
-            pool = self._engine.pool
-            return {
+            base: dict[str, Any] = {
                 "status": "healthy" if row == 1 else "unhealthy",
                 "initialized": True,
                 "latency_ms": latency_ms,
-                "pool": {
-                    "persistent_connections": pool.size(),
-                    "checked_in": pool.checkedin(),
-                    "checked_out": pool.checkedout(),
-                    "overflow_active": pool.overflow()
-                },
-                "settings": {
-                    "pool_persistent_connections": self._settings.pool_persistent_connections,
-                    "pool_overflow_connections": self._settings.pool_overflow_connections,
-                    "pool_checkout_timeout_seconds": self._settings.pool_checkout_timeout_seconds,
-                    "ssl_enabled": self._settings.ssl_enabled
-                }
             }
+            if not detailed:
+                return base
 
-        except Exception:
+            pool = self._engine.pool
+            base["pool"] = {
+                "persistent_connections": pool.size(),
+                "checked_in": pool.checkedin(),
+                "checked_out": pool.checkedout(),
+                "overflow_active": pool.overflow()
+            }
+            base["settings"] = {
+                "pool_persistent_connections": self._settings.pool_persistent_connections,
+                "pool_overflow_connections": self._settings.pool_overflow_connections,
+                "pool_checkout_timeout_seconds": self._settings.pool_checkout_timeout_seconds,
+                "ssl_enabled": self._settings.ssl_enabled
+            }
+            return base
+
+        except asyncio.CancelledError:
+            raise
+        except (SQLAlchemyError, OSError):
             logger.exception("The database health check failed.")
+            return {
+                "status": "unhealthy",
+                "initialized": True,
+                "error": "Health probe failed; see logs for details."
+            }
+        except Exception:
+            logger.exception("The database health check failed with an unexpected error.")
             return {
                 "status": "unhealthy",
                 "initialized": True,
@@ -255,7 +281,8 @@ class DatabaseManager(DatabaseManagerInterface):
                 dbapi_conn,
                 connection_record
         ) -> None:
-            logger.debug("A new database connection was opened.")
+            if self._settings.connection_lifecycle_logging_enabled:
+                logger.debug("A new database connection was opened.")
 
         @event.listens_for(
             self._engine.sync_engine,
@@ -265,7 +292,8 @@ class DatabaseManager(DatabaseManagerInterface):
                 dbapi_conn,
                 connection_record
         ) -> None:
-            logger.debug("A database connection was closed.")
+            if self._settings.connection_lifecycle_logging_enabled:
+                logger.debug("A database connection was closed.")
 
         @event.listens_for(
             self._engine.sync_engine,
@@ -338,7 +366,7 @@ class DatabaseManager(DatabaseManagerInterface):
         if self._engine:
             try:
                 await self._engine.dispose()
-            except Exception:
+            except (SQLAlchemyError, OSError):
                 logger.exception("An error occurred while disposing the database engine.")
 
         self._engine = None
@@ -374,6 +402,9 @@ async def get_database_session(
     try:
         async with database_manager.session() as session:
             yield session
+
+    except asyncio.CancelledError:
+        raise
 
     except HTTPException:
         raise

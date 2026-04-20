@@ -17,6 +17,24 @@ class RabbitMQManagerSettings(BaseSettings):
 
     tcp_connect_timeout_seconds: float = Field(default=10.0, gt=0, le=60.0)
 
+    heartbeat_seconds: int = Field(
+        default=60,
+        ge=10,
+        le=900,
+        description="AMQP heartbeat interval in seconds (passed to the broker connection).",
+    )
+    blocked_connection_timeout_seconds: Optional[float] = Field(
+        default=300.0,
+        gt=0,
+        le=3600.0,
+        description="Seconds before the broker treats this connection as blocked; None to omit.",
+    )
+    client_connection_name: str = Field(
+        default="aura-document-processing-service",
+        max_length=128,
+        description="Shown in the RabbitMQ management UI for this connection.",
+    )
+
     retry_max_attempts: int = Field(default=3, ge=1, le=10)
     retry_backoff_min_seconds: float = Field(default=1.0, gt=0, le=30.0)
     retry_backoff_max_seconds: float = Field(default=10.0, gt=0, le=60.0)
@@ -26,6 +44,13 @@ class RabbitMQManagerSettings(BaseSettings):
     max_delivery_attempts: int = Field(default=3, ge=1, le=20)
 
     consumer_reconnect_delay_seconds: float = Field(default=5.0, gt=0, le=60.0)
+
+    max_message_body_bytes: int = Field(
+        default=16_777_216,
+        ge=1024,
+        le=536_870_912,
+        description="Maximum inbound message body size accepted by consumers before JSON decode.",
+    )
 
     message_ttl_ms: Optional[int] = Field(default=None, ge=1000)
 

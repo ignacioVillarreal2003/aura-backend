@@ -19,7 +19,6 @@ from app.application.services.fragment.post_process_fragment_service.interfaces.
 from app.application.services.fragment.post_process_fragment_service.post_process_fragment_service_settings import (
     PostProcessFragmentServiceSettings,
 )
-from app.configuration.prometheus_post_process_metrics import post_process_jobs_published
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.document_processing_permissions import DocumentProcessingPermissions
 from app.domain.dtos.fragment.post_process_fragment.post_process_fragments_request import PostProcessFragmentsRequest
@@ -30,16 +29,14 @@ from app.domain.dtos.fragment.post_process_fragment.post_process_fragments_statu
     PostProcessFragmentError,
     PostProcessFragmentsStatusResponse,
 )
-from app.infrastructure.messaging.rabbitmq.dtos.commands.post_process_fragment_job_command import (
-    PostProcessFragmentJobCommand,
+from app.infrastructure.messaging.rabbitmq.publisher.interfaces.post_process_fragment_job_publisher_interface import (
+    PostProcessFragmentJobPublisherInterface,
 )
-from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
-from app.infrastructure.messaging.rabbitmq.exceptions.rabbitmq_manager_exception import RabbitMQPublishException
-from app.infrastructure.messaging.rabbitmq.interfaces.rabbitmq_manager_interface import RabbitMQManagerInterface
-from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
+from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_exception import RabbitMQPublishException
+from app.infrastructure.persistence.database.database_manager.database_manager_interface import (
     DatabaseManagerInterface,
 )
-from app.infrastructure.persistence.database.repositories.fragment_repository.interfaces.fragment_repository_interface import (
+from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository_interface import (
     FragmentRepositoryInterface,
 )
 
@@ -51,15 +48,15 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
             self,
             database_manager: DatabaseManagerInterface,
             fragment_repository: FragmentRepositoryInterface,
-            rabbitmq_manager: RabbitMQManagerInterface,
             job_progress_store: PostProcessJobProgressStoreInterface,
+            post_process_fragment_job_publisher: PostProcessFragmentJobPublisherInterface,
             authorizer: Authorizer,
             post_process_fragment_service_settings: Optional[PostProcessFragmentServiceSettings] = None,
     ) -> None:
         self._database_manager = database_manager
         self._fragment_repository = fragment_repository
-        self._rabbitmq_manager = rabbitmq_manager
         self._job_progress_store = job_progress_store
+        self._job_publisher = post_process_fragment_job_publisher
         self._settings = post_process_fragment_service_settings or PostProcessFragmentServiceSettings()
         self._authorizer = authorizer
 
@@ -171,31 +168,21 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
             message: str,
     ) -> PostProcessFragmentsStartResponse:
         job_id = uuid.uuid4().hex
-        begun = await self._job_progress_store.try_begin_fragment_job(job_id=job_id, total_fragments=total_fragments)
+        begun = await self._job_progress_store.try_begin_fragment_job(
+            job_id=job_id,
+            total_fragments=total_fragments,
+            document_ids=document_ids,
+            triggered_by=authenticated_user,
+        )
         if not begun:
             raise PostProcessFragmentAlreadyRunningException("Fragment post-processing is already running.")
 
-        command = PostProcessFragmentJobCommand(
-            job_id=job_id,
-            document_ids=document_ids,
-            total_fragments=total_fragments,
-            user_id=authenticated_user.id,
-            user_email=authenticated_user.email,
-            roles=list(authenticated_user.roles),
-            permissions=list(authenticated_user.permissions),
-        )
-        envelope = MessageEnvelope.wrap(command)
         try:
-            await self._rabbitmq_manager.publish(
-                routing_key=self._rabbitmq_manager.settings.post_process_fragment_queue,
-                body=envelope.to_bytes(),
-                headers={"message_id": envelope.message_id},
-            )
+            await self._job_publisher.publish_job(job_id)
         except Exception as e:
             await self._job_progress_store.abort_fragment_job(job_id)
             raise RabbitMQPublishException("Failed to enqueue the fragment post-processing job.") from e
 
-        post_process_jobs_published.labels("fragment").inc()
         return PostProcessFragmentsStartResponse(
             message=message,
             total_fragments=total_fragments,

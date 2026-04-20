@@ -24,7 +24,7 @@ from app.domain.dtos.document.document_query.document_list_response import Docum
 from app.domain.dtos.document.document_query.document_response import DocumentResponse
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.models.document import Document
-from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
+from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
     DocumentRepositoryInterface
 )
 

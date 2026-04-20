@@ -3,9 +3,7 @@ from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.infrastructure.persistence.database.database_manager.database_manager_settings import (
-    DatabaseManagerSettings
-)
+from app.infrastructure.persistence.database.database_manager.database_manager_settings import DatabaseManagerSettings
 
 
 class DatabaseManagerInterface(ABC):
@@ -44,6 +42,7 @@ class DatabaseManagerInterface(ABC):
 
     @abstractmethod
     async def health_check(
-            self
+            self,
+            detailed: bool = False,
     ) -> dict[str, Any]:
         pass

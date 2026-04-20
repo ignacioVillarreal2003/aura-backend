@@ -1,19 +1,20 @@
 import logging
 from datetime import datetime, timezone
 from typing import Optional
-from sqlalchemy import select, or_
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import desc, or_, select
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.constants.document.document_type import DocumentType
 from app.domain.models.document import Document
-from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
-    DocumentRepositoryInterface
+from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
+    DocumentRepositoryInterface,
 )
-from app.infrastructure.persistence.database.repositories.exceptions.database_exceptions import (
+from app.infrastructure.persistence.database.repositories.database_exceptions import (
     DatabaseConstraintViolationException,
-    DatabaseException
+    DatabaseException,
 )
+from app.infrastructure.persistence.database.repositories.repository_query_utils import chunked_ids
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,10 @@ class DocumentRepository(DocumentRepositoryInterface):
             )
 
             result = await database_session.execute(
-                select(Document).where(Document.id == document_id)
+                select(Document).where(
+                    Document.id == document_id,
+                    Document.deleted_at.is_(None),
+                )
             )
             document = result.scalars().first()
 
@@ -46,7 +50,11 @@ class DocumentRepository(DocumentRepositoryInterface):
             )
             return document
 
-        except Exception as e:
+        except SQLAlchemyError as e:
+            logger.exception(
+                "Database error while fetching the document.",
+                extra={"document_id": document_id},
+            )
             raise DatabaseException("Failed to fetch the document.") from e
 
     async def get_documents_by_chat_id(
@@ -79,7 +87,11 @@ class DocumentRepository(DocumentRepositoryInterface):
             )
             return documents
 
-        except Exception as e:
+        except SQLAlchemyError as e:
+            logger.exception(
+                "Database error while fetching documents by chat ID.",
+                extra={"chat_id": chat_id},
+            )
             raise DatabaseException("Failed to fetch documents by chat ID.") from e
 
     async def get_documents_by_ids(
@@ -87,6 +99,8 @@ class DocumentRepository(DocumentRepositoryInterface):
             document_ids: list[int],
             database_session: AsyncSession
     ) -> list[Document]:
+        if not document_ids:
+            return []
         try:
             logger.debug(
                 "Fetching documents by IDs.",
@@ -94,19 +108,36 @@ class DocumentRepository(DocumentRepositoryInterface):
                     "document_ids_count": len(document_ids)
                 }
             )
-            result = await database_session.execute(
-                select(Document).where(Document.id.in_(document_ids))
-            )
-            documents = list(result.scalars().all())
+            by_id: dict[int, Document] = {}
+            for chunk in chunked_ids(document_ids):
+                result = await database_session.execute(
+                    select(Document).where(
+                        Document.id.in_(chunk),
+                        Document.deleted_at.is_(None),
+                    )
+                )
+                for row in result.scalars().all():
+                    by_id[int(row.id)] = row
+
+            ordered: list[Document] = []
+            for doc_id in dict.fromkeys(document_ids):
+                if doc_id in by_id:
+                    ordered.append(by_id[doc_id])
+
             logger.debug(
                 "The documents-by-IDs lookup completed.",
                 extra={
                     "document_ids_count": len(document_ids),
-                    "found_count": len(documents)
+                    "found_count": len(ordered)
                 }
             )
-            return documents
-        except Exception as e:
+            return ordered
+
+        except SQLAlchemyError as e:
+            logger.exception(
+                "Database error while fetching documents by IDs.",
+                extra={"document_ids_count": len(document_ids)},
+            )
             raise DatabaseException("Failed to fetch documents by IDs.") from e
 
     async def get_documents_missing_metadata(
@@ -136,7 +167,8 @@ class DocumentRepository(DocumentRepositoryInterface):
             )
             return documents
 
-        except Exception as e:
+        except SQLAlchemyError as e:
+            logger.exception("Database error while fetching documents missing metadata.")
             raise DatabaseException("Failed to fetch documents missing metadata.") from e
 
     async def get_documents(
@@ -165,7 +197,11 @@ class DocumentRepository(DocumentRepositoryInterface):
                 }
             )
 
-            query = select(Document).where(Document.deleted_at.is_(None))
+            query = (
+                select(Document)
+                .where(Document.deleted_at.is_(None))
+                .order_by(desc(Document.created_at), desc(Document.id))
+            )
 
             if name is not None:
                 query = query.where(Document.name.ilike(f"%{name}%"))
@@ -181,7 +217,7 @@ class DocumentRepository(DocumentRepositoryInterface):
                 query = query.where(Document.created_at <= created_to)
 
             if page is not None and size is not None:
-                query = query.offset(page * size).limit(size)
+                query = query.offset((page - 1) * size).limit(size)
             elif size is not None:
                 query = query.limit(size)
 
@@ -196,7 +232,11 @@ class DocumentRepository(DocumentRepositoryInterface):
             )
             return documents
 
-        except Exception as e:
+        except SQLAlchemyError as e:
+            logger.exception(
+                "Database error while searching documents.",
+                extra={"page": page, "size": size},
+            )
             raise DatabaseException("Failed to search documents.") from e
 
     async def create_document(
@@ -223,7 +263,7 @@ class DocumentRepository(DocumentRepositoryInterface):
             raise DatabaseConstraintViolationException(
                 "A database constraint was violated while creating the document."
             ) from e
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.exception("Failed to create the document in the database.")
             raise DatabaseException("Failed to create the document.") from e
 
@@ -256,49 +296,12 @@ class DocumentRepository(DocumentRepositoryInterface):
             raise DatabaseConstraintViolationException(
                 "A database constraint was violated while updating the document."
             ) from e
-        except Exception as e:
+        except SQLAlchemyError as e:
+            logger.exception(
+                "Failed to update the document.",
+                extra={"document_id": document.id},
+            )
             raise DatabaseException("Failed to update the document.") from e
-
-    async def hard_delete_document_by_id(
-            self,
-            document_id: int,
-            database_session: AsyncSession
-    ) -> bool:
-        try:
-            logger.debug(
-                "Hard-deleting the document.",
-                extra={
-                    "document_id": document_id
-                }
-            )
-
-            result = await database_session.execute(
-                select(Document).where(Document.id == document_id)
-            )
-            document = result.scalars().first()
-
-            if document is None:
-                logger.warning(
-                    "No document was found for hard-delete.",
-                    extra={
-                        "document_id": document_id
-                    }
-                )
-                return False
-
-            await database_session.delete(document)
-            await database_session.flush()
-
-            logger.info(
-                "The document was hard-deleted successfully.",
-                extra={
-                    "document_id": document_id
-                }
-            )
-            return True
-
-        except Exception as e:
-            raise DatabaseException("Failed to delete the document.") from e
 
     async def soft_delete_document_by_id(
             self,
@@ -347,5 +350,9 @@ class DocumentRepository(DocumentRepositoryInterface):
             )
             return True
 
-        except Exception as e:
+        except SQLAlchemyError as e:
+            logger.exception(
+                "Failed to soft-delete the document.",
+                extra={"document_id": document_id, "user_id": user_id},
+            )
             raise DatabaseException("Failed to soft-delete the document.") from e

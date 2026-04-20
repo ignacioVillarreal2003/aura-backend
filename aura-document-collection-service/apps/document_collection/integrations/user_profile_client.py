@@ -4,6 +4,9 @@ from typing import Iterable
 import httpx
 from django.conf import settings
 
+from core.authentication.authenticated_user import AuthenticatedUser
+from core.authentication.authentication_provider import build_service_user_headers
+
 logger = logging.getLogger(__name__)
 
 
@@ -16,18 +19,24 @@ class UserProfile:
 
 class UserProfileClient:
     @staticmethod
-    def fetch_by_ids(user_ids: Iterable[int]) -> dict[int, UserProfile]:
+    def fetch_by_ids(
+        user_ids: Iterable[int],
+        authenticated_user: AuthenticatedUser,
+    ) -> dict[int, UserProfile]:
         unique = sorted({int(uid) for uid in user_ids})
         if not unique:
             return {}
-        url = (getattr(settings, "USER_PROFILE_SERVICE_URL", None) or "").strip()
-        if not url:
-            return {uid: UserProfile(id=uid, email="", username="") for uid in unique}
+        url = (getattr(settings, "USER_PROFILE_SERVICE_URL", None)).strip()
 
         timeout = float(getattr(settings, "USER_PROFILE_SERVICE_TIMEOUT", 5.0))
+        headers = build_service_user_headers(authenticated_user)
         try:
             with httpx.Client(timeout=timeout) as client:
-                response = client.post(url, json={"user_ids": unique})
+                response = client.post(
+                    url,
+                    json={"user_ids": unique},
+                    headers=headers,
+                )
         except (httpx.HTTPError, ValueError, TypeError) as e:
             logger.warning(
                 "User profile service request failed; using placeholder profiles.",

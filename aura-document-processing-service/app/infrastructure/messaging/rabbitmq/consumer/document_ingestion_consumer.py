@@ -1,22 +1,25 @@
+import json
 import logging
 import tempfile
 import uuid
 from pathlib import Path
+
 import aio_pika.abc
+from pydantic import ValidationError
 
 from app.application.services.document.document_ingestion_service.interfaces.document_ingestion_service_interface import (
     DocumentIngestionServiceInterface
 )
 from app.infrastructure.messaging.rabbitmq.dtos.commands.document_ingestion_command import DocumentIngestionCommand
 from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
-from app.infrastructure.messaging.rabbitmq.interfaces.rabbitmq_manager_interface import RabbitMQManagerInterface
-from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
+from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
+from app.infrastructure.persistence.database.database_manager.database_manager_interface import (
     DatabaseManagerInterface
 )
-from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
+from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
     DocumentRepositoryInterface
 )
-from app.infrastructure.persistence.storages.document_storage.interfaces.document_storage_interface import (
+from app.infrastructure.persistence.storages.document_storage.document_storage_interface import (
     DocumentStorageInterface
 )
 
@@ -71,15 +74,54 @@ class DocumentIngestionConsumer:
             await message.nack(requeue=False)
             return
 
+        body = message.body
+        body_len = len(body)
+        if body_len > self._settings.max_message_body_bytes:
+            logger.error(
+                "The message body exceeded the configured maximum size; discarding without requeue.",
+                extra={
+                    "message_id": (message.headers or {}).get("message_id", "unknown"),
+                    "body_bytes": body_len,
+                    "max_message_body_bytes": self._settings.max_message_body_bytes,
+                },
+            )
+            await message.nack(requeue=False)
+            return
+
         try:
             message_envelope = MessageEnvelope.from_bytes(
-                data=message.body,
+                data=body,
                 command_type=DocumentIngestionCommand,
                 retry_count=retry_count
             )
-        except Exception:
-            logger.exception(
-                "The message body could not be deserialized; discarding it because it cannot be retried safely."
+        except UnicodeDecodeError as e:
+            logger.error(
+                "The message body was not valid UTF-8; discarding without requeue.",
+                extra={
+                    "message_id": (message.headers or {}).get("message_id", "unknown"),
+                    "error": type(e).__name__,
+                },
+            )
+            await message.nack(requeue=False)
+            return
+        except json.JSONDecodeError as e:
+            logger.error(
+                "The message body was not valid JSON; discarding without requeue.",
+                extra={
+                    "message_id": (message.headers or {}).get("message_id", "unknown"),
+                    "error": type(e).__name__,
+                },
+            )
+            await message.nack(requeue=False)
+            return
+        except ValidationError as e:
+            logger.error(
+                "The message envelope failed schema validation; discarding without requeue.",
+                extra={
+                    "message_id": (message.headers or {}).get("message_id", "unknown"),
+                    "error": type(e).__name__,
+                    "error_count": len(e.errors()),
+                },
             )
             await message.nack(requeue=False)
             return

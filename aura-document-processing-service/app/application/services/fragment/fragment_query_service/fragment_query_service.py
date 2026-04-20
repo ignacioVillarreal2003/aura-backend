@@ -32,13 +32,13 @@ from app.domain.dtos.fragment.fragment_query.question_context_fragments_request 
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.models import Document, Fragment
-from app.infrastructure.persistence.database.repositories.document_collection_repository.interfaces.document_collection_repository_interface import (
+from app.infrastructure.persistence.database.repositories.document_collection_repository.document_collection_repository_interface import (
     DocumentCollectionRepositoryInterface
 )
-from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
+from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
     DocumentRepositoryInterface
 )
-from app.infrastructure.persistence.database.repositories.fragment_repository.interfaces.fragment_repository_interface import (
+from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository_interface import (
     FragmentRepositoryInterface
 )
 
@@ -144,15 +144,12 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             else:
                 fragments = fragments_from_question
 
-            if not authenticated_user.has_permission(
-                    DocumentProcessingPermissions.ACCESS_ALL_PROCESSING_RESOURCES
-            ):
-                fragments = await self._filter_accessible_fragments(
-                    fragments=fragments,
-                    user_id=authenticated_user.id,
-                    chat_id=question_context_fragments_request.chat_id,
-                    database_session=database_session
-                )
+            fragments = await self._filter_accessible_fragments(
+                fragments=fragments,
+                user_id=authenticated_user.id,
+                chat_id=question_context_fragments_request.chat_id,
+                database_session=database_session
+            )
 
             rerank_requested = (
                     self._settings.rerank_enabled
@@ -240,18 +237,15 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                     "The number of document identifiers exceeds the configured limit."
                 )
 
-            if not authenticated_user.has_permission(
-                    DocumentProcessingPermissions.ACCESS_ALL_PROCESSING_RESOURCES
-            ):
-                documents = await self._get_documents_by_ids_or_raise(
-                    document_ids=document_ids,
-                    database_session=database_session
+            documents = await self._get_documents_by_ids_or_raise(
+                document_ids=document_ids,
+                database_session=database_session
+            )
+            for document in documents:
+                self._authorizer.require_document_ownership(
+                    document=document,
+                    authenticated_user=authenticated_user,
                 )
-                for document in documents:
-                    self._authorizer.require_document_ownership(
-                        document=document,
-                        authenticated_user=authenticated_user,
-                    )
 
             all_fragments = await self._retrieve_documents_fragments(
                 database_session=database_session,

@@ -40,16 +40,16 @@ from app.infrastructure.messaging.rabbitmq.dtos.commands.document_ingestion_comm
 from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.models.document import Document
-from app.infrastructure.messaging.rabbitmq.exceptions.rabbitmq_manager_exception import RabbitMQPublishException
-from app.infrastructure.messaging.rabbitmq.interfaces.rabbitmq_manager_interface import RabbitMQManagerInterface
-from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
+from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_exception import RabbitMQPublishException
+from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
+from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
     DocumentRepositoryInterface
 )
-from app.infrastructure.persistence.database.repositories.exceptions.database_exceptions import DatabaseException
-from app.infrastructure.persistence.storages.document_storage.exceptions.document_storage_exception import (
+from app.infrastructure.persistence.database.repositories.database_exceptions import DatabaseException
+from app.infrastructure.persistence.storages.document_storage.document_storage_exception import (
     DocumentStorageException
 )
-from app.infrastructure.persistence.storages.document_storage.interfaces.document_storage_interface import (
+from app.infrastructure.persistence.storages.document_storage.document_storage_interface import (
     DocumentStorageInterface
 )
 

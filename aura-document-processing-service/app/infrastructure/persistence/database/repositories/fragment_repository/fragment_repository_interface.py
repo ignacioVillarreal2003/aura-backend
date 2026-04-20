@@ -83,14 +83,6 @@ class FragmentRepositoryInterface(ABC):
         pass
 
     @abstractmethod
-    async def hard_delete_fragments_by_document_id(
-            self,
-            document_id: int,
-            database_session: AsyncSession
-    ) -> int:
-        pass
-
-    @abstractmethod
     async def soft_delete_fragments_by_document_id(
             self,
             document_id: int,
