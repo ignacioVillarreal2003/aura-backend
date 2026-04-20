@@ -1,11 +1,14 @@
+import asyncio
 import logging
 import time
 from pathlib import Path
 from typing import Any, Optional
 from fastapi import HTTPException, Request, status, UploadFile
+from minio.error import S3Error
 
+from app.application.exceptions.app_exception import AppException
 from app.infrastructure.persistence.storages.document_storage.document_storage_settings import DocumentStorageSettings
-from app.infrastructure.persistence.storages.document_storage.exceptions.document_storage_exception import (
+from app.infrastructure.persistence.storages.document_storage.document_storage_exception import (
     DocumentDeleteException,
     DocumentDownloadException,
     DocumentExtensionException,
@@ -15,18 +18,26 @@ from app.infrastructure.persistence.storages.document_storage.exceptions.documen
     DocumentUploadException,
     DocumentValidationException
 )
-from app.infrastructure.persistence.storages.document_storage.interfaces.document_storage_interface import (
+from app.infrastructure.persistence.storages.document_storage.document_storage_interface import (
     DocumentStorageInterface
 )
-from app.infrastructure.persistence.storages.minio_manager.exceptions.minio_manager_exception import (
+from app.infrastructure.persistence.storages.minio_manager.minio_manager_exception import (
     MinioDeleteException,
-    MinioDownloadException
+    MinioDownloadException,
+    MinioManagerException,
 )
-from app.infrastructure.persistence.storages.minio_manager.interfaces.minio_manager_interface import (
+from app.infrastructure.persistence.storages.minio_manager.minio_manager_interface import (
     MinioManagerInterface
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _validate_object_storage_key_fragment(value: str, *, label: str) -> None:
+    if "\x00" in value:
+        raise DocumentValidationException(f"Invalid {label}: null bytes are not allowed.")
+    if ".." in value:
+        raise DocumentValidationException(f"Invalid {label}: parent-directory segments are not allowed.")
 
 
 class DocumentStorage(DocumentStorageInterface):
@@ -59,8 +70,13 @@ class DocumentStorage(DocumentStorageInterface):
                 }
             )
 
-        except Exception as e:
+        except asyncio.CancelledError:
+            raise
+        except (MinioManagerException, OSError) as e:
             raise DocumentStorageException("Failed to start document storage.") from e
+        except Exception:
+            logger.exception("Document storage failed to start with an unexpected error.")
+            raise
 
     async def upload_document(
             self,
@@ -91,13 +107,15 @@ class DocumentStorage(DocumentStorageInterface):
                 document_id=document_id
             )
 
-            metadata: dict[str, str] = {}
-            if self._settings.attach_metadata_to_objects:
-                metadata["original_filename"] = self._settings.sanitize_metadata_value(file.filename)
-                metadata["document_id"] = document_id or "none"
-                metadata["upload_timestamp"] = str(int(time.time()))
-                if additional_metadata:
-                    metadata.update(additional_metadata)
+            try:
+                metadata = self._settings.build_upload_object_metadata(
+                    original_filename=file.filename,
+                    document_id=document_id,
+                    additional_metadata=additional_metadata,
+                    upload_timestamp_seconds=int(time.time()),
+                )
+            except ValueError as e:
+                raise DocumentValidationException(str(e)) from e
 
             await self._minio_manager.upload_data(
                 bucket_name=self._bucket_name,
@@ -106,7 +124,7 @@ class DocumentStorage(DocumentStorageInterface):
                 content_type=(
                     file.content_type if self._settings.send_content_type_header else None
                 ),
-                metadata=metadata or None
+                metadata=metadata,
             )
 
             elapsed_ms = round((time.monotonic() - start_time) * 1000, 2)
@@ -127,12 +145,22 @@ class DocumentStorage(DocumentStorageInterface):
         except (
                 DocumentValidationException,
                 DocumentExtensionException,
-                DocumentSizeLimitException
+                DocumentSizeLimitException,
         ):
             raise
 
-        except Exception as e:
+        except asyncio.CancelledError:
+            raise
+
+        except (MinioManagerException, OSError) as e:
             raise DocumentUploadException("Failed to upload the document.") from e
+
+        except AppException:
+            raise
+
+        except Exception:
+            logger.exception("Failed to upload the document (unexpected error).")
+            raise
 
     async def download_document(
             self,
@@ -141,6 +169,8 @@ class DocumentStorage(DocumentStorageInterface):
         start_time = time.monotonic()
 
         try:
+            _validate_object_storage_key_fragment(object_name, label="object name")
+
             content = await self._minio_manager.download_data(
                 bucket_name=self._bucket_name,
                 object_name=object_name
@@ -165,8 +195,18 @@ class DocumentStorage(DocumentStorageInterface):
                 raise DocumentNotFoundException("The document was not found.") from e
             raise DocumentDownloadException("Failed to download the document.") from e
 
-        except Exception as e:
+        except asyncio.CancelledError:
+            raise
+
+        except (MinioManagerException, OSError) as e:
             raise DocumentDownloadException("Failed to download the document.") from e
+
+        except AppException:
+            raise
+
+        except Exception:
+            logger.exception("Failed to download the document (unexpected error).")
+            raise
 
     async def download_document_to_file(
             self,
@@ -176,6 +216,10 @@ class DocumentStorage(DocumentStorageInterface):
         start_time = time.monotonic()
 
         try:
+            _validate_object_storage_key_fragment(object_name, label="object name")
+            if "\x00" in file_path:
+                raise DocumentValidationException("Invalid file path: null bytes are not allowed.")
+
             await self._minio_manager.download_file(
                 bucket_name=self._bucket_name,
                 object_name=object_name,
@@ -203,11 +247,23 @@ class DocumentStorage(DocumentStorageInterface):
                 raise DocumentNotFoundException("The document was not found.") from e
             raise DocumentDownloadException("Failed to download the document.") from e
 
-        except Exception as e:
+        except asyncio.CancelledError:
+            raise
+
+        except (MinioManagerException, OSError) as e:
             raise DocumentDownloadException("Failed to download the document.") from e
+
+        except AppException:
+            raise
+
+        except Exception:
+            logger.exception("Failed to download the document to file (unexpected error).")
+            raise
 
     async def delete_document(self, object_name: str) -> None:
         try:
+            _validate_object_storage_key_fragment(object_name, label="object name")
+
             await self._minio_manager.delete_object(
                 bucket_name=self._bucket_name,
                 object_name=object_name
@@ -228,20 +284,45 @@ class DocumentStorage(DocumentStorageInterface):
                 raise DocumentNotFoundException("The document was not found.") from e
             raise DocumentDeleteException("Failed to delete the document.") from e
 
-        except Exception as e:
+        except asyncio.CancelledError:
+            raise
+
+        except (MinioManagerException, OSError) as e:
             raise DocumentDeleteException("Failed to delete the document.") from e
+
+        except AppException:
+            raise
+
+        except Exception:
+            logger.exception("Failed to delete the document (unexpected error).")
+            raise
 
     async def document_exists(
             self,
             object_name: str
     ) -> bool:
         try:
+            _validate_object_storage_key_fragment(object_name, label="object name")
+
             return await self._minio_manager.object_exists(
                 bucket_name=self._bucket_name,
                 object_name=object_name
             )
-        except Exception as e:
+        except asyncio.CancelledError:
+            raise
+
+        except S3Error as e:
             raise DocumentStorageException("Failed to check whether the document exists.") from e
+
+        except (MinioManagerException, OSError) as e:
+            raise DocumentStorageException("Failed to check whether the document exists.") from e
+
+        except AppException:
+            raise
+
+        except Exception:
+            logger.exception("Failed to check whether the document exists (unexpected error).")
+            raise
 
     async def get_presigned_url(
             self,
@@ -252,6 +333,8 @@ class DocumentStorage(DocumentStorageInterface):
         expiry = expires if expires is not None else self._settings.presigned_url_expiry_seconds
 
         try:
+            _validate_object_storage_key_fragment(object_name, label="object name")
+
             url = await self._minio_manager.get_presigned_url(
                 bucket_name=self._bucket_name,
                 object_name=object_name,
@@ -272,8 +355,18 @@ class DocumentStorage(DocumentStorageInterface):
             )
             return url
 
-        except Exception as e:
+        except asyncio.CancelledError:
+            raise
+
+        except (MinioManagerException, OSError) as e:
             raise DocumentStorageException("Failed to generate a presigned URL.") from e
+
+        except AppException:
+            raise
+
+        except Exception:
+            logger.exception("Failed to generate a presigned URL (unexpected error).")
+            raise
 
     async def list_documents(
             self,
@@ -281,6 +374,9 @@ class DocumentStorage(DocumentStorageInterface):
             prefix: Optional[str] = None
     ) -> list[dict[str, Any]]:
         try:
+            if prefix is not None:
+                _validate_object_storage_key_fragment(prefix, label="list prefix")
+
             full_prefix = self._build_prefix(prefix)
             objects = await self._minio_manager.list_objects(
                 bucket_name=self._bucket_name,
@@ -300,34 +396,64 @@ class DocumentStorage(DocumentStorageInterface):
             )
             return objects
 
-        except Exception as e:
+        except asyncio.CancelledError:
+            raise
+
+        except (MinioManagerException, OSError) as e:
             raise DocumentStorageException("Failed to list documents.") from e
 
+        except AppException:
+            raise
+
+        except Exception:
+            logger.exception("Failed to list documents (unexpected error).")
+            raise
+
     async def health_check(
-            self
+            self,
+            detailed: bool = False,
     ) -> dict[str, Any]:
+        start_time = time.monotonic()
         try:
-            minio_health = await self._minio_manager.health_check()
+            minio_health = await self._minio_manager.health_check(detailed=detailed)
             minio_healthy = minio_health.get("status") == "healthy"
 
             bucket_accessible = False
             if minio_healthy:
                 bucket_accessible = await self._probe_bucket_accessible()
 
+            latency_ms = round((time.monotonic() - start_time) * 1000, 2)
+            overall_ok = minio_healthy and bucket_accessible
+
+            if not detailed:
+                return {
+                    "status": "healthy" if overall_ok else "unhealthy",
+                    "latency_ms": latency_ms,
+                    "bucket_accessible": bucket_accessible,
+                }
+
             return {
-                "status": "healthy" if (minio_healthy and bucket_accessible) else "unhealthy",
+                "status": "healthy" if overall_ok else "unhealthy",
+                "latency_ms": latency_ms,
                 "bucket": self._bucket_name,
                 "bucket_accessible": bucket_accessible,
-                "minio": minio_health
+                "minio": minio_health,
             }
 
+        except asyncio.CancelledError:
+            raise
         except Exception:
             logger.exception("Document storage health check failed.")
-            return {
+            latency_ms = round((time.monotonic() - start_time) * 1000, 2)
+            err: dict[str, Any] = {
                 "status": "unhealthy",
-                "bucket": self._bucket_name,
-                "error": "Health check failed; see application logs for details."
+                "latency_ms": latency_ms,
+                "bucket_accessible": False,
+                "error": "Health check failed; see application logs for details.",
             }
+            if detailed:
+                err["bucket"] = self._bucket_name
+            return err
 
     def _validate_file_size(self, file_size: int) -> None:
         if (self._settings.max_file_size_bytes is not None
@@ -360,6 +486,8 @@ class DocumentStorage(DocumentStorageInterface):
                 object_name=".health_probe"
             )
             return True
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             logger.warning(
                 "The bucket accessibility probe failed.",
@@ -374,8 +502,14 @@ class DocumentStorage(DocumentStorageInterface):
     def _is_not_found_error(
             error: Exception
     ) -> bool:
-        cause = getattr(error, "__cause__", None)
-        return cause is not None and getattr(cause, "code", None) == "NoSuchKey"
+        visited: set[int] = set()
+        current: Optional[BaseException] = error
+        while current is not None and id(current) not in visited:
+            visited.add(id(current))
+            if getattr(current, "code", None) == "NoSuchKey":
+                return True
+            current = current.__cause__ or current.__context__
+        return False
 
 
 async def get_document_storage(
@@ -383,6 +517,8 @@ async def get_document_storage(
 ) -> DocumentStorageInterface:
     try:
         return request.app.state.document_storage
+    except asyncio.CancelledError:
+        raise
     except AttributeError:
         logger.error("The document storage was not registered on the application state.")
         raise HTTPException(

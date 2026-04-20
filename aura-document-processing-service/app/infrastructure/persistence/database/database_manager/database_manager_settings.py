@@ -1,7 +1,7 @@
 import logging
 import ssl
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 from urllib.parse import quote_plus
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -40,6 +40,7 @@ class DatabaseManagerSettings(BaseSettings):
 
     echo_sql: bool = Field(default=False)
     query_logging_enabled: bool = Field(default=False)
+    connection_lifecycle_logging_enabled: bool = Field(default=False)
     pg_application_name: str = Field(default="app")
 
     ssl_enabled: bool = Field(default=False)
@@ -139,8 +140,8 @@ class DatabaseManagerSettings(BaseSettings):
 
     def get_connect_args(
             self
-    ) -> dict:
-        args: dict = {
+    ) -> dict[str, Any]:
+        args: dict[str, Any] = {
             "timeout": self.tcp_connect_timeout_seconds,
             "command_timeout": self.query_execution_timeout_seconds,
             "server_settings": {

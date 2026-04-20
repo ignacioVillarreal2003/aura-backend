@@ -10,14 +10,9 @@ from app.application.services.fragment.fragment_query_service.exceptions.fragmen
     FragmentQueryNotFoundException,
     FragmentQueryRetrievalException,
     FragmentQueryServiceException,
-    FragmentQueryUnauthorizedException
 )
-from app.application.services.fragment.fragment_query_service.fragment_query_service_authorizer import (
-    FragmentQueryServiceAuthorizer
-)
-from app.application.services.fragment.fragment_query_service.fragment_query_service_validator import (
-    FragmentQueryServiceValidator
-)
+from app.application.authorization.authorizer import Authorizer
+from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
 from app.application.services.fragment.fragment_query_service.fragment_context_reranker import (
     FragmentContextReranker
 )
@@ -27,10 +22,7 @@ from app.application.services.fragment.fragment_query_service.fragment_query_ser
 from app.application.services.fragment.fragment_query_service.interfaces.fragment_query_service_interface import (
     FragmentQueryServiceInterface
 )
-from app.domain.constants.user.user_roles import (
-    ADMIN_ROLES,
-    ALL_ROLES
-)
+from app.domain.constants.document_processing_permissions import DocumentProcessingPermissions
 from app.domain.dtos.fragment.fragment_query.documents_context_fragments_request import (
     DocumentsContextFragmentsRequest
 )
@@ -39,11 +31,14 @@ from app.domain.dtos.fragment.fragment_query.question_context_fragments_request 
     QuestionContextFragmentsRequest
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.models import Document
-from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
+from app.domain.models import Document, Fragment
+from app.infrastructure.persistence.database.repositories.document_collection_repository.document_collection_repository_interface import (
+    DocumentCollectionRepositoryInterface
+)
+from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
     DocumentRepositoryInterface
 )
-from app.infrastructure.persistence.database.repositories.fragment_repository.interfaces.fragment_repository_interface import (
+from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository_interface import (
     FragmentRepositoryInterface
 )
 
@@ -56,17 +51,33 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             document_repository: DocumentRepositoryInterface,
             fragment_repository: FragmentRepositoryInterface,
             embedder_factory: EmbedderFactory,
+            authorizer: Authorizer,
+            document_collection_repository: DocumentCollectionRepositoryInterface,
             fragment_query_service_settings: Optional[FragmentQueryServiceSettings] = None
     ) -> None:
         self._document_repository = document_repository
         self._fragment_repository = fragment_repository
         self._embedder_factory = embedder_factory
         self._settings = fragment_query_service_settings or FragmentQueryServiceSettings()
-        self._validator = FragmentQueryServiceValidator(
-            fragment_query_service_settings=self._settings
-        )
-        self._authorizer = FragmentQueryServiceAuthorizer()
+        self._authorizer = authorizer
+        self._document_collection_repository = document_collection_repository
         self._reranker = FragmentContextReranker(fragment_query_service_settings=self._settings)
+
+    @staticmethod
+    def _merge_distinct_fragments(primary: list, secondary: list) -> list:
+        seen: set[int] = set()
+        merged: list = []
+        for fragment in primary:
+            fid = int(fragment.id)
+            if fid not in seen:
+                seen.add(fid)
+                merged.append(fragment)
+        for fragment in secondary:
+            fid = int(fragment.id)
+            if fid not in seen:
+                seen.add(fid)
+                merged.append(fragment)
+        return merged
 
     async def retrieve_context_fragments_by_question(
             self,
@@ -75,43 +86,69 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             authenticated_user: AuthenticatedUser
     ) -> FragmentListResponse:
         question = question_context_fragments_request.question
-        max_fragments = question_context_fragments_request.max_fragments
-        search_keywords = question_context_fragments_request.search_keywords
-        text_for_vector = (
-            search_keywords.strip()
-            if search_keywords and search_keywords.strip()
-            else question
-        )
+        question_max_fragments = question_context_fragments_request.question_max_fragments
+        use_keywords = question_context_fragments_request.use_keywords is True
 
         logger.info(
             "Retrieving context fragments by question was initiated.",
             extra={
                 "question_length": len(question),
-                "max_fragments": max_fragments,
+                "question_max_fragments": question_max_fragments,
                 "user_id": authenticated_user.id,
-                "uses_search_keywords": text_for_vector != question,
+                "use_keywords": use_keywords,
                 "use_rerank": question_context_fragments_request.use_rerank is True,
             }
         )
 
         try:
             self._authorizer.require_permissions(
-                authenticated_user=authenticated_user
-            )
-            self._authorizer.require_roles(
                 authenticated_user=authenticated_user,
-                allowed_roles=ALL_ROLES
+                required_permissions=frozenset({
+                    DocumentProcessingPermissions.LIST_CONTEXT_FRAGMENTS_BY_QUESTION,
+                }),
             )
 
-            self._validator.validate_question_context_fragments_request(
-                question_context_fragments_request=question_context_fragments_request
-            )
+            if question_context_fragments_request.question_max_fragments > self._settings.max_fragments:
+                raise FragmentQueryInvalidRequestException(
+                    "The maximum number of context fragments for the question exceeds the configured limit."
+                )
+            if (question_context_fragments_request.use_keywords is True
+                    and question_context_fragments_request.keywords_max_fragments is not None
+                    and question_context_fragments_request.keywords_max_fragments > self._settings.max_fragments):
+                raise FragmentQueryInvalidRequestException(
+                    "The maximum number of context fragments for keywords exceeds the configured limit."
+                )
+            if question_context_fragments_request.use_rerank is True and not self._settings.rerank_enabled:
+                raise FragmentQueryInvalidRequestException("Reranking is disabled on this service.")
 
-            query_vector = await self._get_query_embedding(text_for_vector)
-            fragments = await self._retrieve_similar_fragments(
+            question_vector = await self._get_query_embedding(question)
+            fragments_from_question = await self._retrieve_similar_fragments(
                 database_session=database_session,
-                query_vector=query_vector,
-                k=max_fragments
+                query_vector=question_vector,
+                k=question_max_fragments
+            )
+
+            if use_keywords:
+                keywords = question_context_fragments_request.keywords
+                keywords_max_fragments = question_context_fragments_request.keywords_max_fragments
+                keywords_vector = await self._get_query_embedding(keywords)
+                fragments_from_keywords = await self._retrieve_similar_fragments(
+                    database_session=database_session,
+                    query_vector=keywords_vector,
+                    k=keywords_max_fragments
+                )
+                fragments = self._merge_distinct_fragments(
+                    fragments_from_question,
+                    fragments_from_keywords,
+                )
+            else:
+                fragments = fragments_from_question
+
+            fragments = await self._filter_accessible_fragments(
+                fragments=fragments,
+                user_id=authenticated_user.id,
+                chat_id=question_context_fragments_request.chat_id,
+                database_session=database_session
             )
 
             rerank_requested = (
@@ -120,10 +157,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             )
             rerank_applied = False
             if rerank_requested and len(fragments) >= self._settings.rerank_min_fragments:
-                top_n = (
-                    question_context_fragments_request.rerank_final_fragments
-                    or self._settings.rerank_default_top_n
-                )
+                top_n = question_context_fragments_request.rerank_max_fragments
                 fragments = await self._reranker.rerank_fragments(
                     query=question,
                     fragments=fragments,
@@ -151,7 +185,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
 
         except (
                 FragmentQueryNotFoundException,
-                FragmentQueryUnauthorizedException,
+                UnauthorizedException,
                 FragmentQueryInvalidRequestException,
                 FragmentQueryEmbeddingException,
                 FragmentQueryRetrievalException
@@ -192,27 +226,26 @@ class FragmentQueryService(FragmentQueryServiceInterface):
 
         try:
             self._authorizer.require_permissions(
-                authenticated_user=authenticated_user
-            )
-            self._authorizer.require_roles(
                 authenticated_user=authenticated_user,
-                allowed_roles=ALL_ROLES
+                required_permissions=frozenset({
+                    DocumentProcessingPermissions.LIST_CONTEXT_FRAGMENTS_BY_DOCUMENTS,
+                }),
             )
 
-            self._validator.validate_documents_context_fragments_request(
-                documents_context_fragments_request=documents_context_fragments_request
-            )
-
-            if not authenticated_user.has_any_role(ADMIN_ROLES):
-                documents = await self._get_documents_by_ids_or_raise(
-                    document_ids=document_ids,
-                    database_session=database_session
+            if len(documents_context_fragments_request.document_ids) > self._settings.max_document_ids:
+                raise FragmentQueryInvalidRequestException(
+                    "The number of document identifiers exceeds the configured limit."
                 )
-                for document in documents:
-                    self._authorizer.require_ownership(
-                        document=document,
-                        authenticated_user=authenticated_user
-                    )
+
+            documents = await self._get_documents_by_ids_or_raise(
+                document_ids=document_ids,
+                database_session=database_session
+            )
+            for document in documents:
+                self._authorizer.require_document_ownership(
+                    document=document,
+                    authenticated_user=authenticated_user,
+                )
 
             all_fragments = await self._retrieve_documents_fragments(
                 database_session=database_session,
@@ -232,7 +265,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
 
         except (
                 FragmentQueryNotFoundException,
-                FragmentQueryUnauthorizedException,
+                UnauthorizedException,
                 FragmentQueryInvalidRequestException,
                 FragmentQueryEmbeddingException,
                 FragmentQueryRetrievalException
@@ -248,6 +281,26 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             raise FragmentQueryServiceException(
                 "An unexpected error occurred while retrieving context fragments for the documents."
             ) from e
+
+    async def _filter_accessible_fragments(
+            self,
+            fragments: list[Fragment],
+            user_id: int,
+            chat_id: Optional[int],
+            database_session: AsyncSession
+    ) -> list:
+        document_ids = list({fragment.document_id for fragment in fragments})
+        if not document_ids:
+            return fragments
+
+        accessible_ids = await self._document_collection_repository.get_accessible_document_ids(
+            user_id=user_id,
+            document_ids=document_ids,
+            chat_id=chat_id,
+            database_session=database_session
+        )
+
+        return [f for f in fragments if f.document_id in accessible_ids]
 
     async def _get_documents_by_ids_or_raise(
             self,
@@ -293,7 +346,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             database_session: AsyncSession,
             query_vector: list[float],
             k: int
-    ) -> list:
+    ) -> list[Fragment]:
         try:
             fragments = await self._fragment_repository.get_most_similar_fragments(
                 query_vector=query_vector,

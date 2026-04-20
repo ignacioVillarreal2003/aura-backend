@@ -55,38 +55,6 @@ class CreateDocumentController(CreateDocumentControllerInterface):
 
         return create_document_response
 
-    async def create_document_internal(
-            self,
-            chat_id: int = Form(...),
-            actor_user_id: int = Form(...),
-            actor_email: str = Form(...),
-            raw_document: UploadFile = File(...),
-            x_internal_token: Optional[str] = Header(default=None, alias="X-Internal-Token"),
-            create_document_service: CreateDocumentServiceInterface = Depends(get_create_document_service),
-            database_session: AsyncSession = Depends(get_database_session),
-    ) -> CreateDocumentResponse:
-        if x_internal_token != environment_variables.service_api_key:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Invalid internal token",
-            )
-
-        authenticated_user = AuthenticatedUser(
-            id=actor_user_id,
-            email=actor_email,
-            roles=["admin"],
-            permissions=["DOCUMENT_CREATE"],
-        )
-
-        create_document_request = CreateDocumentRequest(chat_id=chat_id)
-
-        return await create_document_service.create_document(
-            create_document_request=create_document_request,
-            raw_document=raw_document,
-            database_session=database_session,
-            authenticated_user=authenticated_user,
-        )
-
 
 router = APIRouter()
 create_document_controller = CreateDocumentController()
@@ -95,8 +63,3 @@ router.post(
     "",
     response_model=CreateDocumentResponse
 )(create_document_controller.create_document)
-
-router.post(
-    "/internal",
-    response_model=CreateDocumentResponse,
-)(create_document_controller.create_document_internal)

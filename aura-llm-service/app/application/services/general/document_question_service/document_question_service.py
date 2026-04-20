@@ -1,5 +1,5 @@
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from typing import Optional
 
 from fastapi import HTTPException, Request, status
@@ -46,23 +46,14 @@ from app.application.services.general.document_question_service.pipeline.documen
 from app.application.services.general.document_question_service.interfaces.document_question_plugin_interface import (
     DocumentQuestionPlugin
 )
-from app.application.services.general.document_question_service.steps.validate_request.validate_request_plugin import (
-    ValidateRequestPlugin,
-)
 from app.application.services.general.document_question_service.steps.rewrite_query.rewrite_query_plugin import (
     RewriteQueryPlugin,
 )
 from app.application.services.general.document_question_service.steps.retrieve_context.retrieve_context_plugin import (
     RetrieveContextPlugin,
 )
-from app.application.services.general.document_question_service.steps.generate_answer.generate_answer_llm_input import (
-    build_generate_answer_llm_input,
-)
 from app.application.services.general.document_question_service.steps.generate_answer.generate_answer_plugin import (
     GenerateAnswerPlugin,
-)
-from app.application.services.general.document_question_service.steps.generate_answer.generate_answer_settings import (
-    GenerateAnswerSettings,
 )
 from app.application.services.general.document_question_service.steps.fallback_answer.fallback_answer_plugin import (
     FallbackAnswerPlugin,
@@ -73,7 +64,6 @@ logger = logging.getLogger(__name__)
 # Plugins run before streaming the main answer. Keep aligned with default
 # DocumentQuestionServiceSettings.pipeline_plugins order (everything before generate_answer).
 _STREAM_PRE_ANSWER_PLUGIN_NAMES: tuple[str, ...] = (
-    "validate_request",
     "rewrite_query",
     "retrieve_context",
 )
@@ -99,7 +89,7 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
         self._llm_streaming_invoker = ollama_llm_streaming_invoker
         self._settings = document_question_service_settings or DocumentQuestionServiceSettings()
         self._pipeline = DocumentQuestionPipeline(
-            plugins=self._build_pipeline_plugins(self._settings.pipeline_plugins),
+            plugins=self._build_pipeline_plugins(),
         )
         self._stream_pre_answer_pipeline = DocumentQuestionPipeline(
             plugins=self._build_stream_pre_answer_plugins(),
@@ -170,10 +160,9 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
             state.answer = ""
 
             if has_context:
-                generate_settings = GenerateAnswerSettings()
-                llm_input = build_generate_answer_llm_input(
+                llm_input = GenerateAnswerPlugin.build_generate_answer_llm_input(
                     state,
-                    generate_settings.history_window,
+                    self._settings.generate_answer_history_window,
                 )
                 llm = await self._ollama_llm_facade.get_llm_base()
                 try:
@@ -268,46 +257,44 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
             )
             return
 
-    @staticmethod
-    def _build_pipeline_plugins(plugin_names: list[str]) -> list[DocumentQuestionPlugin]:
-        registry: dict[str, type[DocumentQuestionPlugin]] = {
-            "validate_request": ValidateRequestPlugin,
-            "rewrite_query": RewriteQueryPlugin,
-            "retrieve_context": RetrieveContextPlugin,
-            "generate_answer": GenerateAnswerPlugin,
-            "fallback_answer": FallbackAnswerPlugin,
+    def _build_pipeline_plugins(self) -> list[DocumentQuestionPlugin]:
+        s = self._settings
+        factories: dict[str, Callable[[], DocumentQuestionPlugin]] = {
+            "rewrite_query": lambda: RewriteQueryPlugin(settings=s),
+            "retrieve_context": lambda: RetrieveContextPlugin(settings=s),
+            "generate_answer": lambda: GenerateAnswerPlugin(settings=s),
+            "fallback_answer": lambda: FallbackAnswerPlugin(),
         }
 
         plugins: list[DocumentQuestionPlugin] = []
-        for name in plugin_names:
-            plugin_cls = registry.get(name)
-            if plugin_cls is None:
+        for name in s.pipeline_plugins:
+            factory = factories.get(name)
+            if factory is None:
                 logger.warning(
                     "Unknown document_question pipeline plugin",
                     extra={"plugin_name": name},
                 )
                 continue
-            plugins.append(plugin_cls())
+            plugins.append(factory())
 
         return plugins
 
-    @staticmethod
-    def _build_stream_pre_answer_plugins() -> list[DocumentQuestionPlugin]:
-        registry: dict[str, type[DocumentQuestionPlugin]] = {
-            "validate_request": ValidateRequestPlugin,
-            "rewrite_query": RewriteQueryPlugin,
-            "retrieve_context": RetrieveContextPlugin,
+    def _build_stream_pre_answer_plugins(self) -> list[DocumentQuestionPlugin]:
+        s = self._settings
+        factories: dict[str, Callable[[], DocumentQuestionPlugin]] = {
+            "rewrite_query": lambda: RewriteQueryPlugin(settings=s),
+            "retrieve_context": lambda: RetrieveContextPlugin(settings=s),
         }
         plugins: list[DocumentQuestionPlugin] = []
         for name in _STREAM_PRE_ANSWER_PLUGIN_NAMES:
-            plugin_cls = registry.get(name)
-            if plugin_cls is None:
+            factory = factories.get(name)
+            if factory is None:
                 logger.warning(
                     "Unknown stream pre-answer plugin name",
                     extra={"plugin_name": name},
                 )
                 continue
-            plugins.append(plugin_cls())
+            plugins.append(factory())
         return plugins
 
 

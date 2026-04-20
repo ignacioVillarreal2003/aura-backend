@@ -1,34 +1,63 @@
 import logging
+from typing import Optional
+
+import redis.asyncio as aioredis
 from fastapi import FastAPI
 
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
 from app.application.processors.readers.reader_factory import ReaderFactory
 from app.application.processors.text_cleaners.text_cleaner_factory import TextCleanerFactory
 from app.application.processors.text_splitters.text_splitter_factory import TextSplitterFactory
+from app.application.authorization.authorizer import Authorizer
 from app.application.services.document.create_document_service.create_document_service import CreateDocumentService
+from app.application.services.document.document_download_service.document_download_service import DocumentDownloadService
 from app.application.services.document.document_ingestion_service.document_ingestion_service import (
-    DocumentIngestionService
+    DocumentIngestionService,
 )
 from app.application.services.document.delete_document_service.delete_document_service import DeleteDocumentService
 from app.application.services.document.document_query_service.document_query_service import DocumentQueryService
-from app.application.services.fragment.fragment_query_service.fragment_query_service import FragmentQueryService
 from app.application.services.document.post_process_document_service.post_process_document_service import (
-    PostProcessDocumentService
+    PostProcessDocumentService,
 )
+from app.application.services.fragment.fragment_query_service.fragment_query_service import FragmentQueryService
 from app.application.services.fragment.post_process_fragment_service.post_process_fragment_service import (
-    PostProcessFragmentService
+    PostProcessFragmentService,
 )
 from app.infrastructure.http.authentication_provider.authentication_provider import AuthenticationProvider
+from app.infrastructure.http.authentication_provider.authentication_provider_settings import \
+    AuthenticationProviderSettings
 from app.infrastructure.http.http_client.http_client import HttpClient
 from app.infrastructure.http.llm_provider.llm_provider import LlmProvider
+from app.application.services.document.post_process_document_processor.post_process_document_processor import (
+    PostProcessDocumentProcessor,
+)
+from app.application.services.fragment.post_process_fragment_processor.post_process_fragment_processor import (
+    PostProcessFragmentProcessor,
+)
+from app.infrastructure.coordination.redis_content_deduplication_port import RedisContentDeduplicationPort
+from app.infrastructure.coordination.redis_coordination_settings import RedisCoordinationSettings
+from app.infrastructure.coordination.redis_post_process_job_progress_store import RedisPostProcessJobProgressStore
 from app.infrastructure.messaging.rabbitmq.consumer.document_ingestion_consumer import DocumentIngestionConsumer
+from app.infrastructure.messaging.rabbitmq.consumer.post_process_document_consumer import PostProcessDocumentConsumer
+from app.infrastructure.messaging.rabbitmq.consumer.post_process_fragment_consumer import PostProcessFragmentConsumer
+from app.infrastructure.messaging.rabbitmq.publisher.post_process_document_job_publisher import (
+    PostProcessDocumentJobPublisher,
+)
+from app.infrastructure.messaging.rabbitmq.publisher.post_process_fragment_job_publisher import (
+    PostProcessFragmentJobPublisher,
+)
 from app.infrastructure.messaging.rabbitmq.rabbitmq_manager import RabbitMQManager
+from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_settings import RabbitMQManagerSettings
 from app.infrastructure.persistence.database.database_manager.database_manager import DatabaseManager
+from app.infrastructure.persistence.database.repositories.chat_repository.chat_repository import ChatRepository
+from app.infrastructure.persistence.database.repositories.document_collection_repository.document_collection_repository import (
+    DocumentCollectionRepository,
+)
 from app.infrastructure.persistence.database.repositories.document_repository.document_repository import (
-    DocumentRepository
+    DocumentRepository,
 )
 from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository import (
-    FragmentRepository
+    FragmentRepository,
 )
 from app.infrastructure.persistence.storages.document_storage.document_storage import DocumentStorage
 from app.infrastructure.persistence.storages.minio_manager.minio_manager import MinioManager
@@ -58,9 +87,12 @@ async def startup_dependencies(app: FastAPI) -> None:
         await http_client.start()
         app.state.http_client = http_client
 
+        authentication_provider_settings = AuthenticationProviderSettings()
         authentication_provider = AuthenticationProvider(
-            http_client=http_client
+            http_client=http_client,
+            authentication_provider_settings=authentication_provider_settings
         )
+        app.state.authentication_provider_settings = authentication_provider_settings
         app.state.authentication_provider = authentication_provider
 
         document_repository: DocumentRepository = DocumentRepository()
@@ -68,6 +100,12 @@ async def startup_dependencies(app: FastAPI) -> None:
 
         fragment_repository: FragmentRepository = FragmentRepository()
         app.state.fragment_repository = fragment_repository
+
+        document_collection_repository: DocumentCollectionRepository = DocumentCollectionRepository()
+        app.state.document_collection_repository = document_collection_repository
+
+        chat_repository: ChatRepository = ChatRepository()
+        app.state.chat_repository = chat_repository
 
         embedder_factory = EmbedderFactory()
         app.state.embedder_factory = embedder_factory
@@ -81,15 +119,21 @@ async def startup_dependencies(app: FastAPI) -> None:
         text_splitter_factory = TextSplitterFactory()
         app.state.text_splitter_factory = text_splitter_factory
 
+        authorizer = Authorizer()
+        app.state.authorizer = authorizer
+
         document_query_service = DocumentQueryService(
-            document_repository=document_repository
+            document_repository=document_repository,
+            authorizer=authorizer
         )
         app.state.document_query_service = document_query_service
 
         fragment_query_service = FragmentQueryService(
             document_repository=document_repository,
             fragment_repository=fragment_repository,
-            embedder_factory=embedder_factory
+            embedder_factory=embedder_factory,
+            authorizer=authorizer,
+            document_collection_repository=document_collection_repository
         )
         app.state.fragment_query_service = fragment_query_service
 
@@ -104,7 +148,29 @@ async def startup_dependencies(app: FastAPI) -> None:
         )
         app.state.document_ingestion_service = document_ingestion_service
 
-        rabbitmq_manager = RabbitMQManager()
+        redis_coordination_settings = RedisCoordinationSettings()
+        redis_client = aioredis.from_url(
+            redis_coordination_settings.url,
+            decode_responses=True,
+        )
+        app.state.redis_client = redis_client
+
+        job_progress_store = RedisPostProcessJobProgressStore(
+            redis_client=redis_client,
+            settings=redis_coordination_settings,
+        )
+        app.state.job_progress_store = job_progress_store
+
+        content_deduplication = RedisContentDeduplicationPort(
+            redis_client=redis_client,
+            settings=redis_coordination_settings,
+        )
+        app.state.content_deduplication = content_deduplication
+
+        rabbitmq_manager_settings = RabbitMQManagerSettings()
+        rabbitmq_manager = RabbitMQManager(
+            rabbit_mq_manager_settings=rabbitmq_manager_settings
+        )
         await rabbitmq_manager.start()
         app.state.rabbitmq_manager = rabbitmq_manager
 
@@ -118,10 +184,57 @@ async def startup_dependencies(app: FastAPI) -> None:
         await document_ingestion_consumer.start()
         app.state.document_ingestion_consumer = document_ingestion_consumer
 
+        llm_provider = LlmProvider(
+            http_client=http_client
+        )
+        app.state.llm_provider = llm_provider
+
+        post_process_document_job_publisher = PostProcessDocumentJobPublisher(
+            rabbitmq_manager=rabbitmq_manager,
+        )
+        app.state.post_process_document_job_publisher = post_process_document_job_publisher
+
+        post_process_fragment_job_publisher = PostProcessFragmentJobPublisher(
+            rabbitmq_manager=rabbitmq_manager,
+        )
+        app.state.post_process_fragment_job_publisher = post_process_fragment_job_publisher
+
+        post_process_document_processor = PostProcessDocumentProcessor(
+            database_manager=database_manager,
+            document_repository=document_repository,
+            fragment_repository=fragment_repository,
+            llm_provider=llm_provider,
+            job_progress_store=job_progress_store,
+        )
+        app.state.post_process_document_processor = post_process_document_processor
+
+        post_process_fragment_processor = PostProcessFragmentProcessor(
+            database_manager=database_manager,
+            fragment_repository=fragment_repository,
+            llm_provider=llm_provider,
+            job_progress_store=job_progress_store,
+        )
+        app.state.post_process_fragment_processor = post_process_fragment_processor
+
+        post_process_document_consumer = PostProcessDocumentConsumer(
+            rabbitmq_manager=rabbitmq_manager,
+            processor=post_process_document_processor,
+        )
+        await post_process_document_consumer.start()
+        app.state.post_process_document_consumer = post_process_document_consumer
+
+        post_process_fragment_consumer = PostProcessFragmentConsumer(
+            rabbitmq_manager=rabbitmq_manager,
+            processor=post_process_fragment_processor,
+        )
+        await post_process_fragment_consumer.start()
+        app.state.post_process_fragment_consumer = post_process_fragment_consumer
+
         delete_document_service = DeleteDocumentService(
             document_repository=document_repository,
             fragment_repository=fragment_repository,
-            document_storage=document_storage
+            chat_repository=chat_repository,
+            authorizer=authorizer
         )
         app.state.delete_document_service = delete_document_service
 
@@ -129,26 +242,33 @@ async def startup_dependencies(app: FastAPI) -> None:
             document_repository=document_repository,
             document_storage=document_storage,
             rabbitmq_manager=rabbitmq_manager,
+            authorizer=authorizer,
+            content_deduplication=content_deduplication,
         )
         app.state.create_document_service = create_document_service
 
-        llm_provider = LlmProvider(
-            http_client=http_client
+        document_download_service = DocumentDownloadService(
+            document_repository=document_repository,
+            document_storage=document_storage,
+            authorizer=authorizer
         )
-        app.state.llm_provider = llm_provider
+        app.state.document_download_service = document_download_service
 
         post_process_document_service = PostProcessDocumentService(
             database_manager=database_manager,
             document_repository=document_repository,
-            fragment_repository=fragment_repository,
-            llm_provider=llm_provider
+            job_progress_store=job_progress_store,
+            post_process_document_job_publisher=post_process_document_job_publisher,
+            authorizer=authorizer,
         )
         app.state.post_process_document_service = post_process_document_service
 
         post_process_fragment_service = PostProcessFragmentService(
             database_manager=database_manager,
             fragment_repository=fragment_repository,
-            llm_provider=llm_provider
+            job_progress_store=job_progress_store,
+            post_process_fragment_job_publisher=post_process_fragment_job_publisher,
+            authorizer=authorizer,
         )
         app.state.post_process_fragment_service = post_process_fragment_service
 
@@ -166,6 +286,9 @@ async def shutdown_dependencies(app: FastAPI) -> None:
 
     if rabbitmq_manager := getattr(state, "rabbitmq_manager", None):
         await rabbitmq_manager.stop()
+
+    if redis_client := getattr(state, "redis_client", None):
+        await redis_client.aclose()
 
     if http_client := getattr(state, "http_client", None):
         await http_client.stop()

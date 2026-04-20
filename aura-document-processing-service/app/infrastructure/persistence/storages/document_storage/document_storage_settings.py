@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 _BUCKET_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9.\-]*[a-z0-9]$")
 _BUCKET_INVALID_CONSECUTIVE_RE = re.compile(r"\.\.|\.[-]|[-]\.")
 _OBJECT_KEY_PREFIX_RE = re.compile(r"^[a-zA-Z0-9/_-]+$")
+_METADATA_USER_KEY_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 
 class DocumentStorageSettings(BaseSettings):
@@ -39,6 +40,10 @@ class DocumentStorageSettings(BaseSettings):
 
     attach_metadata_to_objects: bool = Field(default=False)
     send_content_type_header: bool = Field(default=True)
+
+    max_additional_metadata_entries: int = Field(default=16, ge=0, le=64)
+    max_metadata_key_length: int = Field(default=128, ge=8, le=256)
+    max_metadata_value_length: int = Field(default=256, ge=16, le=1024)
 
     presigned_url_expiry_seconds: int = Field(default=3600, gt=0, le=604_800)
 
@@ -124,6 +129,54 @@ class DocumentStorageSettings(BaseSettings):
                 and self.min_file_size_bytes >= self.max_file_size_bytes):
             raise ValueError("The minimum file size must be less than the maximum file size.")
         return self
+
+    def build_upload_object_metadata(
+            self,
+            original_filename: str,
+            document_id: Optional[str],
+            additional_metadata: Optional[dict[str, str]],
+            upload_timestamp_seconds: int,
+    ) -> Optional[dict[str, str]]:
+        if not self.attach_metadata_to_objects:
+            return None
+
+        metadata: dict[str, str] = {
+            "original_filename": self.sanitize_metadata_value(original_filename),
+            "document_id": self.sanitize_metadata_value(document_id or "none"),
+            "upload_timestamp": str(int(upload_timestamp_seconds)),
+        }
+        if additional_metadata:
+            metadata.update(self._normalize_user_metadata_dict(additional_metadata))
+        return metadata
+
+    def _normalize_user_metadata_dict(
+            self,
+            raw: dict[str, str],
+    ) -> dict[str, str]:
+        if len(raw) > self.max_additional_metadata_entries:
+            raise ValueError(
+                f"Too many additional metadata entries (maximum {self.max_additional_metadata_entries})."
+            )
+
+        out: dict[str, str] = {}
+        for raw_key, raw_val in raw.items():
+            key = raw_key.strip()
+            if not key:
+                raise ValueError("Metadata keys cannot be empty or whitespace-only.")
+            if len(key) > self.max_metadata_key_length:
+                raise ValueError("A metadata key exceeds the configured maximum length.")
+            if not _METADATA_USER_KEY_RE.match(key):
+                raise ValueError(
+                    "Metadata keys may only contain letters, numbers, underscores, and hyphens."
+                )
+
+            value = self.sanitize_metadata_value(raw_val)
+            if len(value) > self.max_metadata_value_length:
+                raise ValueError("A metadata value exceeds the configured maximum length after sanitization.")
+
+            out[key] = value
+
+        return out
 
     def is_extension_allowed(
             self,

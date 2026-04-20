@@ -9,20 +9,21 @@ class DocumentContextProviderInterface(ABC):
     @abstractmethod
     async def retrieve_context_fragments_by_question(
             self,
+            authenticated_user: AuthenticatedUser,
             question: str,
-            max_fragments: int,
-            authenticated_user: Optional[AuthenticatedUser] = None,
-            *,
-            search_keywords: Optional[str] = None,
-            use_rerank: bool = False,
-            rerank_final_fragments: Optional[int] = None,
+            question_max_fragments: int,
+            use_keywords: Optional[bool] = None,
+            keywords: Optional[str] = None,
+            keywords_max_fragments: Optional[int] = None,
+            use_rerank: Optional[bool] = None,
+            rerank_max_fragments: Optional[int] = None
     ) -> FragmentListResponse:
         pass
 
     @abstractmethod
     async def retrieve_context_fragments_by_document(
             self,
-            document_ids: list[int],
-            authenticated_user: Optional[AuthenticatedUser] = None
+            authenticated_user: AuthenticatedUser,
+            document_ids: list[int]
     ) -> FragmentListResponse:
         pass

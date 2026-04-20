@@ -1,0 +1,106 @@
+import logging
+
+from django.db import IntegrityError, transaction
+from django.db.models import QuerySet
+
+from apps.document_collection.exceptions import (
+    CollectionNotFoundException,
+    DocumentLinkNotFoundException,
+    DocumentNotAvailableException,
+    DuplicateDocumentLinkException,
+)
+from apps.document_collection.models import DocumentInDocumentCollection
+from apps.document_collection.permission_codes import (
+    ADD_DOCUMENT_COLLECTION_DOCUMENT,
+    LIST_DOCUMENT_COLLECTION_DOCUMENTS,
+    REMOVE_DOCUMENT_COLLECTION_DOCUMENT,
+)
+from apps.document_collection.repositories import (
+    document_collection_repository,
+    document_in_document_collection_repository,
+    document_repository,
+)
+from core.authentication.authenticated_user import AuthenticatedUser
+from core.authorization.access import AccessControl
+
+logger = logging.getLogger(__name__)
+
+
+def _permissions_gate(user: AuthenticatedUser, permission: str) -> None:
+    AccessControl.require_permissions(user, frozenset({permission}))
+
+
+class DocumentCollectionDocumentService:
+    @staticmethod
+    def list_document_collection_documents(
+        user: AuthenticatedUser,
+        document_collection_id: int,
+    ) -> QuerySet[DocumentInDocumentCollection]:
+        _permissions_gate(user, LIST_DOCUMENT_COLLECTION_DOCUMENTS)
+        if document_collection_repository.get_active_by_id(document_collection_id) is None:
+            raise CollectionNotFoundException()
+        return document_in_document_collection_repository.list_active_by_document_collection_id(
+            document_collection_id
+        )
+
+    @staticmethod
+    @transaction.atomic
+    def add_document_collection_document(
+        user: AuthenticatedUser,
+        document_collection_id: int,
+        document_id: int,
+    ) -> DocumentInDocumentCollection:
+        _permissions_gate(user, ADD_DOCUMENT_COLLECTION_DOCUMENT)
+        document_collection = document_collection_repository.get_active_by_id(document_collection_id)
+        if document_collection is None:
+            raise CollectionNotFoundException()
+        if not document_repository.exists_active_by_id(document_id):
+            raise DocumentNotAvailableException()
+        try:
+            link = document_in_document_collection_repository.create(
+                document_collection_id=document_collection.id,
+                document_id=document_id,
+                created_by=user.id,
+            )
+        except IntegrityError as e:
+            raise DuplicateDocumentLinkException() from e
+        logger.info(
+            "Document linked to document collection.",
+            extra={
+                "document_collection_id": document_collection_id,
+                "document_id": document_id,
+                "actor_id": user.id,
+            },
+        )
+        refreshed = document_in_document_collection_repository.get_active_by_id(link.id)
+        return refreshed or link
+
+    @staticmethod
+    @transaction.atomic
+    def remove_document_collection_document(
+        user: AuthenticatedUser,
+        document_collection_id: int,
+        document_id: int,
+    ) -> None:
+        _permissions_gate(user, REMOVE_DOCUMENT_COLLECTION_DOCUMENT)
+        document_collection = document_collection_repository.get_active_by_id(document_collection_id)
+        if document_collection is None:
+            raise CollectionNotFoundException()
+        document_in_document_collection = document_in_document_collection_repository.get_active_by_document_collection_id_and_document_id(
+            document_collection_id=document_collection.id,
+            document_id=document_id,
+        )
+        if document_in_document_collection is None:
+            raise DocumentLinkNotFoundException()
+        document_in_document_collection_repository.soft_delete(document_in_document_collection, deleted_by=user.id)
+        logger.info(
+            "Document unlinked from document collection.",
+            extra={
+                "document_collection_id": document_collection_id,
+                "document_id": document_id,
+                "actor_id": user.id,
+            },
+        )
+
+
+document_collection_document_service = DocumentCollectionDocumentService()

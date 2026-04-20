@@ -6,7 +6,8 @@ from app.domain.dtos.document.post_process_document.post_process_documents_start
 from app.domain.dtos.document.post_process_document.post_process_documents_request import (
     PostProcessDocumentsRequest,
 )
-from app.domain.dtos.document.post_process_document.post_process_documents_status_response import PostProcessDocumentsStatusResponse
+from app.domain.dtos.document.post_process_document.post_process_documents_status_response import \
+    PostProcessDocumentsStatusResponse
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 
 
@@ -27,13 +28,15 @@ class PostProcessDocumentServiceInterface(ABC):
         pass
 
     @abstractmethod
-    def get_status(
-            self
+    async def get_status(
+            self,
+            authenticated_user: AuthenticatedUser
     ) -> PostProcessDocumentsStatusResponse:
         pass
 
     @abstractmethod
     async def stop(
-            self
+            self,
+            authenticated_user: AuthenticatedUser
     ) -> None:
         pass

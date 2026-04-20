@@ -1,0 +1,6 @@
+GET http://localhost:8000/api/document-download/document/29/download
+Accept: application/octet-stream
+Authorization: Bearer user_token_123
+
+
+###

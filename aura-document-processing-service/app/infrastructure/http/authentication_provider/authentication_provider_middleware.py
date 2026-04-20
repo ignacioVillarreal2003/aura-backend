@@ -6,14 +6,14 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.infrastructure.http.authentication_provider.exceptions.authentication_provider_exception import (
+from app.infrastructure.http.authentication_provider.authentication_provider_exception import (
     AuthenticationProviderException,
     AuthenticationProviderInvalidTokenException,
     AuthenticationProviderServiceUnavailableException,
     AuthenticationProviderUnauthorizedException,
     AuthenticationProviderUserNotFoundException
 )
-from app.infrastructure.http.authentication_provider.interfaces.authentication_provider_interface import (
+from app.infrastructure.http.authentication_provider.authentication_provider_interface import (
     AuthenticationProviderInterface
 )
 
@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 WWW_AUTH = {
     "WWW-Authenticate": "Bearer"
 }
+
 
 class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
     def __init__(
@@ -103,6 +104,24 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
                 headers=WWW_AUTH
             )
 
+        settings = getattr(request.app.state, "authentication_provider_settings", None)
+        if settings is not None and len(token) > settings.max_bearer_token_characters:
+            logger.warning(
+                "Rejected a bearer token that exceeds the configured maximum length.",
+                extra={
+                    "path": request.url.path,
+                    "error_code": "token_too_long",
+                },
+            )
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "detail": "Bearer token is too long",
+                    "error": "token_too_long",
+                },
+                headers=WWW_AUTH,
+            )
+
         return await self._validate_jwt(request, call_next, token, provider)
 
     async def _validate_jwt(
@@ -124,12 +143,12 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
             )
             return await call_next(request)
 
-        except AuthenticationProviderInvalidTokenException as e:
+        except AuthenticationProviderInvalidTokenException:
             logger.warning(
                 "Bearer token is invalid or has expired.",
                 extra={
                     "path": request.url.path,
-                    "error": str(e)
+                    "error_code": "invalid_token",
                 }
             )
             return JSONResponse(
@@ -140,12 +159,12 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
                 },
                 headers=WWW_AUTH
             )
-        except AuthenticationProviderUnauthorizedException as e:
+        except AuthenticationProviderUnauthorizedException:
             logger.warning(
                 "Access was forbidden by the authentication service.",
                 extra={
                     "path": request.url.path,
-                    "error": str(e)
+                    "error_code": "unauthorized",
                 }
             )
             return JSONResponse(
@@ -155,12 +174,12 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
                     "error": "unauthorized"
                 }
             )
-        except AuthenticationProviderUserNotFoundException as e:
+        except AuthenticationProviderUserNotFoundException:
             logger.warning(
                 "No user was found for this token.",
                 extra={
                     "path": request.url.path,
-                    "error": str(e)
+                    "error_code": "user_not_found",
                 }
             )
             return JSONResponse(
@@ -170,12 +189,12 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
                     "error": "user_not_found"
                 }
             )
-        except AuthenticationProviderServiceUnavailableException as e:
+        except AuthenticationProviderServiceUnavailableException:
             logger.error(
                 "Authentication service is unavailable.",
                 extra={
                     "path": request.url.path,
-                    "error": str(e)
+                    "error_code": "service_unavailable",
                 }
             )
             return JSONResponse(
@@ -185,12 +204,12 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
                     "error": "service_unavailable"
                 }
             )
-        except AuthenticationProviderException as e:
+        except AuthenticationProviderException:
             logger.exception(
                 "Authentication failed with an unexpected provider error.",
                 extra={
                     "path": request.url.path,
-                    "error": str(e)
+                    "error_code": "authentication_error",
                 }
             )
             return JSONResponse(

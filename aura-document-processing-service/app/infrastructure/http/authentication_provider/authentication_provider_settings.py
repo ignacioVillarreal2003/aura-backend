@@ -1,4 +1,6 @@
-from pydantic import Field, field_validator
+from typing import Optional
+from urllib.parse import urlparse
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,6 +15,16 @@ class AuthenticationProviderSettings(BaseSettings):
 
     authentication_url: str = Field(...)
 
+    request_timeout_seconds: float = Field(default=15.0, gt=0, le=120.0)
+
+    max_bearer_token_characters: int = Field(default=8192, ge=256, le=65536)
+
+    max_service_user_email_length: int = Field(default=320, ge=16, le=1024)
+    max_service_roles_header_characters: int = Field(default=16_000, ge=256, le=200_000)
+    max_service_permissions_header_characters: int = Field(default=32_000, ge=256, le=400_000)
+
+    allowed_authentication_hosts: Optional[str] = Field(default=None)
+
     @field_validator(
         "authentication_url",
         mode="before"
@@ -26,3 +38,27 @@ class AuthenticationProviderSettings(BaseSettings):
         if not v.startswith(("http://", "https://")):
             raise ValueError("The authentication service URL must start with http:// or https://.")
         return v
+
+    @model_validator(mode="after")
+    def validate_url_host_and_allowlist(
+            self
+    ) -> "AuthenticationProviderSettings":
+        parsed = urlparse(self.authentication_url)
+        if not parsed.netloc:
+            raise ValueError("The authentication service URL must include a valid host.")
+
+        if self.allowed_authentication_hosts:
+            allowed = {
+                h.strip().lower()
+                for h in self.allowed_authentication_hosts.split(",")
+                if h.strip()
+            }
+            if not allowed:
+                return self
+            host = (parsed.hostname or "").lower()
+            if host not in allowed:
+                raise ValueError(
+                    "The authentication service host is not listed in AUTHENTICATION_PROVIDER_ALLOWED_AUTHENTICATION_HOSTS."
+                )
+
+        return self

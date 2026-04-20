@@ -8,47 +8,48 @@ from typing import Optional
 from fastapi import HTTPException, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.services.document.create_document_service.create_document_service_authorizer import (
-    CreateDocumentServiceAuthorizer
+from app.application.authorization.authorizer import Authorizer
+from app.application.coordination.interfaces.content_deduplication_port_interface import (
+    ContentDeduplicationPortInterface,
 )
+from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
 from app.application.services.document.create_document_service.create_document_service_settings import (
     CreateDocumentServiceSettings
 )
 from app.application.services.document.create_document_service.create_document_service_utils import (
     CreateDocumentServiceUtils
 )
-from app.application.services.document.create_document_service.create_document_service_validator import (
-    CreateDocumentServiceValidator
-)
 from app.application.services.document.create_document_service.exceptions.create_document_service_exception import (
+    CreateDocumentInvalidException,
     CreateDocumentPersistenceException,
     CreateDocumentServiceException,
-    CreateDocumentUnauthorizedException,
+    CreateDocumentSizeExceededException,
+    CreateDocumentUnsupportedTypeException,
     CreateDocumentUploadException,
-    CreateDocumentValidationException
+    CreateDocumentValidationException,
 )
 from app.application.services.document.create_document_service.interfaces.create_document_service_interface import (
     CreateDocumentServiceInterface
 )
 from app.domain.constants.document.document_mime_type import DocumentMimeType
 from app.domain.constants.document.document_status import DocumentStatus
-from app.domain.constants.user.user_roles import ALL_ROLES
+from app.domain.constants.document_processing_permissions import DocumentProcessingPermissions
 from app.domain.dtos.document.create_document.create_document_request import CreateDocumentRequest
 from app.domain.dtos.document.create_document.create_document_response import CreateDocumentResponse
 from app.infrastructure.messaging.rabbitmq.dtos.commands.document_ingestion_command import DocumentIngestionCommand
 from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.models.document import Document
-from app.infrastructure.messaging.rabbitmq.exceptions.rabbitmq_manager_exception import RabbitMQPublishException
-from app.infrastructure.messaging.rabbitmq.interfaces.rabbitmq_manager_interface import RabbitMQManagerInterface
-from app.infrastructure.persistence.database.repositories.document_repository.interfaces.document_repository_interface import (
+from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_exception import RabbitMQPublishException
+from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
+from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
     DocumentRepositoryInterface
 )
-from app.infrastructure.persistence.database.repositories.exceptions.database_exceptions import DatabaseException
-from app.infrastructure.persistence.storages.document_storage.exceptions.document_storage_exception import (
+from app.infrastructure.persistence.database.repositories.database_exceptions import DatabaseException
+from app.infrastructure.persistence.storages.document_storage.document_storage_exception import (
     DocumentStorageException
 )
-from app.infrastructure.persistence.storages.document_storage.interfaces.document_storage_interface import (
+from app.infrastructure.persistence.storages.document_storage.document_storage_interface import (
     DocumentStorageInterface
 )
 
@@ -61,6 +62,8 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             document_repository: DocumentRepositoryInterface,
             document_storage: DocumentStorageInterface,
             rabbitmq_manager: RabbitMQManagerInterface,
+            authorizer: Authorizer,
+            content_deduplication: ContentDeduplicationPortInterface,
             create_document_service_settings: Optional[CreateDocumentServiceSettings] = None,
     ) -> None:
         self._document_repository = document_repository
@@ -68,16 +71,11 @@ class CreateDocumentService(CreateDocumentServiceInterface):
         self._rabbitmq_manager = rabbitmq_manager
         self._settings = create_document_service_settings or CreateDocumentServiceSettings()
 
-        self._validator = CreateDocumentServiceValidator(
-            create_document_service_settings=self._settings
-        )
-        self._authorizer = CreateDocumentServiceAuthorizer()
+        self._authorizer = authorizer
+        self._content_deduplication = content_deduplication
         self._utils = CreateDocumentServiceUtils(
             create_document_service_settings=self._settings
         )
-
-        self._deduplication_lock = asyncio.Lock()
-        self._recent_hashes: dict[str, datetime] = {}
 
     async def create_document(
             self,
@@ -99,17 +97,17 @@ class CreateDocumentService(CreateDocumentServiceInterface):
         )
 
         try:
-            self._require_permissions(authenticated_user)
-            self._authorizer.require_roles(
+            self._authorizer.require_permissions(
                 authenticated_user=authenticated_user,
-                allowed_roles=ALL_ROLES
+                required_permissions=frozenset({DocumentProcessingPermissions.INGEST_DOCUMENT}),
             )
 
             try:
-                await self._validator.validate_create_document_request(
-                    raw_document=raw_document,
-                    create_document_request=create_document_request
-                )
+                self._validate_file_present(raw_document)
+                self._validate_filename(raw_document)
+                self._validate_content_type(raw_document)
+                self._validate_size(raw_document)
+                await self._validate_magic_numbers(raw_document)
                 document_mime_type: DocumentMimeType = self._utils.get_document_mime_type(
                     raw_document=raw_document
                 )
@@ -117,12 +115,15 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 raise CreateDocumentValidationException("The document could not be validated.") from e
 
             file_hash: Optional[str] = None
+            content_hash_claimed = False
             if self._settings.deduplication_enabled:
                 file_hash = await self._utils.compute_file_hash(raw_document)
-                if await self._is_duplicate(file_hash):
+                window_seconds = self._settings.deduplication_window_hours * 3600
+                if not await self._content_deduplication.try_claim_content_hash(file_hash, window_seconds):
                     raise CreateDocumentValidationException(
                         "Duplicate document detected. This file was recently uploaded."
                     )
+                content_hash_claimed = True
 
             temp_path = await self._save_temp_file_streaming(raw_document)
             file_size = temp_path.stat().st_size
@@ -140,6 +141,8 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                     }
                 )
             except DocumentStorageException as e:
+                if content_hash_claimed and file_hash:
+                    await self._content_deduplication.release_content_hash_claim(file_hash)
                 raise CreateDocumentUploadException("Failed to upload the document to storage.") from e
 
             now = datetime.now(timezone.utc)
@@ -169,10 +172,9 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 )
             except DatabaseException as e:
                 await self._cleanup_storage(object_name)
+                if content_hash_claimed and file_hash:
+                    await self._content_deduplication.release_content_hash_claim(file_hash)
                 raise CreateDocumentPersistenceException("Failed to save the document to the database.") from e
-
-            if self._settings.deduplication_enabled and file_hash:
-                await self._register_hash(file_hash)
 
             await self._cleanup_temp_file(temp_path)
             temp_path = None
@@ -196,6 +198,8 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                     }
                 )
             except Exception as e:
+                if content_hash_claimed and file_hash:
+                    await self._content_deduplication.release_content_hash_claim(file_hash)
                 raise RabbitMQPublishException("Failed to enqueue the document for ingestion.") from e
 
             logger.info(
@@ -210,7 +214,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             return CreateDocumentResponse.model_validate(database_document)
 
         except (
-                CreateDocumentUnauthorizedException,
+                UnauthorizedException,
                 CreateDocumentValidationException,
                 CreateDocumentUploadException,
                 CreateDocumentPersistenceException
@@ -230,33 +234,76 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 await self._cleanup_temp_file(temp_path)
             raise CreateDocumentServiceException("Document creation failed.") from e
 
-    def _require_permissions(
-            self,
-            authenticated_user: AuthenticatedUser
-    ) -> None:
-        self._authorizer.require_permissions(authenticated_user)
+    @staticmethod
+    def _validate_file_present(file: UploadFile) -> None:
+        if file is None:
+            raise CreateDocumentValidationException("No file was provided.")
+        if not file.filename:
+            raise CreateDocumentValidationException("The file must have a filename.")
 
-    async def _is_duplicate(
-            self,
-            file_hash: str
-    ) -> bool:
-        now = datetime.now(timezone.utc)
-        cutoff_seconds = self._settings.deduplication_window_hours * 3600
+    @staticmethod
+    def _validate_filename(file: UploadFile) -> None:
+        filename = file.filename
+        if ".." in filename or "/" in filename or "\\" in filename:
+            raise CreateDocumentInvalidException(
+                "The filename contains invalid characters. Path separators are not allowed."
+            )
+        if "\x00" in filename:
+            raise CreateDocumentInvalidException("The filename contains null bytes.")
+        if len(filename) > 255:
+            raise CreateDocumentInvalidException("The filename is too long. The maximum length is 255 characters.")
 
-        async with self._deduplication_lock:
-            self._recent_hashes = {
-                h: ts
-                for h, ts in self._recent_hashes.items()
-                if (now - ts).total_seconds() < cutoff_seconds
-            }
-            return file_hash in self._recent_hashes
+    def _validate_content_type(self, file: UploadFile) -> None:
+        content_type = file.content_type
+        if not content_type:
+            raise CreateDocumentInvalidException("The file content type was not provided.")
+        if not self._settings.is_content_type_allowed(content_type):
+            raise CreateDocumentUnsupportedTypeException(
+                "This file type is not supported. Please upload a supported document format."
+            )
 
-    async def _register_hash(
-            self,
-            file_hash: str
-    ) -> None:
-        async with self._deduplication_lock:
-            self._recent_hashes[file_hash] = datetime.now(timezone.utc)
+    def _validate_size(self, file: UploadFile) -> None:
+        file_size = self._get_file_size(file)
+        if file_size is None:
+            raise CreateDocumentInvalidException("The file size could not be determined.")
+        if file_size < self._settings.min_file_size_bytes:
+            raise CreateDocumentInvalidException("The file is smaller than the minimum allowed size.")
+        if file_size > self._settings.max_file_size_bytes:
+            raise CreateDocumentSizeExceededException("The file is larger than the maximum allowed size.")
+
+    async def _validate_magic_numbers(self, file: UploadFile) -> None:
+        content_type = file.content_type
+        magic_numbers = self._settings.get_magic_numbers(content_type)
+        if not magic_numbers:
+            return
+        try:
+            await file.seek(0)
+            header = await file.read(8)
+            await file.seek(0)
+            if not header:
+                raise CreateDocumentInvalidException("The file header could not be read.")
+            if not any(header.startswith(magic) for magic in magic_numbers):
+                raise CreateDocumentInvalidException(
+                    "The file content does not match the declared type. The file may be invalid or mislabeled."
+                )
+        except CreateDocumentInvalidException:
+            raise
+        except Exception as e:
+            raise CreateDocumentInvalidException("Failed to validate the file content.") from e
+
+    @staticmethod
+    def _get_file_size(file: UploadFile) -> Optional[int]:
+        file_size = getattr(file, "size", None)
+        if file_size is not None:
+            return file_size
+        try:
+            current_pos = file.file.tell()
+            file.file.seek(0, 2)
+            size = file.file.tell()
+            file.file.seek(current_pos)
+            return size
+        except Exception:
+            return None
 
     async def _save_temp_file_streaming(
             self,

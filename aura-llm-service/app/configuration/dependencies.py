@@ -12,6 +12,9 @@ from app.application.services.general.agent_service.tools.document_summary_tool.
     DocumentSummaryTool
 )
 from app.application.services.general.document_question_service.document_question_service import DocumentQuestionService
+from app.application.services.general.document_question_service.document_question_settings import (
+    DocumentQuestionServiceSettings,
+)
 from app.application.services.support.document_classify_service.document_classify_service import DocumentClassifyService
 from app.application.services.support.fragment_enrich_service.fragment_enrich_service import FragmentEnrichService
 from app.infrastructure.http.authentication_provider.authentication_provider import AuthenticationProvider
@@ -47,11 +50,13 @@ async def startup_dependencies(app: FastAPI) -> None:
         ollama_llm_invoker = OllamaLLMInvoker()
         ollama_llm_streaming_invoker = OllamaLLMStreamingInvoker()
 
+        document_question_service_settings = DocumentQuestionServiceSettings()
         document_question_service = DocumentQuestionService(
             ollama_llm_facade=ollama_llm_facade_base,
             llm_invoker=ollama_llm_invoker,
             document_context_provider=document_context_provider,
             ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
+            document_question_service_settings=document_question_service_settings,
         )
         app.state.document_question_service = document_question_service
 

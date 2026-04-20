@@ -1,8 +1,5 @@
-import logging
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-logger = logging.getLogger(__name__)
 
 
 class DocumentQueryServiceSettings(BaseSettings):

@@ -318,3 +318,4 @@ async def get_reader_factory(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Reader factory is not configured"
         )
+

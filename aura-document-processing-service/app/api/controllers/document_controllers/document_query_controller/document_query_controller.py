@@ -95,6 +95,36 @@ class DocumentQueryController(DocumentQueryControllerInterface):
         return document_list_response
 
 
+    async def get_documents_by_chat(
+            self,
+            chat_id: int,
+            document_query_service: DocumentQueryServiceInterface = Depends(get_document_query_service),
+            database_session: AsyncSession = Depends(get_database_session),
+            authenticated_user: AuthenticatedUser = Depends(get_authenticated_user)
+    ) -> DocumentListResponse:
+        logger.info(
+            "Handling get documents by chat request",
+            extra={
+                "user_id": authenticated_user.id
+            }
+        )
+
+        document_list_response = await document_query_service.get_documents_by_chat(
+            chat_id=chat_id,
+            database_session=database_session,
+            authenticated_user=authenticated_user
+        )
+
+        logger.info(
+            "Get documents by chat completed successfully",
+            extra={
+                "user_id": authenticated_user.id
+            }
+        )
+
+        return document_list_response
+
+
 router = APIRouter()
 document_query_controller = DocumentQueryController()
 
@@ -107,3 +137,8 @@ router.get(
     "/documents",
     response_model=DocumentListResponse
 )(document_query_controller.get_documents)
+
+router.get(
+    "/documents/chat/{chat_id}",
+    response_model=DocumentListResponse
+)(document_query_controller.get_documents_by_chat)
