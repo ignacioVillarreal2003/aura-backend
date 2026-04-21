@@ -53,6 +53,7 @@ MIGRATION_MODULES = {app: None for app in _LOCAL_APPS}
 
 MIDDLEWARE = [
     'django_prometheus.middleware.PrometheusBeforeMiddleware',
+    'accounts.middleware.metrics_middleware.MetricsAccessMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
@@ -177,6 +178,12 @@ CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:
 
 # REST Framework Configuration
 REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'accounts.authentication.JWTAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
     ],
@@ -196,6 +203,12 @@ SPECTACULAR_SETTINGS = {
 JWT_ACCESS_LIFETIME_MINUTES = config('JWT_ACCESS_LIFETIME_MINUTES', default=15, cast=int)
 JWT_ALGORITHM = config('JWT_ALGORITHM', default='HS256')
 JWT_SIGNING_KEY = config('JWT_SIGNING_KEY', default=SECRET_KEY)
+
+# Service-to-service API key (used by internal services to call protected endpoints)
+SERVICE_API_KEY = config('SERVICE_API_KEY', default='service_api_key')
+
+# IPs allowed to scrape /metrics (Prometheus scraper)
+METRICS_ALLOWED_IPS = config('METRICS_ALLOWED_IPS', default='127.0.0.1,::1', cast=Csv())
 
 # Privilege elevation
 SUPERADMIN_USERNAME = config('SUPERADMIN_USERNAME', default='superadmin')

@@ -11,6 +11,7 @@ from accounts.api.serializers import (
     UserLookupRequestSerializer, UserLookupItemSerializer,
 )
 from accounts.models import User
+from accounts.authentication import ServiceKeyAuthentication, JWTAuthentication
 from accounts.services.auth_service import (
     authenticate_user,
     issue_tokens_for_user,
@@ -88,8 +89,6 @@ class RefreshView(APIView):
 
 
 class LogoutView(APIView):
-    authentication_classes = []
-    permission_classes = []
 
     @extend_schema(
         summary='Logout',
@@ -142,8 +141,7 @@ class ValidateView(APIView):
 
 
 class UserBulkLookupView(APIView):
-    authentication_classes = []
-    permission_classes = []
+    authentication_classes = [ServiceKeyAuthentication, JWTAuthentication]
 
     @extend_schema(
         summary='Bulk user lookup',
