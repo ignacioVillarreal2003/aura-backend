@@ -1,0 +1,60 @@
+@host = http://localhost:8000
+@token = replace_with_valid_jwt
+
+### Crear colección — cuerpo mínimo válido
+# Hace: crea una nueva colección con el nombre indicado.
+# Devuelve: 201 y el objeto de la colección creada en JSON.
+
+POST {{host}}/api/v1/document-collections/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "My collection"
+}
+
+###
+
+### Crear colección — nombre con espacios (se recorta en servidor)
+# Hace: envía un nombre con espacios al inicio/fin; el backend lo normaliza con trim.
+# Devuelve: 201 y la colección en JSON con el nombre ya recortado.
+
+POST {{host}}/api/v1/document-collections/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "  Quarterly reviews  "
+}
+
+###
+
+### Crear colección — error de validación (nombre vacío)
+# Hace: envía `name` vacío; viola la validación del serializer.
+# Devuelve: 400 con errores de campo en JSON (formato DRF).
+
+POST {{host}}/api/v1/document-collections/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": ""
+}
+
+###
+
+### Crear colección — error de validación (solo espacios)
+# Hace: envía un nombre que tras trim queda vacío.
+# Devuelve: 400 con mensaje de validación en JSON.
+
+POST {{host}}/api/v1/document-collections/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "     "
+}

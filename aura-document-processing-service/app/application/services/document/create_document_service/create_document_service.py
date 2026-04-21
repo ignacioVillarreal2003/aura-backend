@@ -9,9 +9,6 @@ from fastapi import HTTPException, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.authorization.authorizer import Authorizer
-from app.application.coordination.interfaces.content_deduplication_port_interface import (
-    ContentDeduplicationPortInterface,
-)
 from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
 from app.application.services.document.create_document_service.create_document_service_settings import (
     CreateDocumentServiceSettings
@@ -63,16 +60,13 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             document_storage: DocumentStorageInterface,
             rabbitmq_manager: RabbitMQManagerInterface,
             authorizer: Authorizer,
-            content_deduplication: ContentDeduplicationPortInterface,
             create_document_service_settings: Optional[CreateDocumentServiceSettings] = None,
     ) -> None:
         self._document_repository = document_repository
         self._document_storage = document_storage
         self._rabbitmq_manager = rabbitmq_manager
         self._settings = create_document_service_settings or CreateDocumentServiceSettings()
-
         self._authorizer = authorizer
-        self._content_deduplication = content_deduplication
         self._utils = CreateDocumentServiceUtils(
             create_document_service_settings=self._settings
         )
@@ -114,17 +108,6 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             except Exception as e:
                 raise CreateDocumentValidationException("The document could not be validated.") from e
 
-            file_hash: Optional[str] = None
-            content_hash_claimed = False
-            if self._settings.deduplication_enabled:
-                file_hash = await self._utils.compute_file_hash(raw_document)
-                window_seconds = self._settings.deduplication_window_hours * 3600
-                if not await self._content_deduplication.try_claim_content_hash(file_hash, window_seconds):
-                    raise CreateDocumentValidationException(
-                        "Duplicate document detected. This file was recently uploaded."
-                    )
-                content_hash_claimed = True
-
             temp_path = await self._save_temp_file_streaming(raw_document)
             file_size = temp_path.stat().st_size
 
@@ -141,8 +124,6 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                     }
                 )
             except DocumentStorageException as e:
-                if content_hash_claimed and file_hash:
-                    await self._content_deduplication.release_content_hash_claim(file_hash)
                 raise CreateDocumentUploadException("Failed to upload the document to storage.") from e
 
             now = datetime.now(timezone.utc)
@@ -172,8 +153,6 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 )
             except DatabaseException as e:
                 await self._cleanup_storage(object_name)
-                if content_hash_claimed and file_hash:
-                    await self._content_deduplication.release_content_hash_claim(file_hash)
                 raise CreateDocumentPersistenceException("Failed to save the document to the database.") from e
 
             await self._cleanup_temp_file(temp_path)
@@ -198,8 +177,6 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                     }
                 )
             except Exception as e:
-                if content_hash_claimed and file_hash:
-                    await self._content_deduplication.release_content_hash_claim(file_hash)
                 raise RabbitMQPublishException("Failed to enqueue the document for ingestion.") from e
 
             logger.info(

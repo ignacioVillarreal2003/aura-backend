@@ -1,0 +1,46 @@
+@host = http://localhost:8000
+@token = replace_with_valid_jwt
+@documentCollectionId = 1
+
+### Actualizar colección (PATCH) — renombrar
+# Hace: cambia el nombre de la colección existente.
+# Devuelve: 200 y el objeto actualizado de la colección en JSON.
+
+PATCH {{host}}/api/v1/document-collections/{{documentCollectionId}}/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Renamed collection"
+}
+
+###
+
+### Actualizar colección — nombre con caracteres Unicode
+# Hace: actualiza el nombre con texto no ASCII.
+# Devuelve: 200 y la colección en JSON con el nuevo nombre.
+
+PATCH {{host}}/api/v1/document-collections/1/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Colección de documentos — 2026"
+}
+
+###
+
+### Actualizar colección — error de validación (nombre vacío)
+# Hace: envía un nombre inválido en el PATCH.
+# Devuelve: 400 con errores de validación en JSON.
+
+PATCH {{host}}/api/v1/document-collections/1/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": ""
+}

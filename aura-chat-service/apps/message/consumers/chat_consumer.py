@@ -1,24 +1,3 @@
-"""
-WebSocket protocol for ``ws/chat/<chat_id>/?token=...``.
-
-Inbound (client → server):
-
-- ``{"type": "chat.message", "message": "<text>"}`` — persist user message and run
-  document-question streaming against the LLM service.
-- ``{"type": "chat.typing", "is_typing": true|false}`` — broadcast typing state.
-
-Outbound (server → client):
-
-- ``user_message`` — persisted user row (``id``, ``message``, ``sender_type``, …).
-- ``ai_meta`` — generation started for this chat (``chat_id``).
-- ``ai_context`` — RAG step finished (``question``, ``fragments``).
-- ``ai_delta`` — answer chunk (``delta`` string).
-- ``ai_complete`` — final answer (``answer``, ``question``, ``fragments``, optional
-  persisted assistant ``id``, ``created_at``, …).
-- ``ai_error`` — failure (``detail``; optional ``code``).
-- ``typing`` — another member’s typing indicator.
-"""
-
 import asyncio
 import logging
 

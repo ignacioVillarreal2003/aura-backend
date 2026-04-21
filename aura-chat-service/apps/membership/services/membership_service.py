@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 
 class MembershipService:
-
     def list_members(self, user: AuthenticatedUser, chat_id: int) -> QuerySet[ChatMembership]:
         self._require_active_member(chat_id, user.id)
         return membership_repository.list_by_chat(chat_id)

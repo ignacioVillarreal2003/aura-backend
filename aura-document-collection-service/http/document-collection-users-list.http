@@ -1,0 +1,30 @@
+@host = http://localhost:8000
+@token = replace_with_valid_jwt
+@documentCollectionId = 1
+
+### Listar usuarios de la colección — primera página
+# Hace: lista los usuarios vinculados a la colección, enriquecido con datos de perfil cuando aplica.
+# Devuelve: 200 con lista paginada (`count`, `next`, `previous`, `results`).
+
+GET {{host}}/api/v1/document-collections/{{documentCollectionId}}/users/
+Accept: application/json
+Authorization: Bearer {{token}}
+
+###
+
+### Listar usuarios — página y tamaño
+# Hace: lista miembros con parámetros de paginación explícitos.
+# Devuelve: 200 paginado; `results` con objetos de membresía + perfil.
+
+GET {{host}}/api/v1/document-collections/1/users/?page=2&page_size=10
+Accept: application/json
+Authorization: Bearer {{token}}
+
+###
+
+### Listar usuarios — sin token (caso negativo)
+# Hace: accede al listado sin Bearer.
+# Devuelve: 401 JSON por autenticación requerida.
+
+GET {{host}}/api/v1/document-collections/1/users/
+Accept: application/json

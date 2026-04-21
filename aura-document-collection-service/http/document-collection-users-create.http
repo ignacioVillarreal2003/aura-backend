@@ -1,0 +1,59 @@
+@host = http://localhost:8000
+@token = replace_with_valid_jwt
+@documentCollectionId = 1
+
+### Añadir usuario a la colección
+# Hace: asocia el `user_id` a la colección si las reglas de negocio lo permiten.
+# Devuelve: 201 y el objeto de la membresía (con datos de perfil) en JSON.
+
+POST {{host}}/api/v1/document-collections/{{documentCollectionId}}/users/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "user_id": 42
+}
+
+###
+
+### Añadir usuario — otro user_id
+# Hace: igual que el anterior con otro identificador de usuario.
+# Devuelve: 201 y la membresía creada, o 4xx si el usuario ya está o no se puede añadir.
+
+POST {{host}}/api/v1/document-collections/1/users/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "user_id": 1001
+}
+
+###
+
+### Añadir usuario — error de validación (user_id menor que 1)
+# Hace: envía un `user_id` fuera del rango permitido por el serializer.
+# Devuelve: 400 con detalle de validación en JSON.
+
+POST {{host}}/api/v1/document-collections/1/users/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "user_id": 0
+}
+
+###
+
+### Añadir usuario — cuerpo incompleto (caso negativo)
+# Hace: POST sin el campo obligatorio `user_id`.
+# Devuelve: 400 JSON indicando campo requerido / inválido.
+
+POST {{host}}/api/v1/document-collections/1/users/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{}

@@ -1,0 +1,23 @@
+@host = http://localhost:8000
+@token = replace_with_valid_jwt
+@documentCollectionId = 1
+@documentId = 500
+
+### Desvincular documento de la colección
+# Hace: elimina el enlace entre la colección y el `document_id` sin borrar el documento en origen.
+# Devuelve: 204 sin cuerpo si la operación fue correcta.
+
+DELETE {{host}}/api/v1/document-collections/{{documentCollectionId}}/documents/{{documentId}}/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+###
+
+### Desvincular documento — sin token (caso negativo)
+# Hace: DELETE sin `Authorization`.
+# Devuelve: 401 JSON por falta de autenticación.
+
+DELETE {{host}}/api/v1/document-collections/1/documents/1/
+Accept: application/json
+Content-Type: application/json

@@ -1,0 +1,39 @@
+@host = http://localhost:8000
+@token = replace_with_valid_jwt
+
+### Listar colecciones — primera página (page_size por defecto 20)
+# Hace: lista las colecciones de documentos a las que tiene acceso el usuario del token.
+# Devuelve: 200 con cuerpo paginado (`count`, `next`, `previous`, `results`).
+
+GET {{host}}/api/v1/document-collections/
+Accept: application/json
+Authorization: Bearer {{token}}
+
+###
+
+### Listar colecciones — página 2
+# Hace: pide la segunda página del listado paginado.
+# Devuelve: 200 con otra ventana de `results` o lista vacía si no hay más datos.
+
+GET {{host}}/api/v1/document-collections/?page=2
+Accept: application/json
+Authorization: Bearer {{token}}
+
+###
+
+### Listar colecciones — tamaño de página personalizado (máx. 100)
+# Hace: lista con `page_size` explícito dentro del límite del paginador.
+# Devuelve: 200 paginado; si `page_size` supera el máximo, el backend lo recorta al máximo permitido.
+
+GET {{host}}/api/v1/document-collections/?page=1&page_size=50
+Accept: application/json
+Authorization: Bearer {{token}}
+
+###
+
+### Listar colecciones — sin token (caso negativo)
+# Hace: llama al endpoint protegido sin `Authorization`.
+# Devuelve: 401 JSON con detalle de autenticación requerida (middleware).
+
+GET {{host}}/api/v1/document-collections/
+Accept: application/json

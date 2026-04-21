@@ -4,7 +4,7 @@ import logging
 import aio_pika.abc
 from pydantic import ValidationError
 
-from app.application.services.document.post_process_document_processor.post_process_document_processor_interface import (
+from app.application.services.document.post_process_document_service.interfaces.post_process_document_processor_interface import (
     PostProcessDocumentProcessorInterface,
 )
 from app.infrastructure.messaging.rabbitmq.dtos.commands.post_process_document_job_command import (

@@ -5,8 +5,8 @@ from typing import Optional
 from fastapi import HTTPException, Request, status
 
 from app.application.authorization.authorizer import Authorizer
-from app.application.coordination.interfaces.post_process_job_progress_store_interface import (
-    PostProcessJobProgressStoreInterface,
+from app.infrastructure.persistence.memory_database.document_post_process_job_progress_store.document_post_process_job_progress_store_interface import (
+    DocumentPostProcessJobProgressStoreInterface,
 )
 from app.application.services.document.post_process_document_service.exceptions.post_process_document_service_exception import (
     PostProcessAlreadyRunningException,
@@ -47,7 +47,7 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
             self,
             database_manager: DatabaseManagerInterface,
             document_repository: DocumentRepositoryInterface,
-            job_progress_store: PostProcessJobProgressStoreInterface,
+            job_progress_store: DocumentPostProcessJobProgressStoreInterface,
             post_process_document_job_publisher: PostProcessDocumentJobPublisherInterface,
             authorizer: Authorizer,
             post_process_document_service_settings: Optional[PostProcessDocumentServiceSettings] = None,

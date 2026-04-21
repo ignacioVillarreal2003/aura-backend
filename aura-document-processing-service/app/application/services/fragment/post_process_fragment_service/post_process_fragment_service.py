@@ -5,8 +5,8 @@ from typing import Optional
 from fastapi import HTTPException, Request, status
 
 from app.application.authorization.authorizer import Authorizer
-from app.application.coordination.interfaces.post_process_job_progress_store_interface import (
-    PostProcessJobProgressStoreInterface,
+from app.infrastructure.persistence.memory_database.fragment_post_process_job_progress_store.fragment_post_process_job_progress_store_interface import (
+    FragmentPostProcessJobProgressStoreInterface,
 )
 from app.application.services.fragment.post_process_fragment_service.exceptions.post_process_fragment_service_exception import (
     PostProcessFragmentAlreadyRunningException,
@@ -48,7 +48,7 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
             self,
             database_manager: DatabaseManagerInterface,
             fragment_repository: FragmentRepositoryInterface,
-            job_progress_store: PostProcessJobProgressStoreInterface,
+            job_progress_store: FragmentPostProcessJobProgressStoreInterface,
             post_process_fragment_job_publisher: PostProcessFragmentJobPublisherInterface,
             authorizer: Authorizer,
             post_process_fragment_service_settings: Optional[PostProcessFragmentServiceSettings] = None,

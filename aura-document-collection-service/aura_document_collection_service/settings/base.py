@@ -8,6 +8,7 @@ SECRET_KEY = config("SECRET_KEY", default="django-insecure-change-me")
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv())
 
 INSTALLED_APPS = [
+    "django_prometheus",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -18,10 +19,13 @@ INSTALLED_APPS = [
     "corsheaders",
     "django_filters",
     "drf_spectacular",
-    "apps.document_collection",
+    "apps.document_collections",
+    "apps.document_collection_users",
+    "apps.document_collection_documents",
 ]
 
 MIDDLEWARE = [
+    "django_prometheus.middleware.PrometheusBeforeMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -32,6 +36,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "django_prometheus.middleware.PrometheusAfterMiddleware",
 ]
 
 ROOT_URLCONF = "aura_document_collection_service.urls"
@@ -58,28 +63,34 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": config("DB_NAME"),
-        "USER": config("DB_USER"),
-        "PASSWORD": config("DB_PASSWORD"),
-        "HOST": config("DB_HOST"),
-        "PORT": config("DB_PORT"),
+        "NAME": config("DB_NAME", default="aura_db"),
+        "USER": config("DB_USER", default="aura_root"),
+        "PASSWORD": config("DB_PASSWORD", default="aura_password"),
+        "HOST": config("DB_HOST", default="localhost"),
+        "PORT": config("DB_PORT", default="5432"),
         "OPTIONS": {
             "connect_timeout": 5,
         },
     }
 }
 
-SERVICE_API_KEY = config("SERVICE_API_KEY")
+SERVICE_API_KEY = config("SERVICE_API_KEY", default="change-me")
 
-AUTHENTICATION_PROVIDER_URL = config("AUTHENTICATION_SERVICE_URL").strip()
+_auth_service_url = config("AUTHENTICATION_SERVICE_URL", default="").strip()
+AUTHENTICATION_PROVIDER_URL = (
+    _auth_service_url
+    or config("AUTHENTICATION_PROVIDER_AUTHENTICATION_URL", default="").strip()
+    or config("AUTHENTICATION_PROVIDER_URL", default="http://localhost:8000/api/v1/auth/me").strip()
+)
 
-USER_PROFILE_SERVICE_URL = config("USER_PROFILE_SERVICE_URL").strip()
+USER_PROFILE_SERVICE_URL = config("USER_PROFILE_SERVICE_URL", default="http://localhost:8000").strip()
 USER_PROFILE_SERVICE_TIMEOUT = float(config("USER_PROFILE_SERVICE_TIMEOUT", default="5.0"))
 
-RABBITMQ_MANAGER_URL = config("RABBITMQ_MANAGER_URL").strip()
+RABBITMQ_MANAGER_URL = config("RABBITMQ_MANAGER_URL", default="http://localhost:15672").strip()
 
 AUTHENTICATION_EXCLUDED_PATHS = [
     "/api/v1/health",
+    "/metrics",
     "/admin/*",
     "/api/schema*",
     "/api/docs*",

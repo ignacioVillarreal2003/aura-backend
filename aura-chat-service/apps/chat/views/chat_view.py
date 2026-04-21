@@ -46,8 +46,6 @@ from core.pagination.pagination import StandardPagination
     ),
 )
 class ChatViewSet(ViewSet):
-    lookup_value_regex = r"[0-9]+"
-
     def create(self, request: Request) -> Response:
         serializer = CreateChatRequest(data=request.data)
         serializer.is_valid(raise_exception=True)

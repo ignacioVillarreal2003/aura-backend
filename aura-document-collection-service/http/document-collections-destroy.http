@@ -1,0 +1,22 @@
+@host = http://localhost:8000
+@token = replace_with_valid_jwt
+@documentCollectionId = 1
+
+### Eliminar colección — borrado definitivo (estilo “hard delete” de API)
+# Hace: elimina la colección indicada para el usuario autenticado (lógica en servicio).
+# Devuelve: 204 sin cuerpo si el borrado fue correcto.
+
+DELETE {{host}}/api/v1/document-collections/{{documentCollectionId}}/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+###
+
+### Eliminar colección — sin token (caso negativo)
+# Hace: intenta borrar sin credenciales.
+# Devuelve: 401 JSON por falta de token.
+
+DELETE {{host}}/api/v1/document-collections/1/
+Accept: application/json
+Content-Type: application/json
