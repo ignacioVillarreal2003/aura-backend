@@ -17,7 +17,7 @@ from core.domain.document_collection_exceptions import (
     DocumentNotAvailableException,
     DuplicateDocumentLinkException,
 )
-from core.permissions import (
+from core.authorization.permissions import (
     ADD_DOCUMENT_COLLECTION_DOCUMENT,
     LIST_DOCUMENT_COLLECTION_DOCUMENTS,
     REMOVE_DOCUMENT_COLLECTION_DOCUMENT,

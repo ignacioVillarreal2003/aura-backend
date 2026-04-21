@@ -8,7 +8,7 @@ from apps.document_collections.repositories import document_collection_repositor
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization.access import AccessControl
 from core.domain.document_collection_exceptions import CollectionNotFoundException
-from core.permissions import (
+from core.authorization.permissions import (
     CREATE_DOCUMENT_COLLECTION,
     DELETE_DOCUMENT_COLLECTION,
     GET_DOCUMENT_COLLECTION,

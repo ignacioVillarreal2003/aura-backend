@@ -1,9 +1,10 @@
 from core.exceptions.base import (
     ConflictException,
     ForbiddenException,
+    InsufficientPermissionsException,
     NotFoundException,
     ServiceException,
-    UnauthorizedException,
+    ServiceUnavailableException,
     ValidationException,
 )
 
@@ -13,5 +14,6 @@ __all__ = [
     "ValidationException",
     "ForbiddenException",
     "ConflictException",
-    "UnauthorizedException",
+    "InsufficientPermissionsException",
+    "ServiceUnavailableException",
 ]

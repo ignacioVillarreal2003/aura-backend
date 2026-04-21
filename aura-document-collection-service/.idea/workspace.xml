@@ -5,130 +5,32 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="541f8908-7e23-4d18-b532-96aae5c81a7c" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/api/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/api/controllers/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/api/controllers/chat_completion_controller.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/api/controllers/conversation_controller.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/api/controllers/message_controller.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/api/controllers/tool_call_controller.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/api/controllers/websocket_controller.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/application/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/application/exceptions/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/application/exceptions/api_exceptions.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/application/services/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/application/services/chat_service.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/application/services/message_service.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/configuration/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/configuration/environment_variables.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/configuration/logging_configuration.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/domain/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/domain/dtos/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/domain/dtos/chat_completion.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/domain/dtos/conversation.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/domain/dtos/message.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/domain/models/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/domain/models/base.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/domain/models/chat_membership.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/domain/models/conversation.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/domain/models/message.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/infrastructure/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/infrastructure/auth_deps.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/infrastructure/database.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/infrastructure/llm_client.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/infrastructure/repositories/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/infrastructure/repositories/chat_repository.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/infrastructure/repositories/message_repository.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/app/main.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/chat/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/chat/apps.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-chat-service/apps/chat/apps.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/chat/migrations/0001_initial.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/chat/migrations/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/chat/models/chat.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-chat-service/apps/chat/models/chat.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/chat/repositories/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/chat/repositories/chat_repository.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-chat-service/apps/chat/repositories/chat_repository.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/chat/serializers/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/chat/serializers/response.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-chat-service/apps/chat/serializers/response.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/chat/services/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/chat/services/chat_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-chat-service/apps/chat/services/chat_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/chat/spectacular_extension.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/chat/views/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/chat/views/chat_view.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-chat-service/apps/chat/views/chat_view.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/membership/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/membership/migrations/0001_initial.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/membership/migrations/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/membership/repositories/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/membership/repositories/membership_repository.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-chat-service/apps/membership/repositories/membership_repository.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/membership/serializers/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/membership/services/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/membership/services/membership_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-chat-service/apps/membership/services/membership_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/membership/views/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/membership/views/membership_view.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-chat-service/apps/membership/views/membership_view.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/message/consumers/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/message/consumers/chat_consumer.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-chat-service/apps/message/consumers/chat_consumer.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/message/migrations/0001_initial.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/message/migrations/0002_drop_notification_table.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/message/migrations/0003_chatmessage_created_by_required.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/message/migrations/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/message/repositories/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/message/repositories/message_repository.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-chat-service/apps/message/repositories/message_repository.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/message/serializers/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/message/services/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/apps/message/services/message_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-chat-service/apps/message/services/message_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/docs/CHAT_API_SPECIFICATION.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/docs/openapi.yaml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/env.docker" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/env.example" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/manage.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-chat-service/manage.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-chat-service/test_main.http" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.env" beforeDir="false" afterPath="$PROJECT_DIR$/.env" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.env.docker" beforeDir="false" afterPath="$PROJECT_DIR$/.env.docker" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/aura-document-collection-service.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/aura-document-collection-service.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/dataSources.local.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dataSources.local.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/dataSources/91993f05-e2c5-4748-b38c-adb292d0eda0.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dataSources/91993f05-e2c5-4748-b38c-adb292d0eda0.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/document_collection/apps.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/document_collection/exceptions.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/document_collection/integrations/user_profile_client.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/document_collection/models.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/document_collection/permission_codes.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/document_collection/repositories/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/document_collection/repositories/document_collection_repository.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/document_collection/repositories/document_in_document_collection_repository.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/document_collection/repositories/document_repository.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/document_collection/repositories/user_in_document_collection_repository.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/document_collection/serializers/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/document_collection/serializers/document_collection_serializers.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/document_collection/serializers/request_serializers.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/document_collection/services/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/document_collection/services/document_collection_document_service.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/document_collection/services/document_collection_service.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/document_collection/services/document_collection_user_service.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/document_collection/urls.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/document_collection/views/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/document_collection/views/document_collection_document_viewset.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/document_collection/views/document_collection_user_viewset.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/document_collection/views/document_collection_viewset.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collection_documents/repositories/document_in_document_collection_repository.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/document_collection_documents/repositories/document_in_document_collection_repository.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collection_documents/services/document_collection_document_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/document_collection_documents/services/document_collection_document_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collection_documents/views/document_collection_document_viewset.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/document_collection_documents/views/document_collection_document_viewset.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collection_users/repositories/user_in_document_collection_repository.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/document_collection_users/repositories/user_in_document_collection_repository.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collection_users/services/document_collection_user_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/document_collection_users/services/document_collection_user_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collection_users/views/document_collection_user_viewset.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/document_collection_users/views/document_collection_user_viewset.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collections/repositories/document_collection_repository.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/document_collections/repositories/document_collection_repository.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collections/services/document_collection_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/document_collections/services/document_collection_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collections/views/document_collection_viewset.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/document_collections/views/document_collection_viewset.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/aura_document_collection_service/api_urls.py" beforeDir="false" afterPath="$PROJECT_DIR$/aura_document_collection_service/api_urls.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/aura_document_collection_service/settings/base.py" beforeDir="false" afterPath="$PROJECT_DIR$/aura_document_collection_service/settings/base.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/aura_document_collection_service/urls.py" beforeDir="false" afterPath="$PROJECT_DIR$/aura_document_collection_service/urls.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/manage.py" beforeDir="false" afterPath="$PROJECT_DIR$/manage.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/aura_document_collection_service/settings/production.py" beforeDir="false" afterPath="$PROJECT_DIR$/aura_document_collection_service/settings/production.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/authorization/access.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/authorization/access.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/domain/document_collection_exceptions.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/domain/document_collection_exceptions.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/exceptions/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/exceptions/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/exceptions/base.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/exceptions/base.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/exceptions/handler.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/exceptions/handler.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/integrations/user_profile_client.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/integrations/user_profile_client.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/.env" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/.env" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/coordination/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/coordination/interfaces/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/coordination/interfaces/content_deduplication_port_interface.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/coordination/interfaces/post_process_job_progress_store_interface.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/document/create_document_service/create_document_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/document/create_document_service/create_document_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/document/create_document_service/create_document_service_settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/document/create_document_service/create_document_service_settings.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/document/create_document_service/create_document_service_utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/document/create_document_service/create_document_service_utils.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/document/post_process_document_processor/post_process_document_processor.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/document/post_process_document_service/post_process_document_processor.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/document/post_process_document_processor/post_process_document_processor_interface.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/document/post_process_document_service/interfaces/post_process_document_processor_interface.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/document/post_process_document_service/post_process_document_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/document/post_process_document_service/post_process_document_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/fragment/post_process_fragment_processor/post_process_fragment_processor.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/fragment/post_process_fragment_service/post_process_fragment_processor.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/fragment/post_process_fragment_processor/post_process_fragment_processor_interface.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/fragment/post_process_fragment_service/interfaces/post_process_fragment_processor_interface.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/fragment/post_process_fragment_service/post_process_fragment_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/application/services/fragment/post_process_fragment_service/post_process_fragment_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/configuration/dependencies.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/configuration/dependencies.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/infrastructure/coordination/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/infrastructure/coordination/redis_content_deduplication_port.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/infrastructure/coordination/redis_coordination_settings.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/infrastructure/coordination/redis_post_process_job_progress_store.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/infrastructure/messaging/rabbitmq/consumer/post_process_document_consumer.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/infrastructure/messaging/rabbitmq/consumer/post_process_document_consumer.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/app/infrastructure/messaging/rabbitmq/consumer/post_process_fragment_consumer.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/app/infrastructure/messaging/rabbitmq/consumer/post_process_fragment_consumer.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -149,32 +51,33 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;Django Server.aura-document-collection.executor&quot;: &quot;Run&quot;,
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.OpenDjangoStructureViewOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
-    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;last_opened_file_path&quot;: &quot;C:/Users/ignac/Desktop/AURA/aura-backend/aura-document-collection-service&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Django Server.aura-document-collection.executor": "Run",
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.OpenDjangoStructureViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "git-widget-placeholder": "feature/cosa",
+    "last_opened_file_path": "C:/Users/ignac/Desktop/AURA/aura-backend/aura-document-collection-service",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable",
+    "vue.rearranger.settings.migration": "true"
   },
-  &quot;keyToStringList&quot;: {
-    &quot;DatabaseDriversLRU&quot;: [
-      &quot;postgresql&quot;
+  "keyToStringList": {
+    "DatabaseDriversLRU": [
+      "postgresql"
     ]
   }
-}</component>
+}]]></component>
   <component name="RunManager">
     <configuration name="aura-document-collection" type="Python.DjangoServer" factoryName="Django server">
       <module name="aura-document-collection-service" />
@@ -189,6 +92,7 @@
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="RUN_TOOL" value="" />
       <option name="launchJavascriptDebuger" value="false" />
       <option name="port" value="8000" />
       <option name="host" value="" />
@@ -204,8 +108,8 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-js-predefined-d6986cc7102b-09060db00ec0-JavaScript-PY-251.26927.74" />
-        <option value="bundled-python-sdk-657d8234b839-64d779b69b7a-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-251.26927.74" />
+        <option value="bundled-js-predefined-d6986cc7102b-c7e53b3be11b-JavaScript-PY-253.28294.336" />
+        <option value="bundled-python-sdk-0978a7220b69-9867c7d4c0a4-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-253.28294.336" />
       </set>
     </attachedChunks>
   </component>
@@ -222,6 +126,7 @@
       <workItem from="1776618468792" duration="1212000" />
       <workItem from="1776726408189" duration="30000" />
       <workItem from="1776734494241" duration="1318000" />
+      <workItem from="1776809944735" duration="1260000" />
     </task>
     <servers />
   </component>

@@ -10,7 +10,7 @@ class DocumentInDocumentCollectionRepository:
         return (
             DocumentInDocumentCollection.objects.filter(document_collection_id=document_collection_id)
             .select_related("document")
-            .order_by("id")
+            .order_by()
         )
 
     def get_active_by_document_collection_id_and_document_id(

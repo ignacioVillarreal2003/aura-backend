@@ -10,7 +10,7 @@ class UserInDocumentCollectionRepository:
         return (
             UserInDocumentCollection.objects.filter(document_collection_id=document_collection_id)
             .select_related("document_collection")
-            .order_by("id")
+            .order_by()
         )
 
     def get_active_by_document_collection_id_and_user_id(

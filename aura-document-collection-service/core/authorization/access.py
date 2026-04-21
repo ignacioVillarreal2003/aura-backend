@@ -1,7 +1,7 @@
 import logging
 
 from core.authentication.authenticated_user import AuthenticatedUser
-from core.exceptions.base import UnauthorizedException
+from core.exceptions.base import InsufficientPermissionsException
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ class AccessControl:
                 "user_permissions": sorted(user_permissions),
             },
         )
-        raise UnauthorizedException(
+        raise InsufficientPermissionsException(
             detail="You do not have permission to perform this action.",
             error_code="insufficient_permissions",
         )

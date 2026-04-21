@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <dataSource name="aura_db@localhost">
-  <database-model serializer="dbm" dbms="POSTGRES" family-id="POSTGRES" format-version="4.53">
+  <database-model serializer="dbm" dbms="POSTGRES" family-id="POSTGRES" format-version="4.54">
     <root id="1">
       <DateStyle>mdy</DateStyle>
       <Grants>1||-9223372036854775808|c|G
@@ -4742,7 +4742,6 @@ true posixrules
     <schema id="291" parent="2" name="public">
       <Comment>standard public schema</Comment>
       <Current>1</Current>
-      <IntrospectionStateNumber>1125</IntrospectionStateNumber>
       <LastIntrospectionLocalTimestamp>2026-04-18.19:46:02</LastIntrospectionLocalTimestamp>
       <ObjectId>2200</ObjectId>
       <StateNumber>532</StateNumber>

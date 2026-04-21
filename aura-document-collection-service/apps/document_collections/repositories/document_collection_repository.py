@@ -9,7 +9,7 @@ class DocumentCollectionRepository:
         return DocumentCollection.objects.filter(pk=document_collection_id).first()
 
     def list_active(self) -> QuerySet[DocumentCollection]:
-        return DocumentCollection.objects.all().order_by("-created_at")
+        return DocumentCollection.objects.all().order_by()
 
     def create(self, name: str, created_by: int) -> DocumentCollection:
         return DocumentCollection.objects.create(

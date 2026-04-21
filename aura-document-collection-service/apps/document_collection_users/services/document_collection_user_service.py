@@ -13,7 +13,7 @@ from core.domain.document_collection_exceptions import (
     DuplicateMembershipException,
     UserMembershipNotFoundException,
 )
-from core.permissions import (
+from core.authorization.permissions import (
     ADD_DOCUMENT_COLLECTION_USER,
     LIST_DOCUMENT_COLLECTION_USERS,
     REMOVE_DOCUMENT_COLLECTION_USER,
