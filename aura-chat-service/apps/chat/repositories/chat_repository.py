@@ -1,7 +1,5 @@
 import logging
-
 from django.db.models import Count, Q, QuerySet
-
 from apps.chat.models.chat import Chat
 
 logger = logging.getLogger(__name__)

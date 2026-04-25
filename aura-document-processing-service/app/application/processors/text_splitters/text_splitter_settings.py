@@ -55,6 +55,7 @@ class TextSplitterSettings(BaseSettings):
     def validate_active_splitter_settings(
             self
     ) -> "TextSplitterSettings":
+        self._validate_common()
         if self.active_type == TextSplitterType.recursive:
             self._validate_recursive()
         elif self.active_type == TextSplitterType.huggingface:
@@ -62,6 +63,12 @@ class TextSplitterSettings(BaseSettings):
         elif self.active_type == TextSplitterType.markdown_processor:
             self._validate_markdown_processor()
         return self
+
+    def _validate_common(
+            self
+    ) -> None:
+        if self.max_text_length < min(self.recursive_split_size, self.markdown_processor_split_size):
+            raise ValueError("max_text_length must be greater than or equal to configured split sizes.")
 
     def _validate_huggingface(
             self
@@ -71,6 +78,8 @@ class TextSplitterSettings(BaseSettings):
             raise ValueError("The Hugging Face model name cannot be empty.")
 
         self.huggingface_model = self.huggingface_model.strip()
+        if self.huggingface_breakpoint_threshold_amount is not None and self.huggingface_breakpoint_threshold_amount <= 0:
+            raise ValueError("The Hugging Face breakpoint threshold amount must be greater than zero.")
 
     def _validate_recursive(
             self

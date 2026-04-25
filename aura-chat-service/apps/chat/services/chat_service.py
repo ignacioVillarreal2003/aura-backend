@@ -1,5 +1,4 @@
 import logging
-
 from django.db import transaction
 from django.db.models import QuerySet
 
@@ -13,10 +12,9 @@ logger = logging.getLogger(__name__)
 
 
 class ChatService:
-
     @transaction.atomic
     def create_chat(self, user: AuthenticatedUser, name: str, **kwargs) -> Chat:
-        chat = chat_repository.create(name=name, created_by=user.id, **kwargs)
+        chat = chat_repository.create(name=name, created_by=user.id)
 
         membership_repository.create(
             member_id=user.id,

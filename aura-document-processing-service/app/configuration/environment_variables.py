@@ -23,6 +23,11 @@ class EnvironmentVariables(BaseSettings):
     cors_origins: list[str] = Field(default=["*"])
     environment: str = Field(default="development")
     service_api_key: str = Field(default="service_api_key")
+    create_document_max_upload_bytes: int = Field(
+        default=50 * 1024 * 1024,
+        ge=1024,
+        le=2 * 1024 * 1024 * 1024,
+    )
 
     @field_validator(
         "log_level"

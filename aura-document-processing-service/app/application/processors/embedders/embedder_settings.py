@@ -95,6 +95,8 @@ class EmbedderSettings(BaseSettings):
     ):
         if self.retry_max_delay < self.retry_delay:
             raise ValueError("The maximum retry delay must be greater than or equal to the initial retry delay.")
+        if self.max_batch_size > 1 and self.max_text_length < 32:
+            raise ValueError("max_text_length is too low for batched embeddings.")
 
     def _validate_ollama(
             self
@@ -109,6 +111,8 @@ class EmbedderSettings(BaseSettings):
             raise ValueError("The Ollama URL must start with http:// or https://.")
 
         self.ollama_url = self.ollama_url.rstrip("/")
+        if not self.ollama_url:
+            raise ValueError("The Ollama URL cannot be empty.")
 
     def _validate_huggingface(
             self
@@ -118,3 +122,5 @@ class EmbedderSettings(BaseSettings):
             raise ValueError("The Hugging Face model name cannot be empty.")
 
         self.huggingface_model = self.huggingface_model.strip()
+        if self.huggingface_device == "cuda" and self.active_type != EmbedderType.huggingface:
+            raise ValueError("huggingface_device can only be configured when active_type is huggingface.")

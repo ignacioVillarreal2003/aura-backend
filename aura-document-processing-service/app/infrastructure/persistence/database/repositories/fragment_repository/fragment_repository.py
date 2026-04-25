@@ -5,7 +5,7 @@ from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.models.fragment import Fragment
+from app.infrastructure.persistence.database.orm.fragment import Fragment
 from app.infrastructure.persistence.database.repositories.database_exceptions import (
     DatabaseConstraintViolationException,
     DatabaseException,

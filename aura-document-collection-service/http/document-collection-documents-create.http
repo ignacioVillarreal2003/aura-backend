@@ -1,0 +1,59 @@
+@host = http://localhost:8000
+@token = replace_with_valid_jwt
+@documentCollectionId = 1
+
+### Vincular un documento a la colección
+# Hace: crea el enlace entre la colección y el `document_id` indicado.
+# Devuelve: 201 y el objeto del enlace en JSON.
+
+POST {{host}}/api/v1/document-collections/{{documentCollectionId}}/documents/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "document_id": 500
+}
+
+###
+
+### Vincular documento — otro document_id
+# Hace: enlaza otro documento a la misma colección.
+# Devuelve: 201 y el enlace creado, o 4xx si el documento no existe o ya está vinculado.
+
+POST {{host}}/api/v1/document-collections/1/documents/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "document_id": 999999
+}
+
+###
+
+### Vincular documento — error de validación (document_id inválido)
+# Hace: envía `document_id` 0, fuera del rango permitido.
+# Devuelve: 400 con errores de validación en JSON.
+
+POST {{host}}/api/v1/document-collections/1/documents/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "document_id": 0
+}
+
+###
+
+### Vincular documento — cuerpo sin document_id (caso negativo)
+# Hace: POST sin el campo obligatorio.
+# Devuelve: 400 JSON de validación DRF.
+
+POST {{host}}/api/v1/document-collections/1/documents/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{}

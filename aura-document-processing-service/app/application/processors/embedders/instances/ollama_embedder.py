@@ -63,15 +63,12 @@ class OllamaEmbedder(BaseEmbedder):
                 self._model.embed_documents
             )
 
-            probe = self._embed_query_with_retry("probe")
-            dimensions = len(probe)
-
             logger.info(
                 "The Ollama embedder was initialized successfully.",
                 extra={
                     "model": self._settings.ollama_model,
                     "url": self._settings.ollama_url,
-                    "dimensions": dimensions,
+                    "dimensions": self._settings.vector_dimension,
                     "max_batch_size": self._settings.max_batch_size,
                     "timeout": self._settings.ollama_request_timeout,
                     "max_retries": self._settings.max_retries,

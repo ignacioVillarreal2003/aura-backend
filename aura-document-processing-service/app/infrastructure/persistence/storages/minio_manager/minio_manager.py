@@ -4,7 +4,7 @@ import time
 from datetime import timedelta
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any, AsyncIterator, Awaitable, Callable, Optional
 import urllib3
 from fastapi import HTTPException, Request, status
 from minio import Minio
@@ -187,6 +187,49 @@ class MinioManager(MinioManagerInterface):
             object_name: str
     ) -> bytes:
         return await self._download_data_retried(bucket_name, object_name)
+
+    async def download_data_stream(
+            self,
+            bucket_name: str,
+            object_name: str,
+            chunk_size: int,
+    ) -> AsyncIterator[bytes]:
+        client = self.client
+        response = None
+        try:
+            response = await asyncio.to_thread(client.get_object, bucket_name, object_name)
+            while True:
+                chunk = await asyncio.to_thread(response.read, chunk_size)
+                if not chunk:
+                    break
+                yield chunk
+        except S3Error as e:
+            logger.error(
+                "S3 error while streaming object data.",
+                extra={
+                    "bucket": bucket_name,
+                    "s3_error_code": e.code,
+                    "object_key_suffix": object_name[
+                        -self._settings.object_key_log_suffix_chars:
+                    ] if object_name else ""
+                }
+            )
+            raise MinioDownloadException("Failed to stream the object.") from e
+        except (InvalidResponseError, Urllib3HTTPError, OSError) as e:
+            logger.exception(
+                "Transport error while streaming object data.",
+                extra={
+                    "bucket": bucket_name,
+                    "object_key_suffix": object_name[
+                        -self._settings.object_key_log_suffix_chars:
+                    ] if object_name else ""
+                },
+            )
+            raise MinioDownloadException("Failed to stream the object.") from e
+        finally:
+            if response is not None:
+                await asyncio.to_thread(response.close)
+                await asyncio.to_thread(response.release_conn)
 
     async def delete_object(
             self,

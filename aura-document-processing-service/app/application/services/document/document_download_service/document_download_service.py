@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import AsyncIterator, Optional
 from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,7 +18,7 @@ from app.application.services.document.document_download_service.interfaces.docu
     DocumentDownloadServiceInterface
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.constants.document_processing_permissions import DocumentProcessingPermissions
+from app.application.authorization.permissions import Permissions
 from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
     DocumentRepositoryInterface
 )
@@ -51,7 +51,7 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
             document_id: int,
             database_session: AsyncSession,
             authenticated_user: AuthenticatedUser
-    ) -> tuple[bytes, str, str]:
+    ) -> tuple[AsyncIterator[bytes], str, str]:
         logger.info(
             "Document download was initiated.",
             extra={
@@ -65,7 +65,7 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
                 raise DocumentDownloadInvalidRequestException("The document identifier must be a positive number.")
             self._authorizer.require_permissions(
                 authenticated_user=authenticated_user,
-                required_permissions=frozenset({DocumentProcessingPermissions.DOWNLOAD_DOCUMENT}),
+                required_permissions=frozenset({Permissions.DOWNLOAD_DOCUMENT}),
             )
 
             document = await self._document_repository.get_document_by_id(
@@ -80,8 +80,9 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
                 raise DocumentDownloadNotFoundException("The document was not found.")
 
             try:
-                content = await self._document_storage.download_document(
-                    object_name=document.storage_url
+                content_stream = self._document_storage.download_document_stream(
+                    object_name=document.storage_url,
+                    chunk_size=self._settings.download_chunk_size_bytes,
                 )
             except DocumentNotFoundException as e:
                 raise DocumentDownloadNotFoundException(
@@ -97,11 +98,11 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
                 extra={
                     "document_id": document_id,
                     "user_id": authenticated_user.id,
-                    "size_bytes": len(content)
+                    "chunk_size_bytes": self._settings.download_chunk_size_bytes
                 }
             )
 
-            return content, document.name, document.mime_type.value
+            return content_stream, document.name, document.mime_type.value
 
         except (
                 DocumentDownloadInvalidRequestException,

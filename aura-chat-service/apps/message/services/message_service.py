@@ -22,8 +22,6 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class DocumentQuestionRunResult:
-    """LLM output plus optional persisted assistant row."""
-
     question: str
     answer: str
     fragments: list[dict[str, Any]]

@@ -8,7 +8,6 @@ logger = logging.getLogger(__name__)
 
 
 class MessageRepository:
-
     @staticmethod
     def create(
         chat_id: int,

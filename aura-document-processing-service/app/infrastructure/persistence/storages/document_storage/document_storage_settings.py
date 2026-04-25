@@ -202,20 +202,21 @@ class DocumentStorageSettings(BaseSettings):
             now = datetime.now(timezone.utc)
             parts += [str(now.year), f"{now.month:02d}", f"{now.day:02d}"]
 
+        unique_suffix = uuid.uuid4().hex
         if document_id:
-            stem = document_id
+            sanitized_document_id = "".join(c for c in document_id if c.isalnum() or c in ("-", "_")) or "doc"
+            stem = f"{sanitized_document_id}_{unique_suffix[:12]}"
         elif self.preserve_original_filename_as_stem:
             raw_stem = Path(original_filename).stem
             sanitised = "".join(c for c in raw_stem if c.isalnum() or c in ("-", "_"))
             max_stem = max(0, self.max_object_stem_length - len(ext))
             sanitised = sanitised[:max_stem] or uuid.uuid4().hex
-            stem = (
-                f"{uuid.uuid4().hex[:8]}_{sanitised}"
-                if self.uuid_prefix_on_preserved_stem
-                else sanitised
-            )
+            if self.uuid_prefix_on_preserved_stem:
+                stem = f"{unique_suffix[:8]}_{sanitised}"
+            else:
+                stem = f"{sanitised}_{unique_suffix[:8]}"
         else:
-            stem = str(uuid.uuid4())
+            stem = unique_suffix
 
         return "/".join(parts + [f"{stem}{ext}"])
 

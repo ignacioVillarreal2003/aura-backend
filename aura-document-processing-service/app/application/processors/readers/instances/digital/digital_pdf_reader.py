@@ -14,7 +14,6 @@ from app.application.processors.readers.reader_settings import ReaderSettings
 
 logger = logging.getLogger(__name__)
 
-_PDF_MAGIC = b"%PDF"
 _CAN_HANDLE_PAGES_TO_PROBE = 3
 
 
@@ -36,9 +35,6 @@ class DigitalPDFReader(BaseReader):
             file_path: Path
     ) -> bool:
         if file_path.suffix.lower() != ".pdf":
-            return False
-
-        if not self._check_magic_bytes(file_path, _PDF_MAGIC, 5):
             return False
 
         try:
@@ -79,7 +75,6 @@ class DigitalPDFReader(BaseReader):
             file_path: Path
     ) -> str:
         self._validate_file_exists(file_path)
-        self._validate_file_size(file_path)
 
         logger.info(
             "Reading a digital PDF.",

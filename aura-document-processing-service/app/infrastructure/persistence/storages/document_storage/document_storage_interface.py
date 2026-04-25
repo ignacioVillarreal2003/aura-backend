@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import Any, AsyncIterator, Optional
 from fastapi import UploadFile
 
 
@@ -20,10 +20,29 @@ class DocumentStorageInterface(ABC):
         pass
 
     @abstractmethod
+    async def upload_document_from_path(
+            self,
+            file_path: str,
+            original_filename: str,
+            document_id: Optional[str] = None,
+            additional_metadata: Optional[dict[str, str]] = None,
+            content_type: Optional[str] = None,
+    ) -> str:
+        pass
+
+    @abstractmethod
     async def download_document(
             self,
             object_name: str
     ) -> bytes:
+        pass
+
+    @abstractmethod
+    async def download_document_stream(
+            self,
+            object_name: str,
+            chunk_size: int,
+    ) -> AsyncIterator[bytes]:
         pass
 
     @abstractmethod

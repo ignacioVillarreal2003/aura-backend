@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import Any, AsyncIterator, Optional
 from minio import Minio
 
 
@@ -74,6 +74,15 @@ class MinioManagerInterface(ABC):
             bucket_name: str,
             object_name: str
     ) -> bytes:
+        pass
+
+    @abstractmethod
+    async def download_data_stream(
+            self,
+            bucket_name: str,
+            object_name: str,
+            chunk_size: int,
+    ) -> AsyncIterator[bytes]:
         pass
 
     @abstractmethod

@@ -1,20 +1,13 @@
-from fastapi import Form
 from pydantic import BaseModel, Field
 
-MAX_ID = 2_147_483_647
+from app.domain.field_limits import MAX_ID
+from app.domain.types import ChatId
 
 
 class CreateDocumentRequest(BaseModel):
-    chat_id: int = Field(..., gt=0, le=MAX_ID)
-    prefer_docling: bool = Field(default=False)
+    chat_id: ChatId = Field(..., gt=0, le=MAX_ID)
+    prefer_docling: bool = False
 
-    @classmethod
-    def as_form(
-            cls,
-            chat_id: int = Form(...),
-            prefer_docling: bool = Form(False)
-    ):
-        return cls(
-            chat_id=chat_id,
-            prefer_docling=prefer_docling
-        )
+    model_config = {
+        "frozen": True
+    }

@@ -7,8 +7,8 @@ class DocumentStorageException(AppException):
 
 
 class DocumentValidationException(DocumentStorageException):
-    def __init__(self, message: str) -> None:
-        super().__init__(message, status_code=400)
+    def __init__(self, message: str, *, status_code: int = 400) -> None:
+        super().__init__(message, status_code=status_code)
 
 
 class DocumentExtensionException(DocumentValidationException):
@@ -17,7 +17,7 @@ class DocumentExtensionException(DocumentValidationException):
 
 class DocumentSizeLimitException(DocumentValidationException):
     def __init__(self, message: str) -> None:
-        super(DocumentValidationException, self).__init__(message, status_code=413)
+        super().__init__(message, status_code=413)
 
 
 class DocumentUploadException(DocumentStorageException):

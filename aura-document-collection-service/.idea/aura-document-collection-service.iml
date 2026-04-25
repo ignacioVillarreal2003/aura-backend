@@ -16,7 +16,7 @@
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.13 virtualenv at C:\Users\ignac\Desktop\AURA\aura-backend\aura-document-collection-service\.venv" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.13 (aura-document-collection-service)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
   <component name="TemplatesService">

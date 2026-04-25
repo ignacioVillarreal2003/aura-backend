@@ -3,6 +3,7 @@ from typing import Optional
 from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.authorization.permissions import Permissions
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
 from app.application.services.fragment.fragment_query_service.exceptions.fragment_query_service_exception import (
     FragmentQueryEmbeddingException,
@@ -22,7 +23,6 @@ from app.application.services.fragment.fragment_query_service.fragment_query_ser
 from app.application.services.fragment.fragment_query_service.interfaces.fragment_query_service_interface import (
     FragmentQueryServiceInterface
 )
-from app.domain.constants.document_processing_permissions import DocumentProcessingPermissions
 from app.domain.dtos.fragment.fragment_query.documents_context_fragments_request import (
     DocumentsContextFragmentsRequest
 )
@@ -31,7 +31,8 @@ from app.domain.dtos.fragment.fragment_query.question_context_fragments_request 
     QuestionContextFragmentsRequest
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.models import Document, Fragment
+from app.infrastructure.persistence.database.orm.document import Document
+from app.infrastructure.persistence.database.orm.fragment import Fragment
 from app.infrastructure.persistence.database.repositories.document_collection_repository.document_collection_repository_interface import (
     DocumentCollectionRepositoryInterface
 )
@@ -104,7 +105,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             self._authorizer.require_permissions(
                 authenticated_user=authenticated_user,
                 required_permissions=frozenset({
-                    DocumentProcessingPermissions.LIST_CONTEXT_FRAGMENTS_BY_QUESTION,
+                    Permissions.LIST_CONTEXT_FRAGMENTS_BY_QUESTION,
                 }),
             )
 
@@ -228,7 +229,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             self._authorizer.require_permissions(
                 authenticated_user=authenticated_user,
                 required_permissions=frozenset({
-                    DocumentProcessingPermissions.LIST_CONTEXT_FRAGMENTS_BY_DOCUMENTS,
+                    Permissions.LIST_CONTEXT_FRAGMENTS_BY_DOCUMENTS,
                 }),
             )
 

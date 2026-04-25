@@ -64,16 +64,13 @@ class HuggingFaceEmbedder(BaseEmbedder):
                 self._model.embed_documents
             )
 
-            probe = self._embed_query_with_retry("probe")
-            dimensions = len(probe)
-
             logger.info(
                 "The Hugging Face embedder was initialized successfully.",
                 extra={
                     "model": self._settings.huggingface_model,
                     "device": self._settings.huggingface_device,
                     "normalize": self._settings.huggingface_normalize_embeddings,
-                    "dimensions": dimensions,
+                    "dimensions": self._settings.vector_dimension,
                     "max_batch_size": self._settings.max_batch_size,
                     "max_retries": self._settings.max_retries,
                     "circuit_breaker_threshold": self._settings.circuit_breaker_threshold

@@ -4,7 +4,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.constants.document.document_type import DocumentType
-from app.domain.models.document import Document
+from app.infrastructure.persistence.database.orm.document import Document
 
 
 class DocumentRepositoryInterface(ABC):
@@ -43,12 +43,12 @@ class DocumentRepositoryInterface(ABC):
     async def get_documents(
             self,
             database_session: AsyncSession,
-            page: Optional[int] = None,
-            size: Optional[int] = None,
+            page: int,
+            size: int,
             name: Optional[str] = None,
             description: Optional[str] = None,
             category: Optional[str] = None,
-            type: Optional[DocumentType] = None,
+            document_type: Optional[DocumentType] = None,
             created_from: Optional[datetime] = None,
             created_to: Optional[datetime] = None
     ) -> list[Document]:

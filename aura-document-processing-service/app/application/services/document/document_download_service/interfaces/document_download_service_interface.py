@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import AsyncIterator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.authentication.authenticated_user import AuthenticatedUser
@@ -11,5 +12,5 @@ class DocumentDownloadServiceInterface(ABC):
             document_id: int,
             database_session: AsyncSession,
             authenticated_user: AuthenticatedUser
-    ) -> tuple[bytes, str, str]:
+    ) -> tuple[AsyncIterator[bytes], str, str]:
         pass

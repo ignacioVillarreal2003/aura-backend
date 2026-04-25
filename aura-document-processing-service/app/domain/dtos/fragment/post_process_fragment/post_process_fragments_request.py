@@ -1,11 +1,10 @@
 from pydantic import BaseModel, Field, model_validator
 
-MAX_DOCUMENT_IDS = 500
-MAX_ID = 2_147_483_647
+from app.domain.field_limits import MAX_ID, MAX_POST_PROCESS_FRAGMENTS_DOCUMENT_IDS
 
 
 class PostProcessFragmentsRequest(BaseModel):
-    document_ids: list[int] = Field(..., min_length=1, max_length=MAX_DOCUMENT_IDS)
+    document_ids: list[int] = Field(..., min_length=1, max_length=MAX_POST_PROCESS_FRAGMENTS_DOCUMENT_IDS)
 
     @model_validator(mode="after")
     def validate_document_ids(self) -> "PostProcessFragmentsRequest":
@@ -14,3 +13,5 @@ class PostProcessFragmentsRequest(BaseModel):
         if len(self.document_ids) != len(set(self.document_ids)):
             raise ValueError("Document identifiers must not contain duplicates.")
         return self
+
+    model_config = {"frozen": True}

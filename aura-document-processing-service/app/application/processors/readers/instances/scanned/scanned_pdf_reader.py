@@ -20,9 +20,6 @@ from app.application.processors.readers.reader_settings import ReaderSettings
 
 logger = logging.getLogger(__name__)
 
-_PDF_MAGIC = b"%PDF"
-
-
 def _ocr_page_worker(
         args: Tuple[bytes, int, str, int],
 ) -> Tuple[int, str, Optional[str]]:
@@ -81,14 +78,13 @@ class ScannedPDFReader(BaseReader):
     ) -> bool:
         if file_path.suffix.lower() != ".pdf":
             return False
-        return self._check_magic_bytes(file_path, _PDF_MAGIC, 5)
+        return True
 
     def read(
             self,
             file_path: Path
     ) -> str:
         self._validate_file_exists(file_path)
-        self._validate_file_size(file_path)
 
         if not self.can_handle(file_path):
             raise UnsupportedScannedPDFFormatException(
@@ -227,35 +223,45 @@ class ScannedPDFReader(BaseReader):
             pages: list[Image.Image]
     ) -> list[str]:
         all_text: list[Optional[str]] = [None] * len(pages)
-        page_args: list[Tuple[bytes, int, str, int]] = []
-
-        for i, page in enumerate(pages):
-            try:
-                buf = io.BytesIO()
-                page.save(buf, format="PNG")
-                page_args.append((
-                    buf.getvalue(),
-                    i,
-                    self._settings.tesseract_lang,
-                    self._settings.tesseract_timeout
-                ))
-            except Exception as e:
-                logger.warning(
-                    "Failed to serialize a page for parallel OCR.",
-                    extra={
-                        "page_num": i + 1,
-                        "exception_type": type(e).__name__
-                    }
-                )
+        max_in_flight = max(1, self._max_workers * 2)
+        next_page_to_submit = 0
 
         with ProcessPoolExecutor(max_workers=self._max_workers) as executor:
-            future_to_page = {
-                executor.submit(_ocr_page_worker, args): args[1]
-                for args in page_args
-            }
+            future_to_page: dict = {}
 
-            for future in as_completed(future_to_page):
-                page_num = future_to_page[future]
+            while next_page_to_submit < len(pages) or future_to_page:
+                while (
+                        next_page_to_submit < len(pages)
+                        and len(future_to_page) < max_in_flight
+                ):
+                    page = pages[next_page_to_submit]
+                    try:
+                        buf = io.BytesIO()
+                        page.save(buf, format="PNG")
+                        payload: Tuple[bytes, int, str, int] = (
+                            buf.getvalue(),
+                            next_page_to_submit,
+                            self._settings.tesseract_lang,
+                            self._settings.tesseract_timeout
+                        )
+                        future = executor.submit(_ocr_page_worker, payload)
+                        future_to_page[future] = next_page_to_submit
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to serialize a page for parallel OCR.",
+                            extra={
+                                "page_num": next_page_to_submit + 1,
+                                "exception_type": type(e).__name__
+                            }
+                        )
+                    finally:
+                        next_page_to_submit += 1
+
+                if not future_to_page:
+                    continue
+
+                future = next(as_completed(future_to_page))
+                page_num = future_to_page.pop(future)
                 try:
                     result_page_num, text, error = future.result(
                         timeout=self._settings.tesseract_timeout + 5

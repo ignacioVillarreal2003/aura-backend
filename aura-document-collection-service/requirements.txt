@@ -1,6 +1,7 @@
 Django==6.0.4
 djangorestframework==3.16.0
 drf-spectacular==0.29.0
+drf-nested-routers==0.94.2
 django-cors-headers==4.7.0
 django-filter==25.1
 psycopg[binary]==3.2.6
@@ -8,3 +9,6 @@ httpx==0.28.1
 python-decouple==3.8
 gunicorn==23.0.0
 python-json-logger==3.3.0
+django-prometheus
+django-redis==5.4.0
+redis==5.2.1

@@ -5,8 +5,8 @@ from typing import Optional
 from fastapi import HTTPException, Request, status
 
 from app.application.authorization.authorizer import Authorizer
-from app.application.coordination.interfaces.post_process_job_progress_store_interface import (
-    PostProcessJobProgressStoreInterface,
+from app.infrastructure.persistence.memory_database.document_post_process_job_progress_store.document_post_process_job_progress_store_interface import (
+    DocumentPostProcessJobProgressStoreInterface,
 )
 from app.application.services.document.post_process_document_service.exceptions.post_process_document_service_exception import (
     PostProcessAlreadyRunningException,
@@ -20,7 +20,7 @@ from app.application.services.document.post_process_document_service.post_proces
     PostProcessDocumentServiceSettings,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.constants.document_processing_permissions import DocumentProcessingPermissions
+from app.application.authorization.permissions import Permissions
 from app.domain.dtos.document.post_process_document.post_process_document_error import PostProcessDocumentError
 from app.domain.dtos.document.post_process_document.post_process_documents_request import PostProcessDocumentsRequest
 from app.domain.dtos.document.post_process_document.post_process_documents_start_response import (
@@ -47,7 +47,7 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
             self,
             database_manager: DatabaseManagerInterface,
             document_repository: DocumentRepositoryInterface,
-            job_progress_store: PostProcessJobProgressStoreInterface,
+            job_progress_store: DocumentPostProcessJobProgressStoreInterface,
             post_process_document_job_publisher: PostProcessDocumentJobPublisherInterface,
             authorizer: Authorizer,
             post_process_document_service_settings: Optional[PostProcessDocumentServiceSettings] = None,
@@ -65,7 +65,7 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
     ) -> PostProcessDocumentsStartResponse:
         self._authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({DocumentProcessingPermissions.POST_PROCESS_DOCUMENTS_START_ALL}),
+            required_permissions=frozenset({Permissions.POST_PROCESS_DOCUMENTS_START_ALL}),
         )
 
         logger.info(
@@ -99,7 +99,7 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
     ) -> PostProcessDocumentsStartResponse:
         self._authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({DocumentProcessingPermissions.POST_PROCESS_DOCUMENTS_START}),
+            required_permissions=frozenset({Permissions.POST_PROCESS_DOCUMENTS_START}),
         )
         if len(post_process_documents_request.document_ids) > self._settings.max_document_ids:
             raise PostProcessDocumentInvalidRequestException(
@@ -125,7 +125,7 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
     ) -> PostProcessDocumentsStatusResponse:
         self._authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({DocumentProcessingPermissions.POST_PROCESS_DOCUMENTS_STATUS}),
+            required_permissions=frozenset({Permissions.POST_PROCESS_DOCUMENTS_STATUS}),
         )
         snapshot = await self._job_progress_store.get_document_job_snapshot()
         return self._document_status_from_snapshot(snapshot)
@@ -136,7 +136,7 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
     ) -> None:
         self._authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({DocumentProcessingPermissions.POST_PROCESS_DOCUMENTS_STOP}),
+            required_permissions=frozenset({Permissions.POST_PROCESS_DOCUMENTS_STOP}),
         )
         snapshot = await self._job_progress_store.get_document_job_snapshot()
         if snapshot is None or not snapshot.get("is_running"):

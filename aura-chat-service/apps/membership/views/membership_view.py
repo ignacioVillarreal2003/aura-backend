@@ -11,7 +11,6 @@ from core.pagination.pagination import StandardPagination
 
 
 class MemberListView(APIView):
-
     @extend_schema(
         tags=["Memberships"],
         summary="List members",
@@ -65,7 +64,6 @@ class MemberListView(APIView):
 
 
 class MemberDetailView(APIView):
-
     @extend_schema(
         tags=["Memberships"],
         summary="Update member status",

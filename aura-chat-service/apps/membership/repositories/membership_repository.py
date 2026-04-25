@@ -9,7 +9,6 @@ logger = logging.getLogger(__name__)
 
 
 class MembershipRepository:
-
     @staticmethod
     def create(member_id: int, chat_id: int, status: str, created_by: int) -> ChatMembership:
         joined_at = timezone.now() if status == "active" else None

@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.models.chat import Chat
+from app.infrastructure.persistence.database.orm.chat import Chat
 from app.infrastructure.persistence.database.repositories.chat_repository.chat_repository_interface import (
     ChatRepositoryInterface,
 )

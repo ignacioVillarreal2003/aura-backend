@@ -25,6 +25,7 @@ def health_check(request):
 
 
 urlpatterns = [
+    path("", include("django_prometheus.urls")),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path(
         "api/docs/",
@@ -37,5 +38,5 @@ urlpatterns = [
         name="redoc",
     ),
     path("api/v1/health", health_check, name="health-check"),
-    path("api/v1/", include("apps.document_collection.urls")),
+    path("api/v1/", include("aura_document_collection_service.api_urls")),
 ]

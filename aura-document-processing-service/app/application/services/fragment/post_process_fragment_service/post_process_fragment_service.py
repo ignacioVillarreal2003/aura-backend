@@ -5,8 +5,8 @@ from typing import Optional
 from fastapi import HTTPException, Request, status
 
 from app.application.authorization.authorizer import Authorizer
-from app.application.coordination.interfaces.post_process_job_progress_store_interface import (
-    PostProcessJobProgressStoreInterface,
+from app.infrastructure.persistence.memory_database.fragment_post_process_job_progress_store.fragment_post_process_job_progress_store_interface import (
+    FragmentPostProcessJobProgressStoreInterface,
 )
 from app.application.services.fragment.post_process_fragment_service.exceptions.post_process_fragment_service_exception import (
     PostProcessFragmentAlreadyRunningException,
@@ -20,7 +20,7 @@ from app.application.services.fragment.post_process_fragment_service.post_proces
     PostProcessFragmentServiceSettings,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.constants.document_processing_permissions import DocumentProcessingPermissions
+from app.application.authorization.permissions import Permissions
 from app.domain.dtos.fragment.post_process_fragment.post_process_fragments_request import PostProcessFragmentsRequest
 from app.domain.dtos.fragment.post_process_fragment.post_process_fragments_start_response import (
     PostProcessFragmentsStartResponse,
@@ -48,7 +48,7 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
             self,
             database_manager: DatabaseManagerInterface,
             fragment_repository: FragmentRepositoryInterface,
-            job_progress_store: PostProcessJobProgressStoreInterface,
+            job_progress_store: FragmentPostProcessJobProgressStoreInterface,
             post_process_fragment_job_publisher: PostProcessFragmentJobPublisherInterface,
             authorizer: Authorizer,
             post_process_fragment_service_settings: Optional[PostProcessFragmentServiceSettings] = None,
@@ -66,7 +66,7 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
     ) -> PostProcessFragmentsStartResponse:
         self._authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({DocumentProcessingPermissions.POST_PROCESS_FRAGMENTS_START_ALL}),
+            required_permissions=frozenset({Permissions.POST_PROCESS_FRAGMENTS_START_ALL}),
         )
 
         logger.info(
@@ -100,7 +100,7 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
     ) -> PostProcessFragmentsStartResponse:
         self._authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({DocumentProcessingPermissions.POST_PROCESS_FRAGMENTS_START}),
+            required_permissions=frozenset({Permissions.POST_PROCESS_FRAGMENTS_START}),
         )
         if len(post_process_fragments_request.document_ids) > self._settings.max_document_ids:
             raise PostProcessFragmentInvalidRequestException(
@@ -140,7 +140,7 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
     ) -> PostProcessFragmentsStatusResponse:
         self._authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({DocumentProcessingPermissions.POST_PROCESS_FRAGMENTS_STATUS}),
+            required_permissions=frozenset({Permissions.POST_PROCESS_FRAGMENTS_STATUS}),
         )
         snapshot = await self._job_progress_store.get_fragment_job_snapshot()
         return self._fragment_status_from_snapshot(snapshot)
@@ -151,7 +151,7 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
     ) -> None:
         self._authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({DocumentProcessingPermissions.POST_PROCESS_FRAGMENTS_STOP}),
+            required_permissions=frozenset({Permissions.POST_PROCESS_FRAGMENTS_STOP}),
         )
         snapshot = await self._job_progress_store.get_fragment_job_snapshot()
         if snapshot is None or not snapshot.get("is_running"):

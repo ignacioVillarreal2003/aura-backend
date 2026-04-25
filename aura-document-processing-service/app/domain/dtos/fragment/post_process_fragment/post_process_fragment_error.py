@@ -1,9 +1,11 @@
 from pydantic import BaseModel, Field
 
-MAX_ID = 2_147_483_647
-MAX_ERROR_MESSAGE_CHARS = 500
+from app.domain.field_limits import MAX_ID, MAX_ERROR_MESSAGE_CHARS
+from app.domain.types import FragmentId
 
 
 class PostProcessFragmentError(BaseModel):
-    fragment_id: int = Field(..., gt=0, le=MAX_ID)
+    fragment_id: FragmentId = Field(..., gt=0, le=MAX_ID)
     error: str = Field(..., min_length=1, max_length=MAX_ERROR_MESSAGE_CHARS)
+
+    model_config = {"frozen": True}

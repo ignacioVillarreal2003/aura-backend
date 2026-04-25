@@ -1,0 +1,4 @@
+from apps.document_collection_documents.serializers.request import AddDocumentToDocumentCollectionRequest
+from apps.document_collection_documents.serializers.response import DocumentInDocumentCollectionResponse
+
+__all__ = ["AddDocumentToDocumentCollectionRequest", "DocumentInDocumentCollectionResponse"]

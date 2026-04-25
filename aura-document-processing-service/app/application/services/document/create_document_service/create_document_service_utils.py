@@ -1,4 +1,3 @@
-import hashlib
 import logging
 from fastapi import UploadFile
 
@@ -45,36 +44,3 @@ class CreateDocumentServiceUtils:
             }
         )
         return mime_type
-
-    async def compute_file_hash(
-            self,
-            file: UploadFile
-    ) -> str:
-        try:
-            hasher = hashlib.sha256()
-            await file.seek(0)
-
-            while chunk := await file.read(self._settings.chunk_size_bytes):
-                hasher.update(chunk)
-
-            await file.seek(0)
-            file_hash = hasher.hexdigest()
-
-            logger.debug(
-                "The file hash was computed.",
-                extra={
-                    "document_filename": file.filename,
-                    "hash_prefix": file_hash[:16]
-                }
-            )
-            return file_hash
-
-        except Exception as e:
-            logger.error(
-                "Failed to compute the file hash.",
-                extra={
-                    "document_filename": file.filename,
-                    "exception_type": type(e).__name__
-                }
-            )
-            raise

@@ -20,20 +20,17 @@ class CreateDocumentServiceSettings(BaseSettings):
     chunk_size_bytes: int = Field(default=65536, ge=4096, le=10_485_760)
     temp_dir_prefix: str = Field(default="doc_uploads")
 
-    deduplication_enabled: bool = Field(default=False)
-    deduplication_window_hours: int = Field(default=24, ge=1, le=168)
-
     allowed_content_types: list[str] = [
         "application/pdf",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document_controllers"
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     ]
     content_type_mapping: dict[str, str] = {
         "application/pdf": "pdf",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document_controllers": "docx"
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx"
     }
     magic_number_validation: dict[str, list[bytes]] = {
         "application/pdf": [b"%PDF"],
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document_controllers": [
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [
             b"PK\x03\x04",
             b"PK\x05\x06",
             b"PK\x07\x08"
