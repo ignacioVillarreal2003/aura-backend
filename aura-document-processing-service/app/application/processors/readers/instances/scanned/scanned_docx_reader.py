@@ -17,7 +17,6 @@ from app.application.processors.readers.reader_settings import ReaderSettings
 
 logger = logging.getLogger(__name__)
 
-_DOCX_MAGIC = b"PK\x03\x04"
 _SUPPORTED_IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".gif"})
 
 
@@ -54,9 +53,6 @@ class ScannedDOCXReader(BaseReader):
         if file_path.suffix.lower() != ".docx":
             return False
 
-        if not self._check_magic_bytes(file_path, _DOCX_MAGIC, 4):
-            return False
-
         return self._has_images(file_path)
 
     def read(
@@ -64,7 +60,6 @@ class ScannedDOCXReader(BaseReader):
             file_path: Path
     ) -> str:
         self._validate_file_exists(file_path)
-        self._validate_file_size(file_path)
 
         if not self.can_handle(file_path):
             raise UnsupportedScannedDOCXFormatException(

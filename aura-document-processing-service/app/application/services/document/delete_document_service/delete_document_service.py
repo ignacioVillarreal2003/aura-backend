@@ -19,8 +19,8 @@ from app.application.services.document.delete_document_service.interfaces.delete
     DeleteDocumentServiceInterface
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.constants.document_processing_permissions import DocumentProcessingPermissions
-from app.domain.models.document import Document
+from app.application.authorization.permissions import Permissions
+from app.infrastructure.persistence.database.orm.document import Document
 from app.infrastructure.persistence.database.repositories.chat_repository.chat_repository_interface import (
     ChatRepositoryInterface,
 )
@@ -69,7 +69,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
                 raise DeleteDocumentInvalidRequestException("The document identifier must be a positive number.")
             self._authorizer.require_permissions(
                 authenticated_user=authenticated_user,
-                required_permissions=frozenset({DocumentProcessingPermissions.SOFT_DELETE_DOCUMENT}),
+                required_permissions=frozenset({Permissions.SOFT_DELETE_DOCUMENT}),
             )
 
             document = await self._get_document_or_raise(document_id, database_session)
@@ -122,12 +122,12 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             if chat_id <= 0:
                 raise DeleteDocumentInvalidRequestException("The chat identifier must be a positive number.")
             if authenticated_user.has_permission(
-                    DocumentProcessingPermissions.SOFT_DELETE_DOCUMENTS_BY_CHAT
+                    Permissions.SOFT_DELETE_DOCUMENTS_BY_CHAT
             ):
                 self._authorizer.require_permissions(
                     authenticated_user=authenticated_user,
                     required_permissions=frozenset({
-                        DocumentProcessingPermissions.SOFT_DELETE_DOCUMENTS_BY_CHAT,
+                        Permissions.SOFT_DELETE_DOCUMENTS_BY_CHAT,
                     }),
                 )
             else:

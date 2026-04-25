@@ -2,7 +2,7 @@ import logging
 
 from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.models import Document
+from app.infrastructure.persistence.database.orm.document import Document
 
 logger = logging.getLogger(__name__)
 

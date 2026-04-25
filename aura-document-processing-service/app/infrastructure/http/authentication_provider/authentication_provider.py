@@ -7,6 +7,7 @@ from fastapi import HTTPException, Request, status
 
 from app.configuration.environment_variables import environment_variables
 from app.domain.authentication.authenticated_user import AuthenticatedUser
+from app.domain.types import UserId
 from app.infrastructure.http.authentication_provider.authentication_provider_settings import (
     AuthenticationProviderSettings
 )
@@ -241,7 +242,7 @@ class AuthenticationProvider(AuthenticationProviderInterface):
             request: Request
     ) -> AuthenticatedUser:
         return AuthenticatedUser(
-            id=user_id,
+            id=UserId(user_id),
             email=email,
             roles=self._parse_comma_list(request.headers.get(_HEADER_USER_ROLES)),
             permissions=self._parse_comma_list(request.headers.get(_HEADER_USER_PERMISSIONS))

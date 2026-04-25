@@ -8,7 +8,7 @@ class TextSplitterException(AppException):
 
 class UnsupportedTextSplitterTypeException(TextSplitterException):
     def __init__(self, message: str) -> None:
-        super().__init__(message, status_code=422)
+        super().__init__(message, status_code=415)
 
 
 class TextSplitterInitializationException(TextSplitterException):

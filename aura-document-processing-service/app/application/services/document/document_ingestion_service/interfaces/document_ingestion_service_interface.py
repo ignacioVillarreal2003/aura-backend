@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from app.domain.models.document import Document
+from app.infrastructure.persistence.database.orm.document import Document
 
 
 class DocumentIngestionServiceInterface(ABC):

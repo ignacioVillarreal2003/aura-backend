@@ -24,12 +24,12 @@ class DocumentQueryServiceInterface(ABC):
             self,
             database_session: AsyncSession,
             authenticated_user: AuthenticatedUser,
-            page: Optional[int] = None,
-            size: Optional[int] = None,
+            page: int,
+            size: int,
             name: Optional[str] = None,
             description: Optional[str] = None,
             category: Optional[str] = None,
-            type: Optional[DocumentType] = None,
+            document_type: Optional[DocumentType] = None,
             created_from: Optional[datetime] = None,
             created_to: Optional[datetime] = None
     ) -> DocumentListResponse:

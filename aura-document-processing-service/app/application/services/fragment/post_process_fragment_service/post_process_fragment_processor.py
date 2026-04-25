@@ -11,7 +11,7 @@ from app.application.services.fragment.post_process_fragment_service.interfaces.
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.fragment.post_process_fragment.post_process_fragment_error import PostProcessFragmentError
-from app.domain.models.fragment import Fragment
+from app.infrastructure.persistence.database.orm.fragment import Fragment
 from app.infrastructure.http.llm_provider.llm_provider_interface import LlmProviderInterface
 from app.infrastructure.persistence.database.database_manager.database_manager_interface import (
     DatabaseManagerInterface,

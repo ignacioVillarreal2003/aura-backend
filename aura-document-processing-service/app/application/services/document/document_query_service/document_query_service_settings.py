@@ -11,6 +11,8 @@ class DocumentQueryServiceSettings(BaseSettings):
         extra="ignore"
     )
 
+    default_page: int = Field(default=1, ge=1, le=1_000_000)
+    default_page_size: int = Field(default=20, ge=1, le=1000)
     max_page_size: int = Field(default=100, ge=1, le=1000)
     max_filter_length: int = Field(default=255, ge=1, le=4000)
 

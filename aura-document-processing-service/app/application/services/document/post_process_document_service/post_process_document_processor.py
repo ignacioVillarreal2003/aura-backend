@@ -9,8 +9,8 @@ from app.application.services.document.post_process_document_service.interfaces.
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.document.post_process_document.post_process_document_error import PostProcessDocumentError
-from app.domain.models.document import Document
-from app.domain.models.fragment import Fragment
+from app.infrastructure.persistence.database.orm.document import Document
+from app.infrastructure.persistence.database.orm.fragment import Fragment
 from app.infrastructure.http.llm_provider.llm_provider_interface import LlmProviderInterface
 from app.infrastructure.http.llm_provider.llm_provider_settings import LlmProviderSettings
 from app.infrastructure.persistence.database.database_manager.database_manager_interface import (

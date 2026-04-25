@@ -16,10 +16,6 @@ from app.application.processors.readers.reader_settings import ReaderSettings
 
 logger = logging.getLogger(__name__)
 
-_PDF_MAGIC = b"%PDF"
-_DOCX_MAGIC = b"PK\x03\x04"
-
-
 class DoclingReader(BaseReader):
     def __init__(
             self,
@@ -67,21 +63,13 @@ class DoclingReader(BaseReader):
             file_path: Path
     ) -> bool:
         suffix = file_path.suffix.lower()
-
-        if suffix == ".pdf":
-            return self._check_magic_bytes(file_path, _PDF_MAGIC, 5)
-
-        if suffix == ".docx":
-            return self._check_magic_bytes(file_path, _DOCX_MAGIC, 4)
-
-        return False
+        return suffix in {".pdf", ".docx"}
 
     def read(
             self,
             file_path: Path
     ) -> str:
         self._validate_file_exists(file_path)
-        self._validate_file_size(file_path)
 
         if not self.can_handle(file_path):
             raise UnsupportedDoclingFormatException("This file format is not supported by the Docling reader.")

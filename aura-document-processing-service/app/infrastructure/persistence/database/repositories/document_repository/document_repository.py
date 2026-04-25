@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.constants.document.document_type import DocumentType
-from app.domain.models.document import Document
+from app.infrastructure.persistence.database.orm.document import Document
 from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
     DocumentRepositoryInterface,
 )
@@ -174,12 +174,12 @@ class DocumentRepository(DocumentRepositoryInterface):
     async def get_documents(
             self,
             database_session: AsyncSession,
-            page: Optional[int] = None,
-            size: Optional[int] = None,
+            page: int,
+            size: int,
             name: Optional[str] = None,
             description: Optional[str] = None,
             category: Optional[str] = None,
-            type: Optional[DocumentType] = None,
+            document_type: Optional[DocumentType] = None,
             created_from: Optional[datetime] = None,
             created_to: Optional[datetime] = None
     ) -> list[Document]:
@@ -192,7 +192,7 @@ class DocumentRepository(DocumentRepositoryInterface):
                     "name_filter_set": name is not None,
                     "description_filter_set": description is not None,
                     "category_filter_set": category is not None,
-                    "type_filter_set": type is not None,
+                    "type_filter_set": document_type is not None,
                     "created_range_set": created_from is not None or created_to is not None,
                 }
             )
@@ -209,17 +209,14 @@ class DocumentRepository(DocumentRepositoryInterface):
                 query = query.where(Document.description.ilike(f"%{description}%"))
             if category is not None:
                 query = query.where(Document.category.ilike(f"%{category}%"))
-            if type is not None:
-                query = query.where(Document.type == type)
+            if document_type is not None:
+                query = query.where(Document.type == document_type)
             if created_from is not None:
                 query = query.where(Document.created_at >= created_from)
             if created_to is not None:
                 query = query.where(Document.created_at <= created_to)
 
-            if page is not None and size is not None:
-                query = query.offset((page - 1) * size).limit(size)
-            elif size is not None:
-                query = query.limit(size)
+            query = query.offset((page - 1) * size).limit(size)
 
             result = await database_session.execute(query)
             documents = list(result.scalars().all())

@@ -1,17 +1,14 @@
 from pydantic import BaseModel, Field, model_validator
 
 from app.domain.dtos.fragment.fragment_query.fragment_response import FragmentResponse
-
-MAX_FRAGMENTS = 1_000
-MAX_TOTAL_CHARS = 300_000
+from app.domain.field_limits import (
+    MAX_FRAGMENTS_IN_LIST,
+    MAX_TOTAL_FRAGMENTS_LIST_CHARS,
+)
 
 
 class FragmentListResponse(BaseModel):
-    fragments: list[FragmentResponse] = Field(default_factory=list, max_length=MAX_FRAGMENTS)
-
-    model_config = {
-        "from_attributes": True
-    }
+    fragments: list[FragmentResponse] = Field(default_factory=list, max_length=MAX_FRAGMENTS_IN_LIST)
 
     @model_validator(mode="after")
     def validate_fragments(self) -> "FragmentListResponse":
@@ -24,15 +21,21 @@ class FragmentListResponse(BaseModel):
         result: list[FragmentResponse] = []
         total_chars = 0
         for fragment in self.fragments:
-            remaining = MAX_TOTAL_CHARS - total_chars
+            remaining = MAX_TOTAL_FRAGMENTS_LIST_CHARS - total_chars
             if remaining <= 0:
                 break
             if len(fragment.content) <= remaining:
                 result.append(fragment)
                 total_chars += len(fragment.content)
             else:
-                result.append(fragment.model_copy(update={"content": fragment.content[:remaining]}))
+                result.append(
+                    fragment.model_copy(update={"content": fragment.content[:remaining]})
+                )
                 break
 
-        self.fragments = result
-        return self
+        return self.model_copy(update={"fragments": result})
+
+    model_config = {
+        "from_attributes": True,
+        "frozen": True,
+    }

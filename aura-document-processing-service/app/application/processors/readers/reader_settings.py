@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from typing import Optional, Literal
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -33,8 +34,21 @@ class ReaderSettings(BaseSettings):
     def validate_reader_settings(
             self
     ) -> "ReaderSettings":
+        self.tesseract_path = self._normalize_optional_path(self.tesseract_path)
+        self.poppler_path = self._normalize_optional_path(self.poppler_path)
+
         if self.tesseract_path is not None:
-            self._validate_tesseract()
+            self._validate_existing_path(self.tesseract_path, "tesseract_path", should_be_file=True)
+
+        if self.poppler_path is not None:
+            self._validate_existing_path(self.poppler_path, "poppler_path", should_be_file=False)
+
+        if self.pdf_use_parallel and self.pdf_max_workers == 1:
+            self.pdf_use_parallel = False
+
+        if self.docling_enabled and self.docling_num_threads < 1:
+            raise ValueError("docling_num_threads must be at least 1 when docling is enabled.")
+
         return self
 
     @property
@@ -42,3 +56,20 @@ class ReaderSettings(BaseSettings):
             self
     ) -> bool:
         return self.tesseract_path is not None
+
+    @staticmethod
+    def _normalize_optional_path(path: Optional[str]) -> Optional[str]:
+        if path is None:
+            return None
+        normalized = path.strip()
+        return normalized or None
+
+    @staticmethod
+    def _validate_existing_path(path: str, field_name: str, *, should_be_file: bool) -> None:
+        candidate = Path(path)
+        if not candidate.exists():
+            raise ValueError(f"{field_name} does not exist: {path}")
+        if should_be_file and not candidate.is_file():
+            raise ValueError(f"{field_name} must point to a file: {path}")
+        if not should_be_file and not candidate.is_dir():
+            raise ValueError(f"{field_name} must point to a directory: {path}")

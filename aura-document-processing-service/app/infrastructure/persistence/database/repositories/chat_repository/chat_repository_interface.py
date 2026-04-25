@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.models.chat import Chat
+from app.infrastructure.persistence.database.orm.chat import Chat
 
 
 class ChatRepositoryInterface(ABC):

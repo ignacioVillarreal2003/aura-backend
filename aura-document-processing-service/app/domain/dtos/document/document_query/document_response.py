@@ -1,25 +1,27 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.domain.constants.document.document_status import DocumentStatus
 from app.domain.constants.document.document_mime_type import DocumentMimeType
+from app.domain.constants.document.document_status import DocumentStatus
 from app.domain.constants.document.document_type import DocumentType
-
-MAX_ID = 2_147_483_647
-MAX_NAME_CHARS = 255
-MAX_DESCRIPTION_CHARS = 2_000
-MAX_STORAGE_URL_CHARS = 1_024
-MIN_FILE_SIZE_BYTES = 1
-MAX_CATEGORY_CHARS = 100
-MAX_PROCESSOR_TYPE_CHARS = 100
-MAX_SPLIT_SIZE = 100_000
-MAX_SPLIT_OVERLAP = 99_999
+from app.domain.field_limits import (
+    MAX_CATEGORY_CHARS,
+    MAX_DESCRIPTION_CHARS,
+    MAX_ID,
+    MAX_NAME_CHARS,
+    MAX_PROCESSOR_TYPE_CHARS,
+    MAX_SPLIT_OVERLAP,
+    MAX_SPLIT_SIZE,
+    MAX_STORAGE_URL_CHARS,
+    MIN_FILE_SIZE_BYTES,
+)
+from app.domain.types import UserId, DocumentId, ChatId
 
 
 class DocumentResponse(BaseModel):
-    id: int = Field(..., gt=0, le=MAX_ID)
-    chat_id: Optional[int] = Field(default=None, gt=0, le=MAX_ID)
+    id: DocumentId = Field(..., gt=0, le=MAX_ID)
+    chat_id: Optional[ChatId] = Field(default=None, gt=0, le=MAX_ID)
     name: str = Field(..., min_length=1, max_length=MAX_NAME_CHARS)
     description: Optional[str] = Field(default=None, min_length=1, max_length=MAX_DESCRIPTION_CHARS)
     mime_type: DocumentMimeType = Field(...)
@@ -35,23 +37,23 @@ class DocumentResponse(BaseModel):
     split_overlap: Optional[int] = Field(default=None, ge=0, le=MAX_SPLIT_OVERLAP)
     processing_started_at: Optional[datetime] = Field(default=None)
     processing_finished_at: Optional[datetime] = Field(default=None)
-    created_by: int = Field(..., gt=0, le=MAX_ID)
+    created_by: UserId = Field(..., gt=0, le=MAX_ID)
     created_at: datetime = Field(...)
-    updated_by: Optional[int] = Field(default=None, gt=0, le=MAX_ID)
+    updated_by: Optional[UserId] = Field(default=None, gt=0, le=MAX_ID)
     updated_at: Optional[datetime] = Field(default=None)
-    deleted_by: Optional[int] = Field(default=None, gt=0, le=MAX_ID)
+    deleted_by: Optional[UserId] = Field(default=None, gt=0, le=MAX_ID)
     deleted_at: Optional[datetime] = Field(default=None)
 
-    model_config = {
-        "from_attributes": True
-    }
+    @field_validator("name", mode="after")
+    @classmethod
+    def name_not_blank(cls, v: str) -> str:
+        s = v.strip()
+        if not s:
+            raise ValueError("name must not be blank.")
+        return s
 
     @model_validator(mode="after")
-    def validate_fields(self) -> "DocumentResponse":
-        self.name = self.name.strip()
-        if not self.name:
-            raise ValueError("name must not be blank.")
-
+    def validate_invariants(self) -> "DocumentResponse":
         if self.split_size is not None and self.split_overlap is not None:
             if self.split_overlap >= self.split_size:
                 raise ValueError("split_overlap must be less than split_size.")
@@ -73,3 +75,8 @@ class DocumentResponse(BaseModel):
             raise ValueError("updated_at and updated_by must both be set or both be absent.")
 
         return self
+
+    model_config = {
+        "from_attributes": True,
+        "frozen": True,
+    }

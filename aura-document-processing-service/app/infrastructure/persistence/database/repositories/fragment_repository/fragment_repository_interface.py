@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.models.fragment import Fragment
+from app.infrastructure.persistence.database.orm.fragment import Fragment
 
 
 class FragmentRepositoryInterface(ABC):

@@ -24,8 +24,8 @@ from app.application.services.document.document_ingestion_service.interfaces.doc
     DocumentIngestionServiceInterface
 )
 from app.domain.constants.document.document_status import DocumentStatus
-from app.domain.models.document import Document
-from app.domain.models.fragment import Fragment
+from app.infrastructure.persistence.database.orm.document import Document
+from app.infrastructure.persistence.database.orm.fragment import Fragment
 from app.infrastructure.persistence.database.database_manager.database_manager_interface import (
     DatabaseManagerInterface
 )
@@ -280,6 +280,12 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                 document.text_cleaner_type = self._cleaner_factory.get_active_type().value
                 document.text_splitter_type = self._splitter_factory.get_active_type().value
                 document.embedder_type = self._embedder_factory.get_active_type().value
+                current_status = (
+                    document.status
+                    if isinstance(document.status, DocumentStatus)
+                    else DocumentStatus(document.status)
+                )
+                current_status.transition_to(DocumentStatus.processed)
                 document.status = DocumentStatus.processed
                 document.processing_finished_at = datetime.now(timezone.utc)
 
@@ -316,6 +322,12 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                 )
 
                 if db_document is not None:
+                    st = (
+                        db_document.status
+                        if isinstance(db_document.status, DocumentStatus)
+                        else DocumentStatus(db_document.status)
+                    )
+                    st.transition_to(DocumentStatus.failed)
                     db_document.status = DocumentStatus.failed
                     db_document.processing_finished_at = datetime.now(timezone.utc)
                     await self._document_repository.update_document(

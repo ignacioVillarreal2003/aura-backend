@@ -30,13 +30,13 @@ from app.application.services.document.create_document_service.interfaces.create
 )
 from app.domain.constants.document.document_mime_type import DocumentMimeType
 from app.domain.constants.document.document_status import DocumentStatus
-from app.domain.constants.document_processing_permissions import DocumentProcessingPermissions
+from app.application.authorization.permissions import Permissions
 from app.domain.dtos.document.create_document.create_document_request import CreateDocumentRequest
 from app.domain.dtos.document.create_document.create_document_response import CreateDocumentResponse
 from app.infrastructure.messaging.rabbitmq.dtos.commands.document_ingestion_command import DocumentIngestionCommand
 from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.models.document import Document
+from app.infrastructure.persistence.database.orm.document import Document
 from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_exception import RabbitMQPublishException
 from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
 from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
@@ -93,7 +93,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
         try:
             self._authorizer.require_permissions(
                 authenticated_user=authenticated_user,
-                required_permissions=frozenset({DocumentProcessingPermissions.INGEST_DOCUMENT}),
+                required_permissions=frozenset({Permissions.INGEST_DOCUMENT}),
             )
 
             try:

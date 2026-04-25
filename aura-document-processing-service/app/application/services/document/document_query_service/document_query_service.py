@@ -9,7 +9,7 @@ from app.application.authorization.exceptions.autorization_exceptions import Una
 from app.application.services.document.document_query_service.document_query_service_settings import (
     DocumentQueryServiceSettings
 )
-from app.domain.constants.document_processing_permissions import DocumentProcessingPermissions
+from app.application.authorization.permissions import Permissions
 from app.domain.constants.document.document_type import DocumentType
 
 from app.application.services.document.document_query_service.exceptions.document_query_service_exception import (
@@ -23,7 +23,7 @@ from app.application.services.document.document_query_service.interfaces.documen
 from app.domain.dtos.document.document_query.document_list_response import DocumentListResponse
 from app.domain.dtos.document.document_query.document_response import DocumentResponse
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.models.document import Document
+from app.infrastructure.persistence.database.orm.document import Document
 from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
     DocumentRepositoryInterface
 )
@@ -62,7 +62,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
                 raise DocumentQueryInvalidRequestException("The document identifier must be a positive number.")
             self._authorizer.require_permissions(
                 authenticated_user=authenticated_user,
-                required_permissions=frozenset({DocumentProcessingPermissions.GET_DOCUMENT}),
+                required_permissions=frozenset({Permissions.GET_DOCUMENT}),
             )
 
             document = await self._get_document_or_raise(document_id, database_session)
@@ -95,16 +95,19 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             self,
             database_session: AsyncSession,
             authenticated_user: AuthenticatedUser,
-            page: Optional[int] = None,
-            size: Optional[int] = None,
+            page: int,
+            size: int,
             name: Optional[str] = None,
             description: Optional[str] = None,
             category: Optional[str] = None,
-            type: Optional[DocumentType] = None,
+            document_type: Optional[DocumentType] = None,
             created_from: Optional[datetime] = None,
             created_to: Optional[datetime] = None
     ) -> DocumentListResponse:
-        has_filters = any(f is not None for f in (name, description, category, type, created_from, created_to))
+        has_filters = any(
+            f is not None
+            for f in (name, description, category, document_type, created_from, created_to)
+        )
 
         logger.info(
             "Fetching the document list was initiated.",
@@ -119,15 +122,14 @@ class DocumentQueryService(DocumentQueryServiceInterface):
         try:
             self._authorizer.require_permissions(
                 authenticated_user=authenticated_user,
-                required_permissions=frozenset({DocumentProcessingPermissions.LIST_DOCUMENTS}),
+                required_permissions=frozenset({Permissions.LIST_DOCUMENTS}),
             )
-            if page is not None and page < 1:
+            if page < 1:
                 raise DocumentQueryInvalidRequestException("The page number must be a positive integer.")
-            if size is not None:
-                if size < 1:
-                    raise DocumentQueryInvalidRequestException("The page size must be a positive integer.")
-                if size > self._settings.max_page_size:
-                    raise DocumentQueryInvalidRequestException("The page size exceeds the maximum allowed value.")
+            if size < 1:
+                raise DocumentQueryInvalidRequestException("The page size must be a positive integer.")
+            if size > self._settings.max_page_size:
+                raise DocumentQueryInvalidRequestException("The page size exceeds the maximum allowed value.")
             for _field_value in (name, description, category):
                 if _field_value is not None and len(_field_value) > self._settings.max_filter_length:
                     raise DocumentQueryInvalidRequestException("A filter value exceeds the maximum allowed length.")
@@ -142,7 +144,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
                     name=name,
                     description=description,
                     category=category,
-                    type=type,
+                    document_type=document_type,
                     created_from=created_from,
                     created_to=created_to
                 )
@@ -203,7 +205,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
                 raise DocumentQueryInvalidRequestException("The chat identifier must be a positive number.")
             self._authorizer.require_permissions(
                 authenticated_user=authenticated_user,
-                required_permissions=frozenset({DocumentProcessingPermissions.LIST_DOCUMENTS_BY_CHAT}),
+                required_permissions=frozenset({Permissions.LIST_DOCUMENTS_BY_CHAT}),
             )
 
             documents = await self._document_repository.get_documents_by_chat_id(

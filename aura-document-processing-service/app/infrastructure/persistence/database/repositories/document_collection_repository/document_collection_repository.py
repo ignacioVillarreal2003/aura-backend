@@ -4,8 +4,9 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.models import DocumentInDocumentCollection, UserInDocumentCollection
-from app.domain.models.document import Document
+from app.infrastructure.persistence.database.orm.document import Document
+from app.infrastructure.persistence.database.orm.document_in_document_collection import DocumentInDocumentCollection
+from app.infrastructure.persistence.database.orm.user_in_document_collection import UserInDocumentCollection
 from app.infrastructure.persistence.database.repositories.document_collection_repository.document_collection_repository_interface import (
     DocumentCollectionRepositoryInterface,
 )

@@ -22,15 +22,15 @@ class CreateDocumentServiceSettings(BaseSettings):
 
     allowed_content_types: list[str] = [
         "application/pdf",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document_controllers"
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     ]
     content_type_mapping: dict[str, str] = {
         "application/pdf": "pdf",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document_controllers": "docx"
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx"
     }
     magic_number_validation: dict[str, list[bytes]] = {
         "application/pdf": [b"%PDF"],
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document_controllers": [
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [
             b"PK\x03\x04",
             b"PK\x05\x06",
             b"PK\x07\x08"

@@ -1,11 +1,11 @@
 from datetime import datetime
 from typing import Optional
+
 from pydantic import BaseModel, Field, model_validator
 
 from app.domain.dtos.document.post_process_document.post_process_document_error import PostProcessDocumentError
-
-MAX_ID = 2_147_483_647
-MAX_ERRORS = 1_000
+from app.domain.field_limits import MAX_ID, MAX_POST_PROCESS_SNAPSHOT_ERRORS
+from app.domain.types import DocumentId
 
 
 class PostProcessDocumentsStatusResponse(BaseModel):
@@ -14,13 +14,15 @@ class PostProcessDocumentsStatusResponse(BaseModel):
     total_documents: int = Field(default=0, ge=0)
     processed_documents: int = Field(default=0, ge=0)
     failed_documents: int = Field(default=0, ge=0)
-    current_document_id: Optional[int] = Field(default=None, gt=0, le=MAX_ID)
+    current_document_id: Optional[DocumentId] = Field(default=None, gt=0, le=MAX_ID)
     started_at: Optional[datetime] = Field(default=None)
     finished_at: Optional[datetime] = Field(default=None)
-    errors: list[PostProcessDocumentError] = Field(default_factory=list, max_length=MAX_ERRORS)
+    errors: list[PostProcessDocumentError] = Field(
+        default_factory=list, max_length=MAX_POST_PROCESS_SNAPSHOT_ERRORS
+    )
 
     @model_validator(mode="after")
-    def validate_fields(self) -> "PostProcessDocumentsStatusResponse":
+    def validate_status_snapshot(self) -> "PostProcessDocumentsStatusResponse":
         if self.processed_documents + self.failed_documents > self.total_documents:
             raise ValueError("processed_documents + failed_documents cannot exceed total_documents.")
         if self.started_at and self.finished_at and self.finished_at < self.started_at:
@@ -30,3 +32,7 @@ class PostProcessDocumentsStatusResponse(BaseModel):
         if not self.is_running and self.current_document_id is not None:
             raise ValueError("current_document_id must be absent when the process is not running.")
         return self
+
+    model_config = {
+        "frozen": True,
+    }
