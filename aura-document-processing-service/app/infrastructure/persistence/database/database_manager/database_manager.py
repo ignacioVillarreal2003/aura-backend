@@ -2,10 +2,10 @@ import asyncio
 import logging
 import time
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator, Optional
+from typing import Any, AsyncIterator, Awaitable, Callable, Optional, TypeVar
 from fastapi import HTTPException, Request, status
 from sqlalchemy import event, text
-from sqlalchemy.exc import DBAPIError, SQLAlchemyError
+from sqlalchemy.exc import DBAPIError, IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
@@ -25,6 +25,9 @@ from app.infrastructure.persistence.database.database_manager.database_manager_i
 logger = logging.getLogger(__name__)
 
 _SQL_DEBUG_LOG_MAX_LENGTH = 240
+_TRANSIENT_SQLSTATES = frozenset({"40P01", "40001"})
+_TRANSIENT_SQLSTATE_PREFIXES = ("08",)
+T = TypeVar("T")
 
 
 class DatabaseManager(DatabaseManagerInterface):
@@ -140,7 +143,6 @@ class DatabaseManager(DatabaseManagerInterface):
         db_session = self._session_factory()
         try:
             yield db_session
-            await db_session.commit()
         except asyncio.CancelledError:
             raise
         except DatabaseNotInitializedException:
@@ -165,6 +167,20 @@ class DatabaseManager(DatabaseManagerInterface):
             except Exception:
                 logger.exception("The session could not be rolled back after an error.")
             raise
+        else:
+                await db_session.commit()
+            except (SQLAlchemyError, OSError) as e:
+                try:
+                    await db_session.rollback()
+                except Exception:
+                    logger.exception("The session could not be rolled back after a failed commit.")
+                raise DatabaseSessionException("A database error occurred while committing the session.") from e
+            except Exception:
+                try:
+                    await db_session.rollback()
+                except Exception:
+                    logger.exception("The session could not be rolled back after a failed commit.")
+                raise
         finally:
             await db_session.close()
 
@@ -225,6 +241,56 @@ class DatabaseManager(DatabaseManagerInterface):
                 "initialized": True,
                 "error": "Health probe failed; see logs for details."
             }
+
+    async def run_write_transaction_with_retry(
+            self,
+            operation: Callable[[AsyncSession], Awaitable[T]],
+            *,
+            operation_name: str,
+    ) -> T:
+        self._ensure_session_factory_ready()
+        assert self._session_factory is not None
+
+        attempt = 0
+        while True:
+            attempt += 1
+            db_session = self._session_factory()
+            try:
+                result = await operation(db_session)
+                await db_session.commit()
+                return result
+            except asyncio.CancelledError:
+                raise
+            except (HTTPException, AppException, IntegrityError):
+                await db_session.rollback()
+                raise
+            except (DBAPIError, SQLAlchemyError, OSError) as e:
+                await db_session.rollback()
+                if self._is_transient_database_error(e) and attempt < self._settings.tx_retry_max_attempts:
+                    delay = min(
+                        self._settings.tx_retry_backoff_max_seconds,
+                        self._settings.tx_retry_backoff_min_seconds * (2 ** (attempt - 1)),
+                    )
+                    logger.warning(
+                        "Retrying write transaction after transient database error.",
+                        extra={
+                            "operation": operation_name,
+                            "attempt": attempt,
+                            "max_attempts": self._settings.tx_retry_max_attempts,
+                            "next_delay_seconds": delay,
+                            "error_type": type(e).__name__,
+                        },
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                raise DatabaseSessionException(
+                    f"A database error occurred while executing transactional operation '{operation_name}'."
+                ) from e
+            except Exception:
+                await db_session.rollback()
+                raise
+            finally:
+                await db_session.close()
 
     async def __aenter__(
             self
@@ -372,6 +438,32 @@ class DatabaseManager(DatabaseManagerInterface):
         self._engine = None
         self._session_factory = None
         self._is_initialized = False
+
+    def _ensure_session_factory_ready(self) -> None:
+        if not self._is_initialized or not self._session_factory:
+            raise DatabaseNotInitializedException("The database manager is not initialized; call initialize() first.")
+
+    @staticmethod
+    def _is_transient_database_error(error: BaseException) -> bool:
+        if isinstance(error, DBAPIError) and getattr(error, "connection_invalidated", False):
+            return True
+        sql_state = DatabaseManager._extract_sql_state(error)
+        if sql_state is None:
+            return False
+        if sql_state in _TRANSIENT_SQLSTATES:
+            return True
+        return any(sql_state.startswith(prefix) for prefix in _TRANSIENT_SQLSTATE_PREFIXES)
+
+    @staticmethod
+    def _extract_sql_state(error: BaseException) -> Optional[str]:
+        original = getattr(error, "orig", None)
+        for source in (error, original):
+            if source is None:
+                continue
+            sqlstate = getattr(source, "sqlstate", None) or getattr(source, "pgcode", None)
+            if isinstance(sqlstate, str):
+                return sqlstate
+        return None
 
 
 async def get_database_manager(

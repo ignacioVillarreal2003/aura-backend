@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import AsyncIterator, Optional
 from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -51,7 +51,7 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
             document_id: int,
             database_session: AsyncSession,
             authenticated_user: AuthenticatedUser
-    ) -> tuple[bytes, str, str]:
+    ) -> tuple[AsyncIterator[bytes], str, str]:
         logger.info(
             "Document download was initiated.",
             extra={
@@ -80,8 +80,9 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
                 raise DocumentDownloadNotFoundException("The document was not found.")
 
             try:
-                content = await self._document_storage.download_document(
-                    object_name=document.storage_url
+                content_stream = self._document_storage.download_document_stream(
+                    object_name=document.storage_url,
+                    chunk_size=self._settings.download_chunk_size_bytes,
                 )
             except DocumentNotFoundException as e:
                 raise DocumentDownloadNotFoundException(
@@ -97,11 +98,11 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
                 extra={
                     "document_id": document_id,
                     "user_id": authenticated_user.id,
-                    "size_bytes": len(content)
+                    "chunk_size_bytes": self._settings.download_chunk_size_bytes
                 }
             )
 
-            return content, document.name, document.mime_type.value
+            return content_stream, document.name, document.mime_type.value
 
         except (
                 DocumentDownloadInvalidRequestException,

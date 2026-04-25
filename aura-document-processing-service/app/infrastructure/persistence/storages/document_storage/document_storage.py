@@ -2,7 +2,7 @@ import asyncio
 import logging
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, AsyncIterator, Optional
 from fastapi import HTTPException, Request, status, UploadFile
 from minio.error import S3Error
 
@@ -162,6 +162,74 @@ class DocumentStorage(DocumentStorageInterface):
             logger.exception("Failed to upload the document (unexpected error).")
             raise
 
+    async def upload_document_from_path(
+            self,
+            file_path: str,
+            original_filename: str,
+            document_id: Optional[str] = None,
+            additional_metadata: Optional[dict[str, str]] = None,
+            content_type: Optional[str] = None,
+    ) -> str:
+        start_time = time.monotonic()
+        try:
+            if not original_filename:
+                raise DocumentValidationException("Filename cannot be empty.")
+            if "\x00" in file_path:
+                raise DocumentValidationException("Invalid file path: null bytes are not allowed.")
+            if not self._settings.is_extension_allowed(original_filename):
+                allowed = (
+                    ", ".join(self._settings.allowed_file_extensions)
+                    if self._settings.allowed_file_extensions
+                    else "all"
+                )
+                raise DocumentExtensionException(f"File extension not allowed. Permitted: {allowed}")
+
+            file_size = Path(file_path).stat().st_size
+            self._validate_file_size(file_size)
+            object_name = self._settings.generate_object_name(
+                original_filename=original_filename,
+                document_id=document_id,
+            )
+            try:
+                metadata = self._settings.build_upload_object_metadata(
+                    original_filename=original_filename,
+                    document_id=document_id,
+                    additional_metadata=additional_metadata,
+                    upload_timestamp_seconds=int(time.time()),
+                )
+            except ValueError as e:
+                raise DocumentValidationException(str(e)) from e
+
+            await self._minio_manager.upload_file(
+                bucket_name=self._bucket_name,
+                object_name=object_name,
+                file_path=file_path,
+                content_type=(content_type if self._settings.send_content_type_header else None),
+                metadata=metadata,
+            )
+            elapsed_ms = round((time.monotonic() - start_time) * 1000, 2)
+            logger.info(
+                "The document was uploaded from file path successfully.",
+                extra={
+                    "bucket": self._bucket_name,
+                    "object_key_suffix": object_name[-self._settings.object_key_log_suffix_chars:] if object_name else "",
+                    "size_bytes": file_size,
+                    "elapsed_ms": elapsed_ms,
+                },
+            )
+            return object_name
+        except (DocumentValidationException, DocumentExtensionException, DocumentSizeLimitException):
+            raise
+        except asyncio.CancelledError:
+            raise
+        except (MinioManagerException, OSError) as e:
+            raise DocumentUploadException("Failed to upload the document.") from e
+        except AppException:
+            raise
+        except Exception:
+            logger.exception("Failed to upload the document from file path (unexpected error).")
+            raise
+
     async def download_document(
             self,
             object_name: str
@@ -206,6 +274,33 @@ class DocumentStorage(DocumentStorageInterface):
 
         except Exception:
             logger.exception("Failed to download the document (unexpected error).")
+            raise
+
+    async def download_document_stream(
+            self,
+            object_name: str,
+            chunk_size: int,
+    ) -> AsyncIterator[bytes]:
+        try:
+            _validate_object_storage_key_fragment(object_name, label="object name")
+            async for chunk in self._minio_manager.download_data_stream(
+                    bucket_name=self._bucket_name,
+                    object_name=object_name,
+                    chunk_size=chunk_size,
+            ):
+                yield chunk
+        except MinioDownloadException as e:
+            if self._is_not_found_error(e):
+                raise DocumentNotFoundException("The document was not found.") from e
+            raise DocumentDownloadException("Failed to download the document.") from e
+        except asyncio.CancelledError:
+            raise
+        except (MinioManagerException, OSError) as e:
+            raise DocumentDownloadException("Failed to download the document.") from e
+        except AppException:
+            raise
+        except Exception:
+            logger.exception("Failed to stream the document (unexpected error).")
             raise
 
     async def download_document_to_file(

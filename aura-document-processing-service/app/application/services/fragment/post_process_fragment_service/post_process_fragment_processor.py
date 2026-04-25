@@ -174,7 +174,7 @@ class PostProcessFragmentProcessor(PostProcessFragmentProcessorInterface):
             authenticated_user=user,
         )
 
-        async with self._database_manager.session() as session:
+        async def _operation(session):
             result = await session.execute(
                 select(Fragment).where(
                     Fragment.id == fragment_id,
@@ -193,7 +193,11 @@ class PostProcessFragmentProcessor(PostProcessFragmentProcessorInterface):
                 fragment=fragment,
                 database_session=session,
             )
-            await session.commit()
+
+        await self._database_manager.run_write_transaction_with_retry(
+            _operation,
+            operation_name="post_process_fragment.update_fragment_metadata",
+        )
 
         logger.info(
             "Fragment metadata was updated after enrichment.",

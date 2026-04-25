@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,3 +10,5 @@ class DocumentDownloadServiceSettings(BaseSettings):
         case_sensitive=False,
         extra="ignore"
     )
+
+    download_chunk_size_bytes: int = Field(default=262_144, ge=16_384, le=4_194_304)

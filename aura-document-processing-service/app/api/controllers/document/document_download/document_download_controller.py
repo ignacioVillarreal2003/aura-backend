@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.controllers.document.document_download.download_document_controller_interface import (
@@ -25,17 +26,17 @@ class DocumentDownloadController(DocumentDownloadControllerInterface):
             database_session: AsyncSession = Depends(get_database_session),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
             _rl: None = Depends(default_rate_limit),
-    ) -> Response:
-        content, filename, mime_type = await document_download_service.download_document(
+    ) -> StreamingResponse:
+        content_stream, filename, mime_type = await document_download_service.download_document(
             document_id=document_id,
             database_session=database_session,
             authenticated_user=authenticated_user,
         )
-        return Response(
-            content=content,
+        return StreamingResponse(
+            content=content_stream,
             media_type=mime_type,
             headers={
-                "Content-Disposition": filename,
+                "Content-Disposition": f"attachment; filename=\"{filename}\"",
             },
         )
 
@@ -59,7 +60,7 @@ router.add_api_route(
     "/document/{document_id}/download",
     document_download_controller.download_document,
     methods=["GET"],
-    response_class=Response,
+    response_class=StreamingResponse,
     operation_id="downloadDocument",
     summary="Descargar documento",
     description="Devuelve el archivo del documento con su tipo MIME.",

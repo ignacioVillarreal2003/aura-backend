@@ -271,7 +271,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             fragments: list[Fragment]
     ) -> None:
         try:
-            async with self._database_manager.session() as database_session:
+            async def _operation(database_session):
                 await self._fragment_repository.create_fragments(
                     fragments=fragments,
                     database_session=database_session
@@ -293,6 +293,10 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                     document=document,
                     database_session=database_session,
                 )
+            await self._database_manager.run_write_transaction_with_retry(
+                _operation,
+                operation_name="document_ingestion.persist_fragments_and_update_document",
+            )
 
             logger.info(
                 "Fragments and document status were saved.",
@@ -315,7 +319,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             document: Document
     ) -> None:
         try:
-            async with self._database_manager.session() as database_session:
+            async def _operation(database_session):
                 db_document = await self._document_repository.get_document_by_id(
                     document_id=document.id,
                     database_session=database_session
@@ -334,6 +338,10 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                         document=db_document,
                         database_session=database_session
                     )
+            await self._database_manager.run_write_transaction_with_retry(
+                _operation,
+                operation_name="document_ingestion.mark_document_as_failed",
+            )
 
             logger.info(
                 "The document was marked as failed.",
@@ -378,7 +386,7 @@ async def get_document_ingestion_service(
         request: Request
 ) -> DocumentIngestionServiceInterface:
     try:
-        return request.app.state.ingestion_pipeline
+        return request.app.state.document_ingestion_service
     except AttributeError:
         logger.error("DocumentIngestionService is not registered on the application state.")
         raise HTTPException(

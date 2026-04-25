@@ -37,6 +37,9 @@ class DatabaseManagerSettings(BaseSettings):
     retry_max_attempts: int = Field(default=3, ge=1, le=10)
     retry_backoff_min_seconds: float = Field(default=2.0, gt=0, le=30.0)
     retry_backoff_max_seconds: float = Field(default=10.0, gt=0, le=60.0)
+    tx_retry_max_attempts: int = Field(default=3, ge=1, le=10)
+    tx_retry_backoff_min_seconds: float = Field(default=0.25, gt=0, le=10.0)
+    tx_retry_backoff_max_seconds: float = Field(default=2.0, gt=0, le=30.0)
 
     echo_sql: bool = Field(default=False)
     query_logging_enabled: bool = Field(default=False)
@@ -114,6 +117,8 @@ class DatabaseManagerSettings(BaseSettings):
 
         if self.retry_backoff_min_seconds >= self.retry_backoff_max_seconds:
             raise ValueError("The shortest retry wait must be less than the longest retry wait.")
+        if self.tx_retry_backoff_min_seconds >= self.tx_retry_backoff_max_seconds:
+            raise ValueError("The shortest transaction retry wait must be less than the longest transaction retry wait.")
 
         if self.ssl_enabled:
             mutual_tls = [self.ssl_client_cert_path, self.ssl_client_key_path]

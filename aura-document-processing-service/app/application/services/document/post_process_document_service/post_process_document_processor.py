@@ -150,7 +150,7 @@ class PostProcessDocumentProcessor(PostProcessDocumentProcessorInterface):
             authenticated_user=user,
         )
 
-        async with self._database_manager.session() as session:
+        async def _operation(session):
             document = await self._document_repository.get_document_by_id(
                 document_id=document_id,
                 database_session=session,
@@ -166,7 +166,11 @@ class PostProcessDocumentProcessor(PostProcessDocumentProcessorInterface):
                 document=document,
                 database_session=session,
             )
-            await session.commit()
+
+        await self._database_manager.run_write_transaction_with_retry(
+            _operation,
+            operation_name="post_process_document.update_document_metadata",
+        )
 
         logger.info(
             "Document metadata was updated after classification.",

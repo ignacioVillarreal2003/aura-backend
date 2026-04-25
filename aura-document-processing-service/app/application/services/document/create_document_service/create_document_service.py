@@ -39,6 +39,7 @@ from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.persistence.database.orm.document import Document
 from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_exception import RabbitMQPublishException
 from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
+from app.infrastructure.messaging.rabbitmq.reliable_publish.redis_outbox_lite import RedisOutboxLite
 from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
     DocumentRepositoryInterface
 )
@@ -60,6 +61,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             document_storage: DocumentStorageInterface,
             rabbitmq_manager: RabbitMQManagerInterface,
             authorizer: Authorizer,
+            outbox_lite: Optional[RedisOutboxLite] = None,
             create_document_service_settings: Optional[CreateDocumentServiceSettings] = None,
     ) -> None:
         self._document_repository = document_repository
@@ -67,6 +69,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
         self._rabbitmq_manager = rabbitmq_manager
         self._settings = create_document_service_settings or CreateDocumentServiceSettings()
         self._authorizer = authorizer
+        self._outbox_lite = outbox_lite
         self._utils = CreateDocumentServiceUtils(
             create_document_service_settings=self._settings
         )
@@ -105,6 +108,8 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 document_mime_type: DocumentMimeType = self._utils.get_document_mime_type(
                     raw_document=raw_document
                 )
+            except CreateDocumentValidationException:
+                raise
             except Exception as e:
                 raise CreateDocumentValidationException("The document could not be validated.") from e
 
@@ -112,9 +117,10 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             file_size = temp_path.stat().st_size
 
             try:
-                await raw_document.seek(0)
-                object_name = await self._document_storage.upload_document(
-                    file=raw_document
+                object_name = await self._document_storage.upload_document_from_path(
+                    file_path=str(temp_path),
+                    original_filename=raw_document.filename,
+                    content_type=raw_document.content_type or None,
                 )
                 logger.info(
                     "The document was uploaded to storage.",
@@ -124,6 +130,8 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                     }
                 )
             except DocumentStorageException as e:
+                if 400 <= e.status_code < 500:
+                    raise CreateDocumentValidationException(str(e), status_code=e.status_code) from e
                 raise CreateDocumentUploadException("Failed to upload the document to storage.") from e
 
             now = datetime.now(timezone.utc)
@@ -169,13 +177,23 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             envelope = MessageEnvelope.wrap(command)
 
             try:
-                await self._rabbitmq_manager.publish(
-                    routing_key=self._rabbitmq_manager.settings.document_ingestion_queue,
-                    body=envelope.to_bytes(),
-                    headers={
-                        "message_id": envelope.message_id
-                    }
-                )
+                if self._outbox_lite is not None:
+                    await self._outbox_lite.publish_or_enqueue(
+                        event_id=envelope.message_id,
+                        event_type="document_ingestion",
+                        aggregate_id=str(database_document.id),
+                        routing_key=self._rabbitmq_manager.settings.document_ingestion_queue,
+                        body=envelope.to_bytes(),
+                        headers={"message_id": envelope.message_id},
+                    )
+                else:
+                    await self._rabbitmq_manager.publish(
+                        routing_key=self._rabbitmq_manager.settings.document_ingestion_queue,
+                        body=envelope.to_bytes(),
+                        headers={
+                            "message_id": envelope.message_id
+                        }
+                    )
             except Exception as e:
                 raise RabbitMQPublishException("Failed to enqueue the document for ingestion.") from e
 

@@ -1,5 +1,5 @@
 import logging
-
+from collections.abc import Awaitable, Callable
 from fastapi import FastAPI
 
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
@@ -42,6 +42,8 @@ from app.infrastructure.messaging.rabbitmq.publisher.post_process_document_job_p
 from app.infrastructure.messaging.rabbitmq.publisher.post_process_fragment_job_publisher import (
     PostProcessFragmentJobPublisher,
 )
+from app.infrastructure.messaging.rabbitmq.reliable_publish.outbox_lite_worker import OutboxLiteWorker
+from app.infrastructure.messaging.rabbitmq.reliable_publish.redis_outbox_lite import RedisOutboxLite
 from app.infrastructure.messaging.rabbitmq.rabbitmq_manager import RabbitMQManager
 from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_settings import RabbitMQManagerSettings
 from app.infrastructure.persistence.database.database_manager.database_manager import DatabaseManager
@@ -68,18 +70,87 @@ from app.infrastructure.persistence.storages.minio_manager.minio_manager import 
 
 logger = logging.getLogger(__name__)
 
+_CleanupFn = Callable[[], Awaitable[None]]
+
+
+async def _rollback_partial_startup(
+        *,
+        cleanup_stack: list[tuple[str, _CleanupFn]],
+        app: FastAPI,
+) -> None:
+    while cleanup_stack:
+        name, fn = cleanup_stack.pop()
+        try:
+            await fn()
+        except Exception:
+            logger.exception(
+                "Startup rollback: cleanup step failed (continuing with remaining steps).",
+                extra={"resource": name},
+            )
+    to_clear = [
+        "post_process_fragment_service",
+        "post_process_document_service",
+        "document_download_service",
+        "create_document_service",
+        "delete_document_service",
+        "post_process_fragment_consumer",
+        "post_process_document_consumer",
+        "post_process_fragment_processor",
+        "post_process_document_processor",
+        "outbox_lite_worker",
+        "post_process_fragment_job_publisher",
+        "post_process_document_job_publisher",
+        "llm_provider",
+        "document_ingestion_consumer",
+        "outbox_lite",
+        "rabbitmq_manager",
+        "fragment_job_progress_store",
+        "document_job_progress_store",
+        "redis_client",
+        "document_ingestion_service",
+        "fragment_query_service",
+        "document_query_service",
+        "authorizer",
+        "text_splitter_factory",
+        "text_cleaner_factory",
+        "reader_factory",
+        "embedder_factory",
+        "chat_repository",
+        "document_collection_repository",
+        "fragment_repository",
+        "document_repository",
+        "authentication_provider",
+        "authentication_provider_settings",
+        "http_client",
+        "document_storage",
+        "minio_manager",
+        "db_manager",
+    ]
+    for key in to_clear:
+        if hasattr(app.state, key):
+            try:
+                delattr(app.state, key)
+            except Exception:
+                logger.warning(
+                    "Startup rollback: could not remove app.state attribute.",
+                    extra={"key": key},
+                )
+
 
 async def startup_dependencies(app: FastAPI) -> None:
+    cleanup_stack: list[tuple[str, _CleanupFn]] = []
     try:
         logger.info("Starting up dependencies")
 
         database_manager = DatabaseManager()
         await database_manager.initialize()
         app.state.db_manager = database_manager
+        cleanup_stack.append(("database_manager", database_manager.dispose))
 
         minio_manager = MinioManager()
         await minio_manager.start()
         app.state.minio_manager = minio_manager
+        cleanup_stack.append(("minio_manager", minio_manager.stop))
 
         document_storage = DocumentStorage(minio_manager=minio_manager)
         await document_storage.start()
@@ -88,6 +159,7 @@ async def startup_dependencies(app: FastAPI) -> None:
         http_client = HttpClient()
         await http_client.start()
         app.state.http_client = http_client
+        cleanup_stack.append(("http_client", http_client.stop))
 
         authentication_provider_settings = AuthenticationProviderSettings()
         authentication_provider = AuthenticationProvider(
@@ -154,6 +226,7 @@ async def startup_dependencies(app: FastAPI) -> None:
         redis_client = RedisClient(redis_client_settings=redis_client_settings)
         await redis_client.initialize()
         app.state.redis_client = redis_client
+        cleanup_stack.append(("redis_client", redis_client.dispose))
 
         document_job_progress_store = DocumentPostProcessJobProgressStore(
             redis_client=redis_client.client,
@@ -171,6 +244,14 @@ async def startup_dependencies(app: FastAPI) -> None:
         rabbitmq_manager = RabbitMQManager(rabbit_mq_manager_settings=rabbitmq_manager_settings)
         await rabbitmq_manager.start()
         app.state.rabbitmq_manager = rabbitmq_manager
+        cleanup_stack.append(("rabbitmq_manager", rabbitmq_manager.stop))
+
+        outbox_lite = RedisOutboxLite(
+            redis_client=redis_client.client,
+            rabbitmq_manager=rabbitmq_manager,
+            settings=redis_client_settings,
+        )
+        app.state.outbox_lite = outbox_lite
 
         document_ingestion_consumer = DocumentIngestionConsumer(
             rabbitmq_manager=rabbitmq_manager,
@@ -178,6 +259,7 @@ async def startup_dependencies(app: FastAPI) -> None:
             database_manager=database_manager,
             document_repository=document_repository,
             document_ingestion_service=document_ingestion_service,
+            redis_client=redis_client.client,
         )
         await document_ingestion_consumer.start()
         app.state.document_ingestion_consumer = document_ingestion_consumer
@@ -187,13 +269,26 @@ async def startup_dependencies(app: FastAPI) -> None:
 
         post_process_document_job_publisher = PostProcessDocumentJobPublisher(
             rabbitmq_manager=rabbitmq_manager,
+            outbox_lite=outbox_lite,
         )
         app.state.post_process_document_job_publisher = post_process_document_job_publisher
 
         post_process_fragment_job_publisher = PostProcessFragmentJobPublisher(
             rabbitmq_manager=rabbitmq_manager,
+            outbox_lite=outbox_lite,
         )
         app.state.post_process_fragment_job_publisher = post_process_fragment_job_publisher
+
+        outbox_lite_worker = OutboxLiteWorker(
+            outbox=outbox_lite,
+            database_manager=database_manager,
+            document_job_progress_store=document_job_progress_store,
+            fragment_job_progress_store=fragment_job_progress_store,
+            settings=redis_client_settings,
+        )
+        await outbox_lite_worker.start()
+        app.state.outbox_lite_worker = outbox_lite_worker
+        cleanup_stack.append(("outbox_lite_worker", outbox_lite_worker.stop))
 
         post_process_document_processor = PostProcessDocumentProcessor(
             database_manager=database_manager,
@@ -239,6 +334,7 @@ async def startup_dependencies(app: FastAPI) -> None:
             document_storage=document_storage,
             rabbitmq_manager=rabbitmq_manager,
             authorizer=authorizer,
+            outbox_lite=outbox_lite,
         )
         app.state.create_document_service = create_document_service
 
@@ -268,9 +364,11 @@ async def startup_dependencies(app: FastAPI) -> None:
         app.state.post_process_fragment_service = post_process_fragment_service
 
         logger.info("All dependencies started successfully")
+        cleanup_stack.clear()
 
     except Exception:
-        logger.critical("Error during dependency starting up")
+        logger.critical("Error during dependency starting up; rolling back started resources in reverse order.")
+        await _rollback_partial_startup(cleanup_stack=cleanup_stack, app=app)
         raise
 
 
@@ -278,6 +376,9 @@ async def shutdown_dependencies(app: FastAPI) -> None:
     logger.info("Shutting down dependencies")
 
     state = app.state
+
+    if outbox_lite_worker := getattr(state, "outbox_lite_worker", None):
+        await outbox_lite_worker.stop()
 
     if rabbitmq_manager := getattr(state, "rabbitmq_manager", None):
         await rabbitmq_manager.stop()

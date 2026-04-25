@@ -1,4 +1,5 @@
 import re
+from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -17,6 +18,7 @@ _EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 class AuthenticatedUserResponse(BaseModel):
     id: int = Field(..., ge=1, le=MAX_ID)
     email: str = Field(...)
+    username: Optional[str] = Field(default=None)
     roles: list[str] = Field(default_factory=list, max_length=MAX_ROLES)
     permissions: list[str] = Field(default_factory=list, max_length=MAX_PERMISSIONS)
 
