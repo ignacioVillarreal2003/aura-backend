@@ -164,11 +164,11 @@ class TextSplitterFactory:
 async def get_text_splitter_factory(
         request: Request
 ) -> TextSplitterFactory:
-    try:
-        return request.app.state.text_splitter_factory
-    except AttributeError:
+    factory = getattr(request.app.state, "text_splitter_factory", None)
+    if factory is None:
         logger.error("The text splitter factory was not registered on the application state.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Text splitter factory is not configured"
         )
+    return factory

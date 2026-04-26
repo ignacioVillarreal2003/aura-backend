@@ -165,11 +165,11 @@ class EmbedderFactory:
 async def get_embedder_factory(
         request: Request
 ) -> EmbedderFactory:
-    try:
-        return request.app.state.embedder_factory
-    except AttributeError:
+    factory = getattr(request.app.state, "embedder_factory", None)
+    if factory is None:
         logger.error("The embedder factory was not registered on the application state.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Embedder factory is not configured"
         )
+    return factory
