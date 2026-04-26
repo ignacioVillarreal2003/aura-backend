@@ -1,12 +1,5 @@
 CREATE TYPE user_status AS ENUM ('active', 'inactive');
 
-CREATE TABLE fau_role (
-    id          SERIAL PRIMARY KEY,
-    name        VARCHAR(255)    NOT NULL UNIQUE,
-    description VARCHAR(255)    NOT NULL DEFAULT '',
-    power       INTEGER         UNIQUE
-);
-
 CREATE TABLE auth_user (
     id                      SERIAL PRIMARY KEY,
     username                VARCHAR(255)    NOT NULL UNIQUE,
@@ -22,7 +15,6 @@ CREATE TABLE auth_user (
     last_password_change    TIMESTAMP,
     enabled                 BOOLEAN         NOT NULL DEFAULT TRUE,
     refresh_token           UUID,
-    fau_role_id             INTEGER         REFERENCES fau_role(id) ON DELETE SET NULL,
     created_by              BIGINT          NOT NULL,
     created_at              TIMESTAMP       NOT NULL DEFAULT NOW(),
     updated_by              BIGINT,
@@ -52,21 +44,15 @@ CREATE TABLE auth_user_in_role (
 
 CREATE TABLE permission (
     id          SERIAL PRIMARY KEY,
-    name        VARCHAR(255)    NOT NULL,
+    name        VARCHAR(255)    NOT NULL UNIQUE,
     description VARCHAR(255)
 );
 
 CREATE TABLE permission_in_role (
     id          SERIAL PRIMARY KEY,
     role_id     BIGINT          NOT NULL REFERENCES role(id),
-    permission_id BIGINT        NOT NULL REFERENCES permission(id)
-);
-
-CREATE TABLE permission_in_fau_role (
-    id          SERIAL PRIMARY KEY,
-    fau_role_id BIGINT          NOT NULL REFERENCES fau_role(id),
     permission_id BIGINT        NOT NULL REFERENCES permission(id),
-    CONSTRAINT permission_in_fau_role_unique UNIQUE (fau_role_id, permission_id)
+    CONSTRAINT permission_in_role_unique UNIQUE (role_id, permission_id)
 );
 
 CREATE TABLE audit_log (
@@ -81,11 +67,6 @@ CREATE TABLE audit_log (
     details         JSONB,
     source          VARCHAR(20)     NOT NULL DEFAULT 'admin'
 );
-
-CREATE INDEX audit_log_timestamp_idx    ON audit_log(timestamp DESC);
-CREATE INDEX audit_log_actor_id_idx     ON audit_log(actor_id);
-CREATE INDEX audit_log_entity_type_idx  ON audit_log(entity_type);
-CREATE INDEX audit_log_action_idx       ON audit_log(action);
 
 CREATE TABLE refresh_tokens (
     id          UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -103,222 +84,93 @@ CREATE TABLE refresh_tokens (
     deleted_by  BIGINT
 );
 
+CREATE INDEX audit_log_timestamp_idx    ON audit_log(timestamp DESC);
+CREATE INDEX audit_log_actor_id_idx     ON audit_log(actor_id);
+CREATE INDEX audit_log_entity_type_idx  ON audit_log(entity_type);
+CREATE INDEX audit_log_action_idx       ON audit_log(action);
+
 CREATE INDEX refresh_tokens_user_idx        ON refresh_tokens(user_id);
-CREATE INDEX refresh_tokens_token_idx       ON refresh_tokens(token);
 CREATE INDEX refresh_tokens_is_revoked_idx  ON refresh_tokens(is_revoked);
 CREATE INDEX refresh_tokens_expires_at_idx  ON refresh_tokens(expires_at);
+CREATE INDEX refresh_tokens_user_active_idx ON refresh_tokens (user_id, expires_at)
+    WHERE (NOT is_revoked AND deleted_at IS NULL);
 
+CREATE INDEX auth_user_in_role_user_idx     ON auth_user_in_role (auth_user_id) WHERE (deleted_at IS NULL);
+CREATE INDEX auth_user_in_role_role_idx     ON auth_user_in_role (role_id) WHERE (deleted_at IS NULL);
+CREATE UNIQUE INDEX auth_user_in_role_user_role_active_uq
+    ON auth_user_in_role (auth_user_id, role_id) WHERE (deleted_at IS NULL);
 
--- datos de prueba
+CREATE INDEX audit_log_entity_idx           ON audit_log (entity_type, entity_id);
+CREATE INDEX audit_log_actor_time_idx        ON audit_log (actor_id, timestamp DESC);
 
--- ============================================
--- PERMISOS
--- ============================================
 INSERT INTO permission (name, description) VALUES
--- fau_role
-('FAU_ROLE_CREATE', 'Permite crear registros de fau_role'),
-('FAU_ROLE_GET', 'Permite consultar registros de fau_role'),
-('FAU_ROLE_UPDATE', 'Permite actualizar registros de fau_role'),
-('FAU_ROLE_DELETE', 'Permite eliminar registros de fau_role'),
+    ('INGEST_DOCUMENT', 'Ingerir o subir un documento al pipeline (carga e ingesta)'),
+    ('GET_DOCUMENT', 'Ver el detalle de un documento'),
+    ('LIST_DOCUMENTS', 'Listar documentos en general'),
+    ('LIST_DOCUMENTS_BY_CHAT', 'Listar documentos asociados a un chat'),
+    ('DOWNLOAD_DOCUMENT', 'Descargar el archivo de un documento'),
+    ('SOFT_DELETE_DOCUMENT', 'Eliminar lógicamente (soft delete) un documento'),
+    ('SOFT_DELETE_DOCUMENTS_BY_CHAT', 'Eliminar lógicamente documentos de un chat'),
+    ('POST_PROCESS_DOCUMENTS_START_ALL', 'Iniciar el post-proceso masivo de documentos'),
+    ('POST_PROCESS_DOCUMENTS_START', 'Iniciar el post-proceso de un documento concreto'),
+    ('POST_PROCESS_DOCUMENTS_STATUS', 'Consultar el estado del post-proceso de documentos'),
+    ('POST_PROCESS_DOCUMENTS_STOP', 'Detener el post-proceso de documentos'),
+    ('POST_PROCESS_FRAGMENTS_START_ALL', 'Iniciar el post-proceso masivo de fragmentos'),
+    ('POST_PROCESS_FRAGMENTS_START', 'Iniciar el post-proceso de un fragmento o lote'),
+    ('POST_PROCESS_FRAGMENTS_STATUS', 'Consultar el estado del post-proceso de fragmentos'),
+    ('POST_PROCESS_FRAGMENTS_STOP', 'Detener el post-proceso de fragmentos'),
+    ('LIST_CONTEXT_FRAGMENTS_BY_QUESTION', 'Obtener fragmentos de contexto según una pregunta'),
+    ('LIST_CONTEXT_FRAGMENTS_BY_DOCUMENTS', 'Obtener fragmentos de contexto a partir de documentos'),
+    ('LIST_DOCUMENT_COLLECTIONS', 'Listar conjuntos o grupos de documentos'),
+    ('CREATE_DOCUMENT_COLLECTION', 'Crear un conjunto de documentos'),
+    ('GET_DOCUMENT_COLLECTION', 'Ver el detalle de un conjunto de documentos'),
+    ('UPDATE_DOCUMENT_COLLECTION', 'Modificar un conjunto de documentos'),
+    ('DELETE_DOCUMENT_COLLECTION', 'Eliminar un conjunto de documentos'),
+    ('LIST_DOCUMENT_COLLECTION_USERS', 'Listar usuarios asignados a un conjunto'),
+    ('ADD_DOCUMENT_COLLECTION_USER', 'Añadir un usuario a un conjunto de documentos'),
+    ('REMOVE_DOCUMENT_COLLECTION_USER', 'Quitar un usuario de un conjunto de documentos'),
+    ('LIST_DOCUMENT_COLLECTION_DOCUMENTS', 'Listar documentos incluidos en un conjunto'),
+    ('ADD_DOCUMENT_COLLECTION_DOCUMENT', 'Añadir un documento a un conjunto'),
+    ('REMOVE_DOCUMENT_COLLECTION_DOCUMENT', 'Quitar un documento de un conjunto');
 
--- auth_user
-('AUTH_USER_CREATE', 'Permite crear registros de auth_user'),
-('AUTH_USER_GET', 'Permite consultar registros de auth_user'),
-('AUTH_USER_UPDATE', 'Permite actualizar registros de auth_user'),
-('AUTH_USER_DELETE', 'Permite eliminar registros de auth_user'),
-
--- role
-('ROLE_CREATE', 'Permite crear registros de role'),
-('ROLE_GET', 'Permite consultar registros de role'),
-('ROLE_UPDATE', 'Permite actualizar registros de role'),
-('ROLE_DELETE', 'Permite eliminar registros de role'),
-
--- auth_user_in_role
-('AUTH_USER_IN_ROLE_CREATE', 'Permite crear registros de auth_user_in_role'),
-('AUTH_USER_IN_ROLE_GET', 'Permite consultar registros de auth_user_in_role'),
-('AUTH_USER_IN_ROLE_UPDATE', 'Permite actualizar registros de auth_user_in_role'),
-('AUTH_USER_IN_ROLE_DELETE', 'Permite eliminar registros de auth_user_in_role'),
-
--- permission
-('PERMISSION_CREATE', 'Permite crear registros de permission'),
-('PERMISSION_GET', 'Permite consultar registros de permission'),
-('PERMISSION_UPDATE', 'Permite actualizar registros de permission'),
-('PERMISSION_DELETE', 'Permite eliminar registros de permission'),
-
--- permission_in_role
-('PERMISSION_IN_ROLE_CREATE', 'Permite crear registros de permission_in_role'),
-('PERMISSION_IN_ROLE_GET', 'Permite consultar registros de permission_in_role'),
-('PERMISSION_IN_ROLE_UPDATE', 'Permite actualizar registros de permission_in_role'),
-('PERMISSION_IN_ROLE_DELETE', 'Permite eliminar registros de permission_in_role'),
-
--- permission_in_fau_role
-('PERMISSION_IN_FAU_ROLE_CREATE', 'Permite crear registros de permission_in_fau_role'),
-('PERMISSION_IN_FAU_ROLE_GET', 'Permite consultar registros de permission_in_fau_role'),
-('PERMISSION_IN_FAU_ROLE_UPDATE', 'Permite actualizar registros de permission_in_fau_role'),
-('PERMISSION_IN_FAU_ROLE_DELETE', 'Permite eliminar registros de permission_in_fau_role'),
-
--- refresh_tokens
-('REFRESH_TOKENS_CREATE', 'Permite crear registros de refresh_tokens'),
-('REFRESH_TOKENS_GET', 'Permite consultar registros de refresh_tokens'),
-('REFRESH_TOKENS_UPDATE', 'Permite actualizar registros de refresh_tokens'),
-('REFRESH_TOKENS_DELETE', 'Permite eliminar registros de refresh_tokens'),
-
--- chat
-('CHAT_CREATE', 'Permite crear registros de chat'),
-('CHAT_GET', 'Permite consultar registros de chat'),
-('CHAT_UPDATE', 'Permite actualizar registros de chat'),
-('CHAT_DELETE', 'Permite eliminar registros de chat'),
-
--- document
-('DOCUMENT_CREATE', 'Permite crear registros de document'),
-('DOCUMENT_GET', 'Permite consultar registros de document'),
-('DOCUMENT_UPDATE', 'Permite actualizar registros de document'),
-('DOCUMENT_DELETE', 'Permite eliminar registros de document'),
-
--- fragment
-('FRAGMENT_CREATE', 'Permite crear registros de fragment'),
-('FRAGMENT_GET', 'Permite consultar registros de fragment'),
-('FRAGMENT_UPDATE', 'Permite actualizar registros de fragment'),
-('FRAGMENT_DELETE', 'Permite eliminar registros de fragment'),
-
--- chat_message
-('CHAT_MESSAGE_CREATE', 'Permite crear registros de chat_message'),
-('CHAT_MESSAGE_GET', 'Permite consultar registros de chat_message'),
-('CHAT_MESSAGE_UPDATE', 'Permite actualizar registros de chat_message'),
-('CHAT_MESSAGE_DELETE', 'Permite eliminar registros de chat_message'),
-
--- chat_membership
-('CHAT_MEMBERSHIP_CREATE', 'Permite crear registros de chat_membership'),
-('CHAT_MEMBERSHIP_GET', 'Permite consultar registros de chat_membership'),
-('CHAT_MEMBERSHIP_UPDATE', 'Permite actualizar registros de chat_membership'),
-('CHAT_MEMBERSHIP_DELETE', 'Permite eliminar registros de chat_membership'),
-
--- notification
-('NOTIFICATION_CREATE', 'Permite crear registros de notification'),
-('NOTIFICATION_GET', 'Permite consultar registros de notification'),
-('NOTIFICATION_UPDATE', 'Permite actualizar registros de notification'),
-('NOTIFICATION_DELETE', 'Permite eliminar registros de notification'),
-
--- document_collection
-('DOCUMENT_COLLECTION_CREATE', 'Permite crear registros de document_collection'),
-('DOCUMENT_COLLECTION_GET', 'Permite consultar registros de document_collection'),
-('DOCUMENT_COLLECTION_UPDATE', 'Permite actualizar registros de document_collection'),
-('DOCUMENT_COLLECTION_DELETE', 'Permite eliminar registros de document_collection'),
-
--- document_in_document_collection
-('DOCUMENT_IN_DOCUMENT_COLLECTION_CREATE', 'Permite crear registros de document_in_document_collection'),
-('DOCUMENT_IN_DOCUMENT_COLLECTION_GET', 'Permite consultar registros de document_in_document_collection'),
-('DOCUMENT_IN_DOCUMENT_COLLECTION_UPDATE', 'Permite actualizar registros de document_in_document_collection'),
-('DOCUMENT_IN_DOCUMENT_COLLECTION_DELETE', 'Permite eliminar registros de document_in_document_collection'),
-
--- user_in_document_collection
-('USER_IN_DOCUMENT_COLLECTION_CREATE', 'Permite crear registros de user_in_document_collection'),
-('USER_IN_DOCUMENT_COLLECTION_GET', 'Permite consultar registros de user_in_document_collection'),
-('USER_IN_DOCUMENT_COLLECTION_UPDATE', 'Permite actualizar registros de user_in_document_collection'),
-('USER_IN_DOCUMENT_COLLECTION_DELETE', 'Permite eliminar registros de user_in_document_collection'),
-
--- custom_groups
-('CUSTOM_GROUPS_CREATE', 'Permite crear registros de custom_groups'),
-('CUSTOM_GROUPS_GET', 'Permite consultar registros de custom_groups'),
-('CUSTOM_GROUPS_UPDATE', 'Permite actualizar registros de custom_groups'),
-('CUSTOM_GROUPS_DELETE', 'Permite eliminar registros de custom_groups'),
-
--- documents
-('DOCUMENTS_CREATE', 'Permite crear registros de documents'),
-('DOCUMENTS_GET', 'Permite consultar registros de documents'),
-('DOCUMENTS_UPDATE', 'Permite actualizar registros de documents'),
-('DOCUMENTS_DELETE', 'Permite eliminar registros de documents'),
-
--- document_roles
-('DOCUMENT_ROLES_CREATE', 'Permite crear registros de document_roles'),
-('DOCUMENT_ROLES_GET', 'Permite consultar registros de document_roles'),
-('DOCUMENT_ROLES_UPDATE', 'Permite actualizar registros de document_roles'),
-('DOCUMENT_ROLES_DELETE', 'Permite eliminar registros de document_roles'),
-
--- auth_user_custom_groups
-('AUTH_USER_CUSTOM_GROUPS_CREATE', 'Permite crear registros de auth_user_custom_groups'),
-('AUTH_USER_CUSTOM_GROUPS_GET', 'Permite consultar registros de auth_user_custom_groups'),
-('AUTH_USER_CUSTOM_GROUPS_UPDATE', 'Permite actualizar registros de auth_user_custom_groups'),
-('AUTH_USER_CUSTOM_GROUPS_DELETE', 'Permite eliminar registros de auth_user_custom_groups'),
-
--- custom_groups_documents
-('CUSTOM_GROUPS_DOCUMENTS_CREATE', 'Permite crear registros de custom_groups_documents'),
-('CUSTOM_GROUPS_DOCUMENTS_GET', 'Permite consultar registros de custom_groups_documents'),
-('CUSTOM_GROUPS_DOCUMENTS_UPDATE', 'Permite actualizar registros de custom_groups_documents'),
-('CUSTOM_GROUPS_DOCUMENTS_DELETE', 'Permite eliminar registros de custom_groups_documents');
-
--- ============================================
--- FAU ROLES (rangos Fuerza Aérea)
--- ============================================
-INSERT INTO fau_role (name, description, power) VALUES
-    ('General de Brigada',    'Máxima autoridad institucional',         600),
-    ('Comodoro',              'Alto mando operativo',                   500),
-    ('Vicecomodoro',          'Segundo al mando operativo',             400),
-    ('Mayor',                 'Oficial superior de área',               350),
-    ('Capitán',               'Oficial a cargo de unidad',              300),
-    ('Teniente Primero',      'Oficial de apoyo senior',                250),
-    ('Teniente',              'Oficial de apoyo',                       200),
-    ('Subteniente',           'Oficial en formación',                   150),
-    ('Suboficial Mayor',      'Suboficial de mayor jerarquía',          120),
-    ('Cabo Primero',          'Suboficial intermedio',                   80),
-    ('Cabo',                  'Suboficial básico',                       50),
-    ('Soldado',               'Personal de tropa',                       10);
-
--- ============================================
--- ROLES DEL SISTEMA
--- ============================================
 INSERT INTO role (name, description) VALUES
     ('superadmin', 'Super administrador con acceso total'),
     ('admin',      'Administrador con acceso de gestión'),
-    ('user',       'Usuario estándar del sistema')
-ON CONFLICT (name) DO NOTHING;
+    ('user',       'Usuario estándar del sistema');
 
--- ============================================
--- PERMISOS POR ROL
--- ============================================
-
--- superadmin tiene todos los permisos
 INSERT INTO permission_in_role (role_id, permission_id)
 SELECT r.id, p.id
 FROM role r, permission p
 WHERE r.name = 'superadmin';
 
--- admin tiene casi todo menos sistema.administrar
 INSERT INTO permission_in_role (role_id, permission_id)
 SELECT r.id, p.id
 FROM role r, permission p
-WHERE r.name = 'admin'
-AND p.name NOT IN ('sistema.administrar');
+WHERE r.name = 'admin';
 
--- user tiene permisos básicos
 INSERT INTO permission_in_role (role_id, permission_id)
 SELECT r.id, p.id
 FROM role r, permission p
 WHERE r.name = 'user'
 AND p.name IN (
-    'documentos.ver',
-    'chat.usar',
-    'chat.ver_historial',
-    'notificaciones.ver'
+    'SOFT_DELETE_DOCUMENTS_BY_CHAT',
+    'LIST_CONTEXT_FRAGMENTS_BY_QUESTION',
+    'LIST_CONTEXT_FRAGMENTS_BY_DOCUMENTS',
+    'INGEST_DOCUMENT'
 );
 
--- ============================================
--- USUARIOS
--- ============================================
--- NOTA: passwords hasheados con Django's PBKDF2SHA256
--- Todos tienen password: hola
+
 INSERT INTO auth_user (
     username, email, password, status,
     account_non_expired, account_non_locked, credentials_non_expired,
     enabled, failed_login_attempts,
-    fau_role_id, created_by, created_at
+    created_by, created_at
 ) VALUES
     (
         'gral.rodriguez',
         'rodriguez@faa.mil.ar',
         'pbkdf2_sha256$870000$randomsalt12345$Y1UGqgZ3FpHi7kVEYMijb4XJdANKHDzqOWNBdTN5aEw=',
         'active', true, true, true, true, 0,
-        (SELECT id FROM fau_role WHERE name = 'General de Brigada'),
         1, NOW()
     ),
     (
@@ -326,7 +178,6 @@ INSERT INTO auth_user (
         'martinez@faa.mil.ar',
         'pbkdf2_sha256$870000$randomsalt12345$Y1UGqgZ3FpHi7kVEYMijb4XJdANKHDzqOWNBdTN5aEw=',
         'active', true, true, true, true, 0,
-        (SELECT id FROM fau_role WHERE name = 'Comodoro'),
         1, NOW()
     ),
     (
@@ -334,7 +185,6 @@ INSERT INTO auth_user (
         'gonzalez@faa.mil.ar',
         'pbkdf2_sha256$870000$randomsalt12345$Y1UGqgZ3FpHi7kVEYMijb4XJdANKHDzqOWNBdTN5aEw=',
         'active', true, true, true, true, 0,
-        (SELECT id FROM fau_role WHERE name = 'Capitán'),
         1, NOW()
     ),
     (
@@ -342,7 +192,6 @@ INSERT INTO auth_user (
         'lopez@faa.mil.ar',
         'pbkdf2_sha256$870000$randomsalt12345$Y1UGqgZ3FpHi7kVEYMijb4XJdANKHDzqOWNBdTN5aEw=',
         'active', true, true, true, true, 0,
-        (SELECT id FROM fau_role WHERE name = 'Teniente'),
         1, NOW()
     ),
     (
@@ -350,7 +199,6 @@ INSERT INTO auth_user (
         'perez@faa.mil.ar',
         'pbkdf2_sha256$870000$randomsalt12345$Y1UGqgZ3FpHi7kVEYMijb4XJdANKHDzqOWNBdTN5aEw=',
         'active', true, true, true, true, 0,
-        (SELECT id FROM fau_role WHERE name = 'Cabo'),
         1, NOW()
     ),
     (
@@ -358,13 +206,9 @@ INSERT INTO auth_user (
         'garcia@faa.mil.ar',
         'pbkdf2_sha256$870000$randomsalt12345$Y1UGqgZ3FpHi7kVEYMijb4XJdANKHDzqOWNBdTN5aEw=',
         'active', true, true, true, true, 0,
-        (SELECT id FROM fau_role WHERE name = 'Soldado'),
         1, NOW()
     );
 
--- ============================================
--- ASIGNAR ROLES DEL SISTEMA A USUARIOS
--- ============================================
 INSERT INTO auth_user_in_role (auth_user_id, role_id, created_by, created_at) VALUES
     (
         (SELECT id FROM auth_user WHERE username = 'gral.rodriguez'),
