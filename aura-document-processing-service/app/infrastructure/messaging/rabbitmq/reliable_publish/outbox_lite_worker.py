@@ -2,12 +2,12 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-
 from sqlalchemy import select
 
 from app.domain.constants.document.document_status import DocumentStatus
 from app.infrastructure.messaging.rabbitmq.dtos.commands.document_ingestion_command import DocumentIngestionCommand
 from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
+from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_settings import RabbitMQManagerSettings
 from app.infrastructure.messaging.rabbitmq.reliable_publish.redis_outbox_lite import RedisOutboxLite
 from app.infrastructure.persistence.database.database_manager.database_manager_interface import DatabaseManagerInterface
 from app.infrastructure.persistence.database.orm.document import Document
@@ -30,12 +30,14 @@ class OutboxLiteWorker:
             database_manager: DatabaseManagerInterface,
             document_job_progress_store: DocumentPostProcessJobProgressStoreInterface,
             fragment_job_progress_store: FragmentPostProcessJobProgressStoreInterface,
+            rabbitmq_settings: RabbitMQManagerSettings,
             settings: Optional[RedisClientSettings] = None,
     ) -> None:
         self._outbox = outbox
         self._database_manager = database_manager
         self._document_job_progress_store = document_job_progress_store
         self._fragment_job_progress_store = fragment_job_progress_store
+        self._rabbitmq_settings = rabbitmq_settings
         self._settings = settings or RedisClientSettings()
         self._task: Optional[asyncio.Task] = None
         self._stop_event = asyncio.Event()
@@ -105,7 +107,7 @@ class OutboxLiteWorker:
                 event_id=envelope.message_id,
                 event_type="document_ingestion",
                 aggregate_id=aggregate_id,
-                routing_key="document.ingestion",
+                routing_key=self._rabbitmq_settings.document_ingestion_queue,
                 body=envelope.to_bytes(),
                 headers={"message_id": envelope.message_id},
             )
@@ -117,7 +119,7 @@ class OutboxLiteWorker:
             if job_id:
                 await self._ensure_post_process_job_pending(
                     event_type="post_process_document",
-                    routing_key="post_process.document",
+                    routing_key=self._rabbitmq_settings.post_process_document_queue,
                     job_id=job_id,
                 )
 
@@ -127,7 +129,7 @@ class OutboxLiteWorker:
             if job_id:
                 await self._ensure_post_process_job_pending(
                     event_type="post_process_fragment",
-                    routing_key="post_process.fragment",
+                    routing_key=self._rabbitmq_settings.post_process_fragment_queue,
                     job_id=job_id,
                 )
 

@@ -408,7 +408,7 @@ class AuthenticationProvider(AuthenticationProviderInterface):
 def get_authenticated_user(
         request: Request
 ) -> AuthenticatedUser:
-    authenticated_user: Optional[AuthenticatedUser] = request.state.authenticated_user or None
+    authenticated_user: Optional[AuthenticatedUser] = getattr(request.state, "authenticated_user", None)
     if authenticated_user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

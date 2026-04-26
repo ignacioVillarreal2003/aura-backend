@@ -860,21 +860,20 @@ class MinioManager(MinioManagerInterface):
 async def get_minio_manager(
         request: Request
 ) -> MinioManagerInterface:
-    try:
-        minio_manager: MinioManagerInterface = request.app.state.minio_manager
-        if not minio_manager.is_started:
-            logger.error("The MinIO manager exists on the application but has not been started.")
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Object storage is not available"
-            )
-        return minio_manager
-    except AttributeError:
+    minio_manager = getattr(request.app.state, "minio_manager", None)
+    if minio_manager is None:
         logger.error("The MinIO manager was not registered on the application state.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Object storage is not configured"
         )
+    if not minio_manager.is_started:
+        logger.error("The MinIO manager exists on the application but has not been started.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Object storage is not available"
+        )
+    return minio_manager
 
 
 async def get_minio_client(

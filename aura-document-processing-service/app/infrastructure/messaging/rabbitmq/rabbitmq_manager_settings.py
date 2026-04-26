@@ -38,6 +38,7 @@ class RabbitMQManagerSettings(BaseSettings):
     retry_max_attempts: int = Field(default=3, ge=1, le=10)
     retry_backoff_min_seconds: float = Field(default=1.0, gt=0, le=30.0)
     retry_backoff_max_seconds: float = Field(default=10.0, gt=0, le=60.0)
+    publish_timeout_seconds: float = Field(default=10.0, gt=0, le=60.0)
 
     prefetch_count: int = Field(default=5, ge=1, le=100)
 
@@ -61,6 +62,9 @@ class RabbitMQManagerSettings(BaseSettings):
     document_ingestion_queue: str = Field(default="document.ingestion")
     post_process_document_queue: str = Field(default="post_process.document")
     post_process_fragment_queue: str = Field(default="post_process.fragment")
+
+    document_ingestion_lock_ttl_seconds: int = Field(default=1800, ge=60, le=86400)
+    document_ingestion_lock_key_prefix: str = Field(default="aura:ingestion", max_length=128)
 
     @field_validator(
         "url",

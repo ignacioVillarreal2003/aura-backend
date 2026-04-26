@@ -26,6 +26,13 @@ from app.infrastructure.persistence.database.repositories.fragment_repository.fr
 logger = logging.getLogger(__name__)
 
 
+def _safe_fragment_index(fragment) -> int:
+    try:
+        return int(fragment.fragment_index)
+    except (TypeError, ValueError):
+        return 0
+
+
 class PostProcessDocumentProcessor(PostProcessDocumentProcessorInterface):
     def __init__(
             self,
@@ -103,7 +110,8 @@ class PostProcessDocumentProcessor(PostProcessDocumentProcessorInterface):
                         processed_increment=1,
                     )
                 except Exception as e:
-                    msg = (str(e) or type(e).__name__)[:500]
+                    raw = str(e) or type(e).__name__
+                    msg = f"{type(e).__name__}: {raw}"[:2000]
                     await self._job_progress_store.append_document_job_error(
                         job_id,
                         PostProcessDocumentError(
@@ -185,7 +193,7 @@ class PostProcessDocumentProcessor(PostProcessDocumentProcessorInterface):
         max_len = self._llm_settings.max_classify_content_length
         parts: list[str] = []
         total = 0
-        for fragment in sorted(fragments, key=lambda f: int(f.fragment_index)):
+        for fragment in sorted(fragments, key=lambda f: _safe_fragment_index(f)):
             piece = (fragment.content or "").strip()
             if not piece:
                 continue

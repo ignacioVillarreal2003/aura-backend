@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 from app.infrastructure.http.authentication_provider.authentication_provider_middleware import (
-    AuthenticationProviderMiddleware
+    AuthenticationProviderMiddleware,
 )
 
 _EXCLUDED_PATHS = [
@@ -16,10 +16,8 @@ _EXCLUDED_PATHS = [
 ]
 
 
-def add_authentication_middleware(
-        app: FastAPI
-) -> None:
+def add_authentication_middleware(app: FastAPI) -> None:
     app.add_middleware(
         AuthenticationProviderMiddleware,
-        excluded_paths=_EXCLUDED_PATHS
+        excluded_paths=_EXCLUDED_PATHS,
     )

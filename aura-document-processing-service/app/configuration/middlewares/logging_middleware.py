@@ -2,7 +2,6 @@ import logging
 import time
 import uuid
 from typing import Any, Optional
-
 from fastapi import FastAPI, Request
 
 logger = logging.getLogger(__name__)
@@ -10,9 +9,7 @@ logger = logging.getLogger(__name__)
 _X_REQUEST_ID = "X-Request-ID"
 
 
-def add_logging_middleware(
-        app: FastAPI
-) -> None:
+def add_logging_middleware(app: FastAPI) -> None:
     @app.middleware("http")
     async def log_requests(request: Request, call_next) -> Any:
         incoming = request.headers.get(_X_REQUEST_ID)

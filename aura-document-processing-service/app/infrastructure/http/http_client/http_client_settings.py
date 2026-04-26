@@ -1,4 +1,5 @@
 import logging
+from functools import cached_property
 from typing import Optional
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -78,7 +79,7 @@ class HttpClientSettings(BaseSettings):
 
         return self
 
-    @property
+    @cached_property
     def retry_enabled_method_set(self) -> frozenset[str]:
         methods = {m.strip().upper() for m in self.retry_enabled_http_methods.split(",") if m.strip()}
         return frozenset(methods)

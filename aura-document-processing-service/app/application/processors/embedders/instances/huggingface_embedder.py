@@ -1,11 +1,11 @@
 import asyncio
 import logging
 from datetime import timedelta
-from typing import Callable, Optional
+from typing import Callable
 from aiobreaker import CircuitBreaker as AioBreaker
-from langchain_huggingface import HuggingFaceEmbeddings
 from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+from app.application.processors._hf_model_cache import get_or_create as _get_or_create_hf_embeddings
 from app.application.processors.embedders.embedder_settings import EmbedderSettings
 from app.application.processors.embedders.exceptions.embedder_exception import (
     EmbedderInitializationException,
@@ -44,17 +44,13 @@ class HuggingFaceEmbedder(BaseEmbedder):
             timeout_duration=timedelta(seconds=self._settings.circuit_breaker_timeout)
         )
 
-        self._model: Optional[HuggingFaceEmbeddings] = None
+        self._model = None
 
         try:
-            self._model = HuggingFaceEmbeddings(
+            self._model = _get_or_create_hf_embeddings(
                 model_name=self._settings.huggingface_model,
-                model_kwargs={
-                    "device": self._settings.huggingface_device
-                },
-                encode_kwargs={
-                    "normalize_embeddings": self._settings.huggingface_normalize_embeddings
-                }
+                device=self._settings.huggingface_device,
+                normalize_embeddings=self._settings.huggingface_normalize_embeddings,
             )
 
             self._embed_query_with_retry: Callable[[str], list[float]] = _retry(

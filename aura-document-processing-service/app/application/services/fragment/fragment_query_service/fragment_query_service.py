@@ -301,6 +301,9 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             database_session=database_session
         )
 
+        if not accessible_ids:
+            return []
+
         return [f for f in fragments if f.document_id in accessible_ids]
 
     async def _get_documents_by_ids_or_raise(

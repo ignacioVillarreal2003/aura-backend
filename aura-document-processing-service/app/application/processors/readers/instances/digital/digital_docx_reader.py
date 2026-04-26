@@ -7,7 +7,6 @@ from app.application.processors.readers.exceptions.reader_exception import (
     DigitalDOCXReadException,
     DOCXHasNoExtractableTextException,
     ReaderFileNotFoundException,
-    ReaderInitializationException
 )
 from app.application.processors.readers.instances.base_reader import BaseReader
 from app.application.processors.readers.reader_settings import ReaderSettings
@@ -21,11 +20,7 @@ class DigitalDOCXReader(BaseReader):
     ) -> None:
         self._settings = reader_settings or ReaderSettings()
 
-        try:
-            logger.info("The digital DOCX reader was initialized successfully.")
-        except Exception as e:
-            logger.exception("Failed to initialize the digital DOCX reader.")
-            raise ReaderInitializationException("Failed to initialize the digital DOCX reader.") from e
+        logger.info("The digital DOCX reader was initialized successfully.")
 
     def can_handle(
             self,
@@ -36,14 +31,15 @@ class DigitalDOCXReader(BaseReader):
 
         try:
             doc = Document(file_path)
-            has_paragraph_text = any(p.text and p.text.strip() for p in doc.paragraphs)
-            has_table_text = any(
-                cell.text and cell.text.strip()
-                for table in doc.tables
-                for row in table.rows
-                for cell in row.cells
-            )
-            return has_paragraph_text or has_table_text
+            if any(p.text and p.text.strip() for p in doc.paragraphs[:20]):
+                return True
+            if doc.tables:
+                return any(
+                    cell.text and cell.text.strip()
+                    for row in doc.tables[0].rows[:5]
+                    for cell in row.cells
+                )
+            return False
 
         except Exception as e:
             logger.debug(

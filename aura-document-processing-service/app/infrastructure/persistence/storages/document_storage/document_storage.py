@@ -610,13 +610,11 @@ class DocumentStorage(DocumentStorageInterface):
 async def get_document_storage(
         request: Request
 ) -> DocumentStorageInterface:
-    try:
-        return request.app.state.document_storage
-    except asyncio.CancelledError:
-        raise
-    except AttributeError:
+    document_storage = getattr(request.app.state, "document_storage", None)
+    if document_storage is None:
         logger.error("The document storage was not registered on the application state.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Document storage is not configured"
         )
+    return document_storage

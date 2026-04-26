@@ -1,4 +1,4 @@
-GET http://localhost:8000/api/document-query/document/29
+GET http://localhost:8000/api/v1/document-query/document/29
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -7,7 +7,7 @@ Authorization: Bearer user_token_123
 ###
 
 
-GET http://localhost:8000/api/document-query/documents
+GET http://localhost:8000/api/v1/document-query/documents
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -16,7 +16,7 @@ Authorization: Bearer user_token_123
 ###
 
 
-GET http://localhost:8000/api/document-query/documents?page=0&size=20&name=&category=
+GET http://localhost:8000/api/v1/document-query/documents?page=1&size=20&name=&category=
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -25,7 +25,7 @@ Authorization: Bearer user_token_123
 ###
 
 
-GET http://localhost:8000/api/document-query/documents/chat/12345
+GET http://localhost:8000/api/v1/document-query/documents/chat/12345
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123

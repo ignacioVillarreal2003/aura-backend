@@ -45,8 +45,6 @@ async def app_exception_handler(
     content: dict = {"error": exc.code, "message": exc.message}
     if request_id:
         content["request_id"] = request_id
-    if cause_chain:
-        content["causes"] = cause_chain
 
     headers = {"X-Request-ID": request_id} if request_id else {}
     return JSONResponse(status_code=exc.status_code, content=content, headers=headers)

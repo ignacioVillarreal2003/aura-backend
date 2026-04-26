@@ -25,7 +25,7 @@ class TextSplitterSettings(BaseSettings):
                            "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
                            "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
                            "intfloat/multilingual-e5-large",
-                       ] | str = Field(default="sentence-transformers/all-MiniLM-L6-v2")
+                       ] | str = Field(default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     huggingface_device: Literal["cpu", "cuda"] = Field(default="cpu")
     huggingface_breakpoint_threshold_type: Literal[
         "percentile",
@@ -34,6 +34,8 @@ class TextSplitterSettings(BaseSettings):
         "gradient"
     ] = Field(default="percentile")
     huggingface_breakpoint_threshold_amount: float | None = Field(default=None, gt=0)
+    huggingface_max_chunk_tokens: int = Field(default=510, gt=0, le=512)
+    huggingface_chunk_token_overlap: int = Field(default=50, ge=0, le=256)
 
     recursive_split_size: int = Field(default=512, gt=0, le=8192)
     recursive_split_overlap: int = Field(default=50, ge=0, le=8192)
@@ -67,7 +69,7 @@ class TextSplitterSettings(BaseSettings):
     def _validate_common(
             self
     ) -> None:
-        if self.max_text_length < min(self.recursive_split_size, self.markdown_processor_split_size):
+        if self.max_text_length < min(self.recursive_split_size, self.markdown_processor_split_size, self.huggingface_max_chunk_tokens):
             raise ValueError("max_text_length must be greater than or equal to configured split sizes.")
 
     def _validate_huggingface(

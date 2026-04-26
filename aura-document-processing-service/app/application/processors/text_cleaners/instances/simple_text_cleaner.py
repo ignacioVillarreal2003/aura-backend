@@ -1,10 +1,7 @@
 import logging
 import re
 
-from app.application.processors.text_cleaners.exceptions.text_cleaner_exception import (
-    TextCleanerInitializationException,
-    TextCleanerExecutionException
-)
+from app.application.processors.text_cleaners.exceptions.text_cleaner_exception import TextCleanerExecutionException
 from app.application.processors.text_cleaners.interfaces.text_cleaner_interface import TextCleanerInterface
 from app.application.processors.text_cleaners.text_cleaner_settings import TextCleanerSettings
 
@@ -40,20 +37,16 @@ class SimpleTextCleaner(TextCleanerInterface):
     ) -> None:
         self._settings = text_cleaner_settings
 
-        try:
-            logger.info(
-                "The simple text cleaner was initialized successfully.",
-                extra={
-                    "remove_urls": self._settings.simple_remove_urls,
-                    "remove_emojis": self._settings.simple_remove_emojis,
-                    "remove_markdown": self._settings.simple_remove_markdown,
-                    "normalize_whitespace": self._settings.simple_normalize_whitespace,
-                    "remove_noise_lines": self._settings.simple_remove_noise_lines
-                }
-            )
-        except Exception as e:
-            logger.exception("Failed to initialize the simple text cleaner.")
-            raise TextCleanerInitializationException("Failed to initialize the simple text cleaner.") from e
+        logger.info(
+            "The simple text cleaner was initialized successfully.",
+            extra={
+                "remove_urls": self._settings.simple_remove_urls,
+                "remove_emojis": self._settings.simple_remove_emojis,
+                "remove_markdown": self._settings.simple_remove_markdown,
+                "normalize_whitespace": self._settings.simple_normalize_whitespace,
+                "remove_noise_lines": self._settings.simple_remove_noise_lines
+            }
+        )
 
     def clean_text(
             self,
@@ -178,8 +171,8 @@ class SimpleTextCleaner(TextCleanerInterface):
                         prev_ends_sentence = output[j][-1] in ".!?:;"
 
                         should_merge = (
-                                (is_short_fragment and empty_count <= 1) or
-                                (starts_lowercase and not prev_ends_sentence and empty_count <= 1)
+                                starts_lowercase and empty_count <= 1
+                                and (is_short_fragment or not prev_ends_sentence)
                         )
 
                         if should_merge:
