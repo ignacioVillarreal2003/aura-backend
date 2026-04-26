@@ -300,6 +300,8 @@ class FragmentRepository(FragmentRepositoryInterface):
         try:
             collected: list[int] = []
             for chunk in chunked_ids(document_ids):
+                if len(collected) >= limit:
+                    break
                 conditions = [
                     Fragment.deleted_at.is_(None),
                     Fragment.document_id.in_(chunk),
@@ -316,6 +318,7 @@ class FragmentRepository(FragmentRepositoryInterface):
                     select(Fragment.id)
                     .where(*conditions)
                     .order_by(Fragment.id)
+                    .limit(limit)
                 )
                 collected.extend(int(row[0]) for row in result.fetchall())
 

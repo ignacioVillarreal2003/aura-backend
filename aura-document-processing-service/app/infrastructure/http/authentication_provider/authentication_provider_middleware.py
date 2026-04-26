@@ -50,9 +50,10 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
             )
             return await call_next(request)
 
-        try:
-            provider: AuthenticationProviderInterface = request.app.state.authentication_provider
-        except AttributeError:
+        provider: Optional[AuthenticationProviderInterface] = getattr(
+            request.app.state, "authentication_provider", None
+        )
+        if provider is None:
             logger.error(
                 "Authentication provider is not configured on the application.",
                 extra={

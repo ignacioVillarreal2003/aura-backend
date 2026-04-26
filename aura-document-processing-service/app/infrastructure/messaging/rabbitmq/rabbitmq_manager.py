@@ -2,7 +2,6 @@ import asyncio
 import logging
 import time
 from typing import Any, Awaitable, Callable, Optional
-
 import aio_pika
 import aio_pika.abc
 from aio_pika.exceptions import (
@@ -49,6 +48,7 @@ class RabbitMQManager(RabbitMQManagerInterface):
         self._publish_lock = asyncio.Lock()
         self._exchanges: dict[str, aio_pika.abc.AbstractExchange] = {}
         self._consumer_tasks: list[asyncio.Task] = []
+        self._publish_with_retry: Optional[Any] = None
 
         self._lifecycle_lock = asyncio.Lock()
         self._is_started: bool = False
@@ -91,6 +91,16 @@ class RabbitMQManager(RabbitMQManagerInterface):
                 await self._channel.set_qos(prefetch_count=self._settings.prefetch_count)
                 await self._declare_topology()
                 self._publish_channel = await self._connection.channel()
+                self._publish_with_retry = retry(
+                    stop=stop_after_attempt(self._settings.retry_max_attempts),
+                    wait=wait_exponential(
+                        min=self._settings.retry_backoff_min_seconds,
+                        max=self._settings.retry_backoff_max_seconds,
+                    ),
+                    retry=retry_if_exception_type(_PUBLISH_RETRY_EXCEPTIONS),
+                    before_sleep=before_sleep_log(logger, logging.WARNING),
+                    reraise=True,
+                )(self._publish_attempt_core)
                 self._is_started = True
                 logger.info("The RabbitMQ manager started successfully.")
 
@@ -143,45 +153,12 @@ class RabbitMQManager(RabbitMQManagerInterface):
             headers: Optional[dict[str, Any]] = None
     ) -> None:
         self._assert_started()
-        connection = self._connection
-        assert connection is not None
+        assert self._publish_with_retry is not None
 
         target_exchange = exchange_name or self._settings.exchange
 
-        @retry(
-            stop=stop_after_attempt(self._settings.retry_max_attempts),
-            wait=wait_exponential(
-                min=self._settings.retry_backoff_min_seconds,
-                max=self._settings.retry_backoff_max_seconds
-            ),
-            retry=retry_if_exception_type(_PUBLISH_RETRY_EXCEPTIONS),
-            before_sleep=before_sleep_log(logger, logging.WARNING),
-            reraise=True
-        )
-        async def _publish_attempt() -> None:
-            async with self._publish_lock:
-                if (
-                        self._publish_channel is None
-                        or self._publish_channel.is_closed
-                ):
-                    self._publish_channel = await connection.channel()
-                exchange = await self._publish_channel.get_exchange(target_exchange)
-                message = aio_pika.Message(
-                    body=body,
-                    delivery_mode=(
-                        aio_pika.DeliveryMode.PERSISTENT
-                        if persistent
-                        else aio_pika.DeliveryMode.NOT_PERSISTENT
-                    ),
-                    headers=headers or {}
-                )
-                await asyncio.wait_for(
-                    exchange.publish(message, routing_key=routing_key),
-                    timeout=self._settings.publish_timeout_seconds,
-                )
-
         try:
-            await _publish_attempt()
+            await self._publish_with_retry(target_exchange, routing_key, body, persistent, headers)
             logger.debug(
                 "A message was published to the broker.",
                 extra={
@@ -199,6 +176,33 @@ class RabbitMQManager(RabbitMQManagerInterface):
                 }
             )
             raise RabbitMQPublishException("Failed to publish the message to RabbitMQ.") from e
+
+    async def _publish_attempt_core(
+            self,
+            target_exchange: str,
+            routing_key: str,
+            body: bytes,
+            persistent: bool,
+            headers: Optional[dict[str, Any]],
+    ) -> None:
+        assert self._connection is not None
+        async with self._publish_lock:
+            if self._publish_channel is None or self._publish_channel.is_closed:
+                self._publish_channel = await self._connection.channel()
+            exchange = await self._publish_channel.get_exchange(target_exchange)
+            message = aio_pika.Message(
+                body=body,
+                delivery_mode=(
+                    aio_pika.DeliveryMode.PERSISTENT
+                    if persistent
+                    else aio_pika.DeliveryMode.NOT_PERSISTENT
+                ),
+                headers=headers or {}
+            )
+            await asyncio.wait_for(
+                exchange.publish(message, routing_key=routing_key),
+                timeout=self._settings.publish_timeout_seconds,
+            )
 
     async def start_consumer(
             self,
@@ -375,6 +379,7 @@ class RabbitMQManager(RabbitMQManagerInterface):
             self
     ) -> None:
         self._exchanges.clear()
+        self._publish_with_retry = None
 
         if self._publish_channel and not self._publish_channel.is_closed:
             try:
@@ -401,18 +406,17 @@ class RabbitMQManager(RabbitMQManagerInterface):
 async def get_rabbitmq_manager(
         request: Request
 ) -> RabbitMQManagerInterface:
-    try:
-        manager: RabbitMQManagerInterface = request.app.state.rabbitmq_manager
-        if not manager.is_started:
-            logger.error("The RabbitMQ manager exists on the application but has not been started.", )
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Messaging (RabbitMQ) is not available"
-            )
-        return manager
-    except AttributeError:
+    manager = getattr(request.app.state, "rabbitmq_manager", None)
+    if manager is None:
         logger.error("The RabbitMQ manager was not registered on the application state.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Messaging service is not configured"
         )
+    if not manager.is_started:
+        logger.error("The RabbitMQ manager exists on the application but has not been started.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Messaging (RabbitMQ) is not available"
+        )
+    return manager

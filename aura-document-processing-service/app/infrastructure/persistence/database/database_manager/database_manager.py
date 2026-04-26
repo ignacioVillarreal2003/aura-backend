@@ -474,21 +474,20 @@ class DatabaseManager(DatabaseManagerInterface):
 async def get_database_manager(
         request: Request
 ) -> DatabaseManagerInterface:
-    try:
-        database_manager: DatabaseManagerInterface = request.app.state.db_manager
-        if not database_manager.is_initialized:
-            logger.error("The database manager exists on the application but has not been initialized.")
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="DatabaseManager is not available"
-            )
-        return database_manager
-    except AttributeError:
+    database_manager = getattr(request.app.state, "db_manager", None)
+    if database_manager is None:
         logger.error("The database manager was not registered on the application state.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="DatabaseManager is not configured"
         )
+    if not database_manager.is_initialized:
+        logger.error("The database manager exists on the application but has not been initialized.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="DatabaseManager is not available"
+        )
+    return database_manager
 
 
 async def get_database_session(

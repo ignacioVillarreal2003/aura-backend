@@ -73,11 +73,20 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
             extra={"user_id": authenticated_user.id},
         )
 
+        _batch = 1000
+        document_ids: list[int] = []
         async with self._database_manager.session() as session:
-            documents = await self._document_repository.get_documents_missing_metadata(
-                database_session=session,
-            )
-            document_ids = [doc.id for doc in documents]
+            offset = 0
+            while True:
+                batch = await self._document_repository.get_documents_missing_metadata(
+                    database_session=session,
+                    limit=_batch,
+                    offset=offset,
+                )
+                document_ids.extend(doc.id for doc in batch)
+                if len(batch) < _batch:
+                    break
+                offset += _batch
 
         if not document_ids:
             return PostProcessDocumentsStartResponse(

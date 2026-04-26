@@ -63,6 +63,9 @@ class RabbitMQManagerSettings(BaseSettings):
     post_process_document_queue: str = Field(default="post_process.document")
     post_process_fragment_queue: str = Field(default="post_process.fragment")
 
+    document_ingestion_lock_ttl_seconds: int = Field(default=1800, ge=60, le=86400)
+    document_ingestion_lock_key_prefix: str = Field(default="aura:ingestion", max_length=128)
+
     @field_validator(
         "url",
         mode="before"

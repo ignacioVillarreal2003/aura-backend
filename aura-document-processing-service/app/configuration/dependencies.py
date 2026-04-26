@@ -288,6 +288,7 @@ async def startup_dependencies(app: FastAPI) -> None:
             database_manager=database_manager,
             document_job_progress_store=document_job_progress_store,
             fragment_job_progress_store=fragment_job_progress_store,
+            rabbitmq_settings=rabbitmq_manager_settings,
             settings=redis_client_settings,
         )
         await outbox_lite_worker.start()

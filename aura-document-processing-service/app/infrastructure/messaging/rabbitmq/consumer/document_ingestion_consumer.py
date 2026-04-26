@@ -13,6 +13,10 @@ from app.application.services.document.document_ingestion_service.interfaces.doc
     DocumentIngestionServiceInterface
 )
 from app.domain.constants.document.document_status import DocumentStatus
+from app.infrastructure.messaging.rabbitmq.consumer.consumer_utils import extract_retry_count
+from app.infrastructure.messaging.rabbitmq.consumer.interfaces.document_ingestion_consumer_interface import (
+    DocumentIngestionConsumerInterface,
+)
 from app.infrastructure.messaging.rabbitmq.dtos.commands.document_ingestion_command import DocumentIngestionCommand
 from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
 from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
@@ -29,7 +33,7 @@ from app.infrastructure.persistence.storages.document_storage.document_storage_i
 logger = logging.getLogger(__name__)
 
 
-class DocumentIngestionConsumer:
+class DocumentIngestionConsumer(DocumentIngestionConsumerInterface):
     def __init__(
             self,
             rabbitmq_manager: RabbitMQManagerInterface,
@@ -46,8 +50,6 @@ class DocumentIngestionConsumer:
         self._document_repository = document_repository
         self._document_ingestion_service = document_ingestion_service
         self._redis = redis_client
-        self._ingestion_lock_ttl_seconds = 60 * 30
-        self._redis_key_prefix = "aura:ingestion"
 
     async def start(
             self
@@ -67,7 +69,7 @@ class DocumentIngestionConsumer:
             self,
             message: aio_pika.abc.AbstractIncomingMessage
     ) -> None:
-        retry_count = self._extract_retry_count(message)
+        retry_count = extract_retry_count(message)
 
         if retry_count >= self._settings.max_delivery_attempts:
             logger.error(
@@ -132,6 +134,16 @@ class DocumentIngestionConsumer:
             )
             await message.nack(requeue=False)
             return
+        except (KeyError, ValueError) as e:
+            logger.error(
+                "The message envelope is missing required fields; discarding without requeue.",
+                extra={
+                    "message_id": (message.headers or {}).get("message_id", "unknown"),
+                    "error": type(e).__name__,
+                },
+            )
+            await message.nack(requeue=False)
+            return
 
         try:
             logger.debug(
@@ -163,21 +175,6 @@ class DocumentIngestionConsumer:
             )
             await message.nack(requeue=False)
 
-    @staticmethod
-    def _extract_retry_count(
-            message: aio_pika.abc.AbstractIncomingMessage
-    ) -> int:
-        if not message.headers:
-            return 0
-        x_death = message.headers.get("x-death")
-        if not x_death:
-            return 0
-        try:
-            return int(sum(entry.get("count", 0) for entry in x_death))
-        except Exception:
-            logger.warning("The x-death header could not be parsed; treating retry count as zero.")
-            return 0
-
     async def handle(
             self,
             message_envelope: MessageEnvelope[DocumentIngestionCommand]
@@ -202,7 +199,7 @@ class DocumentIngestionConsumer:
                 lock_key,
                 lock_token,
                 nx=True,
-                ex=self._ingestion_lock_ttl_seconds,
+                ex=self._settings.document_ingestion_lock_ttl_seconds,
             )
         )
         if not lock_acquired:
@@ -288,9 +285,13 @@ class DocumentIngestionConsumer:
                 await self._release_document_lock(lock_key, lock_token)
 
     def _build_document_lock_key(self, document_id: int) -> str:
-        return f"{self._redis_key_prefix}:document:{document_id}:lock"
+        return f"{self._settings.document_ingestion_lock_key_prefix}:document:{document_id}:lock"
 
     async def _release_document_lock(self, lock_key: str, lock_token: str) -> None:
-        current = await self._redis.get(lock_key)
-        if current == lock_token:
-            await self._redis.delete(lock_key)
+        await self._redis.execute_command(
+            "EVAL",
+            "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+            1,
+            lock_key,
+            lock_token,
+        )

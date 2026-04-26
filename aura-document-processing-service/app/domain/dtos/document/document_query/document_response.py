@@ -52,6 +52,14 @@ class DocumentResponse(BaseModel):
             raise ValueError("name must not be blank.")
         return s
 
+    @field_validator("description", mode="before")
+    @classmethod
+    def normalize_description(cls, v: object) -> object:
+        if not isinstance(v, str):
+            return v
+        stripped = v.strip()
+        return stripped or None
+
     @model_validator(mode="after")
     def validate_invariants(self) -> "DocumentResponse":
         if self.split_size is not None and self.split_overlap is not None:
