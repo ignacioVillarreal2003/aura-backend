@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from fastapi import FastAPI
@@ -182,15 +183,18 @@ async def startup_dependencies(app: FastAPI) -> None:
         app.state.chat_repository = chat_repository
 
         embedder_factory = EmbedderFactory()
+        await asyncio.to_thread(lambda: embedder_factory.embedder)
         app.state.embedder_factory = embedder_factory
 
         reader_factory = ReaderFactory()
         app.state.reader_factory = reader_factory
 
         text_cleaner_factory = TextCleanerFactory()
+        text_cleaner_factory.cleaner
         app.state.text_cleaner_factory = text_cleaner_factory
 
         text_splitter_factory = TextSplitterFactory()
+        await asyncio.to_thread(lambda: text_splitter_factory.splitter)
         app.state.text_splitter_factory = text_splitter_factory
 
         authorizer = Authorizer()
@@ -284,6 +288,7 @@ async def startup_dependencies(app: FastAPI) -> None:
             database_manager=database_manager,
             document_job_progress_store=document_job_progress_store,
             fragment_job_progress_store=fragment_job_progress_store,
+            rabbitmq_settings=rabbitmq_manager_settings,
             settings=redis_client_settings,
         )
         await outbox_lite_worker.start()

@@ -7,6 +7,10 @@ from pydantic import ValidationError
 from app.application.services.fragment.post_process_fragment_service.interfaces.post_process_fragment_processor_interface import (
     PostProcessFragmentProcessorInterface,
 )
+from app.infrastructure.messaging.rabbitmq.consumer.consumer_utils import extract_retry_count
+from app.infrastructure.messaging.rabbitmq.consumer.interfaces.post_process_fragment_consumer_interface import (
+    PostProcessFragmentConsumerInterface,
+)
 from app.infrastructure.messaging.rabbitmq.dtos.commands.post_process_fragment_job_command import (
     PostProcessFragmentJobCommand,
 )
@@ -16,7 +20,7 @@ from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import Rab
 logger = logging.getLogger(__name__)
 
 
-class PostProcessFragmentConsumer:
+class PostProcessFragmentConsumer(PostProcessFragmentConsumerInterface):
     def __init__(
             self,
             rabbitmq_manager: RabbitMQManagerInterface,
@@ -43,7 +47,7 @@ class PostProcessFragmentConsumer:
             self,
             message: aio_pika.abc.AbstractIncomingMessage,
     ) -> None:
-        retry_count = self._extract_retry_count(message)
+        retry_count = extract_retry_count(message)
 
         if retry_count >= self._settings.max_delivery_attempts:
             logger.error(
@@ -108,6 +112,16 @@ class PostProcessFragmentConsumer:
             )
             await message.nack(requeue=False)
             return
+        except (KeyError, ValueError) as e:
+            logger.error(
+                "The message envelope is missing required fields; discarding without requeue.",
+                extra={
+                    "message_id": (message.headers or {}).get("message_id", "unknown"),
+                    "error": type(e).__name__,
+                },
+            )
+            await message.nack(requeue=False)
+            return
 
         job_id = envelope.command.job_id
         try:
@@ -124,17 +138,3 @@ class PostProcessFragmentConsumer:
             )
             await message.nack(requeue=False)
 
-    @staticmethod
-    def _extract_retry_count(
-            message: aio_pika.abc.AbstractIncomingMessage,
-    ) -> int:
-        if not message.headers:
-            return 0
-        x_death = message.headers.get("x-death")
-        if not x_death:
-            return 0
-        try:
-            return int(sum(entry.get("count", 0) for entry in x_death))
-        except Exception:
-            logger.warning("The x-death header could not be parsed; treating retry count as zero.")
-            return 0

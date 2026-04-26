@@ -405,18 +405,17 @@ class HttpClient(HttpClientInterface):
 async def get_http_client(
         request: Request
 ) -> HttpClientInterface:
-    try:
-        http_client: HttpClientInterface = request.app.state.http_client
-        if not http_client.is_started:
-            logger.error("The HTTP client exists on the application but has not been started.")
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="HttpClient is not available"
-            )
-        return http_client
-    except AttributeError:
+    http_client = getattr(request.app.state, "http_client", None)
+    if http_client is None:
         logger.error("The HTTP client was not registered on the application state.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="HttpClient is not configured"
         )
+    if not http_client.is_started:
+        logger.error("The HTTP client exists on the application but has not been started.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="HttpClient is not available"
+        )
+    return http_client

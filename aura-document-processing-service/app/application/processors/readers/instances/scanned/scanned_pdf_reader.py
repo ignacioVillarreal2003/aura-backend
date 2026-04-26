@@ -4,6 +4,7 @@ import multiprocessing
 from concurrent.futures import ProcessPoolExecutor, TimeoutError, as_completed
 from pathlib import Path
 from typing import Optional, Tuple
+import pypdf
 import pytesseract
 from pdf2image import convert_from_path
 from PIL import Image
@@ -78,7 +79,19 @@ class ScannedPDFReader(BaseReader):
     ) -> bool:
         if file_path.suffix.lower() != ".pdf":
             return False
-        return True
+        try:
+            with open(file_path, "rb") as f:
+                reader = pypdf.PdfReader(f)
+                if len(reader.pages) == 0:
+                    return False
+                pages_to_probe = min(len(reader.pages), 3)
+                for i in range(pages_to_probe):
+                    text = reader.pages[i].extract_text()
+                    if text and text.strip():
+                        return False
+            return True
+        except Exception:
+            return True
 
     def read(
             self,

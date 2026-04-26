@@ -153,19 +153,25 @@ class LlmProvider(LlmProviderInterface):
                     "The LLM service returned a response that could not be validated.",
                 ) from e
 
-        except HttpClientTimeoutException:
+        except HttpClientTimeoutException as e:
             logger.error(
                 "The request to the LLM service timed out before a response was received.",
                 extra={"user_id": user_id, "operation": operation},
             )
-            raise
+            raise LlmProviderException(
+                "The LLM service request timed out.",
+                status_code=504,
+            ) from e
 
-        except (HttpClientConnectionException, HttpClientCircuitBreakerException):
+        except (HttpClientConnectionException, HttpClientCircuitBreakerException) as e:
             logger.error(
                 "The LLM service could not be reached or is temporarily rejecting requests.",
                 extra={"user_id": user_id, "operation": operation},
             )
-            raise
+            raise LlmProviderException(
+                "The LLM service is temporarily unavailable.",
+                status_code=503,
+            ) from e
 
         except HttpClientException as e:
             logger.error(

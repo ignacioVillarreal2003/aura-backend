@@ -1,4 +1,4 @@
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,3 +27,11 @@ class RedisClientSettings(BaseSettings):
     outbox_worker_loop_interval_seconds: int = Field(default=15, ge=1, le=3600)
     outbox_document_reconcile_age_seconds: int = Field(default=60, ge=1, le=3600)
     outbox_document_reconcile_batch_size: int = Field(default=100, ge=1, le=1000)
+
+    @model_validator(mode="after")
+    def validate_backoff_range(self) -> "RedisClientSettings":
+        if self.outbox_retry_backoff_min_seconds >= self.outbox_retry_backoff_max_seconds:
+            raise ValueError(
+                "outbox_retry_backoff_min_seconds must be less than outbox_retry_backoff_max_seconds."
+            )
+        return self

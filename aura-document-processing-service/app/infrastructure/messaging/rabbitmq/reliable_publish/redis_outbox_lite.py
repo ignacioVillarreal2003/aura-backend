@@ -2,7 +2,6 @@ import json
 import logging
 import time
 from typing import Any, Optional
-
 import redis.asyncio as aioredis
 
 from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface

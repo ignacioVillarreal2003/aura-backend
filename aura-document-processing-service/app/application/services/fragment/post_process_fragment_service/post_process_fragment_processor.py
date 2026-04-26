@@ -122,7 +122,8 @@ class PostProcessFragmentProcessor(PostProcessFragmentProcessorInterface):
                             processed_increment=1,
                         )
                     except Exception as e:
-                        msg = (str(e) or type(e).__name__)[:500]
+                        raw = str(e) or type(e).__name__
+                        msg = f"{type(e).__name__}: {raw}"[:2000]
                         await self._job_progress_store.append_fragment_job_error(
                             job_id,
                             PostProcessFragmentError(

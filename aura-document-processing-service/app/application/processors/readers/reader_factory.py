@@ -310,12 +310,12 @@ class ReaderFactory:
 async def get_reader_factory(
         request: Request
 ) -> ReaderFactory:
-    try:
-        return request.app.state.reader_factory
-    except AttributeError:
+    factory = getattr(request.app.state, "reader_factory", None)
+    if factory is None:
         logger.error("The reader factory was not registered on the application state.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Reader factory is not configured"
         )
+    return factory
 

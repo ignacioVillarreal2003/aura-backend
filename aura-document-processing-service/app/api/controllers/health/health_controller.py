@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 class HealthController:
-    async def liveness(self, request: Request) -> JSONResponse:
+    async def liveness(self) -> JSONResponse:
         return JSONResponse({"status": "ok"})
 
     async def readiness(self, request: Request) -> JSONResponse:

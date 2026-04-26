@@ -45,8 +45,4 @@ def openapi_tags_metadata() -> list[dict[str, str]]:
 
 
 def root_api_description() -> str:
-    return f"""## API de procesamiento de documentos
-        {API_ROOT_NOTE}
-        {AUTH_BEARER_NOTE}
-        Errores comunes: 401, 403, 404, 422, 429 y 500.
-    """
+    return f"""## API de procesamiento de documentos \n{API_ROOT_NOTE}\n{AUTH_BEARER_NOTE}"""

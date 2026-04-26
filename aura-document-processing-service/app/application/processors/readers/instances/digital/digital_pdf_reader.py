@@ -7,7 +7,6 @@ from app.application.processors.readers.exceptions.reader_exception import (
     DigitalPDFReadException,
     PDFHasNoExtractableTextException,
     ReaderFileNotFoundException,
-    ReaderInitializationException
 )
 from app.application.processors.readers.instances.base_reader import BaseReader
 from app.application.processors.readers.reader_settings import ReaderSettings
@@ -24,11 +23,7 @@ class DigitalPDFReader(BaseReader):
     ) -> None:
         self._settings = reader_settings or ReaderSettings()
 
-        try:
-            logger.info("The digital PDF reader was initialized successfully.")
-        except Exception as e:
-            logger.exception("Failed to initialize the digital PDF reader.")
-            raise ReaderInitializationException("Failed to initialize the digital PDF reader.") from e
+        logger.info("The digital PDF reader was initialized successfully.")
 
     def can_handle(
             self,

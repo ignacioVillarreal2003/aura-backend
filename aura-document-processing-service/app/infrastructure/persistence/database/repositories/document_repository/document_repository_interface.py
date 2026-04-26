@@ -35,7 +35,9 @@ class DocumentRepositoryInterface(ABC):
     @abstractmethod
     async def get_documents_missing_metadata(
             self,
-            database_session: AsyncSession
+            database_session: AsyncSession,
+            limit: int = 1000,
+            offset: int = 0,
     ) -> list[Document]:
         pass
 

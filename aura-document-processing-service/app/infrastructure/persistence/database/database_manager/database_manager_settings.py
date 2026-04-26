@@ -40,6 +40,7 @@ class DatabaseManagerSettings(BaseSettings):
     tx_retry_max_attempts: int = Field(default=3, ge=1, le=10)
     tx_retry_backoff_min_seconds: float = Field(default=0.25, gt=0, le=10.0)
     tx_retry_backoff_max_seconds: float = Field(default=2.0, gt=0, le=30.0)
+    tx_operation_timeout_seconds: Optional[float] = Field(default=60.0, gt=0, le=600.0)
 
     echo_sql: bool = Field(default=False)
     query_logging_enabled: bool = Field(default=False)

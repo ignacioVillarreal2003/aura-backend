@@ -45,7 +45,7 @@ router = APIRouter()
 document_download_controller = DocumentDownloadController()
 
 _error = default_error_responses(
-    include_404=False,
+    include_404=True,
     include_503=True,
 )
 _response = {

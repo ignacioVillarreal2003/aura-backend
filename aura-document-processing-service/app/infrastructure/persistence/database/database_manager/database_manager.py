@@ -168,6 +168,7 @@ class DatabaseManager(DatabaseManagerInterface):
                 logger.exception("The session could not be rolled back after an error.")
             raise
         else:
+            try:
                 await db_session.commit()
             except (SQLAlchemyError, OSError) as e:
                 try:
@@ -256,7 +257,11 @@ class DatabaseManager(DatabaseManagerInterface):
             attempt += 1
             db_session = self._session_factory()
             try:
-                result = await operation(db_session)
+                timeout = self._settings.tx_operation_timeout_seconds
+                if timeout is not None:
+                    result = await asyncio.wait_for(operation(db_session), timeout=timeout)
+                else:
+                    result = await operation(db_session)
                 await db_session.commit()
                 return result
             except asyncio.CancelledError:
@@ -469,21 +474,20 @@ class DatabaseManager(DatabaseManagerInterface):
 async def get_database_manager(
         request: Request
 ) -> DatabaseManagerInterface:
-    try:
-        database_manager: DatabaseManagerInterface = request.app.state.db_manager
-        if not database_manager.is_initialized:
-            logger.error("The database manager exists on the application but has not been initialized.")
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="DatabaseManager is not available"
-            )
-        return database_manager
-    except AttributeError:
+    database_manager = getattr(request.app.state, "db_manager", None)
+    if database_manager is None:
         logger.error("The database manager was not registered on the application state.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="DatabaseManager is not configured"
         )
+    if not database_manager.is_initialized:
+        logger.error("The database manager exists on the application but has not been initialized.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="DatabaseManager is not available"
+        )
+    return database_manager
 
 
 async def get_database_session(

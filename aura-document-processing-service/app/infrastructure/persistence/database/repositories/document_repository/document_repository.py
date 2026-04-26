@@ -142,10 +142,15 @@ class DocumentRepository(DocumentRepositoryInterface):
 
     async def get_documents_missing_metadata(
             self,
-            database_session: AsyncSession
+            database_session: AsyncSession,
+            limit: int = 1000,
+            offset: int = 0,
     ) -> list[Document]:
         try:
-            logger.debug("Fetching documents that are missing metadata.")
+            logger.debug(
+                "Fetching documents that are missing metadata.",
+                extra={"limit": limit, "offset": offset},
+            )
 
             result = await database_session.execute(
                 select(Document).where(
@@ -155,15 +160,13 @@ class DocumentRepository(DocumentRepositoryInterface):
                         Document.category.is_(None),
                         Document.description.is_(None)
                     )
-                )
+                ).order_by(Document.id).limit(limit).offset(offset)
             )
             documents = list(result.scalars().all())
 
             logger.debug(
                 "Documents missing metadata were fetched.",
-                extra={
-                    "count": len(documents)
-                }
+                extra={"count": len(documents), "offset": offset},
             )
             return documents
 

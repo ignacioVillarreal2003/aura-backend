@@ -1,9 +1,12 @@
+import math
 import time
 import uuid
 from typing import Callable
 from fastapi import HTTPException, Request, status
 
 _WINDOW_SECONDS = 60
+_STRICT_RATE = 20
+_DEFAULT_RATE = 60
 
 
 async def _check_rate_limit(request: Request, limit: int) -> None:
@@ -22,18 +25,28 @@ async def _check_rate_limit(request: Request, limit: int) -> None:
 
     async with redis_client.client.pipeline(transaction=True) as pipe:
         pipe.zremrangebyscore(key, 0, now - _WINDOW_SECONDS)
-        pipe.zadd(key, {str(uuid.uuid4()): now})
         pipe.zcard(key)
-        pipe.expire(key, _WINDOW_SECONDS * 2)
+        pipe.zrange(key, 0, 0, withscores=True)
         results = await pipe.execute()
 
-    count: int = results[2]
-    if count > limit:
+    count: int = results[1]
+    if count >= limit:
+        oldest = results[2]
+        if oldest:
+            oldest_score: float = oldest[0][1]
+            retry_after = max(1, math.ceil(oldest_score + _WINDOW_SECONDS - now))
+        else:
+            retry_after = 1
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Rate limit exceeded. Please retry later.",
-            headers={"Retry-After": str(_WINDOW_SECONDS)},
+            headers={"Retry-After": str(retry_after)},
         )
+
+    async with redis_client.client.pipeline(transaction=True) as pipe:
+        pipe.zadd(key, {str(uuid.uuid4()): now})
+        pipe.expire(key, _WINDOW_SECONDS * 2)
+        await pipe.execute()
 
 
 def make_rate_limiter(limit: int) -> Callable:
@@ -43,5 +56,5 @@ def make_rate_limiter(limit: int) -> Callable:
     return _limiter
 
 
-strict_rate_limit = make_rate_limiter(20)
-default_rate_limit = make_rate_limiter(60)
+strict_rate_limit = make_rate_limiter(_STRICT_RATE)
+default_rate_limit = make_rate_limiter(_DEFAULT_RATE)

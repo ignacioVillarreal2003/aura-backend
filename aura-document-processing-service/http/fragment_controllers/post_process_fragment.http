@@ -1,4 +1,4 @@
-POST http://localhost:8000/api/post-process-fragment/start
+POST http://localhost:8000/api/v1/post-process-fragment/start
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -7,7 +7,7 @@ Authorization: Bearer user_token_123
 ###
 
 
-POST http://localhost:8000/api/post-process-fragment/documents
+POST http://localhost:8000/api/v1/post-process-fragment/documents
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -20,7 +20,7 @@ Authorization: Bearer user_token_123
 ###
 
 
-GET http://localhost:8000/api/post-process-fragment/status
+GET http://localhost:8000/api/v1/post-process-fragment/status
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -29,7 +29,7 @@ Authorization: Bearer user_token_123
 ###
 
 
-POST http://localhost:8000/api/post-process-fragment/stop
+DELETE http://localhost:8000/api/v1/post-process-fragment/stop
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123

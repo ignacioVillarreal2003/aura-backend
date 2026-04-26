@@ -40,12 +40,12 @@ class TextCleanerSettings(BaseSettings):
             self
     ) -> None:
         options_enabled = (
-            self.simple_remove_urls
-            or self.simple_remove_emojis
-            or self.simple_remove_markdown
-            or self.simple_normalize_whitespace
-            or self.simple_remove_noise_lines
-            or self.simple_join_fragmented_lines
+                self.simple_remove_urls
+                or self.simple_remove_emojis
+                or self.simple_remove_markdown
+                or self.simple_normalize_whitespace
+                or self.simple_remove_noise_lines
+                or self.simple_join_fragmented_lines
         )
         if not options_enabled:
             raise ValueError("At least one simple cleaner option must be enabled.")

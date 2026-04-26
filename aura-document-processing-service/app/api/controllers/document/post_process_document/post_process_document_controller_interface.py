@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from fastapi import Request, Response
+from fastapi import Response
 
 from app.application.services.document.post_process_document_service.interfaces.post_process_document_service_interface import (
     PostProcessDocumentServiceInterface,
@@ -20,7 +20,6 @@ class PostProcessDocumentControllerInterface(ABC):
     @abstractmethod
     async def start_all(
             self,
-            request: Request,
             post_process_document_service: PostProcessDocumentServiceInterface,
             authenticated_user: AuthenticatedUser,
     ) -> PostProcessDocumentsStartResponse:
@@ -29,7 +28,6 @@ class PostProcessDocumentControllerInterface(ABC):
     @abstractmethod
     async def start_for_documents(
             self,
-            request: Request,
             post_process_documents_request: PostProcessDocumentsRequest,
             post_process_document_service: PostProcessDocumentServiceInterface,
             authenticated_user: AuthenticatedUser,

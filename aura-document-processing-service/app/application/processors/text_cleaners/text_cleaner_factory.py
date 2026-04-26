@@ -159,11 +159,11 @@ class TextCleanerFactory:
 async def get_text_cleaner_factory(
         request: Request
 ) -> TextCleanerFactory:
-    try:
-        return request.app.state.text_cleaner_factory
-    except AttributeError:
+    factory = getattr(request.app.state, "text_cleaner_factory", None)
+    if factory is None:
         logger.error("The text cleaner factory was not registered on the application state.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Text cleaner factory is not configured"
         )
+    return factory

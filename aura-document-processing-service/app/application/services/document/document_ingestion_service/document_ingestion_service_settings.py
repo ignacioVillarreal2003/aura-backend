@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 class DocumentIngestionServiceSettings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_prefix="CREATE_DOCUMENT_",
+        env_prefix="DOCUMENT_INGESTION_",
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
