@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Response, status
 
 from app.api.controllers.document.post_process_document.post_process_document_controller_interface import (
     PostProcessDocumentControllerInterface,
 )
 from app.api.dependencies.idempotency import optional_idempotency_key
-from app.api.dependencies.rate_limiter import strict_rate_limit
+from app.api.dependencies.rate_limiter import default_rate_limit, strict_rate_limit
 from app.api.openapi.common import default_error_responses
 from app.application.services.document.post_process_document_service.interfaces.post_process_document_service_interface import (
     PostProcessDocumentServiceInterface,
@@ -28,7 +28,6 @@ from app.infrastructure.http.authentication_provider.authentication_provider imp
 class PostProcessDocumentController(PostProcessDocumentControllerInterface):
     async def start_all(
             self,
-            request: Request,
             post_process_document_service: PostProcessDocumentServiceInterface = Depends(
                 get_post_process_document_service
             ),
@@ -42,7 +41,6 @@ class PostProcessDocumentController(PostProcessDocumentControllerInterface):
 
     async def start_for_documents(
             self,
-            request: Request,
             post_process_documents_request: PostProcessDocumentsRequest,
             post_process_document_service: PostProcessDocumentServiceInterface = Depends(
                 get_post_process_document_service
@@ -62,6 +60,7 @@ class PostProcessDocumentController(PostProcessDocumentControllerInterface):
                 get_post_process_document_service
             ),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
+            _rl: None = Depends(default_rate_limit),
     ) -> PostProcessDocumentsStatusResponse:
         return await post_process_document_service.get_status(
             authenticated_user=authenticated_user,
@@ -73,6 +72,7 @@ class PostProcessDocumentController(PostProcessDocumentControllerInterface):
                 get_post_process_document_service
             ),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
+            _rl: None = Depends(strict_rate_limit),
     ) -> Response:
         await post_process_document_service.stop(authenticated_user=authenticated_user)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -99,25 +99,23 @@ _error_start_selected = default_error_responses(
 _error_status = default_error_responses(
     include_404=False,
     include_422=False,
-    include_429=False,
     include_503=True,
 )
 _error_stop = default_error_responses(
     include_400=True,
     include_404=False,
     include_422=False,
-    include_429=False,
     include_503=True,
 )
 _response_start = {
-    200: {
+    202: {
         "description": "Inicio aceptado",
         "model": PostProcessDocumentsStartResponse,
     },
     **_error_start_all,
 }
 _response_start_selected = {
-    200: {
+    202: {
         "description": "Inicio aceptado",
         "model": PostProcessDocumentsStartResponse,
     },
@@ -142,6 +140,7 @@ router.add_api_route(
     post_process_document_controller.start_all,
     methods=["POST"],
     response_model=PostProcessDocumentsStartResponse,
+    status_code=status.HTTP_202_ACCEPTED,
     operation_id="startPostProcessDocumentsAll",
     summary="Iniciar postproceso global",
     description="Inicia o reanuda el postproceso para todos los documentos.",
@@ -152,6 +151,7 @@ router.add_api_route(
     post_process_document_controller.start_for_documents,
     methods=["POST"],
     response_model=PostProcessDocumentsStartResponse,
+    status_code=status.HTTP_202_ACCEPTED,
     operation_id="startPostProcessDocumentsSelected",
     summary="Iniciar postproceso por documentos",
     description="Inicia o reanuda el postproceso para los documentos enviados.",

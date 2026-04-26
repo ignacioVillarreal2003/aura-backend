@@ -175,7 +175,10 @@ class RabbitMQManager(RabbitMQManagerInterface):
                     ),
                     headers=headers or {}
                 )
-                await exchange.publish(message, routing_key=routing_key)
+                await asyncio.wait_for(
+                    exchange.publish(message, routing_key=routing_key),
+                    timeout=self._settings.publish_timeout_seconds,
+                )
 
         try:
             await _publish_attempt()

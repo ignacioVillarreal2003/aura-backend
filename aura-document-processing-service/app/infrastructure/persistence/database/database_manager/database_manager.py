@@ -168,6 +168,7 @@ class DatabaseManager(DatabaseManagerInterface):
                 logger.exception("The session could not be rolled back after an error.")
             raise
         else:
+            try:
                 await db_session.commit()
             except (SQLAlchemyError, OSError) as e:
                 try:
@@ -256,7 +257,11 @@ class DatabaseManager(DatabaseManagerInterface):
             attempt += 1
             db_session = self._session_factory()
             try:
-                result = await operation(db_session)
+                timeout = self._settings.tx_operation_timeout_seconds
+                if timeout is not None:
+                    result = await asyncio.wait_for(operation(db_session), timeout=timeout)
+                else:
+                    result = await operation(db_session)
                 await db_session.commit()
                 return result
             except asyncio.CancelledError:

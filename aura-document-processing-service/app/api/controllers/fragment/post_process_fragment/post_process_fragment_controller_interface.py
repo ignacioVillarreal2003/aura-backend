@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from fastapi import Request, Response
+from fastapi import Response
 
 from app.application.services.fragment.post_process_fragment_service.interfaces.post_process_fragment_service_interface import (
     PostProcessFragmentServiceInterface,
@@ -20,7 +20,6 @@ class PostProcessFragmentControllerInterface(ABC):
     @abstractmethod
     async def start_all(
             self,
-            request: Request,
             post_process_fragment_service: PostProcessFragmentServiceInterface,
             authenticated_user: AuthenticatedUser,
     ) -> PostProcessFragmentsStartResponse:
@@ -29,7 +28,6 @@ class PostProcessFragmentControllerInterface(ABC):
     @abstractmethod
     async def start_for_documents(
             self,
-            request: Request,
             post_process_fragments_request: PostProcessFragmentsRequest,
             post_process_fragment_service: PostProcessFragmentServiceInterface,
             authenticated_user: AuthenticatedUser,

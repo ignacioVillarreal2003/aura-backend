@@ -12,7 +12,7 @@ class ErrorBodyHttp(BaseModel):
 
 
 class ValidationErrorItem(BaseModel):
-    loc: list[Union[str, int]] = Field(..., description="Ubicación del error de validación")
+    loc: list[Union[str, int]] = Field(...)
     msg: str
     type: str
 
@@ -27,7 +27,6 @@ class ErrorBodyValidation(BaseModel):
 class ErrorBodyApp(BaseModel):
     error: str
     message: str
-    causes: Optional[list[str]] = None
     request_id: Optional[str] = None
 
 
