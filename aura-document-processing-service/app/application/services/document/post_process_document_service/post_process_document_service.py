@@ -74,7 +74,7 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
         )
 
         _batch = 1000
-        document_ids: list[int] = []
+        total_documents = 0
         async with self._database_manager.session() as session:
             offset = 0
             while True:
@@ -83,12 +83,12 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
                     limit=_batch,
                     offset=offset,
                 )
-                document_ids.extend(doc.id for doc in batch)
+                total_documents += len(batch)
                 if len(batch) < _batch:
                     break
                 offset += _batch
 
-        if not document_ids:
+        if total_documents == 0:
             return PostProcessDocumentsStartResponse(
                 message="No documents are missing metadata.",
                 total_documents=0,
@@ -96,7 +96,8 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
             )
 
         return await self._enqueue_document_job(
-            document_ids=document_ids,
+            total_documents=total_documents,
+            document_ids=None,
             authenticated_user=authenticated_user,
             message="Post-processing has started.",
         )
@@ -123,6 +124,7 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
         )
 
         return await self._enqueue_document_job(
+            total_documents=len(document_ids),
             document_ids=document_ids,
             authenticated_user=authenticated_user,
             message="Post-processing has started for the selected documents.",
@@ -156,15 +158,15 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
 
     async def _enqueue_document_job(
             self,
-            document_ids: list[int],
+            total_documents: int,
+            document_ids: Optional[list[int]],
             authenticated_user: AuthenticatedUser,
             message: str,
     ) -> PostProcessDocumentsStartResponse:
         job_id = uuid.uuid4().hex
-        total = len(document_ids)
         begun = await self._job_progress_store.try_begin_document_job(
             job_id=job_id,
-            total_documents=total,
+            total_documents=total_documents,
             document_ids=document_ids,
             triggered_by=authenticated_user,
         )
@@ -179,7 +181,7 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
 
         return PostProcessDocumentsStartResponse(
             message=message,
-            total_documents=total,
+            total_documents=total_documents,
             job_id=job_id,
         )
 

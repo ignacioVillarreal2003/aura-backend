@@ -12,3 +12,7 @@ class DocumentDownloadInvalidRequestException(DocumentDownloadServiceException):
 
 class DocumentDownloadStorageException(DocumentDownloadServiceException):
     pass
+
+
+class DocumentDownloadNotReadyException(DocumentDownloadServiceException):
+    pass

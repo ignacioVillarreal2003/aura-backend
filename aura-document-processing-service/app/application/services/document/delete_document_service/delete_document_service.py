@@ -121,16 +121,12 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
         try:
             if chat_id <= 0:
                 raise DeleteDocumentInvalidRequestException("The chat identifier must be a positive number.")
-            if authenticated_user.has_permission(
-                    Permissions.SOFT_DELETE_DOCUMENTS_BY_CHAT
-            ):
+            try:
                 self._authorizer.require_permissions(
                     authenticated_user=authenticated_user,
-                    required_permissions=frozenset({
-                        Permissions.SOFT_DELETE_DOCUMENTS_BY_CHAT,
-                    }),
+                    required_permissions=frozenset({Permissions.SOFT_DELETE_DOCUMENTS_BY_CHAT}),
                 )
-            else:
+            except UnauthorizedException:
                 chat = await self._chat_repository.get_chat_by_id(
                     chat_id=chat_id,
                     database_session=database_session,

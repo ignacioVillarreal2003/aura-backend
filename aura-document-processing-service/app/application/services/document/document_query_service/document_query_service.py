@@ -136,24 +136,17 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             if created_from and created_to and created_from > created_to:
                 raise DocumentQueryInvalidRequestException("The start of the date range cannot be after the end.")
 
-            if has_filters:
-                documents: list[Document] = await self._document_repository.get_documents(
-                    database_session=database_session,
-                    page=page,
-                    size=size,
-                    name=name,
-                    description=description,
-                    category=category,
-                    document_type=document_type,
-                    created_from=created_from,
-                    created_to=created_to
-                )
-            else:
-                documents = await self._document_repository.get_documents(
-                    page=page,
-                    size=size,
-                    database_session=database_session
-                )
+            documents: list[Document] = await self._document_repository.get_documents(
+                database_session=database_session,
+                page=page,
+                size=size,
+                name=name,
+                description=description,
+                category=category,
+                document_type=document_type,
+                created_from=created_from,
+                created_to=created_to
+            )
 
             logger.info(
                 "The document list was fetched successfully.",

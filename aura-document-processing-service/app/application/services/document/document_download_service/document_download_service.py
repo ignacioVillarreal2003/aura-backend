@@ -11,6 +11,7 @@ from app.application.services.document.document_download_service.document_downlo
 from app.application.services.document.document_download_service.exceptions.document_download_service_exception import (
     DocumentDownloadInvalidRequestException,
     DocumentDownloadNotFoundException,
+    DocumentDownloadNotReadyException,
     DocumentDownloadServiceException,
     DocumentDownloadStorageException,
 )
@@ -19,6 +20,7 @@ from app.application.services.document.document_download_service.interfaces.docu
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.application.authorization.permissions import Permissions
+from app.domain.constants.document.document_status import DocumentStatus
 from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
     DocumentRepositoryInterface
 )
@@ -79,6 +81,15 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
                 )
                 raise DocumentDownloadNotFoundException("The document was not found.")
 
+            if document.status == DocumentStatus.uploaded:
+                logger.warning(
+                    "The document is not ready for download.",
+                    extra={"document_id": document_id, "status": document.status}
+                )
+                raise DocumentDownloadNotReadyException(
+                    "The document is still being processed and is not yet available for download."
+                )
+
             try:
                 content_stream = self._document_storage.download_document_stream(
                     object_name=document.storage_url,
@@ -107,6 +118,7 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
         except (
                 DocumentDownloadInvalidRequestException,
                 DocumentDownloadNotFoundException,
+                DocumentDownloadNotReadyException,
                 DocumentDownloadStorageException,
                 UnauthorizedException,
         ):

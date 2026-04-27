@@ -71,6 +71,26 @@ class FragmentRepository(FragmentRepositoryInterface):
                 "Failed to count fragments missing metadata for the given document IDs."
             ) from e
 
+    async def get_fragment_by_id(
+            self,
+            fragment_id: int,
+            database_session: AsyncSession
+    ) -> Optional[Fragment]:
+        try:
+            result = await database_session.execute(
+                select(Fragment).where(
+                    Fragment.id == fragment_id,
+                    Fragment.deleted_at.is_(None),
+                )
+            )
+            return result.scalar_one_or_none()
+        except SQLAlchemyError as e:
+            logger.exception(
+                "Database error while fetching fragment by ID.",
+                extra={"fragment_id": fragment_id},
+            )
+            raise DatabaseException("Failed to fetch the fragment.") from e
+
     async def get_fragments_by_document_id(
             self,
             document_id: int,

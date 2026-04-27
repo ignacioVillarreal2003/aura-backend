@@ -116,6 +116,11 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             temp_path = await self._save_temp_file_streaming(raw_document)
             file_size = temp_path.stat().st_size
 
+            if file_size > self._settings.max_file_size_bytes:
+                raise CreateDocumentSizeExceededException(
+                    "The file is larger than the maximum allowed size."
+                )
+
             try:
                 object_name = await self._document_storage.upload_document_from_path(
                     file_path=str(temp_path),
@@ -195,6 +200,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                         }
                     )
             except Exception as e:
+                await self._compensate_failed_publish(database_document, object_name, database_session)
                 raise RabbitMQPublishException("Failed to enqueue the document for ingestion.") from e
 
             logger.info(
@@ -212,7 +218,8 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 UnauthorizedException,
                 CreateDocumentValidationException,
                 CreateDocumentUploadException,
-                CreateDocumentPersistenceException
+                CreateDocumentPersistenceException,
+                RabbitMQPublishException,
         ):
             if temp_path is not None:
                 await self._cleanup_temp_file(temp_path)
@@ -304,6 +311,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             self,
             file: UploadFile
     ) -> Path:
+        temp_path: Optional[Path] = None
         try:
             temp_dir = Path(tempfile.gettempdir()) / self._settings.temp_dir_prefix
             temp_dir.mkdir(parents=True, exist_ok=True)
@@ -335,6 +343,12 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             return temp_path
 
         except Exception as e:
+            if temp_path is not None:
+                try:
+                    if await asyncio.to_thread(temp_path.exists):
+                        await asyncio.to_thread(temp_path.unlink)
+                except Exception:
+                    pass
             logger.exception("Failed to save the temporary file.")
             raise IOError("Failed to save the temporary file.") from e
 
@@ -359,6 +373,30 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                     "exception_type": type(e).__name__
                 }
             )
+
+    async def _compensate_failed_publish(
+            self,
+            document: Document,
+            object_name: str,
+            database_session: AsyncSession,
+    ) -> None:
+        try:
+            await self._document_repository.soft_delete_document_by_id(
+                document_id=document.id,
+                user_id=document.created_by,
+                database_session=database_session,
+            )
+            await database_session.commit()
+            logger.info(
+                "Compensating action removed the document from the database.",
+                extra={"document_id": document.id},
+            )
+        except Exception as e:
+            logger.error(
+                "Compensating database delete failed. Manual cleanup may be required.",
+                extra={"document_id": document.id, "exception_type": type(e).__name__},
+            )
+        await self._cleanup_storage(object_name)
 
     async def _cleanup_storage(
             self,

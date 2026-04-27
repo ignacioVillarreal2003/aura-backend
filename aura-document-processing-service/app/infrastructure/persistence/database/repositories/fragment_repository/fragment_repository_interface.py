@@ -22,6 +22,14 @@ class FragmentRepositoryInterface(ABC):
         pass
 
     @abstractmethod
+    async def get_fragment_by_id(
+            self,
+            fragment_id: int,
+            database_session: AsyncSession
+    ) -> Optional[Fragment]:
+        pass
+
+    @abstractmethod
     async def get_fragments_by_document_id(
             self,
             document_id: int,

@@ -80,11 +80,23 @@ class PostProcessDocumentProcessor(PostProcessDocumentProcessorInterface):
             await self._job_progress_store.abort_document_job(job_id)
             return
 
-        document_ids: list[int] = list(manifest.get("document_ids") or [])
-        if not document_ids:
-            await self._job_progress_store.complete_document_job(job_id)
-            return
+        document_ids_raw = manifest.get("document_ids")
+        if document_ids_raw is not None:
+            document_ids: list[int] = list(document_ids_raw)
+            if not document_ids:
+                await self._job_progress_store.complete_document_job(job_id)
+                return
+            await self._run_explicit_documents(job_id=job_id, document_ids=document_ids, user=user)
+        else:
+            await self._run_all_documents(job_id=job_id, user=user)
 
+    async def _run_explicit_documents(
+            self,
+            *,
+            job_id: str,
+            document_ids: list[int],
+            user: AuthenticatedUser,
+    ) -> None:
         try:
             for document_id in document_ids:
                 if await self._job_progress_store.is_document_stop_requested(job_id):
@@ -127,6 +139,80 @@ class PostProcessDocumentProcessor(PostProcessDocumentProcessorInterface):
                         "A document failed during post-processing.",
                         extra={"job_id": job_id, "document_id": document_id},
                     )
+        finally:
+            await self._job_progress_store.complete_document_job(job_id)
+
+    async def _run_all_documents(
+            self,
+            *,
+            job_id: str,
+            user: AuthenticatedUser,
+    ) -> None:
+        _page = 100
+        failed_ids: set[int] = set()
+        try:
+            while True:
+                if await self._job_progress_store.is_document_stop_requested(job_id):
+                    logger.info(
+                        "Document post-processing stopped cooperatively.",
+                        extra={"job_id": job_id},
+                    )
+                    break
+
+                async with self._database_manager.session() as session:
+                    batch = await self._document_repository.get_documents_missing_metadata(
+                        database_session=session,
+                        limit=_page + len(failed_ids),
+                        offset=0,
+                    )
+
+                pending = [d for d in batch if d.id not in failed_ids]
+                if not pending:
+                    break
+
+                stop_outer = False
+                for doc in pending:
+                    if await self._job_progress_store.is_document_stop_requested(job_id):
+                        stop_outer = True
+                        break
+
+                    await self._job_progress_store.mark_document_job_progress(
+                        job_id,
+                        current_document_id=doc.id,
+                    )
+
+                    try:
+                        await self._process_single_document(
+                            job_id=job_id,
+                            document_id=doc.id,
+                            user=user,
+                        )
+                        await self._job_progress_store.mark_document_job_progress(
+                            job_id,
+                            processed_increment=1,
+                        )
+                    except Exception as e:
+                        failed_ids.add(doc.id)
+                        raw = str(e) or type(e).__name__
+                        msg = f"{type(e).__name__}: {raw}"[:2000]
+                        await self._job_progress_store.append_document_job_error(
+                            job_id,
+                            PostProcessDocumentError(
+                                document_id=doc.id,
+                                error=msg,
+                            ).model_dump(mode="json"),
+                        )
+                        await self._job_progress_store.mark_document_job_progress(
+                            job_id,
+                            failed_increment=1,
+                        )
+                        logger.exception(
+                            "A document failed during post-processing.",
+                            extra={"job_id": job_id, "document_id": doc.id},
+                        )
+
+                if stop_outer:
+                    break
         finally:
             await self._job_progress_store.complete_document_job(job_id)
 

@@ -186,7 +186,6 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             clean_text: str
     ) -> list[str]:
         try:
-            import asyncio
             splitter = self._splitter_factory.splitter
             chunks: list[str] = await asyncio.to_thread(splitter.split_text, clean_text)
 
@@ -364,7 +363,6 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             file_path: Path
     ) -> None:
         try:
-            import asyncio
             if await asyncio.to_thread(file_path.exists):
                 await asyncio.to_thread(file_path.unlink)
                 logger.debug(
