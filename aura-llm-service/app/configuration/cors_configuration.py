@@ -5,10 +5,13 @@ from app.configuration.environment_variables import environment_variables
 
 
 def configure_cors(app: FastAPI) -> None:
+    origins = list(environment_variables.cors_origins)
+    allow_credentials = not any((o or "").strip() == "*" for o in origins)
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=environment_variables.cors_origins,
-        allow_credentials=True,
+        allow_origins=origins,
+        allow_credentials=allow_credentials,
         allow_methods=["*"],
-        allow_headers=["*"]
+        allow_headers=["*"],
     )

@@ -2,6 +2,9 @@ import logging
 from typing import Optional
 from fastapi import HTTPException, Request, status
 
+from app.application.authorization.authorizer import Authorizer
+from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
+from app.application.authorization.permissions import Permissions
 from app.application.exceptions.app_exception import RequestValidationException
 from app.application.services.document.document_summary_service.document_summary_settings import (
     DocumentSummaryServiceSettings,
@@ -56,6 +59,7 @@ class DocumentSummaryService(DocumentSummaryServiceInterface):
     _KNOWN_EXCEPTIONS = (
         RequestValidationException,
         DocumentSummaryServiceException,
+        UnauthorizedException,
     )
 
     def __init__(
@@ -63,11 +67,13 @@ class DocumentSummaryService(DocumentSummaryServiceInterface):
             ollama_llm_facade: OllamaLLMFacadeInterface,
             llm_invoker: OllamaLLMInvokerInterface,
             document_context_provider: DocumentContextProviderInterface,
+            authorizer: Authorizer,
             document_summary_service_settings: Optional[DocumentSummaryServiceSettings] = None,
     ) -> None:
         self._ollama_llm_facade = ollama_llm_facade
         self._llm_invoker = llm_invoker
         self._document_context_provider = document_context_provider
+        self._authorizer = authorizer
         self._settings = document_summary_service_settings or DocumentSummaryServiceSettings()
         self._pipeline = DocumentSummaryPipeline(
             plugins=self._build_pipeline_plugins(self._settings.pipeline_plugins),
@@ -84,6 +90,10 @@ class DocumentSummaryService(DocumentSummaryServiceInterface):
             extra={"user_id": authenticated_user.id, "document_id": document_summary_request.document_id},
         )
 
+        self._authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LLM_DOCUMENT_SUMMARY}),
+        )
         try:
             state = DocumentSummaryPipelineState.from_request(
                 document_summary_request,

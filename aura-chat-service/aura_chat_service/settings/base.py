@@ -186,7 +186,7 @@ SPECTACULAR_SETTINGS = {
 
 LLM_DOCUMENT_QUESTION_URL = config(
     "LLM_DOCUMENT_QUESTION_URL",
-    default="http://localhost:8001/api/document-question",
+    default="http://localhost:8001/api/v1/document-question",
 )
 # SSE streaming endpoint (chat service → LLM). Defaults to ``<LLM_DOCUMENT_QUESTION_URL>/stream``.
 LLM_DOCUMENT_QUESTION_STREAM_URL = config(

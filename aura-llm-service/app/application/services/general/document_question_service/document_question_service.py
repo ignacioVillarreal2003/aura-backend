@@ -4,6 +4,9 @@ from typing import Optional
 
 from fastapi import HTTPException, Request, status
 
+from app.application.authorization.authorizer import Authorizer
+from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
+from app.application.authorization.permissions import Permissions
 from app.application.exceptions.app_exception import RequestValidationException
 from app.application.services.general.document_question_service.document_question_settings import (
     DocumentQuestionServiceSettings,
@@ -73,6 +76,7 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
     _KNOWN_EXCEPTIONS = (
         RequestValidationException,
         DocumentQuestionServiceException,
+        UnauthorizedException,
     )
 
     def __init__(
@@ -81,12 +85,14 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
             llm_invoker: OllamaLLMInvokerInterface,
             document_context_provider: DocumentContextProviderInterface,
             ollama_llm_streaming_invoker: OllamaLLMStreamingInvokerInterface,
+            authorizer: Authorizer,
             document_question_service_settings: Optional[DocumentQuestionServiceSettings] = None,
     ) -> None:
         self._ollama_llm_facade = ollama_llm_facade
         self._llm_invoker = llm_invoker
         self._document_context_provider = document_context_provider
         self._llm_streaming_invoker = ollama_llm_streaming_invoker
+        self._authorizer = authorizer
         self._settings = document_question_service_settings or DocumentQuestionServiceSettings()
         self._pipeline = DocumentQuestionPipeline(
             plugins=self._build_pipeline_plugins(),
@@ -102,6 +108,10 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
     ) -> DocumentQuestionResponse:
         logger.info("Document question execution initiated")
 
+        self._authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LLM_DOCUMENT_QUESTION}),
+        )
         try:
             state = DocumentQuestionPipelineState.from_request(
                 document_question_request,
@@ -138,6 +148,10 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
             document_question_request: DocumentQuestionRequest,
             authenticated_user: AuthenticatedUser,
     ) -> AsyncIterator[DocumentQuestionStreamEvent]:
+        self._authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LLM_DOCUMENT_QUESTION_STREAM}),
+        )
         try:
             state = DocumentQuestionPipelineState.from_request(
                 document_question_request,

@@ -10,6 +10,7 @@ from app.application.services.general.agent_service.tools.document_question_tool
 from app.application.services.general.document_question_service.interfaces.document_question_service_interface import (
     DocumentQuestionServiceInterface
 )
+from app.application.authorization.permissions import Permissions
 from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.general.document_question.document_question_request import DocumentQuestionRequest
 from app.domain.authentication.authenticated_user import AuthenticatedUser
@@ -19,7 +20,12 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentQuestionTool(BaseTool):
-    _TOOL_USER = AuthenticatedUser(id=0, email="tool@agent", roles=[], permissions=[])
+    _TOOL_USER = AuthenticatedUser(
+        id=0,
+        email="tool@agent",
+        roles=[],
+        permissions=[Permissions.LLM_DOCUMENT_QUESTION],
+    )
 
     name: str = "document_question_tool"
     description: str = (

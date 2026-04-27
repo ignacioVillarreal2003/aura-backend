@@ -1,4 +1,4 @@
-"""HTTP client for the aura-llm-service /api/agent endpoint.
+"""HTTP client for the aura-llm-service /api/v1/agent endpoint.
 
 Provides both a synchronous variant (for regular DRF views) and an
 asynchronous variant (for the SSE streaming view running under ASGI).
@@ -22,7 +22,7 @@ class LLMClient:
         try:
             with httpx.Client(timeout=float(settings.LLM_TIMEOUT_SECONDS)) as client:
                 response = client.post(
-                    f"{settings.LLM_SERVICE_URL}/api/agent",
+                    f"{settings.LLM_SERVICE_URL}/api/v1/agent",
                     json={"messages": messages},
                     headers={"Authorization": f"Bearer {token}"},
                 )
@@ -42,7 +42,7 @@ class LLMClient:
         try:
             async with httpx.AsyncClient(timeout=float(settings.LLM_TIMEOUT_SECONDS)) as client:
                 response = await client.post(
-                    f"{settings.LLM_SERVICE_URL}/api/agent",
+                    f"{settings.LLM_SERVICE_URL}/api/v1/agent",
                     json={"messages": messages},
                     headers={"Authorization": f"Bearer {token}"},
                 )

@@ -1,5 +1,5 @@
 # @timeout 600
-POST http://localhost:8000/api/document-action
+POST http://localhost:8000/api/v1/document-action
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -15,7 +15,7 @@ Authorization: Bearer user_token_123
 
 
 # @timeout 600
-POST http://localhost:8000/api/document-action
+POST http://localhost:8000/api/v1/document-action
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -31,7 +31,7 @@ Authorization: Bearer user_token_123
 
 
 # @timeout 600
-POST http://localhost:8000/api/document-action
+POST http://localhost:8000/api/v1/document-action
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -47,7 +47,7 @@ Authorization: Bearer user_token_123
 
 
 # @timeout 600
-POST http://localhost:8000/api/document-action
+POST http://localhost:8000/api/v1/document-action
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -63,7 +63,7 @@ Authorization: Bearer user_token_123
 
 
 # @timeout 600
-POST http://localhost:8000/api/document-action
+POST http://localhost:8000/api/v1/document-action
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -78,7 +78,7 @@ Authorization: Bearer user_token_123
 
 
 # @timeout 600
-POST http://localhost:8000/api/document-action
+POST http://localhost:8000/api/v1/document-action
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -94,7 +94,7 @@ Authorization: Bearer user_token_123
 
 
 # @timeout 600
-POST http://localhost:8000/api/document-action
+POST http://localhost:8000/api/v1/document-action
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -110,7 +110,7 @@ Authorization: Bearer user_token_123
 
 
 # @timeout 600
-POST http://localhost:8000/api/document-action
+POST http://localhost:8000/api/v1/document-action
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123

@@ -2,6 +2,9 @@ import logging
 from typing import Optional
 from fastapi import HTTPException, Request, status
 
+from app.application.authorization.authorizer import Authorizer
+from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
+from app.application.authorization.permissions import Permissions
 from app.application.exceptions.app_exception import RequestValidationException
 from app.application.services.general.agent_service.agent_configuration import AgentConfiguration
 from app.application.services.general.agent_service.agent_node.agent_node_configuration import AgentNodeConfiguration
@@ -23,17 +26,20 @@ logger = logging.getLogger(__name__)
 class AgentService(AgentServiceInterface):
     _KNOWN_EXCEPTIONS = (
         RequestValidationException,
-        AgentServiceException
+        AgentServiceException,
+        UnauthorizedException,
     )
 
     def __init__(
             self,
             ollama_llm_facade: OllamaLLMFacadeInterface,
+            authorizer: Authorizer,
             agent_configuration: Optional[AgentConfiguration] = None,
             sentiment_node_configuration: Optional[SentimentNodeConfiguration] = None,
             agent_node_configuration: Optional[AgentNodeConfiguration] = None
     ) -> None:
         self._ollama_llm_facade = ollama_llm_facade
+        self._authorizer = authorizer
         self._agent_configuration = agent_configuration or AgentConfiguration()
         self._sentiment_node_configuration = sentiment_node_configuration or SentimentNodeConfiguration()
         self._agent_node_configuration = agent_node_configuration or AgentNodeConfiguration()
@@ -60,6 +66,10 @@ class AgentService(AgentServiceInterface):
     ) -> AgentResponse:
         logger.info("Agent execution initiated", extra={"user_id": authenticated_user.id})
 
+        self._authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LLM_AGENT}),
+        )
         try:
             self._request_validator.validate_request(agent_request)
 

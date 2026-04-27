@@ -2,6 +2,9 @@ import logging
 from typing import Optional
 from fastapi import HTTPException, Request, status
 
+from app.application.authorization.authorizer import Authorizer
+from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
+from app.application.authorization.permissions import Permissions
 from app.application.exceptions.app_exception import RequestValidationException
 from app.application.services.document.document_action_service.document_action_settings import (
     DocumentActionServiceSettings,
@@ -56,6 +59,7 @@ class DocumentActionService(DocumentActionServiceInterface):
     _KNOWN_EXCEPTIONS = (
         RequestValidationException,
         DocumentActionServiceException,
+        UnauthorizedException,
     )
 
     def __init__(
@@ -63,11 +67,13 @@ class DocumentActionService(DocumentActionServiceInterface):
             ollama_llm_facade: OllamaLLMFacadeInterface,
             llm_invoker: OllamaLLMInvokerInterface,
             document_context_provider: DocumentContextProviderInterface,
+            authorizer: Authorizer,
             document_action_service_settings: Optional[DocumentActionServiceSettings] = None,
     ) -> None:
         self._ollama_llm_facade = ollama_llm_facade
         self._llm_invoker = llm_invoker
         self._document_context_provider = document_context_provider
+        self._authorizer = authorizer
         settings = document_action_service_settings or DocumentActionServiceSettings()
         self._pipeline = DocumentActionPipeline(
             plugins=self._build_pipeline_plugins(settings.pipeline_plugins),
@@ -88,6 +94,10 @@ class DocumentActionService(DocumentActionServiceInterface):
             },
         )
 
+        self._authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LLM_DOCUMENT_ACTION}),
+        )
         try:
             state = DocumentActionPipelineState.from_request(
                 document_action_request,

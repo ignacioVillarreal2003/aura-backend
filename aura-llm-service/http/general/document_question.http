@@ -1,4 +1,4 @@
-POST http://localhost:8001/api/document-question/stream
+POST http://localhost:8001/api/v1/document-question/stream
 Accept: text/event-stream
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -17,7 +17,7 @@ Authorization: Bearer user_token_123
 
 
 # @timeout 600
-POST http://localhost:8001/api/document-question
+POST http://localhost:8001/api/v1/document-question
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -35,7 +35,7 @@ Authorization: Bearer user_token_123
 ###
 
 
-POST http://localhost:8000/api/document-question
+POST http://localhost:8000/api/v1/document-question
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -53,7 +53,7 @@ Authorization: Bearer user_token_123
 ###
 
 
-POST http://localhost:8000/api/document-question
+POST http://localhost:8000/api/v1/document-question
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -71,7 +71,7 @@ Authorization: Bearer user_token_123
 ###
 
 
-POST http://localhost:8000/api/document-question
+POST http://localhost:8000/api/v1/document-question
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -89,7 +89,7 @@ Authorization: Bearer user_token_123
 ###
 
 
-POST http://localhost:8000/api/document-question
+POST http://localhost:8000/api/v1/document-question
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -107,7 +107,7 @@ Authorization: Bearer user_token_123
 ###
 
 
-POST http://localhost:8000/api/document-question
+POST http://localhost:8000/api/v1/document-question
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123
@@ -125,7 +125,7 @@ Authorization: Bearer user_token_123
 ###
 
 
-POST http://localhost:8000/api/document-question
+POST http://localhost:8000/api/v1/document-question
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer user_token_123

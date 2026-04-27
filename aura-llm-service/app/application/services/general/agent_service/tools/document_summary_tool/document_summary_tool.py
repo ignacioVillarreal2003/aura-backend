@@ -7,6 +7,7 @@ from pydantic import BaseModel, PrivateAttr
 from app.application.services.general.agent_service.tools.document_summary_tool.document_summary_tool_input import (
     DocumentSummaryToolInput
 )
+from app.application.authorization.permissions import Permissions
 from app.application.services.document.document_summary_service.interfaces.document_summary_service_interface import (
     DocumentSummaryServiceInterface
 )
@@ -17,7 +18,12 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentSummaryTool(BaseTool):
-    _TOOL_USER = AuthenticatedUser(id=0, email="tool@agent", roles=[], permissions=[])
+    _TOOL_USER = AuthenticatedUser(
+        id=0,
+        email="tool@agent",
+        roles=[],
+        permissions=[Permissions.LLM_DOCUMENT_SUMMARY],
+    )
 
     name: str = "document_summary_tool"
     description: str = (

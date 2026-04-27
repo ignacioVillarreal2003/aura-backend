@@ -1,7 +1,10 @@
 import logging
+from collections.abc import Awaitable, Callable
+
 from fastapi import FastAPI
 from langchain_core.tools import BaseTool
 
+from app.application.authorization.authorizer import Authorizer
 from app.application.services.document.document_action_service.document_action_service import DocumentActionService
 from app.application.services.document.document_summary_service.document_summary_service import DocumentSummaryService
 from app.application.services.general.agent_service.agent_service import AgentService
@@ -28,16 +31,59 @@ from app.infrastructure.llm.ollama_llm.ollama_llm_streaming_invoker import Ollam
 logger = logging.getLogger(__name__)
 
 
+_CleanupFn = Callable[[], Awaitable[None]]
+
+
+async def _rollback_partial_startup(
+        *,
+        cleanup_stack: list[tuple[str, _CleanupFn]],
+        app: FastAPI,
+) -> None:
+    while cleanup_stack:
+        name, fn = cleanup_stack.pop()
+        try:
+            await fn()
+        except Exception:
+            logger.exception(
+                "Startup rollback: cleanup step failed (continuing with remaining steps).",
+                extra={"resource": name},
+            )
+
+    to_clear = [
+        "agent_service",
+        "ollama_llm_facade_with_tools",
+        "fragment_enrich_service",
+        "document_classify_service",
+        "document_action_service",
+        "document_summary_service",
+        "document_question_service",
+        "ollama_llm_facade_base",
+        "document_context_provider",
+        "authorizer",
+        "authentication_provider",
+        "http_client",
+    ]
+    for attr in to_clear:
+        if hasattr(app.state, attr):
+            delattr(app.state, attr)
+
+
 async def startup_dependencies(app: FastAPI) -> None:
+    cleanup_stack: list[tuple[str, _CleanupFn]] = []
+
     try:
         logger.info("Starting up dependencies")
 
         http_client = HttpClient()
         await http_client.start()
         app.state.http_client = http_client
+        cleanup_stack.append(("http_client", http_client.stop))
 
         authentication_provider = AuthenticationProvider(http_client=http_client)
         app.state.authentication_provider = authentication_provider
+
+        authorizer = Authorizer()
+        app.state.authorizer = authorizer
 
         document_context_provider = DocumentContextProvider(http_client=http_client)
         app.state.document_context_provider = document_context_provider
@@ -57,6 +103,7 @@ async def startup_dependencies(app: FastAPI) -> None:
             document_context_provider=document_context_provider,
             ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
             document_question_service_settings=document_question_service_settings,
+            authorizer=authorizer,
         )
         app.state.document_question_service = document_question_service
 
@@ -64,6 +111,7 @@ async def startup_dependencies(app: FastAPI) -> None:
             ollama_llm_facade=ollama_llm_facade_base,
             llm_invoker=ollama_llm_invoker,
             document_context_provider=document_context_provider,
+            authorizer=authorizer,
         )
         app.state.document_summary_service = document_summary_service
 
@@ -71,18 +119,21 @@ async def startup_dependencies(app: FastAPI) -> None:
             ollama_llm_facade=ollama_llm_facade_base,
             llm_invoker=ollama_llm_invoker,
             document_context_provider=document_context_provider,
+            authorizer=authorizer,
         )
         app.state.document_action_service = document_action_service
 
         document_classify_service = DocumentClassifyService(
             ollama_llm_facade=ollama_llm_facade_base,
             llm_invoker=ollama_llm_invoker,
+            authorizer=authorizer,
         )
         app.state.document_classify_service = document_classify_service
 
         fragment_enrich_service = FragmentEnrichService(
             ollama_llm_facade=ollama_llm_facade_base,
             llm_invoker=ollama_llm_invoker,
+            authorizer=authorizer,
         )
         app.state.fragment_enrich_service = fragment_enrich_service
 
@@ -102,13 +153,18 @@ async def startup_dependencies(app: FastAPI) -> None:
         await ollama_llm_facade_with_tools.initialize()
         app.state.ollama_llm_facade_with_tools = ollama_llm_facade_with_tools
 
-        agent_service = AgentService(ollama_llm_facade=ollama_llm_facade_with_tools)
+        agent_service = AgentService(
+            ollama_llm_facade=ollama_llm_facade_with_tools,
+            authorizer=authorizer,
+        )
         app.state.agent_service = agent_service
 
         logger.info("All dependencies started successfully")
+        cleanup_stack.clear()
 
     except Exception:
-        logger.critical("Error during dependency starting up")
+        logger.critical("Error during dependency starting up; rolling back started resources in reverse order.")
+        await _rollback_partial_startup(cleanup_stack=cleanup_stack, app=app)
         raise
 
 

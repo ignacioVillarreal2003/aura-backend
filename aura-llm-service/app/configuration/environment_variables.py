@@ -14,7 +14,7 @@ class EnvironmentVariables(BaseSettings):
         extra="ignore"
     )
 
-    app_name: str = Field(default="aura document processing service")
+    app_name: str = Field(default="aura llm service")
     app_version: str = Field(default="1.0.0")
     app_host: str = Field(default="0.0.0.0")
     app_port: int = Field(default=8000, ge=1, le=65535)

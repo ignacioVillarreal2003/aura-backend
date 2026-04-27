@@ -4,6 +4,8 @@ from typing import Optional, Any
 from fastapi import HTTPException, Request, status
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from app.application.authorization.authorizer import Authorizer
+from app.application.authorization.permissions import Permissions
 from app.application.services.support.fragment_enrich_service.exceptions.fragment_enrich_service_exceptions import (
     FragmentEnrichServiceException,
 )
@@ -38,18 +40,24 @@ class FragmentEnrichService(FragmentEnrichServiceInterface):
             self,
             ollama_llm_facade: OllamaLLMFacadeInterface,
             llm_invoker: OllamaLLMInvokerInterface,
+            authorizer: Authorizer,
             settings: Optional[FragmentEnrichServiceSettings] = None,
     ) -> None:
         self._ollama_llm_facade = ollama_llm_facade
         self._llm_invoker = llm_invoker
+        self._authorizer = authorizer
         self._settings = settings or FragmentEnrichServiceSettings()
 
     async def enrich_fragment(
             self,
-            request: EnrichFragmentRequest,
+            enrich_fragment_request: EnrichFragmentRequest,
             authenticated_user: AuthenticatedUser,
     ) -> EnrichFragmentResponse:
-        content = request.content
+        self._authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LLM_FRAGMENT_ENRICH}),
+        )
+        content = enrich_fragment_request.content
         if len(content) > self._settings.max_content_chars:
             logger.info(
                 "Truncating fragment content for enrichment",

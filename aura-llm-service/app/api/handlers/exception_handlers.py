@@ -1,52 +1,81 @@
+import logging
+from typing import Optional
 from fastapi import Request, status, FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import HTTPException, RequestValidationError
-import logging
 
 from app.application.exceptions.app_exception import AppException
 
 logger = logging.getLogger(__name__)
 
 
+def _get_request_id(request: Request) -> Optional[str]:
+    return getattr(request.state, "request_id", None)
+
+
+def _build_cause_chain(exc: BaseException) -> list[str]:
+    chain: list[str] = []
+    current = exc.__cause__
+    while current is not None:
+        chain.append(f"{type(current).__name__}: {current}")
+        current = getattr(current, "__cause__", None)
+    return chain
+
+
 async def app_exception_handler(
         request: Request,
         exc: AppException
 ) -> JSONResponse:
-    logger.warning(
+    request_id = _get_request_id(request)
+    cause_chain = _build_cause_chain(exc)
+
+    log_method = logger.error if exc.status_code >= 500 else logger.warning
+    log_method(
         "Application error occurred",
+        exc_info=exc,
         extra={
+            "request_id": request_id,
             "error_code": exc.code,
             "status_code": exc.status_code,
-            "path": request.url.path
-        }
+            "path": request.url.path,
+            "cause_chain": cause_chain,
+        },
     )
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={
-            "error": exc.code,
-            "message": exc.message
-        }
-    )
+
+    content: dict = {"error": exc.code, "message": exc.message}
+    if request_id:
+        content["request_id"] = request_id
+
+    headers = {"X-Request-ID": request_id} if request_id else {}
+    return JSONResponse(status_code=exc.status_code, content=content, headers=headers)
 
 
 async def request_validation_exception_handler(
         request: Request,
         exc: RequestValidationError
 ) -> JSONResponse:
+    request_id = _get_request_id(request)
     logger.warning(
         "Request validation failed",
         extra={
+            "request_id": request_id,
             "errors": exc.errors(),
-            "path": request.url.path
-        }
+            "path": request.url.path,
+        },
     )
+    content: dict = {
+        "error": "ValidationError",
+        "message": "Request validation failed",
+        "detail": exc.errors(),
+    }
+    if request_id:
+        content["request_id"] = request_id
+
+    headers = {"X-Request-ID": request_id} if request_id else {}
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={
-            "error": "ValidationError",
-            "message": "Request validation failed",
-            "detail": exc.errors()
-        }
+        content=content,
+        headers=headers,
     )
 
 
@@ -54,45 +83,54 @@ async def http_exception_handler(
         request: Request,
         exc: HTTPException
 ) -> JSONResponse:
+    request_id = _get_request_id(request)
     logger.warning(
         "HTTP exception occurred",
         extra={
+            "request_id": request_id,
             "status_code": exc.status_code,
-            "path": request.url.path
-        }
+            "path": request.url.path,
+        },
     )
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={
-            "error": "HttpError",
-            "message": exc.detail
-        }
-    )
+    content: dict = {"error": "HttpError", "message": exc.detail}
+    if request_id:
+        content["request_id"] = request_id
+
+    headers = dict(exc.headers or {})
+    if request_id:
+        headers["X-Request-ID"] = request_id
+    return JSONResponse(status_code=exc.status_code, content=content, headers=headers)
 
 
 async def general_exception_handler(
         request: Request,
         exc: Exception
 ) -> JSONResponse:
+    request_id = _get_request_id(request)
     logger.exception(
         "Unexpected error occurred",
         extra={
+            "request_id": request_id,
             "error_type": type(exc).__name__,
-            "path": request.url.path
-        }
+            "path": request.url.path,
+        },
     )
+    content: dict = {
+        "error": "InternalServerError",
+        "message": "An unexpected error occurred",
+    }
+    if request_id:
+        content["request_id"] = request_id
+
+    headers = {"X-Request-ID": request_id} if request_id else {}
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={
-            "error": "InternalServerError",
-            "message": "An unexpected error occurred"
-        }
+        content=content,
+        headers=headers,
     )
 
 
-def register_exception_handlers(
-        app: FastAPI
-) -> None:
+def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(AppException, app_exception_handler)
     app.add_exception_handler(RequestValidationError, request_validation_exception_handler)
     app.add_exception_handler(HTTPException, http_exception_handler)

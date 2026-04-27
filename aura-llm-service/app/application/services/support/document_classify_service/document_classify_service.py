@@ -5,6 +5,8 @@ from typing import Optional, Any
 from fastapi import HTTPException, Request, status
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from app.application.authorization.authorizer import Authorizer
+from app.application.authorization.permissions import Permissions
 from app.application.services.support.document_classify_service.document_classify_settings import (
     DocumentClassifyServiceSettings,
 )
@@ -43,18 +45,24 @@ class DocumentClassifyService(DocumentClassifyServiceInterface):
             self,
             ollama_llm_facade: OllamaLLMFacadeInterface,
             llm_invoker: OllamaLLMInvokerInterface,
+            authorizer: Authorizer,
             settings: Optional[DocumentClassifyServiceSettings] = None,
     ) -> None:
         self._ollama_llm_facade = ollama_llm_facade
         self._llm_invoker = llm_invoker
+        self._authorizer = authorizer
         self._settings = settings or DocumentClassifyServiceSettings()
 
     async def classify_document(
             self,
-            request: ClassifyDocumentRequest,
+            classify_document_request: ClassifyDocumentRequest,
             authenticated_user: AuthenticatedUser,
     ) -> ClassifyDocumentResponse:
-        content = request.content
+        self._authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LLM_DOCUMENT_CLASSIFY}),
+        )
+        content = classify_document_request.content
         if len(content) > self._settings.max_content_chars:
             logger.info(
                 "Truncating document content for classification",
@@ -70,7 +78,7 @@ class DocumentClassifyService(DocumentClassifyServiceInterface):
             SystemMessage(content=_CLASSIFY_SYSTEM),
             HumanMessage(
                 content=_CLASSIFY_HUMAN.format(
-                    document_name=request.document_name,
+                    document_name=classify_document_request.document_name,
                     content=content,
                 )
             ),

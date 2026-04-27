@@ -1,46 +1,54 @@
 from fastapi import APIRouter
 
-from app.api.controllers.document import (
-    document_action_controller,
-    document_summary_controller
+from app.api.controllers import (
+    document_summary,
+    agent,
+    document_question,
+    document_classify,
+    fragment_enrich,
+    document_action,
 )
-from app.api.controllers.general import (
-    document_question_controller,
-    agent_controller
-)
-from app.api.controllers.support import (
-    document_classify_controller,
-    fragment_enrich_controller
-)
+from app.api.controllers.health import health_controller
 
 router = APIRouter()
 
 router.include_router(
-    document_question_controller.router,
-    prefix="/document-question"
+    health_controller.router,
+    tags=["health"],
 )
 
 router.include_router(
-    document_summary_controller.router,
-    prefix="/document-summary"
+    document_question.router,
+    prefix="/document-question",
+    tags=["document-question"],
 )
 
 router.include_router(
-    document_action_controller.router,
-    prefix="/document-action"
+    document_summary.router,
+    prefix="/document-summary",
+    tags=["document-summary"],
 )
 
 router.include_router(
-    agent_controller.router,
-    prefix="/agent"
+    document_action.router,
+    prefix="/document-action",
+    tags=["document-action"],
 )
 
 router.include_router(
-    document_classify_controller.router,
-    prefix="/document-classify"
+    agent.router,
+    prefix="/agent",
+    tags=["agent"],
 )
 
 router.include_router(
-    fragment_enrich_controller.router,
-    prefix="/fragment-enrich"
+    document_classify.router,
+    prefix="/document-classify",
+    tags=["document-classify"],
+)
+
+router.include_router(
+    fragment_enrich.router,
+    prefix="/fragment-enrich",
+    tags=["fragment-enrich"],
 )
