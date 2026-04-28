@@ -25,6 +25,8 @@ class QuestionContextFragmentsRequest(BaseModel):
         if self.use_keywords:
             if not self.keywords:
                 raise ValueError("keywords must be provided when use_keywords is true.")
+            if self.keywords_max_fragments is None:
+                raise ValueError("keywords_max_fragments must be provided when use_keywords is true.")
 
         if self.use_rerank:
             if self.rerank_max_fragments is None:

@@ -1,14 +1,14 @@
 from fastapi import APIRouter
 
 from app.api.controllers import (
-    document_summary,
-    agent,
-    document_question,
-    document_classify,
-    fragment_enrich,
-    document_action,
+    document_summary_controller,
+    agent_controller,
+    document_question_controller,
+    document_classify_controller,
+    fragment_enrich_controller,
+    document_action_controller,
 )
-from app.api.controllers.health import health_controller
+from app.api.controllers.health_controller import health_controller
 
 router = APIRouter()
 
@@ -18,37 +18,37 @@ router.include_router(
 )
 
 router.include_router(
-    document_question.router,
+    document_question_controller.router,
     prefix="/document-question",
     tags=["document-question"],
 )
 
 router.include_router(
-    document_summary.router,
+    document_summary_controller.router,
     prefix="/document-summary",
     tags=["document-summary"],
 )
 
 router.include_router(
-    document_action.router,
+    document_action_controller.router,
     prefix="/document-action",
     tags=["document-action"],
 )
 
 router.include_router(
-    agent.router,
+    agent_controller.router,
     prefix="/agent",
     tags=["agent"],
 )
 
 router.include_router(
-    document_classify.router,
+    document_classify_controller.router,
     prefix="/document-classify",
     tags=["document-classify"],
 )
 
 router.include_router(
-    fragment_enrich.router,
+    fragment_enrich_controller.router,
     prefix="/fragment-enrich",
     tags=["fragment-enrich"],
 )

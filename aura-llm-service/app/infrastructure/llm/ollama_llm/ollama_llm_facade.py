@@ -1,3 +1,4 @@
+import enum
 import logging
 import time
 from asyncio import Lock
@@ -13,6 +14,7 @@ from app.infrastructure.llm.ollama_llm.exceptions.ollama_llm_facade_exceptions i
     LLMInitializationError,
     LLMNotConfiguredError,
     OllamaLLMFacadeError,
+    ToolInitializationError,
 )
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 from app.infrastructure.llm.ollama_llm.ollama_llm_facade_settings import OllamaLLMFacadeSettings
@@ -20,8 +22,15 @@ from app.infrastructure.llm.ollama_llm.ollama_tool_manager import OllamaToolMana
 
 logger = logging.getLogger(__name__)
 
-_INIT_RETRY_COOLDOWN: float = 30.0
+_CIRCUIT_RECOVERY_COOLDOWN: float = 30.0
+_CIRCUIT_FAILURE_THRESHOLD: int = 1
 _PROBE_TIMEOUT: float = 10.0
+
+
+class _CircuitState(enum.Enum):
+    CLOSED = "closed"
+    OPEN = "open"
+    HALF_OPEN = "half_open"
 
 
 def _model_is_available(model_name: str, available_names: set[str]) -> bool:
@@ -44,8 +53,9 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
         self._tool_manager = OllamaToolManager(tool_factories)
 
         self._initialized: bool = False
-        self._init_failed: bool = False
-        self._last_failure_time: float = 0.0
+        self._circuit_state: _CircuitState = _CircuitState.CLOSED
+        self._consecutive_failures: int = 0
+        self._opened_at: float = 0.0
         self._tools_bound: bool = False
         self._init_lock: Lock = Lock()
 
@@ -60,22 +70,26 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
                 logger.debug("OllamaLLMFacade already initialized.")
                 return
 
-            if self._init_failed:
-                elapsed = time.monotonic() - self._last_failure_time
-                if elapsed < _INIT_RETRY_COOLDOWN:
-                    remaining = _INIT_RETRY_COOLDOWN - elapsed
-                    raise LLMNotConfiguredError(
-                        f"OllamaLLMFacade initialization failed. "
-                        f"Retry available in {remaining:.0f}s."
-                    )
-                logger.info("Retrying OllamaLLMFacade initialization after cooldown.")
-                self._init_failed = False
+            match self._circuit_state:
+                case _CircuitState.OPEN:
+                    elapsed = time.monotonic() - self._opened_at
+                    if elapsed < _CIRCUIT_RECOVERY_COOLDOWN:
+                        remaining = _CIRCUIT_RECOVERY_COOLDOWN - elapsed
+                        raise LLMNotConfiguredError(
+                            f"OllamaLLMFacade circuit is open — initialization failed. "
+                            f"Recovery attempt in {remaining:.0f}s."
+                        )
+                    logger.info("Circuit transitioning to HALF_OPEN — retrying initialization.")
+                    self._circuit_state = _CircuitState.HALF_OPEN
+                case _CircuitState.HALF_OPEN | _CircuitState.CLOSED:
+                    pass
 
             logger.info(
                 "Initializing OllamaLLMFacade",
                 extra={
                     "model_name": self._settings.model_name,
                     "base_url": self._settings.base_url,
+                    "circuit_state": self._circuit_state.value,
                 },
             )
 
@@ -85,6 +99,8 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
                 self._bind_tools()
                 await self._probe_connectivity()
                 self._initialized = True
+                self._circuit_state = _CircuitState.CLOSED
+                self._consecutive_failures = 0
                 logger.info("OllamaLLMFacade initialized successfully")
 
             except OllamaLLMFacadeError:
@@ -115,7 +131,7 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
         return self._llm_with_tools
 
     def is_healthy(self) -> bool:
-        return self._initialized and not self._init_failed
+        return self._initialized and self._circuit_state == _CircuitState.CLOSED
 
     @property
     def tools_bound(self) -> bool:
@@ -128,17 +144,18 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
         self._tool_manager = OllamaToolManager(tool_factories)
         self._tool_manager.initialize()
         bound = self._bind_tools()
+        if self._tool_manager.has_tools and not bound:
+            raise ToolInitializationError(
+                "Tools were created but could not be bound to the LLM — "
+                "check that the model supports tool calling."
+            )
         if bound:
             logger.info(
                 "Tools registered and bound successfully",
                 extra={"tool_count": len(self._tool_manager.tools)},
             )
         else:
-            logger.warning(
-                "Tool registration completed but binding failed — "
-                "agent will operate without tools.",
-                extra={"tool_factory_count": len(tool_factories)},
-            )
+            logger.debug("No tools provided — skipping tool binding.")
 
     @property
     def tools(self) -> List[BaseTool]:
@@ -224,8 +241,17 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
 
     def _cleanup_on_failure(self) -> None:
         self._initialized = False
-        self._init_failed = True
-        self._last_failure_time = time.monotonic()
+        self._consecutive_failures += 1
+        if self._consecutive_failures >= _CIRCUIT_FAILURE_THRESHOLD:
+            self._circuit_state = _CircuitState.OPEN
+            self._opened_at = time.monotonic()
+            logger.warning(
+                "Circuit opened after initialization failure",
+                extra={
+                    "consecutive_failures": self._consecutive_failures,
+                    "recovery_in_seconds": _CIRCUIT_RECOVERY_COOLDOWN,
+                },
+            )
         self._tools_bound = False
         self._llm_base = None
         self._llm_with_tools = None

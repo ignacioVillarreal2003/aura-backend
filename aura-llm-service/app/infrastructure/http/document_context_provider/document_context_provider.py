@@ -47,7 +47,6 @@ _HTTP_ERROR_TYPES = (
 
 
 class DocumentContextProvider(DocumentContextProviderInterface):
-
     def __init__(
             self,
             http_client: HttpClientInterface,
@@ -68,10 +67,12 @@ class DocumentContextProvider(DocumentContextProviderInterface):
             rerank_max_fragments: Optional[int] = None,
     ) -> FragmentListResponse:
         logger.info(
-            "Retrieving context fragments by question | user=%s rerank=%s keywords=%s",
-            authenticated_user.id,
-            bool(use_rerank),
-            bool(use_keywords),
+            "Retrieving context fragments by question.",
+            extra={
+                "user_id": authenticated_user.id,
+                "use_rerank": bool(use_rerank),
+                "use_keywords": bool(use_keywords),
+            },
         )
 
         request_body = self._build_question_request(
@@ -94,58 +95,16 @@ class DocumentContextProvider(DocumentContextProviderInterface):
             max_fragments = calculate_question_response_max_fragments(request_body)
             fragments = parse_and_apply_limits(
                 raw_data=response.json(),
-                max_fragments=max_fragments
+                max_fragments=max_fragments,
             )
 
             logger.info(
-                "Context fragments by question ready | user=%s fragments=%d/%d",
-                authenticated_user.id,
-                len(fragments.fragments),
-                max_fragments,
-            )
-            return fragments
-
-        except DocumentContextProviderError:
-            raise
-        except _HTTP_ERROR_TYPES as e:
-            self._handle_http_error(e)
-        except Exception:
-            logger.exception("Unexpected error retrieving fragments by question | user=%s", user_id)
-            raise DocumentContextProviderError(
-                "Unexpected error while retrieving fragments from the external service."
-            )
-
-    async def retrieve_context_fragments_by_document(
-            self,
-            authenticated_user: AuthenticatedUser,
-            document_ids: list[int]
-    ) -> FragmentListResponse:
-        logger.info(
-            "Retrieving context fragments by document | user=%s documents=%d",
-            authenticated_user.id,
-            len(document_ids),
-        )
-
-        request_body = self._build_document_request(document_ids)
-
-        try:
-            response = await self._http_client.post(
-                url=self._settings.document_context_fragments_url,
-                json=request_body.model_dump(),
-                headers=self._build_headers(authenticated_user),
-                timeout=self._settings.timeout_seconds
-            )
-
-            fragments = parse_and_apply_limits(
-                raw_data=response.json(),
-                max_fragments=self._settings.max_fragments_per_document_response
-            )
-
-            logger.info(
-                "Context fragments by document ready | user=%s documents=%d fragments=%d/%d",
-                authenticated_user.id,
-                len(document_ids),
-                len(fragments.fragments)
+                "Context fragments by question retrieved successfully.",
+                extra={
+                    "user_id": authenticated_user.id,
+                    "fragments_returned": len(fragments.fragments),
+                    "fragments_limit": max_fragments,
+                },
             )
             return fragments
 
@@ -155,9 +114,63 @@ class DocumentContextProvider(DocumentContextProviderInterface):
             self._handle_http_error(e)
         except Exception:
             logger.exception(
-                "Unexpected error retrieving fragments by document | user=%s documents=%d",
-                authenticated_user.id,
-                len(document_ids),
+                "Unexpected error retrieving context fragments by question.",
+                extra={"user_id": authenticated_user.id},
+            )
+            raise DocumentContextProviderError(
+                "Unexpected error while retrieving fragments from the external service."
+            )
+
+    async def retrieve_context_fragments_by_document(
+            self,
+            authenticated_user: AuthenticatedUser,
+            document_ids: list[int],
+    ) -> FragmentListResponse:
+        logger.info(
+            "Retrieving context fragments by document.",
+            extra={
+                "user_id": authenticated_user.id,
+                "document_count": len(document_ids),
+            },
+        )
+
+        request_body = self._build_document_request(document_ids)
+
+        try:
+            response = await self._http_client.post(
+                url=self._settings.document_context_fragments_url,
+                json=request_body.model_dump(),
+                headers=self._build_headers(authenticated_user),
+                timeout=self._settings.timeout_seconds,
+            )
+
+            fragments = parse_and_apply_limits(
+                raw_data=response.json(),
+                max_fragments=self._settings.max_fragments_per_document_response,
+            )
+
+            logger.info(
+                "Context fragments by document retrieved successfully.",
+                extra={
+                    "user_id": authenticated_user.id,
+                    "document_count": len(document_ids),
+                    "fragments_returned": len(fragments.fragments),
+                    "fragments_limit": self._settings.max_fragments_per_document_response,
+                },
+            )
+            return fragments
+
+        except DocumentContextProviderError:
+            raise
+        except _HTTP_ERROR_TYPES as e:
+            self._handle_http_error(e)
+        except Exception:
+            logger.exception(
+                "Unexpected error retrieving context fragments by document.",
+                extra={
+                    "user_id": authenticated_user.id,
+                    "document_count": len(document_ids),
+                },
             )
             raise DocumentContextProviderError(
                 "Unexpected error while retrieving fragments from the external service."
@@ -165,16 +178,15 @@ class DocumentContextProvider(DocumentContextProviderInterface):
 
     def _build_headers(
             self,
-            authenticated_user: AuthenticatedUser
+            authenticated_user: AuthenticatedUser,
     ) -> dict[str, str]:
-        headers: dict[str, str] = {
+        return {
             "X-Service-Api-Key": environment_variables.service_api_key,
             "X-User-Id": str(authenticated_user.id),
             "X-User-Email": str(authenticated_user.email),
             "X-User-Roles": ",".join(authenticated_user.roles),
-            "X-User-Permissions": ",".join(authenticated_user.permissions)
+            "X-User-Permissions": ",".join(authenticated_user.permissions),
         }
-        return headers
 
     @staticmethod
     def _build_question_request(
@@ -182,9 +194,9 @@ class DocumentContextProvider(DocumentContextProviderInterface):
             question_max_fragments: int,
             use_keywords: Optional[bool],
             keywords: Optional[str],
-            keywords_max_fragments: int,
+            keywords_max_fragments: Optional[int],
             use_rerank: Optional[bool],
-            rerank_max_fragments: Optional[int]
+            rerank_max_fragments: Optional[int],
     ) -> QuestionContextFragmentsRequest:
         try:
             return QuestionContextFragmentsRequest(
@@ -194,10 +206,13 @@ class DocumentContextProvider(DocumentContextProviderInterface):
                 keywords=keywords if use_keywords else None,
                 keywords_max_fragments=keywords_max_fragments if use_keywords else None,
                 use_rerank=use_rerank,
-                rerank_max_fragments=rerank_max_fragments if use_rerank else None
+                rerank_max_fragments=rerank_max_fragments if use_rerank else None,
             )
         except Exception as e:
-            logger.error("Invalid question request parameters | error=%s", e)
+            logger.error(
+                "Invalid question request parameters.",
+                extra={"error": str(e)},
+            )
             raise DocumentContextProviderError(
                 f"The request parameters are invalid: {e}",
                 status_code=400,
@@ -205,54 +220,67 @@ class DocumentContextProvider(DocumentContextProviderInterface):
 
     @staticmethod
     def _build_document_request(
-            document_ids: list[int]
+            document_ids: list[int],
     ) -> DocumentsContextFragmentsRequest:
         try:
-            return DocumentsContextFragmentsRequest(
-                document_ids=document_ids
-            )
+            return DocumentsContextFragmentsRequest(document_ids=document_ids)
         except Exception as e:
-            logger.error("Invalid document request parameters | error=%s", e)
+            logger.error(
+                "Invalid document request parameters.",
+                extra={"error": str(e)},
+            )
             raise DocumentContextProviderError(
                 f"The request parameters are invalid: {e}",
-                status_code=400
+                status_code=400,
             ) from e
 
     @staticmethod
     def _handle_http_error(error: HttpClientException) -> NoReturn:
         if isinstance(error, HttpClientTimeoutException):
-            logger.error("Context service timed out | error=%s", error)
+            logger.error(
+                "Context service timed out.",
+                extra={"error_type": type(error).__name__},
+            )
             raise DocumentContextProviderTimeoutException(
                 "The context service did not respond in time. Please try again later."
             ) from error
 
         if isinstance(error, (HttpClientConnectionException, HttpClientCircuitBreakerException)):
-            logger.error("Context service unavailable | error=%s", error)
+            logger.error(
+                "Context service is unavailable.",
+                extra={"error_type": type(error).__name__},
+            )
             raise DocumentContextProviderUnavailableException(
                 "Could not connect to the context service. Please try again later."
             ) from error
 
         status_code = getattr(error, "status_code", None)
         if status_code in (401, 403):
-            logger.error("Context service rejected the request | status=%s", status_code)
+            logger.error(
+                "Context service rejected the request due to an authentication failure.",
+                extra={"status_code": status_code},
+            )
             raise DocumentContextProviderUnauthorizedException(
                 "The context service rejected the request."
             ) from error
 
-        logger.error("Unexpected HTTP error from context service | status=%s", status_code)
+        logger.error(
+            "Context service returned an unexpected error response.",
+            extra={"status_code": status_code},
+        )
         raise DocumentContextProviderUnavailableException(
             f"Context service error (HTTP {status_code}). Please try again later."
         ) from error
 
 
 async def get_document_context_provider(
-        request: Request
+        request: Request,
 ) -> DocumentContextProviderInterface:
     try:
         return request.app.state.document_context_provider
     except AttributeError:
-        logger.error("DocumentContextProvider not found in application state")
+        logger.error("DocumentContextProvider not found in application state.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Document context provider service is not available"
+            detail="Document context provider service is not available",
         )

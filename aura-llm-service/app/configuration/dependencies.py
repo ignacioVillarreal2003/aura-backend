@@ -5,21 +5,21 @@ from fastapi import FastAPI
 from langchain_core.tools import BaseTool
 
 from app.application.authorization.authorizer import Authorizer
-from app.application.services.document.document_action_service.document_action_service import DocumentActionService
-from app.application.services.document.document_summary_service.document_summary_service import DocumentSummaryService
-from app.application.services.general.agent_service.agent_service import AgentService
-from app.application.services.general.agent_service.tools.document_question_tool.document_question_tool import (
+from app.application.services.document_action_service.document_action_service import DocumentActionService
+from app.application.services.document_summary_service.document_summary_service import DocumentSummaryService
+from app.application.services.agent_service.agent_service import AgentService
+from app.application.services.agent_service.tools.document_question_tool.document_question_tool import (
     DocumentQuestionTool
 )
-from app.application.services.general.agent_service.tools.document_summary_tool.document_summary_tool import (
+from app.application.services.agent_service.tools.document_summary_tool.document_summary_tool import (
     DocumentSummaryTool
 )
-from app.application.services.general.document_question_service.document_question_service import DocumentQuestionService
-from app.application.services.general.document_question_service.document_question_settings import (
+from app.application.services.document_question_service.document_question_service import DocumentQuestionService
+from app.application.services.document_question_service.document_question_settings import (
     DocumentQuestionServiceSettings,
 )
-from app.application.services.support.document_classify_service.document_classify_service import DocumentClassifyService
-from app.application.services.support.fragment_enrich_service.fragment_enrich_service import FragmentEnrichService
+from app.application.services.document_classify_service.document_classify_service import DocumentClassifyService
+from app.application.services.fragment_enrich_service.fragment_enrich_service import FragmentEnrichService
 from app.infrastructure.http.authentication_provider.authentication_provider import AuthenticationProvider
 from app.infrastructure.http.document_context_provider.document_context_provider import DocumentContextProvider
 from app.infrastructure.http.http_client.http_client import HttpClient
