@@ -13,8 +13,8 @@ from app.application.services.document.document_summary_service.interfaces.docum
     DocumentSummaryServiceInterface
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.dtos.document.document_summary.document_summary_request import DocumentSummaryRequest
-from app.domain.dtos.document.document_summary.document_summary_response import DocumentSummaryResponse
+from app.domain.dtos.document_summary.document_summary_request import DocumentSummaryRequest
+from app.domain.dtos.document_summary.document_summary_response import DocumentSummaryResponse
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 
 logger = logging.getLogger(__name__)

@@ -18,9 +18,9 @@ from app.application.services.general.document_question_service.interfaces.docum
     DocumentQuestionServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.dtos.general.document_question.document_question_request import DocumentQuestionRequest
-from app.domain.dtos.general.document_question.document_question_response import DocumentQuestionResponse
-from app.domain.dtos.general.document_question.document_question_stream_events import (
+from app.domain.dtos.document_question.document_question_request import DocumentQuestionRequest
+from app.domain.dtos.document_question.document_question_response import DocumentQuestionResponse
+from app.domain.dtos.document_question.document_question_stream_events import (
     DocumentQuestionStreamComplete,
     DocumentQuestionStreamDelta,
     DocumentQuestionStreamError,

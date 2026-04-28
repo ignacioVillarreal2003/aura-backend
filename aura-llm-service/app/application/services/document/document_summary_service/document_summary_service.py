@@ -44,8 +44,8 @@ from app.application.services.document.document_summary_service.steps.validate_r
     ValidateRequestPlugin,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.dtos.document.document_summary.document_summary_request import DocumentSummaryRequest
-from app.domain.dtos.document.document_summary.document_summary_response import DocumentSummaryResponse
+from app.domain.dtos.document_summary.document_summary_request import DocumentSummaryRequest
+from app.domain.dtos.document_summary.document_summary_response import DocumentSummaryResponse
 from app.infrastructure.http.document_context_provider.interfaces.document_context_provider_interface import (
     DocumentContextProviderInterface,
 )

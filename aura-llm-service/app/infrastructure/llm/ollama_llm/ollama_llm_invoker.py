@@ -1,20 +1,32 @@
 import logging
-from typing import List
+from typing import List, Optional
+
+import httpx
 from langchain_core.messages import BaseMessage
 from langchain_core.runnables import Runnable
-from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import AsyncRetrying, before_sleep_log, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from app.infrastructure.llm.ollama_llm.exceptions.ollama_llm_invoker_exceptions import LLMInvocationError
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface import OllamaLLMInvokerInterface
+from app.infrastructure.llm.ollama_llm.ollama_llm_invoker_settings import OllamaLLMInvokerSettings
 
 logger = logging.getLogger(__name__)
 
+_RETRYABLE_EXCEPTIONS: tuple[type[Exception], ...] = (
+    httpx.ConnectError,
+    httpx.ReadTimeout,
+    httpx.WriteTimeout,
+    httpx.PoolTimeout,
+    httpx.RemoteProtocolError,
+    ConnectionError,
+    TimeoutError,
+    OSError,
+)
+
 
 class OllamaLLMInvoker(OllamaLLMInvokerInterface):
-    _RETRYABLE_EXCEPTIONS = (ConnectionError, TimeoutError, OSError)
-    _MAX_RETRY_ATTEMPTS = 3
-    _RETRY_MIN_WAIT = 1.0
-    _RETRY_MAX_WAIT = 8.0
+    def __init__(self, settings: Optional[OllamaLLMInvokerSettings] = None) -> None:
+        self._settings = settings or OllamaLLMInvokerSettings()
 
     async def call_llm(
             self,
@@ -23,44 +35,45 @@ class OllamaLLMInvoker(OllamaLLMInvokerInterface):
     ) -> BaseMessage:
         logger.debug("Invoking LLM", extra={"message_count": len(llm_input)})
 
-        @retry(
-            stop=stop_after_attempt(self._MAX_RETRY_ATTEMPTS),
-            wait=wait_exponential(min=self._RETRY_MIN_WAIT, max=self._RETRY_MAX_WAIT),
-            retry=retry_if_exception_type(self._RETRYABLE_EXCEPTIONS),
-            before_sleep=before_sleep_log(logger, logging.WARNING),
-            reraise=True
-        )
-        async def _invoke_with_retry() -> BaseMessage:
-            return await llm.ainvoke(llm_input)
-
+        response: BaseMessage | None = None
         try:
-            response = await _invoke_with_retry()
-
-            if not isinstance(response, BaseMessage):
-                raise LLMInvocationError(
-                    f"Expected BaseMessage, got {type(response).__name__}"
-                )
-
-            logger.debug("LLM invocation successful")
-            return response
+            async for attempt in AsyncRetrying(
+                stop=stop_after_attempt(self._settings.max_retry_attempts),
+                wait=wait_exponential(
+                    min=self._settings.retry_min_wait,
+                    max=self._settings.retry_max_wait,
+                ),
+                retry=retry_if_exception_type(_RETRYABLE_EXCEPTIONS),
+                before_sleep=before_sleep_log(logger, logging.WARNING),
+                reraise=True,
+            ):
+                with attempt:
+                    response = await llm.ainvoke(llm_input)
 
         except LLMInvocationError:
             raise
-        except self._RETRYABLE_EXCEPTIONS as e:
+        except _RETRYABLE_EXCEPTIONS as e:
             logger.error(
                 "LLM invocation failed after retries",
-                extra={"error_type": type(e).__name__, "error_message": str(e)}
+                extra={"error_type": type(e).__name__, "error_message": str(e)},
             )
             raise LLMInvocationError(
-                "El LLM no respondió después de varios intentos. "
-                "Por favor, intente nuevamente más tarde."
+                "LLM failed to respond after multiple retry attempts. Please try again later."
             ) from e
         except Exception as e:
             logger.exception(
                 "Unexpected error during LLM invocation",
-                extra={"error_type": type(e).__name__}
+                extra={"error_type": type(e).__name__},
             )
-            raise LLMInvocationError("The LLM could not process the request.") from e
+            raise LLMInvocationError("LLM could not process the request.") from e
+
+        if not isinstance(response, BaseMessage):
+            raise LLMInvocationError(
+                f"Expected BaseMessage response, got {type(response).__name__}."
+            )
+
+        logger.debug("LLM invocation successful")
+        return response
 
     async def call_llm_content(
             self,
@@ -75,7 +88,7 @@ class OllamaLLMInvoker(OllamaLLMInvokerInterface):
         content = getattr(response, "content", None)
 
         if content is None:
-            raise LLMInvocationError("The LLM response has no content.")
+            raise LLMInvocationError("LLM response has no content field.")
 
         if isinstance(content, list):
             text_parts = [
@@ -83,24 +96,20 @@ class OllamaLLMInvoker(OllamaLLMInvokerInterface):
                 for block in content
                 if isinstance(block, dict) and block.get("type") == "text"
             ]
-            content = " ".join(text_parts).strip()
-
-            if not content:
-                logger.warning(
-                    "LLM returned list content with no extractable text blocks",
-                    extra={"block_count": len(response.content)}
+            result = " ".join(text_parts).strip()
+            if not result:
+                raise LLMInvocationError(
+                    "LLM returned a list response with no extractable text blocks."
                 )
-
-            return content
+            return result
 
         if not isinstance(content, str):
             raise LLMInvocationError(
-                f"Unexpected content type in LLM response: {type(content).__name__}"
+                f"Unexpected content type in LLM response: {type(content).__name__}."
             )
 
         result = content.strip()
-
         if not result:
-            logger.warning("LLM response content is empty after stripping")
+            raise LLMInvocationError("LLM returned an empty response.")
 
         return result

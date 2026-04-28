@@ -11,8 +11,8 @@ from app.api.openapi.common import default_error_responses
 from app.application.services.general.agent_service.agent_service import get_agent_service
 from app.application.services.general.agent_service.interfaces.agent_service_interface import AgentServiceInterface
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.dtos.general.agent.agent_request import AgentRequest
-from app.domain.dtos.general.agent.agent_response import AgentResponse
+from app.domain.dtos.agent.agent_request import AgentRequest
+from app.domain.dtos.agent.agent_response import AgentResponse
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 
 logger = logging.getLogger(__name__)

@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.dtos.general.document_question.document_question_request import DocumentQuestionRequest
+from app.domain.dtos.document_question.document_question_request import DocumentQuestionRequest
 from app.domain.dtos.message import Message
 from app.infrastructure.http.document_context_provider.dtos.fragment_response import FragmentResponse
 

@@ -3,7 +3,7 @@ from typing import List
 
 from app.application.exceptions.app_exception import RequestValidationException
 from app.application.services.general.agent_service.agent_configuration import AgentConfiguration
-from app.domain.dtos.general.agent.agent_request import AgentRequest
+from app.domain.dtos.agent.agent_request import AgentRequest
 from app.domain.dtos.message import Message
 
 logger = logging.getLogger(__name__)

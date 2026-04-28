@@ -5,7 +5,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from app.application.services.general.agent_service.agent_state.agent_state import AgentState
 from app.application.services.general.agent_service.constants.sentimient import Sentiment
 from app.domain.constants.message_role import MessageRole
-from app.domain.dtos.general.agent.agent_request import AgentRequest
+from app.domain.dtos.agent.agent_request import AgentRequest
 from app.domain.dtos.message import Message
 
 logger = logging.getLogger(__name__)

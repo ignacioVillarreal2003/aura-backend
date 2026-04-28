@@ -44,8 +44,8 @@ from app.application.services.document.document_action_service.steps.validate_re
     ValidateRequestPlugin,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.dtos.document.document_action.document_action_request import DocumentActionRequest
-from app.domain.dtos.document.document_action.document_action_response import DocumentActionResponse
+from app.domain.dtos.document_action.document_action_request import DocumentActionRequest
+from app.domain.dtos.document_action.document_action_response import DocumentActionResponse
 from app.infrastructure.http.document_context_provider.interfaces.document_context_provider_interface import (
     DocumentContextProviderInterface,
 )

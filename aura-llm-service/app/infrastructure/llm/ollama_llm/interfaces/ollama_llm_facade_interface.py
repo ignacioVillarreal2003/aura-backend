@@ -17,6 +17,15 @@ class OllamaLLMFacadeInterface(ABC):
     async def get_llm_with_tools(self) -> Runnable:
         pass
 
+    @abstractmethod
+    def is_healthy(self) -> bool:
+        pass
+
+    @property
+    @abstractmethod
+    def tools_bound(self) -> bool:
+        pass
+
     @property
     @abstractmethod
     def tools(self) -> List[BaseTool]:

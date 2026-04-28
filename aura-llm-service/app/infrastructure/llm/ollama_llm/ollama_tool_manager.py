@@ -13,17 +13,18 @@ class OllamaToolManager:
     def __init__(self, tool_factories: Optional[List[ToolFactory]] = None) -> None:
         self._tool_factories = tool_factories or []
         self._tools: List[BaseTool] = []
+        self._instructions: Optional[str] = None
         self._initialized: bool = False
 
         logger.debug("OllamaToolManager created")
 
     def initialize(self) -> None:
         if self._initialized:
-            logger.debug("OllamaToolManager already initialized")
+            logger.debug("OllamaToolManager already initialized.")
             return
 
         if not self._tool_factories:
-            logger.debug("No tool factories provided — skipping tool initialization")
+            logger.debug("No tool factories provided — skipping tool initialization.")
             self._initialized = True
             return
 
@@ -38,7 +39,7 @@ class OllamaToolManager:
                 created_tools.append(tool)
                 logger.debug(
                     "Tool created successfully",
-                    extra={"tool_name": tool.name, "factory_index": idx}
+                    extra={"tool_name": tool.name, "factory_index": idx},
                 )
             except Exception as e:
                 logger.warning(
@@ -46,9 +47,9 @@ class OllamaToolManager:
                     extra={
                         "factory_index": idx,
                         "error_type": type(e).__name__,
-                        "error_message": str(e)
+                        "error_message": str(e),
                     },
-                    exc_info=True
+                    exc_info=True,
                 )
                 errors.append((idx, e))
 
@@ -56,7 +57,7 @@ class OllamaToolManager:
             error_details = "; ".join(f"Factory {idx}: {err}" for idx, err in errors)
             logger.error(
                 "All tool factories failed",
-                extra={"failed_factories": len(errors), "error_details": error_details}
+                extra={"failed_factories": len(errors), "error_details": error_details},
             )
             raise ToolInitializationError(f"All tool factories failed: {error_details}")
 
@@ -66,16 +67,17 @@ class OllamaToolManager:
                 extra={
                     "failed": len(errors),
                     "succeeded": len(created_tools),
-                    "total": len(self._tool_factories)
-                }
+                    "total": len(self._tool_factories),
+                },
             )
 
         self._tools = created_tools
+        self._instructions = self._build_instructions()
         self._initialized = True
 
         logger.info(
             "OllamaToolManager initialized successfully",
-            extra={"tool_count": len(self._tools)}
+            extra={"tool_count": len(self._tools)},
         )
 
     @staticmethod
@@ -84,7 +86,7 @@ class OllamaToolManager:
 
         if not isinstance(tool, BaseTool):
             raise TypeError(
-                f"Factory {factory_index} produced {type(tool).__name__}, expected BaseTool"
+                f"Factory {factory_index} produced {type(tool).__name__}, expected BaseTool."
             )
 
         if not getattr(tool, "args_schema", None):
@@ -92,21 +94,24 @@ class OllamaToolManager:
                 "Tool missing args_schema — tool calling may be unreliable",
                 extra={
                     "tool_name": getattr(tool, "name", "unknown"),
-                    "factory_index": factory_index
-                }
+                    "factory_index": factory_index,
+                },
             )
 
         return tool
 
     @property
     def tools(self) -> List[BaseTool]:
-        return self._tools.copy()
+        return self._tools
 
     @property
     def has_tools(self) -> bool:
         return bool(self._tools)
 
     def generate_instructions(self) -> Optional[str]:
+        return self._instructions
+
+    def _build_instructions(self) -> Optional[str]:
         if not self._tools:
             return None
 

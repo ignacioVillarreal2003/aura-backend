@@ -12,7 +12,7 @@ from app.application.services.general.document_question_service.interfaces.docum
 )
 from app.application.authorization.permissions import Permissions
 from app.domain.constants.message_role import MessageRole
-from app.domain.dtos.general.document_question.document_question_request import DocumentQuestionRequest
+from app.domain.dtos.document_question.document_question_request import DocumentQuestionRequest
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.message import Message
 

@@ -1,0 +1,17 @@
+from pydantic import BaseModel, Field, model_validator
+
+from app.domain.constants.message_role import MessageRole
+from app.domain.dtos.message import Message
+from app.domain.field_limits import MAX_MESSAGES_IN_REQUEST
+
+
+class AgentRequest(BaseModel):
+    messages: list[Message] = Field(..., min_length=1, max_length=MAX_MESSAGES_IN_REQUEST)
+
+    @model_validator(mode="after")
+    def validate_request(self) -> "AgentRequest":
+        if self.messages[-1].role != MessageRole.human:
+            raise ValueError("The last message must be from the human role.")
+        return self
+
+    model_config = {"frozen": True}

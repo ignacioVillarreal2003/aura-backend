@@ -3,7 +3,7 @@ from typing import Optional
 
 from app.application.services.document.document_summary_service.constants.summarization_strategy import SummarizationStrategy
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.dtos.document.document_summary.document_summary_request import DocumentSummaryRequest
+from app.domain.dtos.document_summary.document_summary_request import DocumentSummaryRequest
 from app.infrastructure.http.document_context_provider.dtos.fragment_response import FragmentResponse
 
 

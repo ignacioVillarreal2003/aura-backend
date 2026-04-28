@@ -4,8 +4,8 @@ from app.application.services.support.fragment_enrich_service.interfaces.fragmen
     FragmentEnrichServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.dtos.support.fragment_enrich.enrich_fragment_request import EnrichFragmentRequest
-from app.domain.dtos.support.fragment_enrich.enrich_fragment_response import EnrichFragmentResponse
+from app.domain.dtos.fragment_enrich.enrich_fragment_request import EnrichFragmentRequest
+from app.domain.dtos.fragment_enrich.enrich_fragment_response import EnrichFragmentResponse
 
 
 class FragmentEnrichControllerInterface(ABC):

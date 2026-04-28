@@ -17,8 +17,8 @@ from app.application.services.general.agent_service.sentiment_node.sentiment_nod
     SentimentNodeConfiguration
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.dtos.general.agent.agent_request import AgentRequest
-from app.domain.dtos.general.agent.agent_response import AgentResponse
+from app.domain.dtos.agent.agent_request import AgentRequest
+from app.domain.dtos.agent.agent_response import AgentResponse
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 
 logger = logging.getLogger(__name__)

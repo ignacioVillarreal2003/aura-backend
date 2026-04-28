@@ -2,8 +2,8 @@ from abc import ABC, abstractmethod
 
 from app.application.services.general.agent_service.interfaces.agent_service_interface import AgentServiceInterface
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.dtos.general.agent.agent_request import AgentRequest
-from app.domain.dtos.general.agent.agent_response import AgentResponse
+from app.domain.dtos.agent.agent_request import AgentRequest
+from app.domain.dtos.agent.agent_response import AgentResponse
 
 
 class AgentControllerInterface(ABC):

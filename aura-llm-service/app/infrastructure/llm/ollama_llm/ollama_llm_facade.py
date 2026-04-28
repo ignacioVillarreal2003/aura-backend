@@ -1,37 +1,52 @@
 import logging
+import time
 from asyncio import Lock
 from typing import List, Optional
+
+import httpx
 from fastapi import HTTPException, Request, status
-from langchain_core.messages import HumanMessage
 from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
 from langchain_ollama import ChatOllama
 
 from app.infrastructure.llm.ollama_llm.exceptions.ollama_llm_facade_exceptions import (
     LLMInitializationError,
-    LLMNotConfiguredError
+    LLMNotConfiguredError,
+    OllamaLLMFacadeError,
 )
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 from app.infrastructure.llm.ollama_llm.ollama_llm_facade_settings import OllamaLLMFacadeSettings
-from app.infrastructure.llm.ollama_llm.ollama_tool_manager import (
-    OllamaToolManager,
-    ToolFactory
-)
+from app.infrastructure.llm.ollama_llm.ollama_tool_manager import OllamaToolManager, ToolFactory
 
 logger = logging.getLogger(__name__)
+
+_INIT_RETRY_COOLDOWN: float = 30.0
+_PROBE_TIMEOUT: float = 10.0
+
+
+def _model_is_available(model_name: str, available_names: set[str]) -> bool:
+    if model_name in available_names:
+        return True
+    if ":" not in model_name and f"{model_name}:latest" in available_names:
+        return True
+    if model_name.endswith(":latest") and model_name[: -len(":latest")] in available_names:
+        return True
+    return False
 
 
 class OllamaLLMFacade(OllamaLLMFacadeInterface):
     def __init__(
             self,
             ollama_llm_facade_settings: Optional[OllamaLLMFacadeSettings] = None,
-            tool_factories: Optional[List[ToolFactory]] = None
+            tool_factories: Optional[List[ToolFactory]] = None,
     ) -> None:
         self._settings = ollama_llm_facade_settings or OllamaLLMFacadeSettings()
         self._tool_manager = OllamaToolManager(tool_factories)
 
         self._initialized: bool = False
         self._init_failed: bool = False
+        self._last_failure_time: float = 0.0
+        self._tools_bound: bool = False
         self._init_lock: Lock = Lock()
 
         self._llm_base: Optional[Runnable] = None
@@ -42,15 +57,26 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
     async def initialize(self) -> None:
         async with self._init_lock:
             if self._initialized:
-                logger.debug("OllamaLLMFacade already initialized")
+                logger.debug("OllamaLLMFacade already initialized.")
                 return
+
+            if self._init_failed:
+                elapsed = time.monotonic() - self._last_failure_time
+                if elapsed < _INIT_RETRY_COOLDOWN:
+                    remaining = _INIT_RETRY_COOLDOWN - elapsed
+                    raise LLMNotConfiguredError(
+                        f"OllamaLLMFacade initialization failed. "
+                        f"Retry available in {remaining:.0f}s."
+                    )
+                logger.info("Retrying OllamaLLMFacade initialization after cooldown.")
+                self._init_failed = False
 
             logger.info(
                 "Initializing OllamaLLMFacade",
                 extra={
                     "model_name": self._settings.model_name,
-                    "base_url": self._settings.base_url
-                }
+                    "base_url": self._settings.base_url,
+                },
             )
 
             try:
@@ -59,28 +85,60 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
                 self._bind_tools()
                 await self._probe_connectivity()
                 self._initialized = True
-
                 logger.info("OllamaLLMFacade initialized successfully")
+
+            except OllamaLLMFacadeError:
+                logger.exception("OllamaLLMFacade initialization failed.")
+                self._cleanup_on_failure()
+                raise
 
             except Exception as e:
                 logger.exception(
-                    "Failed to initialize OllamaLLMFacade",
-                    extra={"error_type": type(e).__name__, "error_message": str(e)}
+                    "Unexpected error during OllamaLLMFacade initialization",
+                    extra={"error_type": type(e).__name__},
                 )
                 self._cleanup_on_failure()
-                raise LLMInitializationError("Failed to initialize OllamaLLMFacade") from e
+                raise LLMInitializationError(
+                    "Unexpected error during OllamaLLMFacade initialization."
+                ) from e
 
     async def get_llm_base(self) -> Runnable:
         await self._ensure_initialized()
         if self._llm_base is None:
-            raise LLMNotConfiguredError("Base LLM is not configured")
+            raise LLMNotConfiguredError("Base LLM is not configured.")
         return self._llm_base
 
     async def get_llm_with_tools(self) -> Runnable:
         await self._ensure_initialized()
         if self._llm_with_tools is None:
-            raise LLMNotConfiguredError("LLM with tools is not configured")
+            raise LLMNotConfiguredError("LLM with tools is not configured.")
         return self._llm_with_tools
+
+    def is_healthy(self) -> bool:
+        return self._initialized and not self._init_failed
+
+    @property
+    def tools_bound(self) -> bool:
+        return self._tools_bound
+
+    def register_tools(self, tool_factories: List[ToolFactory]) -> None:
+        if not self._initialized:
+            raise LLMNotConfiguredError("Facade must be initialized before registering tools.")
+        logger.info("Registering tools", extra={"tool_factory_count": len(tool_factories)})
+        self._tool_manager = OllamaToolManager(tool_factories)
+        self._tool_manager.initialize()
+        bound = self._bind_tools()
+        if bound:
+            logger.info(
+                "Tools registered and bound successfully",
+                extra={"tool_count": len(self._tool_manager.tools)},
+            )
+        else:
+            logger.warning(
+                "Tool registration completed but binding failed — "
+                "agent will operate without tools.",
+                extra={"tool_factory_count": len(tool_factories)},
+            )
 
     @property
     def tools(self) -> List[BaseTool]:
@@ -98,87 +156,92 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
         except Exception as e:
             raise LLMInitializationError(f"Failed to build ChatOllama: {e}") from e
 
-    def _bind_tools(self) -> None:
+    def _bind_tools(self) -> bool:
         if self._llm_base is None:
-            raise LLMInitializationError("Base LLM must be built before binding tools")
+            raise LLMInitializationError("Base LLM must be built before binding tools.")
 
         if not self._tool_manager.has_tools:
-            logger.debug("No tools to bind — using base LLM as-is")
+            logger.debug("No tools to bind — using base LLM as-is.")
             self._llm_with_tools = self._llm_base
-            return
+            self._tools_bound = False
+            return False
 
         try:
             logger.debug("Binding tools to LLM")
             self._llm_with_tools = self._llm_base.bind_tools(self._tool_manager.tools)
+            self._tools_bound = True
             logger.info(
                 "Tools bound to LLM successfully",
-                extra={"tool_count": len(self._tool_manager.tools)}
+                extra={"tool_count": len(self._tool_manager.tools)},
             )
+            return True
         except Exception as e:
             logger.warning(
                 "Failed to bind tools — falling back to base LLM",
                 extra={"error_type": type(e).__name__, "error_message": str(e)},
-                exc_info=True
+                exc_info=True,
             )
             self._llm_with_tools = self._llm_base
+            self._tools_bound = False
+            return False
 
     async def _probe_connectivity(self) -> None:
-        if self._llm_base is None:
-            raise LLMInitializationError("Base LLM must be built before probing connectivity")
+        tags_url = f"{self._settings.base_url}/api/tags"
+        logger.debug("Probing Ollama connectivity", extra={"url": tags_url})
 
         try:
-            logger.debug("Probing Ollama connectivity")
-            await self._llm_base.ainvoke([HumanMessage(content="hi")])
-            logger.info("Ollama connectivity probe successful")
+            async with httpx.AsyncClient(timeout=_PROBE_TIMEOUT) as client:
+                response = await client.get(tags_url)
+                response.raise_for_status()
+                data = response.json()
+        except OllamaLLMFacadeError:
+            raise
         except Exception as e:
             raise LLMInitializationError(
-                f"Ollama connectivity probe failed — is the server running "
-                f"and model '{self._settings.model_name}' loaded? Error: {e}"
+                f"Ollama connectivity probe failed at '{tags_url}' — "
+                f"is the server running? Error: {e}"
             ) from e
+
+        models = data.get("models", [])
+        available_names: set[str] = {
+            m.get("name", "")
+            for m in models
+            if isinstance(m, dict) and m.get("name")
+        }
+
+        model_name = self._settings.model_name
+        if not _model_is_available(model_name, available_names):
+            raise LLMInitializationError(
+                f"Model '{model_name}' is not available in Ollama. "
+                f"Pull it with: 'ollama pull {model_name}'. "
+                f"Available models: {sorted(available_names) or ['none']}."
+            )
+
+        logger.info(
+            "Ollama connectivity probe successful — model is available",
+            extra={"model_name": model_name},
+        )
 
     def _cleanup_on_failure(self) -> None:
         self._initialized = False
         self._init_failed = True
+        self._last_failure_time = time.monotonic()
+        self._tools_bound = False
         self._llm_base = None
         self._llm_with_tools = None
 
     async def _ensure_initialized(self) -> None:
         if self._initialized:
             return
-
-        if self._init_failed:
-            raise LLMNotConfiguredError(
-                "OllamaLLMFacade failed to initialize and will not retry. "
-                "Restart the application to try again."
-            )
-
-        logger.debug("Lazy-initializing OllamaLLMFacade on first use")
-        try:
-            await self.initialize()
-        except LLMInitializationError:
-            raise
-        except Exception as e:
-            logger.exception("Unexpected failure during lazy initialization")
-            raise LLMNotConfiguredError("Failed to initialize OllamaLLMFacade") from e
+        await self.initialize()
 
 
-async def get_ollama_llm_facade_base(request: Request) -> OllamaLLMFacadeInterface:
+async def get_ollama_llm_facade(request: Request) -> OllamaLLMFacadeInterface:
     try:
-        return request.app.state.ollama_llm_facade_base
+        return request.app.state.ollama_llm_facade
     except AttributeError:
-        logger.error("OllamaLLMFacade base not found in application state")
+        logger.error("OllamaLLMFacade not found in application state")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="LLM service (base) is not available",
-        )
-
-
-async def get_ollama_llm_facade_with_tools(request: Request) -> OllamaLLMFacadeInterface:
-    try:
-        return request.app.state.ollama_llm_facade_with_tools
-    except AttributeError:
-        logger.error("OllamaLLMFacade with tools not found in application state")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="LLM service (with tools) is not available",
+            detail="LLM service is not available",
         )

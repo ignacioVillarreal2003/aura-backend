@@ -4,8 +4,8 @@ from app.application.services.support.document_classify_service.interfaces.docum
     DocumentClassifyServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.dtos.support.document_classify.classify_document_request import ClassifyDocumentRequest
-from app.domain.dtos.support.document_classify.classify_document_response import ClassifyDocumentResponse
+from app.domain.dtos.document_classify.classify_document_request import ClassifyDocumentRequest
+from app.domain.dtos.document_classify.classify_document_response import ClassifyDocumentResponse
 
 
 class DocumentClassifyControllerInterface(ABC):

@@ -1,7 +1,9 @@
+import asyncio
 import logging
 from collections.abc import AsyncIterator
-from typing import Any, List
+from typing import Any, List, Optional
 
+import httpx
 from langchain_core.messages import BaseMessage
 from langchain_core.runnables import Runnable
 
@@ -9,10 +11,21 @@ from app.infrastructure.llm.ollama_llm.exceptions.ollama_llm_invoker_exceptions 
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_streaming_invoker_interface import (
     OllamaLLMStreamingInvokerInterface,
 )
+from app.infrastructure.llm.ollama_llm.ollama_llm_invoker_settings import OllamaLLMInvokerSettings
 
 logger = logging.getLogger(__name__)
 
-# Content block types we must not surface as user-visible streamed text.
+_RETRYABLE_EXCEPTIONS: tuple[type[Exception], ...] = (
+    httpx.ConnectError,
+    httpx.ReadTimeout,
+    httpx.WriteTimeout,
+    httpx.PoolTimeout,
+    httpx.RemoteProtocolError,
+    ConnectionError,
+    TimeoutError,
+    OSError,
+)
+
 _SKIP_STREAM_BLOCK_TYPES = frozenset({
     "reasoning",
     "tool_call",
@@ -27,44 +40,88 @@ _SKIP_STREAM_BLOCK_TYPES = frozenset({
 
 
 class OllamaLLMStreamingInvoker(OllamaLLMStreamingInvokerInterface):
+    def __init__(self, settings: Optional[OllamaLLMInvokerSettings] = None) -> None:
+        self._settings = settings or OllamaLLMInvokerSettings()
+
     async def stream_llm_content(
             self,
             llm: Runnable,
             llm_input: List[BaseMessage],
     ) -> AsyncIterator[str]:
-        logger.debug("Streaming LLM", extra={"message_count": len(llm_input)})
+        logger.debug("Starting LLM stream", extra={"message_count": len(llm_input)})
 
-        try:
-            async for chunk in llm.astream(llm_input):
-                text = self._chunk_to_text(chunk)
-                if text:
-                    yield text
-        except LLMInvocationError:
-            raise
-        except (ConnectionError, TimeoutError, OSError) as e:
-            logger.error(
-                "LLM streaming failed (network)",
-                extra={"error_type": type(e).__name__, "error_message": str(e)},
-            )
-            raise LLMInvocationError(
-                "El LLM no respondió después de varios intentos. "
-                "Por favor, intente nuevamente más tarde."
-            ) from e
-        except Exception as e:
-            logger.exception(
-                "Unexpected error during LLM streaming",
-                extra={"error_type": type(e).__name__},
-            )
-            raise LLMInvocationError("The LLM could not process the request.") from e
+        last_error: Exception | None = None
 
-        logger.debug("LLM streaming finished")
+        for attempt in range(self._settings.max_retry_attempts):
+            chunks_yielded = False
+            total_chars = 0
+            try:
+                async for chunk in llm.astream(llm_input):
+                    text = self._chunk_to_text(chunk)
+                    if text:
+                        total_chars += len(text)
+                        if total_chars > self._settings.max_stream_response_chars:
+                            raise LLMInvocationError(
+                                "Streaming response exceeded maximum allowed size."
+                            )
+                        chunks_yielded = True
+                        yield text
+
+                logger.debug(
+                    "LLM streaming completed successfully",
+                    extra={"total_chars": total_chars},
+                )
+                return
+
+            except LLMInvocationError:
+                logger.debug("LLM streaming ended with an invocation error.")
+                raise
+
+            except _RETRYABLE_EXCEPTIONS as e:
+                if chunks_yielded:
+                    logger.error(
+                        "LLM stream interrupted mid-stream — cannot retry",
+                        extra={"error_type": type(e).__name__, "error_message": str(e)},
+                    )
+                    raise LLMInvocationError(
+                        "LLM connection was interrupted mid-stream."
+                    ) from e
+
+                last_error = e
+                logger.warning(
+                    "LLM stream connection failed — retrying",
+                    extra={
+                        "attempt": attempt + 1,
+                        "max_attempts": self._settings.max_retry_attempts,
+                        "error_type": type(e).__name__,
+                    },
+                )
+                if attempt < self._settings.max_retry_attempts - 1:
+                    delay = min(
+                        self._settings.retry_min_wait * (2 ** attempt),
+                        self._settings.retry_max_wait,
+                    )
+                    await asyncio.sleep(delay)
+
+            except Exception as e:
+                logger.exception(
+                    "Unexpected error during LLM streaming",
+                    extra={"error_type": type(e).__name__},
+                )
+                raise LLMInvocationError(
+                    "LLM could not process the streaming request."
+                ) from e
+
+        logger.error(
+            "LLM streaming failed after all retry attempts",
+            extra={"max_attempts": self._settings.max_retry_attempts},
+        )
+        raise LLMInvocationError(
+            "LLM failed to respond after multiple retry attempts. Please try again later."
+        ) from last_error
 
     @staticmethod
     def _chunk_to_text(chunk: Any) -> str:
-        """Extract token/delta text from astream chunks (shape varies by provider/LC version)."""
-        if isinstance(chunk, (tuple, list)) and chunk:
-            chunk = chunk[0]
-
         content = getattr(chunk, "content", None)
 
         if isinstance(content, str):

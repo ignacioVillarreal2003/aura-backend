@@ -14,8 +14,8 @@ from app.application.services.support.fragment_enrich_service.interfaces.fragmen
     FragmentEnrichServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.dtos.support.fragment_enrich.enrich_fragment_request import EnrichFragmentRequest
-from app.domain.dtos.support.fragment_enrich.enrich_fragment_response import EnrichFragmentResponse
+from app.domain.dtos.fragment_enrich.enrich_fragment_request import EnrichFragmentRequest
+from app.domain.dtos.fragment_enrich.enrich_fragment_response import EnrichFragmentResponse
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface import OllamaLLMInvokerInterface
 

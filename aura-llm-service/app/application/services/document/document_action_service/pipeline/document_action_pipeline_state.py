@@ -4,7 +4,7 @@ from typing import Optional
 from app.application.services.document.document_action_service.constants.processing_strategy import ProcessingStrategy
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.document_action_type import DocumentActionType
-from app.domain.dtos.document.document_action.document_action_request import DocumentActionRequest
+from app.domain.dtos.document_action.document_action_request import DocumentActionRequest
 from app.infrastructure.http.document_context_provider.dtos.fragment_response import FragmentResponse
 
 

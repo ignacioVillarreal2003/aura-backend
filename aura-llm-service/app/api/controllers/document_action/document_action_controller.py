@@ -13,8 +13,8 @@ from app.application.services.document.document_action_service.interfaces.docume
     DocumentActionServiceInterface
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.dtos.document.document_action.document_action_request import DocumentActionRequest
-from app.domain.dtos.document.document_action.document_action_response import DocumentActionResponse
+from app.domain.dtos.document_action.document_action_request import DocumentActionRequest
+from app.domain.dtos.document_action.document_action_response import DocumentActionResponse
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 
 logger = logging.getLogger(__name__)

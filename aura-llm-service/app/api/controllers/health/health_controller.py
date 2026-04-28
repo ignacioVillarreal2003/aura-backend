@@ -30,21 +30,23 @@ class HealthController:
             checks["http_client"] = {"status": "not_configured"}
             overall_ok = False
 
-        ollama_facade = getattr(request.app.state, "ollama_llm_facade_base", None)
+        ollama_facade = getattr(request.app.state, "ollama_llm_facade", None)
         if ollama_facade is not None:
             try:
-                initialized = bool(getattr(ollama_facade, "_initialized", False))
+                healthy = ollama_facade.is_healthy()
+                tools_bound = ollama_facade.tools_bound if healthy else False
                 checks["ollama"] = {
-                    "status": "ok" if initialized else "error",
+                    "status": "ok" if healthy else "error",
+                    "tools_bound": tools_bound,
                 }
-                if not initialized:
+                if not healthy:
                     overall_ok = False
             except Exception as exc:
                 logger.warning("Ollama facade health check failed", exc_info=exc)
-                checks["ollama"] = {"status": "error"}
+                checks["ollama"] = {"status": "error", "tools_bound": False}
                 overall_ok = False
         else:
-            checks["ollama"] = {"status": "not_configured"}
+            checks["ollama"] = {"status": "not_configured", "tools_bound": False}
             overall_ok = False
 
         http_status = 200 if overall_ok else 503
