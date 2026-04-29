@@ -60,10 +60,10 @@ Salida:
 
 BASE_QUESTION_HUMAN_PROMPT = """
 Historial de conversación:
-{history}
+{history_messages}
 
 Pregunta actual:
-{query}
+{question}
 
 Consulta autocontenida:
 """.strip()
@@ -125,7 +125,7 @@ reglamento interno definición
 
 KEYWORD_QUESTION_HUMAN_PROMPT = """
 Consulta:
-{contextual_question}
+{question}
 
 Keywords:
 """.strip()

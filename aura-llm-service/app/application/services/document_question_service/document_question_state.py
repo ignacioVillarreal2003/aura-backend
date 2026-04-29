@@ -8,12 +8,12 @@ from app.infrastructure.http.document_context_provider.dtos.fragment_response im
 
 
 @dataclass
-class DocumentQuestionPipelineState:
+class DocumentQuestionState:
     authenticated_user: AuthenticatedUser
     messages: list[Message] = field(default_factory=list)
 
-    question_with_history: Optional[str] = None
-    retrieval_keywords: Optional[str] = None
+    base_question: Optional[str] = None
+    keyword_question: Optional[str] = None
 
     retrieved_fragments: list[FragmentResponse] = field(default_factory=list)
 
@@ -21,12 +21,12 @@ class DocumentQuestionPipelineState:
 
     @classmethod
     def from_request(
-        cls,
-        request: DocumentQuestionRequest,
-        authenticated_user: AuthenticatedUser
-    ) -> "DocumentQuestionPipelineState":
+            cls,
+            document_question_request: DocumentQuestionRequest,
+            authenticated_user: AuthenticatedUser,
+    ) -> DocumentQuestionState:
         return cls(
-            messages=request.messages,
+            messages=document_question_request.messages,
             authenticated_user=authenticated_user,
         )
 
@@ -41,9 +41,3 @@ class DocumentQuestionPipelineState:
             self
     ) -> list[Message]:
         return self.messages[:-1]
-
-    @property
-    def effective_question(
-            self
-    ) -> str:
-        return self.question_with_history or self.current_message.content
