@@ -1,7 +1,7 @@
-from app.api.controllers.fragment.fragment_query.fragment_query_controller import (
+from app.api.controllers.fragment.fragment_query_controller.fragment_query_controller import (
     router as fragment_query_router,
 )
-from app.api.controllers.fragment.post_process_fragment.post_process_fragment_controller import (
+from app.api.controllers.fragment.post_process_fragment_controller.post_process_fragment_controller import (
     router as post_process_fragment_router,
 )
 

@@ -11,7 +11,7 @@ from app.api.controllers.document import (
     document_query_router,
     post_process_document_router,
 )
-from app.api.controllers.health import health_controller
+from app.api.controllers.health_controller import health_controller
 
 router = APIRouter()
 
