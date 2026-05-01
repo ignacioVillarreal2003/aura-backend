@@ -7,6 +7,14 @@ from app.domain.field_limits import MAX_QUESTION_CHARS, MAX_CONTENT_CHARS
 from app.infrastructure.http.document_context_provider.dtos.fragment_response import FragmentResponse
 
 
+class DocumentQuestionStreamProgress(BaseModel):
+    type: Literal["progress"] = "progress"
+    step: str = Field(..., min_length=1)
+    message: str = Field(..., min_length=1)
+
+    model_config = {"from_attributes": True}
+
+
 class DocumentQuestionStreamMeta(BaseModel):
     type: Literal["meta"] = "meta"
     question: str = Field(..., min_length=1, max_length=MAX_QUESTION_CHARS)
@@ -38,6 +46,7 @@ class DocumentQuestionStreamError(BaseModel):
 
 
 DocumentQuestionStreamEvent = Union[
+    DocumentQuestionStreamProgress,
     DocumentQuestionStreamMeta,
     DocumentQuestionStreamDelta,
     DocumentQuestionStreamComplete,

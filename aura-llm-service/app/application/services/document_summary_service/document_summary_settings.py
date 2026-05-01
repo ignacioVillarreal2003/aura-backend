@@ -11,13 +11,8 @@ class DocumentSummaryServiceSettings(BaseSettings):
         extra="ignore",
     )
 
-    pipeline_plugins: list[str] = Field(
-        default_factory=lambda: [
-            "validate_request",
-            "retrieve_fragments",
-            "generate_summary_direct",
-            "map_chunks",
-            "reduce_summaries",
-            "fallback_summary",
-        ]
-    )
+    large_document_threshold: int = Field(default=10, ge=2, le=50)
+    chunk_size: int = Field(default=5, ge=1, le=20)
+    max_concurrent_chunks: int = Field(default=3, ge=1, le=10)
+    max_retry_attempts: int = Field(default=3, ge=0, le=10)
+    retry_delay: float = Field(default=1.0, ge=0.0, le=60.0)

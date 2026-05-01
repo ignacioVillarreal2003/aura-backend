@@ -1,47 +1,37 @@
 import logging
 from typing import Optional
+
 from fastapi import HTTPException, Request, status
 
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
 from app.application.authorization.permissions import Permissions
 from app.application.exceptions.app_exception import RequestValidationException
-from app.application.services.document_action_service.document_action_settings import (
-    DocumentActionServiceSettings,
-)
+from app.application.services.document_action_service.document_action_settings import DocumentActionServiceSettings
+from app.application.services.document_action_service.document_action_state import DocumentActionState
 from app.application.services.document_action_service.exceptions.document_action_service_exceptions import (
     DocumentActionServiceException,
-)
-from app.application.services.document_action_service.interfaces.document_action_plugin_interface import (
-    DocumentActionPlugin,
 )
 from app.application.services.document_action_service.interfaces.document_action_service_interface import (
     DocumentActionServiceInterface,
 )
-from app.application.services.document_action_service.pipeline.document_action_pipeline import (
-    DocumentActionPipeline,
+from app.application.services.document_action_service.processors.context_document_action_processor.context_document_action_processor import (
+    ContextDocumentActionProcessor,
 )
-from app.application.services.document_action_service.pipeline.document_action_pipeline_resources import (
-    DocumentActionPipelineResources,
+from app.application.services.document_action_service.processors.direct_document_action_processor.direct_document_action_processor import (
+    DirectDocumentActionProcessor,
 )
-from app.application.services.document_action_service.pipeline.document_action_pipeline_state import (
-    DocumentActionPipelineState,
+from app.application.services.document_action_service.processors.fallback_document_action_processor.fallback_document_action_processor import (
+    FallbackDocumentActionProcessor,
 )
-from app.application.services.document_action_service.steps.fallback_response.fallback_response_plugin import (
-    FallbackResponsePlugin,
+from app.application.services.document_action_service.processors.map_chunks_document_action_processor.map_chunks_document_action_processor import (
+    MapChunksDocumentActionProcessor,
 )
-from app.application.services.document_action_service.steps.generate_response_direct.generate_response_direct_plugin import (
-    GenerateResponseDirectPlugin,
+from app.application.services.document_action_service.processors.reduce_document_action_processor.reduce_document_action_processor import (
+    ReduceDocumentActionProcessor,
 )
-from app.application.services.document_action_service.steps.map_chunks.map_chunks_plugin import MapChunksPlugin
-from app.application.services.document_action_service.steps.reduce_results.reduce_results_plugin import (
-    ReduceResultsPlugin,
-)
-from app.application.services.document_action_service.steps.retrieve_fragments.retrieve_fragments_plugin import (
-    RetrieveFragmentsPlugin,
-)
-from app.application.services.document_action_service.steps.validate_request.validate_request_plugin import (
-    ValidateRequestPlugin,
+from app.application.services.document_action_service.processors.validate_document_action_processor.validate_document_action_processor import (
+    ValidateDocumentActionProcessor,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.document_action.document_action_request import DocumentActionRequest
@@ -54,31 +44,49 @@ from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface i
 
 logger = logging.getLogger(__name__)
 
+_KNOWN_EXCEPTIONS = (
+    RequestValidationException,
+    DocumentActionServiceException,
+    UnauthorizedException,
+)
+
 
 class DocumentActionService(DocumentActionServiceInterface):
-    _KNOWN_EXCEPTIONS = (
-        RequestValidationException,
-        DocumentActionServiceException,
-        UnauthorizedException,
-    )
-
     def __init__(
             self,
             ollama_llm_facade: OllamaLLMFacadeInterface,
-            llm_invoker: OllamaLLMInvokerInterface,
+            ollama_llm_invoker: OllamaLLMInvokerInterface,
             document_context_provider: DocumentContextProviderInterface,
             authorizer: Authorizer,
             document_action_service_settings: Optional[DocumentActionServiceSettings] = None,
     ) -> None:
-        self._ollama_llm_facade = ollama_llm_facade
-        self._llm_invoker = llm_invoker
-        self._document_context_provider = document_context_provider
         self._authorizer = authorizer
-        settings = document_action_service_settings or DocumentActionServiceSettings()
-        self._pipeline = DocumentActionPipeline(
-            plugins=self._build_pipeline_plugins(settings.pipeline_plugins),
+        self._settings = document_action_service_settings or DocumentActionServiceSettings()
+
+        self._validate_processor = ValidateDocumentActionProcessor(
+            document_action_service_settings=self._settings,
         )
-        logger.info("DocumentActionService initialized successfully")
+        self._context_processor = ContextDocumentActionProcessor(
+            document_action_service_settings=self._settings,
+            document_context_provider=document_context_provider,
+        )
+        self._direct_processor = DirectDocumentActionProcessor(
+            ollama_llm_facade=ollama_llm_facade,
+            ollama_llm_invoker=ollama_llm_invoker,
+        )
+        self._map_chunks_processor = MapChunksDocumentActionProcessor(
+            document_action_service_settings=self._settings,
+            ollama_llm_facade=ollama_llm_facade,
+            ollama_llm_invoker=ollama_llm_invoker,
+        )
+        self._reduce_processor = ReduceDocumentActionProcessor(
+            ollama_llm_facade=ollama_llm_facade,
+            ollama_llm_invoker=ollama_llm_invoker,
+        )
+        self._fallback_processor = FallbackDocumentActionProcessor(
+            ollama_llm_facade=ollama_llm_facade,
+            ollama_llm_invoker=ollama_llm_invoker,
+        )
 
     async def execute_document_action(
             self,
@@ -93,38 +101,23 @@ class DocumentActionService(DocumentActionServiceInterface):
                 "action": document_action_request.action.value if document_action_request.action else None,
             },
         )
-
         self._authorizer.require_permissions(
             authenticated_user=authenticated_user,
             required_permissions=frozenset({Permissions.LLM_DOCUMENT_ACTION}),
         )
         try:
-            state = DocumentActionPipelineState.from_request(
-                document_action_request,
-                authenticated_user=authenticated_user,
-            )
-            resources = DocumentActionPipelineResources(
-                ollama_llm_facade=self._ollama_llm_facade,
-                llm_invoker=self._llm_invoker,
-                document_context_provider=self._document_context_provider,
-            )
-
-            await self._pipeline.run(state=state, resources=resources)
-
+            state = DocumentActionState.from_request(document_action_request, authenticated_user)
+            await self._run_pipeline(state)
             logger.info(
                 "Document action execution completed",
-                extra={
-                    "user_id": authenticated_user.id,
-                    "document_ids": document_action_request.document_ids,
-                },
+                extra={"user_id": authenticated_user.id, "document_ids": document_action_request.document_ids},
             )
             return DocumentActionResponse(
                 result=state.result,
                 document_ids=state.document_ids,
                 action=state.action,
             )
-
-        except self._KNOWN_EXCEPTIONS:
+        except _KNOWN_EXCEPTIONS:
             raise
         except Exception as e:
             logger.exception(
@@ -135,29 +128,13 @@ class DocumentActionService(DocumentActionServiceInterface):
                 "Unexpected error while processing the document action"
             ) from e
 
-    @staticmethod
-    def _build_pipeline_plugins(plugin_names: list[str]) -> list[DocumentActionPlugin]:
-        registry: dict[str, type[DocumentActionPlugin]] = {
-            "validate_request": ValidateRequestPlugin,
-            "retrieve_fragments": RetrieveFragmentsPlugin,
-            "generate_response_direct": GenerateResponseDirectPlugin,
-            "map_chunks": MapChunksPlugin,
-            "reduce_results": ReduceResultsPlugin,
-            "fallback_response": FallbackResponsePlugin,
-        }
-
-        plugins: list[DocumentActionPlugin] = []
-        for name in plugin_names:
-            plugin_cls = registry.get(name)
-            if plugin_cls is None:
-                logger.warning(
-                    "Unknown document_action pipeline plugin",
-                    extra={"plugin_name": name},
-                )
-                continue
-            plugins.append(plugin_cls())
-
-        return plugins
+    async def _run_pipeline(self, state: DocumentActionState) -> None:
+        await self._validate_processor.run(state)
+        await self._context_processor.run(state)
+        await self._direct_processor.run(state)
+        await self._map_chunks_processor.run(state)
+        await self._reduce_processor.run(state)
+        await self._fallback_processor.run(state)
 
 
 async def get_document_action_service(request: Request) -> DocumentActionServiceInterface:

@@ -15,7 +15,7 @@ class DocumentQuestionState:
     base_question: Optional[str] = None
     keyword_question: Optional[str] = None
 
-    retrieved_fragments: list[FragmentResponse] = field(default_factory=list)
+    fragments: list[FragmentResponse] = field(default_factory=list)
 
     answer: str = ""
 

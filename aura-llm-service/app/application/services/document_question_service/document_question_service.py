@@ -1,7 +1,6 @@
 import logging
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator
 from typing import Optional
-
 from fastapi import HTTPException, Request, status
 
 from app.application.authorization.authorizer import Authorizer
@@ -11,21 +10,34 @@ from app.application.exceptions.app_exception import RequestValidationException
 from app.application.services.document_question_service.document_question_settings import (
     DocumentQuestionServiceSettings,
 )
+from app.application.services.document_question_service.document_question_state import DocumentQuestionState
 from app.application.services.document_question_service.exceptions.document_question_service_exceptions import (
     DocumentQuestionServiceException,
 )
 from app.application.services.document_question_service.interfaces.document_question_service_interface import (
     DocumentQuestionServiceInterface,
 )
+from app.application.services.document_question_service.processors.answer_document_question_processor.answer_document_question_processor import (
+    AnswerDocumentQuestionProcessor,
+)
+from app.application.services.document_question_service.processors.context_document_question_processor.context_document_question_processor import (
+    ContextDocumentQuestionProcessor,
+)
+from app.application.services.document_question_service.processors.fallback_document_question_processor.fallback_document_question_processor import (
+    FallbackDocumentQuestionProcessor,
+)
+from app.application.services.document_question_service.processors.question_document_question_processor.question_document_question_processor import (
+    QuestionDocumentQuestionProcessor,
+)
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.document_question.document_question_request import DocumentQuestionRequest
 from app.domain.dtos.document_question.document_question_response import DocumentQuestionResponse
 from app.domain.dtos.document_question.document_question_stream_events import (
     DocumentQuestionStreamComplete,
-    DocumentQuestionStreamDelta,
     DocumentQuestionStreamError,
     DocumentQuestionStreamEvent,
     DocumentQuestionStreamMeta,
+    DocumentQuestionStreamProgress,
 )
 from app.infrastructure.http.document_context_provider.interfaces.document_context_provider_interface import (
     DocumentContextProviderInterface,
@@ -37,40 +49,7 @@ from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_streaming_invoker_i
     OllamaLLMStreamingInvokerInterface,
 )
 
-from app.application.services.document_question_service.pipeline.document_question_pipeline import (
-    DocumentQuestionPipeline,
-)
-from app.application.services.document_question_service.pipeline.document_question_pipeline_state import (
-    DocumentQuestionPipelineState,
-)
-from app.application.services.document_question_service.pipeline.document_question_pipeline_resources import (
-    DocumentQuestionPipelineResources,
-)
-from app.application.services.document_question_service.interfaces.document_question_plugin_interface import (
-    DocumentQuestionPlugin
-)
-from app.application.services.document_question_service.steps.rewrite_query.rewrite_query_plugin import (
-    RewriteQueryPlugin,
-)
-from app.application.services.document_question_service.steps.retrieve_context.retrieve_context_plugin import (
-    RetrieveContextPlugin,
-)
-from app.application.services.document_question_service.steps.generate_answer.generate_answer_plugin import (
-    GenerateAnswerPlugin,
-)
-from app.application.services.document_question_service.steps.generate_answer.generate_answer_prompt import (
-    NO_INFO_SENTINEL,
-)
-from app.application.services.document_question_service.steps.fallback_answer.fallback_answer_plugin import (
-    FallbackAnswerPlugin,
-)
-
 logger = logging.getLogger(__name__)
-
-_STREAM_PRE_ANSWER_PLUGIN_NAMES: tuple[str, ...] = (
-    "rewrite_query",
-    "retrieve_context",
-)
 
 
 class DocumentQuestionService(DocumentQuestionServiceInterface):
@@ -83,23 +62,33 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
     def __init__(
             self,
             ollama_llm_facade: OllamaLLMFacadeInterface,
-            llm_invoker: OllamaLLMInvokerInterface,
-            document_context_provider: DocumentContextProviderInterface,
+            ollama_llm_invoker: OllamaLLMInvokerInterface,
             ollama_llm_streaming_invoker: OllamaLLMStreamingInvokerInterface,
+            document_context_provider: DocumentContextProviderInterface,
             authorizer: Authorizer,
             document_question_service_settings: Optional[DocumentQuestionServiceSettings] = None,
     ) -> None:
-        self._ollama_llm_facade = ollama_llm_facade
-        self._llm_invoker = llm_invoker
-        self._document_context_provider = document_context_provider
-        self._llm_streaming_invoker = ollama_llm_streaming_invoker
         self._authorizer = authorizer
         self._settings = document_question_service_settings or DocumentQuestionServiceSettings()
-        self._pipeline = DocumentQuestionPipeline(
-            plugins=self._build_pipeline_plugins(),
+
+        self._question_processor = QuestionDocumentQuestionProcessor(
+            document_question_service_settings=self._settings,
+            ollama_llm_facade=ollama_llm_facade,
+            ollama_llm_invoker=ollama_llm_invoker,
         )
-        self._stream_pre_answer_pipeline = DocumentQuestionPipeline(
-            plugins=self._build_stream_pre_answer_plugins(),
+        self._context_processor = ContextDocumentQuestionProcessor(
+            document_question_service_settings=self._settings,
+            document_context_provider=document_context_provider,
+        )
+        self._answer_processor = AnswerDocumentQuestionProcessor(
+            document_question_service_settings=self._settings,
+            ollama_llm_facade=ollama_llm_facade,
+            ollama_llm_invoker=ollama_llm_invoker,
+            ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
+        )
+        self._fallback_processor = FallbackDocumentQuestionProcessor(
+            ollama_llm_facade=ollama_llm_facade,
+            ollama_llm_invoker=ollama_llm_invoker,
         )
 
     async def execute_document_question(
@@ -108,31 +97,19 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
             authenticated_user: AuthenticatedUser,
     ) -> DocumentQuestionResponse:
         logger.info("Document question execution initiated")
-
         self._authorizer.require_permissions(
             authenticated_user=authenticated_user,
             required_permissions=frozenset({Permissions.LLM_DOCUMENT_QUESTION}),
         )
         try:
-            state = DocumentQuestionPipelineState.from_request(
-                document_question_request,
-                authenticated_user=authenticated_user,
-            )
-            resources = DocumentQuestionPipelineResources(
-                ollama_llm_facade=self._ollama_llm_facade,
-                llm_invoker=self._llm_invoker,
-                document_context_provider=self._document_context_provider,
-            )
-
-            await self._pipeline.run(state=state, resources=resources)
-
+            state = DocumentQuestionState.from_request(document_question_request, authenticated_user)
+            await self._run_pipeline(state)
             logger.info("Document question execution completed")
             return DocumentQuestionResponse(
                 question=state.current_message.content,
                 answer=state.answer,
-                fragments=state.retrieved_fragments
+                fragments=state.fragments,
             )
-
         except self._KNOWN_EXCEPTIONS:
             raise
         except Exception as e:
@@ -154,49 +131,41 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
             required_permissions=frozenset({Permissions.LLM_DOCUMENT_QUESTION_STREAM}),
         )
         try:
-            state = DocumentQuestionPipelineState.from_request(
-                document_question_request,
-                authenticated_user=authenticated_user,
-            )
-            resources = DocumentQuestionPipelineResources(
-                ollama_llm_facade=self._ollama_llm_facade,
-                llm_invoker=self._llm_invoker,
-                document_context_provider=self._document_context_provider,
-            )
-            await self._stream_pre_answer_pipeline.run(state=state, resources=resources)
+            state = DocumentQuestionState.from_request(document_question_request, authenticated_user)
 
-            fragments = state.retrieved_fragments
+            if self._settings.question_processor_enabled:
+                yield DocumentQuestionStreamProgress(
+                    step="question_processing",
+                    message="Analizando y reformulando la consulta...",
+                )
+            await self._question_processor.run(state)
+
+            yield DocumentQuestionStreamProgress(
+                step="context_retrieval",
+                message="Recuperando fragmentos de contexto relevantes...",
+            )
+            await self._context_processor.run(state)
+
             yield DocumentQuestionStreamMeta(
                 question=state.current_message.content,
-                fragments=list(fragments),
+                fragments=list(state.fragments),
             )
 
-            has_context = bool(fragments)
-            state.answer = ""
-
-            if has_context:
-                llm_input = GenerateAnswerPlugin.build_generate_answer_llm_input(
-                    state,
-                    self._settings.generate_answer_history_window,
+            if state.fragments:
+                yield DocumentQuestionStreamProgress(
+                    step="answer_generation",
+                    message="Generando respuesta con el contexto encontrado...",
                 )
-                llm = await self._ollama_llm_facade.get_llm_base()
                 try:
-                    async for delta in self._llm_streaming_invoker.stream_llm_content(
-                            llm,
-                            llm_input,
-                    ):
-                        state.answer += delta
-                        yield DocumentQuestionStreamDelta(text=delta)
+                    async for delta in self._answer_processor.stream(state):
+                        yield delta
                 except LLMInvocationError as e:
-                    logger.exception("LLM streaming failed for document question")
-                    yield DocumentQuestionStreamError(
-                        message=str(e),
-                        code=type(e).__name__,
-                    )
+                    logger.exception("LLM error during answer streaming")
+                    yield DocumentQuestionStreamError(message=str(e), code=type(e).__name__)
                     return
                 except Exception as e:
                     logger.exception(
-                        "Failed to stream answer",
+                        "Error during answer streaming",
                         extra={"error_type": type(e).__name__},
                     )
                     yield DocumentQuestionStreamError(
@@ -205,66 +174,28 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
                     )
                     return
 
-                # Same model + messages as sync `GenerateAnswerPlugin`; some LC/Ollama
-                # stream shapes yield no extractable text — fall back to non-stream invoke.
-                if not (state.answer and state.answer.strip()):
-                    logger.warning(
-                        "LLM stream produced no visible text; invoking same prompt without stream",
-                        extra={"fragment_count": len(fragments)},
-                    )
-                    try:
-                        fallback_answer = await self._llm_invoker.call_llm_content(
-                            llm=llm,
-                            llm_input=llm_input,
-                        )
-                        if fallback_answer and fallback_answer.strip() and NO_INFO_SENTINEL not in fallback_answer:
-                            state.answer = fallback_answer.strip()
-                            yield DocumentQuestionStreamDelta(text=state.answer)
-                    except LLMInvocationError as e:
-                        logger.exception(
-                            "LLM non-stream fallback failed after empty stream",
-                        )
-                        yield DocumentQuestionStreamError(
-                            message=str(e),
-                            code=type(e).__name__,
-                        )
-                        return
-                    except Exception:
-                        logger.exception(
-                            "LLM non-stream fallback failed after empty stream",
-                            extra={"error_type": type(e).__name__},
-                        )
-                        yield DocumentQuestionStreamError(
-                            message="Error invoking the language model",
-                            code="StreamAnswerError",
-                        )
-                        return
-
-            state.answer = state.answer.strip() if state.answer else ""
-
-            if state.answer and NO_INFO_SENTINEL in state.answer:
-                logger.debug("LLM indicated no relevant information found in context — redirecting to fallback.")
-                state.answer = ""
-
-            if not has_context or not state.answer:
-                fallback = FallbackAnswerPlugin()
-                if fallback.should_run(state=state, resources=resources):
-                    await fallback.run(state=state, resources=resources)
+            state.answer = state.answer.strip()
+            if not state.answer:
+                reason = (
+                    "La respuesta generada no fue suficiente, generando respuesta alternativa..."
+                    if state.fragments
+                    else "Sin contexto en la base documental, generando respuesta alternativa..."
+                )
+                yield DocumentQuestionStreamProgress(step="fallback", message=reason)
+                await self._fallback_processor.run(state)
 
             yield DocumentQuestionStreamComplete(
                 result=DocumentQuestionResponse(
                     question=state.current_message.content,
                     answer=state.answer,
-                    fragments=fragments,
+                    fragments=state.fragments,
                 ),
             )
 
         except RequestValidationException as e:
             yield DocumentQuestionStreamError(message=e.message, code=e.code)
-            return
         except DocumentQuestionServiceException as e:
             yield DocumentQuestionStreamError(message=e.message, code=e.code)
-            return
         except Exception as e:
             logger.exception(
                 "Unexpected error during document question stream",
@@ -274,47 +205,12 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
                 message="Unexpected error while processing the question",
                 code="DocumentQuestionStreamError",
             )
-            return
 
-    def _build_pipeline_plugins(self) -> list[DocumentQuestionPlugin]:
-        s = self._settings
-        factories: dict[str, Callable[[], DocumentQuestionPlugin]] = {
-            "rewrite_query": lambda: RewriteQueryPlugin(settings=s),
-            "retrieve_context": lambda: RetrieveContextPlugin(settings=s),
-            "generate_answer": lambda: GenerateAnswerPlugin(settings=s),
-            "fallback_answer": lambda: FallbackAnswerPlugin(),
-        }
-
-        plugins: list[DocumentQuestionPlugin] = []
-        for name in s.pipeline_plugins:
-            factory = factories.get(name)
-            if factory is None:
-                logger.warning(
-                    "Unknown document_question pipeline plugin",
-                    extra={"plugin_name": name},
-                )
-                continue
-            plugins.append(factory())
-
-        return plugins
-
-    def _build_stream_pre_answer_plugins(self) -> list[DocumentQuestionPlugin]:
-        s = self._settings
-        factories: dict[str, Callable[[], DocumentQuestionPlugin]] = {
-            "rewrite_query": lambda: RewriteQueryPlugin(settings=s),
-            "retrieve_context": lambda: RetrieveContextPlugin(settings=s),
-        }
-        plugins: list[DocumentQuestionPlugin] = []
-        for name in _STREAM_PRE_ANSWER_PLUGIN_NAMES:
-            factory = factories.get(name)
-            if factory is None:
-                logger.warning(
-                    "Unknown stream pre-answer plugin name",
-                    extra={"plugin_name": name},
-                )
-                continue
-            plugins.append(factory())
-        return plugins
+    async def _run_pipeline(self, state: DocumentQuestionState) -> None:
+        await self._question_processor.run(state)
+        await self._context_processor.run(state)
+        await self._answer_processor.run(state)
+        await self._fallback_processor.run(state)
 
 
 async def get_document_question_service(request: Request) -> DocumentQuestionServiceInterface:
