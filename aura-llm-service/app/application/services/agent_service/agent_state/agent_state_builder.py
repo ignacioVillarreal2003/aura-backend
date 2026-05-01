@@ -3,7 +3,8 @@ from typing import List, Optional
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
 from app.application.services.agent_service.agent_state.agent_state import AgentState
-from app.application.services.agent_service.constants.sentimient import Sentiment
+from app.application.services.agent_service.constants.query_intent import QueryIntent
+from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.agent.agent_request import AgentRequest
 from app.domain.dtos.message import Message
@@ -12,7 +13,11 @@ logger = logging.getLogger(__name__)
 
 
 class AgentStateBuilder:
-    def build_agent_state(self, agent_request: AgentRequest) -> AgentState:
+    def build_agent_state(
+            self,
+            agent_request: AgentRequest,
+            authenticated_user: AuthenticatedUser,
+    ) -> AgentState:
         logger.debug(
             "Building agent state",
             extra={"message_count": len(agent_request.messages) if agent_request.messages else 0}
@@ -23,8 +28,19 @@ class AgentStateBuilder:
             messages = self._convert_messages(agent_request.messages)
 
         agent_state: AgentState = AgentState(
+            authenticated_user=authenticated_user,
             messages=messages,
-            sentiment=Sentiment.neutral,
+            normalized_query="",
+            resolved_query="",
+            intent=QueryIntent.otro.value,
+            entities={},
+            keywords=[],
+            retrieved_fragments=[],
+            reranked_fragments=[],
+            context="",
+            answer="",
+            guardrail_passed=False,
+            fallback_triggered=False,
         )
 
         logger.debug("Agent state built", extra={"message_count": len(messages)})

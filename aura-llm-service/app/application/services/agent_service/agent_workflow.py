@@ -1,116 +1,203 @@
 import logging
-from typing import Optional
 from langgraph.graph import END, StateGraph
-from langgraph.prebuilt import ToolNode
 
-from app.application.services.agent_service.agent_configuration import AgentConfiguration
-from app.application.services.agent_service.agent_node.agent_node import AgentNode
-from app.application.services.agent_service.agent_node.agent_node_configuration import AgentNodeConfiguration
+from app.application.services.agent_service.agent_settings import AgentServiceSettings
 from app.application.services.agent_service.agent_state.agent_state import AgentState
 from app.application.services.agent_service.constants.node_name import NodeName
-from app.application.services.agent_service.sentiment_node.sentiment_node import SentimentNode
-from app.application.services.agent_service.sentiment_node.sentiment_node_configuration import (
-    SentimentNodeConfiguration
+from app.application.services.agent_service.constants.query_intent import QueryIntent
+from app.application.services.agent_service.nodes.answer_generator_node.answer_generator_node import AnswerGeneratorNode
+from app.application.services.agent_service.nodes.context_builder_node.context_builder_node import ContextBuilderNode
+from app.application.services.agent_service.nodes.context_resolver_node.context_resolver_node import ContextResolverNode
+from app.application.services.agent_service.nodes.document_fetcher_node.document_fetcher_node import DocumentFetcherNode
+from app.application.services.agent_service.nodes.entity_extractor_node.entity_extractor_node import EntityExtractorNode
+from app.application.services.agent_service.nodes.fallback_node.fallback_node import FallbackNode
+from app.application.services.agent_service.nodes.guardrails_node.guardrails_node import GuardrailsNode
+from app.application.services.agent_service.nodes.input_normalizer_node.input_normalizer_node import InputNormalizerNode
+from app.application.services.agent_service.nodes.intent_classifier_node.intent_classifier_node import IntentClassifierNode
+from app.application.services.agent_service.nodes.keyword_extractor_node.keyword_extractor_node import KeywordExtractorNode
+from app.application.services.agent_service.nodes.reranker_node.reranker_node import RerankerNode
+from app.application.services.agent_service.nodes.retriever_node.retriever_node import RetrieverNode
+from app.infrastructure.http.document_context_provider.interfaces.document_context_provider_interface import (
+    DocumentContextProviderInterface,
 )
-from app.application.services.agent_service.tools.tool_call_router import ToolCallRouter
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 
 logger = logging.getLogger(__name__)
 
 
+# ── Routing functions ─────────────────────────────────────────────────────────
+
+def _route_after_keyword_extractor(state: AgentState) -> str:
+    intent = state.get("intent", "")
+    if intent == QueryIntent.busqueda_documento.value:
+        return NodeName.document_fetcher.value
+    return NodeName.retriever.value
+
+
+def _route_after_retrieval(state: AgentState) -> str:
+    fragments = state.get("retrieved_fragments", [])
+    return NodeName.reranker.value if fragments else NodeName.fallback.value
+
+
+def _route_after_guardrails(state: AgentState) -> str:
+    return END if state.get("guardrail_passed", True) else NodeName.fallback.value
+
+
+# ── Workflow ──────────────────────────────────────────────────────────────────
+
 class AgentWorkflow:
     def __init__(
             self,
             ollama_llm_facade: OllamaLLMFacadeInterface,
-            agent_configuration: AgentConfiguration,
-            sentiment_node_configuration: SentimentNodeConfiguration,
-            agent_node_configuration: AgentNodeConfiguration
+            document_context_provider: DocumentContextProviderInterface,
+            agent_service_settings: AgentServiceSettings,
     ) -> None:
         self._ollama_llm_facade = ollama_llm_facade
-        self._agent_configuration = agent_configuration
-        self._sentiment_node_configuration = sentiment_node_configuration
-        self._agent_node_configuration = agent_node_configuration
+        self._document_context_provider = document_context_provider
+        self._agent_service_settings = agent_service_settings
 
-        self._workflow = StateGraph(AgentState)
+        self._graph = StateGraph(AgentState)
         self._compiled_workflow = None
-
-        self._sentiment_node: Optional[SentimentNode] = None
-        self._agent_node: Optional[AgentNode] = None
-        self._tool_node: Optional[ToolNode] = None
 
         logger.debug("AgentWorkflow initialized")
 
-    async def build(self):
+    async def build(self) -> None:
         logger.info("Building agent workflow")
-
         try:
-            await self._create_nodes()
             self._add_nodes()
-            self._set_entry_point()
             self._add_edges()
-            self._compiled_workflow = self._workflow.compile()
+            self._compiled_workflow = self._graph.compile()
             logger.info("Agent workflow built successfully")
-            return self._compiled_workflow
         except Exception as e:
             logger.exception("Failed to build agent workflow")
             raise RuntimeError("Failed to build agent workflow") from e
 
-    async def invoke(self, state: AgentState):
+    async def invoke(self, state: AgentState) -> AgentState:
         if self._compiled_workflow is None:
             raise RuntimeError("Workflow not built. Call build() first.")
         return await self._compiled_workflow.ainvoke(state)
 
-    async def _create_nodes(self) -> None:
-        logger.debug("Creating workflow nodes")
-
-        self._sentiment_node = SentimentNode(
-            ollama_llm_facade=self._ollama_llm_facade,
-            configuration=self._sentiment_node_configuration
-        )
-
-        self._agent_node = AgentNode(
-            ollama_llm_facade=self._ollama_llm_facade,
-            configuration=self._agent_node_configuration
-        )
-
-        tools = self._ollama_llm_facade.tools
-        if tools:
-            self._tool_node = ToolNode(tools)
-            logger.debug("Tool node created", extra={"tool_count": len(tools)})
-
     def _add_nodes(self) -> None:
         logger.debug("Adding nodes to workflow graph")
 
-        if self._sentiment_node is not None:
-            self._workflow.add_node(NodeName.sentiment_node.value, self._sentiment_node.process)
-
-        if self._agent_node is not None:
-            self._workflow.add_node(NodeName.agent_node.value, self._agent_node.process)
-
-        if self._tool_node is not None:
-            self._workflow.add_node(NodeName.tools.value, self._tool_node)
-
-    def _set_entry_point(self) -> None:
-        entry_point = (
-            NodeName.sentiment_node.value
-            if self._sentiment_node
-            else NodeName.agent_node.value
+        self._graph.add_node(
+            NodeName.input_normalizer.value,
+            InputNormalizerNode().process,
         )
-        self._workflow.set_entry_point(entry_point)
+        s = self._agent_service_settings
+        self._graph.add_node(
+            NodeName.context_resolver.value,
+            ContextResolverNode(
+                ollama_llm_facade=self._ollama_llm_facade,
+                settings=s.context_resolver,
+            ).process,
+        )
+        self._graph.add_node(
+            NodeName.intent_classifier.value,
+            IntentClassifierNode(
+                ollama_llm_facade=self._ollama_llm_facade,
+                settings=s.intent_classifier,
+            ).process,
+        )
+        self._graph.add_node(
+            NodeName.entity_extractor.value,
+            EntityExtractorNode(
+                ollama_llm_facade=self._ollama_llm_facade,
+                settings=s.entity_extractor,
+            ).process,
+        )
+        self._graph.add_node(
+            NodeName.keyword_extractor.value,
+            KeywordExtractorNode(
+                ollama_llm_facade=self._ollama_llm_facade,
+                settings=s.keyword_extractor,
+            ).process,
+        )
+        self._graph.add_node(
+            NodeName.retriever.value,
+            RetrieverNode(
+                document_context_provider=self._document_context_provider,
+                settings=s,
+            ).process,
+        )
+        self._graph.add_node(
+            NodeName.document_fetcher.value,
+            DocumentFetcherNode(
+                document_context_provider=self._document_context_provider,
+                settings=s,
+            ).process,
+        )
+        self._graph.add_node(
+            NodeName.reranker.value,
+            RerankerNode(
+                ollama_llm_facade=self._ollama_llm_facade,
+                settings=s,
+            ).process,
+        )
+        self._graph.add_node(
+            NodeName.context_builder.value,
+            ContextBuilderNode(settings=s).process,
+        )
+        self._graph.add_node(
+            NodeName.answer_generator.value,
+            AnswerGeneratorNode(
+                ollama_llm_facade=self._ollama_llm_facade,
+                settings=s.answer_generator,
+            ).process,
+        )
+        self._graph.add_node(
+            NodeName.guardrails.value,
+            GuardrailsNode(
+                ollama_llm_facade=self._ollama_llm_facade,
+                settings=s.guardrails,
+            ).process,
+        )
+        self._graph.add_node(
+            NodeName.fallback.value,
+            FallbackNode().process,
+        )
 
     def _add_edges(self) -> None:
-        if self._sentiment_node:
-            self._workflow.add_edge(NodeName.sentiment_node.value, NodeName.agent_node.value)
+        logger.debug("Adding edges to workflow graph")
 
-        if self._tool_node:
-            router = ToolCallRouter(
-                max_iterations=self._agent_configuration.max_tool_iterations
+        self._graph.set_entry_point(NodeName.input_normalizer.value)
+
+        # Linear pre-processing pipeline
+        self._graph.add_edge(NodeName.input_normalizer.value, NodeName.context_resolver.value)
+        self._graph.add_edge(NodeName.context_resolver.value, NodeName.intent_classifier.value)
+        self._graph.add_edge(NodeName.intent_classifier.value, NodeName.entity_extractor.value)
+        self._graph.add_edge(NodeName.entity_extractor.value, NodeName.keyword_extractor.value)
+
+        # Branch: busqueda_documento → document_fetcher, else → retriever
+        self._graph.add_conditional_edges(
+            NodeName.keyword_extractor.value,
+            _route_after_keyword_extractor,
+            {
+                NodeName.retriever.value: NodeName.retriever.value,
+                NodeName.document_fetcher.value: NodeName.document_fetcher.value,
+            },
+        )
+
+        # Both retrieval branches merge at reranker (or fallback if empty)
+        for retrieval_node in (NodeName.retriever.value, NodeName.document_fetcher.value):
+            self._graph.add_conditional_edges(
+                retrieval_node,
+                _route_after_retrieval,
+                {
+                    NodeName.reranker.value: NodeName.reranker.value,
+                    NodeName.fallback.value: NodeName.fallback.value,
+                },
             )
-            self._workflow.add_conditional_edges(
-                NodeName.agent_node.value,
-                router.should_continue,
-                {"tools": NodeName.tools.value, END: END}
-            )
-            self._workflow.add_edge(NodeName.tools.value, NodeName.agent_node.value)
-        else:
-            self._workflow.add_edge(NodeName.agent_node.value, END)
+
+        # Linear post-processing pipeline
+        self._graph.add_edge(NodeName.reranker.value, NodeName.context_builder.value)
+        self._graph.add_edge(NodeName.context_builder.value, NodeName.answer_generator.value)
+        self._graph.add_edge(NodeName.answer_generator.value, NodeName.guardrails.value)
+
+        self._graph.add_conditional_edges(
+            NodeName.guardrails.value,
+            _route_after_guardrails,
+            {END: END, NodeName.fallback.value: NodeName.fallback.value},
+        )
+
+        self._graph.add_edge(NodeName.fallback.value, END)

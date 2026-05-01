@@ -2,9 +2,21 @@ import operator
 from typing import Annotated, List, TypedDict
 from langchain_core.messages import AnyMessage
 
-from app.application.services.agent_service.constants.sentimient import Sentiment
+from app.domain.authentication.authenticated_user import AuthenticatedUser
+from app.infrastructure.http.document_context_provider.dtos.fragment_response import FragmentResponse
 
 
 class AgentState(TypedDict):
+    authenticated_user: AuthenticatedUser
     messages: Annotated[List[AnyMessage], operator.add]
-    sentiment: Sentiment
+    normalized_query: str
+    resolved_query: str
+    intent: str
+    entities: dict
+    keywords: List[str]
+    retrieved_fragments: List[FragmentResponse]
+    reranked_fragments: List[FragmentResponse]
+    context: str
+    answer: str
+    guardrail_passed: bool
+    fallback_triggered: bool

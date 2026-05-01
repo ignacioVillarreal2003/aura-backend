@@ -1,80 +1,39 @@
 # Docker
 
-Para levantar todo el entorno usá:
+## Levantar todo el stack (CPU + observabilidad)
 
+Desde la carpeta `docker` del repo:
+
+```powershell
+docker compose `
+  -f docker-compose/docker-compose-infrastructure.yml `
+  -f docker-compose/docker-compose-services.yml `
+  -f docker-compose/docker-compose-observability.yml `
+  up -d
 ```
-docker compose up -d
+
+Desde la raíz `aura-backend`:
+
+```powershell
+docker compose `
+  -f docker/docker-compose/docker-compose-infrastructure.yml `
+  -f docker/docker-compose/docker-compose-services.yml `
+  -f docker/docker-compose/docker-compose-observability.yml `
+  up -d
 ```
 
-Ese es el modo normal sin GPU.
-Si querés usar aceleración por GPU, entonces usá:
+Orden recomendado de los `-f`: primero infra, después servicios de aplicación, por último observabilidad. Se fusionan en un solo proyecto y los `depends_on` cruzan entre ficheros.
 
+Para bajar todo lo levantado con esos mismos ficheros, usá `down` en lugar de `up -d` (misma lista de `-f`).
+
+## Stack con GPU
+
+Sustituí `docker-compose-services.yml` por `docker-compose-services.gpu.yml` (con o sin observabilidad, según necesites):
+
+```powershell
+docker compose `
+  -f docker-compose/docker-compose-infrastructure.yml `
+  -f docker-compose/docker-compose-services.gpu.yml `
+  -f docker-compose/docker-compose-observability.yml `
+  up -d
 ```
-docker compose -f docker-compose.gpu.yml up -d
-```
-
-## Descripción de servicios
-
-### aura-auth-service
-
-- Nombre del contenedor: `aura-auth-service`
-- Puerto expuesto: `8002`
-
-### aura-notification-service
-
-- Nombre del contenedor: `aura-notification-service`
-- Puerto expuesto: `8004`
-
-### aura-document-processing-service
-
-- Nombre del contenedor: `aura-document-processing-service`
-- Puerto expuesto: `8001`
-
-### aura-llm-service
-
-- Nombre del contenedor: `aura-llm-service`
-- Puerto expuesto: `8000`
-
-### db (PostgreSQL principal)
-
-- Nombre: `db`
-- Puerto: `5432`
-- Usuario: `aura_root`
-- Contraseña: `aura_password`
-- Base: `aura_db`
-
-### auth_db (PostgreSQL para autenticación)
-
-- Nombre: `auth_db`
-- Puerto: `5433` → dentro del contenedor es `5432`
-- Usuario: `aura_root`
-- Contraseña: `aura_password`
-- Base: `auth_db`
-
-### storage (MinIO — S3 compatible)
-
-- Nombre: `storage`
-- Puertos:
-  - `9000` (API S3)
-  - `9001` (Consola web)
-- Usuario: `aura_root`
-- Contraseña: `aura_password`
-
-### memory_db (Redis)
-
-- Nombre: `memory_db`
-- Puerto: `6379`
-
-### queue (RabbitMQ + Management UI)
-
-- Nombre: `queue`
-- Puertos:
-  - `5672` (cola)
-  - `15672` (panel web)
-- Usuario: `aura_root`
-- Contraseña: `aura_password`
-
-### llm (Ollama)
-
-- Nombre: `llm`
-- Puerto: `11434`

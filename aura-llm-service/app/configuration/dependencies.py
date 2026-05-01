@@ -2,22 +2,12 @@ import logging
 from collections.abc import Awaitable, Callable
 
 from fastapi import FastAPI
-from langchain_core.tools import BaseTool
 
 from app.application.authorization.authorizer import Authorizer
 from app.application.services.document_action_service.document_action_service import DocumentActionService
 from app.application.services.document_summary_service.document_summary_service import DocumentSummaryService
 from app.application.services.agent_service.agent_service import AgentService
-from app.application.services.agent_service.tools.document_question_tool.document_question_tool import (
-    DocumentQuestionTool
-)
-from app.application.services.agent_service.tools.document_summary_tool.document_summary_tool import (
-    DocumentSummaryTool
-)
 from app.application.services.document_question_service.document_question_service import DocumentQuestionService
-from app.application.services.document_question_service.document_question_settings import (
-    DocumentQuestionServiceSettings,
-)
 from app.application.services.document_classify_service.document_classify_service import DocumentClassifyService
 from app.application.services.fragment_enrich_service.fragment_enrich_service import FragmentEnrichService
 from app.infrastructure.http.authentication_provider.authentication_provider import AuthenticationProvider
@@ -97,13 +87,11 @@ async def startup_dependencies(app: FastAPI) -> None:
         ollama_llm_invoker = OllamaLLMInvoker(settings=invoker_settings)
         ollama_llm_streaming_invoker = OllamaLLMStreamingInvoker(settings=invoker_settings)
 
-        document_question_service_settings = DocumentQuestionServiceSettings()
         document_question_service = DocumentQuestionService(
             ollama_llm_facade=ollama_facade,
             ollama_llm_invoker=ollama_llm_invoker,
             ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
             document_context_provider=document_context_provider,
-            document_question_service_settings=document_question_service_settings,
             authorizer=authorizer,
         )
         app.state.document_question_service = document_question_service
@@ -138,16 +126,9 @@ async def startup_dependencies(app: FastAPI) -> None:
         )
         app.state.fragment_enrich_service = fragment_enrich_service
 
-        def make_question_tool() -> BaseTool:
-            return DocumentQuestionTool(document_question_service=document_question_service)
-
-        def make_summary_tool() -> BaseTool:
-            return DocumentSummaryTool(document_summary_service=document_summary_service)
-
-        ollama_facade.register_tools([make_question_tool, make_summary_tool])
-
         agent_service = AgentService(
             ollama_llm_facade=ollama_facade,
+            document_context_provider=document_context_provider,
             authorizer=authorizer,
         )
         app.state.agent_service = agent_service

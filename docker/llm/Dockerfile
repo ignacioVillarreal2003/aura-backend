@@ -1,8 +1,7 @@
 FROM ollama/ollama:latest
 
-RUN ollama serve & sleep 5 && \
-    ollama pull gemma3:1b && \
-    ollama pull qwen3-embedding:0.6b && \
-    pkill ollama
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["serve"]

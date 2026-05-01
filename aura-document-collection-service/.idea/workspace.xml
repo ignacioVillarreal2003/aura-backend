@@ -5,11 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="541f8908-7e23-4d18-b532-96aae5c81a7c" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/dataSources/91993f05-e2c5-4748-b38c-adb292d0eda0.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../docker/aura-db/init.sql" beforeDir="false" afterPath="$PROJECT_DIR$/../docker/aura-db/init.sql" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../docker/auth-db/fix_role_user_lowercase.sql" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../docker/auth-db/init.sql" beforeDir="false" afterPath="$PROJECT_DIR$/../docker/auth-db/init.sql" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../docker/auth-db/migrate_audit_log.sql" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-auth-service/authservice/settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-auth-service/authservice/settings.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../docker/docker-compose.yml" beforeDir="false" afterPath="$PROJECT_DIR$/../docker/docker-compose.yml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -41,7 +38,7 @@
     "RunOnceActivity.git.unshallow": "true",
     "RunOnceActivity.typescript.service.memoryLimit.init": "true",
     "SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "git-widget-placeholder": "fix/cositas",
+    "git-widget-placeholder": "main",
     "last_opened_file_path": "C:/Users/ignac/Desktop/AURA/aura-backend/aura-document-collection-service",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
@@ -106,6 +103,7 @@
       <workItem from="1776734494241" duration="1318000" />
       <workItem from="1776809944735" duration="1260000" />
       <workItem from="1777234919672" duration="63000" />
+      <workItem from="1777667993857" duration="3000" />
     </task>
     <servers />
   </component>

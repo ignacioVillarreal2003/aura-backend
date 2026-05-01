@@ -43,7 +43,6 @@ INSTALLED_APPS = [
     'accounts.apps.AccountsConfig',
     'documents.apps.DocumentsConfig',
     'notifications.apps.NotificationsConfig',
-    'chat.apps.ChatConfig',
 ]
 
 # Local apps whose tables are owned by docker/auth-db/init.sql or docker/aura-db/init.sql.

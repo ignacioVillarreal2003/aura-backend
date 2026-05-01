@@ -213,3 +213,41 @@ CREATE INDEX idx_notification_receiver_status   ON notification(receiver_id, sta
 CREATE INDEX idx_notification_receiver_created   ON notification(receiver_id, created_at DESC);
 CREATE INDEX idx_notification_deleted_at        ON notification(deleted_at);
 CREATE INDEX idx_notification_target_scope      ON notification(target_scope);
+
+INSERT INTO chat (name, system_prompt, response_style, last_message_at, created_by)
+VALUES
+    (
+        'Análisis — Reglamento interno Alpha',
+        'Respondé de forma técnica y breve, basándote solo en el contexto aportado.',
+        'conciso',
+        NOW() - INTERVAL '2 hours',
+        4
+    ),
+    (
+        'Consultas — Doctrina unidad Bravo',
+        'Usá español formal; cuando cites normativa, indicá el apartado si lo conocés.',
+        'formal',
+        NOW() - INTERVAL '1 day',
+        5
+    );
+
+INSERT INTO chat_membership (member_id, chat_id, status, joined_at, left_at, created_by)
+VALUES
+    (4, 1, 'active',   NOW() - INTERVAL '8 days',  NULL, 4),
+    (5, 1, 'active',   NOW() - INTERVAL '7 days',  NULL, 4),
+    (4, 2, 'active',   NOW() - INTERVAL '6 days',  NULL, 5),
+    (5, 2, 'active',   NOW() - INTERVAL '5 days',  NULL, 5),
+    (6, 2, 'pending',  NULL,                      NULL, 5);
+
+INSERT INTO document_collection (name, created_by)
+VALUES
+    ('Colección — Manuales de vuelo (2024)',       4),
+    ('Colección — Informes tácticos equipo sur',  6);
+
+INSERT INTO user_in_document_collection (document_collection_id, user_id, created_by)
+VALUES
+    (1, 4, 4),
+    (1, 5, 4),
+    (2, 5, 6),
+    (2, 6, 6),
+    (2, 4, 6);
