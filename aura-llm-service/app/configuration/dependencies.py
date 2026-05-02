@@ -10,6 +10,7 @@ from app.application.services.agent_service.agent_service import AgentService
 from app.application.services.document_question_service.document_question_service import DocumentQuestionService
 from app.application.services.document_classify_service.document_classify_service import DocumentClassifyService
 from app.application.services.fragment_enrich_service.fragment_enrich_service import FragmentEnrichService
+from app.application.services.rag_agent_service.rag_agent_service import RagAgentService
 from app.infrastructure.http.authentication_provider.authentication_provider import AuthenticationProvider
 from app.infrastructure.http.document_context_provider.document_context_provider import DocumentContextProvider
 from app.infrastructure.http.http_client.http_client import HttpClient
@@ -41,6 +42,7 @@ async def _rollback_partial_startup(
             )
 
     to_clear = [
+        "rag_agent_service",
         "agent_service",
         "fragment_enrich_service",
         "document_classify_service",
@@ -132,6 +134,13 @@ async def startup_dependencies(app: FastAPI) -> None:
             authorizer=authorizer,
         )
         app.state.agent_service = agent_service
+
+        rag_agent_service = RagAgentService(
+            ollama_llm_facade=ollama_facade,
+            document_context_provider=document_context_provider,
+            authorizer=authorizer,
+        )
+        app.state.rag_agent_service = rag_agent_service
 
         logger.info("All dependencies started successfully")
         cleanup_stack.clear()

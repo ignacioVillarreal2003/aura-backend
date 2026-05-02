@@ -7,6 +7,7 @@ from app.api.controllers import (
     document_classify_controller,
     fragment_enrich_controller,
     document_action_controller,
+    rag_agent_controller,
 )
 from app.api.controllers.health_controller import health_controller
 
@@ -51,4 +52,10 @@ router.include_router(
     fragment_enrich_controller.router,
     prefix="/fragment-enrich",
     tags=["fragment-enrich"],
+)
+
+router.include_router(
+    rag_agent_controller.router,
+    prefix="/rag-agent",
+    tags=["rag-agent"],
 )
