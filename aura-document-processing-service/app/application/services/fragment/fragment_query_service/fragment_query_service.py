@@ -174,15 +174,22 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                     },
                 )
 
+            document_ids = list({fragment.document_id for fragment in fragments})
+            documents = await self._document_repository.get_documents_by_ids(
+                document_ids=document_ids,
+                database_session=database_session
+            )
+
             logger.info(
                 "Context fragments were retrieved successfully for the question.",
                 extra={
                     "question_length": len(question),
                     "fragment_count": len(fragments),
+                    "document_count": len(documents),
                     "rerank_applied": rerank_applied,
                 }
             )
-            return FragmentListResponse(fragments=fragments)
+            return FragmentListResponse(fragments=fragments, documents=documents)
 
         except (
                 FragmentQueryNotFoundException,
@@ -261,7 +268,8 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 }
             )
             return FragmentListResponse(
-                fragments=all_fragments
+                fragments=all_fragments,
+                documents=documents
             )
 
         except (

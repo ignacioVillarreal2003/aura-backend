@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field, model_validator
 
+from app.domain.dtos.document.document_query.document_response import DocumentResponse
 from app.domain.dtos.fragment.fragment_query.fragment_response import FragmentResponse
 from app.domain.field_limits import (
     MAX_FRAGMENTS_IN_LIST,
@@ -9,6 +10,7 @@ from app.domain.field_limits import (
 
 class FragmentListResponse(BaseModel):
     fragments: list[FragmentResponse] = Field(default_factory=list, max_length=MAX_FRAGMENTS_IN_LIST)
+    documents: list[DocumentResponse] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_fragments(self) -> "FragmentListResponse":
