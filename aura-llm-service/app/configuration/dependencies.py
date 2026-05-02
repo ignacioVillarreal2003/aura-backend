@@ -10,6 +10,10 @@ from app.application.services.agent_service.agent_service import AgentService
 from app.application.services.document_question_service.document_question_service import DocumentQuestionService
 from app.application.services.document_classify_service.document_classify_service import DocumentClassifyService
 from app.application.services.fragment_enrich_service.fragment_enrich_service import FragmentEnrichService
+from app.application.services.graph_extraction_service.graph_extraction_service import GraphExtractionService
+from app.application.services.graph_query_translation_service.graph_query_translation_service import (
+    GraphQueryTranslationService,
+)
 from app.application.services.rag_agent_service.rag_agent_service import RagAgentService
 from app.infrastructure.http.authentication_provider.authentication_provider import AuthenticationProvider
 from app.infrastructure.http.document_context_provider.document_context_provider import DocumentContextProvider
@@ -44,6 +48,8 @@ async def _rollback_partial_startup(
     to_clear = [
         "rag_agent_service",
         "agent_service",
+        "graph_query_translation_service",
+        "graph_extraction_service",
         "fragment_enrich_service",
         "document_classify_service",
         "document_action_service",
@@ -116,17 +122,31 @@ async def startup_dependencies(app: FastAPI) -> None:
 
         document_classify_service = DocumentClassifyService(
             ollama_llm_facade=ollama_facade,
-            llm_invoker=ollama_llm_invoker,
+            ollama_llm_invoker=ollama_llm_invoker,
             authorizer=authorizer,
         )
         app.state.document_classify_service = document_classify_service
 
         fragment_enrich_service = FragmentEnrichService(
             ollama_llm_facade=ollama_facade,
-            llm_invoker=ollama_llm_invoker,
+            ollama_llm_invoker=ollama_llm_invoker,
             authorizer=authorizer,
         )
         app.state.fragment_enrich_service = fragment_enrich_service
+
+        graph_extraction_service = GraphExtractionService(
+            ollama_llm_facade=ollama_facade,
+            ollama_llm_invoker=ollama_llm_invoker,
+            authorizer=authorizer,
+        )
+        app.state.graph_extraction_service = graph_extraction_service
+
+        graph_query_translation_service = GraphQueryTranslationService(
+            ollama_llm_facade=ollama_facade,
+            ollama_llm_invoker=ollama_llm_invoker,
+            authorizer=authorizer,
+        )
+        app.state.graph_query_translation_service = graph_query_translation_service
 
         agent_service = AgentService(
             ollama_llm_facade=ollama_facade,

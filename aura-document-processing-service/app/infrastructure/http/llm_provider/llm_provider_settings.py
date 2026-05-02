@@ -15,14 +15,44 @@ class LlmProviderSettings(BaseSettings):
 
     classify_document_url: str = Field(...)
     enrich_fragment_url: str = Field(...)
+    extract_entities_relations_url: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional URL of the LLM service endpoint that extracts "
+            "entities and relations from a fragment. Required only when "
+            "the knowledge graph module is enabled."
+        ),
+    )
+    translate_graph_query_url: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional URL of the LLM service endpoint that translates a "
+            "natural-language question into a structured graph intent. "
+            "Required only when the knowledge graph module is enabled."
+        ),
+    )
 
-    timeout_seconds: float = Field(default=120.0, gt=0, le=600.0)
-    classify_timeout_seconds: Optional[float] = Field(default=None, gt=0, le=600.0)
-    enrich_timeout_seconds: Optional[float] = Field(default=None, gt=0, le=600.0)
+    timeout_seconds: float = Field(default=120.0, gt=0, le=3600.0)
+    classify_timeout_seconds: Optional[float] = Field(default=None, gt=0, le=3600.0)
+    enrich_timeout_seconds: Optional[float] = Field(default=None, gt=0, le=3600.0)
+    extract_entities_relations_timeout_seconds: float = Field(
+        default=900.0,
+        gt=0,
+        le=3600.0,
+        description=(
+            "HTTP read timeout for graph extraction calls. Ollama/GPU runs often "
+            "exceed the general LLM_PROVIDER_TIMEOUT_SECONDS default."
+        ),
+    )
+    translate_graph_query_timeout_seconds: Optional[float] = Field(
+        default=None, gt=0, le=3600.0
+    )
 
     max_document_name_length: int = Field(default=512, ge=1, le=2048)
     max_classify_content_length: int = Field(default=5_000_000, ge=1024, le=50_000_000)
     max_enrich_content_length: int = Field(default=1_000_000, ge=256, le=10_000_000)
+    max_extract_content_length: int = Field(default=1_000_000, ge=256, le=10_000_000)
+    max_translate_query_question_length: int = Field(default=4_000, ge=64, le=64_000)
 
     allowed_llm_hosts: Optional[str] = Field(
         default=None,
@@ -32,14 +62,20 @@ class LlmProviderSettings(BaseSettings):
     @field_validator(
         "classify_document_url",
         "enrich_fragment_url",
-        mode="before"
+        "extract_entities_relations_url",
+        "translate_graph_query_url",
+        mode="before",
     )
     @classmethod
     def validate_http_url(
             cls,
-            v: str
-    ) -> str:
-        v = v.strip().rstrip("/")
+            v: Optional[str],
+    ) -> Optional[str]:
+        if v is None:
+            return None
+        v = str(v).strip().rstrip("/")
+        if not v:
+            return None
         if not v.startswith(("http://", "https://")):
             raise ValueError("Each LLM URL must start with http:// or https://.")
         return v
@@ -48,8 +84,19 @@ class LlmProviderSettings(BaseSettings):
     def validate_urls_have_host_and_allowlist(
             self
     ) -> "LlmProviderSettings":
-        for name in ("classify_document_url", "enrich_fragment_url"):
+        required_urls = ("classify_document_url", "enrich_fragment_url")
+        optional_urls = ("extract_entities_relations_url", "translate_graph_query_url")
+
+        for name in required_urls:
             url = getattr(self, name)
+            parsed = urlparse(url)
+            if not parsed.netloc:
+                raise ValueError(f"{name} must include a valid host.")
+
+        for name in optional_urls:
+            url = getattr(self, name)
+            if url is None:
+                continue
             parsed = urlparse(url)
             if not parsed.netloc:
                 raise ValueError(f"{name} must include a valid host.")
@@ -62,8 +109,10 @@ class LlmProviderSettings(BaseSettings):
             }
             if not allowed:
                 return self
-            for name in ("classify_document_url", "enrich_fragment_url"):
+            for name in required_urls + optional_urls:
                 url = getattr(self, name)
+                if url is None:
+                    continue
                 host = (urlparse(url).hostname or "").lower()
                 if host not in allowed:
                     raise ValueError(
@@ -77,3 +126,11 @@ class LlmProviderSettings(BaseSettings):
 
     def effective_enrich_timeout_seconds(self) -> float:
         return float(self.enrich_timeout_seconds or self.timeout_seconds)
+
+    def effective_extract_entities_relations_timeout_seconds(self) -> float:
+        return float(self.extract_entities_relations_timeout_seconds)
+
+    def effective_translate_graph_query_timeout_seconds(self) -> float:
+        return float(
+            self.translate_graph_query_timeout_seconds or self.timeout_seconds
+        )

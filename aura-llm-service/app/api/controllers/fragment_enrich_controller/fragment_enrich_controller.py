@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.dependencies.idempotency import optional_idempotency_key
 from app.api.dependencies.rate_limiter import default_rate_limit
-from app.api.controllers.fragment_enrich.fragment_enrich_controller_interface import (
+from app.api.controllers.fragment_enrich_controller.fragment_enrich_controller_interface import (
     FragmentEnrichControllerInterface
 )
 from app.api.openapi.common import default_error_responses

@@ -48,6 +48,18 @@ class FragmentRepositoryInterface(ABC):
         pass
 
     @abstractmethod
+    async def get_most_relevant_fragments_bm25(
+            self,
+            *,
+            query: str,
+            database_session: AsyncSession,
+            k: int,
+            min_score: float = 0.0,
+            query_max_chars: int = 512,
+    ) -> list[Fragment]:
+        pass
+
+    @abstractmethod
     async def get_fragments_by_document_ids(
             self,
             document_ids: list[int],

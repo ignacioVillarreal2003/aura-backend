@@ -1,4 +1,5 @@
 CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pg_search;
 
 CREATE TYPE document_type AS ENUM (
     'manual',
@@ -197,6 +198,11 @@ CREATE INDEX idx_fragment_document_id     ON fragment(document_id);
 CREATE INDEX idx_fragment_deleted_at      ON fragment(deleted_at);
 CREATE UNIQUE INDEX idx_fragment_doc_index_active
     ON fragment (document_id, fragment_index) WHERE (deleted_at IS NULL);
+
+CREATE INDEX IF NOT EXISTS fragments_bm25_idx
+    ON fragment
+    USING bm25 (id, content)
+    WITH (key_field = 'id');
 
 CREATE INDEX idx_chat_message_chat_created_active
     ON chat_message (chat_id, created_at) WHERE (deleted_at IS NULL);

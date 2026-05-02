@@ -1,6 +1,7 @@
 import json
 import logging
 from typing import Any, Optional, TypeVar
+
 from pydantic import BaseModel, ValidationError
 
 from app.configuration.environment_variables import environment_variables
@@ -16,6 +17,19 @@ from app.infrastructure.http.llm_provider.dtos.classify_document_request import 
 from app.infrastructure.http.llm_provider.dtos.classify_document_response import ClassifyDocumentResponse
 from app.infrastructure.http.llm_provider.dtos.enrich_fragment_request import EnrichFragmentRequest
 from app.infrastructure.http.llm_provider.dtos.enrich_fragment_response import EnrichFragmentResponse
+from app.infrastructure.http.llm_provider.dtos.extract_entities_relations_request import (
+    ExtractEntitiesRelationsRequest,
+)
+from app.infrastructure.http.llm_provider.dtos.extract_entities_relations_response import (
+    ExtractEntitiesRelationsResponse,
+)
+from app.infrastructure.http.llm_provider.dtos.translate_graph_query_request import (
+    GraphOntology,
+    TranslateGraphQueryRequest,
+)
+from app.infrastructure.http.llm_provider.dtos.translate_graph_query_response import (
+    TranslateGraphQueryResponse,
+)
 from app.infrastructure.http.llm_provider.llm_provider_exception import (
     LlmProviderException,
     LlmProviderInvalidResponseException,
@@ -102,6 +116,61 @@ class LlmProvider(LlmProviderInterface):
                 "The fragment content exceeds the maximum length allowed for enrichment.",
                 status_code=400,
             )
+
+    def _raise_if_extract_payload_too_large(
+            self,
+            content: str,
+            user_id: int,
+    ) -> None:
+        if len(content) > self._settings.max_extract_content_length:
+            logger.warning(
+                "Entity/relation extraction rejected because the content exceeds the configured limit.",
+                extra={
+                    "user_id": user_id,
+                    "content_length": len(content),
+                    "max_extract_content_length": self._settings.max_extract_content_length,
+                },
+            )
+            raise LlmProviderException(
+                "The fragment content exceeds the maximum length allowed for extraction.",
+                status_code=400,
+            )
+
+    def _raise_if_translate_question_too_large(
+            self,
+            question: str,
+            user_id: int,
+    ) -> None:
+        if len(question) > self._settings.max_translate_query_question_length:
+            logger.warning(
+                "Graph query translation rejected because the question exceeds the configured limit.",
+                extra={
+                    "user_id": user_id,
+                    "question_length": len(question),
+                    "max_translate_query_question_length":
+                        self._settings.max_translate_query_question_length,
+                },
+            )
+            raise LlmProviderException(
+                "The graph query question exceeds the maximum length allowed.",
+                status_code=400,
+            )
+
+    def _require_extract_url(self) -> str:
+        if not self._settings.extract_entities_relations_url:
+            raise LlmProviderException(
+                "The LLM service URL for entity/relation extraction is not configured.",
+                status_code=503,
+            )
+        return self._settings.extract_entities_relations_url
+
+    def _require_translate_url(self) -> str:
+        if not self._settings.translate_graph_query_url:
+            raise LlmProviderException(
+                "The LLM service URL for graph query translation is not configured.",
+                status_code=503,
+            )
+        return self._settings.translate_graph_query_url
 
     async def _post_llm_json(
             self,
@@ -303,3 +372,133 @@ class LlmProvider(LlmProviderInterface):
         )
 
         return enrich_fragment_response
+
+    async def extract_entities_relations(
+            self,
+            content: str,
+            document_id: int,
+            fragment_id: int,
+            allowed_entity_types: list[str],
+            allowed_relation_types: Optional[list[str]],
+            authenticated_user: AuthenticatedUser,
+    ) -> ExtractEntitiesRelationsResponse:
+        logger.info(
+            "Sending a fragment to the LLM service for entity/relation extraction.",
+            extra={
+                "user_id": authenticated_user.id,
+                "document_id": document_id,
+                "fragment_id": fragment_id,
+                "content_length": len(content),
+            },
+        )
+
+        url = self._require_extract_url()
+        self._raise_if_extract_payload_too_large(
+            content=content,
+            user_id=authenticated_user.id,
+        )
+
+        try:
+            request_payload = ExtractEntitiesRelationsRequest(
+                content=content,
+                document_id=document_id,
+                fragment_id=fragment_id,
+                allowed_entity_types=allowed_entity_types,
+                allowed_relation_types=allowed_relation_types,
+            )
+        except ValidationError as e:
+            logger.warning(
+                "Entity/relation extraction request failed local validation.",
+                extra={
+                    "user_id": authenticated_user.id,
+                    "document_id": document_id,
+                    "fragment_id": fragment_id,
+                    "validation_error_count": len(e.errors()),
+                },
+            )
+            raise LlmProviderException(
+                "The entity/relation extraction request is not valid.",
+                status_code=400,
+            ) from e
+
+        response = await self._post_llm_json(
+            url=url,
+            json_body=request_payload.model_dump(mode="json"),
+            timeout=self._settings.effective_extract_entities_relations_timeout_seconds(),
+            response_model=ExtractEntitiesRelationsResponse,
+            authenticated_user=authenticated_user,
+            operation="extract_entities_relations",
+        )
+
+        logger.info(
+            "The LLM service extracted entities and relations for a fragment.",
+            extra={
+                "user_id": authenticated_user.id,
+                "document_id": document_id,
+                "fragment_id": fragment_id,
+                "entities_count": len(response.entities),
+                "relations_count": len(response.relations),
+            },
+        )
+
+        return response
+
+    async def translate_graph_query(
+            self,
+            question: str,
+            ontology: GraphOntology,
+            authenticated_user: AuthenticatedUser,
+    ) -> TranslateGraphQueryResponse:
+        logger.info(
+            "Sending a question to the LLM service for graph query translation.",
+            extra={
+                "user_id": authenticated_user.id,
+                "question_length": len(question),
+                "entity_types_count": len(ontology.entity_types),
+                "relation_types_count": len(ontology.relation_types),
+            },
+        )
+
+        url = self._require_translate_url()
+        self._raise_if_translate_question_too_large(
+            question=question,
+            user_id=authenticated_user.id,
+        )
+
+        try:
+            request_payload = TranslateGraphQueryRequest(
+                question=question,
+                ontology=ontology,
+            )
+        except ValidationError as e:
+            logger.warning(
+                "Graph query translation request failed local validation.",
+                extra={
+                    "user_id": authenticated_user.id,
+                    "validation_error_count": len(e.errors()),
+                },
+            )
+            raise LlmProviderException(
+                "The graph query translation request is not valid.",
+                status_code=400,
+            ) from e
+
+        response = await self._post_llm_json(
+            url=url,
+            json_body=request_payload.model_dump(mode="json"),
+            timeout=self._settings.effective_translate_graph_query_timeout_seconds(),
+            response_model=TranslateGraphQueryResponse,
+            authenticated_user=authenticated_user,
+            operation="translate_graph_query",
+        )
+
+        logger.info(
+            "The LLM service translated a question to a structured graph intent.",
+            extra={
+                "user_id": authenticated_user.id,
+                "intent": response.intent.value,
+                "confidence": response.confidence,
+            },
+        )
+
+        return response

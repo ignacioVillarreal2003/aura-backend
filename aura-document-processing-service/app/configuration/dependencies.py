@@ -28,6 +28,16 @@ from app.application.services.fragment.post_process_fragment_service.post_proces
 from app.application.services.fragment.post_process_fragment_service.post_process_fragment_processor import (
     PostProcessFragmentProcessor,
 )
+from app.application.services.graph.graph_entity_service.graph_entity_service import GraphEntityService
+from app.application.services.graph.graph_extraction_service.graph_extraction_service import (
+    GraphExtractionService,
+)
+from app.application.services.graph.graph_path_service.graph_path_service import GraphPathService
+from app.application.services.graph.graph_query_service.graph_query_service import GraphQueryService
+from app.application.services.graph.hybrid_retrieval_orchestrator.hybrid_retrieval_orchestrator import (
+    HybridRetrievalOrchestrator,
+)
+from app.configuration.knowledge_graph_settings import KnowledgeGraphSettings
 from app.infrastructure.http.authentication_provider.authentication_provider import AuthenticationProvider
 from app.infrastructure.http.authentication_provider.authentication_provider_settings import (
     AuthenticationProviderSettings,
@@ -35,8 +45,12 @@ from app.infrastructure.http.authentication_provider.authentication_provider_set
 from app.infrastructure.http.http_client.http_client import HttpClient
 from app.infrastructure.http.llm_provider.llm_provider import LlmProvider
 from app.infrastructure.messaging.rabbitmq.consumer.document_ingestion_consumer import DocumentIngestionConsumer
+from app.infrastructure.messaging.rabbitmq.consumer.graph_extraction_consumer import GraphExtractionConsumer
 from app.infrastructure.messaging.rabbitmq.consumer.post_process_document_consumer import PostProcessDocumentConsumer
 from app.infrastructure.messaging.rabbitmq.consumer.post_process_fragment_consumer import PostProcessFragmentConsumer
+from app.infrastructure.messaging.rabbitmq.publisher.graph_extraction_publisher import (
+    GraphExtractionPublisher,
+)
 from app.infrastructure.messaging.rabbitmq.publisher.post_process_document_job_publisher import (
     PostProcessDocumentJobPublisher,
 )
@@ -57,6 +71,19 @@ from app.infrastructure.persistence.database.repositories.document_repository.do
 )
 from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository import (
     FragmentRepository,
+)
+from app.infrastructure.persistence.graph.neo4j_manager.neo4j_manager import Neo4jManager
+from app.infrastructure.persistence.graph.repositories.graph_entity_repository.graph_entity_repository import (
+    GraphEntityRepository,
+)
+from app.infrastructure.persistence.graph.repositories.graph_path_repository.graph_path_repository import (
+    GraphPathRepository,
+)
+from app.infrastructure.persistence.graph.repositories.graph_relation_repository.graph_relation_repository import (
+    GraphRelationRepository,
+)
+from app.infrastructure.persistence.memory_database.graph_extraction_job_progress_store.graph_extraction_job_progress_store import (
+    GraphExtractionJobProgressStore,
 )
 from app.infrastructure.persistence.memory_database.redis_client.redis_client import RedisClient
 from app.infrastructure.persistence.memory_database.redis_client.redis_client_settings import RedisClientSettings
@@ -89,6 +116,19 @@ async def _rollback_partial_startup(
                 extra={"resource": name},
             )
     to_clear = [
+        "hybrid_retrieval_orchestrator",
+        "graph_path_service",
+        "graph_entity_service",
+        "graph_query_service",
+        "graph_extraction_service",
+        "graph_extraction_consumer",
+        "graph_extraction_publisher",
+        "graph_path_repository",
+        "graph_relation_repository",
+        "graph_entity_repository",
+        "graph_extraction_job_progress_store",
+        "neo4j_manager",
+        "knowledge_graph_settings",
         "post_process_fragment_service",
         "post_process_document_service",
         "document_download_service",
@@ -215,17 +255,6 @@ async def startup_dependencies(app: FastAPI) -> None:
         )
         app.state.fragment_query_service = fragment_query_service
 
-        document_ingestion_service = DocumentIngestionService(
-            database_manager=database_manager,
-            document_repository=document_repository,
-            fragment_repository=fragment_repository,
-            reader_factory=reader_factory,
-            text_cleaner_factory=text_cleaner_factory,
-            text_splitter_factory=text_splitter_factory,
-            embedder_factory=embedder_factory,
-        )
-        app.state.document_ingestion_service = document_ingestion_service
-
         redis_client_settings = RedisClientSettings()
         redis_client = RedisClient(redis_client_settings=redis_client_settings)
         await redis_client.initialize()
@@ -256,6 +285,34 @@ async def startup_dependencies(app: FastAPI) -> None:
             settings=redis_client_settings,
         )
         app.state.outbox_lite = outbox_lite
+
+        knowledge_graph_settings = KnowledgeGraphSettings()
+        app.state.knowledge_graph_settings = knowledge_graph_settings
+
+        graph_extraction_publisher = None
+        if knowledge_graph_settings.enabled:
+            graph_extraction_publisher = GraphExtractionPublisher(
+                rabbitmq_manager=rabbitmq_manager,
+                knowledge_graph_settings=knowledge_graph_settings,
+                outbox_lite=outbox_lite,
+            )
+            app.state.graph_extraction_publisher = graph_extraction_publisher
+            logger.info(
+                "Knowledge graph extraction publisher was registered.",
+                extra={"queue": rabbitmq_manager_settings.graph_extraction_queue},
+            )
+
+        document_ingestion_service = DocumentIngestionService(
+            database_manager=database_manager,
+            document_repository=document_repository,
+            fragment_repository=fragment_repository,
+            reader_factory=reader_factory,
+            text_cleaner_factory=text_cleaner_factory,
+            text_splitter_factory=text_splitter_factory,
+            embedder_factory=embedder_factory,
+            graph_extraction_publisher=graph_extraction_publisher,
+        )
+        app.state.document_ingestion_service = document_ingestion_service
 
         document_ingestion_consumer = DocumentIngestionConsumer(
             rabbitmq_manager=rabbitmq_manager,
@@ -368,6 +425,23 @@ async def startup_dependencies(app: FastAPI) -> None:
         )
         app.state.post_process_fragment_service = post_process_fragment_service
 
+        if knowledge_graph_settings.enabled:
+            await _wire_knowledge_graph_module(
+                app=app,
+                cleanup_stack=cleanup_stack,
+                knowledge_graph_settings=knowledge_graph_settings,
+                rabbitmq_manager=rabbitmq_manager,
+                redis_client=redis_client,
+                redis_client_settings=redis_client_settings,
+                database_manager=database_manager,
+                document_repository=document_repository,
+                fragment_repository=fragment_repository,
+                document_collection_repository=document_collection_repository,
+                fragment_query_service=fragment_query_service,
+                authorizer=authorizer,
+                llm_provider=llm_provider,
+            )
+
         logger.info("All dependencies started successfully")
         cleanup_stack.clear()
 
@@ -375,6 +449,111 @@ async def startup_dependencies(app: FastAPI) -> None:
         logger.critical("Error during dependency starting up; rolling back started resources in reverse order.")
         await _rollback_partial_startup(cleanup_stack=cleanup_stack, app=app)
         raise
+
+
+async def _wire_knowledge_graph_module(
+        *,
+        app: FastAPI,
+        cleanup_stack: list[tuple[str, _CleanupFn]],
+        knowledge_graph_settings: KnowledgeGraphSettings,
+        rabbitmq_manager: RabbitMQManager,
+        redis_client: RedisClient,
+        redis_client_settings: RedisClientSettings,
+        database_manager: DatabaseManager,
+        document_repository: DocumentRepository,
+        fragment_repository: FragmentRepository,
+        document_collection_repository: DocumentCollectionRepository,
+        fragment_query_service: FragmentQueryService,
+        authorizer: Authorizer,
+        llm_provider: LlmProvider,
+) -> None:
+    logger.info(
+        "Bootstrapping the knowledge graph module.",
+        extra={
+            "extraction_concurrency": knowledge_graph_settings.extraction_concurrency,
+        },
+    )
+
+    neo4j_manager = Neo4jManager()
+    await neo4j_manager.start()
+    app.state.neo4j_manager = neo4j_manager
+    cleanup_stack.append(("neo4j_manager", neo4j_manager.dispose))
+
+    graph_entity_repository = GraphEntityRepository(neo4j_manager=neo4j_manager)
+    app.state.graph_entity_repository = graph_entity_repository
+
+    graph_relation_repository = GraphRelationRepository(
+        neo4j_manager=neo4j_manager,
+        max_depth=knowledge_graph_settings.query_max_neighbor_depth,
+    )
+    app.state.graph_relation_repository = graph_relation_repository
+
+    graph_path_repository = GraphPathRepository(neo4j_manager=neo4j_manager)
+    app.state.graph_path_repository = graph_path_repository
+
+    graph_extraction_job_progress_store = GraphExtractionJobProgressStore(
+        redis_client=redis_client.client,
+        settings=redis_client_settings,
+        lock_ttl_seconds=knowledge_graph_settings.extraction_lock_ttl_seconds,
+        snapshot_ttl_seconds=knowledge_graph_settings.extraction_snapshot_ttl_seconds,
+    )
+    app.state.graph_extraction_job_progress_store = graph_extraction_job_progress_store
+
+    graph_extraction_service = GraphExtractionService(
+        database_manager=database_manager,
+        document_repository=document_repository,
+        fragment_repository=fragment_repository,
+        llm_provider=llm_provider,
+        entity_repository=graph_entity_repository,
+        relation_repository=graph_relation_repository,
+        job_progress_store=graph_extraction_job_progress_store,
+        knowledge_graph_settings=knowledge_graph_settings,
+    )
+    app.state.graph_extraction_service = graph_extraction_service
+
+    graph_extraction_consumer = GraphExtractionConsumer(
+        rabbitmq_manager=rabbitmq_manager,
+        graph_extraction_service=graph_extraction_service,
+    )
+    await graph_extraction_consumer.start()
+    app.state.graph_extraction_consumer = graph_extraction_consumer
+
+    graph_query_service = GraphQueryService(
+        llm_provider=llm_provider,
+        entity_repository=graph_entity_repository,
+        relation_repository=graph_relation_repository,
+        document_collection_repository=document_collection_repository,
+        authorizer=authorizer,
+        knowledge_graph_settings=knowledge_graph_settings,
+    )
+    app.state.graph_query_service = graph_query_service
+
+    graph_entity_service = GraphEntityService(
+        entity_repository=graph_entity_repository,
+        relation_repository=graph_relation_repository,
+        document_collection_repository=document_collection_repository,
+        authorizer=authorizer,
+        knowledge_graph_settings=knowledge_graph_settings,
+    )
+    app.state.graph_entity_service = graph_entity_service
+
+    graph_path_service = GraphPathService(
+        path_repository=graph_path_repository,
+        document_collection_repository=document_collection_repository,
+        authorizer=authorizer,
+        knowledge_graph_settings=knowledge_graph_settings,
+    )
+    app.state.graph_path_service = graph_path_service
+
+    hybrid_retrieval_orchestrator = HybridRetrievalOrchestrator(
+        graph_query_service=graph_query_service,
+        fragment_query_service=fragment_query_service,
+        authorizer=authorizer,
+        knowledge_graph_settings=knowledge_graph_settings,
+    )
+    app.state.hybrid_retrieval_orchestrator = hybrid_retrieval_orchestrator
+
+    logger.info("The knowledge graph module was bootstrapped successfully.")
 
 
 async def shutdown_dependencies(app: FastAPI) -> None:
@@ -387,6 +566,12 @@ async def shutdown_dependencies(app: FastAPI) -> None:
 
     if rabbitmq_manager := getattr(state, "rabbitmq_manager", None):
         await rabbitmq_manager.stop()
+
+    if neo4j_manager := getattr(state, "neo4j_manager", None):
+        try:
+            await neo4j_manager.dispose()
+        except Exception:
+            logger.exception("Failed to dispose the Neo4j manager during shutdown.")
 
     if redis_client := getattr(state, "redis_client", None):
         await redis_client.dispose()

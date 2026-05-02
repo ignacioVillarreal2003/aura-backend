@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.dependencies.idempotency import optional_idempotency_key
 from app.api.dependencies.rate_limiter import strict_rate_limit
-from app.api.controllers.document_action.document_action_controller_interface import (
+from app.api.controllers.document_action_controller.document_action_controller_interface import (
     DocumentActionControllerInterface
 )
 from app.api.openapi.common import default_error_responses

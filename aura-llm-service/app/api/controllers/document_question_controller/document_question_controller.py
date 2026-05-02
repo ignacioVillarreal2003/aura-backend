@@ -6,7 +6,7 @@ from starlette.responses import StreamingResponse
 
 from app.api.dependencies.idempotency import optional_idempotency_key
 from app.api.dependencies.rate_limiter import default_rate_limit, strict_rate_limit
-from app.api.controllers.document_question.document_question_controller_interface import (
+from app.api.controllers.document_question_controller.document_question_controller_interface import (
     DocumentQuestionControllerInterface
 )
 from app.api.openapi.common import default_error_responses

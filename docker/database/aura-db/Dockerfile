@@ -1,5 +1,3 @@
-FROM postgres:17
-
-RUN apt-get update && apt-get install -y postgresql-17-pgvector && rm -rf /var/lib/apt/lists/*
+FROM paradedb/paradedb:v0.23.2-pg17
 
 COPY init.sql /docker-entrypoint-initdb.d/

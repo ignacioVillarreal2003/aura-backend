@@ -27,6 +27,11 @@ class FragmentQueryServiceSettings(BaseSettings):
     rerank_min_score: float = Field(default=-10.0)
     rerank_batch_size: int = Field(default=16, ge=1, le=512)
 
+    bm25_enabled: bool = Field(default=True)
+    bm25_rrf_k: int = Field(default=60, ge=1, le=10_000)
+    bm25_min_score: float = Field(default=0.0)
+    bm25_query_max_chars: int = Field(default=512, ge=1, le=4_000)
+
     @field_validator("rerank_device", mode="before")
     @classmethod
     def normalize_rerank_device(cls, value: Optional[str]) -> Optional[str]:

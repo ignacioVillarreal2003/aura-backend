@@ -41,6 +41,22 @@ def openapi_tags_metadata() -> list[dict[str, str]]:
             "name": "post-process-fragment",
             "description": "Inicio, estado y detención del postproceso de fragmentos.",
         },
+        {
+            "name": "graph-query",
+            "description": "Consulta el grafo de conocimiento traduciendo lenguaje natural a Cypher parametrizado.",
+        },
+        {
+            "name": "graph-entity",
+            "description": "Lookup de entidades del grafo y sus relaciones directas.",
+        },
+        {
+            "name": "graph-path",
+            "description": "Caminos (más corto / todos) entre entidades del grafo.",
+        },
+        {
+            "name": "graph-hybrid-query",
+            "description": "Recuperación híbrida: grafo de conocimiento con fallback a RAG vectorial.",
+        },
     ]
 
 

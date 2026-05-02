@@ -3,7 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio.session import AsyncSession
 
-from app.api.controllers.document.document_query.document_query_controller_interface import (
+from app.api.controllers.document.document_query_controller.document_query_controller_interface import (
     DocumentQueryControllerInterface,
 )
 from app.api.dependencies.rate_limiter import default_rate_limit

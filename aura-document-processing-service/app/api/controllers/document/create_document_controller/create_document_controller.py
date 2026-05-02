@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, File, UploadFile
 from sqlalchemy.ext.asyncio.session import AsyncSession
 
-from app.api.controllers.document.create_document.create_document_controller_interface import (
+from app.api.controllers.document.create_document_controller.create_document_controller_interface import (
     CreateDocumentControllerInterface,
 )
 from app.api.dependencies.idempotency import optional_idempotency_key

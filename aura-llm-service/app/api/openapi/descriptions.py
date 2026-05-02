@@ -37,6 +37,14 @@ def openapi_tags_metadata() -> list[dict[str, str]]:
             "name": "fragment-enrich",
             "description": "Enriquecimiento de fragmentos.",
         },
+        {
+            "name": "graph-extraction",
+            "description": "Extracción de entidades y relaciones para el grafo de conocimiento.",
+        },
+        {
+            "name": "graph-query-translation",
+            "description": "Traducción de preguntas en lenguaje natural a intents estructurados sobre el grafo.",
+        },
     ]
 
 

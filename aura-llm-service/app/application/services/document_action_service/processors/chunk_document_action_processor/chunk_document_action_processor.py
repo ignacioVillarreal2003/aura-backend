@@ -22,7 +22,7 @@ from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface i
 logger = logging.getLogger(__name__)
 
 
-class MapChunksDocumentActionProcessor:
+class ChunkDocumentActionProcessor:
     def __init__(
             self,
             document_action_service_settings: DocumentActionServiceSettings,

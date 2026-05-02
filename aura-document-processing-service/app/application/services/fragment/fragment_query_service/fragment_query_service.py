@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Optional
 from fastapi import HTTPException, Request, status
@@ -16,6 +17,9 @@ from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
 from app.application.services.fragment.fragment_query_service.fragment_context_reranker import (
     FragmentContextReranker
+)
+from app.application.services.fragment.fragment_query_service.hybrid_fusion import (
+    reciprocal_rank_fusion,
 )
 from app.application.services.fragment.fragment_query_service.fragment_query_service_settings import (
     FragmentQueryServiceSettings
@@ -89,6 +93,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
         question = question_context_fragments_request.question
         question_max_fragments = question_context_fragments_request.question_max_fragments
         use_keywords = question_context_fragments_request.use_keywords is True
+        use_bm25 = question_context_fragments_request.use_bm25 is True
 
         logger.info(
             "Retrieving context fragments by question was initiated.",
@@ -97,6 +102,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 "question_max_fragments": question_max_fragments,
                 "user_id": authenticated_user.id,
                 "use_keywords": use_keywords,
+                "use_bm25": use_bm25,
                 "use_rerank": question_context_fragments_request.use_rerank is True,
             }
         )
@@ -119,25 +125,84 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 raise FragmentQueryInvalidRequestException(
                     "The maximum number of context fragments for keywords exceeds the configured limit."
                 )
+            if (
+                    question_context_fragments_request.use_bm25 is True
+                    and question_context_fragments_request.bm25_max_fragments is not None
+                    and question_context_fragments_request.bm25_max_fragments > self._settings.max_fragments
+            ):
+                raise FragmentQueryInvalidRequestException(
+                    "The maximum number of BM25 fragments exceeds the configured limit."
+                )
             if question_context_fragments_request.use_rerank is True and not self._settings.rerank_enabled:
                 raise FragmentQueryInvalidRequestException("Reranking is disabled on this service.")
-
-            question_vector = await self._get_query_embedding(question)
-            fragments_from_question = await self._retrieve_similar_fragments(
-                database_session=database_session,
-                query_vector=question_vector,
-                k=question_max_fragments
-            )
+            if question_context_fragments_request.use_bm25 is True and not self._settings.bm25_enabled:
+                raise FragmentQueryInvalidRequestException("BM25 retrieval is disabled on this service.")
 
             if use_keywords:
                 keywords = question_context_fragments_request.keywords
                 keywords_max_fragments = question_context_fragments_request.keywords_max_fragments
-                keywords_vector = await self._get_query_embedding(keywords)
-                fragments_from_keywords = await self._retrieve_similar_fragments(
-                    database_session=database_session,
-                    query_vector=keywords_vector,
-                    k=keywords_max_fragments
+                question_vector, keywords_vector = await asyncio.gather(
+                    self._get_query_embedding(question),
+                    self._get_query_embedding(keywords),
                 )
+                fragments_from_question, fragments_from_keywords = await asyncio.gather(
+                    self._retrieve_similar_fragments(
+                        database_session=database_session,
+                        query_vector=question_vector,
+                        k=question_max_fragments,
+                    ),
+                    self._retrieve_similar_fragments(
+                        database_session=database_session,
+                        query_vector=keywords_vector,
+                        k=keywords_max_fragments,
+                    ),
+                )
+            else:
+                question_vector = await self._get_query_embedding(question)
+                fragments_from_question = await self._retrieve_similar_fragments(
+                    database_session=database_session,
+                    query_vector=question_vector,
+                    k=question_max_fragments,
+                )
+                fragments_from_keywords = None
+
+            bm25_requested = use_bm25 and self._settings.bm25_enabled
+            bm25_used = False
+            bm25_count = 0
+
+            if bm25_requested:
+                try:
+                    fragments_from_bm25 = await self._retrieve_bm25_fragments(
+                        database_session=database_session,
+                        query_text=question,
+                        k=question_context_fragments_request.bm25_max_fragments,
+                    )
+                    bm25_count = len(fragments_from_bm25)
+                    bm25_used = True
+
+                    ranked_lists: list[list[Fragment]] = [fragments_from_question]
+                    if use_keywords and fragments_from_keywords is not None:
+                        ranked_lists.append(fragments_from_keywords)
+                    ranked_lists.append(fragments_from_bm25)
+
+                    fragments = reciprocal_rank_fusion(
+                        ranked_lists=ranked_lists,
+                        k=self._settings.bm25_rrf_k,
+                    )
+                except FragmentQueryRetrievalException:
+                    logger.warning(
+                        "BM25 retrieval failed; falling back to vector-only retrieval pool.",
+                        exc_info=True,
+                        extra={"user_id": authenticated_user.id},
+                    )
+                    if use_keywords and fragments_from_keywords is not None:
+                        fragments = self._merge_distinct_fragments(
+                            fragments_from_question,
+                            fragments_from_keywords,
+                        )
+                    else:
+                        fragments = fragments_from_question
+            elif use_keywords and fragments_from_keywords is not None:
                 fragments = self._merge_distinct_fragments(
                     fragments_from_question,
                     fragments_from_keywords,
@@ -151,6 +216,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 chat_id=question_context_fragments_request.chat_id,
                 database_session=database_session
             )
+            post_acl_pool_count = len(fragments)
 
             rerank_requested = (
                     self._settings.rerank_enabled
@@ -187,7 +253,13 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                     "fragment_count": len(fragments),
                     "document_count": len(documents),
                     "rerank_applied": rerank_applied,
-                }
+                    # ``bm25_used`` = retrieval branch ran without error; rows may still be zero.
+                    "bm25_used": bm25_used,
+                    "bm25_candidate_count": bm25_count,
+                    "bm25_had_matches": bm25_count > 0,
+                    "pre_rerank_pool_count": post_acl_pool_count,
+                    "rerank_requested": rerank_requested,
+                },
             )
             return FragmentListResponse(fragments=fragments, documents=documents)
 
@@ -375,6 +447,24 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             return fragments
         except Exception as e:
             raise FragmentQueryRetrievalException("Failed to retrieve similar fragments.") from e
+
+    async def _retrieve_bm25_fragments(
+            self,
+            *,
+            database_session: AsyncSession,
+            query_text: str,
+            k: int,
+    ) -> list[Fragment]:
+        try:
+            return await self._fragment_repository.get_most_relevant_fragments_bm25(
+                query=query_text,
+                database_session=database_session,
+                k=k,
+                min_score=self._settings.bm25_min_score,
+                query_max_chars=self._settings.bm25_query_max_chars,
+            )
+        except Exception as e:
+            raise FragmentQueryRetrievalException("Failed to retrieve BM25-ranked fragments.") from e
 
     async def _retrieve_documents_fragments(
             self,

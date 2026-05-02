@@ -11,6 +11,12 @@ from app.api.controllers.document import (
     document_query_router,
     post_process_document_router,
 )
+from app.api.controllers.graph import (
+    graph_entity_router,
+    graph_hybrid_query_router,
+    graph_path_router,
+    graph_query_router,
+)
 from app.api.controllers.health_controller import health_controller
 
 router = APIRouter()
@@ -60,4 +66,28 @@ router.include_router(
     post_process_fragment_router,
     prefix="/post-process-fragment",
     tags=["post-process-fragment"],
+)
+
+router.include_router(
+    graph_query_router,
+    prefix="/graph/query",
+    tags=["graph-query"],
+)
+
+router.include_router(
+    graph_entity_router,
+    prefix="/graph/entity",
+    tags=["graph-entity"],
+)
+
+router.include_router(
+    graph_path_router,
+    prefix="/graph/path",
+    tags=["graph-path"],
+)
+
+router.include_router(
+    graph_hybrid_query_router,
+    prefix="/graph/hybrid-query",
+    tags=["graph-hybrid-query"],
 )

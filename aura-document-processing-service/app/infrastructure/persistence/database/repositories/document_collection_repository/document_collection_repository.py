@@ -79,3 +79,56 @@ class DocumentCollectionRepository(DocumentCollectionRepositoryInterface):
                 extra={"user_id": user_id, "requested_count": len(document_ids)},
             )
             raise DatabaseException("Failed to resolve accessible document IDs.") from e
+
+    async def list_all_accessible_document_ids(
+            self,
+            user_id: int,
+            database_session: AsyncSession,
+            chat_id: Optional[int] = None,
+            limit: int = 10_000,
+    ) -> list[int]:
+        try:
+            owned_conditions = [
+                Document.created_by == user_id,
+                Document.deleted_at.is_(None),
+            ]
+            if chat_id is not None:
+                owned_conditions.append(Document.chat_id == chat_id)
+
+            owned_result = await database_session.execute(
+                select(Document.id)
+                .where(*owned_conditions)
+                .order_by(Document.id)
+                .limit(limit)
+            )
+            accessible: set[int] = {row[0] for row in owned_result}
+
+            remaining = max(0, limit - len(accessible))
+            if remaining > 0:
+                shared_result = await database_session.execute(
+                    select(DocumentInDocumentCollection.document_id)
+                    .join(
+                        UserInDocumentCollection,
+                        and_(
+                            UserInDocumentCollection.document_collection_id
+                            == DocumentInDocumentCollection.document_collection_id,
+                            UserInDocumentCollection.user_id == user_id,
+                            UserInDocumentCollection.deleted_at.is_(None),
+                        ),
+                    )
+                    .where(DocumentInDocumentCollection.deleted_at.is_(None))
+                    .order_by(DocumentInDocumentCollection.document_id)
+                    .limit(remaining)
+                )
+                accessible.update(row[0] for row in shared_result)
+
+            return sorted(accessible)[:limit]
+
+        except SQLAlchemyError as e:
+            logger.exception(
+                "Database error while listing all accessible document IDs.",
+                extra={"user_id": user_id, "limit": limit},
+            )
+            raise DatabaseException(
+                "Failed to list all accessible document IDs."
+            ) from e

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Response, status
 
-from app.api.controllers.document.post_process_document.post_process_document_controller_interface import (
+from app.api.controllers.document.post_process_document_controller.post_process_document_controller_interface import (
     PostProcessDocumentControllerInterface,
 )
 from app.api.dependencies.idempotency import optional_idempotency_key

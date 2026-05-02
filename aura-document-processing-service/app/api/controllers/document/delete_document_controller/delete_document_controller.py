@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.ext.asyncio.session import AsyncSession
 
-from app.api.controllers.document.delete_document.delete_document_controller_interface import (
+from app.api.controllers.document.delete_document_controller.delete_document_controller_interface import (
     DeleteDocumentControllerInterface,
 )
 from app.api.dependencies.rate_limiter import strict_rate_limit
