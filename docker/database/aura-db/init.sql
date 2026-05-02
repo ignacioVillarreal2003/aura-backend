@@ -197,10 +197,6 @@ CREATE INDEX idx_fragment_document_id     ON fragment(document_id);
 CREATE INDEX idx_fragment_deleted_at      ON fragment(deleted_at);
 CREATE UNIQUE INDEX idx_fragment_doc_index_active
     ON fragment (document_id, fragment_index) WHERE (deleted_at IS NULL);
-CREATE INDEX idx_fragment_vector_hnsw
-    ON fragment USING hnsw (vector vector_cosine_ops)
-    WITH (m = 16, ef_construction = 64)
-    WHERE (deleted_at IS NULL);
 
 CREATE INDEX idx_chat_message_chat_created_active
     ON chat_message (chat_id, created_at) WHERE (deleted_at IS NULL);
