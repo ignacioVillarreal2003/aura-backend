@@ -10,10 +10,6 @@ from app.domain.field_limits import (
     MAX_DESCRIPTION_CHARS,
     MAX_ID,
     MAX_NAME_CHARS,
-    MAX_PROCESSOR_TYPE_CHARS,
-    MAX_SPLIT_OVERLAP,
-    MAX_SPLIT_SIZE,
-    MAX_STORAGE_URL_CHARS,
     MIN_FILE_SIZE_BYTES,
 )
 from app.domain.types import UserId, DocumentId, ChatId
@@ -26,15 +22,9 @@ class DocumentResponse(BaseModel):
     description: Optional[str] = Field(default=None, min_length=1, max_length=MAX_DESCRIPTION_CHARS)
     mime_type: DocumentMimeType = Field(...)
     status: DocumentStatus = Field(...)
-    storage_url: str = Field(..., min_length=1, max_length=MAX_STORAGE_URL_CHARS)
     file_size_bytes: int = Field(..., ge=MIN_FILE_SIZE_BYTES)
     type: Optional[DocumentType] = Field(default=None)
     category: Optional[str] = Field(default=None, min_length=1, max_length=MAX_CATEGORY_CHARS)
-    text_cleaner_type: Optional[str] = Field(default=None, min_length=1, max_length=MAX_PROCESSOR_TYPE_CHARS)
-    text_splitter_type: Optional[str] = Field(default=None, min_length=1, max_length=MAX_PROCESSOR_TYPE_CHARS)
-    embedder_type: Optional[str] = Field(default=None, min_length=1, max_length=MAX_PROCESSOR_TYPE_CHARS)
-    split_size: Optional[int] = Field(default=None, ge=1, le=MAX_SPLIT_SIZE)
-    split_overlap: Optional[int] = Field(default=None, ge=0, le=MAX_SPLIT_OVERLAP)
     processing_started_at: Optional[datetime] = Field(default=None)
     processing_finished_at: Optional[datetime] = Field(default=None)
     created_by: UserId = Field(..., gt=0, le=MAX_ID)
@@ -62,10 +52,6 @@ class DocumentResponse(BaseModel):
 
     @model_validator(mode="after")
     def validate_invariants(self) -> "DocumentResponse":
-        if self.split_size is not None and self.split_overlap is not None:
-            if self.split_overlap >= self.split_size:
-                raise ValueError("split_overlap must be less than split_size.")
-
         if self.processing_started_at and self.processing_finished_at:
             if self.processing_finished_at < self.processing_started_at:
                 raise ValueError("processing_finished_at cannot be before processing_started_at.")

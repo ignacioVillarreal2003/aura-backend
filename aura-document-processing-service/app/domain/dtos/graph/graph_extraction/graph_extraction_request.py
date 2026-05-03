@@ -4,12 +4,6 @@ from app.domain.field_limits import MAX_ID
 
 
 class ExtractKnowledgeGraphRequest(BaseModel):
-    """Body for the manual extraction endpoint
-    (``POST /graph/documents/{id}/extract``) that re-runs extraction
-    for a single document. The path parameter carries ``document_id``;
-    this DTO is reserved for future flags (force re-extraction, etc.).
-    """
-
     force: bool = Field(
         default=False,
         description=(

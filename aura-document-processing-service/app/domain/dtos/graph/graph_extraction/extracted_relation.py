@@ -1,5 +1,4 @@
 from typing import Any
-
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.domain.constants.graph.entity_type import EntityType
@@ -23,8 +22,6 @@ class ExtractedRelationEndpoint(BaseModel):
 
 
 class ExtractedRelation(BaseModel):
-    """Domain DTO for an LLM-emitted relation between two entities."""
-
     type: str = Field(..., min_length=1, max_length=MAX_RELATION_TYPE_CHARS)
     source: ExtractedRelationEndpoint = Field(...)
     target: ExtractedRelationEndpoint = Field(...)

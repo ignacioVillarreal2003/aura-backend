@@ -1,10 +1,4 @@
-"""Length and cardinality limits for knowledge-graph DTOs.
 
-These constants are used by Pydantic models to bound any data that flows
-through the public API or the LLM contracts. They protect Neo4j from
-ever-growing payloads (e.g. malicious prompts emitting thousands of
-entities per fragment) and keep responses predictable.
-"""
 from typing import Final
 
 MAX_ENTITY_NAME_CHARS: Final[int] = 200

@@ -11,12 +11,6 @@ from app.domain.dtos.graph.graph_field_limits import (
 
 
 class ExtractedEntity(BaseModel):
-    """Domain DTO for an entity returned by the LLM extraction.
-
-    The graph extraction service is responsible for canonicalising
-    ``name`` (lowercase, stripped) before persistence.
-    """
-
     name: str = Field(..., min_length=1, max_length=MAX_ENTITY_NAME_CHARS)
     type: EntityType = Field(...)
     aliases: list[str] = Field(default_factory=list, max_length=MAX_ENTITY_ALIASES)
