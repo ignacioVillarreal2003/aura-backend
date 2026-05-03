@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.constants.document.document_type import DocumentType
+from app.domain.field_limits import MAX_DOCUMENTS_IN_LIST
 from app.infrastructure.persistence.database.orm.document import Document
 from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
     DocumentRepositoryInterface,
@@ -74,7 +75,7 @@ class DocumentRepository(DocumentRepositoryInterface):
                 select(Document).where(
                     Document.chat_id == chat_id,
                     Document.deleted_at.is_(None),
-                )
+                ).limit(MAX_DOCUMENTS_IN_LIST)
             )
             documents = list(result.scalars().all())
 

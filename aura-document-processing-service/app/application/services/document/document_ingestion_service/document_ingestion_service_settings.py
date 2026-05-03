@@ -11,7 +11,7 @@ class DocumentIngestionServiceSettings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
-        extra="ignore"
+        extra="ignore",
     )
 
     max_raw_text_length: int = Field(default=50_000_000, gt=0)

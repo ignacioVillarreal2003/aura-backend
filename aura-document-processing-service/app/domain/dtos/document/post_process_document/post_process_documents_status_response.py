@@ -4,12 +4,12 @@ from typing import Optional
 from pydantic import BaseModel, Field, model_validator
 
 from app.domain.dtos.document.post_process_document.post_process_document_error import PostProcessDocumentError
-from app.domain.field_limits import MAX_ID, MAX_POST_PROCESS_SNAPSHOT_ERRORS
+from app.domain.field_limits import MAX_ID, MAX_JOB_ID_CHARS, MAX_POST_PROCESS_SNAPSHOT_ERRORS
 from app.domain.types import DocumentId
 
 
 class PostProcessDocumentsStatusResponse(BaseModel):
-    job_id: Optional[str] = Field(default=None, max_length=64)
+    job_id: Optional[str] = Field(default=None, max_length=MAX_JOB_ID_CHARS)
     is_running: bool = Field(...)
     total_documents: int = Field(default=0, ge=0)
     processed_documents: int = Field(default=0, ge=0)

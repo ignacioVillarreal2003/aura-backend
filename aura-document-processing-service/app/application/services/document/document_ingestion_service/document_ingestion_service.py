@@ -32,6 +32,9 @@ from app.infrastructure.persistence.database.database_manager.database_manager_i
 from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
     DocumentRepositoryInterface
 )
+from app.infrastructure.messaging.rabbitmq.publisher.interfaces.graph_extraction_publisher_interface import (
+    GraphExtractionPublisherInterface,
+)
 from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository_interface import (
     FragmentRepositoryInterface
 )
@@ -49,7 +52,8 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             text_splitter_factory: TextSplitterFactory,
             embedder_factory: EmbedderFactory,
             database_manager: DatabaseManagerInterface,
-            document_ingestion_service_settings: Optional[DocumentIngestionServiceSettings] = None
+            document_ingestion_service_settings: Optional[DocumentIngestionServiceSettings] = None,
+            graph_extraction_publisher: Optional[GraphExtractionPublisherInterface] = None,
     ) -> None:
         self._document_repository = document_repository
         self._fragment_repository = fragment_repository
@@ -59,6 +63,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
         self._embedder_factory = embedder_factory
         self._database_manager = database_manager
         self._settings = document_ingestion_service_settings or DocumentIngestionServiceSettings()
+        self._graph_extraction_publisher = graph_extraction_publisher
 
     async def process_document(
             self,
@@ -94,6 +99,8 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                     "fragment_count": len(fragments)
                 }
             )
+
+            await self._publish_graph_extraction_event(document)
 
         except (
                 DocumentIngestionServiceReadException,
@@ -356,6 +363,30 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                     "document_id": document.id,
                     "exception_type": type(e).__name__
                 }
+            )
+
+    async def _publish_graph_extraction_event(
+            self,
+            document: Document,
+    ) -> None:
+        if self._graph_extraction_publisher is None:
+            return
+        try:
+            await self._graph_extraction_publisher.publish_for_document_owner(
+                document_id=int(document.id),
+                owner_user_id=int(document.created_by),
+            )
+            logger.info(
+                "A knowledge graph extraction event was enqueued.",
+                extra={"document_id": document.id},
+            )
+        except Exception:
+            logger.warning(
+                "Failed to enqueue knowledge graph extraction; document ingestion succeeded.",
+                extra={
+                    "document_id": document.id,
+                    "owner_user_id": document.created_by,
+                },
             )
 
     @staticmethod

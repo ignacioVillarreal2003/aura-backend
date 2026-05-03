@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio.session import AsyncSession
 
-from app.api.controllers.fragment.fragment_query.fragment_query_controller_interface import (
+from app.api.controllers.fragment.fragment_query_controller.fragment_query_controller_interface import (
     FragmentQueryControllerInterface,
 )
 from app.api.dependencies.rate_limiter import default_rate_limit

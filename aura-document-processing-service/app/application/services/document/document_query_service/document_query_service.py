@@ -11,6 +11,7 @@ from app.application.services.document.document_query_service.document_query_ser
 )
 from app.application.authorization.permissions import Permissions
 from app.domain.constants.document.document_type import DocumentType
+from app.domain.field_limits import MAX_DOCUMENTS_IN_LIST
 
 from app.application.services.document.document_query_service.exceptions.document_query_service_exception import (
     DocumentQueryInvalidRequestException,
@@ -205,6 +206,11 @@ class DocumentQueryService(DocumentQueryServiceInterface):
                 chat_id=chat_id,
                 database_session=database_session
             )
+
+            if len(documents) > MAX_DOCUMENTS_IN_LIST:
+                raise DocumentQueryInvalidRequestException(
+                    "The number of documents in this chat exceeds the maximum allowed for a single request."
+                )
 
             logger.info(
                 "Documents by chat were fetched successfully.",

@@ -1,10 +1,8 @@
-import logging
-
 from fastapi import APIRouter, Depends
 
 from app.api.dependencies.idempotency import optional_idempotency_key
 from app.api.dependencies.rate_limiter import strict_rate_limit
-from app.api.controllers.agent.agent_controller_interface import (
+from app.api.controllers.agent_controller.agent_controller_interface import (
     AgentControllerInterface
 )
 from app.api.openapi.common import default_error_responses
@@ -14,8 +12,6 @@ from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.agent.agent_request import AgentRequest
 from app.domain.dtos.agent.agent_response import AgentResponse
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
-
-logger = logging.getLogger(__name__)
 
 
 class AgentController(AgentControllerInterface):
@@ -27,26 +23,10 @@ class AgentController(AgentControllerInterface):
             _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(strict_rate_limit),
     ) -> AgentResponse:
-        logger.info(
-            "Handling execute agent request",
-            extra={
-                "user_id": authenticated_user.id
-            }
-        )
-
-        agent_response = await agent_service.execute_agent(
+        return await agent_service.execute_agent(
             agent_request=agent_request,
             authenticated_user=authenticated_user
         )
-
-        logger.info(
-            "Execute agent completed successfully",
-            extra={
-                "user_id": authenticated_user.id
-            }
-        )
-
-        return agent_response
 
 
 router = APIRouter()

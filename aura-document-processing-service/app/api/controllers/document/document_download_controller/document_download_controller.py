@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.controllers.document.document_download.download_document_controller_interface import (
+from app.api.controllers.document.document_download_controller.download_document_controller_interface import (
     DocumentDownloadControllerInterface,
 )
 from app.api.dependencies.rate_limiter import default_rate_limit

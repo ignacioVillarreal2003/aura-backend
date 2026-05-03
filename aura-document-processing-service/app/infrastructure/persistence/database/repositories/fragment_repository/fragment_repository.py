@@ -1,9 +1,12 @@
 import logging
+import re
 from datetime import datetime, timezone
 from typing import List, Optional
 from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.domain.field_limits import MAX_FRAGMENTS_IN_LIST
 
 from app.infrastructure.persistence.database.orm.fragment import Fragment
 from app.infrastructure.persistence.database.repositories.database_exceptions import (
@@ -16,6 +19,15 @@ from app.infrastructure.persistence.database.repositories.fragment_repository.fr
 from app.infrastructure.persistence.database.repositories.repository_query_utils import chunked_ids
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_bm25_search_input(raw: str, max_chars: int) -> str:
+    printable_only = "".join(c for c in raw if c.isprintable())
+    allowed = re.sub(r"[^\w\s\-.,]", " ", printable_only, flags=re.UNICODE)
+    collapsed = re.sub(r"\s+", " ", allowed).strip()
+    if not collapsed:
+        return ""
+    return collapsed[:max_chars] if len(collapsed) > max_chars else collapsed
 
 
 class FragmentRepository(FragmentRepositoryInterface):
@@ -111,6 +123,7 @@ class FragmentRepository(FragmentRepositoryInterface):
                     Fragment.deleted_at.is_(None)
                 )
                 .order_by(Fragment.fragment_index)
+                .limit(MAX_FRAGMENTS_IN_LIST)
             )
             fragments = list(result.scalars().all())
 
@@ -236,6 +249,93 @@ class FragmentRepository(FragmentRepositoryInterface):
             )
             raise DatabaseException("Failed to run vector similarity search.") from e
 
+    async def get_most_relevant_fragments_bm25(
+            self,
+            *,
+            query: str,
+            database_session: AsyncSession,
+            k: int,
+            min_score: float = 0.0,
+            query_max_chars: int = 512,
+    ) -> List[Fragment]:
+        sanitized = _sanitize_bm25_search_input(query, query_max_chars)
+        if not sanitized:
+            logger.debug(
+                "BM25 search skipped: query empty after sanitization.",
+                extra={"query_max_chars": query_max_chars},
+            )
+            return []
+
+        if k < 1:
+            raise DatabaseException("The BM25 result count k must be at least 1.")
+
+        try:
+            sql = text(
+                """
+                SELECT id,
+                       document_id,
+                       content,
+                       vector,
+                       fragment_index,
+                       summary,
+                       entities,
+                       topics,
+                       created_by,
+                       created_at,
+                       updated_by,
+                       updated_at,
+                       deleted_by,
+                       deleted_at
+                FROM fragment
+                WHERE deleted_at IS NULL
+                  AND content @@@ :search_query
+                  AND paradedb.score(id) >= :min_score
+                ORDER BY paradedb.score(id) DESC
+                LIMIT :k
+                """
+            )
+            result = await database_session.execute(
+                sql,
+                {
+                    "search_query": sanitized,
+                    "min_score": min_score,
+                    "k": k,
+                },
+            )
+            rows = result.fetchall()
+
+            fragments = [
+                Fragment(
+                    id=row.id,
+                    document_id=row.document_id,
+                    content=row.content,
+                    vector=row.vector,
+                    fragment_index=row.fragment_index,
+                    summary=row.summary,
+                    entities=row.entities,
+                    topics=row.topics,
+                    created_by=row.created_by,
+                    created_at=row.created_at,
+                    updated_by=row.updated_by,
+                    updated_at=row.updated_at,
+                    deleted_by=row.deleted_by,
+                    deleted_at=row.deleted_at,
+                )
+                for row in rows
+            ]
+            logger.debug(
+                "BM25 fragment retrieval completed.",
+                extra={"k": k, "results": len(fragments)},
+            )
+            return fragments
+
+        except SQLAlchemyError as e:
+            logger.exception(
+                "Database error during BM25 fragment search.",
+                extra={"k": k},
+            )
+            raise DatabaseException("Failed to run BM25 similarity search.") from e
+
     async def get_fragments_by_document_ids(
             self,
             document_ids: List[int],
@@ -320,7 +420,8 @@ class FragmentRepository(FragmentRepositoryInterface):
         try:
             collected: list[int] = []
             for chunk in chunked_ids(document_ids):
-                if len(collected) >= limit:
+                remaining = limit - len(collected)
+                if remaining <= 0:
                     break
                 conditions = [
                     Fragment.deleted_at.is_(None),
@@ -338,7 +439,7 @@ class FragmentRepository(FragmentRepositoryInterface):
                     select(Fragment.id)
                     .where(*conditions)
                     .order_by(Fragment.id)
-                    .limit(limit)
+                    .limit(remaining)
                 )
                 collected.extend(int(row[0]) for row in result.fetchall())
 

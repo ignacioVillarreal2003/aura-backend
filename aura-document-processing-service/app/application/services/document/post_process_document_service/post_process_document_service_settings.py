@@ -12,5 +12,3 @@ class PostProcessDocumentServiceSettings(BaseSettings):
     )
 
     max_document_ids: int = Field(default=500, ge=1, le=10000)
-    llm_timeout_seconds: float = Field(default=30.0, gt=0, le=300.0)
-    max_errors_in_status: int = Field(default=500, ge=10, le=10000)

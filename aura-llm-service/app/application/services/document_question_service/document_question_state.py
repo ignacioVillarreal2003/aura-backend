@@ -24,7 +24,7 @@ class DocumentQuestionState:
             cls,
             document_question_request: DocumentQuestionRequest,
             authenticated_user: AuthenticatedUser,
-    ) -> DocumentQuestionState:
+    ) -> "DocumentQuestionState":
         return cls(
             messages=document_question_request.messages,
             authenticated_user=authenticated_user,

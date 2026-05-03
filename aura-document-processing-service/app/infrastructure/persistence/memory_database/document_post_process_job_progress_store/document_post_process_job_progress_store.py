@@ -5,6 +5,7 @@ from typing import Any, Optional
 import redis.asyncio as aioredis
 
 from app.domain.authentication.authenticated_user import AuthenticatedUser
+from app.domain.field_limits import MAX_POST_PROCESS_SNAPSHOT_ERRORS
 from app.infrastructure.persistence.memory_database.document_post_process_job_progress_store.document_post_process_job_progress_store_interface import (
     DocumentPostProcessJobProgressStoreInterface,
 )
@@ -67,7 +68,7 @@ class DocumentPostProcessJobProgressStore(DocumentPostProcessJobProgressStoreInt
                 "finished_at": None,
                 "errors": [],
             }
-            await self._redis.set(self._manifest_key(job_id), json.dumps(manifest))
+            await self._redis.set(self._manifest_key(job_id), json.dumps(manifest), ex=self._settings.post_process_job_lock_ttl_seconds)
             await self._redis.set(self._snapshot_key, json.dumps(snapshot))
             return True
         except Exception:
@@ -118,6 +119,8 @@ class DocumentPostProcessJobProgressStore(DocumentPostProcessJobProgressStoreInt
         if not snap or snap.get("job_id") != job_id:
             return
         errors = list(snap.get("errors") or [])
+        if len(errors) >= MAX_POST_PROCESS_SNAPSHOT_ERRORS:
+            return
         errors.append(error)
         snap["errors"] = errors
         await self._redis.set(self._snapshot_key, json.dumps(snap))
@@ -143,8 +146,6 @@ class DocumentPostProcessJobProgressStore(DocumentPostProcessJobProgressStoreInt
         raw = await self._redis.get(key)
         if raw is None:
             return None
-        if isinstance(raw, bytes):
-            raw = raw.decode("utf-8")
         try:
             data = json.loads(raw)
         except json.JSONDecodeError:

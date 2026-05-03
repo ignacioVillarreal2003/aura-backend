@@ -1,0 +1,368 @@
+import logging
+from typing import Any, Optional
+
+from fastapi import HTTPException, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.application.authorization.authorizer import Authorizer
+from app.application.authorization.permissions import Permissions
+from app.application.services.graph.graph_query_service.interfaces.graph_query_service_interface import (
+    GraphQueryServiceInterface,
+)
+from app.configuration.graph.knowledge_graph_settings import KnowledgeGraphSettings
+from app.domain.authentication.authenticated_user import AuthenticatedUser
+from app.domain.constants.graph.entity_type import EntityType
+from app.domain.constants.graph.query_intent import QueryIntent
+from app.domain.constants.graph.relation_type import (
+    DEFAULT_ALLOWED_RELATION_TYPES,
+    normalize_relation_type,
+)
+from app.domain.dtos.graph.graph_entity.graph_entity_response import GraphEntityResponse
+from app.domain.dtos.graph.graph_entity.graph_relation_response import GraphRelationResponse
+from app.domain.dtos.graph.graph_query.graph_query_request import GraphQueryRequest
+from app.domain.dtos.graph.graph_query.graph_query_response import GraphQueryResponse
+from app.infrastructure.http.llm_provider.dtos.translate_graph_query_request import GraphOntology
+from app.infrastructure.http.llm_provider.llm_provider_interface import LlmProviderInterface
+from app.infrastructure.persistence.database.repositories.document_collection_repository.document_collection_repository_interface import (
+    DocumentCollectionRepositoryInterface,
+)
+from app.infrastructure.persistence.graph.repositories.graph_entity_repository.graph_entity_repository_interface import (
+    GraphEntityRepositoryInterface,
+)
+from app.infrastructure.persistence.graph.repositories.graph_relation_repository.graph_relation_repository_interface import (
+    GraphRelationRepositoryInterface,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class GraphQueryService(GraphQueryServiceInterface):
+    """Translates a natural-language question into a structured ``QueryIntent``
+    and dispatches to the corresponding parametrized Cypher query.
+
+    Anti-injection by construction: the LLM never returns Cypher. It returns
+    one of the well-known ``QueryIntent`` values plus a ``parameters`` dict.
+    Each branch in this service maps the intent to a hand-written Cypher
+    template inside the repository layer; the only LLM-controlled values
+    are typed parameters (entity names, types, depth, etc.).
+    """
+
+    def __init__(
+            self,
+            *,
+            llm_provider: LlmProviderInterface,
+            entity_repository: GraphEntityRepositoryInterface,
+            relation_repository: GraphRelationRepositoryInterface,
+            document_collection_repository: DocumentCollectionRepositoryInterface,
+            authorizer: Authorizer,
+            knowledge_graph_settings: Optional[KnowledgeGraphSettings] = None,
+    ) -> None:
+        self._llm_provider = llm_provider
+        self._entity_repository = entity_repository
+        self._relation_repository = relation_repository
+        self._document_collection_repository = document_collection_repository
+        self._authorizer = authorizer
+        self._settings = knowledge_graph_settings or KnowledgeGraphSettings()
+
+    async def execute(
+            self,
+            *,
+            request: GraphQueryRequest,
+            authenticated_user: AuthenticatedUser,
+            database_session: AsyncSession,
+    ) -> GraphQueryResponse:
+        self._authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.GRAPH_QUERY}),
+        )
+
+        accessible_ids = await self._resolve_accessible_ids(
+            user_id=int(authenticated_user.id),
+            chat_id=request.chat_id,
+            database_session=database_session,
+        )
+        if not accessible_ids:
+            logger.info(
+                "Knowledge graph query returned no results because the user has no accessible documents.",
+                extra={"user_id": authenticated_user.id},
+            )
+            return GraphQueryResponse(
+                intent=QueryIntent.UNKNOWN,
+                confidence=0.0,
+                entities=[],
+                relations=[],
+                explanation="The user has no accessible documents.",
+            )
+
+        ontology = GraphOntology(
+            entity_types=self._settings.resolve_allowed_entity_types(),
+            relation_types=self._settings.resolve_allowed_relation_types()
+                          or list(DEFAULT_ALLOWED_RELATION_TYPES),
+        )
+
+        translation = await self._llm_provider.translate_graph_query(
+            question=request.question,
+            ontology=ontology,
+            authenticated_user=authenticated_user,
+        )
+
+        max_results = self._clamp_results(request.max_results)
+        intent = translation.intent
+        params = self._merge_llm_parameter_aliases(
+            intent, translation.parameters or {}
+        )
+
+        try:
+            entities, relations = await self._dispatch_intent(
+                intent=intent,
+                params=params,
+                accessible_ids=accessible_ids,
+                max_results=max_results,
+            )
+        except _GraphIntentParameterError as e:
+            logger.info(
+                "The LLM-emitted parameters did not match the intent schema.",
+                extra={
+                    "user_id": authenticated_user.id,
+                    "intent": intent.value,
+                    "reason": str(e),
+                },
+            )
+            return GraphQueryResponse(
+                intent=QueryIntent.UNKNOWN,
+                confidence=translation.confidence,
+                entities=[],
+                relations=[],
+                explanation="The query could not be answered with the structured intent.",
+            )
+
+        return GraphQueryResponse(
+            intent=intent,
+            confidence=translation.confidence,
+            entities=entities,
+            relations=relations,
+            explanation=translation.reasoning,
+        )
+
+    @staticmethod
+    def _merge_llm_parameter_aliases(
+            intent: QueryIntent,
+            params: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Map keys the LLM prompt suggests (\"name\", \"type\", \"source\") to
+        repository parameter names expected by handlers (entity_name,
+        entity_type, source_name, …).
+
+        Keeps canonical keys when both are present."""
+        merged: dict[str, Any] = dict(params)
+
+        def copy_alias_if_blank(dst: str, src: str) -> None:
+            if merged.get(dst) is None or not str(merged.get(dst)).strip():
+                raw = merged.get(src)
+                if raw is not None and str(raw).strip():
+                    merged[dst] = raw
+
+        if intent in (QueryIntent.FIND_ENTITY, QueryIntent.FIND_NEIGHBORS):
+            copy_alias_if_blank("entity_name", "name")
+            copy_alias_if_blank("entity_type", "type")
+        elif intent == QueryIntent.FILTER_BY_TYPE:
+            copy_alias_if_blank("entity_type", "type")
+        elif intent == QueryIntent.FIND_PATH:
+            copy_alias_if_blank("source_name", "source")
+            if merged.get("source_type") is None or not str(merged.get("source_type")).strip():
+                alias = merged.get("source_entity_type") or merged.get("from_type")
+                if alias is not None and str(alias).strip():
+                    merged["source_type"] = alias
+        return merged
+
+    async def _dispatch_intent(
+            self,
+            *,
+            intent: QueryIntent,
+            params: dict[str, Any],
+            accessible_ids: list[int],
+            max_results: int,
+    ) -> tuple[list[GraphEntityResponse], list[GraphRelationResponse]]:
+        if intent == QueryIntent.FIND_ENTITY:
+            return await self._handle_find_entity(params, accessible_ids, max_results)
+        if intent == QueryIntent.FIND_NEIGHBORS:
+            return await self._handle_find_neighbors(params, accessible_ids, max_results)
+        if intent == QueryIntent.FIND_PATH:
+            return await self._handle_find_path(params, accessible_ids, max_results)
+        if intent == QueryIntent.FILTER_BY_TYPE:
+            return await self._handle_filter_by_type(params, accessible_ids, max_results)
+        return [], []
+
+    async def _handle_find_entity(
+            self,
+            params: dict[str, Any],
+            accessible_ids: list[int],
+            max_results: int,
+    ) -> tuple[list[GraphEntityResponse], list[GraphRelationResponse]]:
+        canonical = self._read_canonical_name(params, "entity_name")
+        entity_type = self._read_optional_entity_type(params, "entity_type")
+        results = await self._entity_repository.search_by_name_prefix(
+            canonical_prefix=canonical,
+            entity_type=entity_type,
+            accessible_document_ids=accessible_ids,
+            limit=max_results,
+        )
+        return results, []
+
+    async def _handle_find_neighbors(
+            self,
+            params: dict[str, Any],
+            accessible_ids: list[int],
+            max_results: int,
+    ) -> tuple[list[GraphEntityResponse], list[GraphRelationResponse]]:
+        canonical = self._read_canonical_name(params, "entity_name")
+        entity_type = self._read_optional_entity_type(params, "entity_type")
+        depth = self._read_int(
+            params,
+            "depth",
+            default=self._settings.query_default_neighbor_depth,
+            min_value=1,
+            max_value=self._settings.query_max_neighbor_depth,
+        )
+        relation_filter = self._read_optional_relation_types(params, "relation_types")
+        relations = await self._relation_repository.list_neighbors_of(
+            canonical_name=canonical,
+            entity_type=entity_type,
+            depth=depth,
+            relation_types=relation_filter,
+            accessible_document_ids=accessible_ids,
+            limit=max_results,
+        )
+        return [], relations
+
+    async def _handle_find_path(
+            self,
+            params: dict[str, Any],
+            accessible_ids: list[int],
+            max_results: int,
+    ) -> tuple[list[GraphEntityResponse], list[GraphRelationResponse]]:
+        # ``find_path`` belongs more to GraphPathService; here we translate
+        # neighbors of the source as a best-effort response. The dedicated
+        # endpoint /graph/path delegates to GraphPathService directly.
+        canonical = self._read_canonical_name(params, "source_name")
+        entity_type = self._read_optional_entity_type(params, "source_type")
+        depth = self._read_int(
+            params,
+            "max_hops",
+            default=self._settings.query_default_neighbor_depth,
+            min_value=1,
+            max_value=self._settings.query_max_neighbor_depth,
+        )
+        relations = await self._relation_repository.list_neighbors_of(
+            canonical_name=canonical,
+            entity_type=entity_type,
+            depth=depth,
+            relation_types=None,
+            accessible_document_ids=accessible_ids,
+            limit=max_results,
+        )
+        return [], relations
+
+    async def _handle_filter_by_type(
+            self,
+            params: dict[str, Any],
+            accessible_ids: list[int],
+            max_results: int,
+    ) -> tuple[list[GraphEntityResponse], list[GraphRelationResponse]]:
+        entity_type = self._read_required_entity_type(params, "entity_type")
+        results = await self._entity_repository.list_by_type(
+            entity_type=entity_type,
+            accessible_document_ids=accessible_ids,
+            limit=max_results,
+        )
+        return results, []
+
+    async def _resolve_accessible_ids(
+            self,
+            *,
+            user_id: int,
+            chat_id: Optional[int],
+            database_session: AsyncSession,
+    ) -> list[int]:
+        return await self._document_collection_repository.list_all_accessible_document_ids(
+            user_id=user_id,
+            chat_id=chat_id,
+            database_session=database_session,
+            limit=self._settings.accessible_documents_max,
+        )
+
+    def _clamp_results(self, value: int) -> int:
+        return max(1, min(int(value), self._settings.query_max_results))
+
+    @staticmethod
+    def _read_canonical_name(params: dict[str, Any], key: str) -> str:
+        raw = params.get(key)
+        if raw is None or not str(raw).strip():
+            raise _GraphIntentParameterError(f"Missing required parameter '{key}'.")
+        return " ".join(str(raw).strip().lower().split())
+
+    @staticmethod
+    def _read_optional_entity_type(
+            params: dict[str, Any],
+            key: str,
+    ) -> Optional[EntityType]:
+        raw = params.get(key)
+        if raw is None or not str(raw).strip():
+            return None
+        return EntityType.parse(str(raw))
+
+    @staticmethod
+    def _read_required_entity_type(
+            params: dict[str, Any],
+            key: str,
+    ) -> EntityType:
+        raw = params.get(key)
+        if raw is None or not str(raw).strip():
+            raise _GraphIntentParameterError(f"Missing required parameter '{key}'.")
+        return EntityType.parse(str(raw))
+
+    @staticmethod
+    def _read_optional_relation_types(
+            params: dict[str, Any],
+            key: str,
+    ) -> Optional[list[str]]:
+        raw = params.get(key)
+        if raw is None:
+            return None
+        if not isinstance(raw, list):
+            return None
+        normalized = [normalize_relation_type(str(item)) for item in raw if item]
+        return normalized or None
+
+    @staticmethod
+    def _read_int(
+            params: dict[str, Any],
+            key: str,
+            *,
+            default: int,
+            min_value: int,
+            max_value: int,
+    ) -> int:
+        raw = params.get(key, default)
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            value = default
+        return max(min_value, min(value, max_value))
+
+
+class _GraphIntentParameterError(Exception):
+    pass
+
+
+async def get_graph_query_service(
+        request: Request,
+) -> GraphQueryServiceInterface:
+    service = getattr(request.app.state, "graph_query_service", None)
+    if service is None:
+        logger.error("GraphQueryService is not registered on the application state.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Knowledge graph query service is not available.",
+        )
+    return service

@@ -168,20 +168,21 @@ class DatabaseManager(DatabaseManagerInterface):
                 logger.exception("The session could not be rolled back after an error.")
             raise
         else:
-            try:
-                await db_session.commit()
-            except (SQLAlchemyError, OSError) as e:
+            if db_session.in_transaction():
                 try:
-                    await db_session.rollback()
+                    await db_session.commit()
+                except (SQLAlchemyError, OSError) as e:
+                    try:
+                        await db_session.rollback()
+                    except Exception:
+                        logger.exception("The session could not be rolled back after a failed commit.")
+                    raise DatabaseSessionException("A database error occurred while committing the session.") from e
                 except Exception:
-                    logger.exception("The session could not be rolled back after a failed commit.")
-                raise DatabaseSessionException("A database error occurred while committing the session.") from e
-            except Exception:
-                try:
-                    await db_session.rollback()
-                except Exception:
-                    logger.exception("The session could not be rolled back after a failed commit.")
-                raise
+                    try:
+                        await db_session.rollback()
+                    except Exception:
+                        logger.exception("The session could not be rolled back after a failed commit.")
+                    raise
         finally:
             await db_session.close()
 

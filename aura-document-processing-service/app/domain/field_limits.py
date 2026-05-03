@@ -1,42 +1,71 @@
-MAX_ID = 2_147_483_647
+from typing import Final
 
-MAX_DOCUMENTS_IN_LIST = 10_000
+# ─── Shared ────────────────────────────────────────────────────────────────────
 
-MAX_NAME_CHARS = 255
-MAX_DESCRIPTION_CHARS = 2_000
-MAX_STORAGE_URL_CHARS = 1_024
-MIN_FILE_SIZE_BYTES = 1
-MAX_CATEGORY_CHARS = 100
-MAX_PROCESSOR_TYPE_CHARS = 100
-MAX_SPLIT_SIZE = 100_000
-MAX_SPLIT_OVERLAP = 99_999
+MAX_ID: Final[int] = 2_147_483_647
 
-MAX_CONTENT_CHARS = 50_000
-MAX_SUMMARY_CHARS = 10_000
-MAX_TOPIC_CHARS = 500
-MAX_ENTITY_KEY_CHARS = 255
-MAX_ENTITY_VALUE_CHARS = 1_000
-MAX_ENTITY_KEYS = 200
-MAX_TOPICS = 100
-MAX_FRAGMENT_INDEX = 100_000
-MAX_FRAGMENTS_IN_LIST = 1_000
-MAX_TOTAL_FRAGMENTS_LIST_CHARS = 300_000
+# ─── Document ──────────────────────────────────────────────────────────────────
 
-MAX_QUESTION_CHARS = 16_000
-MAX_KEYWORDS_CHARS = 16_000
-MAX_FRAGMENTS_PER_QUERY_STRATEGY = 50
-MAX_RERANK_FRAGMENTS = 100
+MAX_NAME_CHARS: Final[int] = 255
+MAX_DESCRIPTION_CHARS: Final[int] = 2_000
+MAX_CATEGORY_CHARS: Final[int] = 100
+MAX_STORAGE_URL_CHARS: Final[int] = 1_024
+MAX_MIME_TYPE_CHARS: Final[int] = 256
+MIN_FILE_SIZE_BYTES: Final[int] = 1
+MAX_DOCUMENTS_IN_LIST: Final[int] = 10_000
 
-MAX_EMAIL_CHARS = 254
-MAX_ROLE_CHARS = 100
-MAX_PERMISSION_CHARS = 100
-MAX_ROLES = 50
-MAX_PERMISSIONS = 200
+DEFAULT_DOCUMENT_QUERY_PAGE_SIZE: Final[int] = 20
+MAX_DOCUMENT_QUERY_PAGE_SIZE: Final[int] = 100
 
-MAX_MESSAGE_CHARS = 500
-MAX_ERROR_MESSAGE_CHARS = 500
+# ─── Knowledge graph (HTTP controllers & shared KG field bounds) ───────────────
 
-MAX_POST_PROCESS_SNAPSHOT_ERRORS = 1_000
-MAX_POST_PROCESS_DOCUMENT_IDS = 10_000
-MAX_POST_PROCESS_FRAGMENTS_DOCUMENT_IDS = 500
-MAX_CONTEXT_QUERY_DOCUMENT_IDS = 50
+MAX_ENTITY_NAME_CHARS: Final[int] = 200
+MAX_PATH_HOPS: Final[int] = 6
+
+# ─── Fragment ──────────────────────────────────────────────────────────────────
+
+MAX_FRAGMENT_CONTENT_CHARS: Final[int] = 50_000
+MAX_FRAGMENT_SUMMARY_CHARS: Final[int] = 50_000
+MAX_CONTENT_CHARS: Final[int] = 50_000
+MAX_SUMMARY_CHARS: Final[int] = 10_000
+MAX_TOPIC_CHARS: Final[int] = 500
+MAX_ENTITY_KEY_CHARS: Final[int] = 255
+MAX_ENTITY_VALUE_CHARS: Final[int] = 1_000
+MAX_ENTITY_KEYS: Final[int] = 200
+MAX_TOPICS: Final[int] = 100
+MAX_FRAGMENT_INDEX: Final[int] = 100_000
+MAX_FRAGMENTS_IN_LIST: Final[int] = 1_000
+MAX_TOTAL_FRAGMENTS_LIST_CHARS: Final[int] = 300_000
+
+# ─── Query and retrieval ───────────────────────────────────────────────────────
+
+MAX_CHARS_PER_QUERY: Final[int] = 16_000
+MAX_QUERIES_PER_TYPE: Final[int] = 10
+MAX_FRAGMENTS_PER_QUERY_STRATEGY: Final[int] = 50
+MAX_TOTAL_FRAGMENTS: Final[int] = 100
+MAX_CONTEXT_QUERY_DOCUMENT_IDS: Final[int] = 50
+
+# ─── Post-processing ───────────────────────────────────────────────────────────
+
+MAX_POST_PROCESS_DOCUMENT_IDS: Final[int] = 10_000
+MAX_POST_PROCESS_FRAGMENTS_DOCUMENT_IDS: Final[int] = 500
+MAX_POST_PROCESS_SNAPSHOT_ERRORS: Final[int] = 1_000
+MAX_JOB_ID_CHARS: Final[int] = 64
+MAX_MESSAGE_CHARS: Final[int] = 500
+MAX_ERROR_MESSAGE_CHARS: Final[int] = 500
+MAX_POST_PROCESS_ERROR_MESSAGE_CHARS: Final[int] = 2_000
+
+# ─── Auth / user ───────────────────────────────────────────────────────────────
+
+MAX_EMAIL_CHARS: Final[int] = 254
+MAX_ROLE_CHARS: Final[int] = 100
+MAX_PERMISSION_CHARS: Final[int] = 100
+MAX_ROLES: Final[int] = 50
+MAX_PERMISSIONS: Final[int] = 200
+
+# ─── LLM provider payload ceilings ────────────────────────────────────────────
+
+MAX_LLM_DOCUMENT_NAME_CHARS: Final[int] = 2_048
+MAX_LLM_CLASSIFY_CONTENT_CHARS: Final[int] = 50_000_000
+MAX_LLM_ENRICH_CONTENT_CHARS: Final[int] = 10_000_000
+MAX_LLM_EXTRACT_CONTENT_CHARS: Final[int] = 10_000_000

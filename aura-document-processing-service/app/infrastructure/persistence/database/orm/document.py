@@ -42,6 +42,7 @@ class Document(Base):
         default=DocumentStatus.uploaded,
         nullable=False
     )
+
     storage_url = Column(String(MAX_STORAGE_URL_CHARS), nullable=False)
 
     file_size_bytes = Column(BigInteger, nullable=False)

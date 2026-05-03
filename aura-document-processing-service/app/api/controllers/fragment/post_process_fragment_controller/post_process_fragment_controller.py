@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Response, status
 
-from app.api.controllers.fragment.post_process_fragment.post_process_fragment_controller_interface import (
+from app.api.controllers.fragment.post_process_fragment_controller.post_process_fragment_controller_interface import (
     PostProcessFragmentControllerInterface,
 )
 from app.api.dependencies.idempotency import optional_idempotency_key

@@ -52,6 +52,10 @@ MOCK_USERS = {
             "LIST_DOCUMENT_COLLECTION_DOCUMENTS",
             "ADD_DOCUMENT_COLLECTION_DOCUMENT",
             "REMOVE_DOCUMENT_COLLECTION_DOCUMENT",
+            "GRAPH_QUERY",
+            "GRAPH_ENTITY",
+            "GRAPH_PATH",
+            "LLM_GRAPH_QUERY_TRANSLATION",
         ]
     },
 }

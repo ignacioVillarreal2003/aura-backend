@@ -15,6 +15,8 @@ from app.application.services.document_action_service.exceptions.document_action
 from app.application.services.document_action_service.interfaces.document_action_service_interface import (
     DocumentActionServiceInterface,
 )
+from app.application.services.document_action_service.processors.chunk_document_action_processor.chunk_document_action_processor import \
+    ChunkDocumentActionProcessor
 from app.application.services.document_action_service.processors.context_document_action_processor.context_document_action_processor import (
     ContextDocumentActionProcessor,
 )
@@ -24,14 +26,8 @@ from app.application.services.document_action_service.processors.direct_document
 from app.application.services.document_action_service.processors.fallback_document_action_processor.fallback_document_action_processor import (
     FallbackDocumentActionProcessor,
 )
-from app.application.services.document_action_service.processors.map_chunks_document_action_processor.map_chunks_document_action_processor import (
-    MapChunksDocumentActionProcessor,
-)
 from app.application.services.document_action_service.processors.reduce_document_action_processor.reduce_document_action_processor import (
     ReduceDocumentActionProcessor,
-)
-from app.application.services.document_action_service.processors.validate_document_action_processor.validate_document_action_processor import (
-    ValidateDocumentActionProcessor,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.document_action.document_action_request import DocumentActionRequest
@@ -63,9 +59,6 @@ class DocumentActionService(DocumentActionServiceInterface):
         self._authorizer = authorizer
         self._settings = document_action_service_settings or DocumentActionServiceSettings()
 
-        self._validate_processor = ValidateDocumentActionProcessor(
-            document_action_service_settings=self._settings,
-        )
         self._context_processor = ContextDocumentActionProcessor(
             document_action_service_settings=self._settings,
             document_context_provider=document_context_provider,
@@ -74,7 +67,7 @@ class DocumentActionService(DocumentActionServiceInterface):
             ollama_llm_facade=ollama_llm_facade,
             ollama_llm_invoker=ollama_llm_invoker,
         )
-        self._map_chunks_processor = MapChunksDocumentActionProcessor(
+        self._chunk_processor = ChunkDocumentActionProcessor(
             document_action_service_settings=self._settings,
             ollama_llm_facade=ollama_llm_facade,
             ollama_llm_invoker=ollama_llm_invoker,
@@ -129,10 +122,9 @@ class DocumentActionService(DocumentActionServiceInterface):
             ) from e
 
     async def _run_pipeline(self, state: DocumentActionState) -> None:
-        await self._validate_processor.run(state)
         await self._context_processor.run(state)
         await self._direct_processor.run(state)
-        await self._map_chunks_processor.run(state)
+        await self._chunk_processor.run(state)
         await self._reduce_processor.run(state)
         await self._fallback_processor.run(state)
 

@@ -6,6 +6,7 @@ from typing import Any, Optional
 import redis.asyncio as aioredis
 
 from app.domain.authentication.authenticated_user import AuthenticatedUser
+from app.domain.field_limits import MAX_POST_PROCESS_SNAPSHOT_ERRORS
 from app.infrastructure.persistence.memory_database.fragment_post_process_job_progress_store.fragment_post_process_job_progress_store_interface import (
     FragmentPostProcessJobProgressStoreInterface,
 )
@@ -70,7 +71,7 @@ class FragmentPostProcessJobProgressStore(FragmentPostProcessJobProgressStoreInt
                 "finished_at": None,
                 "errors": [],
             }
-            await self._redis.set(self._manifest_key(job_id), json.dumps(manifest))
+            await self._redis.set(self._manifest_key(job_id), json.dumps(manifest), ex=self._settings.post_process_job_lock_ttl_seconds)
             await self._redis.set(self._snapshot_key, json.dumps(snapshot))
             return True
         except Exception:
@@ -121,6 +122,8 @@ class FragmentPostProcessJobProgressStore(FragmentPostProcessJobProgressStoreInt
         if not snap or snap.get("job_id") != job_id:
             return
         errors = list(snap.get("errors") or [])
+        if len(errors) >= MAX_POST_PROCESS_SNAPSHOT_ERRORS:
+            return
         errors.append(error)
         snap["errors"] = errors
         await self._redis.set(self._snapshot_key, json.dumps(snap))
@@ -151,16 +154,18 @@ class FragmentPostProcessJobProgressStore(FragmentPostProcessJobProgressStoreInt
         raw = await self._redis.get(key)
         if not raw:
             return
-        manifest = json.loads(raw)
+        try:
+            manifest = json.loads(raw)
+        except json.JSONDecodeError:
+            logger.error("Fragment job manifest was not valid JSON; skipping cursor update.", extra={"job_id": job_id})
+            return
         manifest["last_fragment_id"] = last_fragment_id
-        await self._redis.set(key, json.dumps(manifest))
+        await self._redis.set(key, json.dumps(manifest), ex=self._settings.post_process_job_lock_ttl_seconds)
 
     async def _get_json(self, key: str) -> Optional[dict[str, Any]]:
         raw = await self._redis.get(key)
         if raw is None:
             return None
-        if isinstance(raw, bytes):
-            raw = raw.decode("utf-8")
         try:
             data = json.loads(raw)
         except json.JSONDecodeError:

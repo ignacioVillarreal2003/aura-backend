@@ -1,10 +1,8 @@
-import logging
-
 from fastapi import APIRouter, Depends
 
 from app.api.dependencies.idempotency import optional_idempotency_key
 from app.api.dependencies.rate_limiter import strict_rate_limit
-from app.api.controllers.document_summary.document_summary_controller_interface import (
+from app.api.controllers.document_summary_controller.document_summary_controller_interface import (
     DocumentSummaryControllerInterface
 )
 from app.api.openapi.common import default_error_responses
@@ -17,8 +15,6 @@ from app.domain.dtos.document_summary.document_summary_request import DocumentSu
 from app.domain.dtos.document_summary.document_summary_response import DocumentSummaryResponse
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 
-logger = logging.getLogger(__name__)
-
 
 class DocumentSummaryController(DocumentSummaryControllerInterface):
     async def execute_document_summary(
@@ -29,26 +25,10 @@ class DocumentSummaryController(DocumentSummaryControllerInterface):
             _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(strict_rate_limit),
     ) -> DocumentSummaryResponse:
-        logger.info(
-            "Handling document summary request",
-            extra={
-                "user_id": authenticated_user.id
-            }
-        )
-
-        document_summary_response = await document_summary_service.execute_document_summary(
+        return await document_summary_service.execute_document_summary(
             document_summary_request=document_summary_request,
             authenticated_user=authenticated_user
         )
-
-        logger.info(
-            "Document summary completed successfully",
-            extra={
-                "user_id": authenticated_user.id
-            }
-        )
-
-        return document_summary_response
 
 
 router = APIRouter()

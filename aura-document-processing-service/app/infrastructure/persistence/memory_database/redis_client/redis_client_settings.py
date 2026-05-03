@@ -1,4 +1,4 @@
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,7 +11,7 @@ class RedisClientSettings(BaseSettings):
         extra="ignore",
     )
 
-    url: str = Field(default="redis://127.0.0.1:6379/0")
+    url: SecretStr = Field(default="redis://127.0.0.1:6379/0")
     max_connections: int = Field(default=20, ge=1, le=200)
     socket_connect_timeout: float = Field(default=5.0, ge=0.5, le=30.0)
     socket_timeout: float = Field(default=10.0, ge=0.5, le=60.0)

@@ -27,7 +27,12 @@ class OllamaLLMFacadeSettings(BaseSettings):
     num_ctx: Optional[int] = Field(default=None, ge=512, le=131_072)
     num_predict: Optional[int] = Field(default=None, ge=1, le=32_768)
 
-    request_timeout: Optional[float] = Field(default=120.0, gt=0, le=600.0)
+    request_timeout: Optional[float] = Field(
+        default=600.0,
+        gt=0,
+        le=3600.0,
+        description="Overall timeout passed to LangChain ChatOllama toward Ollama (long graphs need more).",
+    )
     keep_alive: Optional[str] = Field(default=None)
 
     @field_validator("model_name", mode="before")

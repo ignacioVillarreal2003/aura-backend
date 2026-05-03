@@ -8,6 +8,8 @@ from app.api.controllers import (
     fragment_enrich_controller,
     document_action_controller,
     rag_agent_controller,
+    graph_extraction_controller,
+    graph_query_translation_controller,
 )
 from app.api.controllers.health_controller import health_controller
 
@@ -58,4 +60,16 @@ router.include_router(
     rag_agent_controller.router,
     prefix="/rag-agent",
     tags=["rag-agent"],
+)
+
+router.include_router(
+    graph_extraction_controller.router,
+    prefix="/graph-extraction",
+    tags=["graph-extraction"],
+)
+
+router.include_router(
+    graph_query_translation_controller.router,
+    prefix="/graph-query-translation",
+    tags=["graph-query-translation"],
 )
