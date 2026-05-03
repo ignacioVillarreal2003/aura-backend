@@ -9,6 +9,7 @@ from app.application.services.document.post_process_document_service.interfaces.
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.document.post_process_document.post_process_document_error import PostProcessDocumentError
+from app.domain.field_limits import MAX_POST_PROCESS_ERROR_MESSAGE_CHARS
 from app.infrastructure.persistence.database.orm.document import Document
 from app.infrastructure.persistence.database.orm.fragment import Fragment
 from app.infrastructure.http.llm_provider.llm_provider_interface import LlmProviderInterface
@@ -194,7 +195,7 @@ class PostProcessDocumentProcessor(PostProcessDocumentProcessorInterface):
                     except Exception as e:
                         failed_ids.add(doc.id)
                         raw = str(e) or type(e).__name__
-                        msg = f"{type(e).__name__}: {raw}"[:2000]
+                        msg = f"{type(e).__name__}: {raw}"[:MAX_POST_PROCESS_ERROR_MESSAGE_CHARS]
                         await self._job_progress_store.append_document_job_error(
                             job_id,
                             PostProcessDocumentError(

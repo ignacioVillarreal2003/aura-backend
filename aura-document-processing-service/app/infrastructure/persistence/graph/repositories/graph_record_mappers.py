@@ -1,12 +1,5 @@
-"""Helpers that map raw Neo4j records into domain DTOs.
-
-The Neo4j async driver returns records whose values can be primitives,
-``Node``/``Relationship`` objects, lists, etc. The mappers here keep
-that conversion centralized so each repository stays focused on Cypher.
-"""
 from datetime import datetime, timezone
 from typing import Any, Optional
-
 from neo4j.graph import Node, Relationship
 from neo4j.time import DateTime as Neo4jDateTime
 
@@ -61,7 +54,6 @@ def _coerce_str_list(value: Any) -> list[str]:
 
 
 def map_entity_node(node: Any) -> GraphEntityResponse:
-    """Map an entity node (Node or plain dict) into ``GraphEntityResponse``."""
     if node is None:
         raise ValueError("entity node is required for mapping.")
 
@@ -98,7 +90,6 @@ def map_relationship(
         source: GraphEntityResponse,
         target: GraphEntityResponse,
 ) -> GraphRelationResponse:
-    """Map a Relationship (or dict of properties) plus its endpoints into the DTO."""
     if relationship is None:
         raise ValueError("relationship is required for mapping.")
 

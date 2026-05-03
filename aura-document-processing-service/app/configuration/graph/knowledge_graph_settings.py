@@ -7,13 +7,6 @@ from app.domain.constants.graph.relation_type import DEFAULT_ALLOWED_RELATION_TY
 
 
 class KnowledgeGraphSettings(BaseSettings):
-    """Master configuration for the knowledge-graph module.
-
-    The module is fully optional: when ``enabled`` is False the rest of
-    the application starts up without any of the KG dependencies (Neo4j,
-    KG consumers, KG endpoints).
-    """
-
     model_config = SettingsConfigDict(
         env_prefix="KNOWLEDGE_GRAPH_",
         env_file=".env",
@@ -25,12 +18,7 @@ class KnowledgeGraphSettings(BaseSettings):
     enabled: bool = Field(default=False)
 
     extraction_max_fragments_per_document: int = Field(default=500, ge=1, le=10_000)
-    extraction_concurrency: int = Field(
-        default=1,
-        ge=1,
-        le=32,
-        description="Parallel fragment extractions per document job; prefer 1 for slow local Ollama.",
-    )
+    extraction_concurrency: int = Field(default=1,ge=1,le=32)
     extraction_lock_ttl_seconds: int = Field(default=1800, ge=60, le=86_400)
     extraction_snapshot_ttl_seconds: int = Field(default=86_400, ge=60, le=2_592_000)
 
@@ -41,51 +29,12 @@ class KnowledgeGraphSettings(BaseSettings):
 
     accessible_documents_max: int = Field(default=10_000, ge=1, le=1_000_000)
 
-    hybrid_intent_confidence_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
-    hybrid_min_kg_results: int = Field(default=1, ge=0, le=100)
+    allowed_entity_types: Optional[str] = Field(default=None)
+    allowed_relation_types: Optional[str] = Field(default=None)
 
-    allowed_entity_types: Optional[str] = Field(
-        default=None,
-        description=(
-            "Optional comma-separated list of entity types restricting what "
-            "the extraction LLM is allowed to emit. When unset, the full "
-            "EntityType enum is allowed."
-        ),
-    )
-    allowed_relation_types: Optional[str] = Field(
-        default=None,
-        description=(
-            "Optional comma-separated list of relation types restricting "
-            "what the extraction LLM is allowed to emit. When unset, the "
-            "default whitelist DEFAULT_ALLOWED_RELATION_TYPES is used."
-        ),
-    )
-
-    system_principal_email: str = Field(
-        default="kg-extraction@system.local",
-        min_length=3,
-        max_length=254,
-        description=(
-            "Email used to identify event-triggered (non user-driven) "
-            "extraction jobs in audit logs. The trust mechanism is the "
-            "service API key; this email is propagated for traceability."
-        ),
-    )
-    system_principal_roles: Optional[str] = Field(
-        default=None,
-        description=(
-            "Optional comma-separated roles propagated to the LLM service "
-            "for event-triggered extraction calls."
-        ),
-    )
-    system_principal_permissions: Optional[str] = Field(
-        default=None,
-        description=(
-            "Optional comma-separated permissions propagated to the LLM "
-            "service for event-triggered extraction calls. The LLM service "
-            "should rely on the service API key for trust; this is for audit."
-        ),
-    )
+    system_principal_email: str = Field(default="kg-extraction@system.local",min_length=3,max_length=254)
+    system_principal_roles: Optional[str] = Field(default=None)
+    system_principal_permissions: Optional[str] = Field(default=None)
 
     def resolve_system_principal_roles(self) -> list[str]:
         if not self.system_principal_roles:

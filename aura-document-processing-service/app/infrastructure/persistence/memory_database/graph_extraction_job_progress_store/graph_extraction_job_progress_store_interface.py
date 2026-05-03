@@ -3,13 +3,6 @@ from typing import Any, Optional
 
 
 class GraphExtractionJobProgressStoreInterface(ABC):
-    """Tracks per-document graph-extraction job progress in Redis.
-
-    Unlike the fragment-post-process store (which only tracks ONE global
-    job at a time), this store keys snapshots by ``document_id`` because
-    extraction is event-driven and many documents can run concurrently.
-    """
-
     @abstractmethod
     async def try_acquire_extraction_lock(
             self,
@@ -24,6 +17,7 @@ class GraphExtractionJobProgressStoreInterface(ABC):
             self,
             *,
             document_id: int,
+            job_id: Optional[str] = None,
     ) -> None:
         pass
 

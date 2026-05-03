@@ -36,6 +36,7 @@ from app.domain.dtos.document.create_document.create_document_response import Cr
 from app.infrastructure.messaging.rabbitmq.dtos.commands.document_ingestion_command import DocumentIngestionCommand
 from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
 from app.domain.authentication.authenticated_user import AuthenticatedUser
+from app.domain.field_limits import MAX_NAME_CHARS
 from app.infrastructure.persistence.database.orm.document import Document
 from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_exception import RabbitMQPublishException
 from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
@@ -252,8 +253,10 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             )
         if "\x00" in filename:
             raise CreateDocumentInvalidException("The filename contains null bytes.")
-        if len(filename) > 255:
-            raise CreateDocumentInvalidException("The filename is too long. The maximum length is 255 characters.")
+        if len(filename) > MAX_NAME_CHARS:
+            raise CreateDocumentInvalidException(
+                f"The filename is too long. The maximum length is {MAX_NAME_CHARS} characters."
+            )
 
     def _validate_content_type(self, file: UploadFile) -> None:
         content_type = file.content_type

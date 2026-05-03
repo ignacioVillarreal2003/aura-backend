@@ -9,7 +9,7 @@ from app.application.authorization.permissions import Permissions
 from app.application.services.graph.graph_query_service.interfaces.graph_query_service_interface import (
     GraphQueryServiceInterface,
 )
-from app.configuration.knowledge_graph_settings import KnowledgeGraphSettings
+from app.configuration.graph.knowledge_graph_settings import KnowledgeGraphSettings
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.graph.entity_type import EntityType
 from app.domain.constants.graph.query_intent import QueryIntent
@@ -73,7 +73,7 @@ class GraphQueryService(GraphQueryServiceInterface):
     ) -> GraphQueryResponse:
         self._authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.QUERY_KNOWLEDGE_GRAPH}),
+            required_permissions=frozenset({Permissions.GRAPH_QUERY}),
         )
 
         accessible_ids = await self._resolve_accessible_ids(

@@ -3,14 +3,9 @@ import logging
 import time
 from typing import Any, Optional
 from urllib.parse import urlparse
-
 from fastapi import HTTPException, Request, status
 from neo4j import AsyncDriver, AsyncGraphDatabase, AsyncManagedTransaction
-from neo4j.exceptions import (
-    AuthError,
-    Neo4jError,
-    ServiceUnavailable,
-)
+from neo4j.exceptions import AuthError, Neo4jError, ServiceUnavailable
 
 from app.infrastructure.persistence.graph.neo4j_manager.neo4j_manager_exception import (
     Neo4jConnectionException,
@@ -142,16 +137,21 @@ class Neo4jManager(Neo4jManagerInterface):
 
     async def _verify_connection(self) -> None:
         assert self._driver is not None
+        driver = self._driver
+        timeout = self._settings.health_probe_timeout_seconds
         try:
-            await asyncio.wait_for(
-                self._driver.verify_connectivity(),
-                timeout=self._settings.health_probe_timeout_seconds,
-            )
-            async with self._driver.session(database=self._settings.database) as session:
-                result = await session.run("RETURN 1 AS health")
-                record = await result.single()
-                if record is None or record["health"] != 1:
-                    raise Neo4jConnectionException("Neo4j health probe returned an unexpected value.")
+            await asyncio.wait_for(driver.verify_connectivity(), timeout=timeout)
+
+            async def _probe() -> None:
+                async with driver.session(database=self._settings.database) as session:
+                    result = await session.run("RETURN 1 AS health")
+                    record = await result.single()
+                    if record is None or record["health"] != 1:
+                        raise Neo4jConnectionException(
+                            "Neo4j health probe returned an unexpected value."
+                        )
+
+            await asyncio.wait_for(_probe(), timeout=timeout)
             logger.info(
                 "The Neo4j connection was verified successfully.",
                 extra={"database": self._settings.database},
@@ -170,13 +170,18 @@ class Neo4jManager(Neo4jManagerInterface):
             }
 
         try:
+            driver = self._driver
             start_time = time.monotonic()
-            async with self._driver.session(database=self._settings.database) as session:
-                result = await asyncio.wait_for(
-                    session.run("RETURN 1 AS health"),
-                    timeout=self._settings.health_probe_timeout_seconds,
-                )
-                record = await result.single()
+
+            async def _probe() -> Any:
+                async with driver.session(database=self._settings.database) as session:
+                    result = await session.run("RETURN 1 AS health")
+                    return await result.single()
+
+            record = await asyncio.wait_for(
+                _probe(),
+                timeout=self._settings.health_probe_timeout_seconds,
+            )
             latency_ms = round((time.monotonic() - start_time) * 1000, 2)
             healthy = record is not None and record.get("health") == 1
             return {

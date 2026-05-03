@@ -1,5 +1,4 @@
 import logging
-
 from neo4j import AsyncDriver
 from neo4j.exceptions import Neo4jError
 
@@ -34,12 +33,6 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
 
 
 class Neo4jSchemaInitializer:
-    """Idempotent schema bootstrap for the knowledge graph.
-
-    The initializer is safe to run on every application startup: each statement
-    uses ``IF NOT EXISTS`` so existing constraints/indexes remain untouched.
-    """
-
     def __init__(self, driver: AsyncDriver, database: str) -> None:
         self._driver = driver
         self._database = database

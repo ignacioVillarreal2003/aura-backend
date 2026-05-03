@@ -24,7 +24,7 @@ class RedisClient:
 
     async def initialize(self) -> None:
         self._pool = aioredis.ConnectionPool.from_url(
-            self._settings.url,
+            self._settings.url.get_secret_value(),
             max_connections=self._settings.max_connections,
             socket_connect_timeout=self._settings.socket_connect_timeout,
             socket_timeout=self._settings.socket_timeout,
@@ -66,7 +66,7 @@ class RedisClient:
     def _redacted_url(self) -> str:
         try:
             from urllib.parse import urlparse, urlunparse
-            parsed = urlparse(self._settings.url)
+            parsed = urlparse(self._settings.url.get_secret_value())
             redacted = parsed._replace(
                 netloc=f"{parsed.hostname}:{parsed.port}" if parsed.port else parsed.hostname
             )

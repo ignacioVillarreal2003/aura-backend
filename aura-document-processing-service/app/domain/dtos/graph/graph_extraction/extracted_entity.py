@@ -2,11 +2,11 @@ from typing import Optional
 from pydantic import BaseModel, Field, field_validator
 
 from app.domain.constants.graph.entity_type import EntityType
+from app.domain.field_limits import MAX_ENTITY_NAME_CHARS
 from app.domain.dtos.graph.graph_field_limits import (
     MAX_ENTITY_ALIAS_CHARS,
     MAX_ENTITY_ALIASES,
     MAX_ENTITY_DESCRIPTION_CHARS,
-    MAX_ENTITY_NAME_CHARS,
 )
 
 

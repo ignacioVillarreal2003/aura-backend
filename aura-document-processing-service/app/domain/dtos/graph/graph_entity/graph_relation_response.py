@@ -3,10 +3,8 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from app.domain.constants.graph.entity_type import EntityType
-from app.domain.dtos.graph.graph_field_limits import (
-    MAX_ENTITY_NAME_CHARS,
-    MAX_RELATION_TYPE_CHARS,
-)
+from app.domain.field_limits import MAX_ENTITY_NAME_CHARS
+from app.domain.dtos.graph.graph_field_limits import MAX_RELATION_TYPE_CHARS
 
 
 class GraphRelationEndpoint(BaseModel):

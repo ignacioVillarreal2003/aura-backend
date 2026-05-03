@@ -12,7 +12,7 @@ from app.application.services.graph.graph_entity_service.exceptions.graph_entity
 from app.application.services.graph.graph_entity_service.interfaces.graph_entity_service_interface import (
     GraphEntityServiceInterface,
 )
-from app.configuration.knowledge_graph_settings import KnowledgeGraphSettings
+from app.configuration.graph.knowledge_graph_settings import KnowledgeGraphSettings
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.graph.entity_type import EntityType
 from app.domain.dtos.graph.graph_entity.graph_entity_with_relations_response import (
@@ -58,7 +58,7 @@ class GraphEntityService(GraphEntityServiceInterface):
     ) -> GraphEntityWithRelationsResponse:
         self._authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.READ_GRAPH_ENTITY}),
+            required_permissions=frozenset({Permissions.GRAPH_ENTITY}),
         )
 
         canonical = self._canonicalize(name)
@@ -82,9 +82,7 @@ class GraphEntityService(GraphEntityServiceInterface):
             accessible_document_ids=accessible_ids,
         )
         if entity is None:
-            raise GraphEntityNotFoundException(
-                f"Entity not found: {name!r}"
-            )
+            raise GraphEntityNotFoundException("The entity was not found.")
 
         clamped_depth = max(1, min(int(depth), self._settings.query_max_neighbor_depth))
         relations = await self._relation_repository.list_neighbors_of(

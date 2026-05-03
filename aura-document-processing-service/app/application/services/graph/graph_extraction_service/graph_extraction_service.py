@@ -14,10 +14,10 @@ from app.application.services.graph.graph_extraction_service.exceptions.graph_ex
 from app.application.services.graph.graph_extraction_service.interfaces.graph_extraction_service_interface import (
     GraphExtractionServiceInterface,
 )
-from app.configuration.knowledge_graph_settings import KnowledgeGraphSettings
+from app.configuration.graph.knowledge_graph_settings import KnowledgeGraphSettings
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.constants.graph.entity_type import EntityType
 from app.domain.constants.graph.relation_type import normalize_relation_type
+from app.domain.dtos.graph.graph_field_limits import MAX_KG_ERROR_MESSAGE_CHARS
 from app.domain.dtos.graph.graph_extraction.extracted_entity import ExtractedEntity
 from app.domain.dtos.graph.graph_extraction.extracted_relation import ExtractedRelation
 from app.domain.dtos.graph.graph_extraction.graph_extraction_progress import (
@@ -107,6 +107,13 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             },
         )
 
+        if force:
+            await self._job_progress_store.release_extraction_lock(document_id=document_id)
+            logger.info(
+                "Force flag set; any existing extraction lock was released.",
+                extra={"document_id": document_id, "user_id": user.id},
+            )
+
         acquired = await self._job_progress_store.try_acquire_extraction_lock(
             document_id=document_id,
             job_id=job_id,
@@ -133,6 +140,7 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             )
             await self._job_progress_store.release_extraction_lock(
                 document_id=document_id,
+                job_id=job_id,
             )
 
     async def get_progress(
@@ -429,7 +437,7 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             stage: str,
     ) -> None:
         message = f"[{stage}] {type(error).__name__}: {str(error) or type(error).__name__}"[
-            :2000
+            :MAX_KG_ERROR_MESSAGE_CHARS
         ]
         await self._job_progress_store.append_error(
             job_id=job_id,
@@ -470,9 +478,6 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             except ValueError:
                 return None
         return None
-
-
-_VALID_ENTITY_TYPES_FOR_EXTRACTION: frozenset[str] = frozenset(EntityType.values())
 
 
 async def get_graph_extraction_service(

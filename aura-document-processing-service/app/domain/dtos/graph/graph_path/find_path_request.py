@@ -2,11 +2,8 @@ from typing import Optional
 from pydantic import BaseModel, Field, model_validator
 
 from app.domain.constants.graph.entity_type import EntityType
-from app.domain.dtos.graph.graph_field_limits import (
-    MAX_ENTITY_NAME_CHARS,
-    MAX_PATH_HOPS,
-    MAX_PATHS_RETURNED,
-)
+from app.domain.field_limits import MAX_ENTITY_NAME_CHARS, MAX_PATH_HOPS
+from app.domain.dtos.graph.graph_field_limits import MAX_PATHS_RETURNED
 
 
 class FindPathRequest(BaseModel):

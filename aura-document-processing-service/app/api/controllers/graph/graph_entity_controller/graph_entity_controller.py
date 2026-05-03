@@ -1,5 +1,4 @@
 from typing import Optional
-
 from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,9 +7,7 @@ from app.api.controllers.graph.graph_entity_controller.graph_entity_controller_i
 )
 from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
-from app.application.services.graph.graph_entity_service.graph_entity_service import (
-    get_graph_entity_service,
-)
+from app.application.services.graph.graph_entity_service.graph_entity_service import get_graph_entity_service
 from app.application.services.graph.graph_entity_service.interfaces.graph_entity_service_interface import (
     GraphEntityServiceInterface,
 )
@@ -19,16 +16,9 @@ from app.domain.constants.graph.entity_type import EntityType
 from app.domain.dtos.graph.graph_entity.graph_entity_with_relations_response import (
     GraphEntityWithRelationsResponse,
 )
-from app.domain.dtos.graph.graph_field_limits import (
-    MAX_ENTITY_NAME_CHARS,
-    MAX_PATH_HOPS,
-)
-from app.infrastructure.http.authentication_provider.authentication_provider import (
-    get_authenticated_user,
-)
-from app.infrastructure.persistence.database.database_manager.database_manager import (
-    get_database_session,
-)
+from app.domain.field_limits import MAX_ENTITY_NAME_CHARS, MAX_PATH_HOPS
+from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
+from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
 
 
 class GraphEntityController(GraphEntityControllerInterface):

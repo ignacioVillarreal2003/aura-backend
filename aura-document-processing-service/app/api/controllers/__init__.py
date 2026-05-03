@@ -13,7 +13,6 @@ from app.api.controllers.document import (
 )
 from app.api.controllers.graph import (
     graph_entity_router,
-    graph_hybrid_query_router,
     graph_path_router,
     graph_query_router,
 )
@@ -84,10 +83,4 @@ router.include_router(
     graph_path_router,
     prefix="/graph/path",
     tags=["graph-path"],
-)
-
-router.include_router(
-    graph_hybrid_query_router,
-    prefix="/graph/hybrid-query",
-    tags=["graph-hybrid-query"],
 )

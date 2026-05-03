@@ -7,8 +7,12 @@ from app.infrastructure.persistence.memory_database.fragment_post_process_job_pr
 from app.application.services.fragment.post_process_fragment_service.interfaces.post_process_fragment_processor_interface import (
     PostProcessFragmentProcessorInterface,
 )
+from app.application.services.fragment.post_process_fragment_service.post_process_fragment_service_settings import (
+    PostProcessFragmentServiceSettings,
+)
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.fragment.post_process_fragment.post_process_fragment_error import PostProcessFragmentError
+from app.domain.field_limits import MAX_POST_PROCESS_ERROR_MESSAGE_CHARS
 from app.infrastructure.http.llm_provider.llm_provider_interface import LlmProviderInterface
 from app.infrastructure.persistence.database.database_manager.database_manager_interface import (
     DatabaseManagerInterface,
@@ -19,8 +23,6 @@ from app.infrastructure.persistence.database.repositories.fragment_repository.fr
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_FRAGMENT_PAGE_SIZE = 50
-
 
 class PostProcessFragmentProcessor(PostProcessFragmentProcessorInterface):
     def __init__(
@@ -29,13 +31,14 @@ class PostProcessFragmentProcessor(PostProcessFragmentProcessorInterface):
             fragment_repository: FragmentRepositoryInterface,
             llm_provider: LlmProviderInterface,
             job_progress_store: FragmentPostProcessJobProgressStoreInterface,
-            fragment_page_size: int = _DEFAULT_FRAGMENT_PAGE_SIZE,
+            post_process_fragment_service_settings: Optional[PostProcessFragmentServiceSettings] = None,
     ) -> None:
         self._database_manager = database_manager
         self._fragment_repository = fragment_repository
         self._llm_provider = llm_provider
         self._job_progress_store = job_progress_store
-        self._page_size = max(1, min(fragment_page_size, 500))
+        self._settings = post_process_fragment_service_settings or PostProcessFragmentServiceSettings()
+        self._page_size = self._settings.fragment_page_size
 
     async def run_job(
             self,
@@ -120,7 +123,7 @@ class PostProcessFragmentProcessor(PostProcessFragmentProcessorInterface):
                         )
                     except Exception as e:
                         raw = str(e) or type(e).__name__
-                        msg = f"{type(e).__name__}: {raw}"[:2000]
+                        msg = f"{type(e).__name__}: {raw}"[:MAX_POST_PROCESS_ERROR_MESSAGE_CHARS]
                         await self._job_progress_store.append_fragment_job_error(
                             job_id,
                             PostProcessFragmentError(

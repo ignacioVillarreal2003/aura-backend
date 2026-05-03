@@ -1,6 +1,5 @@
 import json
 import logging
-
 import aio_pika.abc
 from pydantic import ValidationError
 
@@ -12,9 +11,7 @@ from app.infrastructure.messaging.rabbitmq.consumer.consumer_utils import extrac
 from app.infrastructure.messaging.rabbitmq.consumer.interfaces.graph_extraction_consumer_interface import (
     GraphExtractionConsumerInterface,
 )
-from app.infrastructure.messaging.rabbitmq.dtos.commands.graph_extraction_command import (
-    GraphExtractionCommand,
-)
+from app.infrastructure.messaging.rabbitmq.dtos.commands.graph_extraction_command import GraphExtractionCommand
 from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
 from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
 
@@ -22,15 +19,6 @@ logger = logging.getLogger(__name__)
 
 
 class GraphExtractionConsumer(GraphExtractionConsumerInterface):
-    """Listens on the graph-extraction queue and runs the extraction service.
-
-    Follows the same defensive parsing/ack/nack pattern used by
-    ``PostProcessDocumentConsumer``: on parse failure or repeated delivery
-    the message is nacked without requeue so it is dead-lettered. On
-    handler failure the message is also nacked without requeue, allowing
-    the broker's DLX to retry through the configured topology.
-    """
-
     def __init__(
             self,
             rabbitmq_manager: RabbitMQManagerInterface,

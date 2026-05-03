@@ -6,6 +6,8 @@ from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.field_limits import MAX_FRAGMENTS_IN_LIST
+
 from app.infrastructure.persistence.database.orm.fragment import Fragment
 from app.infrastructure.persistence.database.repositories.database_exceptions import (
     DatabaseConstraintViolationException,
@@ -121,6 +123,7 @@ class FragmentRepository(FragmentRepositoryInterface):
                     Fragment.deleted_at.is_(None)
                 )
                 .order_by(Fragment.fragment_index)
+                .limit(MAX_FRAGMENTS_IN_LIST)
             )
             fragments = list(result.scalars().all())
 
@@ -417,7 +420,8 @@ class FragmentRepository(FragmentRepositoryInterface):
         try:
             collected: list[int] = []
             for chunk in chunked_ids(document_ids):
-                if len(collected) >= limit:
+                remaining = limit - len(collected)
+                if remaining <= 0:
                     break
                 conditions = [
                     Fragment.deleted_at.is_(None),
@@ -435,7 +439,7 @@ class FragmentRepository(FragmentRepositoryInterface):
                     select(Fragment.id)
                     .where(*conditions)
                     .order_by(Fragment.id)
-                    .limit(limit)
+                    .limit(remaining)
                 )
                 collected.extend(int(row[0]) for row in result.fetchall())
 

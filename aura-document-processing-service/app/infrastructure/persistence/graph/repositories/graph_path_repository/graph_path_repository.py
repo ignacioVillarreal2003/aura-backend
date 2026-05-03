@@ -1,13 +1,10 @@
 import logging
 from typing import Any, Optional
-
 from neo4j.exceptions import Neo4jError
 
 from app.domain.constants.graph.entity_type import EntityType
 from app.domain.dtos.graph.graph_path.graph_path_response import GraphPath
-from app.infrastructure.persistence.graph.neo4j_manager.neo4j_manager_interface import (
-    Neo4jManagerInterface,
-)
+from app.infrastructure.persistence.graph.neo4j_manager.neo4j_manager_interface import Neo4jManagerInterface
 from app.infrastructure.persistence.graph.repositories.graph_path_repository.graph_path_repository_interface import (
     GraphPathRepositoryInterface,
 )
@@ -15,12 +12,9 @@ from app.infrastructure.persistence.graph.repositories.graph_record_mappers impo
     map_entity_node,
     map_relationship,
 )
-from app.infrastructure.persistence.graph.repositories.graph_repository_exceptions import (
-    GraphPersistenceException,
-)
+from app.infrastructure.persistence.graph.repositories.graph_repository_exceptions import GraphPersistenceException
 
 logger = logging.getLogger(__name__)
-
 
 _FIND_PATHS_CYPHER_TEMPLATE = """
 MATCH (a:Entity {{canonical_name: $source_name}})
@@ -45,6 +39,7 @@ RETURN [n IN nodes(p) | n] AS path_nodes,
 
 _SHORTEST_PATH_CLAUSE = "MATCH p = shortestPath((a)-[:REL*1..{max_hops}]-(b))"
 _ALL_SIMPLE_PATHS_CLAUSE = "MATCH p = (a)-[:REL*1..{max_hops}]-(b)"
+_MAX_ALL_SIMPLE_PATHS_HOPS = 4
 
 
 class GraphPathRepository(GraphPathRepositoryInterface):
@@ -71,7 +66,8 @@ class GraphPathRepository(GraphPathRepositoryInterface):
     ) -> list[GraphPath]:
         if not accessible_document_ids:
             return []
-        clamped_hops = max(1, min(int(max_hops), self._absolute_max_hops))
+        hops_ceiling = self._absolute_max_hops if only_shortest else min(self._absolute_max_hops, _MAX_ALL_SIMPLE_PATHS_HOPS)
+        clamped_hops = max(1, min(int(max_hops), hops_ceiling))
         path_match = (
             _SHORTEST_PATH_CLAUSE.format(max_hops=clamped_hops)
             if only_shortest

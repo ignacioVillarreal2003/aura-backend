@@ -1,25 +1,17 @@
 import logging
 from typing import Optional
-
 from neo4j.exceptions import Neo4jError
 
 from app.domain.constants.graph.entity_type import EntityType
 from app.domain.dtos.graph.graph_entity.graph_entity_response import GraphEntityResponse
-from app.infrastructure.persistence.graph.neo4j_manager.neo4j_manager_interface import (
-    Neo4jManagerInterface,
-)
+from app.infrastructure.persistence.graph.neo4j_manager.neo4j_manager_interface import Neo4jManagerInterface
 from app.infrastructure.persistence.graph.repositories.graph_entity_repository.graph_entity_repository_interface import (
     GraphEntityRepositoryInterface,
 )
-from app.infrastructure.persistence.graph.repositories.graph_record_mappers import (
-    map_entity_node,
-)
-from app.infrastructure.persistence.graph.repositories.graph_repository_exceptions import (
-    GraphPersistenceException,
-)
+from app.infrastructure.persistence.graph.repositories.graph_record_mappers import map_entity_node
+from app.infrastructure.persistence.graph.repositories.graph_repository_exceptions import GraphPersistenceException
 
 logger = logging.getLogger(__name__)
-
 
 _UPSERT_ENTITY_CYPHER = """
 MERGE (e:Entity {canonical_name: $canonical_name, type: $entity_type})

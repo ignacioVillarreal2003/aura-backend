@@ -1,13 +1,10 @@
 import logging
 from typing import Optional
-
 from neo4j.exceptions import Neo4jError
 
 from app.domain.constants.graph.entity_type import EntityType
 from app.domain.dtos.graph.graph_entity.graph_relation_response import GraphRelationResponse
-from app.infrastructure.persistence.graph.neo4j_manager.neo4j_manager_interface import (
-    Neo4jManagerInterface,
-)
+from app.infrastructure.persistence.graph.neo4j_manager.neo4j_manager_interface import Neo4jManagerInterface
 from app.infrastructure.persistence.graph.repositories.graph_record_mappers import (
     map_entity_node,
     map_relationship,
@@ -15,12 +12,9 @@ from app.infrastructure.persistence.graph.repositories.graph_record_mappers impo
 from app.infrastructure.persistence.graph.repositories.graph_relation_repository.graph_relation_repository_interface import (
     GraphRelationRepositoryInterface,
 )
-from app.infrastructure.persistence.graph.repositories.graph_repository_exceptions import (
-    GraphPersistenceException,
-)
+from app.infrastructure.persistence.graph.repositories.graph_repository_exceptions import GraphPersistenceException
 
 logger = logging.getLogger(__name__)
-
 
 _UPSERT_RELATION_CYPHER = """
 MATCH (a:Entity {canonical_name: $source_name, type: $source_type})

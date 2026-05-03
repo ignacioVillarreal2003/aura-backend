@@ -6,21 +6,15 @@ from app.api.controllers.graph.graph_path_controller.graph_path_controller_inter
 )
 from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
-from app.application.services.graph.graph_path_service.graph_path_service import (
-    get_graph_path_service,
-)
+from app.application.services.graph.graph_path_service.graph_path_service import get_graph_path_service
 from app.application.services.graph.graph_path_service.interfaces.graph_path_service_interface import (
     GraphPathServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.graph.graph_path.find_path_request import FindPathRequest
 from app.domain.dtos.graph.graph_path.graph_path_response import FindPathResponse
-from app.infrastructure.http.authentication_provider.authentication_provider import (
-    get_authenticated_user,
-)
-from app.infrastructure.persistence.database.database_manager.database_manager import (
-    get_database_session,
-)
+from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
+from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
 
 
 class GraphPathController(GraphPathControllerInterface):

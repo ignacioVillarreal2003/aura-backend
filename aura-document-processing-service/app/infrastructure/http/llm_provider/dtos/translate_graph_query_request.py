@@ -2,21 +2,16 @@ from pydantic import BaseModel, Field
 
 from app.domain.dtos.graph.graph_field_limits import (
     MAX_ENTITY_TYPE_CHARS,
+    MAX_ONTOLOGY_ENTITY_TYPES,
+    MAX_ONTOLOGY_RELATION_TYPES,
     MAX_QUERY_QUESTION_CHARS,
     MAX_RELATION_TYPE_CHARS,
 )
 
 
 class GraphOntology(BaseModel):
-    """Ontology snapshot sent to the LLM so it can ground the question
-    on the entity and relation types that exist in the graph.
-
-    The LLM never receives raw Cypher; it returns a structured intent
-    plus parameters validated against this ontology.
-    """
-
-    entity_types: list[str] = Field(..., min_length=1, max_length=64)
-    relation_types: list[str] = Field(default_factory=list, max_length=128)
+    entity_types: list[str] = Field(..., min_length=1, max_length=MAX_ONTOLOGY_ENTITY_TYPES)
+    relation_types: list[str] = Field(default_factory=list, max_length=MAX_ONTOLOGY_RELATION_TYPES)
 
 
 class TranslateGraphQueryRequest(BaseModel):

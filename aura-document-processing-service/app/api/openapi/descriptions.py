@@ -53,10 +53,6 @@ def openapi_tags_metadata() -> list[dict[str, str]]:
             "name": "graph-path",
             "description": "Caminos (más corto / todos) entre entidades del grafo.",
         },
-        {
-            "name": "graph-hybrid-query",
-            "description": "Recuperación híbrida: grafo de conocimiento con fallback a RAG vectorial.",
-        },
     ]
 
 

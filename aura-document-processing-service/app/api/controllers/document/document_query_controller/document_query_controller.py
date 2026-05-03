@@ -14,6 +14,12 @@ from app.application.services.document.document_query_service.interfaces.documen
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.document.document_type import DocumentType
+from app.domain.field_limits import (
+    MAX_CATEGORY_CHARS,
+    MAX_DESCRIPTION_CHARS,
+    MAX_DOCUMENT_QUERY_PAGE_SIZE,
+    MAX_NAME_CHARS,
+)
 from app.domain.dtos.document.document_query.document_list_response import DocumentListResponse
 from app.domain.dtos.document.document_query.document_response import DocumentResponse
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
@@ -38,10 +44,10 @@ class DocumentQueryController(DocumentQueryControllerInterface):
     async def get_documents(
             self,
             page: int = Query(1, ge=1),
-            size: int = Query(20, ge=1, le=100),
-            name: Optional[str] = Query(None),
-            description: Optional[str] = Query(None),
-            category: Optional[str] = Query(None),
+            size: int = Query(1, ge=1, le=MAX_DOCUMENT_QUERY_PAGE_SIZE),
+            name: Optional[str] = Query(None, max_length=MAX_NAME_CHARS),
+            description: Optional[str] = Query(None, max_length=MAX_DESCRIPTION_CHARS),
+            category: Optional[str] = Query(None, max_length=MAX_CATEGORY_CHARS),
             document_type: Optional[DocumentType] = Query(None),
             created_from: Optional[datetime] = Query(None),
             created_to: Optional[datetime] = Query(None),

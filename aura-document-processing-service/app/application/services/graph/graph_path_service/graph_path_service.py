@@ -9,7 +9,7 @@ from app.application.authorization.permissions import Permissions
 from app.application.services.graph.graph_path_service.interfaces.graph_path_service_interface import (
     GraphPathServiceInterface,
 )
-from app.configuration.knowledge_graph_settings import KnowledgeGraphSettings
+from app.configuration.graph.knowledge_graph_settings import KnowledgeGraphSettings
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.graph.graph_field_limits import MAX_PATHS_RETURNED
 from app.domain.dtos.graph.graph_path.find_path_request import FindPathRequest
@@ -47,7 +47,7 @@ class GraphPathService(GraphPathServiceInterface):
     ) -> FindPathResponse:
         self._authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.FIND_GRAPH_PATH}),
+            required_permissions=frozenset({Permissions.GRAPH_PATH}),
         )
 
         accessible_ids = await self._document_collection_repository.list_all_accessible_document_ids(
@@ -73,7 +73,7 @@ class GraphPathService(GraphPathServiceInterface):
             accessible_document_ids=accessible_ids,
         )
 
-        truncated = len(paths) >= request.max_paths and request.max_paths < MAX_PATHS_RETURNED
+        truncated = len(paths) >= request.max_paths
         return FindPathResponse(paths=paths[: request.max_paths], truncated=truncated)
 
     @staticmethod

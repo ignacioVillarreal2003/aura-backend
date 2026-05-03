@@ -9,7 +9,8 @@ from app.application.processors.text_cleaners.text_cleaner_factory import TextCl
 from app.application.processors.text_splitters.text_splitter_factory import TextSplitterFactory
 from app.application.authorization.authorizer import Authorizer
 from app.application.services.document.create_document_service.create_document_service import CreateDocumentService
-from app.application.services.document.document_download_service.document_download_service import DocumentDownloadService
+from app.application.services.document.document_download_service.document_download_service import \
+    DocumentDownloadService
 from app.application.services.document.document_ingestion_service.document_ingestion_service import (
     DocumentIngestionService,
 )
@@ -28,16 +29,16 @@ from app.application.services.fragment.post_process_fragment_service.post_proces
 from app.application.services.fragment.post_process_fragment_service.post_process_fragment_processor import (
     PostProcessFragmentProcessor,
 )
+from app.application.services.fragment.post_process_fragment_service.post_process_fragment_service_settings import (
+    PostProcessFragmentServiceSettings,
+)
 from app.application.services.graph.graph_entity_service.graph_entity_service import GraphEntityService
 from app.application.services.graph.graph_extraction_service.graph_extraction_service import (
     GraphExtractionService,
 )
 from app.application.services.graph.graph_path_service.graph_path_service import GraphPathService
 from app.application.services.graph.graph_query_service.graph_query_service import GraphQueryService
-from app.application.services.graph.hybrid_retrieval_orchestrator.hybrid_retrieval_orchestrator import (
-    HybridRetrievalOrchestrator,
-)
-from app.configuration.knowledge_graph_settings import KnowledgeGraphSettings
+from app.configuration.graph.knowledge_graph_settings import KnowledgeGraphSettings
 from app.infrastructure.http.authentication_provider.authentication_provider import AuthenticationProvider
 from app.infrastructure.http.authentication_provider.authentication_provider_settings import (
     AuthenticationProviderSettings,
@@ -116,7 +117,6 @@ async def _rollback_partial_startup(
                 extra={"resource": name},
             )
     to_clear = [
-        "hybrid_retrieval_orchestrator",
         "graph_path_service",
         "graph_entity_service",
         "graph_query_service",
@@ -361,11 +361,13 @@ async def startup_dependencies(app: FastAPI) -> None:
         )
         app.state.post_process_document_processor = post_process_document_processor
 
+        post_process_fragment_service_settings = PostProcessFragmentServiceSettings()
         post_process_fragment_processor = PostProcessFragmentProcessor(
             database_manager=database_manager,
             fragment_repository=fragment_repository,
             llm_provider=llm_provider,
             job_progress_store=fragment_job_progress_store,
+            post_process_fragment_service_settings=post_process_fragment_service_settings,
         )
         app.state.post_process_fragment_processor = post_process_fragment_processor
 
@@ -422,6 +424,7 @@ async def startup_dependencies(app: FastAPI) -> None:
             job_progress_store=fragment_job_progress_store,
             post_process_fragment_job_publisher=post_process_fragment_job_publisher,
             authorizer=authorizer,
+            post_process_fragment_service_settings=post_process_fragment_service_settings,
         )
         app.state.post_process_fragment_service = post_process_fragment_service
 
@@ -437,7 +440,6 @@ async def startup_dependencies(app: FastAPI) -> None:
                 document_repository=document_repository,
                 fragment_repository=fragment_repository,
                 document_collection_repository=document_collection_repository,
-                fragment_query_service=fragment_query_service,
                 authorizer=authorizer,
                 llm_provider=llm_provider,
             )
@@ -463,7 +465,6 @@ async def _wire_knowledge_graph_module(
         document_repository: DocumentRepository,
         fragment_repository: FragmentRepository,
         document_collection_repository: DocumentCollectionRepository,
-        fragment_query_service: FragmentQueryService,
         authorizer: Authorizer,
         llm_provider: LlmProvider,
 ) -> None:
@@ -544,14 +545,6 @@ async def _wire_knowledge_graph_module(
         knowledge_graph_settings=knowledge_graph_settings,
     )
     app.state.graph_path_service = graph_path_service
-
-    hybrid_retrieval_orchestrator = HybridRetrievalOrchestrator(
-        graph_query_service=graph_query_service,
-        fragment_query_service=fragment_query_service,
-        authorizer=authorizer,
-        knowledge_graph_settings=knowledge_graph_settings,
-    )
-    app.state.hybrid_retrieval_orchestrator = hybrid_retrieval_orchestrator
 
     logger.info("The knowledge graph module was bootstrapped successfully.")
 

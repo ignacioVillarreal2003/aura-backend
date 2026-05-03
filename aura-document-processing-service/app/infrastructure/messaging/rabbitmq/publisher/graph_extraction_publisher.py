@@ -1,7 +1,7 @@
 import logging
 from typing import Optional
 
-from app.configuration.knowledge_graph_settings import KnowledgeGraphSettings
+from app.configuration.graph.knowledge_graph_settings import KnowledgeGraphSettings
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.types import UserId
 from app.infrastructure.messaging.rabbitmq.dtos.commands.graph_extraction_command import (
@@ -18,18 +18,6 @@ logger = logging.getLogger(__name__)
 
 
 class GraphExtractionPublisher(GraphExtractionPublisherInterface):
-    """Publishes graph-extraction commands to RabbitMQ via the outbox-lite.
-
-    Mirrors ``PostProcessDocumentJobPublisher`` but uses the dedicated
-    ``graph_extraction_queue`` and identifies the aggregate as ``document_id``.
-
-    For event-triggered extractions (e.g. fired from
-    ``DocumentIngestionService``), use ``publish_for_document_owner`` so the
-    publisher synthesizes a system principal from
-    ``KnowledgeGraphSettings``. For API-triggered extractions, callers
-    pass the request's ``AuthenticatedUser`` to ``publish``.
-    """
-
     def __init__(
             self,
             rabbitmq_manager: RabbitMQManagerInterface,

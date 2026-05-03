@@ -5,35 +5,19 @@ from app.domain.field_limits import MAX_CONTENT_CHARS, MAX_ID
 from app.domain.dtos.graph.graph_field_limits import (
     MAX_ENTITIES_PER_FRAGMENT,
     MAX_ENTITY_TYPE_CHARS,
+    MAX_ONTOLOGY_ENTITY_TYPES,
+    MAX_ONTOLOGY_RELATION_TYPES,
     MAX_RELATION_TYPE_CHARS,
     MAX_RELATIONS_PER_FRAGMENT,
 )
 
 
 class ExtractEntitiesRelationsRequest(BaseModel):
-    """Contract sent over HTTP to the LLM service to ask for entity and
-    relation extraction from a single fragment.
-
-    The LLM service is expected to return a strictly typed
-    ``ExtractEntitiesRelationsResponse``. This request model is the
-    single source of truth for what the document service is willing
-    to send.
-    """
-
     content: str = Field(..., min_length=1, max_length=MAX_CONTENT_CHARS)
     document_id: int = Field(..., ge=1, le=MAX_ID)
     fragment_id: int = Field(..., ge=1, le=MAX_ID)
-    allowed_entity_types: list[str] = Field(
-        ..., min_length=1, max_length=64
-    )
-    allowed_relation_types: Optional[list[str]] = Field(
-        default=None,
-        max_length=128,
-        description=(
-            "Optional whitelist of relation types. When None, the LLM may "
-            "emit any relation type and the document service normalises it."
-        ),
-    )
+    allowed_entity_types: list[str] = Field(..., min_length=1, max_length=MAX_ONTOLOGY_ENTITY_TYPES)
+    allowed_relation_types: Optional[list[str]] = Field(default=None, max_length=MAX_ONTOLOGY_RELATION_TYPES)
     max_entities: int = Field(default=MAX_ENTITIES_PER_FRAGMENT, ge=1, le=MAX_ENTITIES_PER_FRAGMENT)
     max_relations: int = Field(default=MAX_RELATIONS_PER_FRAGMENT, ge=0, le=MAX_RELATIONS_PER_FRAGMENT)
 

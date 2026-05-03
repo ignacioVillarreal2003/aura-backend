@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from typing import Any, Optional
-
 from neo4j import AsyncDriver
 
 

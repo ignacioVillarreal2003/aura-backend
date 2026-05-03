@@ -9,16 +9,7 @@ from app.domain.dtos.graph.graph_field_limits import (
 
 
 class ExtractEntitiesRelationsResponse(BaseModel):
-    """LLM-emitted entity and relation list for a single fragment.
-
-    The document service will canonicalise each entity (lowercase,
-    stripped) and normalise relation type tokens before persisting to
-    Neo4j. This response is the public contract between services.
-    """
-
-    entities: list[ExtractedEntity] = Field(
-        default_factory=list, max_length=MAX_ENTITIES_PER_FRAGMENT
-    )
+    entities: list[ExtractedEntity] = Field(default_factory=list, max_length=MAX_ENTITIES_PER_FRAGMENT)
     relations: list[ExtractedRelation] = Field(
         default_factory=list, max_length=MAX_RELATIONS_PER_FRAGMENT
     )

@@ -1,6 +1,5 @@
 from typing import Optional
 from urllib.parse import urlparse
-
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -24,23 +23,11 @@ class Neo4jManagerSettings(BaseSettings):
     connection_timeout_seconds: float = Field(default=15.0, gt=0, le=120.0)
     max_transaction_retry_seconds: float = Field(default=30.0, gt=0, le=300.0)
 
-    encrypted: Optional[bool] = Field(
-        default=None,
-        description=(
-            "If True, force TLS to the Neo4j server. If None, follow the URI scheme "
-            "(neo4j+s/bolt+s force TLS, others do not)."
-        ),
-    )
+    encrypted: Optional[bool] = Field(default=None)
 
     health_probe_timeout_seconds: float = Field(default=5.0, gt=0, le=60.0)
 
-    apply_schema_on_startup: bool = Field(
-        default=True,
-        description=(
-            "If True, the manager runs the idempotent schema initializer (constraints + indexes) "
-            "during start(). Disable in environments where schema is managed externally."
-        ),
-    )
+    apply_schema_on_startup: bool = Field(default=True)
 
     @field_validator("uri", mode="before")
     @classmethod

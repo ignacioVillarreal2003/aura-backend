@@ -10,8 +10,17 @@ MAX_NAME_CHARS: Final[int] = 255
 MAX_DESCRIPTION_CHARS: Final[int] = 2_000
 MAX_CATEGORY_CHARS: Final[int] = 100
 MAX_STORAGE_URL_CHARS: Final[int] = 1_024
+MAX_MIME_TYPE_CHARS: Final[int] = 256
 MIN_FILE_SIZE_BYTES: Final[int] = 1
 MAX_DOCUMENTS_IN_LIST: Final[int] = 10_000
+
+DEFAULT_DOCUMENT_QUERY_PAGE_SIZE: Final[int] = 20
+MAX_DOCUMENT_QUERY_PAGE_SIZE: Final[int] = 100
+
+# ─── Knowledge graph (HTTP controllers & shared KG field bounds) ───────────────
+
+MAX_ENTITY_NAME_CHARS: Final[int] = 200
+MAX_PATH_HOPS: Final[int] = 6
 
 # ─── Fragment ──────────────────────────────────────────────────────────────────
 
@@ -44,6 +53,7 @@ MAX_POST_PROCESS_SNAPSHOT_ERRORS: Final[int] = 1_000
 MAX_JOB_ID_CHARS: Final[int] = 64
 MAX_MESSAGE_CHARS: Final[int] = 500
 MAX_ERROR_MESSAGE_CHARS: Final[int] = 500
+MAX_POST_PROCESS_ERROR_MESSAGE_CHARS: Final[int] = 2_000
 
 # ─── Auth / user ───────────────────────────────────────────────────────────────
 
@@ -52,3 +62,10 @@ MAX_ROLE_CHARS: Final[int] = 100
 MAX_PERMISSION_CHARS: Final[int] = 100
 MAX_ROLES: Final[int] = 50
 MAX_PERMISSIONS: Final[int] = 200
+
+# ─── LLM provider payload ceilings ────────────────────────────────────────────
+
+MAX_LLM_DOCUMENT_NAME_CHARS: Final[int] = 2_048
+MAX_LLM_CLASSIFY_CONTENT_CHARS: Final[int] = 50_000_000
+MAX_LLM_ENRICH_CONTENT_CHARS: Final[int] = 10_000_000
+MAX_LLM_EXTRACT_CONTENT_CHARS: Final[int] = 10_000_000
