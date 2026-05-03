@@ -1,5 +1,3 @@
-import logging
-
 from fastapi import APIRouter, Depends
 
 from app.api.controllers.graph_query_translation_controller.graph_query_translation_controller_interface import (
@@ -15,15 +13,9 @@ from app.application.services.graph_query_translation_service.interfaces.graph_q
     GraphQueryTranslationServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.dtos.graph.query_translation.translate_graph_query_request import (
-    TranslateGraphQueryRequest,
-)
-from app.domain.dtos.graph.query_translation.translate_graph_query_response import (
-    TranslateGraphQueryResponse,
-)
+from app.domain.dtos.graph_query_translation.translate_graph_query_request import TranslateGraphQueryRequest
+from app.domain.dtos.graph_query_translation.translate_graph_query_response import TranslateGraphQueryResponse
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
-
-logger = logging.getLogger(__name__)
 
 
 class GraphQueryTranslationController(GraphQueryTranslationControllerInterface):
@@ -37,29 +29,10 @@ class GraphQueryTranslationController(GraphQueryTranslationControllerInterface):
             _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(default_rate_limit),
     ) -> TranslateGraphQueryResponse:
-        logger.info(
-            "Handling graph query translation request",
-            extra={
-                "user_id": authenticated_user.id,
-                "question_len": len(translate_graph_query_request.question),
-            },
-        )
-
-        response = await graph_query_translation_service.translate_graph_query(
+        return await graph_query_translation_service.translate_graph_query(
             translate_graph_query_request=translate_graph_query_request,
             authenticated_user=authenticated_user,
         )
-
-        logger.info(
-            "Graph query translation completed successfully",
-            extra={
-                "user_id": authenticated_user.id,
-                "intent": response.intent.value,
-                "confidence": response.confidence,
-            },
-        )
-
-        return response
 
 
 router = APIRouter()

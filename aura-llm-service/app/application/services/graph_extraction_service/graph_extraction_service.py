@@ -28,10 +28,10 @@ from app.application.services.graph_extraction_service.interfaces.graph_extracti
 )
 from app.application.utils.llm_json_parser import parse_json_object
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.dtos.graph.extraction.extract_entities_relations_request import (
+from app.domain.dtos.graph_extraction.extract_entities_relations_request import (
     ExtractEntitiesRelationsRequest,
 )
-from app.domain.dtos.graph.extraction.extract_entities_relations_response import (
+from app.domain.dtos.graph_extraction.extract_entities_relations_response import (
     ExtractEntitiesRelationsResponse,
 )
 from app.infrastructure.llm.ollama_llm.exceptions.ollama_llm_invoker_exceptions import LLMInvocationError

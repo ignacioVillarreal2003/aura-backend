@@ -4,12 +4,8 @@ from app.application.services.graph_query_translation_service.interfaces.graph_q
     GraphQueryTranslationServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.dtos.graph.query_translation.translate_graph_query_request import (
-    TranslateGraphQueryRequest,
-)
-from app.domain.dtos.graph.query_translation.translate_graph_query_response import (
-    TranslateGraphQueryResponse,
-)
+from app.domain.dtos.graph_query_translation.translate_graph_query_request import TranslateGraphQueryRequest
+from app.domain.dtos.graph_query_translation.translate_graph_query_response import TranslateGraphQueryResponse
 
 
 class GraphQueryTranslationControllerInterface(ABC):

@@ -3,10 +3,7 @@ from typing import Any
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.domain.constants.graph.entity_type import EntityType
-from app.domain.dtos.graph.graph_field_limits import (
-    MAX_ENTITY_NAME_CHARS,
-    MAX_RELATION_TYPE_CHARS,
-)
+from app.domain.field_limits import MAX_ENTITY_NAME_CHARS, MAX_GRAPH_RELATION_TYPE_CHARS
 
 
 class ExtractedRelationEndpoint(BaseModel):
@@ -23,7 +20,7 @@ class ExtractedRelationEndpoint(BaseModel):
 
 
 class ExtractedRelation(BaseModel):
-    type: str = Field(..., min_length=1, max_length=MAX_RELATION_TYPE_CHARS)
+    type: str = Field(..., min_length=1, max_length=MAX_GRAPH_RELATION_TYPE_CHARS)
     source: ExtractedRelationEndpoint = Field(...)
     target: ExtractedRelationEndpoint = Field(...)
     confidence: float = Field(default=0.5, ge=0.0, le=1.0)

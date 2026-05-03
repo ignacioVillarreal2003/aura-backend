@@ -1,4 +1,3 @@
-import logging
 from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Depends
@@ -22,8 +21,6 @@ from app.domain.dtos.document_question.document_question_stream_events import (
 )
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 
-logger = logging.getLogger(__name__)
-
 
 class DocumentQuestionController(DocumentQuestionControllerInterface):
     async def execute_document_question(
@@ -34,26 +31,10 @@ class DocumentQuestionController(DocumentQuestionControllerInterface):
             _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(default_rate_limit),
     ) -> DocumentQuestionResponse:
-        logger.info(
-            "Handling document question request",
-            extra={
-                "user_id": authenticated_user.id
-            }
-        )
-
-        document_question_response = await document_question_service.execute_document_question(
+        return await document_question_service.execute_document_question(
             document_question_request=document_question_request,
             authenticated_user=authenticated_user
         )
-
-        logger.info(
-            "Document question completed successfully",
-            extra={
-                "user_id": authenticated_user.id
-            }
-        )
-
-        return document_question_response
 
     async def execute_document_question_stream(
             self,
@@ -62,11 +43,6 @@ class DocumentQuestionController(DocumentQuestionControllerInterface):
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
             _rl: None = Depends(strict_rate_limit),
     ) -> StreamingResponse:
-        logger.info(
-            "Handling document question stream request",
-            extra={"user_id": authenticated_user.id},
-        )
-
         async def sse_bytes() -> AsyncIterator[bytes]:
             async for event in document_question_service.execute_document_question_stream(
                     document_question_request=document_question_request,

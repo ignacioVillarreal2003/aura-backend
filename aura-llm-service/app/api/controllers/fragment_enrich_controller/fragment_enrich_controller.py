@@ -1,5 +1,3 @@
-import logging
-
 from fastapi import APIRouter, Depends
 
 from app.api.dependencies.idempotency import optional_idempotency_key
@@ -17,8 +15,6 @@ from app.domain.dtos.fragment_enrich.enrich_fragment_request import EnrichFragme
 from app.domain.dtos.fragment_enrich.enrich_fragment_response import EnrichFragmentResponse
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 
-logger = logging.getLogger(__name__)
-
 
 class FragmentEnrichController(FragmentEnrichControllerInterface):
     async def enrich_fragment(
@@ -29,26 +25,10 @@ class FragmentEnrichController(FragmentEnrichControllerInterface):
             _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(default_rate_limit),
     ) -> EnrichFragmentResponse:
-        logger.info(
-            "Handling enrich fragment request",
-            extra={
-                "user_id": authenticated_user.id
-            }
-        )
-
-        enrich_fragment_response = await fragment_enrich_service.enrich_fragment(
+        return await fragment_enrich_service.enrich_fragment(
             enrich_fragment_request=enrich_fragment_request,
             authenticated_user=authenticated_user
         )
-
-        logger.info(
-            "Enrich fragment completed successfully",
-            extra={
-                "user_id": authenticated_user.id
-            }
-        )
-
-        return enrich_fragment_response
 
 
 router = APIRouter()

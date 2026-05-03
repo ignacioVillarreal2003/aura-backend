@@ -1,5 +1,3 @@
-import logging
-
 from fastapi import APIRouter, Depends
 
 from app.api.dependencies.idempotency import optional_idempotency_key
@@ -12,8 +10,6 @@ from app.domain.dtos.agent.agent_request import AgentRequest
 from app.domain.dtos.agent.agent_response import AgentResponse
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 
-logger = logging.getLogger(__name__)
-
 
 class RagAgentController:
     async def execute(
@@ -24,22 +20,10 @@ class RagAgentController:
             _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(strict_rate_limit),
     ) -> AgentResponse:
-        logger.info(
-            "Handling RAG agent request",
-            extra={"user_id": authenticated_user.id},
-        )
-
-        response = await rag_agent_service.execute(
+        return await rag_agent_service.execute(
             agent_request=agent_request,
             authenticated_user=authenticated_user,
         )
-
-        logger.info(
-            "RAG agent request completed successfully",
-            extra={"user_id": authenticated_user.id},
-        )
-
-        return response
 
 
 router = APIRouter()

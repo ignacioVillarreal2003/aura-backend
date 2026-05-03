@@ -1,5 +1,3 @@
-import logging
-
 from fastapi import APIRouter, Depends
 
 from app.api.controllers.graph_extraction_controller.graph_extraction_controller_interface import (
@@ -15,15 +13,9 @@ from app.application.services.graph_extraction_service.interfaces.graph_extracti
     GraphExtractionServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.dtos.graph.extraction.extract_entities_relations_request import (
-    ExtractEntitiesRelationsRequest,
-)
-from app.domain.dtos.graph.extraction.extract_entities_relations_response import (
-    ExtractEntitiesRelationsResponse,
-)
+from app.domain.dtos.graph_extraction.extract_entities_relations_request import ExtractEntitiesRelationsRequest
+from app.domain.dtos.graph_extraction.extract_entities_relations_response import ExtractEntitiesRelationsResponse
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
-
-logger = logging.getLogger(__name__)
 
 
 class GraphExtractionController(GraphExtractionControllerInterface):
@@ -35,32 +27,10 @@ class GraphExtractionController(GraphExtractionControllerInterface):
             _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(default_rate_limit),
     ) -> ExtractEntitiesRelationsResponse:
-        logger.info(
-            "Handling graph extraction request",
-            extra={
-                "user_id": authenticated_user.id,
-                "document_id": extract_entities_relations_request.document_id,
-                "fragment_id": extract_entities_relations_request.fragment_id,
-            },
-        )
-
-        response = await graph_extraction_service.extract_entities_relations(
+        return await graph_extraction_service.extract_entities_relations(
             extract_entities_relations_request=extract_entities_relations_request,
             authenticated_user=authenticated_user,
         )
-
-        logger.info(
-            "Graph extraction completed successfully",
-            extra={
-                "user_id": authenticated_user.id,
-                "document_id": extract_entities_relations_request.document_id,
-                "fragment_id": extract_entities_relations_request.fragment_id,
-                "entities_count": len(response.entities),
-                "relations_count": len(response.relations),
-            },
-        )
-
-        return response
 
 
 router = APIRouter()

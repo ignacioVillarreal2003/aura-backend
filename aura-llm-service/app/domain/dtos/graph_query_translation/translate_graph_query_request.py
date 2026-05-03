@@ -1,19 +1,25 @@
 from pydantic import BaseModel, Field
 
-from app.domain.dtos.graph.graph_field_limits import (
-    MAX_ENTITY_TYPE_CHARS,
-    MAX_QUERY_QUESTION_CHARS,
-    MAX_RELATION_TYPE_CHARS,
+from app.domain.field_limits import (
+    MAX_GRAPH_ENTITY_TYPE_CHARS,
+    MAX_GRAPH_ENTITY_TYPES_PER_ONTOLOGY,
+    MAX_GRAPH_QUERY_QUESTION_CHARS,
+    MAX_GRAPH_RELATION_TYPE_CHARS,
+    MAX_GRAPH_RELATION_TYPES_PER_ONTOLOGY,
 )
 
 
 class GraphOntology(BaseModel):
-    entity_types: list[str] = Field(..., min_length=1, max_length=64)
-    relation_types: list[str] = Field(default_factory=list, max_length=128)
+    entity_types: list[str] = Field(
+        ..., min_length=1, max_length=MAX_GRAPH_ENTITY_TYPES_PER_ONTOLOGY
+    )
+    relation_types: list[str] = Field(
+        default_factory=list, max_length=MAX_GRAPH_RELATION_TYPES_PER_ONTOLOGY
+    )
 
 
 class TranslateGraphQueryRequest(BaseModel):
-    question: str = Field(..., min_length=1, max_length=MAX_QUERY_QUESTION_CHARS)
+    question: str = Field(..., min_length=1, max_length=MAX_GRAPH_QUERY_QUESTION_CHARS)
     ontology: GraphOntology = Field(...)
 
     model_config = {"frozen": True}
@@ -32,10 +38,10 @@ class TranslateGraphQueryRequest(BaseModel):
         self._validate_lengths(
             list(self.ontology.entity_types),
             field_name="ontology.entity_types",
-            max_len=MAX_ENTITY_TYPE_CHARS,
+            max_len=MAX_GRAPH_ENTITY_TYPE_CHARS,
         )
         self._validate_lengths(
             list(self.ontology.relation_types),
             field_name="ontology.relation_types",
-            max_len=MAX_RELATION_TYPE_CHARS,
+            max_len=MAX_GRAPH_RELATION_TYPE_CHARS,
         )

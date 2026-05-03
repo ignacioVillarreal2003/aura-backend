@@ -1,5 +1,3 @@
-import logging
-
 from fastapi import APIRouter, Depends
 
 from app.api.dependencies.idempotency import optional_idempotency_key
@@ -17,8 +15,6 @@ from app.domain.dtos.document_classify.classify_document_request import Classify
 from app.domain.dtos.document_classify.classify_document_response import ClassifyDocumentResponse
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 
-logger = logging.getLogger(__name__)
-
 
 class DocumentClassifyController(DocumentClassifyControllerInterface):
     async def classify_document(
@@ -29,26 +25,10 @@ class DocumentClassifyController(DocumentClassifyControllerInterface):
             _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(default_rate_limit),
     ) -> ClassifyDocumentResponse:
-        logger.info(
-            "Handling classify document request",
-            extra={
-                "user_id": authenticated_user.id
-            }
-        )
-
-        classify_document_response = await document_classify_service.classify_document(
+        return await document_classify_service.classify_document(
             classify_document_request=classify_document_request,
             authenticated_user=authenticated_user
         )
-
-        logger.info(
-            "Classify document completed successfully",
-            extra={
-                "user_id": authenticated_user.id
-            }
-        )
-
-        return classify_document_response
 
 
 router = APIRouter()

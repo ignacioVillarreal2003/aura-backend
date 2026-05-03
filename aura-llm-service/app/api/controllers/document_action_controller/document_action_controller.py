@@ -1,5 +1,3 @@
-import logging
-
 from fastapi import APIRouter, Depends
 
 from app.api.dependencies.idempotency import optional_idempotency_key
@@ -17,8 +15,6 @@ from app.domain.dtos.document_action.document_action_request import DocumentActi
 from app.domain.dtos.document_action.document_action_response import DocumentActionResponse
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 
-logger = logging.getLogger(__name__)
-
 
 class DocumentActionController(DocumentActionControllerInterface):
     async def execute_document_action(
@@ -29,26 +25,10 @@ class DocumentActionController(DocumentActionControllerInterface):
             _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(strict_rate_limit),
     ) -> DocumentActionResponse:
-        logger.info(
-            "Handling document action request",
-            extra={
-                "user_id": authenticated_user.id
-            }
-        )
-
-        document_action_response = await document_action_service.execute_document_action(
+        return await document_action_service.execute_document_action(
             document_action_request=document_action_request,
             authenticated_user=authenticated_user
         )
-
-        logger.info(
-            "Document action completed successfully",
-            extra={
-                "user_id": authenticated_user.id
-            }
-        )
-
-        return document_action_response
 
 
 router = APIRouter()

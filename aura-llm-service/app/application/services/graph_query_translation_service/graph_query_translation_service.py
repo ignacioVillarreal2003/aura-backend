@@ -1,7 +1,6 @@
 import json
 import logging
 from typing import Optional
-
 from fastapi import HTTPException, Request, status
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
@@ -28,10 +27,10 @@ from app.application.services.graph_query_translation_service.interfaces.graph_q
 )
 from app.application.utils.llm_json_parser import parse_json_object
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.dtos.graph.query_translation.translate_graph_query_request import (
+from app.domain.dtos.graph_query_translation.translate_graph_query_request import (
     TranslateGraphQueryRequest,
 )
-from app.domain.dtos.graph.query_translation.translate_graph_query_response import (
+from app.domain.dtos.graph_query_translation.translate_graph_query_response import (
     TranslateGraphQueryResponse,
 )
 from app.infrastructure.llm.ollama_llm.exceptions.ollama_llm_invoker_exceptions import LLMInvocationError

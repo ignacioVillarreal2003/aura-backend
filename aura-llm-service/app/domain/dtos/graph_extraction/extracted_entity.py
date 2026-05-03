@@ -2,7 +2,7 @@ from typing import Optional
 from pydantic import BaseModel, Field, field_validator
 
 from app.domain.constants.graph.entity_type import EntityType
-from app.domain.dtos.graph.graph_field_limits import (
+from app.domain.field_limits import (
     MAX_ENTITY_ALIAS_CHARS,
     MAX_ENTITY_ALIASES,
     MAX_ENTITY_DESCRIPTION_CHARS,
@@ -15,7 +15,8 @@ class ExtractedEntity(BaseModel):
     type: EntityType = Field(...)
     aliases: list[str] = Field(default_factory=list, max_length=MAX_ENTITY_ALIASES)
     description: Optional[str] = Field(
-        default=None, max_length=MAX_ENTITY_DESCRIPTION_CHARS
+        default=None,
+        max_length=MAX_ENTITY_DESCRIPTION_CHARS,
     )
 
     @field_validator("name", mode="after")
