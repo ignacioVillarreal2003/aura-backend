@@ -30,10 +30,6 @@ class _SemanticQuery(_BaseQuery):
     text: str = Field(..., min_length=1, max_length=MAX_CHARS_PER_QUERY)
 
 
-class _KeywordQuery(_BaseQuery):
-    text: str = Field(..., min_length=1, max_length=MAX_CHARS_PER_QUERY)
-
-
 class _BM25Query(_BaseQuery):
     text: str = Field(..., min_length=1, max_length=MAX_CHARS_PER_QUERY)
 
@@ -55,14 +51,10 @@ class _RerankConfig(BaseModel):
     model_config = {"frozen": True}
 
 
-class ContextFragmentsRequest(BaseModel):
+class QuestionContextFragmentsRequest(BaseModel):
     chat_id: Optional[ChatId] = Field(default=None, gt=0, le=MAX_ID)
 
     semantic_queries: list[_SemanticQuery] = Field(
-        default_factory=list,
-        max_length=MAX_QUERIES_PER_TYPE,
-    )
-    keyword_queries: list[_KeywordQuery] = Field(
         default_factory=list,
         max_length=MAX_QUERIES_PER_TYPE,
     )
@@ -77,7 +69,6 @@ class ContextFragmentsRequest(BaseModel):
     def _validate_queries(self) -> "ContextFragmentsRequest":
         total_sources = (
                 len(self.semantic_queries)
-                + len(self.keyword_queries)
                 + len(self.bm25_queries)
         )
 
@@ -87,7 +78,6 @@ class ContextFragmentsRequest(BaseModel):
         if self.rerank.enabled:
             pool = (
                     sum(q.max_fragments for q in self.semantic_queries)
-                    + sum(q.max_fragments for q in self.keyword_queries)
                     + sum(q.max_fragments for q in self.bm25_queries)
             )
 

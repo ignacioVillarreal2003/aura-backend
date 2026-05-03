@@ -4,12 +4,12 @@ from typing import Optional
 from pydantic import BaseModel, Field, model_validator
 
 from app.domain.dtos.fragment.post_process_fragment.post_process_fragment_error import PostProcessFragmentError
-from app.domain.field_limits import MAX_ID, MAX_POST_PROCESS_SNAPSHOT_ERRORS
+from app.domain.field_limits import MAX_ID, MAX_JOB_ID_CHARS, MAX_POST_PROCESS_SNAPSHOT_ERRORS
 from app.domain.types import FragmentId
 
 
 class PostProcessFragmentsStatusResponse(BaseModel):
-    job_id: Optional[str] = Field(default=None, max_length=64)
+    job_id: Optional[str] = Field(default=None, max_length=MAX_JOB_ID_CHARS)
     is_running: bool = Field(...)
     total_fragments: int = Field(default=0, ge=0)
     processed_fragments: int = Field(default=0, ge=0)

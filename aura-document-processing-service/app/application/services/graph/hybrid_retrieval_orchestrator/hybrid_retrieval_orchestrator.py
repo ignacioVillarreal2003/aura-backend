@@ -22,6 +22,7 @@ from app.domain.constants.graph.query_intent import QueryIntent
 from app.domain.dtos.fragment.fragment_query.question_context_fragments_request import (
     QuestionContextFragmentsRequest,
 )
+from app.domain.field_limits import MAX_FRAGMENTS_PER_QUERY_STRATEGY
 from app.domain.dtos.graph.graph_query.graph_hybrid_query_response import (
     GraphHybridQueryResponse,
     HybridRetrievalSource,
@@ -172,11 +173,10 @@ class HybridRetrievalOrchestrator(HybridRetrievalOrchestratorInterface):
     ) -> Optional[FragmentListResponse]:
         try:
             rag_request = QuestionContextFragmentsRequest(
-                question=request.question,
-                question_max_fragments=min(request.max_results, 50),
                 chat_id=request.chat_id,
-                use_keywords=False,
-                use_rerank=False,
+                semantic_queries=[
+                    {"text": request.question, "max_fragments": min(request.max_results, MAX_FRAGMENTS_PER_QUERY_STRATEGY)},
+                ],
             )
             return await self._fragment_query_service.retrieve_context_fragments_by_question(
                 question_context_fragments_request=rag_request,

@@ -369,13 +369,6 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             self,
             document: Document,
     ) -> None:
-        """Best-effort publish of a knowledge-graph extraction event.
-
-        The event is purely additive: failure to publish is logged but
-        never propagated, so the existing RAG ingestion flow keeps its
-        original semantics. When the knowledge graph module is disabled
-        (``graph_extraction_publisher is None``), this method is a no-op.
-        """
         if self._graph_extraction_publisher is None:
             return
         try:

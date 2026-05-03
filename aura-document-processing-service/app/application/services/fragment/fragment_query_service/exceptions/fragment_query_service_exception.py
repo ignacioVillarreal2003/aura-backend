@@ -11,11 +11,6 @@ class FragmentQueryNotFoundException(FragmentQueryServiceException):
         super().__init__(message, status_code=404)
 
 
-class FragmentQueryUnauthorizedException(FragmentQueryServiceException):
-    def __init__(self, message: str) -> None:
-        super().__init__(message, status_code=403)
-
-
 class FragmentQueryInvalidRequestException(FragmentQueryServiceException):
     def __init__(self, message: str) -> None:
         super().__init__(message, status_code=400)

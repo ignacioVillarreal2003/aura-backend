@@ -3,17 +3,17 @@ import logging
 import time
 from functools import partial
 from typing import Any, ClassVar, Optional
-
 from sentence_transformers import CrossEncoder
 
 from app.application.services.fragment.fragment_query_service.fragment_query_service_settings import (
     FragmentQueryServiceSettings,
 )
+from app.infrastructure.persistence.database.orm.fragment import Fragment
 
 logger = logging.getLogger(__name__)
 
 
-class FragmentContextReranker:
+class FragmentReranker:
     _model: ClassVar[Optional[CrossEncoder]] = None
     _model_lock: ClassVar[asyncio.Lock] = asyncio.Lock()
 
@@ -45,14 +45,22 @@ class FragmentContextReranker:
                 )
             return cls._model
 
+    @classmethod
+    async def reset_model(cls) -> None:
+        async with cls._model_lock:
+            cls._model = None
+
     async def rerank_fragments(
-            self,
-            query: str,
-            fragments: list[Any],
-            top_n: int,
-    ) -> list[Any]:
+        self,
+        query: str,
+        fragments: list[Fragment],
+        top_n: int,
+    ) -> list[Fragment]:
         if not fragments:
             return []
+
+        if top_n <= 0:
+            raise ValueError(f"top_n must be a positive integer, got {top_n}.")
 
         logger.debug(
             "Running cross-encoder reranking",
@@ -77,8 +85,8 @@ class FragmentContextReranker:
             )
             scores = await loop.run_in_executor(None, predict_fn)
 
-            ranked: list[tuple[float, Any]] = sorted(
-                zip(scores, fragments),
+            ranked: list[tuple[float, Fragment]] = sorted(
+                zip(scores, fragments, strict=True),
                 key=lambda item: float(item[0]),
                 reverse=True,
             )
@@ -106,6 +114,8 @@ class FragmentContextReranker:
             )
             return selected
 
+        except (MemoryError, SystemExit, KeyboardInterrupt):
+            raise
         except Exception:
             logger.warning(
                 "Cross-encoder reranking failed, falling back to original top-k order",

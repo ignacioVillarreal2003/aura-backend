@@ -13,12 +13,6 @@ def reciprocal_rank_fusion(
         ranked_lists: list[list[T]],
         k: int = 60,
 ) -> list[T]:
-    """Merge several ordered result lists with Reciprocal Rank Fusion (RRF).
-
-    Score(fragment) = sum over lists L of 1 / (k + rank_in_L(fragment)).
-    Fragments not present in a list contribute 0 for that list.
-    """
-
     if not ranked_lists:
         return []
 
