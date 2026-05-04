@@ -5,13 +5,14 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.message.exceptions import LLMServiceException
+from apps.message.exceptions import LLMServiceException, TranscriptionException
 from apps.message.serializers.request import SendMessageRequest
 from apps.message.serializers.response import (
     MessageResponse,
     SendMessagePostResponseSerializer,
 )
 from apps.message.services.message_service import message_service
+from core.openapi.common import standard_error_responses
 from core.pagination.pagination import MessageCursorPagination
 
 
@@ -21,19 +22,12 @@ class MessageListView(APIView):
         tags=["Messages"],
         summary="List messages",
         parameters=[
-            OpenApiParameter(
-                name="chat_id",
-                type=int,
-                location=OpenApiParameter.PATH,
-                required=True,
-            ),
+            OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
         ],
-        responses={200: MessageResponse(many=True)},
+        responses={200: MessageResponse(many=True), **standard_error_responses(401, 403, 404)},
     )
     def get(self, request: Request, chat_id: int) -> Response:
-        messages = message_service.get_messages(
-            user=request.user, chat_id=chat_id
-        )
+        messages = message_service.get_messages(user=request.user, chat_id=chat_id)
         paginator = MessageCursorPagination()
         page = paginator.paginate_queryset(messages, request)
         return paginator.get_paginated_response(
@@ -44,24 +38,26 @@ class MessageListView(APIView):
         tags=["Messages"],
         summary="Send message",
         parameters=[
-            OpenApiParameter(
-                name="chat_id",
-                type=int,
-                location=OpenApiParameter.PATH,
-                required=True,
-            ),
+            OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
         ],
-        request=SendMessageRequest,
-        responses={201: SendMessagePostResponseSerializer},
+        request={"multipart/form-data": SendMessageRequest, "application/json": SendMessageRequest},
+        responses={201: SendMessagePostResponseSerializer, **standard_error_responses(400, 401, 403, 404, 502)},
     )
     def post(self, request: Request, chat_id: int) -> Response:
         serializer = SendMessageRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        transcript = None
+        if "audio" in serializer.validated_data:
+            transcript = message_service.transcribe_audio(serializer.validated_data["audio"])
+            text = transcript
+        else:
+            text = serializer.validated_data["message"]
+
         msg = message_service.send_message(
             user=request.user,
             chat_id=chat_id,
-            text=serializer.validated_data["message"],
+            text=text,
         )
 
         assistant = None
@@ -80,6 +76,7 @@ class MessageListView(APIView):
 
         body = {
             "message": MessageResponse(msg).data,
+            "transcript": transcript,
             "assistant": assistant,
             "assistant_error": assistant_error,
         }

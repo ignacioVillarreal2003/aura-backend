@@ -8,6 +8,7 @@ from rest_framework.viewsets import ViewSet
 from apps.chat.serializers.request import CreateChatRequest, UpdateChatRequest
 from apps.chat.serializers.response import ChatListResponse, ChatResponse
 from apps.chat.services.chat_service import chat_service
+from core.openapi.common import standard_error_responses
 from core.pagination.pagination import StandardPagination
 
 
@@ -15,34 +16,34 @@ from core.pagination.pagination import StandardPagination
     list=extend_schema(
         tags=["Chats"],
         summary="List chats",
-        responses={200: ChatListResponse(many=True)},
+        responses={200: ChatListResponse(many=True), **standard_error_responses(401)},
     ),
     create=extend_schema(
         tags=["Chats"],
         summary="Create chat",
         request=CreateChatRequest,
-        responses={201: ChatResponse},
+        responses={201: ChatResponse, **standard_error_responses(400, 401)},
     ),
     retrieve=extend_schema(
         tags=["Chats"],
         summary="Get chat",
-        responses={200: ChatResponse},
+        responses={200: ChatResponse, **standard_error_responses(401, 403, 404)},
     ),
     partial_update=extend_schema(
         tags=["Chats"],
         summary="Update chat",
         request=UpdateChatRequest,
-        responses={200: ChatResponse},
+        responses={200: ChatResponse, **standard_error_responses(400, 401, 403, 404)},
     ),
     destroy=extend_schema(
         tags=["Chats"],
         summary="Delete chat",
-        responses={204: OpenApiResponse(description="No content")},
+        responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     ),
     my_chats=extend_schema(
         tags=["Chats"],
         summary="List chats created by me",
-        responses={200: ChatListResponse(many=True)},
+        responses={200: ChatListResponse(many=True), **standard_error_responses(401)},
     ),
 )
 class ChatViewSet(ViewSet):

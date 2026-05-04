@@ -1,5 +1,4 @@
 import logging
-
 from django.db.models import QuerySet
 from django.utils import timezone
 

@@ -33,3 +33,17 @@ class ConflictException(ServiceException):
     status_code = 409
     error_code = "conflict"
     detail = "Resource conflict"
+
+
+class ServiceUnavailableException(ServiceException):
+    status_code = 503
+    error_code = "service_unavailable"
+    detail = "A dependency service is temporarily unavailable"
+
+
+class InsufficientPermissionsException(ServiceException):
+    """Authenticated caller lacks application-level permissions (HTTP 403, not 401)."""
+
+    status_code = 403
+    error_code = "insufficient_permissions"
+    detail = "You do not have permission to perform this action"

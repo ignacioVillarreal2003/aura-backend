@@ -14,12 +14,15 @@ from apps.membership.exceptions import (
 from apps.membership.models.chat_membership import ChatMembership
 from apps.membership.repositories.membership_repository import membership_repository
 from core.authentication.authenticated_user import AuthenticatedUser
+from core.authorization import AccessControl
+from core.authorization.permissions import ADD_MEMBER, LIST_MEMBERS, REMOVE_MEMBER, UPDATE_MEMBER
 
 logger = logging.getLogger(__name__)
 
 
 class MembershipService:
     def list_members(self, user: AuthenticatedUser, chat_id: int) -> QuerySet[ChatMembership]:
+        AccessControl.require_permissions(user, frozenset({LIST_MEMBERS}))
         self._require_active_member(chat_id, user.id)
         return membership_repository.list_by_chat(chat_id)
 
@@ -29,6 +32,7 @@ class MembershipService:
         chat_id: int,
         member_ids: list[int],
     ) -> list[ChatMembership]:
+        AccessControl.require_permissions(user, frozenset({ADD_MEMBER}))
         chat = chat_repository.get_by_id(chat_id)
         if chat is None:
             raise ChatNotFoundException()
@@ -67,6 +71,7 @@ class MembershipService:
         member_id: int,
         new_status: str,
     ) -> ChatMembership:
+        AccessControl.require_permissions(user, frozenset({UPDATE_MEMBER}))
         self._require_active_member(chat_id, user.id)
 
         membership = membership_repository.get_by_chat_and_member(chat_id, member_id)
@@ -92,6 +97,7 @@ class MembershipService:
         chat_id: int,
         member_id: int,
     ) -> None:
+        AccessControl.require_permissions(user, frozenset({REMOVE_MEMBER}))
         chat = chat_repository.get_by_id(chat_id)
         if chat is None:
             raise ChatNotFoundException()
@@ -122,6 +128,7 @@ class MembershipService:
         )
 
     def leave_chat(self, user: AuthenticatedUser, chat_id: int) -> None:
+        AccessControl.require_permissions(user, frozenset({REMOVE_MEMBER}))
         chat = chat_repository.get_by_id(chat_id)
         if chat is None:
             raise ChatNotFoundException()

@@ -8,7 +8,6 @@ class StandardPagination(PageNumberPagination):
 
 
 class MessageCursorPagination(CursorPagination):
-    """Cursor-based pagination optimised for chat messages (newest first)."""
     page_size = 50
     page_size_query_param = "page_size"
     max_page_size = 100

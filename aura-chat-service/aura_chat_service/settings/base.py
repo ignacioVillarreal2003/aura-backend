@@ -35,7 +35,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "core.middleware.correlation_id.CorrelationIdMiddleware",
     "core.middleware.request_logging.RequestLoggingMiddleware",
-    "core.authentication.middleware.AuthenticationMiddleware",
+    "core.authentication.authentication_middleware.AuthenticationMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -100,7 +100,7 @@ CHANNEL_LAYERS = {
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "core.authentication.backends.ServiceAuthentication",
+        "core.authentication.service_authentication.ServiceAuthentication",
     ],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_PERMISSION_CLASSES": [
@@ -141,7 +141,7 @@ CORS_ALLOW_CREDENTIALS = True
 # Authentication service
 # ──────────────────────────────────────────────
 # The provider issues GET requests with ``Authorization: Bearer <token>`` to this URL
-# (see ``core.authentication.provider.AuthenticationProvider.validate_token``).
+# (see ``core.authentication.authentication_provider.AuthenticationProvider.validate_token``).
 # ``AUTHENTICATION_PROVIDER_AUTHENTICATION_URL`` is accepted as a fallback name so
 # local mocks match other services' env naming.
 
@@ -178,7 +178,32 @@ SPECTACULAR_SETTINGS = {
         {"name": "Messages", "description": "Chat messages (REST)"},
         {"name": "Memberships", "description": "Chat members"},
     ],
+    "SECURITY": [{"BearerAuth": []}, {"ServiceApiKey": []}],
+    "APPEND_COMPONENTS": {
+        "securitySchemes": {
+            "BearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT",
+                "description": "Token de usuario validado por el auth service.",
+            },
+            "ServiceApiKey": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "X-Service-Api-Key",
+                "description": "Clave para llamadas service-to-service. Requiere también X-User-Id y X-User-Email.",
+            },
+        }
+    },
 }
+
+# ──────────────────────────────────────────────
+# Whisper (transcripción local de audio)
+# ──────────────────────────────────────────────
+
+WHISPER_MODEL_SIZE = config("WHISPER_MODEL_SIZE", default="small")
+WHISPER_DEVICE = config("WHISPER_DEVICE", default="cpu")
+WHISPER_COMPUTE_TYPE = config("WHISPER_COMPUTE_TYPE", default="int8")
 
 # ──────────────────────────────────────────────
 # LLM Service

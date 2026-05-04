@@ -28,5 +28,6 @@ class AssistantErrorSerializer(serializers.Serializer):
 
 class SendMessagePostResponseSerializer(serializers.Serializer):
     message = MessageResponse()
+    transcript = serializers.CharField(allow_null=True, required=False)
     assistant = AssistantBlockSerializer(allow_null=True, required=False)
     assistant_error = AssistantErrorSerializer(allow_null=True, required=False)

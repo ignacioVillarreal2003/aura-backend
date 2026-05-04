@@ -8,6 +8,7 @@ import httpx
 from django.conf import settings
 
 from core.authentication.authenticated_user import AuthenticatedUser
+from core.authentication.authentication_provider import build_service_user_headers
 from core.clients.exceptions import (
     HttpClientConnectionException,
     HttpClientException,
@@ -179,21 +180,17 @@ class LLMClient:
 
     @staticmethod
     def _build_service_headers(user: AuthenticatedUser) -> dict[str, str]:
-        return {
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "X-Service-Api-Key": settings.SERVICE_API_KEY,
-            "X-User-Id": str(user.id),
-            "X-User-Email": user.email,
-            "X-User-Roles": ",".join(user.roles),
-            "X-User-Permissions": ",".join(user.permissions),
-        }
+        headers = build_service_user_headers(user)
+        headers["Accept"] = "application/json"
+        headers["Content-Type"] = "application/json"
+        return headers
 
     @staticmethod
     def _build_stream_headers(user: AuthenticatedUser) -> dict[str, str]:
-        h = LLMClient._build_service_headers(user)
-        h["Accept"] = "text/event-stream"
-        return h
+        headers = build_service_user_headers(user)
+        headers["Accept"] = "text/event-stream"
+        headers["Content-Type"] = "application/json"
+        return headers
 
 
 llm_client = LLMClient()

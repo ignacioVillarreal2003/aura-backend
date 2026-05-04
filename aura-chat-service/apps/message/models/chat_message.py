@@ -1,9 +1,8 @@
 from django.db import models
+from core.models import CreatedAuditModel, SoftDeleteModel
 
-from core.models import SoftDeleteModel
 
-
-class ChatMessage(SoftDeleteModel):
+class ChatMessage(CreatedAuditModel, SoftDeleteModel):
     class SenderType(models.TextChoices):
         SYSTEM = "system", "System"
         USER = "user", "User"
@@ -18,8 +17,6 @@ class ChatMessage(SoftDeleteModel):
         max_length=10,
         choices=SenderType.choices,
     )
-    created_by = models.BigIntegerField()
-    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "chat_message"

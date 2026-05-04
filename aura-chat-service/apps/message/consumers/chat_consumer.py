@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 
 class ChatConsumer(AsyncJsonWebsocketConsumer):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.chat_id: int | None = None
