@@ -1,0 +1,26 @@
+@dpsBase = http://localhost:8000/api/v1
+@authToken = user_token_123
+
+### Consulta al grafo (POST /api/v1/graph/query)
+POST {{dpsBase}}/graph/query
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "question": "¿Qué vecinos tiene la entidad Comando General de la Fuerza Aérea?",
+  "max_results": 20,
+  "chat_id": 1
+}
+
+
+### Sin chat_id (opcional)
+POST {{dpsBase}}/graph/query
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "question": "Listá organizaciones relacionadas con aviación civil.",
+  "max_results": 10
+}

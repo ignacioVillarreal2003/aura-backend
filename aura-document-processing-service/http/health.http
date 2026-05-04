@@ -1,0 +1,10 @@
+@dpsBase = http://localhost:8000/api/v1
+@authToken = user_token_123
+
+### Liveness (sin Bearer: excluido en authentication_middleware)
+GET {{dpsBase}}/health
+
+
+### Readiness (requiere Bearer: /api/v1/ready no está en excluded_paths)
+GET {{dpsBase}}/ready
+Authorization: Bearer {{authToken}}

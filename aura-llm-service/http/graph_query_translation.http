@@ -1,0 +1,33 @@
+@llmBase = http://localhost:8001/api/v1
+@authToken = user_token_123
+
+### Traducir pregunta a intent de grafo (POST /api/v1/graph-query-translation)
+POST {{llmBase}}/graph-query-translation
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "question": "¿Qué vecinos tiene la entidad Comando General de la Fuerza Aérea?",
+  "ontology": {
+    "entity_types": [
+      "person",
+      "organization",
+      "location",
+      "product",
+      "event",
+      "concept",
+      "date",
+      "other"
+    ],
+    "relation_types": [
+      "related_to",
+      "part_of",
+      "located_in",
+      "works_for",
+      "founded",
+      "uses",
+      "mentioned_in"
+    ]
+  }
+}

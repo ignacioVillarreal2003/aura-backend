@@ -1,35 +1,34 @@
 from app.infrastructure.http.document_context_provider.dtos.fragment_list_response import FragmentListResponse
 from app.infrastructure.http.document_context_provider.dtos.fragment_response import FragmentResponse
 from app.infrastructure.http.document_context_provider.dtos.question_context_fragments_request import (
-    QuestionContextFragmentsRequest
+    QuestionContextFragmentsRequest,
 )
 from app.infrastructure.http.document_context_provider.exceptions.document_context_provider_exception import (
-    DocumentContextProviderInvalidResponseException
+    DocumentContextProviderInvalidResponseException,
 )
 
 
 def calculate_question_response_max_fragments(
-        request_body: QuestionContextFragmentsRequest
+        request_body: QuestionContextFragmentsRequest,
 ) -> int:
-    if request_body.use_rerank and request_body.rerank_max_fragments is not None:
-        return request_body.rerank_max_fragments
-
-    total = request_body.question_max_fragments
-    if request_body.use_keywords:
-        total += request_body.keywords_max_fragments
-    return total
+    if request_body.rerank.enabled and request_body.rerank.max_fragments is not None:
+        return request_body.rerank.max_fragments
+    return (
+            sum(q.max_fragments for q in request_body.semantic_queries)
+            + sum(q.max_fragments for q in request_body.bm25_queries)
+    )
 
 
 def apply_fragment_count_limit(
         fragments: list[FragmentResponse],
-        max_fragments: int
+        max_fragments: int,
 ) -> list[FragmentResponse]:
     return fragments[:max_fragments]
 
 
 def parse_and_apply_limits(
         raw_data: dict,
-        max_fragments: int
+        max_fragments: int,
 ) -> FragmentListResponse:
     try:
         response = FragmentListResponse.model_validate(raw_data)
@@ -40,9 +39,6 @@ def parse_and_apply_limits(
 
     limited = apply_fragment_count_limit(
         fragments=response.fragments,
-        max_fragments=max_fragments
+        max_fragments=max_fragments,
     )
-    return FragmentListResponse(
-        fragments=limited,
-        documents=response.documents,
-    )
+    return FragmentListResponse(fragments=limited)

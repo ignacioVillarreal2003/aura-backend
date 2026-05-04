@@ -1,7 +1,10 @@
-POST http://localhost:8000/api/v1/document-classify
+@llmBase = http://localhost:8001/api/v1
+@authToken = user_token_123
+
+POST {{llmBase}}/document-classify
 Accept: application/json
 Content-Type: application/json
-Authorization: Bearer user_token_123
+Authorization: Bearer {{authToken}}
 
 {
   "document_name": "ejemplo.pdf",

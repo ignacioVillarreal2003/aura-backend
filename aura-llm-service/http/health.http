@@ -1,0 +1,8 @@
+@llmBase = http://localhost:8001/api/v1
+
+### Liveness (sin auth)
+GET {{llmBase}}/health
+
+
+### Readiness (sin auth; 503 si Ollama / HTTP client no están listos)
+GET {{llmBase}}/ready

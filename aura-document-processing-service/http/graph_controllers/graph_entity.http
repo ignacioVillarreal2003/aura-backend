@@ -1,0 +1,13 @@
+@dpsBase = http://localhost:8000/api/v1
+@authToken = user_token_123
+
+### Entidad por nombre (GET /api/v1/graph/entity/{name})
+GET {{dpsBase}}/graph/entity/Acme%20Corp
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Con tipo y profundidad (query: type, depth)
+GET {{dpsBase}}/graph/entity/Comando%20General%20de%20la%20Fuerza%20A%C3%A9rea?type=organization&depth=2
+Accept: application/json
+Authorization: Bearer {{authToken}}

@@ -1,38 +1,30 @@
-POST http://localhost:8000/api/v1/post-process-fragment/start
+@dpsBase = http://localhost:8000/api/v1
+@authToken = user_token_123
+
+### Iniciar post-proceso de fragmentos
+POST {{dpsBase}}/post-process-fragment/start
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Encolar por documentos
+POST {{dpsBase}}/post-process-fragment/documents
 Accept: application/json
 Content-Type: application/json
-Authorization: Bearer user_token_123
-
-
-###
-
-
-POST http://localhost:8000/api/v1/post-process-fragment/documents
-Accept: application/json
-Content-Type: application/json
-Authorization: Bearer user_token_123
+Authorization: Bearer {{authToken}}
 
 {
   "document_ids": [1, 2]
 }
 
 
-###
-
-
-GET http://localhost:8000/api/v1/post-process-fragment/status
+### Estado
+GET {{dpsBase}}/post-process-fragment/status
 Accept: application/json
-Content-Type: application/json
-Authorization: Bearer user_token_123
+Authorization: Bearer {{authToken}}
 
 
-###
-
-
-DELETE http://localhost:8000/api/v1/post-process-fragment/stop
+### Detener
+DELETE {{dpsBase}}/post-process-fragment/stop
 Accept: application/json
-Content-Type: application/json
-Authorization: Bearer user_token_123
-
-
-###
+Authorization: Bearer {{authToken}}

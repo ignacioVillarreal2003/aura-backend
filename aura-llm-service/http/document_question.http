@@ -1,13 +1,17 @@
-POST http://localhost:8001/api/v1/document-question/stream
+@llmBase = http://localhost:8001/api/v1
+@authToken = user_token_123
+
+### Streaming
+POST {{llmBase}}/document-question/stream
 Accept: text/event-stream
 Content-Type: application/json
-Authorization: Bearer user_token_123
+Authorization: Bearer {{authToken}}
 
 {
   "messages": [
     {
       "role": "human",
-      "content": "hablame de que es Sabotaje"
+      "content": "hablame de que es la factura a Francisco"
     }
   ]
 }
@@ -17,10 +21,10 @@ Authorization: Bearer user_token_123
 
 
 # @timeout 600
-POST http://localhost:8001/api/v1/document-question
+POST {{llmBase}}/document-question
 Accept: application/json
 Content-Type: application/json
-Authorization: Bearer user_token_123
+Authorization: Bearer {{authToken}}
 
 {
   "messages": [
@@ -35,10 +39,10 @@ Authorization: Bearer user_token_123
 ###
 
 
-POST http://localhost:8000/api/v1/document-question
+POST {{llmBase}}/document-question
 Accept: application/json
 Content-Type: application/json
-Authorization: Bearer user_token_123
+Authorization: Bearer {{authToken}}
 
 {
   "messages": [
@@ -53,10 +57,10 @@ Authorization: Bearer user_token_123
 ###
 
 
-POST http://localhost:8000/api/v1/document-question
+POST {{llmBase}}/document-question
 Accept: application/json
 Content-Type: application/json
-Authorization: Bearer user_token_123
+Authorization: Bearer {{authToken}}
 
 {
   "messages": [
@@ -71,10 +75,10 @@ Authorization: Bearer user_token_123
 ###
 
 
-POST http://localhost:8000/api/v1/document-question
+POST {{llmBase}}/document-question
 Accept: application/json
 Content-Type: application/json
-Authorization: Bearer user_token_123
+Authorization: Bearer {{authToken}}
 
 {
   "messages": [
@@ -89,10 +93,10 @@ Authorization: Bearer user_token_123
 ###
 
 
-POST http://localhost:8000/api/v1/document-question
+POST {{llmBase}}/document-question
 Accept: application/json
 Content-Type: application/json
-Authorization: Bearer user_token_123
+Authorization: Bearer {{authToken}}
 
 {
   "messages": [
@@ -107,10 +111,10 @@ Authorization: Bearer user_token_123
 ###
 
 
-POST http://localhost:8000/api/v1/document-question
+POST {{llmBase}}/document-question
 Accept: application/json
 Content-Type: application/json
-Authorization: Bearer user_token_123
+Authorization: Bearer {{authToken}}
 
 {
   "messages": [
@@ -125,10 +129,10 @@ Authorization: Bearer user_token_123
 ###
 
 
-POST http://localhost:8000/api/v1/document-question
+POST {{llmBase}}/document-question
 Accept: application/json
 Content-Type: application/json
-Authorization: Bearer user_token_123
+Authorization: Bearer {{authToken}}
 
 {
   "messages": [

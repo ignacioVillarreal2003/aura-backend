@@ -1,16 +1,13 @@
-DELETE http://localhost:8000/api/v1/delete-document/soft/document/38
+@dpsBase = http://localhost:8000/api/v1
+@authToken = user_token_123
+
+### Borrado lógico de documento
+DELETE {{dpsBase}}/delete-document/soft/document/38
 Accept: application/json
-Content-Type: application/json
-Authorization: Bearer user_token_123
+Authorization: Bearer {{authToken}}
 
 
-###
-
-
-DELETE http://localhost:8000/api/v1/delete-document/soft/chat/12345
+### Borrado lógico por chat
+DELETE {{dpsBase}}/delete-document/soft/chat/1
 Accept: application/json
-Content-Type: application/json
-Authorization: Bearer user_token_123
-
-
-###
+Authorization: Bearer {{authToken}}

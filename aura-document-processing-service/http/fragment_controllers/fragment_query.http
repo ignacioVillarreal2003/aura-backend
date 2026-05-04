@@ -1,25 +1,85 @@
-POST http://localhost:8000/api/v1/fragment-query/by-question
+@dpsBase = http://localhost:8000/api/v1
+@authToken = user_token_123
+
+### Fragmentos por pregunta — solo semántico (POST /api/v1/fragment-query/by-question)
+POST {{dpsBase}}/fragment-query/by-question
 Accept: application/json
 Content-Type: application/json
-Authorization: Bearer user_token_123
+Authorization: Bearer {{authToken}}
 
 {
-  "question": "Avion de caza",
-  "max_fragments": 3
+  "chat_id": 1,
+  "semantic_queries": [
+    {
+      "text": "Avión de caza",
+      "max_fragments": 3
+    }
+  ],
+  "bm25_queries": [],
+  "rerank": {
+    "enabled": false
+  }
 }
 
 
-###
-
-
-POST http://localhost:8000/api/v1/fragment-query/by-documents
+### Híbrido semántico + BM25
+POST {{dpsBase}}/fragment-query/by-question
 Accept: application/json
 Content-Type: application/json
-Authorization: Bearer user_token_123
+Authorization: Bearer {{authToken}}
+
+{
+  "semantic_queries": [
+    {
+      "text": "caza multirrol",
+      "max_fragments": 5
+    }
+  ],
+  "bm25_queries": [
+    {
+      "text": "Fuerza Aérea",
+      "max_fragments": 5
+    }
+  ],
+  "rerank": {
+    "enabled": false
+  }
+}
+
+
+### Con rerank (max_fragments del rerank no puede superar la suma de max_fragments de las consultas)
+POST {{dpsBase}}/fragment-query/by-question
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "chat_id": 1,
+  "semantic_queries": [
+    {
+      "text": "seguridad de la aviación",
+      "max_fragments": 8
+    }
+  ],
+  "bm25_queries": [
+    {
+      "text": "PNSAC",
+      "max_fragments": 4
+    }
+  ],
+  "rerank": {
+    "enabled": true,
+    "max_fragments": 6
+  }
+}
+
+
+### Fragmentos por documentos (POST /api/v1/fragment-query/by-documents)
+POST {{dpsBase}}/fragment-query/by-documents
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
 
 {
   "document_ids": [32]
 }
-
-
-###

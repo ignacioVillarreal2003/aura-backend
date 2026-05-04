@@ -108,6 +108,7 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
             return DocumentQuestionResponse(
                 question=state.current_message.content,
                 answer=state.answer,
+                messages=state.messages,
                 fragments=state.fragments,
             )
         except self._KNOWN_EXCEPTIONS:
@@ -188,6 +189,7 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
                 result=DocumentQuestionResponse(
                     question=state.current_message.content,
                     answer=state.answer,
+                    messages=state.messages,
                     fragments=state.fragments,
                 ),
             )

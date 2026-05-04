@@ -1,40 +1,88 @@
 from typing import Optional
-from pydantic import BaseModel, Field, model_validator
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+# Mirrors aura-document-processing-service/app/domain/field_limits.py (fragment / query)
+_MAX_ID = 2_147_483_647
+_MAX_CHARS_PER_QUERY = 16_000
+_MAX_FRAGMENTS_PER_QUERY_STRATEGY = 50
+_MAX_TOTAL_FRAGMENTS = 100
+_MAX_QUERIES_PER_TYPE = 10
+
+
+class _BaseQuery(BaseModel):
+    text: str
+    max_fragments: int = Field(..., ge=1, le=_MAX_FRAGMENTS_PER_QUERY_STRATEGY)
+
+    @field_validator("text")
+    @classmethod
+    def clean_text(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("text must not be blank.")
+        return v
+
+    model_config = {"frozen": True}
+
+
+class SemanticQuery(_BaseQuery):
+    text: str = Field(..., min_length=1, max_length=_MAX_CHARS_PER_QUERY)
+
+
+class BM25Query(_BaseQuery):
+    text: str = Field(..., min_length=1, max_length=_MAX_CHARS_PER_QUERY)
+
+
+class RerankConfig(BaseModel):
+    enabled: bool = False
+    max_fragments: Optional[int] = Field(default=None, ge=1, le=_MAX_TOTAL_FRAGMENTS)
+
+    @model_validator(mode="after")
+    def validate_rerank_consistency(self) -> "RerankConfig":
+        if self.enabled and self.max_fragments is None:
+            raise ValueError("rerank.max_fragments is required when rerank is enabled.")
+        if not self.enabled and self.max_fragments is not None:
+            raise ValueError(
+                "rerank.max_fragments has no effect when rerank is disabled."
+            )
+        return self
+
+    model_config = {"frozen": True}
 
 
 class QuestionContextFragmentsRequest(BaseModel):
-    question: str = Field(..., min_length=1, max_length=16_000)
-    question_max_fragments: int = Field(..., ge=1, le=50)
-    use_keywords: Optional[bool] = Field(default=None)
-    keywords: Optional[str] = Field(default=None, max_length=16_000)
-    keywords_max_fragments: Optional[int] = Field(default=None, ge=1, le=50)
-    use_rerank: Optional[bool] = Field(default=None)
-    rerank_max_fragments: Optional[int] = Field(default=None, ge=1)
+    chat_id: Optional[int] = Field(default=None, gt=0, le=_MAX_ID)
+
+    semantic_queries: list[SemanticQuery] = Field(
+        default_factory=list,
+        max_length=_MAX_QUERIES_PER_TYPE,
+    )
+    bm25_queries: list[BM25Query] = Field(
+        default_factory=list,
+        max_length=_MAX_QUERIES_PER_TYPE,
+    )
+
+    rerank: RerankConfig = Field(default_factory=RerankConfig)
 
     @model_validator(mode="after")
-    def validate_request(self) -> "QuestionContextFragmentsRequest":
-        question = self.question.strip()
-        if not question:
-            raise ValueError("question must not be empty.")
-        self.question = question
+    def _validate_queries(self) -> "QuestionContextFragmentsRequest":
+        total_sources = len(self.semantic_queries) + len(self.bm25_queries)
 
-        if self.keywords is not None:
-            keywords = self.keywords.strip()
-            self.keywords = keywords or None
+        if total_sources == 0:
+            raise ValueError("At least one query must be provided.")
 
-        if self.use_keywords:
-            if not self.keywords:
-                raise ValueError("keywords must be provided when use_keywords is true.")
-            if self.keywords_max_fragments is None:
-                raise ValueError("keywords_max_fragments must be provided when use_keywords is true.")
+        if self.rerank.enabled:
+            pool = (
+                sum(q.max_fragments for q in self.semantic_queries)
+                + sum(q.max_fragments for q in self.bm25_queries)
+            )
 
-        if self.use_rerank:
-            if self.rerank_max_fragments is None:
-                raise ValueError("rerank_max_fragments must be provided when use_rerank is true.")
-            max_rerank_fragments = self.question_max_fragments
-            if self.use_keywords:
-                max_rerank_fragments += self.keywords_max_fragments
-            if self.rerank_max_fragments > max_rerank_fragments:
-                raise ValueError("rerank_max_fragments must not exceed total question+keywords fragments.")
+            if self.rerank.max_fragments is not None and self.rerank.max_fragments > pool:
+                raise ValueError(
+                    f"rerank.max_fragments ({self.rerank.max_fragments}) "
+                    f"cannot exceed total retrieved fragments ({pool})."
+                )
 
         return self
+
+    model_config = {"frozen": True}

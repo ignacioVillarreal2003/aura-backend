@@ -1,0 +1,33 @@
+@dpsBase = http://localhost:8000/api/v1
+@authToken = user_token_123
+
+### Caminos entre entidades (POST /api/v1/graph/path)
+POST {{dpsBase}}/graph/path
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "source_name": "Juan Pérez",
+  "target_name": "Acme Corp",
+  "source_type": "person",
+  "target_type": "organization",
+  "max_hops": 4,
+  "max_paths": 10,
+  "only_shortest": false
+}
+
+
+### Solo el camino más corto
+POST {{dpsBase}}/graph/path
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "source_name": "Montevideo",
+  "target_name": "Uruguay",
+  "max_hops": 6,
+  "max_paths": 5,
+  "only_shortest": true
+}

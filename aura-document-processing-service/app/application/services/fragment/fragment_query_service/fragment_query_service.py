@@ -157,8 +157,8 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                     )
                     rerank_applied = True
                 else:
-                    logger.debug(
-                        "Rerank skipped: fragment count below configured minimum.",
+                    logger.info(
+                        "Rerank skipped: fragment count is below rerank_min_fragments.",
                         extra={
                             "fragment_count": pre_rerank_count,
                             "rerank_min_fragments": self._settings.rerank_min_fragments,

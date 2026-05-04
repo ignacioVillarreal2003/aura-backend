@@ -3,9 +3,20 @@ from typing import Optional
 
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.document_context_provider.dtos.fragment_list_response import FragmentListResponse
+from app.infrastructure.http.document_context_provider.dtos.question_context_fragments_request import (
+    QuestionContextFragmentsRequest,
+)
 
 
 class DocumentContextProviderInterface(ABC):
+    @abstractmethod
+    async def retrieve_context_fragments_by_question_request(
+            self,
+            authenticated_user: AuthenticatedUser,
+            request: QuestionContextFragmentsRequest,
+    ) -> FragmentListResponse:
+        pass
+
     @abstractmethod
     async def retrieve_context_fragments_by_question(
             self,
@@ -16,7 +27,8 @@ class DocumentContextProviderInterface(ABC):
             keywords: Optional[str] = None,
             keywords_max_fragments: Optional[int] = None,
             use_rerank: Optional[bool] = None,
-            rerank_max_fragments: Optional[int] = None
+            rerank_max_fragments: Optional[int] = None,
+            chat_id: Optional[int] = None,
     ) -> FragmentListResponse:
         pass
 
@@ -24,6 +36,6 @@ class DocumentContextProviderInterface(ABC):
     async def retrieve_context_fragments_by_document(
             self,
             authenticated_user: AuthenticatedUser,
-            document_ids: list[int]
+            document_ids: list[int],
     ) -> FragmentListResponse:
         pass

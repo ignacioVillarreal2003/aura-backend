@@ -66,7 +66,7 @@ class QuestionContextFragmentsRequest(BaseModel):
     rerank: _RerankConfig = Field(default_factory=_RerankConfig)
 
     @model_validator(mode="after")
-    def _validate_queries(self) -> "ContextFragmentsRequest":
+    def _validate_queries(self) -> "QuestionContextFragmentsRequest":
         total_sources = (
                 len(self.semantic_queries)
                 + len(self.bm25_queries)

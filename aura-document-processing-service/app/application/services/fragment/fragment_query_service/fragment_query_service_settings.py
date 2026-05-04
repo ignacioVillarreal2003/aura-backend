@@ -21,7 +21,7 @@ class FragmentQueryServiceSettings(BaseSettings):
     rerank_enabled: bool = Field(default=True)
     rerank_model_name: str = Field(default="BAAI/bge-reranker-v2-m3")
     rerank_device: Optional[str] = Field(default=None)
-    rerank_min_fragments: int = Field(default=6, ge=1, le=50)
+    rerank_min_fragments: int = Field(default=1, ge=1, le=50)
     rerank_min_score: float = Field(default=0.0)
     rerank_batch_size: int = Field(default=16, ge=1, le=512)
 

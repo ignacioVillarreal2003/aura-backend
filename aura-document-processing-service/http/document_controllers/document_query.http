@@ -1,34 +1,25 @@
-GET http://localhost:8000/api/v1/document-query/document/29
+@dpsBase = http://localhost:8000/api/v1
+@authToken = user_token_123
+
+### Documento por id
+GET {{dpsBase}}/document-query/document/29
 Accept: application/json
-Content-Type: application/json
-Authorization: Bearer user_token_123
+Authorization: Bearer {{authToken}}
 
 
-###
-
-
-GET http://localhost:8000/api/v1/document-query/documents
+### Listar documentos
+GET {{dpsBase}}/document-query/documents
 Accept: application/json
-Content-Type: application/json
-Authorization: Bearer user_token_123
+Authorization: Bearer {{authToken}}
 
 
-###
-
-
-GET http://localhost:8000/api/v1/document-query/documents?page=1&size=20&name=&category=
+### Paginación y filtros
+GET {{dpsBase}}/document-query/documents?page=1&size=20&name=&category=
 Accept: application/json
-Content-Type: application/json
-Authorization: Bearer user_token_123
+Authorization: Bearer {{authToken}}
 
 
-###
-
-
-GET http://localhost:8000/api/v1/document-query/documents/chat/12345
+### Documentos por chat
+GET {{dpsBase}}/document-query/documents/chat/1
 Accept: application/json
-Content-Type: application/json
-Authorization: Bearer user_token_123
-
-
-###
+Authorization: Bearer {{authToken}}

@@ -1,0 +1,15 @@
+@llmBase = http://localhost:8001/api/v1
+@authToken = user_token_123
+
+# @timeout 600
+POST {{llmBase}}/document-summary
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "document_id": 12
+}
+
+
+###

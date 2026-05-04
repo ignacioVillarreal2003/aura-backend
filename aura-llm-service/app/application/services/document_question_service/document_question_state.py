@@ -12,6 +12,7 @@ class DocumentQuestionState:
     authenticated_user: AuthenticatedUser
     messages: list[Message] = field(default_factory=list)
 
+    chat_id: Optional[int] = None
     base_question: Optional[str] = None
     keyword_question: Optional[str] = None
 
@@ -28,6 +29,7 @@ class DocumentQuestionState:
         return cls(
             messages=document_question_request.messages,
             authenticated_user=authenticated_user,
+            chat_id=document_question_request.chat_id,
         )
 
     @property

@@ -1,0 +1,34 @@
+@llmBase = http://localhost:8001/api/v1
+@authToken = user_token_123
+
+### Extraer entidades y relaciones (POST /api/v1/graph-extraction)
+POST {{llmBase}}/graph-extraction
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "content": "Juan Pérez trabaja en Acme Corp en Montevideo. La empresa usa AWS.",
+  "document_id": 1,
+  "fragment_id": 1,
+  "allowed_entity_types": [
+    "person",
+    "organization",
+    "location",
+    "product",
+    "event",
+    "concept",
+    "date",
+    "other"
+  ],
+  "allowed_relation_types": [
+    "related_to",
+    "part_of",
+    "located_in",
+    "works_for",
+    "uses",
+    "mentioned_in"
+  ],
+  "max_entities": 32,
+  "max_relations": 64
+}

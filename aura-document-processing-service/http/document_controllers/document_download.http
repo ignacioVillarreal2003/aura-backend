@@ -1,6 +1,7 @@
-GET http://localhost:8000/api/v1/document-download/document/29/download
+@dpsBase = http://localhost:8000/api/v1
+@authToken = user_token_123
+
+### Descarga de documento
+GET {{dpsBase}}/document-download/document/29/download
 Accept: application/octet-stream
-Authorization: Bearer user_token_123
-
-
-###
+Authorization: Bearer {{authToken}}
