@@ -82,6 +82,32 @@ LLM_SERVICE_PERMISSIONS: list[str] = [
     "LLM_GRAPH_QUERY_TRANSLATION",
 ]
 
+LLM_SERVICE_PERMISSIONS: list[str] = [
+    "LLM_DOCUMENT_QUESTION",
+    "LLM_DOCUMENT_QUESTION_STREAM",
+    "LLM_DOCUMENT_SUMMARY",
+    "LLM_DOCUMENT_ACTION",
+    "LLM_AGENT",
+    "LLM_DOCUMENT_CLASSIFY",
+    "LLM_FRAGMENT_ENRICH",
+    "LLM_GRAPH_EXTRACTION",
+    "LLM_GRAPH_QUERY_TRANSLATION",
+]
+
+"LIST_CHATS",
+            "CREATE_CHAT",
+            "GET_CHAT",
+            "UPDATE_CHAT",
+            "DELETE_CHAT",
+
+            "LIST_MESSAGES",
+            "SEND_MESSAGE",
+
+            "LIST_MEMBERS",
+            "ADD_MEMBER",
+            "REMOVE_MEMBER",
+            "UPDATE_MEMBER",
+
 MOCK_USERS = {
     "user_token_123": {
         "id": 12,

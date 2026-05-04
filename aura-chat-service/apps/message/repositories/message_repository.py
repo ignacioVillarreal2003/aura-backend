@@ -1,5 +1,4 @@
 import logging
-
 from django.db.models import QuerySet
 
 from apps.message.models.chat_message import ChatMessage

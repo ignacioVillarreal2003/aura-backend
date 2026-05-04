@@ -1,10 +1,4 @@
-from core.exceptions import ForbiddenException, ServiceException
-
-
-class MessageSendException(ServiceException):
-    status_code = 500
-    error_code = "message_send_error"
-    detail = "Failed to send message"
+from core.exceptions import ForbiddenException, ServiceUnavailableException
 
 
 class MessageAccessDeniedException(ForbiddenException):
@@ -12,7 +6,13 @@ class MessageAccessDeniedException(ForbiddenException):
     detail = "You do not have access to messages in this chat"
 
 
-class LLMServiceException(ServiceException):
+class LLMServiceException(ServiceUnavailableException):
     status_code = 502
     error_code = "llm_service_error"
     detail = "AI service is temporarily unavailable"
+
+
+class TranscriptionException(ServiceUnavailableException):
+    status_code = 502
+    error_code = "transcription_error"
+    detail = "Audio could not be transcribed"

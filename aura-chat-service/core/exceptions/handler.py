@@ -70,5 +70,7 @@ def _status_to_error_code(status_code: int) -> str:
         405: "method_not_allowed",
         409: "conflict",
         429: "throttled",
+        502: "bad_gateway",
+        503: "service_unavailable",
     }
     return mapping.get(status_code, "error")

@@ -2,7 +2,6 @@ import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any
-
 from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.utils import timezone
@@ -10,12 +9,15 @@ from django.utils import timezone
 from apps.chat.exceptions import ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.membership.repositories.membership_repository import membership_repository
-from apps.message.exceptions import LLMServiceException, MessageAccessDeniedException
+from apps.message.exceptions import LLMServiceException, MessageAccessDeniedException, TranscriptionException
 from apps.message.models.chat_message import ChatMessage
 from apps.message.repositories.message_repository import message_repository
 from core.authentication.authenticated_user import AuthenticatedUser
+from core.authorization import AccessControl
+from core.authorization.permissions import LIST_MESSAGES, SEND_MESSAGE
 from core.clients.exceptions import HttpClientException
 from core.clients.llm_client import DocumentQuestionResult, llm_client
+from core.clients.transcription_client import transcription_client
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,11 @@ class DocumentQuestionRunResult:
 
 
 class MessageService:
+    def transcribe_audio(self, audio_file) -> str:
+        try:
+            return transcription_client.transcribe(audio_file)
+        except Exception as e:
+            raise TranscriptionException() from e
 
     def send_message(
         self,
@@ -36,6 +43,7 @@ class MessageService:
         chat_id: int,
         text: str,
     ) -> ChatMessage:
+        AccessControl.require_permissions(user, frozenset({SEND_MESSAGE}))
         self._require_access(chat_id, user.id)
 
         msg = message_repository.create(
@@ -58,16 +66,12 @@ class MessageService:
         return msg
 
     def get_messages(self, user: AuthenticatedUser, chat_id: int):
+        AccessControl.require_permissions(user, frozenset({LIST_MESSAGES}))
         self._require_access(chat_id, user.id)
         return message_repository.get_messages_by_chat(chat_id)
 
-    async def run_document_question(
-        self,
-        user: AuthenticatedUser,
-        chat_id: int,
-    ) -> DocumentQuestionRunResult:
-        await sync_to_async(self._require_access)(chat_id, user.id)
-
+    @staticmethod
+    async def _build_llm_messages(chat_id: int) -> list[dict[str, str]]:
         recent = await sync_to_async(message_repository.get_recent_messages)(
             chat_id, limit=20
         )
@@ -77,6 +81,16 @@ class MessageService:
                 messages.append({"role": "human", "content": m.message})
             elif m.sender_type == ChatMessage.SenderType.SYSTEM:
                 messages.append({"role": "assistant", "content": m.message})
+        return messages
+
+    async def run_document_question(
+        self,
+        user: AuthenticatedUser,
+        chat_id: int,
+    ) -> DocumentQuestionRunResult:
+        await sync_to_async(self._require_access)(chat_id, user.id)
+
+        messages = await self._build_llm_messages(chat_id)
 
         try:
             llm_out: DocumentQuestionResult = await llm_client.document_question(
@@ -128,22 +142,9 @@ class MessageService:
         user: AuthenticatedUser,
         chat_id: int,
     ) -> AsyncIterator[dict[str, Any]]:
-        """
-        Yields dicts suitable for ``channel_layer.group_send`` (must include ``type``
-        matching a ``ChatConsumer`` handler: ``ai_context``, ``ai_delta``,
-        ``ai_complete``, ``ai_error``).
-        """
         await sync_to_async(self._require_access)(chat_id, user.id)
 
-        recent = await sync_to_async(message_repository.get_recent_messages)(
-            chat_id, limit=20
-        )
-        messages: list[dict[str, str]] = []
-        for m in reversed(recent):
-            if m.sender_type == ChatMessage.SenderType.USER:
-                messages.append({"role": "human", "content": m.message})
-            elif m.sender_type == ChatMessage.SenderType.SYSTEM:
-                messages.append({"role": "assistant", "content": m.message})
+        messages = await self._build_llm_messages(chat_id)
 
         try:
             async for sse in llm_client.document_question_stream_events(

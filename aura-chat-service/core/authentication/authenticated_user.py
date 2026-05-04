@@ -10,9 +10,18 @@ class AuthenticatedUser:
 
     @property
     def pk(self) -> int:
-        """Alias of ``id`` for Django / DRF (e.g. ``UserRateThrottle.get_cache_key``)."""
         return self.id
 
     @property
     def is_authenticated(self) -> bool:
         return True
+
+    def has_all_permissions(self, required: frozenset[str]) -> bool:
+        if not required:
+            return True
+        return required <= set(self.permissions)
+
+    def has_any_role(self, allowed: frozenset[str]) -> bool:
+        if not allowed:
+            return False
+        return bool(allowed & set(self.roles))

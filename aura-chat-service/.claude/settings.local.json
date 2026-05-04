@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Remove-Item -Recurse -Force \"C:/Users/ignac/Desktop/aura-backend/aura-chat-service/chat\")",
+      "Bash(Remove-Item -Recurse -Force \"C:/Users/ignac/Desktop/aura-backend/aura-chat-service/config\")"
+    ]
+  }
+}

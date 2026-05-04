@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 from apps.membership.serializers.request import AddMemberRequest, UpdateMemberRequest
 from apps.membership.serializers.response import MembershipResponse
 from apps.membership.services.membership_service import membership_service
+from core.openapi.common import standard_error_responses
 from core.pagination.pagination import StandardPagination
 
 
@@ -15,19 +16,12 @@ class MemberListView(APIView):
         tags=["Memberships"],
         summary="List members",
         parameters=[
-            OpenApiParameter(
-                name="chat_id",
-                type=int,
-                location=OpenApiParameter.PATH,
-                required=True,
-            ),
+            OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
         ],
-        responses={200: MembershipResponse(many=True)},
+        responses={200: MembershipResponse(many=True), **standard_error_responses(401, 403, 404)},
     )
     def get(self, request: Request, chat_id: int) -> Response:
-        members = membership_service.list_members(
-            user=request.user, chat_id=chat_id
-        )
+        members = membership_service.list_members(user=request.user, chat_id=chat_id)
         paginator = StandardPagination()
         page = paginator.paginate_queryset(members, request)
         return paginator.get_paginated_response(
@@ -38,15 +32,10 @@ class MemberListView(APIView):
         tags=["Memberships"],
         summary="Invite members",
         parameters=[
-            OpenApiParameter(
-                name="chat_id",
-                type=int,
-                location=OpenApiParameter.PATH,
-                required=True,
-            ),
+            OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
         ],
         request=AddMemberRequest,
-        responses={201: MembershipResponse(many=True)},
+        responses={201: MembershipResponse(many=True), **standard_error_responses(400, 401, 403, 404, 409)},
     )
     def post(self, request: Request, chat_id: int) -> Response:
         serializer = AddMemberRequest(data=request.data)
@@ -68,21 +57,11 @@ class MemberDetailView(APIView):
         tags=["Memberships"],
         summary="Update member status",
         parameters=[
-            OpenApiParameter(
-                name="chat_id",
-                type=int,
-                location=OpenApiParameter.PATH,
-                required=True,
-            ),
-            OpenApiParameter(
-                name="member_id",
-                type=int,
-                location=OpenApiParameter.PATH,
-                required=True,
-            ),
+            OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
+            OpenApiParameter(name="member_id", type=int, location=OpenApiParameter.PATH, required=True),
         ],
         request=UpdateMemberRequest,
-        responses={200: MembershipResponse},
+        responses={200: MembershipResponse, **standard_error_responses(400, 401, 403, 404)},
     )
     def patch(self, request: Request, chat_id: int, member_id: int) -> Response:
         serializer = UpdateMemberRequest(data=request.data)
@@ -100,20 +79,10 @@ class MemberDetailView(APIView):
         tags=["Memberships"],
         summary="Remove member",
         parameters=[
-            OpenApiParameter(
-                name="chat_id",
-                type=int,
-                location=OpenApiParameter.PATH,
-                required=True,
-            ),
-            OpenApiParameter(
-                name="member_id",
-                type=int,
-                location=OpenApiParameter.PATH,
-                required=True,
-            ),
+            OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
+            OpenApiParameter(name="member_id", type=int, location=OpenApiParameter.PATH, required=True),
         ],
-        responses={204: OpenApiResponse(description="No content")},
+        responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     def delete(self, request: Request, chat_id: int, member_id: int) -> Response:
         membership_service.remove_member(
@@ -132,14 +101,9 @@ class LeaveChatView(APIView):
         tags=["Memberships"],
         summary="Leave chat",
         parameters=[
-            OpenApiParameter(
-                name="chat_id",
-                type=int,
-                location=OpenApiParameter.PATH,
-                required=True,
-            ),
+            OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
         ],
-        responses={204: OpenApiResponse(description="No content")},
+        responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     def post(self, request: Request, chat_id: int) -> Response:
         membership_service.leave_chat(user=request.user, chat_id=chat_id)

@@ -1,5 +1,8 @@
 import logging
+
 from django.db.models import Count, Q, QuerySet
+from django.utils import timezone
+
 from apps.chat.models.chat import Chat
 
 logger = logging.getLogger(__name__)
@@ -56,8 +59,6 @@ class ChatRepository:
 
     @staticmethod
     def update(chat: Chat, updated_by: int, **fields) -> Chat:
-        from django.utils import timezone
-
         for key, value in fields.items():
             setattr(chat, key, value)
         chat.updated_by = updated_by
