@@ -56,6 +56,20 @@ MOCK_USERS = {
             "GRAPH_ENTITY",
             "GRAPH_PATH",
             "LLM_GRAPH_QUERY_TRANSLATION",
+
+            "LIST_CHATS",
+            "CREATE_CHAT",
+            "GET_CHAT",
+            "UPDATE_CHAT",
+            "DELETE_CHAT",
+
+            "LIST_MESSAGES",
+            "SEND_MESSAGE",
+
+            "LIST_MEMBERS",
+            "ADD_MEMBER",
+            "REMOVE_MEMBER",
+            "UPDATE_MEMBER",
         ]
     },
 }
