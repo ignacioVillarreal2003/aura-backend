@@ -94,19 +94,19 @@ LLM_SERVICE_PERMISSIONS: list[str] = [
     "LLM_GRAPH_QUERY_TRANSLATION",
 ]
 
-"LIST_CHATS",
-            "CREATE_CHAT",
-            "GET_CHAT",
-            "UPDATE_CHAT",
-            "DELETE_CHAT",
-
-            "LIST_MESSAGES",
-            "SEND_MESSAGE",
-
-            "LIST_MEMBERS",
-            "ADD_MEMBER",
-            "REMOVE_MEMBER",
-            "UPDATE_MEMBER",
+CHAT_SERVICE_PERMISSIONS: list[str] = [
+    "LIST_CHATS",
+    "CREATE_CHAT",
+    "GET_CHAT",
+    "UPDATE_CHAT",
+    "DELETE_CHAT",
+    "LIST_MESSAGES",
+    "SEND_MESSAGE",
+    "LIST_MEMBERS",
+    "ADD_MEMBER",
+    "REMOVE_MEMBER",
+    "UPDATE_MEMBER",
+]
 
 MOCK_USERS = {
     "user_token_123": {
@@ -118,6 +118,7 @@ MOCK_USERS = {
             DOCUMENT_PROCESSING_SERVICE_PERMISSIONS,
             DOCUMENT_COLLECTION_SERVICE_PERMISSIONS,
             LLM_SERVICE_PERMISSIONS,
+            CHAT_SERVICE_PERMISSIONS,
         ),
     },
 }
