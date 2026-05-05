@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "Bash(Remove-Item -Recurse -Force \"C:/Users/ignac/Desktop/aura-backend/aura-chat-service/chat\")",
-      "Bash(Remove-Item -Recurse -Force \"C:/Users/ignac/Desktop/aura-backend/aura-chat-service/config\")"
+      "Bash(Remove-Item -Recurse -Force \"C:/Users/ignac/Desktop/aura-backend/aura-chat-service/config\")",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\ignac\\\\Desktop\\\\aura-backend\\\\aura-chat-service\\\\aura_chat_service\" -Recurse -Force)",
+      "Bash(Select-Object FullName, PSIsContainer)",
+      "Bash(Sort-Object FullName)",
+      "Bash(Format-Table -AutoSize)",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\ignac\\\\Desktop\\\\aura-backend\\\\aura-chat-service\\\\aura_chat_service\" -Recurse | ForEach-Object { $_.FullName })",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\ignac\\\\Desktop\\\\aura-backend\\\\aura-chat-service\" -Recurse | ForEach-Object { $_.FullName })"
     ]
   }
 }

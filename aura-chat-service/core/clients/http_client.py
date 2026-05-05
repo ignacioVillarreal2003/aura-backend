@@ -12,7 +12,11 @@ from core.clients.exceptions import (
 
 logger = logging.getLogger(__name__)
 
-_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+# 500 is excluded for non-safe methods: POST/PUT/PATCH are not idempotent and
+# a server error may have already processed the request before responding.
+_RETRYABLE_CODES_SAFE = frozenset({429, 500, 502, 503, 504})
+_RETRYABLE_CODES_UNSAFE = frozenset({429, 502, 503, 504})
 
 
 class AsyncHttpClient:
@@ -39,6 +43,7 @@ class AsyncHttpClient:
         headers: dict | None = None,
     ) -> httpx.Response:
         last_exc: BaseException | None = None
+        retryable_codes = _RETRYABLE_CODES_SAFE if method.upper() in _SAFE_METHODS else _RETRYABLE_CODES_UNSAFE
 
         for attempt in range(self._max_retries):
             try:
@@ -47,7 +52,7 @@ class AsyncHttpClient:
                         method, url, json=json, headers=headers
                     )
 
-                if response.status_code in _RETRYABLE_STATUS_CODES and attempt < self._max_retries - 1:
+                if response.status_code in retryable_codes and attempt < self._max_retries - 1:
                     delay = min(2.0, 0.1 * (2 ** attempt) + random.uniform(0, 0.05))
                     logger.warning(
                         "Retryable HTTP error, will retry.",

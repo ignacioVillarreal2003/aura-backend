@@ -1,5 +1,8 @@
+import hashlib
 import logging
 import secrets
+import threading
+import time
 from typing import Optional
 
 import httpx
@@ -17,6 +20,48 @@ from core.authentication.authentication_exceptions import (
 )
 
 logger = logging.getLogger(__name__)
+
+_TOKEN_CACHE_MAX_SIZE = 2000
+
+_token_cache: dict[str, tuple[AuthenticatedUser, float]] = {}
+_token_cache_lock = threading.Lock()
+
+
+def _token_cache_ttl() -> float:
+    return float(getattr(settings, "TOKEN_CACHE_TTL_SECONDS", 60))
+
+
+def _cache_key(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def _get_cached_user(token: str) -> Optional[AuthenticatedUser]:
+    key = _cache_key(token)
+    with _token_cache_lock:
+        entry = _token_cache.get(key)
+        if entry is None:
+            return None
+        user, expires_at = entry
+        if time.monotonic() >= expires_at:
+            del _token_cache[key]
+            return None
+        return user
+
+
+def _cache_user(token: str, user: AuthenticatedUser) -> None:
+    key = _cache_key(token)
+    expires_at = time.monotonic() + _token_cache_ttl()
+    with _token_cache_lock:
+        if len(_token_cache) >= _TOKEN_CACHE_MAX_SIZE:
+            now = time.monotonic()
+            expired = [k for k, (_, exp) in _token_cache.items() if exp <= now]
+            for k in expired:
+                del _token_cache[k]
+            if len(_token_cache) >= _TOKEN_CACHE_MAX_SIZE:
+                oldest = min(_token_cache, key=lambda k: _token_cache[k][1])
+                del _token_cache[oldest]
+        _token_cache[key] = (user, expires_at)
+
 
 _HEADER_SERVICE_API_KEY = "X-Service-Api-Key"
 _HEADER_USER_ID = "X-User-Id"
@@ -113,6 +158,11 @@ class AuthenticationProvider:
         )
 
     def validate_token(self, token: str) -> AuthenticatedUser:
+        cached = _get_cached_user(token)
+        if cached is not None:
+            logger.debug("Token resolved from cache.", extra={"user_id": cached.id})
+            return cached
+
         logger.debug("Validating bearer token with the authentication service.")
         auth_header = _format_bearer_token(token)
 
@@ -167,12 +217,14 @@ class AuthenticationProvider:
                 "Invalid authentication response format"
             ) from e
 
-        return AuthenticatedUser(
+        user = AuthenticatedUser(
             id=user_id,
             email=str(data.get("email", "")),
             roles=list(data.get("roles") or []),
             permissions=list(data.get("permissions") or []),
         )
+        _cache_user(token, user)
+        return user
 
 
 def _format_bearer_token(token: str) -> str:

@@ -52,9 +52,10 @@ class ChatService:
         AccessControl.require_permissions(user, frozenset({LIST_CHATS}))
         return chat_repository.get_chats_created_by(user_id=user.id)
 
+    @transaction.atomic
     def update_chat(self, user: AuthenticatedUser, chat_id: int, **fields) -> Chat:
         AccessControl.require_permissions(user, frozenset({UPDATE_CHAT}))
-        chat = chat_repository.get_by_id(chat_id)
+        chat = chat_repository.get_by_id_for_update(chat_id)
         if chat is None:
             raise ChatNotFoundException()
 
@@ -71,7 +72,7 @@ class ChatService:
     @transaction.atomic
     def delete_chat(self, user: AuthenticatedUser, chat_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({DELETE_CHAT}))
-        chat = chat_repository.get_by_id(chat_id)
+        chat = chat_repository.get_by_id_for_update(chat_id)
         if chat is None:
             raise ChatNotFoundException()
 

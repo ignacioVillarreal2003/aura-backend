@@ -33,6 +33,15 @@ class MemberListView(APIView):
     )
     def get(self, request: Request, chat_id: int) -> Response:
         raw_status = request.query_params.get("status", "active")
+        if raw_status not in _STATUS_CHOICES:
+            return Response(
+                {
+                    "error": "bad_request",
+                    "detail": f"Invalid status '{raw_status}'. Allowed: {', '.join(_STATUS_CHOICES)}.",
+                    "status_code": 400,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         status_filter = None if raw_status == "all" else raw_status
         members = membership_service.list_members(
             user=request.user,

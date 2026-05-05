@@ -89,7 +89,7 @@ class LLMClient:
 
         timeout = httpx.Timeout(
             connect=settings.LLM_STREAM_CONNECT_TIMEOUT,
-            read=None,
+            read=settings.LLM_STREAM_READ_TIMEOUT,
             write=30.0,
             pool=10.0,
         )

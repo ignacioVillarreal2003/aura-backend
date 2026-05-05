@@ -76,6 +76,7 @@ DATABASES = {
         "OPTIONS": {
             "connect_timeout": 5,
         },
+        "CONN_MAX_AGE": config("DB_CONN_MAX_AGE", default=60, cast=int),
     }
 }
 
@@ -229,6 +230,9 @@ LLM_SERVICE_TIMEOUT = config("LLM_SERVICE_TIMEOUT", default=120, cast=int)
 # Connect timeout for the streaming client; read timeout is unset (long generations).
 LLM_STREAM_CONNECT_TIMEOUT = config(
     "LLM_STREAM_CONNECT_TIMEOUT", default=10.0, cast=float
+)
+LLM_STREAM_READ_TIMEOUT = config(
+    "LLM_STREAM_READ_TIMEOUT", default=180.0, cast=float
 )
 LLM_CONTEXT_MESSAGE_LIMIT = config("LLM_CONTEXT_MESSAGE_LIMIT", default=20, cast=int)
 

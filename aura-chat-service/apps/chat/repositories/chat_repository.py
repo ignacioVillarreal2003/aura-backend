@@ -21,6 +21,13 @@ class ChatRepository:
             return None
 
     @staticmethod
+    def get_by_id_for_update(chat_id: int) -> Chat | None:
+        try:
+            return Chat.objects.select_for_update().get(pk=chat_id)
+        except Chat.DoesNotExist:
+            return None
+
+    @staticmethod
     def get_chats_for_member(member_id: int) -> QuerySet[Chat]:
         return (
             Chat.objects
@@ -67,6 +74,15 @@ class ChatRepository:
         update_fields = list(fields.keys()) + ["updated_by", "updated_at"]
         chat.save(update_fields=update_fields)
         return chat
+
+    @staticmethod
+    def touch_last_message_at(chat_id: int, updated_by: int) -> None:
+        now = timezone.now()
+        Chat.objects.filter(pk=chat_id).update(
+            last_message_at=now,
+            updated_by=updated_by,
+            updated_at=now,
+        )
 
     @staticmethod
     def soft_delete(chat: Chat, deleted_by: int) -> None:

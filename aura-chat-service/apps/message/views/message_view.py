@@ -1,6 +1,6 @@
 import logging
 
-from asgiref.sync import async_to_sync
+from asgiref.sync import sync_to_async
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.request import Request
@@ -58,33 +58,35 @@ class MessageListView(APIView):
             **standard_error_responses(400, 401, 403, 404, 409, 502, 503),
         },
     )
-    def post(self, request: Request, chat_id: int) -> Response:
+    async def post(self, request: Request, chat_id: int) -> Response:
         serializer = SendMessageRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         transcript = None
         if "audio" in serializer.validated_data:
-            transcript = message_service.transcribe_audio(serializer.validated_data["audio"])
+            transcript = await sync_to_async(message_service.transcribe_audio)(
+                serializer.validated_data["audio"]
+            )
             text = transcript
         else:
             text = serializer.validated_data["message"]
 
-        if not try_acquire(chat_id):
+        if not await sync_to_async(try_acquire)(chat_id):
             raise ChatAiReplyInProgressException()
 
-        broadcast_chat_ai_lock_change(chat_id, True)
+        await sync_to_async(broadcast_chat_ai_lock_change)(chat_id, True)
         assistant = None
         assistant_error = None
         msg = None
         try:
-            msg = message_service.send_message(
+            msg = await sync_to_async(message_service.send_message)(
                 user=request.user,
                 chat_id=chat_id,
                 text=text,
             )
 
             try:
-                turn = async_to_sync(message_service.run_document_question)(
+                turn = await message_service.run_document_question(
                     request.user, chat_id
                 )
                 assistant = {
@@ -101,8 +103,8 @@ class MessageListView(APIView):
                 )
                 assistant_error = {"detail": "AI service encountered an unexpected error."}
         finally:
-            release(chat_id)
-            broadcast_chat_ai_lock_change(chat_id, False)
+            await sync_to_async(release)(chat_id)
+            await sync_to_async(broadcast_chat_ai_lock_change)(chat_id, False)
 
         body = {
             "message": MessageResponse(msg).data,

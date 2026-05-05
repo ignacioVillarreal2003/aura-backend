@@ -34,6 +34,15 @@ class MembershipRepository:
             return None
 
     @staticmethod
+    def get_by_chat_and_member_for_update(chat_id: int, member_id: int) -> ChatMembership | None:
+        try:
+            return ChatMembership.objects.select_for_update().get(
+                chat_id=chat_id, member_id=member_id
+            )
+        except ChatMembership.DoesNotExist:
+            return None
+
+    @staticmethod
     def list_by_chat(chat_id: int, status: str | None = None) -> QuerySet[ChatMembership]:
         qs = ChatMembership.objects.filter(chat_id=chat_id).order_by("created_at")
         if status is not None:

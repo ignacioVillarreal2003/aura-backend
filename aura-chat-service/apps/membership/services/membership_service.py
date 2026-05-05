@@ -3,6 +3,7 @@ import logging
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.db import IntegrityError, transaction
+from django.db.transaction import on_commit
 from django.db.models import QuerySet
 
 from apps.chat.exceptions import ChatNotFoundException
@@ -18,8 +19,15 @@ from apps.membership.repositories.membership_repository import membership_reposi
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization import AccessControl
 from core.authorization.permissions import ADD_MEMBER, LIST_MEMBERS, REMOVE_MEMBER, UPDATE_MEMBER
+from core.exceptions import ValidationException
 
 logger = logging.getLogger(__name__)
+
+_VALID_TRANSITIONS: dict[str, set[str]] = {
+    ChatMembership.Status.PENDING: {ChatMembership.Status.ACTIVE, ChatMembership.Status.INACTIVE},
+    ChatMembership.Status.ACTIVE: {ChatMembership.Status.INACTIVE},
+    ChatMembership.Status.INACTIVE: {ChatMembership.Status.ACTIVE},
+}
 
 
 def _broadcast_member_joined(chat_id: int, member_id: int) -> None:
@@ -97,6 +105,7 @@ class MembershipService:
         )
         return created
 
+    @transaction.atomic
     def update_member(
         self,
         user: AuthenticatedUser,
@@ -118,16 +127,23 @@ class MembershipService:
                 "Only the chat owner or the member themselves can update member status"
             )
 
-        membership = membership_repository.get_by_chat_and_member(chat_id, member_id)
+        membership = membership_repository.get_by_chat_and_member_for_update(chat_id, member_id)
         if membership is None:
             raise MembershipNotFoundException()
+
+        allowed = _VALID_TRANSITIONS.get(membership.status, set())
+        if new_status not in allowed:
+            raise ValidationException(
+                detail=f"Cannot transition membership from '{membership.status}' to '{new_status}'.",
+                error_code="invalid_status_transition",
+            )
 
         membership = membership_repository.update_status(
             membership, new_status=new_status, updated_by=user.id
         )
 
         if new_status == ChatMembership.Status.ACTIVE:
-            _broadcast_member_joined(chat_id, member_id)
+            on_commit(lambda: _broadcast_member_joined(chat_id, member_id))
 
         logger.info(
             "Membership updated.",
@@ -140,6 +156,7 @@ class MembershipService:
         )
         return membership
 
+    @transaction.atomic
     def remove_member(
         self,
         user: AuthenticatedUser,
@@ -162,12 +179,12 @@ class MembershipService:
                 "Only the chat owner or the member themselves can remove a member"
             )
 
-        membership = membership_repository.get_by_chat_and_member(chat_id, member_id)
+        membership = membership_repository.get_by_chat_and_member_for_update(chat_id, member_id)
         if membership is None:
             raise MembershipNotFoundException()
 
         membership_repository.soft_delete(membership, deleted_by=user.id)
-        _broadcast_member_left(chat_id, member_id)
+        on_commit(lambda: _broadcast_member_left(chat_id, member_id))
         logger.info(
             "Member removed from chat.",
             extra={
@@ -177,6 +194,7 @@ class MembershipService:
             },
         )
 
+    @transaction.atomic
     def leave_chat(self, user: AuthenticatedUser, chat_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({REMOVE_MEMBER}))
         chat = chat_repository.get_by_id(chat_id)
@@ -188,12 +206,12 @@ class MembershipService:
                 "The owner cannot leave the chat. Delete it instead."
             )
 
-        membership = membership_repository.get_by_chat_and_member(chat_id, user.id)
+        membership = membership_repository.get_by_chat_and_member_for_update(chat_id, user.id)
         if membership is None:
             raise MembershipNotFoundException()
 
         membership_repository.soft_delete(membership, deleted_by=user.id)
-        _broadcast_member_left(chat_id, user.id)
+        on_commit(lambda: _broadcast_member_left(chat_id, user.id))
         logger.info(
             "User left chat.",
             extra={"chat_id": chat_id, "user_id": user.id},

@@ -79,11 +79,7 @@ class MessageService:
                 sender_type=ChatMessage.SenderType.USER,
                 created_by=user.id,
             )
-            chat = chat_repository.get_by_id(chat_id)
-            if chat:
-                chat_repository.update(
-                    chat, updated_by=user.id, last_message_at=timezone.now()
-                )
+            chat_repository.touch_last_message_at(chat_id, updated_by=user.id)
 
         logger.info(
             "User message saved.",
@@ -100,11 +96,7 @@ class MessageService:
                 sender_type=ChatMessage.SenderType.SYSTEM,
                 created_by=user_id,
             )
-            chat = chat_repository.get_by_id(chat_id)
-            if chat:
-                chat_repository.update(
-                    chat, updated_by=user_id, last_message_at=timezone.now()
-                )
+            chat_repository.touch_last_message_at(chat_id, updated_by=user_id)
         return msg
 
     def get_messages(self, user: AuthenticatedUser, chat_id: int):
@@ -147,9 +139,7 @@ class MessageService:
                     "chat_id": chat_id,
                     "user_id": user.id,
                     "status_code": e.status_code,
-                    "llm_url": getattr(
-                        settings, "LLM_DOCUMENT_QUESTION_URL", ""
-                    ),
+                    "llm_url": getattr(settings, "LLM_DOCUMENT_QUESTION_URL", ""),
                 },
                 exc_info=True,
             )
@@ -262,7 +252,6 @@ class MessageService:
         chat = chat_repository.get_by_id(chat_id)
         if chat is None:
             raise ChatNotFoundException()
-
         if not membership_repository.is_active_member(chat_id, user_id):
             raise MessageAccessDeniedException()
 
