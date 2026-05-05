@@ -1,6 +1,8 @@
 import logging
 
-from django.db import IntegrityError
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+from django.db import IntegrityError, transaction
 from django.db.models import QuerySet
 
 from apps.chat.exceptions import ChatNotFoundException
@@ -20,12 +22,38 @@ from core.authorization.permissions import ADD_MEMBER, LIST_MEMBERS, REMOVE_MEMB
 logger = logging.getLogger(__name__)
 
 
+def _broadcast_member_joined(chat_id: int, member_id: int) -> None:
+    channel_layer = get_channel_layer()
+    if channel_layer is None:
+        return
+    async_to_sync(channel_layer.group_send)(
+        f"chat_{chat_id}",
+        {"type": "member_joined", "member_id": member_id},
+    )
+
+
+def _broadcast_member_left(chat_id: int, member_id: int) -> None:
+    channel_layer = get_channel_layer()
+    if channel_layer is None:
+        return
+    async_to_sync(channel_layer.group_send)(
+        f"chat_{chat_id}",
+        {"type": "member_left", "member_id": member_id},
+    )
+
+
 class MembershipService:
-    def list_members(self, user: AuthenticatedUser, chat_id: int) -> QuerySet[ChatMembership]:
+    def list_members(
+        self,
+        user: AuthenticatedUser,
+        chat_id: int,
+        status: str | None = "active",
+    ) -> QuerySet[ChatMembership]:
         AccessControl.require_permissions(user, frozenset({LIST_MEMBERS}))
         self._require_active_member(chat_id, user.id)
-        return membership_repository.list_by_chat(chat_id)
+        return membership_repository.list_by_chat(chat_id, status=status)
 
+    @transaction.atomic
     def add_members(
         self,
         user: AuthenticatedUser,
@@ -37,10 +65,15 @@ class MembershipService:
         if chat is None:
             raise ChatNotFoundException()
 
-        self._require_active_member(chat_id, user.id)
+        if chat.created_by != user.id:
+            raise MembershipForbiddenException("Only the chat owner can add members")
 
         created = []
         for member_id in member_ids:
+            if membership_repository.is_active_member(chat_id, member_id):
+                raise MembershipAlreadyExistsException(
+                    f"User {member_id} is already a member of chat {chat_id}"
+                )
             try:
                 membership = membership_repository.create(
                     member_id=member_id,
@@ -72,7 +105,18 @@ class MembershipService:
         new_status: str,
     ) -> ChatMembership:
         AccessControl.require_permissions(user, frozenset({UPDATE_MEMBER}))
-        self._require_active_member(chat_id, user.id)
+
+        chat = chat_repository.get_by_id(chat_id)
+        if chat is None:
+            raise ChatNotFoundException()
+
+        is_self = user.id == member_id
+        is_owner = chat.created_by == user.id
+
+        if not is_self and not is_owner:
+            raise MembershipForbiddenException(
+                "Only the chat owner or the member themselves can update member status"
+            )
 
         membership = membership_repository.get_by_chat_and_member(chat_id, member_id)
         if membership is None:
@@ -81,12 +125,17 @@ class MembershipService:
         membership = membership_repository.update_status(
             membership, new_status=new_status, updated_by=user.id
         )
+
+        if new_status == ChatMembership.Status.ACTIVE:
+            _broadcast_member_joined(chat_id, member_id)
+
         logger.info(
             "Membership updated.",
             extra={
                 "chat_id": chat_id,
                 "member_id": member_id,
                 "new_status": new_status,
+                "updated_by": user.id,
             },
         )
         return membership
@@ -118,6 +167,7 @@ class MembershipService:
             raise MembershipNotFoundException()
 
         membership_repository.soft_delete(membership, deleted_by=user.id)
+        _broadcast_member_left(chat_id, member_id)
         logger.info(
             "Member removed from chat.",
             extra={
@@ -143,6 +193,7 @@ class MembershipService:
             raise MembershipNotFoundException()
 
         membership_repository.soft_delete(membership, deleted_by=user.id)
+        _broadcast_member_left(chat_id, user.id)
         logger.info(
             "User left chat.",
             extra={"chat_id": chat_id, "user_id": user.id},

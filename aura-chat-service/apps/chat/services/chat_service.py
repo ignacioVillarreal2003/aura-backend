@@ -6,6 +6,7 @@ from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundExceptio
 from apps.chat.models.chat import Chat
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.membership.repositories.membership_repository import membership_repository
+from apps.message.repositories.message_repository import message_repository
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization import AccessControl
 from core.authorization.permissions import CREATE_CHAT, GET_CHAT, LIST_CHATS, UPDATE_CHAT, DELETE_CHAT
@@ -17,7 +18,7 @@ class ChatService:
     @transaction.atomic
     def create_chat(self, user: AuthenticatedUser, name: str, **kwargs) -> Chat:
         AccessControl.require_permissions(user, frozenset({CREATE_CHAT}))
-        chat = chat_repository.create(name=name, created_by=user.id)
+        chat = chat_repository.create(name=name, created_by=user.id, **kwargs)
 
         membership_repository.create(
             member_id=user.id,
@@ -67,6 +68,7 @@ class ChatService:
         )
         return chat
 
+    @transaction.atomic
     def delete_chat(self, user: AuthenticatedUser, chat_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({DELETE_CHAT}))
         chat = chat_repository.get_by_id(chat_id)
@@ -76,6 +78,8 @@ class ChatService:
         if chat.created_by != user.id:
             raise ChatAccessDeniedException("Only the chat owner can delete the chat")
 
+        membership_repository.soft_delete_by_chat(chat_id, deleted_by=user.id)
+        message_repository.soft_delete_by_chat(chat_id, deleted_by=user.id)
         chat_repository.soft_delete(chat, deleted_by=user.id)
         logger.info(
             "Chat deleted.",

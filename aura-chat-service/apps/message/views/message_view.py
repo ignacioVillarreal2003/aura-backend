@@ -1,3 +1,5 @@
+import logging
+
 from asgiref.sync import async_to_sync
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
@@ -5,13 +7,23 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.message.exceptions import LLMServiceException, TranscriptionException
+logger = logging.getLogger(__name__)
+
+from apps.message.chat_ai_reply_lock import release, try_acquire
+from apps.message.exceptions import (
+    ChatAiReplyInProgressException,
+    LLMServiceException,
+    TranscriptionException,
+)
 from apps.message.serializers.request import SendMessageRequest
 from apps.message.serializers.response import (
     MessageResponse,
     SendMessagePostResponseSerializer,
 )
-from apps.message.services.message_service import message_service
+from apps.message.services.message_service import (
+    broadcast_chat_ai_lock_change,
+    message_service,
+)
 from core.openapi.common import standard_error_responses
 from core.pagination.pagination import MessageCursorPagination
 
@@ -41,7 +53,10 @@ class MessageListView(APIView):
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
         ],
         request={"multipart/form-data": SendMessageRequest, "application/json": SendMessageRequest},
-        responses={201: SendMessagePostResponseSerializer, **standard_error_responses(400, 401, 403, 404, 502)},
+        responses={
+            201: SendMessagePostResponseSerializer,
+            **standard_error_responses(400, 401, 403, 404, 409, 502, 503),
+        },
     )
     def post(self, request: Request, chat_id: int) -> Response:
         serializer = SendMessageRequest(data=request.data)
@@ -54,25 +69,40 @@ class MessageListView(APIView):
         else:
             text = serializer.validated_data["message"]
 
-        msg = message_service.send_message(
-            user=request.user,
-            chat_id=chat_id,
-            text=text,
-        )
+        if not try_acquire(chat_id):
+            raise ChatAiReplyInProgressException()
 
+        broadcast_chat_ai_lock_change(chat_id, True)
         assistant = None
         assistant_error = None
+        msg = None
         try:
-            turn = async_to_sync(message_service.run_document_question)(
-                request.user, chat_id
+            msg = message_service.send_message(
+                user=request.user,
+                chat_id=chat_id,
+                text=text,
             )
-            assistant = {
-                "question": turn.question,
-                "answer": turn.answer,
-                "fragments": turn.fragments,
-            }
-        except LLMServiceException as e:
-            assistant_error = {"detail": e.detail}
+
+            try:
+                turn = async_to_sync(message_service.run_document_question)(
+                    request.user, chat_id
+                )
+                assistant = {
+                    "question": turn.question,
+                    "answer": turn.answer,
+                    "fragments": turn.fragments,
+                }
+            except LLMServiceException as e:
+                assistant_error = {"detail": e.detail}
+            except Exception:
+                logger.exception(
+                    "Unexpected error running document question.",
+                    extra={"chat_id": chat_id, "user_id": request.user.id},
+                )
+                assistant_error = {"detail": "AI service encountered an unexpected error."}
+        finally:
+            release(chat_id)
+            broadcast_chat_ai_lock_change(chat_id, False)
 
         body = {
             "message": MessageResponse(msg).data,

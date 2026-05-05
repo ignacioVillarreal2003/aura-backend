@@ -33,5 +33,9 @@ class MessageRepository:
             .order_by("-created_at")[:limit]
         )
 
+    @staticmethod
+    def soft_delete_by_chat(chat_id: int, deleted_by: int) -> None:
+        ChatMessage.objects.filter(chat_id=chat_id).delete(deleted_by=deleted_by)
+
 
 message_repository = MessageRepository()

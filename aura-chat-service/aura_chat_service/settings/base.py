@@ -82,14 +82,21 @@ DATABASES = {
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ──────────────────────────────────────────────
-# Channel Layers (Redis)
+# Redis (Channels + distributed chat AI reply lock)
 # ──────────────────────────────────────────────
+
+REDIS_URL = config("REDIS_URL", default="redis://localhost:6379/0")
+CHAT_AI_REPLY_LOCK_TTL_SECONDS = config(
+    "CHAT_AI_REPLY_LOCK_TTL_SECONDS",
+    default=180,
+    cast=int,
+)
 
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [config("REDIS_URL", default="redis://localhost:6379/0")],
+            "hosts": [REDIS_URL],
         },
     },
 }
@@ -223,6 +230,7 @@ LLM_SERVICE_TIMEOUT = config("LLM_SERVICE_TIMEOUT", default=120, cast=int)
 LLM_STREAM_CONNECT_TIMEOUT = config(
     "LLM_STREAM_CONNECT_TIMEOUT", default=10.0, cast=float
 )
+LLM_CONTEXT_MESSAGE_LIMIT = config("LLM_CONTEXT_MESSAGE_LIMIT", default=20, cast=int)
 
 # ──────────────────────────────────────────────
 # Internationalization

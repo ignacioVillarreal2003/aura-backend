@@ -27,12 +27,17 @@ class ChatMembership(AuditModel, SoftDeleteModel):
         constraints = [
             models.UniqueConstraint(
                 fields=["member_id", "chat"],
+                condition=models.Q(deleted_at__isnull=True),
                 name="chat_membership_member_chat_unique",
             ),
         ]
         indexes = [
             models.Index(fields=["chat"], name="idx_chat_membership_chat_id"),
             models.Index(fields=["member_id"], name="idx_chat_membership_member"),
+            models.Index(
+                fields=["chat", "member_id", "status"],
+                name="idx_chat_membership_chat_member_status",
+            ),
         ]
 
     def __str__(self):

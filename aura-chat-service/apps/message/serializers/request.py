@@ -15,17 +15,17 @@ class SendMessageRequest(serializers.Serializer):
         content_type = getattr(file, "content_type", "")
         if content_type not in _SUPPORTED_AUDIO_TYPES:
             raise serializers.ValidationError(
-                f"Formato no soportado '{content_type}'. Usar: mp3, mp4, wav, webm, ogg, flac."
+                f"Unsupported format '{content_type}'. Allowed: mp3, mp4, wav, webm, ogg, flac."
             )
         if file.size > _MAX_AUDIO_MB * 1024 * 1024:
-            raise serializers.ValidationError(f"El audio no puede superar {_MAX_AUDIO_MB} MB.")
+            raise serializers.ValidationError(f"Audio file cannot exceed {_MAX_AUDIO_MB} MB.")
         return file
 
     def validate(self, attrs):
         has_text = bool(attrs.get("message"))
         has_audio = bool(attrs.get("audio"))
         if not has_text and not has_audio:
-            raise serializers.ValidationError("Enviá 'message' (texto) o 'audio' (archivo).")
+            raise serializers.ValidationError("Provide either 'message' (text) or 'audio' (file).")
         if has_text and has_audio:
-            raise serializers.ValidationError("Enviá solo uno: 'message' o 'audio'.")
+            raise serializers.ValidationError("Provide only one: 'message' or 'audio'.")
         return attrs

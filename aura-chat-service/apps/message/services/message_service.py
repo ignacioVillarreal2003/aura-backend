@@ -2,8 +2,11 @@ import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any
-from asgiref.sync import sync_to_async
+
+from asgiref.sync import async_to_sync, sync_to_async
+from channels.layers import get_channel_layer
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 
 from apps.chat.exceptions import ChatNotFoundException
@@ -12,6 +15,7 @@ from apps.membership.repositories.membership_repository import membership_reposi
 from apps.message.exceptions import LLMServiceException, MessageAccessDeniedException, TranscriptionException
 from apps.message.models.chat_message import ChatMessage
 from apps.message.repositories.message_repository import message_repository
+from apps.message.serializers.response import MessageResponse
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization import AccessControl
 from core.authorization.permissions import LIST_MESSAGES, SEND_MESSAGE
@@ -20,6 +24,28 @@ from core.clients.llm_client import DocumentQuestionResult, llm_client
 from core.clients.transcription_client import transcription_client
 
 logger = logging.getLogger(__name__)
+
+
+def _broadcast_user_message_to_chat_group(chat_id: int, msg: ChatMessage) -> None:
+    channel_layer = get_channel_layer()
+    if channel_layer is None:
+        return
+    payload = MessageResponse(msg).data
+    async_to_sync(channel_layer.group_send)(
+        f"chat_{chat_id}",
+        {"type": "user_message", **payload},
+    )
+
+
+def broadcast_chat_ai_lock_change(chat_id: int, locked: bool) -> None:
+    """Tell all subscribers whether new user messages are accepted (AI turn in progress)."""
+    channel_layer = get_channel_layer()
+    if channel_layer is None:
+        return
+    async_to_sync(channel_layer.group_send)(
+        f"chat_{chat_id}",
+        {"type": "chat_ai_lock_changed", "locked": locked},
+    )
 
 
 @dataclass
@@ -46,23 +72,39 @@ class MessageService:
         AccessControl.require_permissions(user, frozenset({SEND_MESSAGE}))
         self._require_access(chat_id, user.id)
 
-        msg = message_repository.create(
-            chat_id=chat_id,
-            message=text,
-            sender_type=ChatMessage.SenderType.USER,
-            created_by=user.id,
-        )
-
-        chat = chat_repository.get_by_id(chat_id)
-        if chat:
-            chat_repository.update(
-                chat, updated_by=user.id, last_message_at=timezone.now()
+        with transaction.atomic():
+            msg = message_repository.create(
+                chat_id=chat_id,
+                message=text,
+                sender_type=ChatMessage.SenderType.USER,
+                created_by=user.id,
             )
+            chat = chat_repository.get_by_id(chat_id)
+            if chat:
+                chat_repository.update(
+                    chat, updated_by=user.id, last_message_at=timezone.now()
+                )
 
         logger.info(
             "User message saved.",
             extra={"chat_id": chat_id, "message_id": msg.id, "user_id": user.id},
         )
+        _broadcast_user_message_to_chat_group(chat_id, msg)
+        return msg
+
+    def _save_ai_message(self, chat_id: int, user_id: int, answer: str) -> ChatMessage:
+        with transaction.atomic():
+            msg = message_repository.create(
+                chat_id=chat_id,
+                message=answer,
+                sender_type=ChatMessage.SenderType.SYSTEM,
+                created_by=user_id,
+            )
+            chat = chat_repository.get_by_id(chat_id)
+            if chat:
+                chat_repository.update(
+                    chat, updated_by=user_id, last_message_at=timezone.now()
+                )
         return msg
 
     def get_messages(self, user: AuthenticatedUser, chat_id: int):
@@ -72,8 +114,9 @@ class MessageService:
 
     @staticmethod
     async def _build_llm_messages(chat_id: int) -> list[dict[str, str]]:
+        limit = getattr(settings, "LLM_CONTEXT_MESSAGE_LIMIT", 20)
         recent = await sync_to_async(message_repository.get_recent_messages)(
-            chat_id, limit=20
+            chat_id, limit=limit
         )
         messages: list[dict[str, str]] = []
         for m in reversed(recent):
@@ -114,17 +157,9 @@ class MessageService:
 
         assistant_msg: ChatMessage | None = None
         if llm_out.answer.strip():
-            assistant_msg = await sync_to_async(message_repository.create)(
-                chat_id=chat_id,
-                message=llm_out.answer,
-                sender_type=ChatMessage.SenderType.SYSTEM,
-                created_by=user.id,
+            assistant_msg = await sync_to_async(self._save_ai_message)(
+                chat_id, user.id, llm_out.answer
             )
-            chat = await sync_to_async(chat_repository.get_by_id)(chat_id)
-            if chat:
-                await sync_to_async(chat_repository.update)(
-                    chat, updated_by=user.id, last_message_at=timezone.now()
-                )
             logger.info(
                 "AI response saved.",
                 extra={"chat_id": chat_id, "message_id": assistant_msg.id},
@@ -176,23 +211,9 @@ class MessageService:
 
                     assistant_msg: ChatMessage | None = None
                     if answer:
-                        assistant_msg = await sync_to_async(
-                            message_repository.create
-                        )(
-                            chat_id=chat_id,
-                            message=answer,
-                            sender_type=ChatMessage.SenderType.SYSTEM,
-                            created_by=user.id,
+                        assistant_msg = await sync_to_async(self._save_ai_message)(
+                            chat_id, user.id, answer
                         )
-                        chat = await sync_to_async(chat_repository.get_by_id)(
-                            chat_id
-                        )
-                        if chat:
-                            await sync_to_async(chat_repository.update)(
-                                chat,
-                                updated_by=user.id,
-                                last_message_at=timezone.now(),
-                            )
                         logger.info(
                             "AI response saved (stream).",
                             extra={

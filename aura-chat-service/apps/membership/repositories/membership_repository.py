@@ -34,8 +34,11 @@ class MembershipRepository:
             return None
 
     @staticmethod
-    def list_by_chat(chat_id: int) -> QuerySet[ChatMembership]:
-        return ChatMembership.objects.filter(chat_id=chat_id).order_by("created_at")
+    def list_by_chat(chat_id: int, status: str | None = None) -> QuerySet[ChatMembership]:
+        qs = ChatMembership.objects.filter(chat_id=chat_id).order_by("created_at")
+        if status is not None:
+            qs = qs.filter(status=status)
+        return qs
 
     @staticmethod
     def is_active_member(chat_id: int, member_id: int) -> bool:
@@ -84,6 +87,15 @@ class MembershipRepository:
             ChatMembership.objects
             .filter(chat_id=chat_id, status="active")
             .values_list("member_id", flat=True)
+        )
+
+    @staticmethod
+    def soft_delete_by_chat(chat_id: int, deleted_by: int) -> None:
+        now = timezone.now()
+        ChatMembership.objects.filter(chat_id=chat_id).update(
+            left_at=now,
+            deleted_at=now,
+            deleted_by=deleted_by,
         )
 
 
