@@ -12,7 +12,7 @@ from django.utils import timezone
 from apps.chat.exceptions import ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.membership.repositories.membership_repository import membership_repository
-from apps.message.exceptions import LLMServiceException, MessageAccessDeniedException, TranscriptionException
+from apps.message.exceptions import ChatLockedException, LLMServiceException, MessageAccessDeniedException, MessageDeleteForbiddenException, MessageNotFoundException, NoMessageToRegenerateException, NotChatCreatorException, ReaderCannotSendMessageException, TranscriptionException
 from apps.message.models.chat_message import ChatMessage
 from apps.message.repositories.message_repository import message_repository
 from apps.message.serializers.response import MessageResponse
@@ -71,6 +71,11 @@ class MessageService:
     ) -> ChatMessage:
         AccessControl.require_permissions(user, frozenset({SEND_MESSAGE}))
         self._require_access(chat_id, user.id)
+        if membership_repository.get_role(chat_id, user.id) == "reader":
+            raise ReaderCannotSendMessageException()
+        chat = chat_repository.get_by_id(chat_id)
+        if chat is not None and chat.is_locked:
+            raise ChatLockedException()
 
         with transaction.atomic():
             msg = message_repository.create(
@@ -86,6 +91,13 @@ class MessageService:
             extra={"chat_id": chat_id, "message_id": msg.id, "user_id": user.id},
         )
         _broadcast_user_message_to_chat_group(chat_id, msg)
+        from apps.chat.services.webhook_service import webhook_service
+        webhook_service.fire_event(chat_id, "message.created", {
+            "message_id": msg.id,
+            "sender_type": msg.sender_type,
+            "created_by": msg.created_by,
+            "created_at": msg.created_at,
+        })
         return msg
 
     def _save_ai_message(self, chat_id: int, user_id: int, answer: str) -> ChatMessage:
@@ -102,7 +114,27 @@ class MessageService:
     def get_messages(self, user: AuthenticatedUser, chat_id: int):
         AccessControl.require_permissions(user, frozenset({LIST_MESSAGES}))
         self._require_access(chat_id, user.id)
-        return message_repository.get_messages_by_chat(chat_id)
+        return message_repository.get_messages_by_chat(chat_id, user_id=user.id)
+
+    def clear_history(self, user: AuthenticatedUser, chat_id: int) -> None:
+        AccessControl.require_permissions(user, frozenset({SEND_MESSAGE}))
+        self._require_access(chat_id, user.id)
+        chat = chat_repository.get_by_id(chat_id)
+        if chat is None:
+            raise ChatNotFoundException()
+        if chat.created_by != user.id:
+            raise NotChatCreatorException()
+        message_repository.soft_delete_by_chat(chat_id, deleted_by=user.id)
+        logger.info("Chat history cleared.", extra={"chat_id": chat_id, "user_id": user.id})
+
+    def delete_last_ai_message(self, user: AuthenticatedUser, chat_id: int) -> None:
+        AccessControl.require_permissions(user, frozenset({SEND_MESSAGE}))
+        self._require_access(chat_id, user.id)
+        last_ai = message_repository.get_last_ai_message(chat_id)
+        if last_ai is None:
+            raise NoMessageToRegenerateException()
+        last_ai.delete(deleted_by=user.id)
+        logger.info("Last AI message deleted for regeneration.", extra={"chat_id": chat_id, "message_id": last_ai.id})
 
     @staticmethod
     async def _build_llm_messages(chat_id: int) -> list[dict[str, str]]:
@@ -247,6 +279,62 @@ class MessageService:
                 exc_info=True,
             )
             raise LLMServiceException() from e
+
+    def delete_message(self, user: AuthenticatedUser, chat_id: int, message_id: int) -> None:
+        AccessControl.require_permissions(user, frozenset({SEND_MESSAGE}))
+        self._require_access(chat_id, user.id)
+        msg = message_repository.get_by_id_and_chat(message_id, chat_id)
+        if msg is None:
+            raise MessageNotFoundException()
+        chat = chat_repository.get_by_id(chat_id)
+        is_author = msg.created_by == user.id
+        is_owner = chat is not None and chat.created_by == user.id
+        if not is_author and not is_owner:
+            raise MessageDeleteForbiddenException()
+        msg.delete(deleted_by=user.id)
+        logger.info("Message deleted.", extra={"chat_id": chat_id, "message_id": message_id, "user_id": user.id})
+
+    def send_ephemeral_message(
+        self,
+        user: AuthenticatedUser,
+        chat_id: int,
+        text: str,
+    ) -> ChatMessage:
+        AccessControl.require_permissions(user, frozenset({SEND_MESSAGE}))
+        self._require_access(chat_id, user.id)
+        if membership_repository.get_role(chat_id, user.id) == "reader":
+            raise ReaderCannotSendMessageException()
+        return ChatMessage(
+            chat_id=chat_id,
+            message=text,
+            sender_type=ChatMessage.SenderType.USER,
+            created_by=user.id,
+        )
+
+    async def run_ephemeral_document_question(
+        self,
+        user: AuthenticatedUser,
+        chat_id: int,
+        user_message: str,
+    ) -> DocumentQuestionRunResult:
+        await sync_to_async(self._require_access)(chat_id, user.id)
+        messages = [{"role": "human", "content": user_message}]
+        try:
+            llm_out: DocumentQuestionResult = await llm_client.document_question(messages, user)
+        except HttpClientException as e:
+            logger.error(
+                "LLM ephemeral document-question failed: %s",
+                str(e),
+                extra={"chat_id": chat_id, "user_id": user.id},
+                exc_info=True,
+            )
+            raise LLMServiceException() from e
+        return DocumentQuestionRunResult(
+            question=llm_out.question,
+            answer=llm_out.answer,
+            fragments=llm_out.fragments,
+            assistant_message=None,
+        )
 
     def _require_access(self, chat_id: int, user_id: int) -> None:
         chat = chat_repository.get_by_id(chat_id)

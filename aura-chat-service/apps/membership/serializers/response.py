@@ -11,6 +11,7 @@ class MembershipResponse(serializers.ModelSerializer):
             "member_id",
             "chat_id",
             "status",
+            "role",
             "joined_at",
             "left_at",
             "created_by",

@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 
 logger = logging.getLogger(__name__)
 
+from apps.chat.repositories.chat_repository import chat_repository
 from apps.message.chat_ai_reply_lock import release, try_acquire
 from apps.message.exceptions import (
     ChatAiReplyInProgressException,
@@ -71,6 +72,9 @@ class MessageListView(APIView):
         else:
             text = serializer.validated_data["message"]
 
+        chat_obj = await sync_to_async(chat_repository.get_by_id)(chat_id)
+        is_ephemeral = chat_obj is not None and chat_obj.is_ephemeral
+
         if not await sync_to_async(try_acquire)(chat_id):
             raise ChatAiReplyInProgressException()
 
@@ -79,29 +83,52 @@ class MessageListView(APIView):
         assistant_error = None
         msg = None
         try:
-            msg = await sync_to_async(message_service.send_message)(
-                user=request.user,
-                chat_id=chat_id,
-                text=text,
-            )
-
-            try:
-                turn = await message_service.run_document_question(
-                    request.user, chat_id
+            if is_ephemeral:
+                msg = await sync_to_async(message_service.send_ephemeral_message)(
+                    user=request.user,
+                    chat_id=chat_id,
+                    text=text,
                 )
-                assistant = {
-                    "question": turn.question,
-                    "answer": turn.answer,
-                    "fragments": turn.fragments,
-                }
-            except LLMServiceException as e:
-                assistant_error = {"detail": e.detail}
-            except Exception:
-                logger.exception(
-                    "Unexpected error running document question.",
-                    extra={"chat_id": chat_id, "user_id": request.user.id},
+                try:
+                    turn = await message_service.run_ephemeral_document_question(
+                        request.user, chat_id, text
+                    )
+                    assistant = {
+                        "question": turn.question,
+                        "answer": turn.answer,
+                        "fragments": turn.fragments,
+                    }
+                except LLMServiceException as e:
+                    assistant_error = {"detail": e.detail}
+                except Exception:
+                    logger.exception(
+                        "Unexpected error running ephemeral document question.",
+                        extra={"chat_id": chat_id, "user_id": request.user.id},
+                    )
+                    assistant_error = {"detail": "AI service encountered an unexpected error."}
+            else:
+                msg = await sync_to_async(message_service.send_message)(
+                    user=request.user,
+                    chat_id=chat_id,
+                    text=text,
                 )
-                assistant_error = {"detail": "AI service encountered an unexpected error."}
+                try:
+                    turn = await message_service.run_document_question(
+                        request.user, chat_id
+                    )
+                    assistant = {
+                        "question": turn.question,
+                        "answer": turn.answer,
+                        "fragments": turn.fragments,
+                    }
+                except LLMServiceException as e:
+                    assistant_error = {"detail": e.detail}
+                except Exception:
+                    logger.exception(
+                        "Unexpected error running document question.",
+                        extra={"chat_id": chat_id, "user_id": request.user.id},
+                    )
+                    assistant_error = {"detail": "AI service encountered an unexpected error."}
         finally:
             await sync_to_async(release)(chat_id)
             await sync_to_async(broadcast_chat_ai_lock_change)(chat_id, False)

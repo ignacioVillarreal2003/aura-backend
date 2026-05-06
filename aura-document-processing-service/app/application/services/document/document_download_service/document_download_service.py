@@ -81,10 +81,11 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
                 )
                 raise DocumentDownloadNotFoundException("The document was not found.")
 
-            if document.status == DocumentStatus.uploaded:
+            status_str = document.status.value if hasattr(document.status, "value") else document.status
+            if status_str == DocumentStatus.uploaded.value:
                 logger.warning(
                     "The document is not ready for download.",
-                    extra={"document_id": document_id, "status": document.status}
+                    extra={"document_id": document_id, "status": status_str}
                 )
                 raise DocumentDownloadNotReadyException(
                     "The document is still being processed and is not yet available for download."
@@ -113,7 +114,12 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
                 }
             )
 
-            return content_stream, document.name, document.mime_type.value
+            mime_str = (
+                document.mime_type.value
+                if hasattr(document.mime_type, "value")
+                else document.mime_type
+            )
+            return content_stream, document.name, mime_str
 
         except (
                 DocumentDownloadInvalidRequestException,

@@ -8,7 +8,13 @@
       "Bash(Sort-Object FullName)",
       "Bash(Format-Table -AutoSize)",
       "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\ignac\\\\Desktop\\\\aura-backend\\\\aura-chat-service\\\\aura_chat_service\" -Recurse | ForEach-Object { $_.FullName })",
-      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\ignac\\\\Desktop\\\\aura-backend\\\\aura-chat-service\" -Recurse | ForEach-Object { $_.FullName })"
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\ignac\\\\Desktop\\\\aura-backend\\\\aura-chat-service\" -Recurse | ForEach-Object { $_.FullName })",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\ignac\\\\Desktop\\\\aura-backend\\\\aura-chat-service\" -Recurse -Directory)",
+      "Bash(Select-Object FullName)",
+      "Bash(Head -50)",
+      "PowerShell(head *)",
+      "Bash(xargs grep -l \"export\\\\|download\")",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\ignac\\\\Desktop\\\\aura-backend\\\\aura-chat-service\\\\apps\" -Recurse -Directory | Select-Object -ExpandProperty FullName | Where-Object { $_ -notmatch '__pycache__' })"
     ]
   }
 }

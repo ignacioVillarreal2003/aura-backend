@@ -208,7 +208,11 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 "Document creation completed and the ingestion message was published.",
                 extra={
                     "document_id": database_document.id,
-                    "status": database_document.status.value,
+                    "status": (
+                        database_document.status.value
+                        if hasattr(database_document.status, "value")
+                        else database_document.status
+                    ),
                     "message_id": envelope.message_id
                 }
             )

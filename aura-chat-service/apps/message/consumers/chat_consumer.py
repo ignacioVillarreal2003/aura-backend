@@ -6,6 +6,7 @@ from collections import deque
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
+from apps.chat.repositories.chat_repository import chat_repository
 from apps.message.chat_ai_reply_lock import is_locked, release, try_acquire
 from apps.message.exceptions import LLMServiceException
 from apps.message.services.message_service import (
@@ -116,6 +117,15 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 pass
 
     async def _handle_chat_message(self, content: dict):
+        chat_obj = await database_sync_to_async(chat_repository.get_by_id)(self.chat_id)
+        if chat_obj is not None and chat_obj.is_locked:
+            await self.send_json({
+                "type": "error",
+                "error_code": "chat_locked",
+                "detail": "This chat is locked and does not accept new messages.",
+            })
+            return
+
         text = content.get("message", "").strip()
         if not text:
             await self.send_json({
@@ -349,6 +359,13 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 "user_id": event["user_id"],
                 "is_typing": event["is_typing"],
             })
+
+    async def chat_locked_changed(self, event):
+        await self.send_json({
+            "type": "chat_locked_changed",
+            "is_locked": event["is_locked"],
+            "by": event.get("by"),
+        })
 
     async def member_joined(self, event):
         await self.send_json({

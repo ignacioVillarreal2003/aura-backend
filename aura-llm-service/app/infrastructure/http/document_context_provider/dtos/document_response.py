@@ -2,7 +2,6 @@ from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.domain.constants.document_type import DocumentType
 from app.domain.field_limits import (
     MAX_CATEGORY_CHARS,
     MAX_DESCRIPTION_CHARS,
@@ -26,7 +25,7 @@ class DocumentResponse(BaseModel):
     status: str = Field(...)
     storage_url: str = Field(..., min_length=1, max_length=_MAX_STORAGE_URL_CHARS)
     file_size_bytes: int = Field(..., ge=_MIN_FILE_SIZE_BYTES)
-    type: Optional[DocumentType] = Field(default=None)
+    type: Optional[str] = Field(default=None, max_length=64)
     category: Optional[str] = Field(default=None, min_length=1, max_length=MAX_CATEGORY_CHARS)
     text_cleaner_type: Optional[str] = Field(default=None, min_length=1, max_length=_MAX_PROCESSOR_TYPE_CHARS)
     text_splitter_type: Optional[str] = Field(default=None, min_length=1, max_length=_MAX_PROCESSOR_TYPE_CHARS)

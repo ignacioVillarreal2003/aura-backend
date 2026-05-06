@@ -13,6 +13,7 @@ from apps.membership.exceptions import (
     MembershipAlreadyExistsException,
     MembershipForbiddenException,
     MembershipNotFoundException,
+    RoleUpdateForbiddenException,
 )
 from apps.membership.models.chat_membership import ChatMembership
 from apps.membership.repositories.membership_repository import membership_repository
@@ -144,6 +145,8 @@ class MembershipService:
 
         if new_status == ChatMembership.Status.ACTIVE:
             on_commit(lambda: _broadcast_member_joined(chat_id, member_id))
+            from apps.chat.services.webhook_service import webhook_service
+            webhook_service.fire_event(chat_id, "member.joined", {"member_id": member_id})
 
         logger.info(
             "Membership updated.",
@@ -185,6 +188,8 @@ class MembershipService:
 
         membership_repository.soft_delete(membership, deleted_by=user.id)
         on_commit(lambda: _broadcast_member_left(chat_id, member_id))
+        from apps.chat.services.webhook_service import webhook_service
+        webhook_service.fire_event(chat_id, "member.left", {"member_id": member_id})
         logger.info(
             "Member removed from chat.",
             extra={
@@ -212,10 +217,36 @@ class MembershipService:
 
         membership_repository.soft_delete(membership, deleted_by=user.id)
         on_commit(lambda: _broadcast_member_left(chat_id, user.id))
+        from apps.chat.services.webhook_service import webhook_service
+        webhook_service.fire_event(chat_id, "member.left", {"member_id": user.id})
         logger.info(
             "User left chat.",
             extra={"chat_id": chat_id, "user_id": user.id},
         )
+
+    def update_member_role(
+        self,
+        user: AuthenticatedUser,
+        chat_id: int,
+        member_id: int,
+        role: str,
+    ) -> ChatMembership:
+        AccessControl.require_permissions(user, frozenset({UPDATE_MEMBER}))
+        chat = chat_repository.get_by_id(chat_id)
+        if chat is None:
+            raise ChatNotFoundException()
+        if chat.created_by != user.id:
+            raise RoleUpdateForbiddenException()
+        if membership_repository.get_by_chat_and_member(chat_id, member_id) is None:
+            raise MembershipNotFoundException()
+        membership = membership_repository.update_role(chat_id, member_id, role)
+        if membership is None:
+            raise MembershipNotFoundException()
+        logger.info(
+            "Member role updated.",
+            extra={"chat_id": chat_id, "member_id": member_id, "role": role, "updated_by": user.id},
+        )
+        return membership
 
     @staticmethod
     def _require_active_member(chat_id: int, user_id: int) -> None:

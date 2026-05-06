@@ -1,17 +1,14 @@
-  -- 1. Reemplazar el unique constraint sin condición por uno condicional
-  --    (permite re-agregar miembros que fueron removidos)
-  ALTER TABLE chat_membership
-      DROP CONSTRAINT chat_membership_member_chat_unique;
+# Aura DB (PostgreSQL)
 
-  CREATE UNIQUE INDEX chat_membership_member_chat_unique
-      ON chat_membership (member_id, chat_id)
-      WHERE deleted_at IS NULL;
+El esquema inicial y los datos de seed están en **`init.sql`** (entrada de Docker `docker-entrypoint-initdb.d`).
 
-  -- 2. Índice compuesto para is_active_member (se ejecuta en cada request y cada WS connect)                                                                                                                                       
-  CREATE INDEX idx_chat_membership_chat_member_status
-      ON chat_membership (chat_id, member_id, status);
+Los valores antes modelados como `ENUM` de PostgreSQL están en columnas **`VARCHAR(64)`**; los conjuntos válidos los define la aplicación/API.
 
-    
-  -- Índice compuesto para cursor pagination en ChatMessage                                                                                                                                                                         
-  CREATE INDEX idx_chat_message_chat_created
-      ON chat_message (chat_id, created_at DESC);
+Incluye, entre otros:
+
+- **chat**: columnas `tags`, `is_ephemeral`, `is_locked`
+- **chat_membership**: `pinned_at`, `archived_at`, `last_read_at`, `role`, `muted_until`; unicidad `(member_id, chat_id)` solo cuando `deleted_at IS NULL`; índice `(chat_id, member_id, status)`
+- **chat_message**: índice `(chat_id, created_at DESC)` para paginación por cursor
+- **Tablas**: `pinned_message`, `message_bookmark`, `message_thread_reply`, `message_feedback`, `chat_share_link`, `chat_webhook`
+
+Para bases ya existentes, migrá con deltas equivalentes a lo definido arriba (ALTER / CREATE INDEX / CREATE TABLE) en el orden correcto según FKs.

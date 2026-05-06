@@ -8,6 +8,11 @@ class ChatMembership(AuditModel, SoftDeleteModel):
         INACTIVE = "inactive", "Inactive"
         PENDING = "pending", "Pending"
 
+    class Role(models.TextChoices):
+        OWNER = "owner", "Owner"
+        EDITOR = "editor", "Editor"
+        READER = "reader", "Reader"
+
     member_id = models.BigIntegerField()
     chat = models.ForeignKey(
         "chat.Chat",
@@ -15,12 +20,16 @@ class ChatMembership(AuditModel, SoftDeleteModel):
         related_name="chatmembership",
     )
     status = models.CharField(
-        max_length=20,
-        choices=Status.choices,
+        max_length=64,
         default=Status.PENDING,
     )
+    role = models.CharField(max_length=64, default=Role.EDITOR)
     joined_at = models.DateTimeField(null=True, blank=True)
     left_at = models.DateTimeField(null=True, blank=True)
+    pinned_at = models.DateTimeField(null=True, blank=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    last_read_at = models.DateTimeField(null=True, blank=True)
+    muted_until = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = "chat_membership"

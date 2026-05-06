@@ -12,4 +12,8 @@ class AddMemberRequest(serializers.Serializer):
 
 
 class UpdateMemberRequest(serializers.Serializer):
-    status = serializers.ChoiceField(choices=ChatMembership.Status.choices)
+    status = serializers.CharField(max_length=64)
+
+
+class UpdateRoleRequest(serializers.Serializer):
+    role = serializers.CharField(max_length=64)

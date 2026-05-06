@@ -13,10 +13,7 @@ class ChatMessage(CreatedAuditModel, SoftDeleteModel):
         related_name="messages",
     )
     message = models.TextField()
-    sender_type = models.CharField(
-        max_length=10,
-        choices=SenderType.choices,
-    )
+    sender_type = models.CharField(max_length=64)
 
     class Meta:
         db_table = "chat_message"

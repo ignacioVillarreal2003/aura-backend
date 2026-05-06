@@ -12,3 +12,5 @@ python-decouple==3.8
 django-prometheus==2.3.1
 python-json-logger==2.0.7
 requests==2.32.3
+markdown==3.7
+xhtml2pdf==0.2.16

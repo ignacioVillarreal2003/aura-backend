@@ -19,3 +19,8 @@ class MembershipForbiddenException(ForbiddenException):
 class CannotRemoveOwnerException(ForbiddenException):
     error_code = "cannot_remove_owner"
     detail = "The chat owner cannot be removed"
+
+
+class RoleUpdateForbiddenException(ForbiddenException):
+    error_code = "role_update_forbidden"
+    detail = "Only the chat owner can update member roles"

@@ -1,5 +1,14 @@
 from rest_framework import serializers
 
+
+class SendThreadReplyRequest(serializers.Serializer):
+    message = serializers.CharField(max_length=5000, allow_blank=False)
+
+
+class SetFeedbackRequest(serializers.Serializer):
+    value = serializers.ChoiceField(choices=[1, -1])
+
+
 _SUPPORTED_AUDIO_TYPES = {
     "audio/mpeg", "audio/mp4", "audio/wav", "audio/webm",
     "audio/ogg", "audio/flac", "audio/x-wav", "audio/x-m4a",

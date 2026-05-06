@@ -2,8 +2,6 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
-from app.domain.constants.document_type import DocumentType
-
 _MAX_ID = 2_147_483_647
 _MAX_NAME_CHARS = 255
 _MAX_DESCRIPTION_CHARS = 2_000
@@ -24,7 +22,7 @@ class FragmentEmbeddedDocument(BaseModel):
     id: int = Field(..., gt=0, le=_MAX_ID)
     name: str = Field(..., min_length=1, max_length=_MAX_NAME_CHARS)
     description: Optional[str] = Field(default=None, min_length=1, max_length=_MAX_DESCRIPTION_CHARS)
-    type: Optional[DocumentType] = Field(default=None)
+    type: Optional[str] = Field(default=None, max_length=64)
     category: Optional[str] = Field(default=None, min_length=1, max_length=_MAX_CATEGORY_CHARS)
 
     @field_validator("name", mode="after")

@@ -16,6 +16,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.postgres",
     "rest_framework",
     "corsheaders",
     "django_filters",
@@ -167,6 +168,7 @@ AUTHENTICATION_EXCLUDED_PATHS = [
     "/api/schema*",
     "/api/docs*",
     "/api/redoc*",
+    "/api/v1/share*",
 ]
 
 SPECTACULAR_SETTINGS = {
