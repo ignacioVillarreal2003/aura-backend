@@ -82,6 +82,7 @@ class NotificationListCreateView(APIView):
         receiver_ids = serializer.validated_data['receiver_ids']
         message = serializer.validated_data['message']
         notification_type = serializer.validated_data['type']
+        sender_name = serializer.validated_data.get('sender_name')
         target_scope = serializer.validated_data.get('target_scope', 'individual')
         target_label = serializer.validated_data.get('target_label')
 
@@ -93,6 +94,7 @@ class NotificationListCreateView(APIView):
                     receiver_id=receiver_id,
                     message=message,
                     type=notification_type,
+                    sender_name=sender_name,
                     target_scope=target_scope,
                     target_label=target_label,
                     status=NotificationStatus.UNREAD,
@@ -226,6 +228,7 @@ class InternalAdminNotificationCreateView(APIView):
         receiver_ids = serializer.validated_data['receiver_ids']
         message = serializer.validated_data['message']
         notification_type = serializer.validated_data['type']
+        sender_name = serializer.validated_data.get('sender_name')
         target_scope = serializer.validated_data.get('target_scope', 'individual')
         target_label = serializer.validated_data.get('target_label')
         actor_user_id = serializer.validated_data.get('actor_user_id')
@@ -235,6 +238,7 @@ class InternalAdminNotificationCreateView(APIView):
                 receiver_id=receiver_id,
                 message=message,
                 type=notification_type,
+                sender_name=sender_name,
                 target_scope=target_scope,
                 target_label=target_label,
                 status=NotificationStatus.UNREAD,

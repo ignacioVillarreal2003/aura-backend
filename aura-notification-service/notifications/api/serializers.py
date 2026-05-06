@@ -12,6 +12,7 @@ class NotificationSerializer(serializers.ModelSerializer):
             'receiver_id',
             'message',
             'type',
+            'sender_name',
             'target_scope',
             'target_label',
             'status',
@@ -32,6 +33,7 @@ class NotificationCreateSerializer(serializers.Serializer):
     )
     message = serializers.CharField(max_length=500)
     type = serializers.ChoiceField(choices=NotificationType.choices)
+    sender_name = serializers.CharField(max_length=255, required=False, allow_blank=True, allow_null=True)
     target_scope = serializers.ChoiceField(
         choices=[('individual', 'Individual'), ('group', 'Grupal'), ('system', 'Sistema')],
         required=False,
