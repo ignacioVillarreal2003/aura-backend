@@ -5,6 +5,7 @@ from django.db.models import QuerySet
 
 from apps.chat.exceptions import ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
+from core.clients.notification_client import notification_client
 from apps.membership.exceptions import (
     CannotRemoveOwnerException,
     MembershipAlreadyExistsException,
@@ -31,6 +32,7 @@ class MembershipService:
         user: AuthenticatedUser,
         chat_id: int,
         member_ids: list[int],
+        access_token: str = "",
     ) -> list[ChatMembership]:
         AccessControl.require_permissions(user, frozenset({ADD_MEMBER}))
         chat = chat_repository.get_by_id(chat_id)
@@ -62,6 +64,16 @@ class MembershipService:
                 "member_ids": member_ids,
             },
         )
+
+        if created and access_token:
+            notification_client.notify_members_added(
+                receiver_ids=[m.member_id for m in created],
+                chat_name=chat.name,
+                sender_id=user.id,
+                sender_name=user.username or user.email,
+                access_token=access_token,
+            )
+
         return created
 
     def update_member(

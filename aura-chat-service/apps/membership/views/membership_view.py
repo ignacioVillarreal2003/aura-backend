@@ -41,10 +41,14 @@ class MemberListView(APIView):
         serializer = AddMemberRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        auth_header = request.headers.get("Authorization", "")
+        access_token = auth_header.split(" ", 1)[1] if auth_header.startswith("Bearer ") else ""
+
         memberships = membership_service.add_members(
             user=request.user,
             chat_id=chat_id,
             member_ids=serializer.validated_data["member_ids"],
+            access_token=access_token,
         )
         return Response(
             MembershipResponse(memberships, many=True).data,

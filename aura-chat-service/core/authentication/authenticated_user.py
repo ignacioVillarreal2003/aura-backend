@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 class AuthenticatedUser:
     id: int
     email: str
+    username: str = ""
     roles: list[str] = field(default_factory=list)
     permissions: list[str] = field(default_factory=list)
 
@@ -18,6 +19,8 @@ class AuthenticatedUser:
 
     def has_all_permissions(self, required: frozenset[str]) -> bool:
         if not required:
+            return True
+        if "*" in self.permissions:
             return True
         return required <= set(self.permissions)
 
