@@ -82,5 +82,37 @@ class ChatService:
             extra={"chat_id": chat_id, "user_id": user.id},
         )
 
+    def archive_chat(self, user: AuthenticatedUser, chat_id: int) -> Chat:
+        AccessControl.require_permissions(user, frozenset({UPDATE_CHAT}))
+        chat = chat_repository.get_by_id(chat_id)
+        if chat is None:
+            raise ChatNotFoundException()
+
+        if chat.created_by != user.id:
+            raise ChatAccessDeniedException("Only the chat owner can archive the chat")
+
+        chat = chat_repository.set_archived(chat, archived=True, updated_by=user.id)
+        logger.info(
+            "Chat archived.",
+            extra={"chat_id": chat_id, "user_id": user.id},
+        )
+        return chat
+
+    def unarchive_chat(self, user: AuthenticatedUser, chat_id: int) -> Chat:
+        AccessControl.require_permissions(user, frozenset({UPDATE_CHAT}))
+        chat = chat_repository.get_by_id(chat_id)
+        if chat is None:
+            raise ChatNotFoundException()
+
+        if chat.created_by != user.id:
+            raise ChatAccessDeniedException("Only the chat owner can unarchive the chat")
+
+        chat = chat_repository.set_archived(chat, archived=False, updated_by=user.id)
+        logger.info(
+            "Chat unarchived.",
+            extra={"chat_id": chat_id, "user_id": user.id},
+        )
+        return chat
+
 
 chat_service = ChatService()

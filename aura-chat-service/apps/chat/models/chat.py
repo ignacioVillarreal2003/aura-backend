@@ -7,6 +7,7 @@ class Chat(AuditModel, SoftDeleteModel):
     system_prompt = models.TextField(null=True, blank=True)
     response_style = models.TextField(null=True, blank=True)
     last_message_at = models.DateTimeField(null=True, blank=True)
+    is_archived = models.BooleanField(default=False)
 
     class Meta:
         db_table = "chat"

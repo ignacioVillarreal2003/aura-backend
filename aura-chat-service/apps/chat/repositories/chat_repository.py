@@ -25,6 +25,7 @@ class ChatRepository:
         return (
             Chat.objects
             .filter(
+                is_archived=False,
                 chatmembership__member_id=member_id,
                 chatmembership__status="active",
                 chatmembership__deleted_at__isnull=True,
@@ -45,7 +46,7 @@ class ChatRepository:
     def get_chats_created_by(user_id: int) -> QuerySet[Chat]:
         return (
             Chat.objects
-            .filter(created_by=user_id)
+            .filter(created_by=user_id, is_archived=False)
             .annotate(
                 member_count=Count(
                     "chatmembership",
@@ -56,6 +57,14 @@ class ChatRepository:
                 )
             )
         )
+
+    @staticmethod
+    def set_archived(chat: Chat, archived: bool, updated_by: int) -> Chat:
+        chat.is_archived = archived
+        chat.updated_by = updated_by
+        chat.updated_at = timezone.now()
+        chat.save(update_fields=["is_archived", "updated_by", "updated_at"])
+        return chat
 
     @staticmethod
     def update(chat: Chat, updated_by: int, **fields) -> Chat:

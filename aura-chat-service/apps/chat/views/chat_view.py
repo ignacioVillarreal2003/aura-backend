@@ -45,6 +45,18 @@ from core.pagination.pagination import StandardPagination
         summary="List chats created by me",
         responses={200: ChatListResponse(many=True), **standard_error_responses(401)},
     ),
+    archive=extend_schema(
+        tags=["Chats"],
+        summary="Archive chat",
+        request=None,
+        responses={200: ChatResponse, **standard_error_responses(401, 403, 404)},
+    ),
+    unarchive=extend_schema(
+        tags=["Chats"],
+        summary="Unarchive chat",
+        request=None,
+        responses={200: ChatResponse, **standard_error_responses(401, 403, 404)},
+    ),
 )
 class ChatViewSet(ViewSet):
     def create(self, request: Request) -> Response:
@@ -95,3 +107,13 @@ class ChatViewSet(ViewSet):
         return paginator.get_paginated_response(
             ChatListResponse(page, many=True).data
         )
+
+    @action(detail=True, methods=["post"], url_path="archive")
+    def archive(self, request: Request, pk=None) -> Response:
+        chat = chat_service.archive_chat(user=request.user, chat_id=int(pk))
+        return Response(ChatResponse(chat).data)
+
+    @action(detail=True, methods=["post"], url_path="unarchive")
+    def unarchive(self, request: Request, pk=None) -> Response:
+        chat = chat_service.unarchive_chat(user=request.user, chat_id=int(pk))
+        return Response(ChatResponse(chat).data)
