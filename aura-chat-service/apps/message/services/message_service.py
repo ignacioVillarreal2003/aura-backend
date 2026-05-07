@@ -2,16 +2,20 @@ import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any
-from asgiref.sync import sync_to_async
+
+from asgiref.sync import async_to_sync, sync_to_async
+from channels.layers import get_channel_layer
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 
 from apps.chat.exceptions import ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.membership.repositories.membership_repository import membership_repository
-from apps.message.exceptions import LLMServiceException, MessageAccessDeniedException, TranscriptionException
+from apps.message.exceptions import ChatLockedException, LLMServiceException, MessageAccessDeniedException, MessageDeleteForbiddenException, MessageNotFoundException, NoMessageToRegenerateException, NotChatCreatorException, ReaderCannotSendMessageException, TranscriptionException
 from apps.message.models.chat_message import ChatMessage
 from apps.message.repositories.message_repository import message_repository
+from apps.message.serializers.response import MessageResponse
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization import AccessControl
 from core.authorization.permissions import LIST_MESSAGES, SEND_MESSAGE
@@ -20,6 +24,28 @@ from core.clients.llm_client import DocumentQuestionResult, llm_client
 from core.clients.transcription_client import transcription_client
 
 logger = logging.getLogger(__name__)
+
+
+def _broadcast_user_message_to_chat_group(chat_id: int, msg: ChatMessage) -> None:
+    channel_layer = get_channel_layer()
+    if channel_layer is None:
+        return
+    payload = MessageResponse(msg).data
+    async_to_sync(channel_layer.group_send)(
+        f"chat_{chat_id}",
+        {"type": "user_message", **payload},
+    )
+
+
+def broadcast_chat_ai_lock_change(chat_id: int, locked: bool) -> None:
+    """Tell all subscribers whether new user messages are accepted (AI turn in progress)."""
+    channel_layer = get_channel_layer()
+    if channel_layer is None:
+        return
+    async_to_sync(channel_layer.group_send)(
+        f"chat_{chat_id}",
+        {"type": "chat_ai_lock_changed", "locked": locked},
+    )
 
 
 @dataclass
@@ -45,35 +71,76 @@ class MessageService:
     ) -> ChatMessage:
         AccessControl.require_permissions(user, frozenset({SEND_MESSAGE}))
         self._require_access(chat_id, user.id)
-
-        msg = message_repository.create(
-            chat_id=chat_id,
-            message=text,
-            sender_type=ChatMessage.SenderType.USER,
-            created_by=user.id,
-        )
-
+        if membership_repository.get_role(chat_id, user.id) == "reader":
+            raise ReaderCannotSendMessageException()
         chat = chat_repository.get_by_id(chat_id)
-        if chat:
-            chat_repository.update(
-                chat, updated_by=user.id, last_message_at=timezone.now()
+        if chat is not None and chat.is_locked:
+            raise ChatLockedException()
+
+        with transaction.atomic():
+            msg = message_repository.create(
+                chat_id=chat_id,
+                message=text,
+                sender_type=ChatMessage.SenderType.USER,
+                created_by=user.id,
             )
+            chat_repository.touch_last_message_at(chat_id, updated_by=user.id)
 
         logger.info(
             "User message saved.",
             extra={"chat_id": chat_id, "message_id": msg.id, "user_id": user.id},
         )
+        _broadcast_user_message_to_chat_group(chat_id, msg)
+        from apps.chat.services.webhook_service import webhook_service
+        webhook_service.fire_event(chat_id, "message.created", {
+            "message_id": msg.id,
+            "sender_type": msg.sender_type,
+            "created_by": msg.created_by,
+            "created_at": msg.created_at,
+        })
+        return msg
+
+    def _save_ai_message(self, chat_id: int, user_id: int, answer: str) -> ChatMessage:
+        with transaction.atomic():
+            msg = message_repository.create(
+                chat_id=chat_id,
+                message=answer,
+                sender_type=ChatMessage.SenderType.SYSTEM,
+                created_by=user_id,
+            )
+            chat_repository.touch_last_message_at(chat_id, updated_by=user_id)
         return msg
 
     def get_messages(self, user: AuthenticatedUser, chat_id: int):
         AccessControl.require_permissions(user, frozenset({LIST_MESSAGES}))
         self._require_access(chat_id, user.id)
-        return message_repository.get_messages_by_chat(chat_id)
+        return message_repository.get_messages_by_chat(chat_id, user_id=user.id)
+
+    def clear_history(self, user: AuthenticatedUser, chat_id: int) -> None:
+        AccessControl.require_permissions(user, frozenset({SEND_MESSAGE}))
+        self._require_access(chat_id, user.id)
+        chat = chat_repository.get_by_id(chat_id)
+        if chat is None:
+            raise ChatNotFoundException()
+        if chat.created_by != user.id:
+            raise NotChatCreatorException()
+        message_repository.soft_delete_by_chat(chat_id, deleted_by=user.id)
+        logger.info("Chat history cleared.", extra={"chat_id": chat_id, "user_id": user.id})
+
+    def delete_last_ai_message(self, user: AuthenticatedUser, chat_id: int) -> None:
+        AccessControl.require_permissions(user, frozenset({SEND_MESSAGE}))
+        self._require_access(chat_id, user.id)
+        last_ai = message_repository.get_last_ai_message(chat_id)
+        if last_ai is None:
+            raise NoMessageToRegenerateException()
+        last_ai.delete(deleted_by=user.id)
+        logger.info("Last AI message deleted for regeneration.", extra={"chat_id": chat_id, "message_id": last_ai.id})
 
     @staticmethod
     async def _build_llm_messages(chat_id: int) -> list[dict[str, str]]:
+        limit = getattr(settings, "LLM_CONTEXT_MESSAGE_LIMIT", 20)
         recent = await sync_to_async(message_repository.get_recent_messages)(
-            chat_id, limit=20
+            chat_id, limit=limit
         )
         messages: list[dict[str, str]] = []
         for m in reversed(recent):
@@ -104,9 +171,7 @@ class MessageService:
                     "chat_id": chat_id,
                     "user_id": user.id,
                     "status_code": e.status_code,
-                    "llm_url": getattr(
-                        settings, "LLM_DOCUMENT_QUESTION_URL", ""
-                    ),
+                    "llm_url": getattr(settings, "LLM_DOCUMENT_QUESTION_URL", ""),
                 },
                 exc_info=True,
             )
@@ -114,17 +179,9 @@ class MessageService:
 
         assistant_msg: ChatMessage | None = None
         if llm_out.answer.strip():
-            assistant_msg = await sync_to_async(message_repository.create)(
-                chat_id=chat_id,
-                message=llm_out.answer,
-                sender_type=ChatMessage.SenderType.SYSTEM,
-                created_by=user.id,
+            assistant_msg = await sync_to_async(self._save_ai_message)(
+                chat_id, user.id, llm_out.answer
             )
-            chat = await sync_to_async(chat_repository.get_by_id)(chat_id)
-            if chat:
-                await sync_to_async(chat_repository.update)(
-                    chat, updated_by=user.id, last_message_at=timezone.now()
-                )
             logger.info(
                 "AI response saved.",
                 extra={"chat_id": chat_id, "message_id": assistant_msg.id},
@@ -176,23 +233,9 @@ class MessageService:
 
                     assistant_msg: ChatMessage | None = None
                     if answer:
-                        assistant_msg = await sync_to_async(
-                            message_repository.create
-                        )(
-                            chat_id=chat_id,
-                            message=answer,
-                            sender_type=ChatMessage.SenderType.SYSTEM,
-                            created_by=user.id,
+                        assistant_msg = await sync_to_async(self._save_ai_message)(
+                            chat_id, user.id, answer
                         )
-                        chat = await sync_to_async(chat_repository.get_by_id)(
-                            chat_id
-                        )
-                        if chat:
-                            await sync_to_async(chat_repository.update)(
-                                chat,
-                                updated_by=user.id,
-                                last_message_at=timezone.now(),
-                            )
                         logger.info(
                             "AI response saved (stream).",
                             extra={
@@ -237,11 +280,66 @@ class MessageService:
             )
             raise LLMServiceException() from e
 
+    def delete_message(self, user: AuthenticatedUser, chat_id: int, message_id: int) -> None:
+        AccessControl.require_permissions(user, frozenset({SEND_MESSAGE}))
+        self._require_access(chat_id, user.id)
+        msg = message_repository.get_by_id_and_chat(message_id, chat_id)
+        if msg is None:
+            raise MessageNotFoundException()
+        chat = chat_repository.get_by_id(chat_id)
+        is_author = msg.created_by == user.id
+        is_owner = chat is not None and chat.created_by == user.id
+        if not is_author and not is_owner:
+            raise MessageDeleteForbiddenException()
+        msg.delete(deleted_by=user.id)
+        logger.info("Message deleted.", extra={"chat_id": chat_id, "message_id": message_id, "user_id": user.id})
+
+    def send_ephemeral_message(
+        self,
+        user: AuthenticatedUser,
+        chat_id: int,
+        text: str,
+    ) -> ChatMessage:
+        AccessControl.require_permissions(user, frozenset({SEND_MESSAGE}))
+        self._require_access(chat_id, user.id)
+        if membership_repository.get_role(chat_id, user.id) == "reader":
+            raise ReaderCannotSendMessageException()
+        return ChatMessage(
+            chat_id=chat_id,
+            message=text,
+            sender_type=ChatMessage.SenderType.USER,
+            created_by=user.id,
+        )
+
+    async def run_ephemeral_document_question(
+        self,
+        user: AuthenticatedUser,
+        chat_id: int,
+        user_message: str,
+    ) -> DocumentQuestionRunResult:
+        await sync_to_async(self._require_access)(chat_id, user.id)
+        messages = [{"role": "human", "content": user_message}]
+        try:
+            llm_out: DocumentQuestionResult = await llm_client.document_question(messages, user)
+        except HttpClientException as e:
+            logger.error(
+                "LLM ephemeral document-question failed: %s",
+                str(e),
+                extra={"chat_id": chat_id, "user_id": user.id},
+                exc_info=True,
+            )
+            raise LLMServiceException() from e
+        return DocumentQuestionRunResult(
+            question=llm_out.question,
+            answer=llm_out.answer,
+            fragments=llm_out.fragments,
+            assistant_message=None,
+        )
+
     def _require_access(self, chat_id: int, user_id: int) -> None:
         chat = chat_repository.get_by_id(chat_id)
         if chat is None:
             raise ChatNotFoundException()
-
         if not membership_repository.is_active_member(chat_id, user_id):
             raise MessageAccessDeniedException()
 

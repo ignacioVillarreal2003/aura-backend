@@ -1,18 +1,18 @@
 import logging
-import threading
 import uuid
+from contextvars import ContextVar
 
-_correlation_id = threading.local()
+_correlation_id: ContextVar[str] = ContextVar("correlation_id", default="-")
 
 HEADER_NAME = "X-Correlation-Id"
 
 
 def get_correlation_id() -> str:
-    return getattr(_correlation_id, "value", "-")
+    return _correlation_id.get()
 
 
-def set_correlation_id(value: str):
-    _correlation_id.value = value
+def set_correlation_id(value: str) -> None:
+    _correlation_id.set(value)
 
 
 class CorrelationIdFilter(logging.Filter):

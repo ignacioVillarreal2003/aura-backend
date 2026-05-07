@@ -79,7 +79,7 @@ class OutboxLiteWorker:
             result = await session.execute(
                 select(Document).where(
                     Document.deleted_at.is_(None),
-                    Document.status == DocumentStatus.uploaded,
+                    Document.status == DocumentStatus.uploaded.value,
                     Document.created_at <= cutoff,
                 ).order_by(Document.created_at.asc()).limit(self._settings.outbox_document_reconcile_batch_size)
             )

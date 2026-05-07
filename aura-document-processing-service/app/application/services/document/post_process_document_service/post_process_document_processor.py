@@ -253,7 +253,11 @@ class PostProcessDocumentProcessor(PostProcessDocumentProcessorInterface):
             if document is None:
                 raise ValueError(f"Document {document_id} was not found.")
 
-            document.type = classification.type
+            document.type = (
+                classification.type.value
+                if hasattr(classification.type, "value")
+                else classification.type
+            )
             document.category = classification.category
             document.description = classification.description
 

@@ -1,4 +1,11 @@
-from core.exceptions import ForbiddenException, ServiceUnavailableException
+from core.exceptions import ConflictException, ForbiddenException, NotFoundException, ServiceException, ServiceUnavailableException, ValidationException
+
+
+class ChatAiReplyInProgressException(ConflictException):
+    """Another message is being processed; wait for the assistant to finish."""
+
+    error_code = "chat_ai_reply_in_progress"
+    detail = "Wait until the assistant finishes the current reply."
 
 
 class MessageAccessDeniedException(ForbiddenException):
@@ -16,3 +23,44 @@ class TranscriptionException(ServiceUnavailableException):
     status_code = 502
     error_code = "transcription_error"
     detail = "Audio could not be transcribed"
+
+
+class MessageNotFoundException(NotFoundException):
+    error_code = "message_not_found"
+    detail = "Message not found"
+
+
+class PDFGenerationException(ServiceException):
+    status_code = 500
+    error_code = "pdf_generation_error"
+    detail = "Failed to generate PDF"
+
+
+class NotChatCreatorException(ForbiddenException):
+    error_code = "not_chat_creator"
+    detail = "Only the chat creator can perform this action"
+
+
+class NotAIMessageException(ValidationException):
+    error_code = "not_ai_message"
+    detail = "Feedback can only be submitted for AI messages"
+
+
+class NoMessageToRegenerateException(ConflictException):
+    error_code = "no_message_to_regenerate"
+    detail = "There is no AI message to regenerate in this chat"
+
+
+class ReaderCannotSendMessageException(ForbiddenException):
+    error_code = "reader_cannot_send_message"
+    detail = "Readers cannot send messages in this chat"
+
+
+class ChatLockedException(ForbiddenException):
+    error_code = "chat_locked"
+    detail = "This chat is locked and does not accept new messages"
+
+
+class MessageDeleteForbiddenException(ForbiddenException):
+    error_code = "message_delete_forbidden"
+    detail = "Only the message author or chat owner can delete this message"

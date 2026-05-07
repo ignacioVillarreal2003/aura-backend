@@ -1,54 +1,6 @@
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pg_search;
 
-CREATE TYPE document_type AS ENUM (
-    'manual',
-    'informe',
-    'orden',
-    'doctrina',
-    'otro'
-);
-
-CREATE TYPE document_status AS ENUM (
-    'uploaded',
-    'processing',
-    'processed',
-    'failed'
-);
-
-CREATE TYPE document_mime_type AS ENUM (
-    'pdf',
-    'docx'
-);
-
-CREATE TYPE chat_message_sender_type AS ENUM (
-    'system',
-    'user'
-);
-
-CREATE TYPE chat_membership_status AS ENUM (
-    'active',
-    'inactive',
-    'pending'
-);
-
-CREATE TYPE notification_type AS ENUM (
-    'system',
-    'admin'
-);
-
-CREATE TYPE notification_status AS ENUM (
-    'unread',
-    'read',
-    'archived'
-);
-
-CREATE TYPE notification_target_scope AS ENUM (
-    'individual',
-    'group',
-    'system'
-);
-
 CREATE TABLE chat (
     id          BIGSERIAL PRIMARY KEY,
     name        VARCHAR(255)             NOT NULL,
@@ -60,7 +12,10 @@ CREATE TABLE chat (
     updated_by  BIGINT,
     updated_at  TIMESTAMPTZ,
     deleted_by  BIGINT,
-    deleted_at  TIMESTAMPTZ
+    deleted_at  TIMESTAMPTZ,
+    tags        TEXT[]                   NOT NULL DEFAULT '{}',
+    is_ephemeral BOOLEAN                NOT NULL DEFAULT FALSE,
+    is_locked   BOOLEAN                 NOT NULL DEFAULT FALSE
 );
 
 CREATE TABLE document (
@@ -69,11 +24,11 @@ CREATE TABLE document (
         CONSTRAINT fk_document_chat_id REFERENCES chat(id) ON DELETE CASCADE,
     name                    VARCHAR(255)    NOT NULL,
     description             TEXT,
-    mime_type               document_mime_type NOT NULL,
-    status                  document_status NOT NULL DEFAULT 'uploaded',
+    mime_type               VARCHAR(64)         NOT NULL,
+    status                  VARCHAR(64)         NOT NULL DEFAULT 'uploaded',
     storage_url             VARCHAR(255)    NOT NULL,
     file_size_bytes         BIGINT          NOT NULL,
-    type                    document_type,
+    type                    VARCHAR(64),
     category                VARCHAR(255),
     text_cleaner_type       VARCHAR(255),
     text_splitter_type      VARCHAR(255),
@@ -113,7 +68,7 @@ CREATE TABLE chat_message (
     chat_id     BIGINT                      NOT NULL
         CONSTRAINT fk_chat_message_chat_id REFERENCES chat(id),
     message     TEXT                        NOT NULL,
-    sender_type chat_message_sender_type    NOT NULL,
+    sender_type VARCHAR(64)                   NOT NULL,
     created_by  BIGINT,
     created_at  TIMESTAMPTZ                 NOT NULL DEFAULT NOW(),
     deleted_by  BIGINT,
@@ -125,7 +80,7 @@ CREATE TABLE chat_membership (
     member_id   BIGINT                  NOT NULL,
     chat_id     BIGINT                  NOT NULL
         CONSTRAINT fk_chat_membership_chat_id REFERENCES chat(id),
-    status      chat_membership_status  NOT NULL,
+    status      VARCHAR(64)               NOT NULL,
     joined_at   TIMESTAMPTZ,
     left_at     TIMESTAMPTZ,
     created_by  BIGINT                  NOT NULL,
@@ -134,17 +89,82 @@ CREATE TABLE chat_membership (
     updated_at  TIMESTAMPTZ,
     deleted_by  BIGINT,
     deleted_at  TIMESTAMPTZ,
-    CONSTRAINT chat_membership_member_chat_unique UNIQUE (member_id, chat_id)
+    pinned_at   TIMESTAMPTZ,
+    archived_at TIMESTAMPTZ,
+    last_read_at TIMESTAMPTZ,
+    role        VARCHAR(64)             NOT NULL DEFAULT 'editor',
+    muted_until TIMESTAMPTZ
+);
+
+CREATE TABLE pinned_message (
+    id          BIGSERIAL PRIMARY KEY,
+    message_id  BIGINT                  NOT NULL,
+    chat_id     BIGINT                  NOT NULL,
+    pinned_by   BIGINT                  NOT NULL,
+    pinned_at   TIMESTAMPTZ             NOT NULL DEFAULT NOW(),
+    CONSTRAINT pinned_message_unique UNIQUE (message_id, chat_id),
+    CONSTRAINT fk_pinned_message_message FOREIGN KEY (message_id) REFERENCES chat_message(id) ON DELETE CASCADE,
+    CONSTRAINT fk_pinned_message_chat FOREIGN KEY (chat_id) REFERENCES chat(id) ON DELETE CASCADE
+);
+
+CREATE TABLE message_bookmark (
+    id          BIGSERIAL PRIMARY KEY,
+    message_id  BIGINT                  NOT NULL REFERENCES chat_message(id) ON DELETE CASCADE,
+    user_id     BIGINT                  NOT NULL,
+    created_at  TIMESTAMPTZ             NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_message_bookmark UNIQUE (message_id, user_id)
+);
+
+CREATE TABLE message_thread_reply (
+    id                  BIGSERIAL PRIMARY KEY,
+    parent_message_id   BIGINT                  NOT NULL REFERENCES chat_message(id) ON DELETE CASCADE,
+    message             TEXT                  NOT NULL,
+    created_by          BIGINT                NOT NULL,
+    created_at          TIMESTAMPTZ           NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE message_feedback (
+    id          BIGSERIAL PRIMARY KEY,
+    message_id  BIGINT                  NOT NULL REFERENCES chat_message(id) ON DELETE CASCADE,
+    user_id     BIGINT                  NOT NULL,
+    value       SMALLINT                NOT NULL,
+    created_at  TIMESTAMPTZ             NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ,
+    CONSTRAINT uq_message_feedback UNIQUE (message_id, user_id),
+    CONSTRAINT chk_feedback_value CHECK (value IN (1, -1))
+);
+
+CREATE TABLE chat_share_link (
+    id          BIGSERIAL PRIMARY KEY,
+    chat_id     BIGINT                  NOT NULL REFERENCES chat(id) ON DELETE CASCADE,
+    token       UUID                    NOT NULL DEFAULT gen_random_uuid(),
+    created_by  BIGINT                  NOT NULL,
+    created_at  TIMESTAMPTZ             NOT NULL DEFAULT NOW(),
+    expires_at  TIMESTAMPTZ,
+    is_active   BOOLEAN                 NOT NULL DEFAULT TRUE,
+    CONSTRAINT uq_share_link_token UNIQUE (token)
+);
+
+CREATE TABLE chat_webhook (
+    id          BIGSERIAL PRIMARY KEY,
+    chat_id     BIGINT                  NOT NULL,
+    url         TEXT                    NOT NULL,
+    events      TEXT[]                  NOT NULL DEFAULT '{}',
+    secret      VARCHAR(64)             NOT NULL,
+    is_active   BOOLEAN                 NOT NULL DEFAULT TRUE,
+    created_by  BIGINT                  NOT NULL,
+    created_at  TIMESTAMPTZ             NOT NULL DEFAULT NOW(),
+    CONSTRAINT fk_chat_webhook_chat FOREIGN KEY (chat_id) REFERENCES chat(id) ON DELETE CASCADE
 );
 
 CREATE TABLE notification (
     id          BIGSERIAL PRIMARY KEY,
     receiver_id BIGINT              NOT NULL,
     message     VARCHAR(500)        NOT NULL,
-    type         notification_type          NOT NULL,
-    target_scope notification_target_scope  NOT NULL DEFAULT 'individual',
+    type         VARCHAR(64)                NOT NULL,
+    target_scope VARCHAR(64)                NOT NULL DEFAULT 'individual',
     target_label VARCHAR(255),
-    status       notification_status        NOT NULL DEFAULT 'unread',
+    status       VARCHAR(64)                NOT NULL DEFAULT 'unread',
     read_at     TIMESTAMPTZ,
     created_by  BIGINT,
     created_at  TIMESTAMPTZ         NOT NULL DEFAULT NOW(),
@@ -206,10 +226,26 @@ CREATE INDEX IF NOT EXISTS fragments_bm25_idx
 
 CREATE INDEX idx_chat_message_chat_created_active
     ON chat_message (chat_id, created_at) WHERE (deleted_at IS NULL);
+CREATE INDEX idx_chat_message_chat_created
+    ON chat_message (chat_id, created_at DESC);
 CREATE INDEX idx_chat_created_by_active     ON chat (created_by) WHERE (deleted_at IS NULL);
 
+CREATE UNIQUE INDEX chat_membership_member_chat_unique
+    ON chat_membership (member_id, chat_id)
+    WHERE deleted_at IS NULL;
+CREATE INDEX idx_chat_membership_chat_member_status
+    ON chat_membership (chat_id, member_id, status);
 CREATE INDEX idx_chat_membership_chat_id  ON chat_membership(chat_id);
 CREATE INDEX idx_chat_membership_member   ON chat_membership(member_id);
+
+CREATE INDEX idx_pinned_message_chat ON pinned_message(chat_id);
+CREATE INDEX idx_message_bookmark_message ON message_bookmark(message_id);
+CREATE INDEX idx_message_bookmark_user ON message_bookmark(user_id);
+CREATE INDEX idx_thread_reply_parent ON message_thread_reply(parent_message_id);
+CREATE INDEX idx_message_feedback_message ON message_feedback(message_id);
+CREATE INDEX idx_share_link_chat ON chat_share_link(chat_id);
+CREATE INDEX idx_share_link_token ON chat_share_link(token);
+CREATE INDEX idx_chat_webhook_chat ON chat_webhook(chat_id);
 
 CREATE INDEX idx_notification_receiver_status   ON notification(receiver_id, status);
 CREATE INDEX idx_notification_receiver_created   ON notification(receiver_id, created_at DESC);
@@ -233,13 +269,13 @@ VALUES
         5
     );
 
-INSERT INTO chat_membership (member_id, chat_id, status, joined_at, left_at, created_by)
+INSERT INTO chat_membership (member_id, chat_id, status, joined_at, left_at, created_by, role)
 VALUES
-    (4, 1, 'active',   NOW() - INTERVAL '8 days',  NULL, 4),
-    (5, 1, 'active',   NOW() - INTERVAL '7 days',  NULL, 4),
-    (4, 2, 'active',   NOW() - INTERVAL '6 days',  NULL, 5),
-    (5, 2, 'active',   NOW() - INTERVAL '5 days',  NULL, 5),
-    (6, 2, 'pending',  NULL,                      NULL, 5);
+    (4, 1, 'active',   NOW() - INTERVAL '8 days',  NULL, 4, 'owner'),
+    (5, 1, 'active',   NOW() - INTERVAL '7 days',  NULL, 4, 'editor'),
+    (4, 2, 'active',   NOW() - INTERVAL '6 days',  NULL, 5, 'editor'),
+    (5, 2, 'active',   NOW() - INTERVAL '5 days',  NULL, 5, 'owner'),
+    (6, 2, 'pending',  NULL,                      NULL, 5, 'editor');
 
 INSERT INTO document_collection (name, created_by)
 VALUES

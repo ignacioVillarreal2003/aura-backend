@@ -2,9 +2,6 @@ from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.domain.constants.document.document_mime_type import DocumentMimeType
-from app.domain.constants.document.document_status import DocumentStatus
-from app.domain.constants.document.document_type import DocumentType
 from app.domain.field_limits import (
     MAX_CATEGORY_CHARS,
     MAX_DESCRIPTION_CHARS,
@@ -20,10 +17,10 @@ class DocumentResponse(BaseModel):
     chat_id: Optional[ChatId] = Field(default=None, gt=0, le=MAX_ID)
     name: str = Field(..., min_length=1, max_length=MAX_NAME_CHARS)
     description: Optional[str] = Field(default=None, min_length=1, max_length=MAX_DESCRIPTION_CHARS)
-    mime_type: DocumentMimeType = Field(...)
-    status: DocumentStatus = Field(...)
+    mime_type: str = Field(..., min_length=1, max_length=64)
+    status: str = Field(..., min_length=1, max_length=64)
     file_size_bytes: int = Field(..., ge=MIN_FILE_SIZE_BYTES)
-    type: Optional[DocumentType] = Field(default=None)
+    type: Optional[str] = Field(default=None, max_length=64)
     category: Optional[str] = Field(default=None, min_length=1, max_length=MAX_CATEGORY_CHARS)
     processing_started_at: Optional[datetime] = Field(default=None)
     processing_finished_at: Optional[datetime] = Field(default=None)

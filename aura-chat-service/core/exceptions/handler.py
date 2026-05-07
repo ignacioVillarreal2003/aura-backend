@@ -33,18 +33,35 @@ def custom_exception_handler(exc, context):
 
     if response is not None:
         error_detail = response.data
-        if isinstance(error_detail, dict):
-            detail_text = error_detail.get("detail", str(error_detail))
-        elif isinstance(error_detail, list):
-            detail_text = error_detail[0] if error_detail else "Validation error"
-        else:
-            detail_text = str(error_detail)
+        error_code = _status_to_error_code(response.status_code)
 
-        response.data = {
-            "error": _status_to_error_code(response.status_code),
-            "detail": detail_text,
-            "status_code": response.status_code,
-        }
+        if isinstance(error_detail, dict) and "detail" in error_detail:
+            response.data = {
+                "error": error_code,
+                "detail": str(error_detail["detail"]),
+                "status_code": response.status_code,
+            }
+        elif isinstance(error_detail, dict):
+            # Field-level validation errors: {"field": ["msg1", ...], ...}
+            response.data = {
+                "error": error_code,
+                "detail": "Validation failed",
+                "fields": _serialize_validation_errors(error_detail),
+                "status_code": response.status_code,
+            }
+        elif isinstance(error_detail, list):
+            first = str(error_detail[0]) if error_detail else "Validation error"
+            response.data = {
+                "error": error_code,
+                "detail": first,
+                "status_code": response.status_code,
+            }
+        else:
+            response.data = {
+                "error": error_code,
+                "detail": str(error_detail),
+                "status_code": response.status_code,
+            }
         return response
 
     logger.exception(
@@ -59,6 +76,15 @@ def custom_exception_handler(exc, context):
         },
         status=status.HTTP_500_INTERNAL_SERVER_ERROR,
     )
+
+
+def _serialize_validation_errors(data) -> dict | list | str:
+    """Recursively convert DRF ErrorDetail objects to plain strings."""
+    if isinstance(data, dict):
+        return {k: _serialize_validation_errors(v) for k, v in data.items()}
+    if isinstance(data, list):
+        return [_serialize_validation_errors(item) for item in data]
+    return str(data)
 
 
 def _status_to_error_code(status_code: int) -> str:

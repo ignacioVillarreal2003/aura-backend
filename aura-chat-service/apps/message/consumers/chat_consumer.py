@@ -1,16 +1,30 @@
 import asyncio
 import logging
+import time
+from collections import deque
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
+from apps.chat.repositories.chat_repository import chat_repository
+from apps.message.chat_ai_reply_lock import is_locked, release, try_acquire
 from apps.message.exceptions import LLMServiceException
-from apps.message.serializers.response import MessageResponse
-from apps.message.services.message_service import message_service
+from apps.message.services.message_service import (
+    broadcast_chat_ai_lock_change,
+    message_service,
+)
 from apps.membership.repositories.membership_repository import membership_repository
 from core.authentication.authenticated_user import AuthenticatedUser
+from core.exceptions import ServiceUnavailableException
 
 logger = logging.getLogger(__name__)
+
+
+_MAX_MESSAGE_LENGTH = 10_000
+_RATE_LIMIT_MAX = 10
+_RATE_LIMIT_WINDOW = 60
+_TYPING_RATE_LIMIT_MAX = 20
+_TYPING_RATE_LIMIT_WINDOW = 10
 
 
 class ChatConsumer(AsyncJsonWebsocketConsumer):
@@ -20,6 +34,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.group_name: str | None = None
         self.user: AuthenticatedUser | None = None
         self._document_question_task: asyncio.Task | None = None
+        self._message_timestamps: deque[float] = deque()
+        self._typing_timestamps: deque[float] = deque()
 
     async def connect(self):
         self.chat_id = int(self.scope["url_route"]["kwargs"]["chat_id"])
@@ -40,6 +56,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
+
+        locked = await database_sync_to_async(is_locked)(self.chat_id)
+        await self.send_json({"type": "chat_ai_lock", "locked": locked})
 
         logger.info(
             "WebSocket connected.",
@@ -75,19 +94,38 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         )
 
     async def receive_json(self, content, **kwargs):
-        msg_type = content.get("type")
+        try:
+            msg_type = content.get("type")
 
-        if msg_type == "chat.message":
-            await self._handle_chat_message(content)
-        elif msg_type == "chat.typing":
-            await self._handle_typing(content)
-        else:
-            await self.send_json({
-                "type": "error",
-                "detail": f"Unknown message type: {msg_type}",
-            })
+            if msg_type == "chat.message":
+                await self._handle_chat_message(content)
+            elif msg_type == "chat.typing":
+                await self._handle_typing(content)
+            else:
+                await self.send_json({
+                    "type": "error",
+                    "detail": f"Unknown message type: {msg_type}",
+                })
+        except Exception:
+            logger.exception(
+                "Unhandled error in receive_json.",
+                extra={"chat_id": self.chat_id, "user_id": getattr(self.user, "id", None)},
+            )
+            try:
+                await self.send_json({"type": "error", "detail": "Internal server error."})
+            except Exception:
+                pass
 
     async def _handle_chat_message(self, content: dict):
+        chat_obj = await database_sync_to_async(chat_repository.get_by_id)(self.chat_id)
+        if chat_obj is not None and chat_obj.is_locked:
+            await self.send_json({
+                "type": "error",
+                "error_code": "chat_locked",
+                "detail": "This chat is locked and does not accept new messages.",
+            })
+            return
+
         text = content.get("message", "").strip()
         if not text:
             await self.send_json({
@@ -96,23 +134,74 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             })
             return
 
-        user_msg = await database_sync_to_async(message_service.send_message)(
-            self.user, self.chat_id, text
-        )
+        if len(text) > _MAX_MESSAGE_LENGTH:
+            await self.send_json({
+                "type": "error",
+                "error_code": "message_too_long",
+                "detail": f"Message exceeds {_MAX_MESSAGE_LENGTH} characters.",
+            })
+            return
 
-        user_payload = MessageResponse(user_msg).data
-
-        await self.channel_layer.group_send(
-            self.group_name,
-            {
-                "type": "user_message",
-                **user_payload,
-            },
-        )
+        now = time.monotonic()
+        while self._message_timestamps and now - self._message_timestamps[0] > _RATE_LIMIT_WINDOW:
+            self._message_timestamps.popleft()
+        if len(self._message_timestamps) >= _RATE_LIMIT_MAX:
+            await self.send_json({
+                "type": "error",
+                "error_code": "rate_limit_exceeded",
+                "detail": "Too many messages. Please wait before sending more.",
+            })
+            return
+        self._message_timestamps.append(now)
 
         prev = self._document_question_task
         if prev is not None and not prev.done():
             prev.cancel()
+            try:
+                await prev
+            except asyncio.CancelledError:
+                pass
+
+        try:
+            acquired = await database_sync_to_async(try_acquire)(self.chat_id)
+        except ServiceUnavailableException as e:
+            await self.send_json({
+                "type": "error",
+                "error_code": e.error_code,
+                "detail": e.detail,
+            })
+            return
+
+        if not acquired:
+            await self.send_json({
+                "type": "error",
+                "error_code": "chat_ai_reply_in_progress",
+                "detail": "Wait until the assistant finishes the current reply.",
+            })
+            return
+
+        await database_sync_to_async(broadcast_chat_ai_lock_change)(
+            self.chat_id, True
+        )
+
+        try:
+            await database_sync_to_async(message_service.send_message)(
+                self.user, self.chat_id, text
+            )
+        except Exception:
+            logger.exception(
+                "Failed to save user message.",
+                extra={"chat_id": self.chat_id, "user_id": self.user.id},
+            )
+            await database_sync_to_async(release)(self.chat_id)
+            await database_sync_to_async(broadcast_chat_ai_lock_change)(
+                self.chat_id, False
+            )
+            await self.send_json({
+                "type": "error",
+                "detail": "Failed to save message. Please try again.",
+            })
+            return
 
         task = asyncio.create_task(self._run_document_question())
 
@@ -140,46 +229,67 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self._document_question_task = task
 
     async def _run_document_question(self):
-        await self.channel_layer.group_send(
-            self.group_name,
-            {"type": "ai_meta", "chat_id": self.chat_id},
-        )
-
         try:
-            async for payload in message_service.iter_document_question_stream_group_payloads(
-                self.user, self.chat_id
-            ):
-                await self.channel_layer.group_send(self.group_name, payload)
-        except LLMServiceException:
             await self.channel_layer.group_send(
                 self.group_name,
-                {
-                    "type": "ai_error",
-                    "detail": "AI service is temporarily unavailable",
-                },
+                {"type": "ai_meta", "chat_id": self.chat_id},
             )
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            logger.exception(
-                "Error running document-question stream.",
-                extra={"chat_id": self.chat_id},
-            )
-            await self.channel_layer.group_send(
-                self.group_name,
-                {
-                    "type": "ai_error",
-                    "detail": "AI service is temporarily unavailable",
-                },
+
+            try:
+                async for payload in message_service.iter_document_question_stream_group_payloads(
+                    self.user, self.chat_id
+                ):
+                    await self.channel_layer.group_send(self.group_name, payload)
+            except LLMServiceException:
+                await self.channel_layer.group_send(
+                    self.group_name,
+                    {
+                        "type": "ai_error",
+                        "detail": "AI service is temporarily unavailable",
+                    },
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception(
+                    "Error running document-question stream.",
+                    extra={"chat_id": self.chat_id},
+                )
+                await self.channel_layer.group_send(
+                    self.group_name,
+                    {
+                        "type": "ai_error",
+                        "detail": "AI service is temporarily unavailable",
+                    },
+                )
+        finally:
+            await database_sync_to_async(release)(self.chat_id)
+            await database_sync_to_async(broadcast_chat_ai_lock_change)(
+                self.chat_id, False
             )
 
     async def _handle_typing(self, content: dict):
+        is_typing = content.get("is_typing")
+        if not isinstance(is_typing, bool):
+            await self.send_json({
+                "type": "error",
+                "detail": "'is_typing' must be a boolean.",
+            })
+            return
+
+        now = time.monotonic()
+        while self._typing_timestamps and now - self._typing_timestamps[0] > _TYPING_RATE_LIMIT_WINDOW:
+            self._typing_timestamps.popleft()
+        if len(self._typing_timestamps) >= _TYPING_RATE_LIMIT_MAX:
+            return
+        self._typing_timestamps.append(now)
+
         await self.channel_layer.group_send(
             self.group_name,
             {
                 "type": "typing",
                 "user_id": self.user.id,
-                "is_typing": content.get("is_typing", True),
+                "is_typing": is_typing,
             },
         )
 
@@ -236,6 +346,12 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             out["code"] = event["code"]
         await self.send_json(out)
 
+    async def chat_ai_lock_changed(self, event):
+        await self.send_json({
+            "type": "chat_ai_lock",
+            "locked": event["locked"],
+        })
+
     async def typing(self, event):
         if event["user_id"] != self.user.id:
             await self.send_json({
@@ -243,6 +359,13 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 "user_id": event["user_id"],
                 "is_typing": event["is_typing"],
             })
+
+    async def chat_locked_changed(self, event):
+        await self.send_json({
+            "type": "chat_locked_changed",
+            "is_locked": event["is_locked"],
+            "by": event.get("by"),
+        })
 
     async def member_joined(self, event):
         await self.send_json({

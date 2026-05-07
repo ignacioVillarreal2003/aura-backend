@@ -34,12 +34,11 @@ class Notification(AuditedModel):
         verbose_name='Mensaje',
     )
     type = models.CharField(
-        max_length=20,
-        choices=NotificationType.choices,
+        max_length=64,
         verbose_name='Tipo',
     )
     target_scope = models.CharField(
-        max_length=20,
+        max_length=64,
         default='individual',
         db_index=True,
         verbose_name='Alcance',
@@ -53,8 +52,7 @@ class Notification(AuditedModel):
         help_text='Optional source label (group or role names)',
     )
     status = models.CharField(
-        max_length=20,
-        choices=NotificationStatus.choices,
+        max_length=64,
         default=NotificationStatus.UNREAD,
         verbose_name='Estado',
         db_index=True,

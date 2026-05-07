@@ -1,7 +1,7 @@
 """Serializers for notification API endpoints."""
 
 from rest_framework import serializers
-from notifications.models import Notification, NotificationType, NotificationStatus
+from notifications.models import Notification
 
 
 class NotificationSerializer(serializers.ModelSerializer):
@@ -32,10 +32,9 @@ class NotificationCreateSerializer(serializers.Serializer):
         help_text='List of auth_user.id values to notify. Use a single-element list for one user.',
     )
     message = serializers.CharField(max_length=500)
-    type = serializers.ChoiceField(choices=NotificationType.choices)
-    sender_name = serializers.CharField(max_length=255, required=False, allow_blank=True, allow_null=True)
-    target_scope = serializers.ChoiceField(
-        choices=[('individual', 'Individual'), ('group', 'Grupal'), ('system', 'Sistema')],
+    type = serializers.CharField(max_length=64)
+    target_scope = serializers.CharField(
+        max_length=64,
         required=False,
         default='individual',
     )
@@ -44,12 +43,9 @@ class NotificationCreateSerializer(serializers.Serializer):
 
 
 class NotificationStatusUpdateSerializer(serializers.Serializer):
-    status = serializers.ChoiceField(
-        choices=[
-            NotificationStatus.READ,
-            NotificationStatus.ARCHIVED,
-        ],
-        help_text='Target status: "read" or "archived".',
+    status = serializers.CharField(
+        max_length=64,
+        help_text='Target status string (domain-defined; e.g. read, archived).',
     )
 
 

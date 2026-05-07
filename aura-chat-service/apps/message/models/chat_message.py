@@ -13,16 +13,14 @@ class ChatMessage(CreatedAuditModel, SoftDeleteModel):
         related_name="messages",
     )
     message = models.TextField()
-    sender_type = models.CharField(
-        max_length=10,
-        choices=SenderType.choices,
-    )
+    sender_type = models.CharField(max_length=64)
 
     class Meta:
         db_table = "chat_message"
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["chat"], name="idx_chat_message_chat_id"),
+            models.Index(fields=["chat", "-created_at"], name="idx_chat_message_chat_created"),
         ]
 
     def __str__(self):

@@ -9,12 +9,13 @@ logger = logging.getLogger(__name__)
 
 class MembershipRepository:
     @staticmethod
-    def create(member_id: int, chat_id: int, status: str, created_by: int) -> ChatMembership:
+    def create(member_id: int, chat_id: int, status: str, created_by: int, role: str = "editor") -> ChatMembership:
         joined_at = timezone.now() if status == "active" else None
         return ChatMembership.objects.create(
             member_id=member_id,
             chat_id=chat_id,
             status=status,
+            role=role,
             joined_at=joined_at,
             created_by=created_by,
         )
@@ -34,8 +35,20 @@ class MembershipRepository:
             return None
 
     @staticmethod
-    def list_by_chat(chat_id: int) -> QuerySet[ChatMembership]:
-        return ChatMembership.objects.filter(chat_id=chat_id).order_by("created_at")
+    def get_by_chat_and_member_for_update(chat_id: int, member_id: int) -> ChatMembership | None:
+        try:
+            return ChatMembership.objects.select_for_update().get(
+                chat_id=chat_id, member_id=member_id
+            )
+        except ChatMembership.DoesNotExist:
+            return None
+
+    @staticmethod
+    def list_by_chat(chat_id: int, status: str | None = None) -> QuerySet[ChatMembership]:
+        qs = ChatMembership.objects.filter(chat_id=chat_id).order_by("created_at")
+        if status is not None:
+            qs = qs.filter(status=status)
+        return qs
 
     @staticmethod
     def is_active_member(chat_id: int, member_id: int) -> bool:
@@ -84,6 +97,95 @@ class MembershipRepository:
             ChatMembership.objects
             .filter(chat_id=chat_id, status="active")
             .values_list("member_id", flat=True)
+        )
+
+    @staticmethod
+    def mark_as_read(chat_id: int, member_id: int) -> None:
+        ChatMembership.objects.filter(
+            chat_id=chat_id,
+            member_id=member_id,
+            status="active",
+        ).update(last_read_at=timezone.now())
+
+    @staticmethod
+    def update_role(chat_id: int, member_id: int, role: str) -> ChatMembership | None:
+        membership = ChatMembership.objects.filter(
+            chat_id=chat_id,
+            member_id=member_id,
+            status="active",
+        ).first()
+        if membership is None:
+            return None
+        membership.role = role
+        membership.save(update_fields=["role"])
+        return membership
+
+    @staticmethod
+    def get_role(chat_id: int, member_id: int) -> str | None:
+        result = ChatMembership.objects.filter(
+            chat_id=chat_id,
+            member_id=member_id,
+            status="active",
+        ).values_list("role", flat=True).first()
+        return result
+
+    @staticmethod
+    def pin(chat_id: int, member_id: int) -> None:
+        ChatMembership.objects.filter(
+            chat_id=chat_id,
+            member_id=member_id,
+            status="active",
+        ).update(pinned_at=timezone.now())
+
+    @staticmethod
+    def unpin(chat_id: int, member_id: int) -> None:
+        ChatMembership.objects.filter(
+            chat_id=chat_id,
+            member_id=member_id,
+            status="active",
+        ).update(pinned_at=None)
+
+    @staticmethod
+    def archive_chats(chat_ids: list[int], member_id: int) -> int:
+        return ChatMembership.objects.filter(
+            chat_id__in=chat_ids,
+            member_id=member_id,
+            status="active",
+            archived_at__isnull=True,
+        ).update(archived_at=timezone.now())
+
+    @staticmethod
+    def unarchive_chats(chat_ids: list[int], member_id: int) -> int:
+        return ChatMembership.objects.filter(
+            chat_id__in=chat_ids,
+            member_id=member_id,
+            status="active",
+            archived_at__isnull=False,
+        ).update(archived_at=None)
+
+    @staticmethod
+    def mute(chat_id: int, member_id: int, muted_until) -> None:
+        ChatMembership.objects.filter(
+            chat_id=chat_id,
+            member_id=member_id,
+            status="active",
+        ).update(muted_until=muted_until)
+
+    @staticmethod
+    def unmute(chat_id: int, member_id: int) -> None:
+        ChatMembership.objects.filter(
+            chat_id=chat_id,
+            member_id=member_id,
+            status="active",
+        ).update(muted_until=None)
+
+    @staticmethod
+    def soft_delete_by_chat(chat_id: int, deleted_by: int) -> None:
+        now = timezone.now()
+        ChatMembership.objects.filter(chat_id=chat_id).update(
+            left_at=now,
+            deleted_at=now,
+            deleted_by=deleted_by,
         )
 
 

@@ -9,6 +9,9 @@ channels-redis==4.2.1
 psycopg[binary]==3.2.6
 httpx==0.28.1
 python-decouple==3.8
-uvicorn[standard]==0.34.2
-django-prometheus
-python-json-logger
+django-prometheus==2.3.1
+python-json-logger==2.0.7
+requests==2.32.3
+markdown==3.7
+python-bidi==0.6.7
+xhtml2pdf==0.2.16

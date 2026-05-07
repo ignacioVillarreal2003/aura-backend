@@ -16,6 +16,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.postgres",
     "rest_framework",
     "corsheaders",
     "django_filters",
@@ -76,20 +77,28 @@ DATABASES = {
         "OPTIONS": {
             "connect_timeout": 5,
         },
+        "CONN_MAX_AGE": config("DB_CONN_MAX_AGE", default=60, cast=int),
     }
 }
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ──────────────────────────────────────────────
-# Channel Layers (Redis)
+# Redis (Channels + distributed chat AI reply lock)
 # ──────────────────────────────────────────────
+
+REDIS_URL = config("REDIS_URL", default="redis://localhost:6379/0")
+CHAT_AI_REPLY_LOCK_TTL_SECONDS = config(
+    "CHAT_AI_REPLY_LOCK_TTL_SECONDS",
+    default=180,
+    cast=int,
+)
 
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [config("REDIS_URL", default="redis://localhost:6379/0")],
+            "hosts": [REDIS_URL],
         },
     },
 }
@@ -159,16 +168,12 @@ AUTHENTICATION_EXCLUDED_PATHS = [
     "/api/schema*",
     "/api/docs*",
     "/api/redoc*",
+    "/api/v1/share*",
 ]
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Aura Chat Service",
-    "DESCRIPTION": (
-        "REST API for chats, messages, and memberships. "
-        "Use **Authorization: Bearer** plus your token (validated by the auth service), "
-        "or for service-to-service calls send **X-Service-Api-Key** with **X-User-Id**, "
-        "**X-User-Email**, and optionally **X-User-Roles** / **X-User-Permissions**."
-    ),
+    "DESCRIPTION": "REST API for chats, messages, and memberships.",
     "VERSION": config("APP_VERSION", default="1.0.0"),
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
@@ -177,24 +182,22 @@ SPECTACULAR_SETTINGS = {
         {"name": "Chats", "description": "Chat CRUD"},
         {"name": "Messages", "description": "Chat messages (REST)"},
         {"name": "Memberships", "description": "Chat members"},
+        {"name": "Share Links", "description": "Read-only share links"},
+        {"name": "Webhooks", "description": "Outgoing webhooks"},
     ],
-    "SECURITY": [{"BearerAuth": []}, {"ServiceApiKey": []}],
+    "SECURITY": [{"BearerAuth": []}],
     "APPEND_COMPONENTS": {
         "securitySchemes": {
             "BearerAuth": {
                 "type": "http",
                 "scheme": "bearer",
                 "bearerFormat": "JWT",
-                "description": "Token de usuario validado por el auth service.",
-            },
-            "ServiceApiKey": {
-                "type": "apiKey",
-                "in": "header",
-                "name": "X-Service-Api-Key",
-                "description": "Clave para llamadas service-to-service. Requiere también X-User-Id y X-User-Email.",
+                "description": "Authorization: Bearer <token>",
             },
         }
     },
+    "ENUM_GENERATE_CHOICE_DESCRIPTION": True,
+    "ENUM_ADD_EXPLICIT_BLANK_NULL_CHOICE": False,
 }
 
 # ──────────────────────────────────────────────
@@ -225,6 +228,10 @@ LLM_SERVICE_TIMEOUT = config("LLM_SERVICE_TIMEOUT", default=120, cast=int)
 LLM_STREAM_CONNECT_TIMEOUT = config(
     "LLM_STREAM_CONNECT_TIMEOUT", default=10.0, cast=float
 )
+LLM_STREAM_READ_TIMEOUT = config(
+    "LLM_STREAM_READ_TIMEOUT", default=180.0, cast=float
+)
+LLM_CONTEXT_MESSAGE_LIMIT = config("LLM_CONTEXT_MESSAGE_LIMIT", default=20, cast=int)
 
 # ──────────────────────────────────────────────
 # Internationalization

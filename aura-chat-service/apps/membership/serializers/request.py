@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from apps.membership.models.chat_membership import ChatMembership
+
 
 class AddMemberRequest(serializers.Serializer):
     member_ids = serializers.ListField(
@@ -10,4 +12,8 @@ class AddMemberRequest(serializers.Serializer):
 
 
 class UpdateMemberRequest(serializers.Serializer):
-    status = serializers.ChoiceField(choices=["active", "inactive", "pending"])
+    status = serializers.ChoiceField(choices=ChatMembership.Status.choices)
+
+
+class UpdateRoleRequest(serializers.Serializer):
+    role = serializers.ChoiceField(choices=ChatMembership.Role.choices)

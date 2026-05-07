@@ -1,27 +1,32 @@
 import logging
-import tempfile
 import os
+import tempfile
+import threading
 
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
 _model = None
+_model_lock = threading.Lock()
 
 
 def _get_model():
     global _model
-    if _model is None:
-        from faster_whisper import WhisperModel
-        model_size = getattr(settings, "WHISPER_MODEL_SIZE", "small")
-        device = getattr(settings, "WHISPER_DEVICE", "cuda")
-        compute_type = getattr(settings, "WHISPER_COMPUTE_TYPE", "float16")
-        logger.info(
-            "Loading Whisper model.",
-            extra={"model": model_size, "device": device, "compute_type": compute_type},
-        )
-        _model = WhisperModel(model_size, device=device, compute_type=compute_type)
-        logger.info("Whisper model ready.")
+    if _model is not None:
+        return _model
+    with _model_lock:
+        if _model is None:
+            from faster_whisper import WhisperModel
+            model_size = getattr(settings, "WHISPER_MODEL_SIZE", "small")
+            device = getattr(settings, "WHISPER_DEVICE", "cuda")
+            compute_type = getattr(settings, "WHISPER_COMPUTE_TYPE", "float16")
+            logger.info(
+                "Loading Whisper model.",
+                extra={"model": model_size, "device": device, "compute_type": compute_type},
+            )
+            _model = WhisperModel(model_size, device=device, compute_type=compute_type)
+            logger.info("Whisper model ready.")
     return _model
 
 

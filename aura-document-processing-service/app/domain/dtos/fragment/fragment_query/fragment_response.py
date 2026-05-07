@@ -1,7 +1,6 @@
 from typing import Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.domain.constants.document.document_type import DocumentType
 from app.domain.field_limits import (
     MAX_CATEGORY_CHARS,
     MAX_DESCRIPTION_CHARS,
@@ -23,7 +22,7 @@ class _Document(BaseModel):
     id: DocumentId = Field(..., gt=0, le=MAX_ID)
     name: str = Field(..., min_length=1, max_length=MAX_NAME_CHARS)
     description: Optional[str] = Field(default=None, min_length=1, max_length=MAX_DESCRIPTION_CHARS)
-    type: Optional[DocumentType] = Field(default=None)
+    type: Optional[str] = Field(default=None, max_length=64)
     category: Optional[str] = Field(default=None, min_length=1, max_length=MAX_CATEGORY_CHARS)
 
     @field_validator("name", mode="after")

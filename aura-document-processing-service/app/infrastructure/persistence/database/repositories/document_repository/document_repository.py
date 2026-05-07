@@ -214,7 +214,7 @@ class DocumentRepository(DocumentRepositoryInterface):
             if category is not None:
                 query = query.where(Document.category.ilike(f"%{category}%"))
             if document_type is not None:
-                query = query.where(Document.type == document_type)
+                query = query.where(Document.type == document_type.value)
             if created_from is not None:
                 query = query.where(Document.created_at >= created_from)
             if created_to is not None:
