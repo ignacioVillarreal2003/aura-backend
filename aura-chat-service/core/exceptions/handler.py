@@ -1,5 +1,4 @@
 import logging
-
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
@@ -42,7 +41,6 @@ def custom_exception_handler(exc, context):
                 "status_code": response.status_code,
             }
         elif isinstance(error_detail, dict):
-            # Field-level validation errors: {"field": ["msg1", ...], ...}
             response.data = {
                 "error": error_code,
                 "detail": "Validation failed",
@@ -79,7 +77,6 @@ def custom_exception_handler(exc, context):
 
 
 def _serialize_validation_errors(data) -> dict | list | str:
-    """Recursively convert DRF ErrorDetail objects to plain strings."""
     if isinstance(data, dict):
         return {k: _serialize_validation_errors(v) for k, v in data.items()}
     if isinstance(data, list):
@@ -96,6 +93,7 @@ def _status_to_error_code(status_code: int) -> str:
         405: "method_not_allowed",
         409: "conflict",
         429: "throttled",
+        500: "internal_error",
         502: "bad_gateway",
         503: "service_unavailable",
     }

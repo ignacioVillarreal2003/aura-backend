@@ -1,4 +1,5 @@
 import logging
+import threading
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -20,7 +21,7 @@ from apps.membership.models.chat_membership import ChatMembership
 from apps.membership.repositories.membership_repository import membership_repository
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization import AccessControl
-from core.authorization.permissions import ADD_MEMBER, LIST_MEMBERS, REMOVE_MEMBER, UPDATE_MEMBER
+from core.authorization.permissions import ADD_MEMBER, LEAVE_CHAT, LIST_MEMBERS, REMOVE_MEMBER, UPDATE_MEMBER, UPDATE_MEMBER_ROLE
 from core.exceptions import ValidationException
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,9 @@ class MembershipService:
         status: str | None = "active",
     ) -> QuerySet[ChatMembership]:
         AccessControl.require_permissions(user, frozenset({LIST_MEMBERS}))
+        chat = chat_repository.get_by_id(chat_id)
+        if chat is None:
+            raise ChatNotFoundException()
         self._require_active_member(chat_id, user.id)
         return membership_repository.list_by_chat(chat_id, status=status)
 
@@ -79,12 +83,15 @@ class MembershipService:
         if chat.created_by != user.id:
             raise MembershipForbiddenException("Only the chat owner can add members")
 
+        already_active = membership_repository.get_active_member_ids_in(chat_id, member_ids)
+        if already_active:
+            first = next(iter(already_active))
+            raise MembershipAlreadyExistsException(
+                f"User {first} is already a member of chat {chat_id}"
+            )
+
         created = []
         for member_id in member_ids:
-            if membership_repository.is_active_member(chat_id, member_id):
-                raise MembershipAlreadyExistsException(
-                    f"User {member_id} is already a member of chat {chat_id}"
-                )
             try:
                 membership = membership_repository.create(
                     member_id=member_id,
@@ -108,13 +115,26 @@ class MembershipService:
         )
 
         if created and access_token:
-            notification_client.notify_members_added(
-                receiver_ids=[m.member_id for m in created],
-                chat_name=chat.name,
-                sender_id=user.id,
-                sender_name=user.username or user.email,
-                access_token=access_token,
-            )
+            receiver_ids = [m.member_id for m in created]
+            message = f'Te agregaron al chat "{chat.name}"'
+            sender_id = user.id
+            sender_name = user.username or user.email
+
+            def _send_notification():
+                threading.Thread(
+                    target=notification_client.notify_members_added,
+                    kwargs={
+                        "receiver_ids": receiver_ids,
+                        "chat_name": chat.name,
+                        "sender_id": sender_id,
+                        "sender_name": sender_name,
+                        "access_token": access_token,
+                        "message": message,
+                    },
+                    daemon=True,
+                ).start()
+
+            on_commit(_send_notification)
 
         return created
 
@@ -139,6 +159,9 @@ class MembershipService:
             raise MembershipForbiddenException(
                 "Only the chat owner or the member themselves can update member status"
             )
+
+        if member_id == chat.created_by:
+            raise CannotRemoveOwnerException("The chat owner's membership status cannot be changed")
 
         membership = membership_repository.get_by_chat_and_member_for_update(chat_id, member_id)
         if membership is None:
@@ -213,7 +236,7 @@ class MembershipService:
 
     @transaction.atomic
     def leave_chat(self, user: AuthenticatedUser, chat_id: int) -> None:
-        AccessControl.require_permissions(user, frozenset({REMOVE_MEMBER}))
+        AccessControl.require_permissions(user, frozenset({LEAVE_CHAT}))
         chat = chat_repository.get_by_id(chat_id)
         if chat is None:
             raise ChatNotFoundException()
@@ -236,6 +259,7 @@ class MembershipService:
             extra={"chat_id": chat_id, "user_id": user.id},
         )
 
+    @transaction.atomic
     def update_member_role(
         self,
         user: AuthenticatedUser,
@@ -243,15 +267,15 @@ class MembershipService:
         member_id: int,
         role: str,
     ) -> ChatMembership:
-        AccessControl.require_permissions(user, frozenset({UPDATE_MEMBER}))
+        AccessControl.require_permissions(user, frozenset({UPDATE_MEMBER_ROLE}))
         chat = chat_repository.get_by_id(chat_id)
         if chat is None:
             raise ChatNotFoundException()
         if chat.created_by != user.id:
             raise RoleUpdateForbiddenException()
-        if membership_repository.get_by_chat_and_member(chat_id, member_id) is None:
-            raise MembershipNotFoundException()
-        membership = membership_repository.update_role(chat_id, member_id, role)
+        if member_id == chat.created_by:
+            raise RoleUpdateForbiddenException()
+        membership = membership_repository.update_role(chat_id, member_id, role, updated_by=user.id)
         if membership is None:
             raise MembershipNotFoundException()
         logger.info(

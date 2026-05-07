@@ -87,9 +87,11 @@ class MembershipRepository:
 
     @staticmethod
     def soft_delete(membership: ChatMembership, deleted_by: int) -> None:
-        membership.left_at = timezone.now()
-        membership.save(update_fields=["left_at"])
-        membership.delete(deleted_by=deleted_by)
+        now = timezone.now()
+        membership.left_at = now
+        membership.deleted_at = now
+        membership.deleted_by = deleted_by
+        membership.save(update_fields=["left_at", "deleted_at", "deleted_by"])
 
     @staticmethod
     def get_active_member_ids(chat_id: int) -> list[int]:
@@ -108,8 +110,16 @@ class MembershipRepository:
         ).update(last_read_at=timezone.now())
 
     @staticmethod
-    def update_role(chat_id: int, member_id: int, role: str) -> ChatMembership | None:
-        membership = ChatMembership.objects.filter(
+    def get_active_member_ids_in(chat_id: int, member_ids: list[int]) -> set[int]:
+        return set(
+            ChatMembership.objects
+            .filter(chat_id=chat_id, member_id__in=member_ids, status="active")
+            .values_list("member_id", flat=True)
+        )
+
+    @staticmethod
+    def update_role(chat_id: int, member_id: int, role: str, updated_by: int) -> ChatMembership | None:
+        membership = ChatMembership.objects.select_for_update().filter(
             chat_id=chat_id,
             member_id=member_id,
             status="active",
@@ -117,7 +127,9 @@ class MembershipRepository:
         if membership is None:
             return None
         membership.role = role
-        membership.save(update_fields=["role"])
+        membership.updated_by = updated_by
+        membership.updated_at = timezone.now()
+        membership.save(update_fields=["role", "updated_by", "updated_at"])
         return membership
 
     @staticmethod

@@ -25,6 +25,8 @@ from apps.message.services.message_service import (
     broadcast_chat_ai_lock_change,
     message_service,
 )
+from core.authorization import AccessControl
+from core.authorization.permissions import LIST_MESSAGES, SEND_MESSAGE
 from core.openapi.common import standard_error_responses
 from core.pagination.pagination import MessageCursorPagination
 
@@ -34,12 +36,18 @@ class MessageListView(APIView):
     @extend_schema(
         tags=["Messages"],
         summary="List messages",
+        description=(
+            "Returns the chat message history with **cursor pagination** (newest first by default). "
+            "Each item may include user-specific annotations when applicable: `is_bookmarked`, "
+            "`user_feedback` (1/-1 or null), and `thread_reply_count`."
+        ),
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
         ],
         responses={200: MessageResponse(many=True), **standard_error_responses(401, 403, 404)},
     )
     def get(self, request: Request, chat_id: int) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({LIST_MESSAGES}))
         messages = message_service.get_messages(user=request.user, chat_id=chat_id)
         paginator = MessageCursorPagination()
         page = paginator.paginate_queryset(messages, request)
@@ -50,6 +58,14 @@ class MessageListView(APIView):
     @extend_schema(
         tags=["Messages"],
         summary="Send message",
+        description=(
+            "Send **either** plain text (`message`) **or** a voice clip (`audio` multipart field)—not both. "
+            "Audio is transcribed server-side; the transcript may appear in `transcript` in the response. "
+            "After storing the user message, the service runs the document-question flow: the response body "
+            "includes `message` (persisted user row), optional `assistant` / `assistant_error`, and applies "
+            "to **non-ephemeral** chats the same pipeline; **ephemeral** chats use an ephemeral AI path. "
+            "Returns **409** if another AI reply is already in progress for this chat (`ChatAiReplyInProgressException`)."
+        ),
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
         ],
@@ -60,6 +76,7 @@ class MessageListView(APIView):
         },
     )
     def post(self, request: Request, chat_id: int) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({SEND_MESSAGE}))
         return async_to_sync(self._post_async)(request, chat_id)
 
     async def _post_async(self, request: Request, chat_id: int) -> Response:

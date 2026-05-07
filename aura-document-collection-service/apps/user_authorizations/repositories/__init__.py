@@ -1,0 +1,4 @@
+from apps.user_authorizations.repositories.user_clearance_repository import user_clearance_repository
+from apps.user_authorizations.repositories.user_compartment_repository import user_compartment_repository
+
+__all__ = ["user_clearance_repository", "user_compartment_repository"]

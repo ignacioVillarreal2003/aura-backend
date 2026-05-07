@@ -19,3 +19,8 @@ class ShareLinkNotFoundException(NotFoundException):
 class ShareLinkExpiredOrInactiveException(ValidationException):
     error_code = "share_link_expired_or_inactive"
     detail = "This share link is expired or inactive"
+
+
+class WebhookNotFoundException(NotFoundException):
+    error_code = "webhook_not_found"
+    detail = "Webhook not found"

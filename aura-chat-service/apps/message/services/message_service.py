@@ -7,7 +7,6 @@ from asgiref.sync import async_to_sync, sync_to_async
 from channels.layers import get_channel_layer
 from django.conf import settings
 from django.db import transaction
-from django.utils import timezone
 
 from apps.chat.exceptions import ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
@@ -18,7 +17,13 @@ from apps.message.repositories.message_repository import message_repository
 from apps.message.serializers.response import MessageResponse
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization import AccessControl
-from core.authorization.permissions import LIST_MESSAGES, SEND_MESSAGE
+from core.authorization.permissions import (
+    CLEAR_CHAT_HISTORY,
+    DELETE_MESSAGE,
+    LIST_MESSAGES,
+    REGENERATE_AI_RESPONSE,
+    SEND_MESSAGE,
+)
 from core.clients.exceptions import HttpClientException
 from core.clients.llm_client import DocumentQuestionResult, llm_client
 from core.clients.transcription_client import transcription_client
@@ -70,11 +75,10 @@ class MessageService:
         text: str,
     ) -> ChatMessage:
         AccessControl.require_permissions(user, frozenset({SEND_MESSAGE}))
-        self._require_access(chat_id, user.id)
+        chat = self._require_access(chat_id, user.id)
         if membership_repository.get_role(chat_id, user.id) == "reader":
             raise ReaderCannotSendMessageException()
-        chat = chat_repository.get_by_id(chat_id)
-        if chat is not None and chat.is_locked:
+        if chat.is_locked:
             raise ChatLockedException()
 
         with transaction.atomic():
@@ -117,18 +121,15 @@ class MessageService:
         return message_repository.get_messages_by_chat(chat_id, user_id=user.id)
 
     def clear_history(self, user: AuthenticatedUser, chat_id: int) -> None:
-        AccessControl.require_permissions(user, frozenset({SEND_MESSAGE}))
-        self._require_access(chat_id, user.id)
-        chat = chat_repository.get_by_id(chat_id)
-        if chat is None:
-            raise ChatNotFoundException()
+        AccessControl.require_permissions(user, frozenset({CLEAR_CHAT_HISTORY}))
+        chat = self._require_access(chat_id, user.id)
         if chat.created_by != user.id:
             raise NotChatCreatorException()
         message_repository.soft_delete_by_chat(chat_id, deleted_by=user.id)
         logger.info("Chat history cleared.", extra={"chat_id": chat_id, "user_id": user.id})
 
     def delete_last_ai_message(self, user: AuthenticatedUser, chat_id: int) -> None:
-        AccessControl.require_permissions(user, frozenset({SEND_MESSAGE}))
+        AccessControl.require_permissions(user, frozenset({REGENERATE_AI_RESPONSE}))
         self._require_access(chat_id, user.id)
         last_ai = message_repository.get_last_ai_message(chat_id)
         if last_ai is None:
@@ -138,7 +139,7 @@ class MessageService:
 
     @staticmethod
     async def _build_llm_messages(chat_id: int) -> list[dict[str, str]]:
-        limit = getattr(settings, "LLM_CONTEXT_MESSAGE_LIMIT", 20)
+        limit = getattr(settings, "LLM_CONTEXT_MESSAGE_LIMIT", 10)
         recent = await sync_to_async(message_repository.get_recent_messages)(
             chat_id, limit=limit
         )
@@ -281,14 +282,13 @@ class MessageService:
             raise LLMServiceException() from e
 
     def delete_message(self, user: AuthenticatedUser, chat_id: int, message_id: int) -> None:
-        AccessControl.require_permissions(user, frozenset({SEND_MESSAGE}))
-        self._require_access(chat_id, user.id)
+        AccessControl.require_permissions(user, frozenset({DELETE_MESSAGE}))
+        chat = self._require_access(chat_id, user.id)
         msg = message_repository.get_by_id_and_chat(message_id, chat_id)
         if msg is None:
             raise MessageNotFoundException()
-        chat = chat_repository.get_by_id(chat_id)
         is_author = msg.created_by == user.id
-        is_owner = chat is not None and chat.created_by == user.id
+        is_owner = chat.created_by == user.id
         if not is_author and not is_owner:
             raise MessageDeleteForbiddenException()
         msg.delete(deleted_by=user.id)
@@ -301,9 +301,11 @@ class MessageService:
         text: str,
     ) -> ChatMessage:
         AccessControl.require_permissions(user, frozenset({SEND_MESSAGE}))
-        self._require_access(chat_id, user.id)
+        chat = self._require_access(chat_id, user.id)
         if membership_repository.get_role(chat_id, user.id) == "reader":
             raise ReaderCannotSendMessageException()
+        if chat.is_locked:
+            raise ChatLockedException()
         return ChatMessage(
             chat_id=chat_id,
             message=text,
@@ -336,12 +338,13 @@ class MessageService:
             assistant_message=None,
         )
 
-    def _require_access(self, chat_id: int, user_id: int) -> None:
+    def _require_access(self, chat_id: int, user_id: int):
         chat = chat_repository.get_by_id(chat_id)
         if chat is None:
             raise ChatNotFoundException()
         if not membership_repository.is_active_member(chat_id, user_id):
             raise MessageAccessDeniedException()
+        return chat
 
 
 message_service = MessageService()

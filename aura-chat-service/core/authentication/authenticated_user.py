@@ -6,8 +6,8 @@ class AuthenticatedUser:
     id: int
     email: str
     username: str = ""
-    roles: list[str] = field(default_factory=list)
-    permissions: list[str] = field(default_factory=list)
+    roles: tuple[str, ...] = field(default_factory=tuple)
+    permissions: tuple[str, ...] = field(default_factory=tuple)
 
     @property
     def pk(self) -> int:

@@ -6,6 +6,8 @@ from rest_framework.views import APIView
 
 from apps.chat.serializers.share_link import ShareLinkCreateRequest, ShareLinkResponse
 from apps.chat.services.share_link_service import share_link_service
+from core.authorization import AccessControl
+from core.authorization.permissions import CREATE_SHARE_LINK, DELETE_SHARE_LINK, LIST_SHARE_LINKS
 from core.openapi.common import standard_error_responses
 from core.pagination.pagination import StandardPagination
 
@@ -14,12 +16,14 @@ class ShareLinkListView(APIView):
     @extend_schema(
         tags=["Share Links"],
         summary="List share links for a chat",
+        description="Paginated list of share-link records (token, expiry, active flag) for moderation.",
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
         ],
         responses={200: ShareLinkResponse(many=True), **standard_error_responses(401, 403, 404)},
     )
     def get(self, request: Request, chat_id: int) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({LIST_SHARE_LINKS}))
         links = share_link_service.list_links(user=request.user, chat_id=chat_id)
         paginator = StandardPagination()
         page = paginator.paginate_queryset(links, request)
@@ -28,6 +32,10 @@ class ShareLinkListView(APIView):
     @extend_schema(
         tags=["Share Links"],
         summary="Create a share link",
+        description=(
+            "Creates a UUID **token** clients can pass to the public read-only endpoint "
+            "`GET /api/v1/share/{token}/messages/` (no Bearer). Optional future `expires_at`."
+        ),
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
         ],
@@ -35,6 +43,7 @@ class ShareLinkListView(APIView):
         responses={201: ShareLinkResponse, **standard_error_responses(400, 401, 403, 404)},
     )
     def post(self, request: Request, chat_id: int) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({CREATE_SHARE_LINK}))
         serializer = ShareLinkCreateRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
         link = share_link_service.create_link(
@@ -49,6 +58,7 @@ class ShareLinkDetailView(APIView):
     @extend_schema(
         tags=["Share Links"],
         summary="Revoke a share link",
+        description="Soft-deactivates the link so the public token no longer resolves to messages.",
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
             OpenApiParameter(name="link_id", type=int, location=OpenApiParameter.PATH, required=True),
@@ -56,5 +66,6 @@ class ShareLinkDetailView(APIView):
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     def delete(self, request: Request, chat_id: int, link_id: int) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({DELETE_SHARE_LINK}))
         share_link_service.revoke_link(user=request.user, chat_id=chat_id, link_id=link_id)
         return Response(status=status.HTTP_204_NO_CONTENT)

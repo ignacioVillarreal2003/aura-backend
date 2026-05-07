@@ -3,7 +3,6 @@ import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
-
 import httpx
 from django.conf import settings
 
@@ -74,10 +73,6 @@ class LLMClient:
         messages: list[dict[str, str]],
         user: AuthenticatedUser,
     ) -> AsyncIterator[dict[str, Any]]:
-        """
-        Consume POST /document-question/stream (SSE). Yields one dict per event
-        with at least key ``type`` in {meta, delta, complete, error}.
-        """
         payload = {"messages": messages}
         headers = self._build_stream_headers(user)
         url = settings.LLM_DOCUMENT_QUESTION_STREAM_URL

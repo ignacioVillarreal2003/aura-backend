@@ -4,11 +4,15 @@ from apps.chat.models.webhook import WEBHOOK_EVENTS, ChatWebhook
 
 
 class WebhookCreateRequest(serializers.Serializer):
-    url = serializers.URLField()
+    url = serializers.URLField(help_text="HTTPS endpoint to receive signed webhook deliveries.")
     events = serializers.ListField(
         child=serializers.ChoiceField(choices=WEBHOOK_EVENTS),
         min_length=1,
+        help_text="Non-empty list of event types (deduplicated). See enum in schema.",
     )
+
+    def validate_events(self, value):
+        return list(dict.fromkeys(value))
 
 
 class WebhookUpdateRequest(serializers.Serializer):
@@ -17,8 +21,15 @@ class WebhookUpdateRequest(serializers.Serializer):
         child=serializers.ChoiceField(choices=WEBHOOK_EVENTS),
         required=False,
         min_length=1,
+        help_text="When set, replaces event subscription list.",
     )
-    is_active = serializers.BooleanField(required=False)
+    is_active = serializers.BooleanField(
+        required=False,
+        help_text="Disable delivery without deleting the webhook.",
+    )
+
+    def validate_events(self, value):
+        return list(dict.fromkeys(value))
 
 
 class WebhookResponse(serializers.ModelSerializer):

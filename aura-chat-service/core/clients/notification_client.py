@@ -1,6 +1,5 @@
 import logging
-
-import requests
+import httpx
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -17,6 +16,7 @@ class NotificationClient:
         sender_id: int,
         sender_name: str,
         access_token: str,
+        message: str,
     ) -> None:
         if not self.base:
             logger.warning("NOTIFICATION_SERVICE_URL not configured, skipping notification.")
@@ -24,25 +24,25 @@ class NotificationClient:
 
         payload = {
             "receiver_ids": receiver_ids,
-            "message": f"Te agregaron al chat \"{chat_name}\"",
+            "message": message,
             "type": "user",
             "sender_name": sender_name,
             "target_scope": "individual",
         }
 
         try:
-            response = requests.post(
+            response = httpx.post(
                 f"{self.base}/api/notifications/",
                 json=payload,
                 headers={"Authorization": f"Bearer {access_token}"},
                 timeout=5,
             )
-            if not response.ok:
+            if not response.is_success:
                 logger.warning(
                     "Notification service returned non-OK response.",
                     extra={"status": response.status_code, "body": response.text[:200]},
                 )
-        except requests.RequestException as exc:
+        except httpx.RequestError as exc:
             logger.error("Failed to send notification: %s", exc)
 
 

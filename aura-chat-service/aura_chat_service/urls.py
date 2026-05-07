@@ -23,6 +23,10 @@ logger = logging.getLogger(__name__)
 @extend_schema(
     tags=["Health"],
     summary="Health check",
+    description=(
+        "Returns `status: ok` or `degraded` and per-dependency checks (`database`, `redis`). "
+        "**200** when all checks pass; **503** when any dependency fails."
+    ),
     auth=[],
     responses={
         200: inline_serializer(

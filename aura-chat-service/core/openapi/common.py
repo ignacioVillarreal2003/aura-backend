@@ -1,5 +1,18 @@
+from drf_spectacular.extensions import OpenApiAuthenticationExtension
 from drf_spectacular.utils import OpenApiResponse, inline_serializer
 from rest_framework import serializers as drf_serializers
+
+
+class ServiceAuthenticationScheme(OpenApiAuthenticationExtension):
+    target_class = "core.authentication.service_authentication.ServiceAuthentication"
+    name = "BearerAuth"
+
+    def get_security_definition(self, auto_schema):
+        return {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+        }
 
 ApiErrorBody = inline_serializer(
     name="ApiErrorBody",

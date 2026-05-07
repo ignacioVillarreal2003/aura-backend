@@ -18,7 +18,7 @@ from apps.message.services.export_service import (
     generate_message_pdf,
 )
 from core.authorization import AccessControl
-from core.authorization.permissions import LIST_MESSAGES
+from core.authorization.permissions import EXPORT_CHAT
 from core.openapi.common import standard_error_responses
 
 logger = logging.getLogger(__name__)
@@ -38,6 +38,10 @@ class ChatExportPDFView(APIView):
     @extend_schema(
         tags=["Messages"],
         summary="Export full chat as PDF",
+        operation_id="v1_chats_messages_export_pdf_chat",
+        description=(
+            "Downloads the **full** conversation as a PDF attachment. Requires chat membership and `EXPORT_CHAT`."
+        ),
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
         ],
@@ -47,7 +51,7 @@ class ChatExportPDFView(APIView):
         },
     )
     def get(self, request: Request, chat_id: int) -> HttpResponse:
-        AccessControl.require_permissions(request.user, frozenset({LIST_MESSAGES}))
+        AccessControl.require_permissions(request.user, frozenset({EXPORT_CHAT}))
         chat = _get_chat_or_raise(chat_id, request.user.id)
         messages = list(
             message_repository.get_messages_by_chat(chat_id).order_by("created_at")
@@ -63,6 +67,7 @@ class ChatExportMarkdownView(APIView):
     @extend_schema(
         tags=["Messages"],
         summary="Export full chat as Markdown",
+        description="Downloads the **full** chat transcript as Markdown (`Content-Disposition: attachment`).",
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
         ],
@@ -72,7 +77,7 @@ class ChatExportMarkdownView(APIView):
         },
     )
     def get(self, request: Request, chat_id: int) -> HttpResponse:
-        AccessControl.require_permissions(request.user, frozenset({LIST_MESSAGES}))
+        AccessControl.require_permissions(request.user, frozenset({EXPORT_CHAT}))
         chat = _get_chat_or_raise(chat_id, request.user.id)
         messages = list(message_repository.get_messages_by_chat(chat_id).order_by("created_at"))
         content = generate_chat_markdown(chat, messages)
@@ -86,6 +91,7 @@ class ChatExportJSONView(APIView):
     @extend_schema(
         tags=["Messages"],
         summary="Export full chat as JSON",
+        description="Structured **backup** of chat metadata and messages as downloadable JSON.",
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
         ],
@@ -95,7 +101,7 @@ class ChatExportJSONView(APIView):
         },
     )
     def get(self, request: Request, chat_id: int) -> HttpResponse:
-        AccessControl.require_permissions(request.user, frozenset({LIST_MESSAGES}))
+        AccessControl.require_permissions(request.user, frozenset({EXPORT_CHAT}))
         chat = _get_chat_or_raise(chat_id, request.user.id)
         messages = list(message_repository.get_messages_by_chat(chat_id).order_by("created_at"))
         content = generate_chat_json(chat, messages)
@@ -109,6 +115,7 @@ class AIResponsesExportView(APIView):
     @extend_schema(
         tags=["Messages"],
         summary="Export AI responses only as Markdown",
+        description="Like full Markdown export but **only assistant/system** messages, for summaries or QA excerpts.",
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
         ],
@@ -118,7 +125,7 @@ class AIResponsesExportView(APIView):
         },
     )
     def get(self, request: Request, chat_id: int) -> HttpResponse:
-        AccessControl.require_permissions(request.user, frozenset({LIST_MESSAGES}))
+        AccessControl.require_permissions(request.user, frozenset({EXPORT_CHAT}))
         chat = _get_chat_or_raise(chat_id, request.user.id)
         messages = list(message_repository.get_messages_by_chat(chat_id).order_by("created_at"))
         content = generate_ai_responses_markdown(chat, messages)
@@ -132,6 +139,8 @@ class MessageExportPDFView(APIView):
     @extend_schema(
         tags=["Messages"],
         summary="Export single message as PDF",
+        operation_id="v1_chats_messages_export_pdf_message",
+        description="Renders **one** message (with chat context as implemented by the generator) as a PDF attachment.",
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
             OpenApiParameter(name="message_id", type=int, location=OpenApiParameter.PATH, required=True),
@@ -142,7 +151,7 @@ class MessageExportPDFView(APIView):
         },
     )
     def get(self, request: Request, chat_id: int, message_id: int) -> HttpResponse:
-        AccessControl.require_permissions(request.user, frozenset({LIST_MESSAGES}))
+        AccessControl.require_permissions(request.user, frozenset({EXPORT_CHAT}))
         chat = _get_chat_or_raise(chat_id, request.user.id)
         message = message_repository.get_by_id_and_chat(message_id, chat_id)
         if message is None:

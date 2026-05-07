@@ -228,7 +228,10 @@ CREATE INDEX idx_chat_message_chat_created_active
     ON chat_message (chat_id, created_at) WHERE (deleted_at IS NULL);
 CREATE INDEX idx_chat_message_chat_created
     ON chat_message (chat_id, created_at DESC);
+CREATE INDEX idx_chat_message_chat_id ON chat_message(chat_id);
+CREATE INDEX idx_chat_message_deleted_at ON chat_message(deleted_at);
 CREATE INDEX idx_chat_created_by_active     ON chat (created_by) WHERE (deleted_at IS NULL);
+CREATE INDEX idx_chat_deleted_at            ON chat(deleted_at);
 
 CREATE UNIQUE INDEX chat_membership_member_chat_unique
     ON chat_membership (member_id, chat_id)
@@ -237,8 +240,10 @@ CREATE INDEX idx_chat_membership_chat_member_status
     ON chat_membership (chat_id, member_id, status);
 CREATE INDEX idx_chat_membership_chat_id  ON chat_membership(chat_id);
 CREATE INDEX idx_chat_membership_member   ON chat_membership(member_id);
+CREATE INDEX idx_chat_membership_deleted_at ON chat_membership(deleted_at);
 
 CREATE INDEX idx_pinned_message_chat ON pinned_message(chat_id);
+CREATE INDEX idx_pinned_message_message ON pinned_message(message_id);
 CREATE INDEX idx_message_bookmark_message ON message_bookmark(message_id);
 CREATE INDEX idx_message_bookmark_user ON message_bookmark(user_id);
 CREATE INDEX idx_thread_reply_parent ON message_thread_reply(parent_message_id);

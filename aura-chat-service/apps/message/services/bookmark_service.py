@@ -7,7 +7,7 @@ from apps.message.repositories.bookmark_repository import bookmark_repository
 from apps.message.repositories.message_repository import message_repository
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization import AccessControl
-from core.authorization.permissions import LIST_MESSAGES
+from core.authorization.permissions import BOOKMARK_MESSAGE, LIST_BOOKMARKS
 
 
 def _require_message_access(user_id: int, chat_id: int, message_id: int) -> ChatMessage:
@@ -21,17 +21,17 @@ def _require_message_access(user_id: int, chat_id: int, message_id: int) -> Chat
 
 class BookmarkService:
     def bookmark(self, user: AuthenticatedUser, chat_id: int, message_id: int) -> None:
-        AccessControl.require_permissions(user, frozenset({LIST_MESSAGES}))
+        AccessControl.require_permissions(user, frozenset({BOOKMARK_MESSAGE}))
         _require_message_access(user.id, chat_id, message_id)
         bookmark_repository.create(message_id=message_id, user_id=user.id)
 
     def unbookmark(self, user: AuthenticatedUser, chat_id: int, message_id: int) -> None:
-        AccessControl.require_permissions(user, frozenset({LIST_MESSAGES}))
+        AccessControl.require_permissions(user, frozenset({BOOKMARK_MESSAGE}))
         _require_message_access(user.id, chat_id, message_id)
         bookmark_repository.delete(message_id=message_id, user_id=user.id)
 
     def list_bookmarked(self, user: AuthenticatedUser, chat_id: int):
-        AccessControl.require_permissions(user, frozenset({LIST_MESSAGES}))
+        AccessControl.require_permissions(user, frozenset({LIST_BOOKMARKS}))
         chat = chat_repository.get_by_id(chat_id)
         if chat is None:
             raise ChatNotFoundException()
