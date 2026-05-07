@@ -191,6 +191,14 @@ class ChatRepository:
         return qs.order_by(F("pinned_at").desc(nulls_last=True), order_expr)
 
     @staticmethod
+    def set_archived(chat: Chat, archived: bool, updated_by: int) -> Chat:
+        chat.is_archived = archived
+        chat.updated_by = updated_by
+        chat.updated_at = timezone.now()
+        chat.save(update_fields=["is_archived", "updated_by", "updated_at"])
+        return chat
+
+    @staticmethod
     def update(chat: Chat, updated_by: int, **fields) -> Chat:
         for key, value in fields.items():
             setattr(chat, key, value)

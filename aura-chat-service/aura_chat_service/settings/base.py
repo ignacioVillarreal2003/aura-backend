@@ -212,6 +212,8 @@ WHISPER_COMPUTE_TYPE = config("WHISPER_COMPUTE_TYPE", default="int8")
 # LLM Service
 # ──────────────────────────────────────────────
 
+NOTIFICATION_SERVICE_URL = config("NOTIFICATION_SERVICE_URL", default="")
+
 LLM_DOCUMENT_QUESTION_URL = config(
     "LLM_DOCUMENT_QUESTION_URL",
     default="http://localhost:8001/api/v1/document-question",

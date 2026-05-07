@@ -8,6 +8,7 @@ from notifications.models.audited import AuditedModel
 class NotificationType(models.TextChoices):
     SYSTEM = 'system', 'Sistema'
     ADMIN = 'admin', 'Administrador'
+    USER = 'user', 'Usuario'
 
 
 class NotificationStatus(models.TextChoices):
@@ -55,6 +56,13 @@ class Notification(AuditedModel):
         default=NotificationStatus.UNREAD,
         verbose_name='Estado',
         db_index=True,
+    )
+    sender_name = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        verbose_name='Nombre del emisor',
+        help_text='Display name of the sender at the time of creation (denormalized)',
     )
     read_at = models.DateTimeField(
         null=True,

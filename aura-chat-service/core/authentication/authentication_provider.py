@@ -220,6 +220,7 @@ class AuthenticationProvider:
         user = AuthenticatedUser(
             id=user_id,
             email=str(data.get("email", "")),
+            username=str(data.get("username", "")),
             roles=list(data.get("roles") or []),
             permissions=list(data.get("permissions") or []),
         )

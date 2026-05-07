@@ -80,6 +80,18 @@ _TAGS_PARAM = OpenApiParameter(
         parameters=[_SEARCH_PARAM, _ORDERING_PARAM, _TAGS_PARAM],
         responses={200: ChatListResponse(many=True), **standard_error_responses(401)},
     ),
+    archive=extend_schema(
+        tags=["Chats"],
+        summary="Archive chat",
+        request=None,
+        responses={200: ChatResponse, **standard_error_responses(401, 403, 404)},
+    ),
+    unarchive=extend_schema(
+        tags=["Chats"],
+        summary="Unarchive chat",
+        request=None,
+        responses={200: ChatResponse, **standard_error_responses(401, 403, 404)},
+    ),
 )
 class ChatViewSet(ViewSet):
     def create(self, request: Request) -> Response:

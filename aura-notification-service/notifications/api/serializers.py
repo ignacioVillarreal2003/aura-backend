@@ -12,6 +12,7 @@ class NotificationSerializer(serializers.ModelSerializer):
             'receiver_id',
             'message',
             'type',
+            'sender_name',
             'target_scope',
             'target_label',
             'status',
