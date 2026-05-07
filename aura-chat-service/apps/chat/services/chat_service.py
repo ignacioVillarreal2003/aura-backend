@@ -163,12 +163,13 @@ class ChatService:
 
     def lock_chat(self, user: AuthenticatedUser, chat_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({UPDATE_CHAT}))
-        chat = chat_repository.get_by_id_for_update(chat_id)
-        if chat is None:
-            raise ChatNotFoundException()
-        if chat.created_by != user.id:
-            raise ChatAccessDeniedException("Only the chat owner can lock the chat")
-        chat_repository.update(chat, updated_by=user.id, is_locked=True)
+        with transaction.atomic():
+            chat = chat_repository.get_by_id_for_update(chat_id)
+            if chat is None:
+                raise ChatNotFoundException()
+            if chat.created_by != user.id:
+                raise ChatAccessDeniedException("Only the chat owner can lock the chat")
+            chat_repository.update(chat, updated_by=user.id, is_locked=True)
         _broadcast_chat_locked_changed(chat_id, is_locked=True, by=user.id)
         from apps.chat.services.webhook_service import webhook_service
         webhook_service.fire_event(chat_id, "chat.locked", {"locked_by": user.id})
@@ -176,12 +177,13 @@ class ChatService:
 
     def unlock_chat(self, user: AuthenticatedUser, chat_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({UPDATE_CHAT}))
-        chat = chat_repository.get_by_id_for_update(chat_id)
-        if chat is None:
-            raise ChatNotFoundException()
-        if chat.created_by != user.id:
-            raise ChatAccessDeniedException("Only the chat owner can unlock the chat")
-        chat_repository.update(chat, updated_by=user.id, is_locked=False)
+        with transaction.atomic():
+            chat = chat_repository.get_by_id_for_update(chat_id)
+            if chat is None:
+                raise ChatNotFoundException()
+            if chat.created_by != user.id:
+                raise ChatAccessDeniedException("Only the chat owner can unlock the chat")
+            chat_repository.update(chat, updated_by=user.id, is_locked=False)
         _broadcast_chat_locked_changed(chat_id, is_locked=False, by=user.id)
         from apps.chat.services.webhook_service import webhook_service
         webhook_service.fire_event(chat_id, "chat.unlocked", {"unlocked_by": user.id})

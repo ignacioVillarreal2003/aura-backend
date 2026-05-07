@@ -1,6 +1,6 @@
 import logging
 
-from asgiref.sync import sync_to_async
+from asgiref.sync import async_to_sync, sync_to_async
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.request import Request
@@ -59,7 +59,10 @@ class MessageListView(APIView):
             **standard_error_responses(400, 401, 403, 404, 409, 502, 503),
         },
     )
-    async def post(self, request: Request, chat_id: int) -> Response:
+    def post(self, request: Request, chat_id: int) -> Response:
+        return async_to_sync(self._post_async)(request, chat_id)
+
+    async def _post_async(self, request: Request, chat_id: int) -> Response:
         serializer = SendMessageRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
 

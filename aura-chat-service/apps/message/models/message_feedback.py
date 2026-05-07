@@ -21,7 +21,7 @@ class MessageFeedback(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["message", "user_id"], name="uq_message_feedback"),
             models.CheckConstraint(
-                check=models.Q(value__in=[1, -1]),
+                condition=models.Q(value__in=[1, -1]),
                 name="chk_feedback_value",
             ),
         ]

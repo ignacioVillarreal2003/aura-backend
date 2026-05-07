@@ -1,4 +1,5 @@
 from django.contrib.postgres.fields import ArrayField
+from django.core.validators import MaxLengthValidator
 from django.db import models
 
 from core.models import AuditModel, SoftDeleteModel
@@ -9,7 +10,11 @@ class Chat(AuditModel, SoftDeleteModel):
     system_prompt = models.TextField(null=True, blank=True)
     response_style = models.TextField(null=True, blank=True)
     last_message_at = models.DateTimeField(null=True, blank=True)
-    tags = ArrayField(models.CharField(max_length=50), default=list, blank=True)
+    tags = ArrayField(
+        models.TextField(validators=[MaxLengthValidator(50)]),
+        default=list,
+        blank=True,
+    )
     is_ephemeral = models.BooleanField(default=False)
     is_locked = models.BooleanField(default=False)
 

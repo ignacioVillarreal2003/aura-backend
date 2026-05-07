@@ -1,4 +1,5 @@
 from django.contrib.postgres.fields import ArrayField
+from django.core.validators import MaxLengthValidator
 from django.db import models
 
 
@@ -18,7 +19,10 @@ class ChatWebhook(models.Model):
         related_name="webhooks",
     )
     url = models.TextField()
-    events = ArrayField(models.CharField(max_length=50), default=list)
+    events = ArrayField(
+        models.TextField(validators=[MaxLengthValidator(50)]),
+        default=list,
+    )
     secret = models.CharField(max_length=64)
     is_active = models.BooleanField(default=True)
     created_by = models.BigIntegerField()

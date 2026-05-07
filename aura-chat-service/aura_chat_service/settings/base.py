@@ -173,12 +173,7 @@ AUTHENTICATION_EXCLUDED_PATHS = [
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Aura Chat Service",
-    "DESCRIPTION": (
-        "REST API for chats, messages, and memberships. "
-        "Use **Authorization: Bearer** plus your token (validated by the auth service), "
-        "or for service-to-service calls send **X-Service-Api-Key** with **X-User-Id**, "
-        "**X-User-Email**, and optionally **X-User-Roles** / **X-User-Permissions**."
-    ),
+    "DESCRIPTION": "REST API for chats, messages, and memberships.",
     "VERSION": config("APP_VERSION", default="1.0.0"),
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
@@ -187,24 +182,22 @@ SPECTACULAR_SETTINGS = {
         {"name": "Chats", "description": "Chat CRUD"},
         {"name": "Messages", "description": "Chat messages (REST)"},
         {"name": "Memberships", "description": "Chat members"},
+        {"name": "Share Links", "description": "Read-only share links"},
+        {"name": "Webhooks", "description": "Outgoing webhooks"},
     ],
-    "SECURITY": [{"BearerAuth": []}, {"ServiceApiKey": []}],
+    "SECURITY": [{"BearerAuth": []}],
     "APPEND_COMPONENTS": {
         "securitySchemes": {
             "BearerAuth": {
                 "type": "http",
                 "scheme": "bearer",
                 "bearerFormat": "JWT",
-                "description": "Token de usuario validado por el auth service.",
-            },
-            "ServiceApiKey": {
-                "type": "apiKey",
-                "in": "header",
-                "name": "X-Service-Api-Key",
-                "description": "Clave para llamadas service-to-service. Requiere también X-User-Id y X-User-Email.",
+                "description": "Authorization: Bearer <token>",
             },
         }
     },
+    "ENUM_GENERATE_CHOICE_DESCRIPTION": True,
+    "ENUM_ADD_EXPLICIT_BLANK_NULL_CHOICE": False,
 }
 
 # ──────────────────────────────────────────────
