@@ -9,8 +9,14 @@ from rest_framework.views import APIView
 
 from apps.message.chat_ai_reply_lock import release, try_acquire
 from apps.message.exceptions import ChatAiReplyInProgressException, LLMServiceException
-from apps.message.serializers.response import AssistantBlockSerializer, AssistantErrorSerializer
+from apps.message.serializers.response import (
+    AssistantBlockSerializer,
+    AssistantErrorSerializer,
+    RegenerateResponseSerializer,
+)
 from apps.message.services.message_service import broadcast_chat_ai_lock_change, message_service
+from core.authorization import AccessControl
+from core.authorization.permissions import REGENERATE_AI_RESPONSE
 from core.openapi.common import standard_error_responses
 
 logger = logging.getLogger(__name__)
@@ -21,16 +27,22 @@ class RegenerateResponseView(APIView):
     @extend_schema(
         tags=["Messages"],
         summary="Regenerate last AI response",
-        description="Deletes the last AI message and requests a new response from the LLM using the same conversation context.",
+        description=(
+            "Deletes the last assistant (**system**) message and runs the document-question flow again with the same "
+            "conversation context. Returns `assistant` and/or `assistant_error`. **409** if another AI reply is in "
+            "progress for this chat."
+        ),
+        request=None,
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
         ],
         responses={
-            200: None,
+            200: RegenerateResponseSerializer,
             **standard_error_responses(401, 403, 404, 409, 502, 503),
         },
     )
     def post(self, request: Request, chat_id: int) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({REGENERATE_AI_RESPONSE}))
         return async_to_sync(self._post_async)(request, chat_id)
 
     async def _post_async(self, request: Request, chat_id: int) -> Response:

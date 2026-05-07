@@ -5,17 +5,26 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 
+from apps.chat.models.chat import Chat
 from apps.chat.repositories.chat_repository import ALLOWED_ORDERINGS
-
-
-def _parse_tags(raw: str | None) -> list[str] | None:
-    if not raw:
-        return None
-    tags = [t.strip() for t in raw.split(",") if t.strip()]
-    return tags or None
 from apps.chat.serializers.request import BulkChatIdsRequest, CreateChatRequest, MuteChatRequest, UpdateChatRequest
 from apps.chat.serializers.response import ChatListResponse, ChatResponse
 from apps.chat.services.chat_service import chat_service
+from core.authorization import AccessControl
+from core.authorization.permissions import (
+    ARCHIVE_CHAT,
+    CREATE_CHAT,
+    DELETE_CHAT,
+    GET_CHAT,
+    LIST_ARCHIVED_CHATS,
+    LIST_CHATS,
+    LIST_MY_CHATS,
+    LOCK_CHAT,
+    MUTE_CHAT,
+    PIN_CHAT,
+    UNARCHIVE_CHAT,
+    UPDATE_CHAT,
+)
 from core.openapi.common import standard_error_responses
 from core.pagination.pagination import StandardPagination
 
@@ -43,58 +52,79 @@ _TAGS_PARAM = OpenApiParameter(
     required=False,
     description="Comma-separated tag list. Returns chats that contain ALL specified tags (e.g. tags=work,urgent).",
 )
+_PATH_PK = OpenApiParameter(
+    name="pk",
+    type=int,
+    location=OpenApiParameter.PATH,
+    required=True,
+    description="Chat ID",
+)
+
+
+def _parse_tags(raw: str | None) -> list[str] | None:
+    if not raw:
+        return None
+    tags = [t.strip() for t in raw.split(",") if t.strip()]
+    return tags or None
 
 
 @extend_schema_view(
     list=extend_schema(
         tags=["Chats"],
         summary="List chats",
+        description=(
+            "Paginated list of chats the user can access. Filter by `search`, `ordering`, and comma-separated `tags` "
+            "(ALL tags must match). Rows use **ChatListResponse** (unread counts, pin state, archive, mute)."
+        ),
         parameters=[_SEARCH_PARAM, _ORDERING_PARAM, _TAGS_PARAM],
         responses={200: ChatListResponse(many=True), **standard_error_responses(401)},
     ),
     create=extend_schema(
         tags=["Chats"],
         summary="Create chat",
+        description=(
+            "Creates a new chat with optional system prompt, response style, tags, and `is_ephemeral` (no persistent "
+            "history / ephemeral AI flow per product rules)."
+        ),
         request=CreateChatRequest,
         responses={201: ChatResponse, **standard_error_responses(400, 401)},
     ),
     retrieve=extend_schema(
         tags=["Chats"],
         summary="Get chat",
+        description="Returns full **ChatResponse** for one chat id (membership and permissions enforced server-side).",
+        parameters=[_PATH_PK],
         responses={200: ChatResponse, **standard_error_responses(401, 403, 404)},
     ),
     partial_update=extend_schema(
         tags=["Chats"],
         summary="Update chat",
+        description="Partial update of name, prompts, style, tags, and ephemeral flag.",
+        parameters=[_PATH_PK],
         request=UpdateChatRequest,
         responses={200: ChatResponse, **standard_error_responses(400, 401, 403, 404)},
     ),
     destroy=extend_schema(
         tags=["Chats"],
         summary="Delete chat",
+        description="Deletes the chat for allowed roles (service rules apply).",
+        parameters=[_PATH_PK],
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     ),
     my_chats=extend_schema(
         tags=["Chats"],
         summary="List chats created by me",
+        description="Same filters as list but only chats **created by** the authenticated user.",
         parameters=[_SEARCH_PARAM, _ORDERING_PARAM, _TAGS_PARAM],
         responses={200: ChatListResponse(many=True), **standard_error_responses(401)},
     ),
-    archive=extend_schema(
-        tags=["Chats"],
-        summary="Archive chat",
-        request=None,
-        responses={200: ChatResponse, **standard_error_responses(401, 403, 404)},
-    ),
-    unarchive=extend_schema(
-        tags=["Chats"],
-        summary="Unarchive chat",
-        request=None,
-        responses={200: ChatResponse, **standard_error_responses(401, 403, 404)},
-    ),
 )
 class ChatViewSet(ViewSet):
+    queryset = Chat.objects.none()
+    serializer_class = ChatResponse
+
     def create(self, request: Request) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({CREATE_CHAT}))
         serializer = CreateChatRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -105,6 +135,7 @@ class ChatViewSet(ViewSet):
         return Response(ChatResponse(chat).data, status=status.HTTP_201_CREATED)
 
     def list(self, request: Request) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({LIST_CHATS}))
         search = request.query_params.get("search") or None
         ordering = request.query_params.get("ordering") or None
         if ordering not in ALLOWED_ORDERINGS:
@@ -117,10 +148,12 @@ class ChatViewSet(ViewSet):
         return paginator.get_paginated_response(ChatListResponse(page, many=True).data)
 
     def retrieve(self, request: Request, pk=None) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({GET_CHAT}))
         chat = chat_service.get_chat(user=request.user, chat_id=int(pk))
         return Response(ChatResponse(chat).data)
 
     def partial_update(self, request: Request, pk=None) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({UPDATE_CHAT}))
         serializer = UpdateChatRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -132,11 +165,13 @@ class ChatViewSet(ViewSet):
         return Response(ChatResponse(chat).data)
 
     def destroy(self, request: Request, pk=None) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({DELETE_CHAT}))
         chat_service.delete_chat(user=request.user, chat_id=int(pk))
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=["get"], url_path="me")
     def my_chats(self, request: Request) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({LIST_MY_CHATS}))
         search = request.query_params.get("search") or None
         ordering = request.query_params.get("ordering") or None
         if ordering not in ALLOWED_ORDERINGS:
@@ -152,16 +187,21 @@ class ChatViewSet(ViewSet):
         methods=["POST"],
         tags=["Chats"],
         summary="Pin chat",
+        description="Pins this chat for the current user so it sorts to the top of list views.",
+        parameters=[_PATH_PK],
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     @extend_schema(
         methods=["DELETE"],
         tags=["Chats"],
         summary="Unpin chat",
+        description="Removes the user-level pin for this chat.",
+        parameters=[_PATH_PK],
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     @action(detail=True, methods=["post", "delete"], url_path="pin")
     def pin(self, request: Request, pk=None) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({PIN_CHAT}))
         if request.method == "POST":
             chat_service.pin_chat(user=request.user, chat_id=int(pk))
         else:
@@ -171,11 +211,16 @@ class ChatViewSet(ViewSet):
     @extend_schema(
         tags=["Chats"],
         summary="List archived chats",
+        description=(
+            "Lists chats **archived by** the user (not in the main inbox). Same query params as list (`search`, "
+            "`ordering`, `tags`)."
+        ),
         parameters=[_SEARCH_PARAM, _ORDERING_PARAM, _TAGS_PARAM],
         responses={200: ChatListResponse(many=True), **standard_error_responses(401)},
     )
     @action(detail=False, methods=["get"], url_path="archived")
     def archived(self, request: Request) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({LIST_ARCHIVED_CHATS}))
         search = request.query_params.get("search") or None
         ordering = request.query_params.get("ordering") or None
         if ordering not in ALLOWED_ORDERINGS:
@@ -192,15 +237,21 @@ class ChatViewSet(ViewSet):
     @extend_schema(
         tags=["Chats"],
         summary="Archive chats",
-        description="Archiva uno o varios chats para el usuario autenticado. Los chats archivados dejan de aparecer en el listado principal pero pueden restaurarse.",
+        description=(
+            "Archives one or more chats for the authenticated user. Archived threads disappear from the default list "
+            "until unarchived."
+        ),
         request=BulkChatIdsRequest,
         responses={
-            200: OpenApiResponse(description='{"archived": <count>}'),
+            200: OpenApiResponse(
+                description="JSON object: `archived` = number of chats archived.",
+            ),
             **standard_error_responses(400, 401),
         },
     )
     @action(detail=False, methods=["post"], url_path="archive")
     def archive(self, request: Request) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({ARCHIVE_CHAT}))
         serializer = BulkChatIdsRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
         count = chat_service.archive_chats(
@@ -211,15 +262,18 @@ class ChatViewSet(ViewSet):
     @extend_schema(
         tags=["Chats"],
         summary="Unarchive chats",
-        description="Restaura uno o varios chats archivados para el usuario autenticado.",
+        description="Restores one or more archived chats to the main inbox for the authenticated user.",
         request=BulkChatIdsRequest,
         responses={
-            200: OpenApiResponse(description='{"unarchived": <count>}'),
+            200: OpenApiResponse(
+                description="JSON object: `unarchived` = number of chats restored.",
+            ),
             **standard_error_responses(400, 401),
         },
     )
     @action(detail=False, methods=["post"], url_path="unarchive")
     def unarchive(self, request: Request) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({UNARCHIVE_CHAT}))
         serializer = BulkChatIdsRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
         count = chat_service.unarchive_chats(
@@ -232,16 +286,20 @@ class ChatViewSet(ViewSet):
         tags=["Chats"],
         summary="Lock chat",
         description="Prevents all members from sending new messages. Owner only.",
+        parameters=[_PATH_PK],
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     @extend_schema(
         methods=["DELETE"],
         tags=["Chats"],
         summary="Unlock chat",
+        description="Re-opens the chat so members can send messages again.",
+        parameters=[_PATH_PK],
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     @action(detail=True, methods=["post", "delete"], url_path="lock")
     def lock(self, request: Request, pk=None) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({LOCK_CHAT}))
         if request.method == "POST":
             chat_service.lock_chat(user=request.user, chat_id=int(pk))
         else:
@@ -253,6 +311,7 @@ class ChatViewSet(ViewSet):
         tags=["Chats"],
         summary="Mute chat",
         description="Silences this chat for the current user until the given datetime.",
+        parameters=[_PATH_PK],
         request=MuteChatRequest,
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(400, 401, 403, 404)},
     )
@@ -260,10 +319,13 @@ class ChatViewSet(ViewSet):
         methods=["DELETE"],
         tags=["Chats"],
         summary="Unmute chat",
+        description="Clears mute for the current user (notifications / unread behaviour per product).",
+        parameters=[_PATH_PK],
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     @action(detail=True, methods=["post", "delete"], url_path="mute")
     def mute(self, request: Request, pk=None) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({MUTE_CHAT}))
         if request.method == "POST":
             serializer = MuteChatRequest(data=request.data)
             serializer.is_valid(raise_exception=True)

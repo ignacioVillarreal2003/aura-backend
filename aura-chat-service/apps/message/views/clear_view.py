@@ -7,6 +7,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.message.services.message_service import message_service
+from core.authorization import AccessControl
+from core.authorization.permissions import CLEAR_CHAT_HISTORY
 from core.openapi.common import standard_error_responses
 
 logger = logging.getLogger(__name__)
@@ -27,5 +29,6 @@ class ClearHistoryView(APIView):
         },
     )
     def delete(self, request: Request, chat_id: int) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({CLEAR_CHAT_HISTORY}))
         message_service.clear_history(user=request.user, chat_id=chat_id)
         return Response(status=status.HTTP_204_NO_CONTENT)

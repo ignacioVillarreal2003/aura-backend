@@ -12,7 +12,7 @@ from apps.membership.repositories.membership_repository import membership_reposi
 from apps.message.repositories.message_repository import message_repository
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization import AccessControl
-from core.authorization.permissions import GET_CHAT
+from core.authorization.permissions import CREATE_SHARE_LINK, DELETE_SHARE_LINK, LIST_SHARE_LINKS
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ class ShareLinkService:
         chat_id: int,
         expires_at=None,
     ) -> ChatShareLink:
-        AccessControl.require_permissions(user, frozenset({GET_CHAT}))
+        AccessControl.require_permissions(user, frozenset({CREATE_SHARE_LINK}))
         chat = chat_repository.get_by_id(chat_id)
         if chat is None:
             raise ChatNotFoundException()
@@ -39,7 +39,7 @@ class ShareLinkService:
         return link
 
     def list_links(self, user: AuthenticatedUser, chat_id: int) -> QuerySet[ChatShareLink]:
-        AccessControl.require_permissions(user, frozenset({GET_CHAT}))
+        AccessControl.require_permissions(user, frozenset({LIST_SHARE_LINKS}))
         chat = chat_repository.get_by_id(chat_id)
         if chat is None:
             raise ChatNotFoundException()
@@ -48,7 +48,7 @@ class ShareLinkService:
         return share_link_repository.list_by_chat(chat_id)
 
     def revoke_link(self, user: AuthenticatedUser, chat_id: int, link_id: int) -> None:
-        AccessControl.require_permissions(user, frozenset({GET_CHAT}))
+        AccessControl.require_permissions(user, frozenset({DELETE_SHARE_LINK}))
         chat = chat_repository.get_by_id(chat_id)
         if chat is None:
             raise ChatNotFoundException()

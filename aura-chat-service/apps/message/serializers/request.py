@@ -2,11 +2,18 @@ from rest_framework import serializers
 
 
 class SendThreadReplyRequest(serializers.Serializer):
-    message = serializers.CharField(max_length=5000, allow_blank=False)
+    message = serializers.CharField(
+        max_length=5000,
+        allow_blank=False,
+        help_text="Thread reply body (max 5000 characters).",
+    )
 
 
 class SetFeedbackRequest(serializers.Serializer):
-    value = serializers.ChoiceField(choices=[1, -1])
+    value = serializers.ChoiceField(
+        choices=[1, -1],
+        help_text="1 = thumbs up, -1 = thumbs down. Only applies to assistant messages.",
+    )
 
 
 _SUPPORTED_AUDIO_TYPES = {
@@ -17,8 +24,16 @@ _MAX_AUDIO_MB = 25
 
 
 class SendMessageRequest(serializers.Serializer):
-    message = serializers.CharField(max_length=10000, required=False, allow_blank=False)
-    audio = serializers.FileField(required=False)
+    message = serializers.CharField(
+        max_length=10000,
+        required=False,
+        allow_blank=False,
+        help_text="Plain-text message. Omit when sending `audio` instead.",
+    )
+    audio = serializers.FileField(
+        required=False,
+        help_text="Single audio file for transcription; exclusive with `message` (max 25 MB, common MIME types).",
+    )
 
     def validate_audio(self, file):
         content_type = getattr(file, "content_type", "")

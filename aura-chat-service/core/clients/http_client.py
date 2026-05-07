@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import random
-
 import httpx
 
 from core.clients.exceptions import (
@@ -13,8 +12,6 @@ from core.clients.exceptions import (
 logger = logging.getLogger(__name__)
 
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
-# 500 is excluded for non-safe methods: POST/PUT/PATCH are not idempotent and
-# a server error may have already processed the request before responding.
 _RETRYABLE_CODES_SAFE = frozenset({429, 500, 502, 503, 504})
 _RETRYABLE_CODES_UNSAFE = frozenset({429, 502, 503, 504})
 
@@ -23,6 +20,7 @@ class AsyncHttpClient:
     def __init__(self, timeout: int = 30, max_retries: int = 3):
         self._timeout = timeout
         self._max_retries = max_retries
+        self._client = httpx.AsyncClient(timeout=self._timeout)
 
     async def get(self, url: str, headers: dict | None = None) -> httpx.Response:
         return await self._request("GET", url, headers=headers)
@@ -47,10 +45,7 @@ class AsyncHttpClient:
 
         for attempt in range(self._max_retries):
             try:
-                async with httpx.AsyncClient(timeout=self._timeout) as client:
-                    response = await client.request(
-                        method, url, json=json, headers=headers
-                    )
+                response = await self._client.request(method, url, json=json, headers=headers)
 
                 if response.status_code in retryable_codes and attempt < self._max_retries - 1:
                     delay = min(2.0, 0.1 * (2 ** attempt) + random.uniform(0, 0.05))
@@ -69,7 +64,6 @@ class AsyncHttpClient:
                 if response.status_code >= 400:
                     snippet = ""
                     try:
-                        await response.aread()
                         snippet = response.text[:200] if response.text else ""
                     except Exception:
                         pass

@@ -3,17 +3,26 @@ import logging
 from django.db import transaction
 from django.db.models import QuerySet
 
+from apps.classification_levels.repositories import classification_level_repository
+from apps.compartments.repositories import compartment_repository
 from apps.document_collections.models import DocumentCollection
-from apps.document_collections.repositories import document_collection_repository
+from apps.document_collections.repositories import (
+    document_collection_compartment_repository,
+    document_collection_repository,
+)
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization.access import AccessControl
-from core.domain.document_collection_exceptions import CollectionNotFoundException
 from core.authorization.permissions import (
     CREATE_DOCUMENT_COLLECTION,
     DELETE_DOCUMENT_COLLECTION,
     GET_DOCUMENT_COLLECTION,
     LIST_DOCUMENT_COLLECTIONS,
     UPDATE_DOCUMENT_COLLECTION,
+)
+from core.domain.document_collection_exceptions import (
+    ClassificationLevelNotFoundException,
+    CollectionNotFoundException,
+    CompartmentNotFoundException,
 )
 
 logger = logging.getLogger(__name__)
@@ -29,16 +38,42 @@ class DocumentCollectionService:
         return document_collection_repository.list_active()
 
     @transaction.atomic
-    def create_document_collection(self, user: AuthenticatedUser, name: str) -> DocumentCollection:
+    def create_document_collection(
+        self,
+        user: AuthenticatedUser,
+        name: str,
+        classification_level_id: int,
+        compartment_ids: list[int],
+    ) -> DocumentCollection:
         _permissions_gate(user, CREATE_DOCUMENT_COLLECTION)
-        document_collection = document_collection_repository.create(name=name, created_by=user.id)
+        if classification_level_repository.get_by_id(classification_level_id) is None:
+            raise ClassificationLevelNotFoundException()
+        for cid in compartment_ids:
+            if compartment_repository.get_by_id(cid) is None:
+                raise CompartmentNotFoundException()
+        document_collection = document_collection_repository.create(
+            name=name,
+            created_by=user.id,
+            classification_level_id=classification_level_id,
+        )
+        for cid in compartment_ids:
+            document_collection_compartment_repository.create(
+                document_collection_id=document_collection.id,
+                compartment_id=cid,
+                created_by=user.id,
+            )
+        document_collection.refresh_from_db()
         logger.info(
             "Document collection created.",
             extra={"document_collection_id": document_collection.id, "user_id": user.id},
         )
-        return document_collection
+        return document_collection_repository.get_active_by_id(document_collection.id)
 
-    def get_document_collection(self, user: AuthenticatedUser, document_collection_id: int) -> DocumentCollection:
+    def get_document_collection(
+        self,
+        user: AuthenticatedUser,
+        document_collection_id: int,
+    ) -> DocumentCollection:
         _permissions_gate(user, GET_DOCUMENT_COLLECTION)
         document_collection = document_collection_repository.get_active_by_id(document_collection_id)
         if document_collection is None:
@@ -50,20 +85,42 @@ class DocumentCollectionService:
         self,
         user: AuthenticatedUser,
         document_collection_id: int,
-        name: str,
+        name: str | None = None,
+        classification_level_id: int | None = None,
+        compartment_ids: list[int] | None = None,
     ) -> DocumentCollection:
         _permissions_gate(user, UPDATE_DOCUMENT_COLLECTION)
         document_collection = document_collection_repository.get_active_by_id(document_collection_id)
         if document_collection is None:
             raise CollectionNotFoundException()
-        return document_collection_repository.update(
+        if classification_level_id is not None:
+            if classification_level_repository.get_by_id(classification_level_id) is None:
+                raise ClassificationLevelNotFoundException()
+        if compartment_ids is not None:
+            for cid in compartment_ids:
+                if compartment_repository.get_by_id(cid) is None:
+                    raise CompartmentNotFoundException()
+            document_collection_compartment_repository.delete_all_by_collection_id(document_collection_id)
+            for cid in compartment_ids:
+                document_collection_compartment_repository.create(
+                    document_collection_id=document_collection_id,
+                    compartment_id=cid,
+                    created_by=user.id,
+                )
+        document_collection_repository.update(
             document_collection,
-            name=name,
             updated_by=user.id,
+            name=name,
+            classification_level_id=classification_level_id,
         )
+        return document_collection_repository.get_active_by_id(document_collection_id)
 
     @transaction.atomic
-    def delete_document_collection(self, user: AuthenticatedUser, document_collection_id: int) -> None:
+    def delete_document_collection(
+        self,
+        user: AuthenticatedUser,
+        document_collection_id: int,
+    ) -> None:
         _permissions_gate(user, DELETE_DOCUMENT_COLLECTION)
         document_collection = document_collection_repository.get_active_by_id(document_collection_id)
         if document_collection is None:

@@ -8,6 +8,8 @@ from apps.membership.models.chat_membership import ChatMembership
 from apps.membership.serializers.request import AddMemberRequest, UpdateMemberRequest
 from apps.membership.serializers.response import MembershipResponse
 from apps.membership.services.membership_service import membership_service
+from core.authorization import AccessControl
+from core.authorization.permissions import ADD_MEMBER, LEAVE_CHAT, LIST_MEMBERS, REMOVE_MEMBER, UPDATE_MEMBER
 from core.openapi.common import standard_error_responses
 from core.pagination.pagination import StandardPagination
 
@@ -18,6 +20,10 @@ class MemberListView(APIView):
     @extend_schema(
         tags=["Memberships"],
         summary="List members",
+        description=(
+            "Paginated membership rows for the chat. Optional `status` query: membership status or `all`. "
+            "Invalid values return **400** with a structured error (not the standard DRF validation shape)."
+        ),
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
             OpenApiParameter(
@@ -32,6 +38,7 @@ class MemberListView(APIView):
         responses={200: MembershipResponse(many=True), **standard_error_responses(401, 403, 404)},
     )
     def get(self, request: Request, chat_id: int) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({LIST_MEMBERS}))
         raw_status = request.query_params.get("status", "active")
         if raw_status not in _STATUS_CHOICES:
             return Response(
@@ -57,6 +64,10 @@ class MemberListView(APIView):
     @extend_schema(
         tags=["Memberships"],
         summary="Invite members",
+        description=(
+            "Adds users by id list (deduplicated). The service may notify downstream systems using the same "
+            "Bearer token from the `Authorization` header. **409** if a member already exists or state conflicts."
+        ),
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
         ],
@@ -64,6 +75,7 @@ class MemberListView(APIView):
         responses={201: MembershipResponse(many=True), **standard_error_responses(400, 401, 403, 404, 409)},
     )
     def post(self, request: Request, chat_id: int) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({ADD_MEMBER}))
         serializer = AddMemberRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -86,6 +98,7 @@ class MemberDetailView(APIView):
     @extend_schema(
         tags=["Memberships"],
         summary="Update member status",
+        description="Transitions membership status (e.g. pending → active) subject to allowed state machine rules.",
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
             OpenApiParameter(name="member_id", type=int, location=OpenApiParameter.PATH, required=True),
@@ -94,6 +107,7 @@ class MemberDetailView(APIView):
         responses={200: MembershipResponse, **standard_error_responses(400, 401, 403, 404)},
     )
     def patch(self, request: Request, chat_id: int, member_id: int) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({UPDATE_MEMBER}))
         serializer = UpdateMemberRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -108,6 +122,7 @@ class MemberDetailView(APIView):
     @extend_schema(
         tags=["Memberships"],
         summary="Remove member",
+        description="Removes another user from the chat (not self-serve leave; use **Leave chat** for that).",
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
             OpenApiParameter(name="member_id", type=int, location=OpenApiParameter.PATH, required=True),
@@ -115,6 +130,7 @@ class MemberDetailView(APIView):
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     def delete(self, request: Request, chat_id: int, member_id: int) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({REMOVE_MEMBER}))
         membership_service.remove_member(
             user=request.user,
             chat_id=chat_id,
@@ -129,11 +145,14 @@ class LeaveChatView(APIView):
     @extend_schema(
         tags=["Memberships"],
         summary="Leave chat",
+        description="The authenticated user leaves this chat (membership updated accordingly).",
+        request=None,
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
         ],
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     def post(self, request: Request, chat_id: int) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({LEAVE_CHAT}))
         membership_service.leave_chat(user=request.user, chat_id=chat_id)
         return Response(status=status.HTTP_204_NO_CONTENT)

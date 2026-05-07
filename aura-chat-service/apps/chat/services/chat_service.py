@@ -12,7 +12,20 @@ from apps.membership.repositories.membership_repository import membership_reposi
 from apps.message.repositories.message_repository import message_repository
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization import AccessControl
-from core.authorization.permissions import CREATE_CHAT, DELETE_CHAT, GET_CHAT, LIST_CHATS, UPDATE_CHAT
+from core.authorization.permissions import (
+    ARCHIVE_CHAT,
+    CREATE_CHAT,
+    DELETE_CHAT,
+    GET_CHAT,
+    LIST_ARCHIVED_CHATS,
+    LIST_CHATS,
+    LIST_MY_CHATS,
+    LOCK_CHAT,
+    MUTE_CHAT,
+    PIN_CHAT,
+    UNARCHIVE_CHAT,
+    UPDATE_CHAT,
+)
 
 
 def _broadcast_chat_locked_changed(chat_id: int, is_locked: bool, by: int) -> None:
@@ -77,7 +90,7 @@ class ChatService:
         ordering: str | None = None,
         tags: list[str] | None = None,
     ) -> QuerySet[Chat]:
-        AccessControl.require_permissions(user, frozenset({LIST_CHATS}))
+        AccessControl.require_permissions(user, frozenset({LIST_MY_CHATS}))
         return chat_repository.get_chats_created_by(
             user_id=user.id,
             search=search,
@@ -121,7 +134,7 @@ class ChatService:
         ordering: str | None = None,
         tags: list[str] | None = None,
     ) -> QuerySet[Chat]:
-        AccessControl.require_permissions(user, frozenset({LIST_CHATS}))
+        AccessControl.require_permissions(user, frozenset({LIST_ARCHIVED_CHATS}))
         return chat_repository.get_archived_chats_for_member(
             member_id=user.id,
             search=search,
@@ -130,19 +143,19 @@ class ChatService:
         )
 
     def archive_chats(self, user: AuthenticatedUser, chat_ids: list[int]) -> int:
-        AccessControl.require_permissions(user, frozenset({LIST_CHATS}))
+        AccessControl.require_permissions(user, frozenset({ARCHIVE_CHAT}))
         count = membership_repository.archive_chats(chat_ids=chat_ids, member_id=user.id)
         logger.info("Chats archived.", extra={"chat_ids": chat_ids, "user_id": user.id, "count": count})
         return count
 
     def unarchive_chats(self, user: AuthenticatedUser, chat_ids: list[int]) -> int:
-        AccessControl.require_permissions(user, frozenset({LIST_CHATS}))
+        AccessControl.require_permissions(user, frozenset({UNARCHIVE_CHAT}))
         count = membership_repository.unarchive_chats(chat_ids=chat_ids, member_id=user.id)
         logger.info("Chats unarchived.", extra={"chat_ids": chat_ids, "user_id": user.id, "count": count})
         return count
 
     def pin_chat(self, user: AuthenticatedUser, chat_id: int) -> None:
-        AccessControl.require_permissions(user, frozenset({GET_CHAT}))
+        AccessControl.require_permissions(user, frozenset({PIN_CHAT}))
         chat = chat_repository.get_by_id(chat_id)
         if chat is None:
             raise ChatNotFoundException()
@@ -152,7 +165,7 @@ class ChatService:
         logger.info("Chat pinned.", extra={"chat_id": chat_id, "user_id": user.id})
 
     def unpin_chat(self, user: AuthenticatedUser, chat_id: int) -> None:
-        AccessControl.require_permissions(user, frozenset({GET_CHAT}))
+        AccessControl.require_permissions(user, frozenset({PIN_CHAT}))
         chat = chat_repository.get_by_id(chat_id)
         if chat is None:
             raise ChatNotFoundException()
@@ -162,7 +175,7 @@ class ChatService:
         logger.info("Chat unpinned.", extra={"chat_id": chat_id, "user_id": user.id})
 
     def lock_chat(self, user: AuthenticatedUser, chat_id: int) -> None:
-        AccessControl.require_permissions(user, frozenset({UPDATE_CHAT}))
+        AccessControl.require_permissions(user, frozenset({LOCK_CHAT}))
         with transaction.atomic():
             chat = chat_repository.get_by_id_for_update(chat_id)
             if chat is None:
@@ -176,7 +189,7 @@ class ChatService:
         logger.info("Chat locked.", extra={"chat_id": chat_id, "user_id": user.id})
 
     def unlock_chat(self, user: AuthenticatedUser, chat_id: int) -> None:
-        AccessControl.require_permissions(user, frozenset({UPDATE_CHAT}))
+        AccessControl.require_permissions(user, frozenset({LOCK_CHAT}))
         with transaction.atomic():
             chat = chat_repository.get_by_id_for_update(chat_id)
             if chat is None:
@@ -190,14 +203,14 @@ class ChatService:
         logger.info("Chat unlocked.", extra={"chat_id": chat_id, "user_id": user.id})
 
     def mute_chat(self, user: AuthenticatedUser, chat_id: int, muted_until) -> None:
-        AccessControl.require_permissions(user, frozenset({GET_CHAT}))
+        AccessControl.require_permissions(user, frozenset({MUTE_CHAT}))
         if not membership_repository.is_active_member(chat_id=chat_id, member_id=user.id):
             raise ChatAccessDeniedException()
         membership_repository.mute(chat_id=chat_id, member_id=user.id, muted_until=muted_until)
         logger.info("Chat muted.", extra={"chat_id": chat_id, "user_id": user.id})
 
     def unmute_chat(self, user: AuthenticatedUser, chat_id: int) -> None:
-        AccessControl.require_permissions(user, frozenset({GET_CHAT}))
+        AccessControl.require_permissions(user, frozenset({MUTE_CHAT}))
         if not membership_repository.is_active_member(chat_id=chat_id, member_id=user.id):
             raise ChatAccessDeniedException()
         membership_repository.unmute(chat_id=chat_id, member_id=user.id)

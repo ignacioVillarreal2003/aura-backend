@@ -1,4 +1,4 @@
-from core.exceptions.base import ConflictException, NotFoundException
+from core.exceptions.base import ConflictException, ForbiddenException, NotFoundException
 
 
 class CollectionNotFoundException(NotFoundException):
@@ -6,14 +6,6 @@ class CollectionNotFoundException(NotFoundException):
         super().__init__(
             detail="Document collection not found",
             error_code="document_collection_not_found",
-        )
-
-
-class UserMembershipNotFoundException(NotFoundException):
-    def __init__(self):
-        super().__init__(
-            detail="User membership not found",
-            error_code="user_membership_not_found",
         )
 
 
@@ -33,17 +25,65 @@ class DocumentNotAvailableException(NotFoundException):
         )
 
 
-class DuplicateMembershipException(ConflictException):
-    def __init__(self):
-        super().__init__(
-            detail="User is already in this document collection",
-            error_code="duplicate_membership",
-        )
-
-
 class DuplicateDocumentLinkException(ConflictException):
     def __init__(self):
         super().__init__(
             detail="Document is already linked to this document collection",
             error_code="duplicate_document_link",
+        )
+
+
+class ClassificationLevelNotFoundException(NotFoundException):
+    def __init__(self):
+        super().__init__(
+            detail="Classification level not found",
+            error_code="classification_level_not_found",
+        )
+
+
+class ClassificationLevelInUseException(ForbiddenException):
+    def __init__(self):
+        super().__init__(
+            detail="Classification level is in use and cannot be deleted",
+            error_code="classification_level_in_use",
+        )
+
+
+class CompartmentNotFoundException(NotFoundException):
+    def __init__(self):
+        super().__init__(
+            detail="Compartment not found",
+            error_code="compartment_not_found",
+        )
+
+
+class CompartmentInUseException(ForbiddenException):
+    def __init__(self):
+        super().__init__(
+            detail="Compartment is in use and cannot be deleted",
+            error_code="compartment_in_use",
+        )
+
+
+class UserClearanceNotFoundException(NotFoundException):
+    def __init__(self):
+        super().__init__(
+            detail="User clearance not found",
+            error_code="user_clearance_not_found",
+        )
+
+
+class DuplicateUserCompartmentException(ConflictException):
+    def __init__(self):
+        super().__init__(
+            detail="User is already assigned to this compartment",
+            error_code="duplicate_user_compartment",
+        )
+
+
+class UserCompartmentNotFoundException(NotFoundException):
+    def __init__(self):
+        super().__init__(
+            detail="User compartment assignment not found",
+            error_code="user_compartment_not_found",
         )

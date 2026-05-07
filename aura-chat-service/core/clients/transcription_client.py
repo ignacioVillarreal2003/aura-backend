@@ -2,7 +2,6 @@ import logging
 import os
 import tempfile
 import threading
-
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -19,7 +18,7 @@ def _get_model():
         if _model is None:
             from faster_whisper import WhisperModel
             model_size = getattr(settings, "WHISPER_MODEL_SIZE", "small")
-            device = getattr(settings, "WHISPER_DEVICE", "cuda")
+            device = getattr(settings, "WHISPER_DEVICE", "cpu")
             compute_type = getattr(settings, "WHISPER_COMPUTE_TYPE", "float16")
             logger.info(
                 "Loading Whisper model.",

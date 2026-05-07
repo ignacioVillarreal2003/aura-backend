@@ -4,6 +4,9 @@ from decouple import config, Csv
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
+APP_NAME = "Aura Chat Service"
+APP_VERSION = "1.0.0"
+
 SECRET_KEY = config("SECRET_KEY", default="django-insecure-change-me")
 
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv())
@@ -62,20 +65,18 @@ TEMPLATES = [
 
 ASGI_APPLICATION = "aura_chat_service.asgi.application"
 
-# ──────────────────────────────────────────────
-# Database
-# ──────────────────────────────────────────────
+_db_connect_timeout = config("DB_CONNECT_TIMEOUT", default=5, cast=int)
 
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": config("DB_NAME", default="aura_db"),
-        "USER": config("DB_USER", default="aura_root"),
-        "PASSWORD": config("DB_PASSWORD", default="aura_password"),
-        "HOST": config("DB_HOST", default="localhost"),
-        "PORT": config("DB_PORT", default="5432"),
+        "NAME": config("DB_NAME"),
+        "USER": config("DB_USER"),
+        "PASSWORD": config("DB_PASSWORD"),
+        "HOST": config("DB_HOST"),
+        "PORT": config("DB_PORT"),
         "OPTIONS": {
-            "connect_timeout": 5,
+            "connect_timeout": _db_connect_timeout,
         },
         "CONN_MAX_AGE": config("DB_CONN_MAX_AGE", default=60, cast=int),
     }
@@ -83,11 +84,7 @@ DATABASES = {
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# ──────────────────────────────────────────────
-# Redis (Channels + distributed chat AI reply lock)
-# ──────────────────────────────────────────────
-
-REDIS_URL = config("REDIS_URL", default="redis://localhost:6379/0")
+REDIS_URL = config("REDIS_URL")
 CHAT_AI_REPLY_LOCK_TTL_SECONDS = config(
     "CHAT_AI_REPLY_LOCK_TTL_SECONDS",
     default=180,
@@ -103,9 +100,12 @@ CHANNEL_LAYERS = {
     },
 }
 
-# ──────────────────────────────────────────────
-# Django REST Framework
-# ──────────────────────────────────────────────
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": REDIS_URL,
+    }
+}
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -135,10 +135,6 @@ REST_FRAMEWORK = {
     ],
 }
 
-# ──────────────────────────────────────────────
-# CORS
-# ──────────────────────────────────────────────
-
 CORS_ALLOWED_ORIGINS = config(
     "CORS_ALLOWED_ORIGINS",
     default="http://localhost:3000",
@@ -146,20 +142,8 @@ CORS_ALLOWED_ORIGINS = config(
 )
 CORS_ALLOW_CREDENTIALS = True
 
-# ──────────────────────────────────────────────
-# Authentication service
-# ──────────────────────────────────────────────
-# The provider issues GET requests with ``Authorization: Bearer <token>`` to this URL
-# (see ``core.authentication.authentication_provider.AuthenticationProvider.validate_token``).
-# ``AUTHENTICATION_PROVIDER_AUTHENTICATION_URL`` is accepted as a fallback name so
-# local mocks match other services' env naming.
-
-_auth_service_url = config("AUTHENTICATION_SERVICE_URL", default="").strip()
-AUTHENTICATION_SERVICE_URL = _auth_service_url or config(
-    "AUTHENTICATION_PROVIDER_AUTHENTICATION_URL",
-    default="http://auth-service:8000/api/v1/auth/me",
-).strip()
-SERVICE_API_KEY = config("SERVICE_API_KEY", default="change-me")
+AUTHENTICATION_SERVICE_URL = config("AUTHENTICATION_SERVICE_URL").strip()
+SERVICE_API_KEY = config("SERVICE_API_KEY")
 
 AUTHENTICATION_EXCLUDED_PATHS = [
     "/api/v1/health",
@@ -172,18 +156,55 @@ AUTHENTICATION_EXCLUDED_PATHS = [
 ]
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "Aura Chat Service",
-    "DESCRIPTION": "REST API for chats, messages, and memberships.",
-    "VERSION": config("APP_VERSION", default="1.0.0"),
+    "TITLE": APP_NAME,
+    "DESCRIPTION": (
+        "REST API under `/api/v1/` for **chats**, **messages**, **memberships**, **share links**, and **webhooks**. "
+        "Most operations require `Authorization: Bearer <JWT>` and **application permissions** on the authenticated "
+        "user (e.g. `LIST_CHATS`, `SEND_MESSAGE`) enforced per endpoint. "
+        "See also Markdown docs in the repository `docs/` folder.\n\n"
+        "- **Open JSON schema:** `GET /api/schema/`\n"
+        "- **Swagger UI:** `GET /api/docs/`\n"
+        "- **ReDoc:** `GET /api/redoc/`\n\n"
+        "Public routes (no Bearer): health, schema/docs, read-only share by token (`/api/v1/share/...`). "
+        "Real-time chat uses WebSockets separately from this OpenAPI surface."
+    ),
+    "VERSION": APP_VERSION,
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
     "TAGS": [
-        {"name": "Health", "description": "Service health"},
-        {"name": "Chats", "description": "Chat CRUD"},
-        {"name": "Messages", "description": "Chat messages (REST)"},
-        {"name": "Memberships", "description": "Chat members"},
-        {"name": "Share Links", "description": "Read-only share links"},
-        {"name": "Webhooks", "description": "Outgoing webhooks"},
+        {
+            "name": "Health",
+            "description": "Liveness/readiness: database and Redis checks (`GET /api/v1/health`).",
+        },
+        {
+            "name": "Chats",
+            "description": (
+                "Create and manage chats: listing, CRUD, pin, archive, lock, mute; "
+                "includes `me` and `archived` collections."
+            ),
+        },
+        {
+            "name": "Messages",
+            "description": (
+                "Message history (cursor pagination), send text/audio, bookmarks, pins, threads, feedback, "
+                "exports, regenerate AI response, clear history, mark read."
+            ),
+        },
+        {
+            "name": "Memberships",
+            "description": "List/update members, invite users, roles, leave chat.",
+        },
+        {
+            "name": "Share Links",
+            "description": (
+                "Authenticated management of share tokens; **public** read-only message list uses "
+                "`GET /api/v1/share/{token}/messages/` (AllowAny)."
+            ),
+        },
+        {
+            "name": "Webhooks",
+            "description": "Configure HTTP callbacks for chat events (create, update, delete).",
+        },
     ],
     "SECURITY": [{"BearerAuth": []}],
     "APPEND_COMPONENTS": {
@@ -192,66 +213,41 @@ SPECTACULAR_SETTINGS = {
                 "type": "http",
                 "scheme": "bearer",
                 "bearerFormat": "JWT",
-                "description": "Authorization: Bearer <token>",
+                "description": (
+                    "Use Authorization Bearer with the JWT from your identity provider. "
+                    "Claims must include application permission strings required by each operation (e.g. LIST_CHATS)."
+                ),
             },
-        }
+        },
     },
     "ENUM_GENERATE_CHOICE_DESCRIPTION": True,
     "ENUM_ADD_EXPLICIT_BLANK_NULL_CHOICE": False,
 }
 
-# ──────────────────────────────────────────────
-# Whisper (transcripción local de audio)
-# ──────────────────────────────────────────────
-
 WHISPER_MODEL_SIZE = config("WHISPER_MODEL_SIZE", default="small")
 WHISPER_DEVICE = config("WHISPER_DEVICE", default="cpu")
 WHISPER_COMPUTE_TYPE = config("WHISPER_COMPUTE_TYPE", default="int8")
 
-# ──────────────────────────────────────────────
-# LLM Service
-# ──────────────────────────────────────────────
+NOTIFICATION_SERVICE_URL = config("NOTIFICATION_SERVICE_URL").strip()
 
-NOTIFICATION_SERVICE_URL = config("NOTIFICATION_SERVICE_URL", default="")
-
-LLM_DOCUMENT_QUESTION_URL = config(
-    "LLM_DOCUMENT_QUESTION_URL",
-    default="http://localhost:8001/api/v1/document-question",
-)
-# SSE streaming endpoint (chat service → LLM). Defaults to ``<LLM_DOCUMENT_QUESTION_URL>/stream``.
-LLM_DOCUMENT_QUESTION_STREAM_URL = config(
-    "LLM_DOCUMENT_QUESTION_STREAM_URL",
-    default=LLM_DOCUMENT_QUESTION_URL.rstrip("/") + "/stream",
-)
+LLM_DOCUMENT_QUESTION_URL = config("LLM_DOCUMENT_QUESTION_URL").strip()
+LLM_DOCUMENT_QUESTION_STREAM_URL = config("LLM_DOCUMENT_QUESTION_STREAM_URL").strip()
 LLM_SERVICE_TIMEOUT = config("LLM_SERVICE_TIMEOUT", default=120, cast=int)
-# Connect timeout for the streaming client; read timeout is unset (long generations).
 LLM_STREAM_CONNECT_TIMEOUT = config(
     "LLM_STREAM_CONNECT_TIMEOUT", default=10.0, cast=float
 )
 LLM_STREAM_READ_TIMEOUT = config(
     "LLM_STREAM_READ_TIMEOUT", default=180.0, cast=float
 )
-LLM_CONTEXT_MESSAGE_LIMIT = config("LLM_CONTEXT_MESSAGE_LIMIT", default=20, cast=int)
-
-# ──────────────────────────────────────────────
-# Internationalization
-# ──────────────────────────────────────────────
+LLM_CONTEXT_MESSAGE_LIMIT = config("LLM_CONTEXT_MESSAGE_LIMIT", default=10, cast=int)
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 
-# ──────────────────────────────────────────────
-# Static files
-# ──────────────────────────────────────────────
-
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-
-# ──────────────────────────────────────────────
-# Logging
-# ──────────────────────────────────────────────
 
 LOGGING = {
     "version": 1,

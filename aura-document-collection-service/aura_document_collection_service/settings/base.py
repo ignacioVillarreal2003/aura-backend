@@ -20,8 +20,10 @@ INSTALLED_APPS = [
     "django_filters",
     "drf_spectacular",
     "apps.document_collections",
-    "apps.document_collection_users",
     "apps.document_collection_documents",
+    "apps.classification_levels",
+    "apps.compartments",
+    "apps.user_authorizations",
 ]
 
 MIDDLEWARE = [
@@ -235,7 +237,9 @@ SPECTACULAR_SETTINGS = {
     "TAGS": [
         {"name": "Health", "description": "Service health"},
         {"name": "DocumentCollections", "description": "Document group CRUD"},
-        {"name": "DocumentCollectionUsers", "description": "Users in a document collection"},
+        {"name": "ClassificationLevels", "description": "MAC classification level catalog"},
+        {"name": "Compartments", "description": "MAC compartment catalog"},
+        {"name": "UserAuthorizations", "description": "User clearance and compartment assignments"},
         {"name": "DocumentCollectionDocuments", "description": "Documents linked to a document collection"},
     ],
 }

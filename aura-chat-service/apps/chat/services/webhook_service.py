@@ -5,24 +5,19 @@ import logging
 import secrets
 import threading
 
-import requests
+import httpx
 from django.db.transaction import on_commit
 
-from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
+from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException, WebhookNotFoundException
 from apps.chat.models.webhook import WEBHOOK_EVENTS, ChatWebhook
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.chat.repositories.webhook_repository import webhook_repository
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization import AccessControl
-from core.authorization.permissions import GET_CHAT
-from core.exceptions import NotFoundException, ValidationException
+from core.authorization.permissions import CREATE_WEBHOOK, DELETE_WEBHOOK, LIST_WEBHOOKS, UPDATE_WEBHOOK
+from core.exceptions import ValidationException
 
 logger = logging.getLogger(__name__)
-
-
-class WebhookNotFoundException(NotFoundException):
-    error_code = "webhook_not_found"
-    detail = "Webhook not found"
 
 
 def _sign_payload(secret: str, body: str) -> str:
@@ -31,9 +26,9 @@ def _sign_payload(secret: str, body: str) -> str:
 
 def _dispatch(url: str, body: str, signature: str) -> None:
     try:
-        requests.post(
+        httpx.post(
             url,
-            data=body,
+            content=body,
             headers={
                 "Content-Type": "application/json",
                 "X-Webhook-Signature": f"sha256={signature}",
@@ -52,7 +47,7 @@ class WebhookService:
         url: str,
         events: list[str],
     ) -> ChatWebhook:
-        AccessControl.require_permissions(user, frozenset({GET_CHAT}))
+        AccessControl.require_permissions(user, frozenset({CREATE_WEBHOOK}))
         chat = chat_repository.get_by_id(chat_id)
         if chat is None:
             raise ChatNotFoundException()
@@ -76,7 +71,7 @@ class WebhookService:
         return hook
 
     def list_webhooks(self, user: AuthenticatedUser, chat_id: int):
-        AccessControl.require_permissions(user, frozenset({GET_CHAT}))
+        AccessControl.require_permissions(user, frozenset({LIST_WEBHOOKS}))
         chat = chat_repository.get_by_id(chat_id)
         if chat is None:
             raise ChatNotFoundException()
@@ -91,7 +86,7 @@ class WebhookService:
         webhook_id: int,
         **fields,
     ) -> ChatWebhook:
-        AccessControl.require_permissions(user, frozenset({GET_CHAT}))
+        AccessControl.require_permissions(user, frozenset({UPDATE_WEBHOOK}))
         chat = chat_repository.get_by_id(chat_id)
         if chat is None:
             raise ChatNotFoundException()
@@ -110,7 +105,7 @@ class WebhookService:
         return webhook_repository.update(hook, **fields)
 
     def delete_webhook(self, user: AuthenticatedUser, chat_id: int, webhook_id: int) -> None:
-        AccessControl.require_permissions(user, frozenset({GET_CHAT}))
+        AccessControl.require_permissions(user, frozenset({DELETE_WEBHOOK}))
         chat = chat_repository.get_by_id(chat_id)
         if chat is None:
             raise ChatNotFoundException()

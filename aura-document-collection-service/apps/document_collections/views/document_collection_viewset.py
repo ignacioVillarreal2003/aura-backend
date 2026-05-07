@@ -28,55 +28,36 @@ _ERR_DESTROY = standard_error_responses(401, 403, 404)
 @extend_schema(
     auth=[
         {"bearerAuth": []},
-        {
-            "serviceApiKey": [],
-            "serviceUserId": [],
-            "serviceUserEmail": [],
-        },
+        {"serviceApiKey": [], "serviceUserId": [], "serviceUserEmail": []},
     ],
 )
 @extend_schema_view(
     list=extend_schema(
         tags=["DocumentCollections"],
         summary="List document collections",
-        responses={
-            200: DocumentCollectionResponse(many=True),
-            **_ERR_LIST,
-        },
+        responses={200: DocumentCollectionResponse(many=True), **_ERR_LIST},
     ),
     create=extend_schema(
         tags=["DocumentCollections"],
         summary="Create document collection",
         request=CreateDocumentCollectionRequest,
-        responses={
-            201: DocumentCollectionResponse,
-            **_ERR_WRITE,
-        },
+        responses={201: DocumentCollectionResponse, **_ERR_WRITE},
     ),
     retrieve=extend_schema(
         tags=["DocumentCollections"],
         summary="Get document collection",
-        responses={
-            200: DocumentCollectionResponse,
-            **_ERR_RETRIEVE,
-        },
+        responses={200: DocumentCollectionResponse, **_ERR_RETRIEVE},
     ),
     partial_update=extend_schema(
         tags=["DocumentCollections"],
         summary="Update document collection",
         request=PatchDocumentCollectionRequest,
-        responses={
-            200: DocumentCollectionResponse,
-            **_ERR_WRITE,
-        },
+        responses={200: DocumentCollectionResponse, **_ERR_WRITE},
     ),
     destroy=extend_schema(
         tags=["DocumentCollections"],
         summary="Delete document collection",
-        responses={
-            204: OpenApiResponse(description="No content"),
-            **_ERR_DESTROY,
-        },
+        responses={204: OpenApiResponse(description="No content"), **_ERR_DESTROY},
     ),
 )
 class DocumentCollectionViewSet(GenericViewSet):
@@ -99,18 +80,14 @@ class DocumentCollectionViewSet(GenericViewSet):
         serializer.is_valid(raise_exception=True)
         document_collection = document_collection_service.create_document_collection(
             request.user,
-            serializer.validated_data["name"],
+            name=serializer.validated_data["name"],
+            classification_level_id=serializer.validated_data["classification_level_id"],
+            compartment_ids=serializer.validated_data["compartment_ids"],
         )
-        return Response(
-            DocumentCollectionResponse(document_collection).data,
-            status=status.HTTP_201_CREATED,
-        )
+        return Response(DocumentCollectionResponse(document_collection).data, status=status.HTTP_201_CREATED)
 
     def retrieve(self, request: Request, pk: str | None = None) -> Response:
-        document_collection = document_collection_service.get_document_collection(
-            request.user,
-            int(pk),
-        )
+        document_collection = document_collection_service.get_document_collection(request.user, int(pk))
         return Response(DocumentCollectionResponse(document_collection).data)
 
     def partial_update(self, request: Request, pk: str | None = None) -> Response:
@@ -119,7 +96,9 @@ class DocumentCollectionViewSet(GenericViewSet):
         document_collection = document_collection_service.update_document_collection(
             request.user,
             int(pk),
-            name=serializer.validated_data["name"],
+            name=serializer.validated_data.get("name"),
+            classification_level_id=serializer.validated_data.get("classification_level_id"),
+            compartment_ids=serializer.validated_data.get("compartment_ids"),
         )
         return Response(DocumentCollectionResponse(document_collection).data)
 

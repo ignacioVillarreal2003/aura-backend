@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\ignac\\\\Desktop\\\\AURA\\\\aura-backend\\\\aura-document-collection-service\" -Recurse -Directory)",
+      "Bash(Select-Object FullName)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\ignac\\\\Desktop\\\\AURA\\\\aura-backend\\\\aura-document-collection-service\\\\core\\\\models\" -Filter \"*.py\")",
+      "Bash(Select-Object -ExpandProperty FullName)"
+    ]
+  }
+}

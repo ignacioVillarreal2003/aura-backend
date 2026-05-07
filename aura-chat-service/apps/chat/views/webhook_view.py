@@ -6,6 +6,8 @@ from rest_framework.views import APIView
 
 from apps.chat.serializers.webhook import WebhookCreateRequest, WebhookResponse, WebhookUpdateRequest
 from apps.chat.services.webhook_service import webhook_service
+from core.authorization import AccessControl
+from core.authorization.permissions import CREATE_WEBHOOK, DELETE_WEBHOOK, LIST_WEBHOOKS, UPDATE_WEBHOOK
 from core.openapi.common import standard_error_responses
 from core.pagination.pagination import StandardPagination
 
@@ -14,12 +16,14 @@ class WebhookListView(APIView):
     @extend_schema(
         tags=["Webhooks"],
         summary="List webhooks for a chat",
+        description="Paginated outgoing webhook subscriptions (URL, events, secret presence).",
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
         ],
         responses={200: WebhookResponse(many=True), **standard_error_responses(401, 403, 404)},
     )
     def get(self, request: Request, chat_id: int) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({LIST_WEBHOOKS}))
         hooks = webhook_service.list_webhooks(user=request.user, chat_id=chat_id)
         paginator = StandardPagination()
         page = paginator.paginate_queryset(hooks, request)
@@ -28,6 +32,7 @@ class WebhookListView(APIView):
     @extend_schema(
         tags=["Webhooks"],
         summary="Create a webhook",
+        description="Registers an HTTPS URL and a non-empty list of event names (see schema enum / `WEBHOOK_EVENTS`).",
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
         ],
@@ -35,6 +40,7 @@ class WebhookListView(APIView):
         responses={201: WebhookResponse, **standard_error_responses(400, 401, 403, 404)},
     )
     def post(self, request: Request, chat_id: int) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({CREATE_WEBHOOK}))
         serializer = WebhookCreateRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
         hook = webhook_service.create_webhook(
@@ -50,6 +56,7 @@ class WebhookDetailView(APIView):
     @extend_schema(
         tags=["Webhooks"],
         summary="Update a webhook",
+        description="Patch URL, events, or `is_active` without replacing unspecified fields (merge semantics in service).",
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
             OpenApiParameter(name="webhook_id", type=int, location=OpenApiParameter.PATH, required=True),
@@ -58,6 +65,7 @@ class WebhookDetailView(APIView):
         responses={200: WebhookResponse, **standard_error_responses(400, 401, 403, 404)},
     )
     def patch(self, request: Request, chat_id: int, webhook_id: int) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({UPDATE_WEBHOOK}))
         serializer = WebhookUpdateRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
         hook = webhook_service.update_webhook(
@@ -71,6 +79,7 @@ class WebhookDetailView(APIView):
     @extend_schema(
         tags=["Webhooks"],
         summary="Delete a webhook",
+        description="Removes the subscription permanently.",
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
             OpenApiParameter(name="webhook_id", type=int, location=OpenApiParameter.PATH, required=True),
@@ -78,6 +87,7 @@ class WebhookDetailView(APIView):
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     def delete(self, request: Request, chat_id: int, webhook_id: int) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({DELETE_WEBHOOK}))
         webhook_service.delete_webhook(
             user=request.user,
             chat_id=chat_id,

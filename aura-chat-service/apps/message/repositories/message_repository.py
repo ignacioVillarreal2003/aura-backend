@@ -61,7 +61,7 @@ class MessageRepository:
         return qs
 
     @staticmethod
-    def get_recent_messages(chat_id: int, limit: int = 20) -> list[ChatMessage]:
+    def get_recent_messages(chat_id: int, limit: int = 10) -> list[ChatMessage]:
         return list(
             ChatMessage.objects
             .filter(chat_id=chat_id)

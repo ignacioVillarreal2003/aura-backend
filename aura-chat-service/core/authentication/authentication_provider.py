@@ -4,7 +4,6 @@ import secrets
 import threading
 import time
 from typing import Optional
-
 import httpx
 from django.conf import settings
 from django.http import HttpRequest
@@ -153,8 +152,8 @@ class AuthenticationProvider:
         return AuthenticatedUser(
             id=user_id,
             email=email,
-            roles=_parse_comma_list(request.headers.get(_HEADER_USER_ROLES)),
-            permissions=_parse_comma_list(request.headers.get(_HEADER_USER_PERMISSIONS)),
+            roles=tuple(_parse_comma_list(request.headers.get(_HEADER_USER_ROLES))),
+            permissions=tuple(_parse_comma_list(request.headers.get(_HEADER_USER_PERMISSIONS))),
         )
 
     def validate_token(self, token: str) -> AuthenticatedUser:
@@ -221,8 +220,8 @@ class AuthenticationProvider:
             id=user_id,
             email=str(data.get("email", "")),
             username=str(data.get("username", "")),
-            roles=list(data.get("roles") or []),
-            permissions=list(data.get("permissions") or []),
+            roles=tuple(data.get("roles") or []),
+            permissions=tuple(data.get("permissions") or []),
         )
         _cache_user(token, user)
         return user

@@ -1,6 +1,10 @@
 from .base import *
+from decouple import config
 
 DEBUG = False
+
+SECRET_KEY = config("SECRET_KEY")
+SERVICE_API_KEY = config("SERVICE_API_KEY")
 
 SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=True, cast=bool)
 SECURE_HSTS_SECONDS = 31536000
