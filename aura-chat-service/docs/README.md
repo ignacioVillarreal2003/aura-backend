@@ -4,6 +4,7 @@ Documentación orientada a integradores y al equipo de producto. Complementa el 
 
 | Documento | Contenido |
 |-----------|-----------|
+| [api-summary.md](api-summary.md) | Visión de producto: propósito del servicio, conceptos, tablas, flujos típicos y límites de responsabilidad. |
 | [api-overview.md](api-overview.md) | Versión de la API, autenticación, formato de errores, paginación, rutas públicas y enlaces al esquema en vivo. |
 | [endpoints.md](endpoints.md) | Catálogo de rutas HTTP: método, path, permiso requerido, qué hace el endpoint y para qué se usa. |
 | [permissions.md](permissions.md) | Referencia de constantes de permiso y ámbito funcional. |

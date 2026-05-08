@@ -1,0 +1,10 @@
+@host = {{host}}
+@token = {{token}}
+@userId = {{userId}}
+
+### Resumen MAC del usuario — clearance + compartimentos
+# Hace: `GET .../user-authorizations/{user}/` devuelve `user_id`, `clearance` (null si no tiene) y `compartments`.
+
+GET {{host}}/api/v1/user-authorizations/{{userId}}/
+Accept: application/json
+Authorization: Bearer {{token}}

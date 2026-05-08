@@ -2,8 +2,6 @@ from core.exceptions import ConflictException, ForbiddenException, NotFoundExcep
 
 
 class ChatAiReplyInProgressException(ConflictException):
-    """Another message is being processed; wait for the assistant to finish."""
-
     error_code = "chat_ai_reply_in_progress"
     detail = "Wait until the assistant finishes the current reply."
 

@@ -1,0 +1,16 @@
+@host = {{host}}
+@token = {{token}}
+@userId = {{userId}}
+@compartmentId = {{compartmentId}}
+
+### Añadir compartimento al usuario
+# Devuelve: 201; 409 `duplicate_user_compartment` si ya existía la fila duplicada.
+
+POST {{host}}/api/v1/user-authorizations/{{userId}}/compartments/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "compartment_id": {{compartmentId}}
+}

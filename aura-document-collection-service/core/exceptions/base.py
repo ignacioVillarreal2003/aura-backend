@@ -47,6 +47,3 @@ class InsufficientPermissionsException(ServiceException):
     status_code = 403
     error_code = "insufficient_permissions"
     detail = "You do not have permission to perform this action"
-
-    def __init__(self, detail: str | None = None, error_code: str | None = None):
-        super().__init__(detail=detail, error_code=error_code)

@@ -1,0 +1,31 @@
+@host = {{host}}
+@token = {{token}}
+
+### Listar compartimentos — primera página
+
+GET {{host}}/api/v1/compartments/
+Accept: application/json
+Authorization: Bearer {{token}}
+
+###
+
+### Listar compartimentos — filtro por nombre icontains
+
+GET {{host}}/api/v1/compartments/?name=fin
+Accept: application/json
+Authorization: Bearer {{token}}
+
+###
+
+### Listar compartimentos — orden descendente por id
+
+GET {{host}}/api/v1/compartments/?ordering=-id
+Accept: application/json
+Authorization: Bearer {{token}}
+
+###
+
+### Sin token
+
+GET {{host}}/api/v1/compartments/
+Accept: application/json

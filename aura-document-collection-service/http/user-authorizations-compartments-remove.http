@@ -1,0 +1,11 @@
+@host = {{host}}
+@token = {{token}}
+@userId = {{userId}}
+@compartmentIdAlt = {{compartmentIdAlt}}
+
+### Quitar compartimento — path anidado
+# `{compartment_id}` es el FK de compartimento, no la fila pivote interna.
+
+DELETE {{host}}/api/v1/user-authorizations/{{userId}}/compartments/{{compartmentIdAlt}}/
+Accept: application/json
+Authorization: Bearer {{token}}

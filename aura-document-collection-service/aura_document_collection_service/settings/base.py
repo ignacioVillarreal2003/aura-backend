@@ -3,7 +3,7 @@ from decouple import Csv, config
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-SECRET_KEY = config("SECRET_KEY", default="django-insecure-change-me")
+SECRET_KEY = config("SECRET_KEY")
 
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv())
 
@@ -65,10 +65,10 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": config("DB_NAME", default="aura_db"),
-        "USER": config("DB_USER", default="aura_root"),
-        "PASSWORD": config("DB_PASSWORD", default="aura_password"),
-        "HOST": config("DB_HOST", default="localhost"),
+        "NAME": config("DB_NAME"),
+        "USER": config("DB_USER"),
+        "PASSWORD": config("DB_PASSWORD"),
+        "HOST": config("DB_HOST"),
         "PORT": config("DB_PORT", default="5432"),
         "OPTIONS": {
             "connect_timeout": 5,
@@ -76,24 +76,12 @@ DATABASES = {
     }
 }
 
-SERVICE_API_KEY = config("SERVICE_API_KEY", default="change-me")
+SERVICE_API_KEY = config("SERVICE_API_KEY")
 
-_auth_service_url = config("AUTHENTICATION_SERVICE_URL", default="").strip()
-AUTHENTICATION_PROVIDER_URL = (
-    _auth_service_url
-    or config("AUTHENTICATION_PROVIDER_AUTHENTICATION_URL", default="").strip()
-    or config("AUTHENTICATION_PROVIDER_URL", default="http://localhost:8000/api/v1/auth/me").strip()
-)
+AUTHENTICATION_PROVIDER_URL = config("AUTHENTICATION_SERVICE_URL").strip()
 
-USER_PROFILE_SERVICE_URL = config("USER_PROFILE_SERVICE_URL", default="http://localhost:8000").strip()
-USER_PROFILE_SERVICE_TIMEOUT = float(config("USER_PROFILE_SERVICE_TIMEOUT", default="5.0"))
-USER_PROFILE_CACHE_TTL_SECONDS = int(config("USER_PROFILE_CACHE_TTL_SECONDS", default="45"))
-USER_PROFILE_STRICT = config("USER_PROFILE_STRICT", default="false").lower() in ("1", "true", "yes")
-USER_PROFILE_MAX_RETRIES = int(config("USER_PROFILE_MAX_RETRIES", default="3"))
-USER_PROFILE_BREAKER_FAIL_THRESHOLD = int(config("USER_PROFILE_BREAKER_FAIL_THRESHOLD", default="5"))
-USER_PROFILE_BREAKER_OPEN_SECONDS = int(config("USER_PROFILE_BREAKER_OPEN_SECONDS", default="30"))
 
-_redis_url = config("REDIS_URL", default="redis://127.0.0.1:6379/1").strip()
+_redis_url = config("REDIS_URL").strip()
 _cache_key_prefix = config("CACHE_KEY_PREFIX", default="aura-doc-collect:").strip()
 
 CACHES = {
@@ -116,7 +104,6 @@ DEFAULT_LOCAL_CORS_ORIGINS: list[str] = [
     *[f"http://localhost:{port}" for port in range(8000, 8007)],
     *[f"http://127.0.0.1:{port}" for port in range(8000, 8007)],
 ]
-RABBITMQ_MANAGER_URL = config("RABBITMQ_MANAGER_URL", default="http://localhost:15672").strip()
 
 AUTHENTICATION_EXCLUDED_PATHS = [
     "/api/v1/health",
@@ -175,13 +162,30 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {
     "TITLE": "Aura Document Collection Service",
     "DESCRIPTION": (
-        "REST API for document collections and membership.\n\n"
-        "**Authentication:** use **Authorization: Bearer** (validated by the auth service), "
-        "or service-to-service headers **X-Service-Api-Key**, **X-User-Id**, and **X-User-Email** "
-        "(optional: **X-User-Roles**, **X-User-Permissions**), as enforced by the authentication middleware.\n\n"
-        "**HTTP semantics:** **401** is returned by the gateway middleware when credentials are missing or invalid. "
-        "**403** with `error_code=insufficient_permissions` means the caller is authenticated but lacks "
-        "application-level permissions for the operation."
+        "REST facade for modelling **Mandatory Access Control (MAC)** metadata around document collections:\n\n"
+        "- classify collections with immutable-looking **classification levels** plus **compartments**,\n"
+        "- maintain **membership rows** tying external document ids back to collections,\n"
+        "- configure per-user **clearance** plus compartment badges that downstream services honor.\n\n"
+        "### Consumers\n\n"
+        "Operational UIs, automation jobs, or peer microservices that need to enumerate which collections "
+        "a principal may touch - use **`GET .../accessible-collections/{user}`** once permissions allow.\n\n"
+        "### Authentication (this schema)\n\n"
+        "**Interactive / client credentials**: send `Authorization: Bearer <JWT>`. Tokens are validated against "
+        "`AUTHENTICATION_SERVICE_URL` and populate `AuthenticatedUser.permissions` alongside roles/email.\n\n"
+        "**Note:** server-to-server header authentication may still exist at runtime for internal gateways; "
+        "it is intentionally **excluded from this OpenAPI document** so public Swagger exposes only Bearer.\n\n"
+        "**401** originates from middleware when Bearer material is absent or JWT validation fails. "
+        "**403 insufficient_permissions** (JSON `error`) means identity resolved but lacked the granular "
+        "permission constants documented per route (see tag descriptions).\n\n"
+        "### Operational headers & observability\n\n"
+        "`X-Correlation-Id` is echoed on responses (generated if omitted) for tracing across mesh hops.\n\n"
+        "### Pagination, filtering, sorting\n\n"
+        "List endpoints are page-number paginated (`page`, optional `page_size` capped at **100**, default **20`). "
+        "Where highlighted, Django Filter exposes query parameters enumerated on each route; Ordering uses `ordering=` "
+        "with fields listed per resource.\n\n"
+        "### Error envelope\n\n"
+        "Unless the middleware emits a bespoke JSON blob first, handlers wrap failures as **`{ error, detail, "
+        "status_code }`** (see reusable `ApiErrorBody` responses attached to statuses in this schema)."
     ),
     "VERSION": config("APP_VERSION", default="1.0.0"),
     "SERVE_INCLUDE_SCHEMA": False,
@@ -192,55 +196,60 @@ SPECTACULAR_SETTINGS = {
                 "type": "http",
                 "scheme": "bearer",
                 "bearerFormat": "JWT",
-                "description": "Bearer token validated by the authentication service.",
-            },
-            "serviceApiKey": {
-                "type": "apiKey",
-                "in": "header",
-                "name": "X-Service-Api-Key",
-                "description": "Shared service API key (must match SERVICE_API_KEY).",
-            },
-            "serviceUserId": {
-                "type": "apiKey",
-                "in": "header",
-                "name": "X-User-Id",
-                "description": "Acting user id (integer) for service-to-service calls.",
-            },
-            "serviceUserEmail": {
-                "type": "apiKey",
-                "in": "header",
-                "name": "X-User-Email",
-                "description": "Acting user email for service-to-service calls.",
-            },
-            "serviceUserRoles": {
-                "type": "apiKey",
-                "in": "header",
-                "name": "X-User-Roles",
-                "description": "Optional comma-separated roles forwarded to downstream services.",
-            },
-            "serviceUserPermissions": {
-                "type": "apiKey",
-                "in": "header",
-                "name": "X-User-Permissions",
-                "description": "Optional comma-separated permission codes (application-level).",
+                "description": (
+                    "Standard `Authorization: Bearer <token>` header. The auth microservice validates the JWT and "
+                    "returns `id`, `email`, `roles`, and `permissions` which feed `AccessControl` checks."
+                ),
             },
         },
     },
     "SECURITY": [
         {"bearerAuth": []},
-        {
-            "serviceApiKey": [],
-            "serviceUserId": [],
-            "serviceUserEmail": [],
-        },
     ],
     "TAGS": [
-        {"name": "Health", "description": "Service health"},
-        {"name": "DocumentCollections", "description": "Document group CRUD"},
-        {"name": "ClassificationLevels", "description": "MAC classification level catalog"},
-        {"name": "Compartments", "description": "MAC compartment catalog"},
-        {"name": "UserAuthorizations", "description": "User clearance and compartment assignments"},
-        {"name": "DocumentCollectionDocuments", "description": "Documents linked to a document collection"},
+        {
+            "name": "Health",
+            "description": (
+                "Liveness-style probes that bypass auth middleware. Only `GET /api/v1/health` is described here; "
+                "Prometheus metrics live at `/metrics` outside this tag."
+            ),
+        },
+        {
+            "name": "DocumentCollections",
+            "description": (
+                "CRUD for **document collections**—logical folders combining a **classification level** with one or "
+                "more **compartments**. Deletes are soft; responses embed nested catalogue objects for convenience."
+            ),
+        },
+        {
+            "name": "ClassificationLevels",
+            "description": (
+                "MAC ladder maintenance: each record pairs a display `name` with a monotonic `rank` used for "
+                "dominance checks. Protective rules block deletion while dependencies exist."
+            ),
+        },
+        {
+            "name": "Compartments",
+            "description": (
+                "Need-to-know silos orthogonal to rank. Collections reference many compartments; users gain "
+                "membership rows that gate `accessible-collections` responses."
+            ),
+        },
+        {
+            "name": "UserAuthorizations",
+            "description": (
+                "Surface area for **per-user MAC state**: fetch aggregate authorization, set/delete clearance, "
+                "CRUD compartment memberships, and query **pre-computed accessible collections** for cross-service "
+                "enforcement."
+            ),
+        },
+        {
+            "name": "DocumentCollectionDocuments",
+            "description": (
+                "Nested routes under `/document-collections/{id}/documents` that **link** existing document records "
+                "into a collection. Payloads never stream binaries—only registry ids and denormalized titles."
+            ),
+        },
     ],
 }
 

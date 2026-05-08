@@ -1,0 +1,10 @@
+@host = {{host}}
+@token = {{token}}
+@classificationLevelId = {{classificationLevelId}}
+
+### Eliminar nivel
+# Devuelve: 204 sin cuerpo; 409 `classification_level_in_use` si todavía referenciado.
+
+DELETE {{host}}/api/v1/classification-levels/{{classificationLevelId}}/
+Accept: application/json
+Authorization: Bearer {{token}}

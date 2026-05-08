@@ -1,0 +1,35 @@
+@host = {{host}}
+@token = {{token}}
+
+### Listar niveles de clasificación — primera página
+# Hace: catálogo MAC con paginación por defecto.
+# Devuelve: 200 paginado (`count`, `next`, `previous`, `results`).
+
+GET {{host}}/api/v1/classification-levels/
+Accept: application/json
+Authorization: Bearer {{token}}
+
+###
+
+### Listar niveles — filtro por nombre + orden descendente por rank
+# Hace: `name` usa icontains; `ordering` admite `-rank`, `name`, etc.
+
+GET {{host}}/api/v1/classification-levels/?name=conf&ordering=-rank
+Accept: application/json
+Authorization: Bearer {{token}}
+
+###
+
+### Listar niveles — rango de rank
+# Hace: `rank_gte`, `rank_lte` del FilterSet.
+
+GET {{host}}/api/v1/classification-levels/?rank_gte=1&rank_lte=10
+Accept: application/json
+Authorization: Bearer {{token}}
+
+###
+
+### Listar sin token (negativo)
+
+GET {{host}}/api/v1/classification-levels/
+Accept: application/json

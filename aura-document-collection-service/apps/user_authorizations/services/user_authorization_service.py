@@ -63,7 +63,7 @@ class UserAuthorizationService:
         _permissions_gate(user, SET_USER_CLEARANCE)
         if classification_level_repository.get_by_id(classification_level_id) is None:
             raise ClassificationLevelNotFoundException()
-        clearance = user_clearance_repository.set(
+        user_clearance_repository.set(
             user_id=target_user_id,
             classification_level_id=classification_level_id,
             created_by=user.id,
@@ -76,7 +76,7 @@ class UserAuthorizationService:
                 "actor_id": user.id,
             },
         )
-        return clearance
+        return user_clearance_repository.get_by_user_id(target_user_id)
 
     @transaction.atomic
     def delete_user_clearance(
@@ -111,6 +111,12 @@ class UserAuthorizationService:
         _permissions_gate(user, ADD_USER_COMPARTMENT)
         if compartment_repository.get_by_id(compartment_id) is None:
             raise CompartmentNotFoundException()
+        existing = user_compartment_repository.get_by_user_id_and_compartment_id(
+            user_id=target_user_id,
+            compartment_id=compartment_id,
+        )
+        if existing is not None:
+            raise DuplicateUserCompartmentException()
         try:
             entry = user_compartment_repository.create(
                 user_id=target_user_id,

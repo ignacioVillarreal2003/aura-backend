@@ -1,0 +1,15 @@
+@host = {{host}}
+@token = {{token}}
+@userId = {{userId}}
+@classificationLevelId = {{classificationLevelId}}
+
+### Asignar / actualizar clearance (PUT)
+
+PUT {{host}}/api/v1/user-authorizations/{{userId}}/clearance/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "classification_level_id": {{classificationLevelId}}
+}

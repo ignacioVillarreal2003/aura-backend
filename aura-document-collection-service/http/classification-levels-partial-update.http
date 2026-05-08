@@ -1,0 +1,39 @@
+@host = {{host}}
+@token = {{token}}
+@classificationLevelId = {{classificationLevelId}}
+
+### PATCH — renombrar
+
+PATCH {{host}}/api/v1/classification-levels/{{classificationLevelId}}/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "CONFIDENCIAL (ACTUALIZADO)"
+}
+
+###
+
+### PATCH — rerank parcial
+
+PATCH {{host}}/api/v1/classification-levels/{{classificationLevelId}}/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "rank": 12
+}
+
+###
+
+### PATCH — cuerpo vacío (invalida serializer)
+# Devuelve: 400 "At least one field must be provided."
+
+PATCH {{host}}/api/v1/classification-levels/{{classificationLevelId}}/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{}

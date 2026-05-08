@@ -1,0 +1,8 @@
+@host = {{host}}
+
+### Health (sin autenticación)
+# Hace: comprueba que el proceso responde; excluido del middleware Bearer.
+# Devuelve: 200 `{"status": "ok"}`.
+
+GET {{host}}/api/v1/health
+Accept: application/json

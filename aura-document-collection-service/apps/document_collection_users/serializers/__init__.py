@@ -1,4 +1,0 @@
-from apps.document_collection_users.serializers.request import AddUserToDocumentCollectionRequest
-from apps.document_collection_users.serializers.response import UserInDocumentCollectionResponse
-
-__all__ = ["AddUserToDocumentCollectionRequest", "UserInDocumentCollectionResponse"]

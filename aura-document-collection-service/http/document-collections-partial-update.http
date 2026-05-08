@@ -1,10 +1,11 @@
-@host = http://localhost:8000
-@token = replace_with_valid_jwt
-@documentCollectionId = 1
+@host = {{host}}
+@token = {{token}}
+@documentCollectionId = {{documentCollectionId}}
+@classificationLevelIdAlt = {{classificationLevelIdAlt}}
+@compartmentId = {{compartmentId}}
+@compartmentIdAlt = {{compartmentIdAlt}}
 
-### Actualizar colección (PATCH) — renombrar
-# Hace: cambia el nombre de la colección existente.
-# Devuelve: 200 y el objeto actualizado de la colección en JSON.
+### PATCH — renombrar solamente
 
 PATCH {{host}}/api/v1/document-collections/{{documentCollectionId}}/
 Accept: application/json
@@ -12,31 +13,40 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-  "name": "Renamed collection"
+  "name": "Renombrado por HTTP Client"
 }
 
 ###
 
-### Actualizar colección — nombre con caracteres Unicode
-# Hace: actualiza el nombre con texto no ASCII.
-# Devuelve: 200 y la colección en JSON con el nuevo nombre.
+### PATCH — reemplazar compartimentos (lista nueva no vacía reescribe pivotes)
 
-PATCH {{host}}/api/v1/document-collections/1/
+PATCH {{host}}/api/v1/document-collections/{{documentCollectionId}}/
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-  "name": "Colección de documentos — 2026"
+  "compartment_ids": [{{compartmentId}}, {{compartmentIdAlt}}]
 }
 
 ###
 
-### Actualizar colección — error de validación (nombre vacío)
-# Hace: envía un nombre inválido en el PATCH.
-# Devuelve: 400 con errores de validación en JSON.
+### PATCH — cambiar nivel de clasificación del agrupamiento
 
-PATCH {{host}}/api/v1/document-collections/1/
+PATCH {{host}}/api/v1/document-collections/{{documentCollectionId}}/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "classification_level_id": {{classificationLevelIdAlt}}
+}
+
+###
+
+### PATCH — nombre vacío (validación JSON)
+
+PATCH {{host}}/api/v1/document-collections/{{documentCollectionId}}/
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer {{token}}

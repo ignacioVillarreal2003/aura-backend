@@ -1,0 +1,18 @@
+@host = {{host}}
+@token = {{token}}
+@classificationLevelId = {{classificationLevelId}}
+@classificationLevelIdAlt = {{classificationLevelIdAlt}}
+
+### Obtener nivel por id
+
+GET {{host}}/api/v1/classification-levels/{{classificationLevelId}}/
+Accept: application/json
+Authorization: Bearer {{token}}
+
+###
+
+### Obtener otro id (404 posible si no existe)
+
+GET {{host}}/api/v1/classification-levels/{{classificationLevelIdAlt}}/
+Accept: application/json
+Authorization: Bearer {{token}}

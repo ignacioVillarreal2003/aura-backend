@@ -4,7 +4,10 @@
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\ignac\\\\Desktop\\\\AURA\\\\aura-backend\\\\aura-document-collection-service\" -Recurse -Directory)",
       "Bash(Select-Object FullName)",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\ignac\\\\Desktop\\\\AURA\\\\aura-backend\\\\aura-document-collection-service\\\\core\\\\models\" -Filter \"*.py\")",
-      "Bash(Select-Object -ExpandProperty FullName)"
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Get-ChildItem -Recurse -Directory \"C:\\\\Users\\\\ignac\\\\Desktop\\\\AURA\\\\aura-backend\\\\aura-document-collection-service\" -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object -First 50 FullName)",
+      "Bash(Remove-Item *)"
     ]
   }
 }

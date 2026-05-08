@@ -3,5 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="Python 3.13 (aura-document-collection)" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.13 virtualenv at C:\Users\ignac\Desktop\AURA\aura-backend\aura-document-collection-service\.venv" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.13 (aura-document-collection-service)" project-jdk-type="Python SDK" />
 </project>

@@ -9,12 +9,22 @@ from rest_framework.response import Response
 
 @extend_schema(
     tags=["Health"],
-    summary="Health check",
+    summary="Liveness ping",
+    description=(
+        "`AllowAny` route excluded from JWT/service-key middleware—ideal for load balancers, Kubernetes probes, "
+        "or sanity checks immediately after rollout. Successful responses return JSON **{ \"status\": \"ok\" }** with "
+        "HTTP 200; carries no datastore nor dependency chatter."
+    ),
     auth=[],
     responses={
         200: inline_serializer(
             name="HealthResponse",
-            fields={"status": serializers.CharField()},
+            fields={
+                "status": serializers.CharField(
+                    help_text="Literal `ok` when the ASGI/WSGI stack answers; extend later if richer diagnostics emerge.",
+                    default="ok",
+                ),
+            },
         ),
     },
 )

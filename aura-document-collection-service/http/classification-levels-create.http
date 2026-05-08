@@ -1,0 +1,46 @@
+@host = {{host}}
+@token = {{token}}
+
+### Crear nivel de clasificación
+# Hace: alta con `name` y `rank` (1–32767).
+# Devuelve: 201 y el recurso JSON; puede ser 409 si negocio detecta duplicados.
+
+POST {{host}}/api/v1/classification-levels/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "CONFIDENCIAL",
+  "rank": 10
+}
+
+###
+
+### Crear nivel — nombre con trim
+# Devuelve: 201 tras normalizar espacios con `trim_whitespace` en servidor.
+
+POST {{host}}/api/v1/classification-levels/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "  INTERNOS  ",
+  "rank": 5
+}
+
+###
+
+### Crear nivel — validación nombre vacío
+# Devuelve: 400 DRF.
+
+POST {{host}}/api/v1/classification-levels/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "",
+  "rank": 1
+}

@@ -1,0 +1,10 @@
+@host = {{host}}
+@token = {{token}}
+@userId = {{userId}}
+
+### Borrar clearance
+# Devuelve: 204; 404 `user_clearance_not_found` si nunca hubo clearance.
+
+DELETE {{host}}/api/v1/user-authorizations/{{userId}}/clearance/
+Accept: application/json
+Authorization: Bearer {{token}}

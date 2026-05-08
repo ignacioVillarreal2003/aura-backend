@@ -1,5 +1,5 @@
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import status
 from rest_framework.filters import OrderingFilter
 from rest_framework.request import Request
@@ -20,21 +20,58 @@ _ERR_LIST = standard_error_responses(401, 403, 404)
 _ERR_CREATE = standard_error_responses(400, 401, 403, 404, 409)
 _ERR_DESTROY = standard_error_responses(401, 403, 404)
 
+_PARENT_COLLECTION = OpenApiParameter(
+    name="document_collection_pk",
+    type=int,
+    location=OpenApiParameter.PATH,
+    required=True,
+    description=(
+        "Positive integer surrogate key referencing the parent `/document-collections/{id}` resource. Presence unlocks nested membership operations."
+    ),
+)
+
 
 @extend_schema(
-    auth=[
-        {"bearerAuth": []},
-        {
-            "serviceApiKey": [],
-            "serviceUserId": [],
-            "serviceUserEmail": [],
-        },
-    ],
+    auth=[{"bearerAuth": []}],
+    description=(
+        "Bridge routes attaching surrogate document ids persisted in **`document`** to owning collections via join rows "
+        "`document_in_document_collection`. Responses surface lightweight excerpts rather than heavyweight media payloads."
+    ),
 )
 @extend_schema_view(
     list=extend_schema(
         tags=["DocumentCollectionDocuments"],
-        summary="List documents in document collection",
+        summary="List linked documents inside a collection",
+        description=(
+            "Paginates join rows honoring filters such as targeted `document_id` or textual search against stored "
+            "document descriptors. Requires **LIST_DOCUMENT_COLLECTION_DOCUMENTS** and a valid parent collection id."
+        ),
+        parameters=[
+            _PARENT_COLLECTION,
+            OpenApiParameter(
+                name="ordering",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Allowed sorts: `id`, `created_at`, `document_id` (defaults ascending by `id`).",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="document_id",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="Restrict result set to memberships referencing this document surrogate key.",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="document_name",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Case-insensitive substring match evaluated against persisted `document.name`.",
+                required=False,
+            ),
+            OpenApiParameter(name="page", type=int, location=OpenApiParameter.QUERY, required=False),
+            OpenApiParameter(name="page_size", type=int, location=OpenApiParameter.QUERY, required=False),
+        ],
         responses={
             200: DocumentInDocumentCollectionResponse(many=True),
             **_ERR_LIST,
@@ -42,7 +79,11 @@ _ERR_DESTROY = standard_error_responses(401, 403, 404)
     ),
     create=extend_schema(
         tags=["DocumentCollectionDocuments"],
-        summary="Link document to document collection",
+        summary="Link existing document registry entry",
+        description=(
+            "`POST` idempotently friendly until duplicates appear—Integrity violations become **`duplicate_document_link`** conflicts. Requires **ADD_DOCUMENT_COLLECTION_DOCUMENT**."
+        ),
+        parameters=[_PARENT_COLLECTION],
         request=AddDocumentToDocumentCollectionRequest,
         responses={
             201: DocumentInDocumentCollectionResponse,
@@ -51,9 +92,26 @@ _ERR_DESTROY = standard_error_responses(401, 403, 404)
     ),
     destroy=extend_schema(
         tags=["DocumentCollectionDocuments"],
-        summary="Unlink document from document collection",
+        summary="Detach membership identified by surrogate id",
+        description=(
+            "Deletes referencing the **`pk` of join table rows**, not arbitrary document ids elsewhere. Errors map to **`document_link_not_found`** "
+            "when already removed. Requires **REMOVE_DOCUMENT_COLLECTION_DOCUMENT**."
+        ),
+        parameters=[
+            _PARENT_COLLECTION,
+            OpenApiParameter(
+                name="pk",
+                type=int,
+                location=OpenApiParameter.PATH,
+                required=True,
+                description=(
+                    "The `document.id` of the document to unlink — the upstream document surrogate key, "
+                    "not the `document_in_document_collection.id` join-row pk."
+                ),
+            ),
+        ],
         responses={
-            204: OpenApiResponse(description="No content"),
+            204: OpenApiResponse(description="Empty body signalling successful unlink."),
             **_ERR_DESTROY,
         },
     ),

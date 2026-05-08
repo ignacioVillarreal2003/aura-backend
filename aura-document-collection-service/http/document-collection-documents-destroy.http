@@ -1,23 +1,18 @@
-@host = http://localhost:8000
-@token = replace_with_valid_jwt
-@documentCollectionId = 1
-@documentId = 500
+@host = {{host}}
+@token = {{token}}
+@documentCollectionId = {{documentCollectionId}}
+@documentLinkId = {{documentLinkId}}
 
-### Desvincular documento de la colección
-# Hace: elimina el enlace entre la colección y el `document_id` sin borrar el documento en origen.
-# Devuelve: 204 sin cuerpo si la operación fue correcta.
+### Eliminar vínculo (usa el **`pk` de `document_in_document_collection`**, no el `document_id` del registro)
+# La respuesta anterior de `POST .../documents/` devuelve `id` dentro del JSON (`id`, `created_by`, …) — ese es el valor que debe ir aquí como `documentLinkId`.
 
-DELETE {{host}}/api/v1/document-collections/{{documentCollectionId}}/documents/{{documentId}}/
+DELETE {{host}}/api/v1/document-collections/{{documentCollectionId}}/documents/{{documentLinkId}}/
 Accept: application/json
-Content-Type: application/json
 Authorization: Bearer {{token}}
 
 ###
 
-### Desvincular documento — sin token (caso negativo)
-# Hace: DELETE sin `Authorization`.
-# Devuelve: 401 JSON por falta de autenticación.
+### Intentar DELETE sin Bearer
 
-DELETE {{host}}/api/v1/document-collections/1/documents/1/
+DELETE {{host}}/api/v1/document-collections/{{documentCollectionId}}/documents/{{documentLinkId}}/
 Accept: application/json
-Content-Type: application/json

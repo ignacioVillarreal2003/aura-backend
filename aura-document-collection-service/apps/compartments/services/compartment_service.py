@@ -1,5 +1,4 @@
 import logging
-
 from django.db import IntegrityError
 from django.db.models import QuerySet
 
@@ -17,6 +16,7 @@ from core.authorization.permissions import (
 from core.domain.document_collection_exceptions import (
     CompartmentInUseException,
     CompartmentNotFoundException,
+    DuplicateCompartmentException,
 )
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,10 @@ class CompartmentService:
         description: str,
     ) -> Compartment:
         _permissions_gate(user, CREATE_COMPARTMENT)
-        obj = compartment_repository.create(name=name, description=description)
+        try:
+            obj = compartment_repository.create(name=name, description=description)
+        except IntegrityError as e:
+            raise DuplicateCompartmentException() from e
         logger.info(
             "Compartment created.",
             extra={"compartment_id": obj.id, "user_id": user.id},
@@ -64,7 +67,10 @@ class CompartmentService:
             raise CompartmentNotFoundException()
         name = kwargs.get("name", obj.name)
         description = kwargs.get("description", obj.description)
-        return compartment_repository.update(obj, name=name, description=description)
+        try:
+            return compartment_repository.update(obj, name=name, description=description)
+        except IntegrityError as e:
+            raise DuplicateCompartmentException() from e
 
     def delete_compartment(self, user: AuthenticatedUser, compartment_id: int) -> None:
         _permissions_gate(user, DELETE_COMPARTMENT)

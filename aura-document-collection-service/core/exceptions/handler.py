@@ -31,17 +31,9 @@ def custom_exception_handler(exc, context):
     response = exception_handler(exc, context)
 
     if response is not None:
-        error_detail = response.data
-        if isinstance(error_detail, dict):
-            detail_text = error_detail.get("detail", str(error_detail))
-        elif isinstance(error_detail, list):
-            detail_text = error_detail[0] if error_detail else "Validation error"
-        else:
-            detail_text = str(error_detail)
-
         response.data = {
             "error": _status_to_error_code(response.status_code),
-            "detail": detail_text,
+            "detail": response.data,
             "status_code": response.status_code,
         }
         return response

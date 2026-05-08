@@ -1,5 +1,4 @@
 import logging
-
 from django.db import IntegrityError
 from django.db.models import QuerySet
 
@@ -17,6 +16,7 @@ from core.authorization.permissions import (
 from core.domain.document_collection_exceptions import (
     ClassificationLevelInUseException,
     ClassificationLevelNotFoundException,
+    DuplicateClassificationLevelException,
 )
 
 logger = logging.getLogger(__name__)
@@ -49,7 +49,10 @@ class ClassificationLevelService:
         rank: int,
     ) -> ClassificationLevel:
         _permissions_gate(user, CREATE_CLASSIFICATION_LEVEL)
-        obj = classification_level_repository.create(name=name, rank=rank)
+        try:
+            obj = classification_level_repository.create(name=name, rank=rank)
+        except IntegrityError as e:
+            raise DuplicateClassificationLevelException() from e
         logger.info(
             "Classification level created.",
             extra={"classification_level_id": obj.id, "user_id": user.id},
@@ -68,7 +71,10 @@ class ClassificationLevelService:
             raise ClassificationLevelNotFoundException()
         name = kwargs.get("name", obj.name)
         rank = kwargs.get("rank", obj.rank)
-        return classification_level_repository.update(obj, name=name, rank=rank)
+        try:
+            return classification_level_repository.update(obj, name=name, rank=rank)
+        except IntegrityError as e:
+            raise DuplicateClassificationLevelException() from e
 
     def delete_classification_level(
         self,

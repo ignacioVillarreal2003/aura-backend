@@ -1,0 +1,17 @@
+@host = {{host}}
+@token = {{token}}
+@userId = {{userId}}
+
+### Listar compartimentos asignados al usuario (paginado)
+
+GET {{host}}/api/v1/user-authorizations/{{userId}}/compartments/
+Accept: application/json
+Authorization: Bearer {{token}}
+
+###
+
+### Con page_size explícito
+
+GET {{host}}/api/v1/user-authorizations/{{userId}}/compartments/?page=1&page_size=50
+Accept: application/json
+Authorization: Bearer {{token}}

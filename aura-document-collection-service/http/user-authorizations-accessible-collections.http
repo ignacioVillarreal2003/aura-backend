@@ -1,0 +1,18 @@
+@host = {{host}}
+@token = {{token}}
+@userId = {{userId}}
+
+### Colecciones documentales accesibles para el usuario (MAC)
+# Hace: aplica clearance + todos los compartimentos que exige cada colección; respuesta igual forma que colecciones.
+
+GET {{host}}/api/v1/user-authorizations/{{userId}}/accessible-collections/
+Accept: application/json
+Authorization: Bearer {{token}}
+
+###
+
+### Paginación explícita
+
+GET {{host}}/api/v1/user-authorizations/{{userId}}/accessible-collections/?page=1&page_size=25
+Accept: application/json
+Authorization: Bearer {{token}}

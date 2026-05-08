@@ -1,10 +1,10 @@
-@host = http://localhost:8000
-@token = replace_with_valid_jwt
-@documentCollectionId = 1
+@host = {{host}}
+@token = {{token}}
+@documentCollectionId = {{documentCollectionId}}
+@documentId = {{documentId}}
 
-### Vincular un documento a la colección
-# Hace: crea el enlace entre la colección y el `document_id` indicado.
-# Devuelve: 201 y el objeto del enlace en JSON.
+### Vincular documento ya existente (`document_registry`) a esta colección
+# Devuelve: 201 y el objeto de enlace; 409 si `duplicate_document_link`.
 
 POST {{host}}/api/v1/document-collections/{{documentCollectionId}}/documents/
 Accept: application/json
@@ -12,16 +12,14 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-  "document_id": 500
+  "document_id": {{documentId}}
 }
 
 ###
 
-### Vincular documento — otro document_id
-# Hace: enlaza otro documento a la misma colección.
-# Devuelve: 201 y el enlace creado, o 4xx si el documento no existe o ya está vinculado.
+### Vincular otro numeric id (ajústalo contra tu base)
 
-POST {{host}}/api/v1/document-collections/1/documents/
+POST {{host}}/api/v1/document-collections/{{documentCollectionId}}/documents/
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer {{token}}
@@ -32,11 +30,9 @@ Authorization: Bearer {{token}}
 
 ###
 
-### Vincular documento — error de validación (document_id inválido)
-# Hace: envía `document_id` 0, fuera del rango permitido.
-# Devuelve: 400 con errores de validación en JSON.
+### Validación — document_id ilegal (≤0)
 
-POST {{host}}/api/v1/document-collections/1/documents/
+POST {{host}}/api/v1/document-collections/{{documentCollectionId}}/documents/
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer {{token}}
@@ -47,11 +43,9 @@ Authorization: Bearer {{token}}
 
 ###
 
-### Vincular documento — cuerpo sin document_id (caso negativo)
-# Hace: POST sin el campo obligatorio.
-# Devuelve: 400 JSON de validación DRF.
+### Cuerpo vacío (falta `document_id`)
 
-POST {{host}}/api/v1/document-collections/1/documents/
+POST {{host}}/api/v1/document-collections/{{documentCollectionId}}/documents/
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer {{token}}

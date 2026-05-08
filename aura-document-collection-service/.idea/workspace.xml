@@ -5,8 +5,75 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="541f8908-7e23-4d18-b532-96aae5c81a7c" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/../aura-auth-service/authservice/settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-auth-service/authservice/settings.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../docker/docker-compose.yml" beforeDir="false" afterPath="$PROJECT_DIR$/../docker/docker-compose.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.claude/settings.local.json" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/settings.local.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.env" beforeDir="false" afterPath="$PROJECT_DIR$/.env" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.env.docker" beforeDir="false" afterPath="$PROJECT_DIR$/.env.docker" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/aura-document-collection-service.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/aura-document-collection-service.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/classification_levels/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/classification_levels/serializers/request.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/classification_levels/serializers/request.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/classification_levels/serializers/response.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/classification_levels/serializers/response.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/classification_levels/services/classification_level_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/classification_levels/services/classification_level_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/classification_levels/views/classification_level_viewset.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/classification_levels/views/classification_level_viewset.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/compartments/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/compartments/serializers/request.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/compartments/serializers/request.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/compartments/serializers/response.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/compartments/serializers/response.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/compartments/services/compartment_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/compartments/services/compartment_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/compartments/views/compartment_viewset.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/compartments/views/compartment_viewset.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collection_documents/repositories/document_in_document_collection_repository.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/document_collection_documents/repositories/document_in_document_collection_repository.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collection_documents/serializers/request.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/document_collection_documents/serializers/request.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collection_documents/serializers/response.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/document_collection_documents/serializers/response.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collection_documents/services/document_collection_document_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/document_collection_documents/services/document_collection_document_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collection_documents/views/document_collection_document_viewset.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/document_collection_documents/views/document_collection_document_viewset.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collection_users/apps.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collection_users/filters.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collection_users/models/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collection_users/models/user_in_document_collection.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collection_users/repositories/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collection_users/repositories/user_in_document_collection_repository.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collection_users/serializers/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collection_users/serializers/request.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collection_users/serializers/response.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collection_users/services/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collection_users/services/document_collection_user_service.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collection_users/views/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collection_users/views/document_collection_user_viewset.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collections/repositories/document_collection_repository.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/document_collections/repositories/document_collection_repository.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collections/serializers/request.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/document_collections/serializers/request.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collections/serializers/response.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/document_collections/serializers/response.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collections/services/document_collection_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/document_collections/services/document_collection_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/document_collections/views/document_collection_viewset.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/document_collections/views/document_collection_viewset.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/user_authorizations/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/user_authorizations/serializers/request.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/user_authorizations/serializers/request.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/user_authorizations/serializers/response.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/user_authorizations/serializers/response.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/user_authorizations/services/user_authorization_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/user_authorizations/services/user_authorization_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/user_authorizations/views/user_authorization_viewset.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/user_authorizations/views/user_authorization_viewset.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/aura_document_collection_service/settings/base.py" beforeDir="false" afterPath="$PROJECT_DIR$/aura_document_collection_service/settings/base.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/aura_document_collection_service/settings/production.py" beforeDir="false" afterPath="$PROJECT_DIR$/aura_document_collection_service/settings/production.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/aura_document_collection_service/urls.py" beforeDir="false" afterPath="$PROJECT_DIR$/aura_document_collection_service/urls.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/authentication/authenticated_user.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/authentication/authenticated_user.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/authentication/authentication_middleware.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/authentication/authentication_middleware.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/authentication/authentication_provider.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/authentication/authentication_provider.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/domain/document_collection_exceptions.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/domain/document_collection_exceptions.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/exceptions/base.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/exceptions/base.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/exceptions/handler.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/exceptions/handler.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/integrations/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/integrations/user_profile_client.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/openapi/common.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/openapi/common.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/http/document-collection-documents-create.http" beforeDir="false" afterPath="$PROJECT_DIR$/http/document-collection-documents-create.http" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/http/document-collection-documents-destroy.http" beforeDir="false" afterPath="$PROJECT_DIR$/http/document-collection-documents-destroy.http" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/http/document-collection-documents-list.http" beforeDir="false" afterPath="$PROJECT_DIR$/http/document-collection-documents-list.http" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/http/document-collection-users-create.http" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/http/document-collection-users-destroy.http" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/http/document-collection-users-list.http" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/http/document-collections-create.http" beforeDir="false" afterPath="$PROJECT_DIR$/http/document-collections-create.http" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/http/document-collections-destroy.http" beforeDir="false" afterPath="$PROJECT_DIR$/http/document-collections-destroy.http" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/http/document-collections-list.http" beforeDir="false" afterPath="$PROJECT_DIR$/http/document-collections-list.http" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/http/document-collections-partial-update.http" beforeDir="false" afterPath="$PROJECT_DIR$/http/document-collections-partial-update.http" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/http/document-collections-retrieve.http" beforeDir="false" afterPath="$PROJECT_DIR$/http/document-collections-retrieve.http" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/http/http-client.env.json" beforeDir="false" afterPath="$PROJECT_DIR$/http/http-client.env.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sql/mac_schema.sql" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -27,33 +94,33 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "Django Server.aura-document-collection.executor": "Run",
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.OpenDjangoStructureViewOnStart": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
-    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "git-widget-placeholder": "main",
-    "last_opened_file_path": "C:/Users/ignac/Desktop/AURA/aura-backend/aura-document-collection-service",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Django Server.aura-document-collection.executor&quot;: &quot;Run&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.OpenDjangoStructureViewOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/ignac/Desktop/AURA/aura-backend/aura-document-collection-service&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   },
-  "keyToStringList": {
-    "DatabaseDriversLRU": [
-      "postgresql"
+  &quot;keyToStringList&quot;: {
+    &quot;DatabaseDriversLRU&quot;: [
+      &quot;postgresql&quot;
     ]
   }
-}]]></component>
+}</component>
   <component name="RunManager">
     <configuration name="aura-document-collection" type="Python.DjangoServer" factoryName="Django server">
       <module name="aura-document-collection-service" />
@@ -104,6 +171,7 @@
       <workItem from="1776809944735" duration="1260000" />
       <workItem from="1777234919672" duration="63000" />
       <workItem from="1777667993857" duration="3000" />
+      <workItem from="1778269367620" duration="8323000" />
     </task>
     <servers />
   </component>

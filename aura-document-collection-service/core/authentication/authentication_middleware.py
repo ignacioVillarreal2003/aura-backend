@@ -35,7 +35,7 @@ class AuthenticationMiddleware:
             service_user = authentication_provider.evaluate_service_auth(request)
         except ServiceAuthenticationRejected as e:
             return JsonResponse(
-                {"detail": e.detail, "error": e.error},
+                {"error": e.error, "detail": e.detail, "status_code": e.status_code},
                 status=e.status_code,
             )
 
@@ -55,8 +55,9 @@ class AuthenticationMiddleware:
             )
             return JsonResponse(
                 {
-                    "detail": "Authentication required",
                     "error": "missing_token",
+                    "detail": "Authentication required",
+                    "status_code": 401,
                 },
                 status=401,
                 headers=_WWW_AUTH,
@@ -79,7 +80,7 @@ class AuthenticationMiddleware:
                 extra={"path": request.path, "error": str(e)},
             )
             return JsonResponse(
-                {"detail": "Invalid or expired token", "error": "invalid_token"},
+                {"error": "invalid_token", "detail": "Invalid or expired token", "status_code": 401},
                 status=401,
                 headers=_WWW_AUTH,
             )
@@ -89,7 +90,7 @@ class AuthenticationMiddleware:
                 extra={"path": request.path, "error": str(e)},
             )
             return JsonResponse(
-                {"detail": "Access forbidden", "error": "unauthorized"},
+                {"error": "unauthorized", "detail": "Access forbidden", "status_code": 403},
                 status=403,
             )
         except AuthenticationProviderUserNotFoundException as e:
@@ -98,7 +99,7 @@ class AuthenticationMiddleware:
                 extra={"path": request.path, "error": str(e)},
             )
             return JsonResponse(
-                {"detail": "User not found", "error": "user_not_found"},
+                {"error": "user_not_found", "detail": "User not found", "status_code": 404},
                 status=404,
             )
         except AuthenticationProviderServiceUnavailableException as e:
@@ -108,8 +109,9 @@ class AuthenticationMiddleware:
             )
             return JsonResponse(
                 {
-                    "detail": "Authentication service temporarily unavailable",
                     "error": "service_unavailable",
+                    "detail": "Authentication service temporarily unavailable",
+                    "status_code": 503,
                 },
                 status=503,
             )
@@ -119,7 +121,7 @@ class AuthenticationMiddleware:
                 extra={"path": request.path, "error": str(e)},
             )
             return JsonResponse(
-                {"detail": "Authentication error", "error": "authentication_error"},
+                {"error": "authentication_error", "detail": "Authentication error", "status_code": 500},
                 status=500,
             )
         except Exception:
@@ -128,7 +130,7 @@ class AuthenticationMiddleware:
                 extra={"path": request.path},
             )
             return JsonResponse(
-                {"detail": "Internal server error", "error": "internal_error"},
+                {"error": "internal_error", "detail": "Internal server error", "status_code": 500},
                 status=500,
             )
 

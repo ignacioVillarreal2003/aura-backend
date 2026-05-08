@@ -1,10 +1,8 @@
-@host = http://localhost:8000
-@token = replace_with_valid_jwt
-@documentCollectionId = 1
+@host = {{host}}
+@token = {{token}}
+@documentCollectionId = {{documentCollectionId}}
 
 ### Obtener una colección por id
-# Hace: recupera el detalle de la colección `documentCollectionId` si el usuario tiene permiso.
-# Devuelve: 200 y un objeto JSON con los datos de la colección.
 
 GET {{host}}/api/v1/document-collections/{{documentCollectionId}}/
 Accept: application/json
@@ -12,19 +10,15 @@ Authorization: Bearer {{token}}
 
 ###
 
-### Obtener colección — otro id numérico
-# Hace: igual que el anterior con otro identificador en la URL.
-# Devuelve: 200 y la colección, o 404/4xx si no existe o no hay acceso (según reglas de negocio).
+### Obtener colección — otro id
 
-GET {{host}}/api/v1/document-collections/42/
+GET {{host}}/api/v1/document-collections/{{documentCollectionIdAlt}}/
 Accept: application/json
 Authorization: Bearer {{token}}
 
 ###
 
-### Obtener colección — sin autenticación (caso negativo)
-# Hace: pide el recurso sin Bearer.
-# Devuelve: 401 JSON indicando que falta autenticación.
+### Sin Bearer
 
-GET {{host}}/api/v1/document-collections/1/
+GET {{host}}/api/v1/document-collections/{{documentCollectionId}}/
 Accept: application/json

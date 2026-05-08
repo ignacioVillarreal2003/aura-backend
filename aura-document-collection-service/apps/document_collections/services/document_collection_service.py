@@ -1,5 +1,4 @@
 import logging
-
 from django.db import transaction
 from django.db.models import QuerySet
 
@@ -48,21 +47,20 @@ class DocumentCollectionService:
         _permissions_gate(user, CREATE_DOCUMENT_COLLECTION)
         if classification_level_repository.get_by_id(classification_level_id) is None:
             raise ClassificationLevelNotFoundException()
-        for cid in compartment_ids:
-            if compartment_repository.get_by_id(cid) is None:
-                raise CompartmentNotFoundException()
+        unique_compartment_ids = list(set(compartment_ids))
+        if compartment_repository.filter_by_ids(unique_compartment_ids).count() != len(unique_compartment_ids):
+            raise CompartmentNotFoundException()
         document_collection = document_collection_repository.create(
             name=name,
             created_by=user.id,
             classification_level_id=classification_level_id,
         )
-        for cid in compartment_ids:
+        for cid in unique_compartment_ids:
             document_collection_compartment_repository.create(
                 document_collection_id=document_collection.id,
                 compartment_id=cid,
                 created_by=user.id,
             )
-        document_collection.refresh_from_db()
         logger.info(
             "Document collection created.",
             extra={"document_collection_id": document_collection.id, "user_id": user.id},
@@ -97,11 +95,11 @@ class DocumentCollectionService:
             if classification_level_repository.get_by_id(classification_level_id) is None:
                 raise ClassificationLevelNotFoundException()
         if compartment_ids is not None:
-            for cid in compartment_ids:
-                if compartment_repository.get_by_id(cid) is None:
-                    raise CompartmentNotFoundException()
+            unique_compartment_ids = list(set(compartment_ids))
+            if compartment_repository.filter_by_ids(unique_compartment_ids).count() != len(unique_compartment_ids):
+                raise CompartmentNotFoundException()
             document_collection_compartment_repository.delete_all_by_collection_id(document_collection_id)
-            for cid in compartment_ids:
+            for cid in unique_compartment_ids:
                 document_collection_compartment_repository.create(
                     document_collection_id=document_collection_id,
                     compartment_id=cid,

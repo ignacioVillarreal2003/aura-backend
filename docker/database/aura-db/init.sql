@@ -174,15 +174,40 @@ CREATE TABLE notification (
     deleted_at  TIMESTAMPTZ
 );
 
-CREATE TABLE document_collection (
+CREATE TABLE classification_level (
+    id      BIGSERIAL PRIMARY KEY,
+    name    VARCHAR(100) NOT NULL UNIQUE,
+    rank    SMALLINT NOT NULL UNIQUE CHECK (rank >= 0)
+);
+
+CREATE TABLE compartment (
     id          BIGSERIAL PRIMARY KEY,
-    name        VARCHAR(255)    NOT NULL,
-    created_by  BIGINT          NOT NULL,
-    created_at  TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
-    updated_by  BIGINT,
-    updated_at  TIMESTAMPTZ,
-    deleted_by  BIGINT,
-    deleted_at  TIMESTAMPTZ
+    name        VARCHAR(100)    NOT NULL UNIQUE,
+    description TEXT            NOT NULL DEFAULT ''
+);
+
+CREATE TABLE document_collection (
+    id                       BIGSERIAL PRIMARY KEY,
+    name                     VARCHAR(255)    NOT NULL,
+    classification_level_id  BIGINT
+        REFERENCES classification_level(id),
+    created_by               BIGINT          NOT NULL,
+    created_at               TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    updated_by               BIGINT,
+    updated_at               TIMESTAMPTZ,
+    deleted_by               BIGINT,
+    deleted_at               TIMESTAMPTZ
+);
+
+CREATE TABLE document_collection_compartment (
+    id                      BIGSERIAL PRIMARY KEY,
+    document_collection_id  BIGINT NOT NULL
+        CONSTRAINT fk_doc_coll_comp_collection REFERENCES document_collection(id),
+    compartment_id          BIGINT NOT NULL
+        CONSTRAINT fk_doc_coll_comp_compartment REFERENCES compartment(id),
+    created_by              BIGINT          NOT NULL,
+    created_at              TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    CONSTRAINT doc_coll_comp_coll_compartment_unique UNIQUE (document_collection_id, compartment_id)
 );
 
 CREATE TABLE document_in_document_collection (
@@ -194,20 +219,26 @@ CREATE TABLE document_in_document_collection (
     created_by              BIGINT  NOT NULL,
     created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_by              BIGINT,
-    deleted_at              TIMESTAMPTZ,
-    CONSTRAINT document_in_collection_unique UNIQUE (document_collection_id, document_id)
+    deleted_at              TIMESTAMPTZ
 );
 
-CREATE TABLE user_in_document_collection (
+CREATE TABLE user_clearance (
     id                      BIGSERIAL PRIMARY KEY,
-    document_collection_id  BIGINT  NOT NULL
-        CONSTRAINT fk_uidc_collection REFERENCES document_collection(id),
-    user_id                 BIGINT  NOT NULL,
-    created_by              BIGINT  NOT NULL,
-    created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    deleted_by              BIGINT,
-    deleted_at              TIMESTAMPTZ,
-    CONSTRAINT user_in_collection_unique UNIQUE (document_collection_id, user_id)
+    user_id                 BIGINT NOT NULL UNIQUE,
+    classification_level_id BIGINT NOT NULL
+        REFERENCES classification_level(id),
+    created_by              BIGINT NOT NULL,
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE user_compartment (
+    id               BIGSERIAL PRIMARY KEY,
+    user_id          BIGINT NOT NULL,
+    compartment_id   BIGINT NOT NULL
+        REFERENCES compartment(id),
+    created_by       BIGINT NOT NULL,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT user_compartment_user_compartment_unique UNIQUE (user_id, compartment_id)
 );
 
 CREATE INDEX idx_document_status          ON document(status);
@@ -257,40 +288,24 @@ CREATE INDEX idx_notification_receiver_created   ON notification(receiver_id, cr
 CREATE INDEX idx_notification_deleted_at        ON notification(deleted_at);
 CREATE INDEX idx_notification_target_scope      ON notification(target_scope);
 
-INSERT INTO chat (name, system_prompt, response_style, last_message_at, created_by)
-VALUES
-    (
-        'Análisis — Reglamento interno Alpha',
-        'Respondé de forma técnica y breve, basándote solo en el contexto aportado.',
-        'conciso',
-        NOW() - INTERVAL '2 hours',
-        4
-    ),
-    (
-        'Consultas — Doctrina unidad Bravo',
-        'Usá español formal; cuando cites normativa, indicá el apartado si lo conocés.',
-        'formal',
-        NOW() - INTERVAL '1 day',
-        5
-    );
+CREATE UNIQUE INDEX idx_document_in_collection_active_unique
+    ON document_in_document_collection (document_collection_id, document_id)
+    WHERE deleted_at IS NULL;
 
-INSERT INTO chat_membership (member_id, chat_id, status, joined_at, left_at, created_by, role)
-VALUES
-    (4, 1, 'active',   NOW() - INTERVAL '8 days',  NULL, 4, 'owner'),
-    (5, 1, 'active',   NOW() - INTERVAL '7 days',  NULL, 4, 'editor'),
-    (4, 2, 'active',   NOW() - INTERVAL '6 days',  NULL, 5, 'editor'),
-    (5, 2, 'active',   NOW() - INTERVAL '5 days',  NULL, 5, 'owner'),
-    (6, 2, 'pending',  NULL,                      NULL, 5, 'editor');
+CREATE INDEX idx_document_collection_classification_level_id
+    ON document_collection (classification_level_id);
+CREATE INDEX idx_document_collection_deleted_at
+    ON document_collection (deleted_at);
 
-INSERT INTO document_collection (name, created_by)
-VALUES
-    ('Colección — Manuales de vuelo (2024)',       4),
-    ('Colección — Informes tácticos equipo sur',  6);
+CREATE INDEX idx_document_collection_compartment_collection
+    ON document_collection_compartment (document_collection_id);
+CREATE INDEX idx_document_collection_compartment_compartment
+    ON document_collection_compartment (compartment_id);
 
-INSERT INTO user_in_document_collection (document_collection_id, user_id, created_by)
-VALUES
-    (1, 4, 4),
-    (1, 5, 4),
-    (2, 5, 6),
-    (2, 6, 6),
-    (2, 4, 6);
+CREATE INDEX idx_user_clearance_classification_level_id
+    ON user_clearance (classification_level_id);
+
+CREATE INDEX idx_user_compartment_user_id
+    ON user_compartment (user_id);
+CREATE INDEX idx_user_compartment_compartment_id
+    ON user_compartment (compartment_id);

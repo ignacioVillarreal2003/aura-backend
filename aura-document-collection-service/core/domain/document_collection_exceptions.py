@@ -1,4 +1,4 @@
-from core.exceptions.base import ConflictException, ForbiddenException, NotFoundException
+from core.exceptions.base import ConflictException, NotFoundException
 
 
 class CollectionNotFoundException(NotFoundException):
@@ -41,7 +41,15 @@ class ClassificationLevelNotFoundException(NotFoundException):
         )
 
 
-class ClassificationLevelInUseException(ForbiddenException):
+class DuplicateClassificationLevelException(ConflictException):
+    def __init__(self):
+        super().__init__(
+            detail="A classification level with this name or rank already exists",
+            error_code="duplicate_classification_level",
+        )
+
+
+class ClassificationLevelInUseException(ConflictException):
     def __init__(self):
         super().__init__(
             detail="Classification level is in use and cannot be deleted",
@@ -57,7 +65,15 @@ class CompartmentNotFoundException(NotFoundException):
         )
 
 
-class CompartmentInUseException(ForbiddenException):
+class DuplicateCompartmentException(ConflictException):
+    def __init__(self):
+        super().__init__(
+            detail="A compartment with this name already exists",
+            error_code="duplicate_compartment",
+        )
+
+
+class CompartmentInUseException(ConflictException):
     def __init__(self):
         super().__init__(
             detail="Compartment is in use and cannot be deleted",

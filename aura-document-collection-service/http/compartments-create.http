@@ -1,0 +1,43 @@
+@host = {{host}}
+@token = {{token}}
+
+### Crear compartimento — mínimo
+# Body: `name` obligatorio; `description` puede omitirse o ser "".
+
+POST {{host}}/api/v1/compartments/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Finanzas"
+}
+
+###
+
+### Crear compartimento — con descripción
+
+POST {{host}}/api/v1/compartments/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "RRHH",
+  "description": "Solo equipo de personas."
+}
+
+###
+
+### Crear compartimento — nombre vacío
+# Devuelve: 400.
+
+POST {{host}}/api/v1/compartments/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "",
+  "description": "x"
+}

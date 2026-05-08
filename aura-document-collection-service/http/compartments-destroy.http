@@ -1,0 +1,10 @@
+@host = {{host}}
+@token = {{token}}
+@compartmentId = {{compartmentId}}
+
+### Eliminar compartimento
+# Devuelve: 204; 409 si `compartment_in_use`.
+
+DELETE {{host}}/api/v1/compartments/{{compartmentId}}/
+Accept: application/json
+Authorization: Bearer {{token}}

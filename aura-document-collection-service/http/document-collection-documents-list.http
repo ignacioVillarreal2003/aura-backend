@@ -1,10 +1,8 @@
-@host = http://localhost:8000
-@token = replace_with_valid_jwt
-@documentCollectionId = 1
+@host = {{host}}
+@token = {{token}}
+@documentCollectionId = {{documentCollectionId}}
 
-### Listar documentos vinculados a la colección
-# Hace: devuelve los enlaces documento–colección visibles para el usuario.
-# Devuelve: 200 con respuesta paginada (`count`, `next`, `previous`, `results`).
+### Listar enlaces documento ↔ colección (paginado)
 
 GET {{host}}/api/v1/document-collections/{{documentCollectionId}}/documents/
 Accept: application/json
@@ -12,19 +10,15 @@ Authorization: Bearer {{token}}
 
 ###
 
-### Listar documentos — con page_size
-# Hace: lista con tamaño de página explícito.
-# Devuelve: 200 paginado con hasta `page_size` ítems en `results`.
+### Con page_size y filtros conocidos (`document_id`, `document_name`, `ordering`)
 
-GET {{host}}/api/v1/document-collections/1/documents/?page=1&page_size=25
+GET {{host}}/api/v1/document-collections/{{documentCollectionId}}/documents/?page_size=25&ordering=-created_at
 Accept: application/json
 Authorization: Bearer {{token}}
 
 ###
 
-### Listar documentos — sin token (caso negativo)
-# Hace: consulta sin Bearer.
-# Devuelve: 401 JSON por autenticación requerida.
+### Sin Bearer
 
-GET {{host}}/api/v1/document-collections/1/documents/
+GET {{host}}/api/v1/document-collections/{{documentCollectionId}}/documents/
 Accept: application/json

@@ -1,5 +1,4 @@
 import logging
-
 from django.db import IntegrityError, transaction
 from django.db.models import QuerySet
 
@@ -56,6 +55,12 @@ class DocumentCollectionDocumentService:
             raise CollectionNotFoundException()
         if not document_repository.exists_active_by_id(document_id):
             raise DocumentNotAvailableException()
+        existing = document_in_document_collection_repository.get_active_by_document_collection_id_and_document_id(
+            document_collection_id=document_collection.id,
+            document_id=document_id,
+        )
+        if existing is not None:
+            raise DuplicateDocumentLinkException()
         try:
             link = document_in_document_collection_repository.create(
                 document_collection_id=document_collection.id,

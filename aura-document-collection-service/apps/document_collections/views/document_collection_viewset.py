@@ -1,5 +1,5 @@
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import status
 from rest_framework.filters import OrderingFilter
 from rest_framework.request import Request
@@ -24,40 +24,116 @@ _ERR_RETRIEVE = standard_error_responses(401, 403, 404)
 _ERR_WRITE = standard_error_responses(400, 401, 403, 404)
 _ERR_DESTROY = standard_error_responses(401, 403, 404)
 
+_ORDERING_HINT = OpenApiParameter(
+    name="ordering",
+    type=str,
+    location=OpenApiParameter.QUERY,
+    description=(
+        "Comma-separated field(s) respecting DRF OrderingFilter semantics. Prefix with `-` for descending. "
+        "Allowed: `id`, `name`, `created_at`, `updated_at`; default `-created_at`."
+    ),
+    required=False,
+)
+
 
 @extend_schema(
-    auth=[
-        {"bearerAuth": []},
-        {"serviceApiKey": [], "serviceUserId": [], "serviceUserEmail": []},
-    ],
+    auth=[{"bearerAuth": []}],
+    description=(
+        "Manage logical groupings tying external document ids together under Mandatory Access Control primitives. "
+        "Deletes intentionally **soft-remove** audits while reads honour active markers only via repository queries."
+    ),
 )
 @extend_schema_view(
     list=extend_schema(
         tags=["DocumentCollections"],
-        summary="List document collections",
+        summary="List MAC-aware document collections",
+        description=(
+            "Returns paginated, filterable inventories of collections including nested classification/compartment slices. "
+            "Requires **LIST_DOCUMENT_COLLECTIONS** capability."
+        ),
+        parameters=[
+            _ORDERING_HINT,
+            OpenApiParameter(
+                name="name",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Case-insensitive substring match against `document_collection.name`.",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="created_by",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="Exact match filtering on authoring user id persisted at insertion.",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="created_after",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="ISO-8601 lower bound inclusive on `created_at`.",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="created_before",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="ISO-8601 upper bound inclusive on `created_at`.",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="page",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="Page number for standard pagination.",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="page_size",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="Optional override capped at StandardPagination.MAX limit (defaults to configured page size).",
+                required=False,
+            ),
+        ],
         responses={200: DocumentCollectionResponse(many=True), **_ERR_LIST},
     ),
     create=extend_schema(
         tags=["DocumentCollections"],
-        summary="Create document collection",
+        summary="Create collection with clearance + compartments",
+        description=(
+            "Atomically allocates a DocumentCollection pivoting on `classification_level_id` and rewires compartment "
+            "memberships. Requires **CREATE_DOCUMENT_COLLECTION** and validates existence of FK targets."
+        ),
         request=CreateDocumentCollectionRequest,
         responses={201: DocumentCollectionResponse, **_ERR_WRITE},
     ),
     retrieve=extend_schema(
         tags=["DocumentCollections"],
-        summary="Get document collection",
+        summary="Retrieve a single collection by id",
+        description=(
+            "Hydrates catalogue joins for readability. Missing/soft deleted rows bubble up as **`document_collection_not_found`**."
+        ),
         responses={200: DocumentCollectionResponse, **_ERR_RETRIEVE},
     ),
     partial_update=extend_schema(
         tags=["DocumentCollections"],
-        summary="Update document collection",
+        summary="PATCH mutable collection facets",
+        description=(
+            "`PATCH`-only ergonomics—send sparse JSON. Updating `compartment_ids` rewires memberships atomically "
+            "(non-empty replacements). Requires **UPDATE_DOCUMENT_COLLECTION**."
+        ),
         request=PatchDocumentCollectionRequest,
         responses={200: DocumentCollectionResponse, **_ERR_WRITE},
     ),
     destroy=extend_schema(
         tags=["DocumentCollections"],
-        summary="Delete document collection",
-        responses={204: OpenApiResponse(description="No content"), **_ERR_DESTROY},
+        summary="Soft-delete a collection row",
+        description=(
+            "`DELETE` logically retires collections while retaining historical provenance (**soft delete**) so audit pipelines "
+            "remain intact. Requires **DELETE_DOCUMENT_COLLECTION**."
+        ),
+        responses={204: OpenApiResponse(description="No body on success."), **_ERR_DESTROY},
     ),
 )
 class DocumentCollectionViewSet(GenericViewSet):

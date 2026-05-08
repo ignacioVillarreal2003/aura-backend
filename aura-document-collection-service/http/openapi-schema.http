@@ -1,0 +1,7 @@
+@host = {{host}}
+
+### OpenAPI schema (sin JWT en middleware de rutas de documentación)
+# Útil para inspeccionar el JSON desde el mismo host que la app dev.
+
+GET {{host}}/api/schema/
+Accept: application/vnd.oai.openapi+json, application/json

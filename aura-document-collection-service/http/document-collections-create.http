@@ -1,9 +1,12 @@
-@host = http://localhost:8000
-@token = replace_with_valid_jwt
+@host = {{host}}
+@token = {{token}}
+@classificationLevelId = {{classificationLevelId}}
+@compartmentId = {{compartmentId}}
+@compartmentIdAlt = {{compartmentIdAlt}}
 
-### Crear colección — cuerpo mínimo válido
-# Hace: crea una nueva colección con el nombre indicado.
-# Devuelve: 201 y el objeto de la colección creada en JSON.
+### Crear colección — cuerpo válido (nivel + al menos un compartimento)
+# Requiere JSON: `name`, `classification_level_id`, `compartment_ids` (lista no vacía).
+# Devuelve: 201 y la colección con `classification_level` y `compartments` expandidos.
 
 POST {{host}}/api/v1/document-collections/
 Accept: application/json
@@ -11,14 +14,15 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-  "name": "My collection"
+  "name": "Mis expedientes QA",
+  "classification_level_id": {{classificationLevelId}},
+  "compartment_ids": [{{compartmentId}}]
 }
 
 ###
 
-### Crear colección — nombre con espacios (se recorta en servidor)
-# Hace: envía un nombre con espacios al inicio/fin; el backend lo normaliza con trim.
-# Devuelve: 201 y la colección en JSON con el nombre ya recortado.
+### Crear colección — varios compartimentos
+# IDs duplicados se deduplican en servidor antes de crear pivotes.
 
 POST {{host}}/api/v1/document-collections/
 Accept: application/json
@@ -26,14 +30,14 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-  "name": "  Quarterly reviews  "
+  "name": "Paquete multi-cofre",
+  "classification_level_id": {{classificationLevelId}},
+  "compartment_ids": [{{compartmentId}}, {{compartmentIdAlt}}]
 }
 
 ###
 
-### Crear colección — error de validación (nombre vacío)
-# Hace: envía `name` vacío; viola la validación del serializer.
-# Devuelve: 400 con errores de campo en JSON (formato DRF).
+### Crear colección — nombre con espacios (trim en servidor)
 
 POST {{host}}/api/v1/document-collections/
 Accept: application/json
@@ -41,14 +45,14 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-  "name": ""
+  "name": "  Reviews trimmer  ",
+  "classification_level_id": {{classificationLevelId}},
+  "compartment_ids": [{{compartmentId}}]
 }
 
 ###
 
-### Crear colección — error de validación (solo espacios)
-# Hace: envía un nombre que tras trim queda vacío.
-# Devuelve: 400 con mensaje de validación en JSON.
+### Crear colección — `compartment_ids` vacíos (lista vacía prohibida)
 
 POST {{host}}/api/v1/document-collections/
 Accept: application/json
@@ -56,5 +60,22 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-  "name": "     "
+  "name": "Coleccion invalida empty compartments",
+  "classification_level_id": {{classificationLevelId}},
+  "compartment_ids": []
+}
+
+###
+
+### Crear colección — sin classification_level_id (validación)
+# Falta FK obligatorio al crear desde cero si no se usa partial serializer create request.
+
+POST {{host}}/api/v1/document-collections/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Solo texto",
+  "compartment_ids": [{{compartmentId}}]
 }

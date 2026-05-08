@@ -23,19 +23,9 @@ _HEADER_USER_ROLES = "X-User-Roles"
 _HEADER_USER_PERMISSIONS = "X-User-Permissions"
 
 
-def build_service_user_headers(authenticated_user: Optional[AuthenticatedUser] = None) -> dict[str, str]:
-    headers: dict[str, str] = {_HEADER_SERVICE_API_KEY: str(settings.SERVICE_API_KEY)}
-    if authenticated_user is not None:
-        headers[_HEADER_USER_ID] = str(authenticated_user.id)
-        headers[_HEADER_USER_EMAIL] = str(authenticated_user.email)
-        headers[_HEADER_USER_ROLES] = ",".join(authenticated_user.roles)
-        headers[_HEADER_USER_PERMISSIONS] = ",".join(authenticated_user.permissions)
-    return headers
-
-
 class AuthenticationProvider:
     def evaluate_service_auth(self, request: HttpRequest) -> Optional[AuthenticatedUser]:
-        raw_key = request.META.get(_HEADER_SERVICE_API_KEY)
+        raw_key = request.headers.get(_HEADER_SERVICE_API_KEY)
         if raw_key is None:
             return None
 
@@ -62,7 +52,7 @@ class AuthenticationProvider:
                 "Invalid service API key",
             )
 
-        raw_user_id = (request.META.get(_HEADER_USER_ID) or "").strip()
+        raw_user_id = (request.headers.get(_HEADER_USER_ID) or "").strip()
         if not raw_user_id:
             logger.warning(
                 "Service-to-service call is missing the user id header.",
@@ -87,7 +77,7 @@ class AuthenticationProvider:
                 "X-User-Id must be a valid integer",
             )
 
-        email = (request.META.get(_HEADER_USER_EMAIL) or "").strip()
+        email = (request.headers.get(_HEADER_USER_EMAIL) or "").strip()
         if not email:
             logger.warning(
                 "Service-to-service call is missing the user email header.",
@@ -106,8 +96,8 @@ class AuthenticationProvider:
         return AuthenticatedUser(
             id=user_id,
             email=email,
-            roles=_parse_comma_list(request.META.get(_HEADER_USER_ROLES)),
-            permissions=_parse_comma_list(request.META.get(_HEADER_USER_PERMISSIONS)),
+            roles=_parse_comma_list(request.headers.get(_HEADER_USER_ROLES)),
+            permissions=_parse_comma_list(request.headers.get(_HEADER_USER_PERMISSIONS)),
         )
 
     def validate_token(self, token: str) -> AuthenticatedUser:
@@ -167,8 +157,8 @@ class AuthenticationProvider:
         return AuthenticatedUser(
             id=user_id,
             email=str(data.get("email", "")),
-            roles=list(data.get("roles") or []),
-            permissions=list(data.get("permissions") or []),
+            roles=tuple(data.get("roles") or []),
+            permissions=tuple(data.get("permissions") or []),
         )
 
 
@@ -177,10 +167,10 @@ def _format_bearer_token(token: str) -> str:
     return stripped if stripped.lower().startswith("bearer ") else f"Bearer {stripped}"
 
 
-def _parse_comma_list(value: Optional[str]) -> list[str]:
+def _parse_comma_list(value: Optional[str]) -> tuple[str, ...]:
     if not value:
-        return []
-    return [item.strip() for item in value.split(",") if item.strip()]
+        return ()
+    return tuple(item.strip() for item in value.split(",") if item.strip())
 
 
 authentication_provider = AuthenticationProvider()

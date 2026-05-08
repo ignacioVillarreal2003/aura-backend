@@ -8,7 +8,10 @@ class DocumentInDocumentCollectionRepository:
         self, document_collection_id: int
     ) -> QuerySet[DocumentInDocumentCollection]:
         return (
-            DocumentInDocumentCollection.objects.filter(document_collection_id=document_collection_id)
+            DocumentInDocumentCollection.objects.filter(
+                document_collection_id=document_collection_id,
+                document__deleted_at__isnull=True,
+            )
             .select_related("document")
             .order_by()
         )

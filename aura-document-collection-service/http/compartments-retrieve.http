@@ -1,0 +1,9 @@
+@host = {{host}}
+@token = {{token}}
+@compartmentId = {{compartmentId}}
+
+### Obtener compartimento
+
+GET {{host}}/api/v1/compartments/{{compartmentId}}/
+Accept: application/json
+Authorization: Bearer {{token}}

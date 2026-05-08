@@ -1,0 +1,27 @@
+@host = {{host}}
+@token = {{token}}
+@compartmentId = {{compartmentId}}
+
+### PATCH — renombrar
+
+PATCH {{host}}/api/v1/compartments/{{compartmentId}}/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Finanzas (renombrado)"
+}
+
+###
+
+### PATCH — solo descripción
+
+PATCH {{host}}/api/v1/compartments/{{compartmentId}}/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "description": ""
+}

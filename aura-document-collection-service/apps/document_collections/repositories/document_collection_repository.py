@@ -1,4 +1,4 @@
-from django.db.models import QuerySet
+from django.db.models import Count, F, Q, QuerySet
 from django.utils import timezone
 
 from apps.document_collections.models import DocumentCollection
@@ -23,13 +23,20 @@ class DocumentCollectionRepository:
         max_rank: int,
         compartment_ids: list[int],
     ) -> QuerySet[DocumentCollection]:
+        if not compartment_ids:
+            return self._base_qs().none()
         return (
             self._base_qs()
-            .filter(
-                classification_level__rank__lte=max_rank,
-                compartments__id__in=compartment_ids,
+            .filter(classification_level__rank__lte=max_rank)
+            .annotate(
+                total=Count("compartments", distinct=True),
+                matched=Count(
+                    "compartments",
+                    filter=Q(compartments__id__in=compartment_ids),
+                    distinct=True,
+                ),
             )
-            .distinct()
+            .filter(total=F("matched"), total__gt=0)
         )
 
     def create(

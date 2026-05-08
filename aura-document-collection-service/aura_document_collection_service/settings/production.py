@@ -1,4 +1,4 @@
-from decouple import Csv, config
+from decouple import config
 
 from .base import *
 
@@ -14,18 +14,7 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 CORS_ALLOW_ALL_ORIGINS = False
 _cors_prod = config("CORS_ORIGINS", default="").strip()
-if _cors_prod in ("*", '["*"]', "['*']"):
-    CORS_ALLOWED_ORIGINS = list(
-        config(
-            "CORS_ALLOWED_ORIGINS",
-            default=",".join(DEFAULT_LOCAL_CORS_ORIGINS),
-            cast=Csv(),
-        )
-    )
-elif not _cors_prod:
-    CORS_ALLOWED_ORIGINS = list(DEFAULT_LOCAL_CORS_ORIGINS)
-else:
-    CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_prod.split(",") if o.strip()]
+CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_prod.split(",") if o.strip()]
 
 REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
     "anon": config("THROTTLE_ANON_RATE", default="20/minute"),
