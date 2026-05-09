@@ -79,8 +79,7 @@ INSERT INTO message_thread_reply (parent_message_id, message, created_by)
 VALUES (
     2,
     'Anexo confirmado por la jefatura; conviene pegar referencia literal en el briefing.',
-    5,
-    NOW() - INTERVAL '10 hours'
+    5
 );
 
 INSERT INTO message_feedback (message_id, user_id, value)
