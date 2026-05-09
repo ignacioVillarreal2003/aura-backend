@@ -1,0 +1,7 @@
+{% extends "notifications/email_base.html" %}
+{% block content %}
+<p>Hola{% if recipient_name %} {{ recipient_name }}{% endif %},</p>
+<p>El procesamiento del documento <strong>{{ document_name|default:"sin titulo" }}</strong> fallo.</p>
+{% if reason %}<p>Motivo: {{ reason }}</p>{% endif %}
+{% if link_url %}<p><a href="{{ link_url }}">Ver detalle</a></p>{% endif %}
+{% endblock %}

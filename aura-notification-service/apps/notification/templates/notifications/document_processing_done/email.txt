@@ -1,0 +1,2 @@
+El documento "{{ document_name|default:"sin titulo" }}" termino de procesarse.
+{% if link_url %}{{ link_url }}{% endif %}

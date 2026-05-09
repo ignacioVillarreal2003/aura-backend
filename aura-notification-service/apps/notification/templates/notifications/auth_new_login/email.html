@@ -1,0 +1,6 @@
+{% extends "notifications/email_base.html" %}
+{% block content %}
+<p>Hola{% if recipient_name %} {{ recipient_name }}{% endif %},</p>
+<p>Detectamos un inicio de sesion desde un dispositivo nuevo{% if location %} ({{ location }}){% endif %}{% if user_agent %}<br>Agente: <code>{{ user_agent }}</code>{% endif %}.</p>
+<p>Si no reconoces este acceso, cambia tu contrasena de inmediato.</p>
+{% endblock %}

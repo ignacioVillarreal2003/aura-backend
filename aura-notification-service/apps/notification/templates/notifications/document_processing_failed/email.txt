@@ -1,0 +1,3 @@
+El procesamiento del documento "{{ document_name|default:"sin titulo" }}" fallo.
+{% if reason %}Motivo: {{ reason }}{% endif %}
+{% if link_url %}{{ link_url }}{% endif %}

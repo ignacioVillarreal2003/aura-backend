@@ -1,0 +1,1 @@
+{{ actor_name|default:"Alguien" }} te menciono en "{{ chat_name|default:"un chat" }}".

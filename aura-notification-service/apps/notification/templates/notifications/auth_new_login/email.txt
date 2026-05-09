@@ -1,0 +1,3 @@
+Inicio de sesion desde un dispositivo nuevo{% if location %} ({{ location }}){% endif %}.
+{% if user_agent %}Agente: {{ user_agent }}{% endif %}
+Si no reconoces este acceso, cambia tu contrasena de inmediato.

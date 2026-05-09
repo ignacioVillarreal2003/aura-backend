@@ -1,0 +1,6 @@
+{% extends "notifications/email_base.html" %}
+{% block content %}
+<p>Hola{% if recipient_name %} {{ recipient_name }}{% endif %},</p>
+<p>Tu contrasena fue cambiada correctamente{% if at %} el {{ at }}{% endif %}.</p>
+<p>Si no fuiste vos, contacta a un administrador inmediatamente.</p>
+{% endblock %}

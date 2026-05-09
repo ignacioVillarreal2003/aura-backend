@@ -1,0 +1,6 @@
+{% extends "notifications/email_base.html" %}
+{% block content %}
+<p>Hola{% if recipient_name %} {{ recipient_name }}{% endif %},</p>
+<p><strong>{{ actor_name|default:"Un miembro" }}</strong> te invito al chat <strong>{{ chat_name|default:"sin nombre" }}</strong>.</p>
+{% if link_url %}<p><a href="{{ link_url }}">Abrir el chat</a></p>{% endif %}
+{% endblock %}

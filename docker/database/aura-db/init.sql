@@ -161,17 +161,68 @@ CREATE TABLE notification (
     id          BIGSERIAL PRIMARY KEY,
     receiver_id BIGINT              NOT NULL,
     message     VARCHAR(500)        NOT NULL,
-    type         VARCHAR(64)                NOT NULL,
-    target_scope VARCHAR(64)                NOT NULL DEFAULT 'individual',
+    type        VARCHAR(64)         NOT NULL DEFAULT 'system',
+    target_scope VARCHAR(64)        NOT NULL DEFAULT 'individual',
     target_label VARCHAR(255),
-    status       VARCHAR(64)                NOT NULL DEFAULT 'unread',
+    status      VARCHAR(64)         NOT NULL DEFAULT 'unread',
     read_at     TIMESTAMPTZ,
     created_by  BIGINT,
     created_at  TIMESTAMPTZ         NOT NULL DEFAULT NOW(),
     updated_by  BIGINT,
     updated_at  TIMESTAMPTZ,
     deleted_by  BIGINT,
-    deleted_at  TIMESTAMPTZ
+    deleted_at  TIMESTAMPTZ,
+    event_type  VARCHAR(128),
+    event_key   VARCHAR(128),
+    data        JSONB               NOT NULL DEFAULT '{}'::jsonb,
+    link_url    TEXT,
+    severity    VARCHAR(16)         NOT NULL DEFAULT 'info',
+    sender_name VARCHAR(255)
+);
+
+CREATE TABLE notification_preference (
+    user_id           BIGINT       PRIMARY KEY,
+    inapp_enabled     BOOLEAN      NOT NULL DEFAULT TRUE,
+    email_enabled     BOOLEAN      NOT NULL DEFAULT TRUE,
+    mute_until        TIMESTAMPTZ,
+    quiet_hours_start TIME,
+    quiet_hours_end   TIME,
+    quiet_hours_tz    VARCHAR(64)  NOT NULL DEFAULT 'UTC',
+    created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ,
+    updated_by        BIGINT
+);
+
+CREATE TABLE notification_event_preference (
+    id          BIGSERIAL    PRIMARY KEY,
+    user_id     BIGINT       NOT NULL,
+    event_type  VARCHAR(128) NOT NULL,
+    channel     VARCHAR(16)  NOT NULL,
+    enabled     BOOLEAN      NOT NULL DEFAULT TRUE,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ,
+    CONSTRAINT  notification_event_preference_channel_chk
+        CHECK (channel IN ('inapp', 'email')),
+    CONSTRAINT  notification_event_preference_unique
+        UNIQUE (user_id, event_type, channel)
+);
+
+CREATE TABLE notification_dispatch (
+    id              BIGSERIAL    PRIMARY KEY,
+    notification_id BIGINT       REFERENCES notification(id) ON DELETE SET NULL,
+    receiver_id     BIGINT       NOT NULL,
+    event_type      VARCHAR(128) NOT NULL,
+    channel         VARCHAR(16)  NOT NULL,
+    status          VARCHAR(16)  NOT NULL DEFAULT 'pending',
+    attempt         INT          NOT NULL DEFAULT 0,
+    error           TEXT,
+    metadata        JSONB        NOT NULL DEFAULT '{}'::jsonb,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    sent_at         TIMESTAMPTZ,
+    CONSTRAINT      notification_dispatch_channel_chk
+        CHECK (channel IN ('inapp', 'email', 'webpush', 'sms')),
+    CONSTRAINT      notification_dispatch_status_chk
+        CHECK (status IN ('pending', 'sent', 'failed', 'skipped', 'suppressed'))
 );
 
 CREATE TABLE classification_level (
@@ -283,10 +334,43 @@ CREATE INDEX idx_share_link_chat ON chat_share_link(chat_id);
 CREATE INDEX idx_share_link_token ON chat_share_link(token);
 CREATE INDEX idx_chat_webhook_chat ON chat_webhook(chat_id);
 
-CREATE INDEX idx_notification_receiver_status   ON notification(receiver_id, status);
-CREATE INDEX idx_notification_receiver_created   ON notification(receiver_id, created_at DESC);
 CREATE INDEX idx_notification_deleted_at        ON notification(deleted_at);
 CREATE INDEX idx_notification_target_scope      ON notification(target_scope);
+
+CREATE INDEX notif_receiver_status_created_idx
+    ON notification (receiver_id, status, created_at DESC)
+    WHERE deleted_at IS NULL;
+
+CREATE INDEX notif_receiver_event_type_created_idx
+    ON notification (receiver_id, event_type, created_at DESC)
+    WHERE deleted_at IS NULL;
+
+CREATE UNIQUE INDEX notif_receiver_event_key_active_uq
+    ON notification (receiver_id, event_key)
+    WHERE event_key IS NOT NULL AND deleted_at IS NULL;
+
+CREATE INDEX notif_severity_idx
+    ON notification (severity)
+    WHERE deleted_at IS NULL;
+
+CREATE INDEX notification_preference_mute_until_idx
+    ON notification_preference (mute_until)
+    WHERE mute_until IS NOT NULL;
+
+CREATE INDEX notification_event_preference_user_idx
+    ON notification_event_preference (user_id);
+
+CREATE INDEX notification_dispatch_notification_idx
+    ON notification_dispatch (notification_id);
+
+CREATE INDEX notification_dispatch_receiver_created_idx
+    ON notification_dispatch (receiver_id, created_at DESC);
+
+CREATE INDEX notification_dispatch_status_idx
+    ON notification_dispatch (status, created_at DESC);
+
+CREATE INDEX notification_dispatch_event_type_idx
+    ON notification_dispatch (event_type, created_at DESC);
 
 CREATE UNIQUE INDEX idx_document_in_collection_active_unique
     ON document_in_document_collection (document_collection_id, document_id)

@@ -1,0 +1,1 @@
+Fuiste removido del chat "{{ chat_name|default:"sin nombre" }}"

@@ -9,7 +9,17 @@ RUN addgroup --system app && adduser --system --ingroup app app
 
 FROM base AS dependencies
 
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libcairo2-dev \
+    pkg-config \
+    python3-dev \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
+
 RUN pip install --no-cache-dir -r requirements.txt
 
 FROM dependencies AS runtime
@@ -17,6 +27,7 @@ FROM dependencies AS runtime
 COPY . .
 
 RUN chown -R app:app /app
+
 USER app
 
 EXPOSE 8000

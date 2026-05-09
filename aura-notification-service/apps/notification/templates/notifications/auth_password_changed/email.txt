@@ -1,0 +1,2 @@
+Tu contrasena fue cambiada correctamente{% if at %} el {{ at }}{% endif %}.
+Si no fuiste vos, contacta a un administrador inmediatamente.

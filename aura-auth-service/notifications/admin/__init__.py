@@ -1,3 +1,3 @@
 """Register notifications admin modules."""
 
-from notifications.admin import notification_admin as _notification_admin  # noqa: F401
+from . import notification_admin as _notification_admin  # noqa: F401

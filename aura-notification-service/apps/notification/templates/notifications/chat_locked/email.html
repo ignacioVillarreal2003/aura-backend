@@ -1,0 +1,5 @@
+{% extends "notifications/email_base.html" %}
+{% block content %}
+<p>Hola{% if recipient_name %} {{ recipient_name }}{% endif %},</p>
+<p>El chat <strong>{{ chat_name|default:"sin nombre" }}</strong> fue bloqueado{% if actor_name %} por {{ actor_name }}{% endif %}.</p>
+{% endblock %}

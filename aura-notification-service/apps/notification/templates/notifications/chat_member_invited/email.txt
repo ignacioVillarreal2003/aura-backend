@@ -1,0 +1,2 @@
+{{ actor_name|default:"Un miembro" }} te invito al chat "{{ chat_name|default:"sin nombre" }}".
+{% if link_url %}Abrir: {{ link_url }}{% endif %}

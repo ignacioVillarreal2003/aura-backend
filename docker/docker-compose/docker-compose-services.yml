@@ -73,8 +73,34 @@ services:
     depends_on:
       aura_db:
         condition: service_healthy
+      memory_db:
+        condition: service_healthy
+      queue:
+        condition: service_healthy
       aura-auth-service:
         condition: service_started
+    restart: on-failure
+
+  aura-notification-worker:
+    build: ../../aura-notification-service
+    container_name: aura-notification-worker
+    command:
+      - celery
+      - -A
+      - aura_notification_service
+      - worker
+      - --loglevel=info
+      - --concurrency=2
+      - --queues=notifications
+    env_file:
+      - ../../aura-notification-service/.env.docker
+    depends_on:
+      aura_db:
+        condition: service_healthy
+      memory_db:
+        condition: service_healthy
+      queue:
+        condition: service_healthy
     restart: on-failure
 
   aura-document-collection-service:

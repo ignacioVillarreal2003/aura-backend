@@ -1,0 +1,1 @@
+El chat "{{ chat_name|default:"sin nombre" }}" fue bloqueado.

@@ -1,0 +1,1 @@
+Te mencionaron en "{{ chat_name|default:"un chat" }}"

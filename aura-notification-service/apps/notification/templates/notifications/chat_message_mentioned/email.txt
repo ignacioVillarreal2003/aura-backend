@@ -1,0 +1,3 @@
+{{ actor_name|default:"Un miembro" }} te menciono en "{{ chat_name|default:"un chat" }}".
+{% if message_excerpt %}> {{ message_excerpt }}{% endif %}
+{% if link_url %}{{ link_url }}{% endif %}

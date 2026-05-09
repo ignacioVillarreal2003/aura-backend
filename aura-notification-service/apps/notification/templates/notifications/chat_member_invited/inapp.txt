@@ -1,0 +1,1 @@
+{{ actor_name|default:"Alguien" }} te invito al chat "{{ chat_name|default:"sin nombre" }}".

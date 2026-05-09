@@ -123,14 +123,11 @@ VALUES
 
 INSERT INTO document_collection_compartment (document_collection_id, compartment_id, created_by)
 VALUES
-    -- Manuales: Alpha + Bravo
     (1, 1, 4),
     (1, 2, 4),
-    -- Informes tácticos: los tres programas (máxima intersección de «necesidad de saber»)
     (2, 1, 6),
     (2, 2, 6),
     (2, 3, 6),
-    -- Pública: sólo etiqueta contractual Alpha
     (3, 1, 4);
 
 INSERT INTO user_clearance (user_id, classification_level_id, created_by)

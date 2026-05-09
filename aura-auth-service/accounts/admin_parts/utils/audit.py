@@ -21,7 +21,13 @@ def log_audit(actor, action: str, entity_type: str,
     :param details:      Optional dict with extra context (changed fields, old values, …).
     :param source:       'admin' | 'api' — where the action originated.
     """
-    from accounts.models import AuditLog
+    try:
+        from accounts.models import AuditLog
+    except ImportError:
+        logger.debug(
+            'log_audit skipped: AuditLog model is not exposed on accounts.models'
+        )
+        return
     try:
         AuditLog.objects.create(
             actor_id=getattr(actor, 'pk', None) if actor else None,

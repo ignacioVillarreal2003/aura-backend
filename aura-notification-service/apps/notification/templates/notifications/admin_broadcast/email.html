@@ -1,0 +1,6 @@
+{% extends "notifications/email_base.html" %}
+{% block content %}
+<p>Hola{% if recipient_name %} {{ recipient_name }}{% endif %},</p>
+<p>{{ message|linebreaksbr }}</p>
+{% if actor_name %}<p style="color:#6b7280;">— {{ actor_name }}</p>{% endif %}
+{% endblock %}
