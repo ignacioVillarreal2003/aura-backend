@@ -20,5 +20,6 @@ class GraphEntityServiceInterface(ABC):
             depth: int,
             authenticated_user: AuthenticatedUser,
             database_session: AsyncSession,
+            authorization_header: Optional[str] = None,
     ) -> GraphEntityWithRelationsResponse:
         pass

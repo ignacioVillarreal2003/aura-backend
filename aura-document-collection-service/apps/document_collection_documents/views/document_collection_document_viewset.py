@@ -92,10 +92,11 @@ _PARENT_COLLECTION = OpenApiParameter(
     ),
     destroy=extend_schema(
         tags=["DocumentCollectionDocuments"],
-        summary="Detach membership identified by surrogate id",
+        summary="Detach document membership by document id",
         description=(
-            "Deletes referencing the **`pk` of join table rows**, not arbitrary document ids elsewhere. Errors map to **`document_link_not_found`** "
-            "when already removed. Requires **REMOVE_DOCUMENT_COLLECTION_DOCUMENT**."
+            "Unlinks a document from a collection by the **`document.id`** (the upstream surrogate key), "
+            "not the `document_in_document_collection` join-row id. Errors map to **`document_link_not_found`** "
+            "when the membership does not exist. Requires **REMOVE_DOCUMENT_COLLECTION_DOCUMENT**."
         ),
         parameters=[
             _PARENT_COLLECTION,
@@ -104,10 +105,7 @@ _PARENT_COLLECTION = OpenApiParameter(
                 type=int,
                 location=OpenApiParameter.PATH,
                 required=True,
-                description=(
-                    "The `document.id` of the document to unlink — the upstream document surrogate key, "
-                    "not the `document_in_document_collection.id` join-row pk."
-                ),
+                description="The `document.id` surrogate key of the document to unlink from this collection.",
             ),
         ],
         responses={

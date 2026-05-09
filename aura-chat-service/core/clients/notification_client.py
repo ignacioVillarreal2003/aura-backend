@@ -26,6 +26,7 @@ class NotificationClient:
             "receiver_ids": receiver_ids,
             "message": message,
             "type": "user",
+            "sender_id": sender_id,
             "sender_name": sender_name,
             "target_scope": "individual",
         }

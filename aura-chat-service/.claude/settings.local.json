@@ -22,7 +22,10 @@
       "Bash(xargs -I{} bash -c 'echo \"=== {} ===\"; cat -n \"{}\"')",
       "Bash(python -m py_compile core/authentication/authenticated_user.py core/authentication/authentication_provider.py core/clients/http_client.py core/clients/notification_client.py core/clients/transcription_client.py core/middleware/correlation_id.py core/middleware/request_logging.py core/exceptions/handler.py apps/membership/services/membership_service.py)",
       "Bash(python -c \"import sys; sys.path.insert\\(0, '.'\\); from apps.chat.models import Chat; print\\([f.name for f in Chat._meta.fields]\\)\")",
-      "Bash(python3)"
+      "Bash(python3)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\ignac\\\\Desktop\\\\AURA\\\\aura-backend\\\\aura-chat-service\\\\apps\" -Recurse -File)",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\ignac\\\\Desktop\\\\AURA\\\\aura-backend\\\\aura-chat-service\\\\apps\" -Recurse | Where-Object { $_.PSIsContainer -eq $false } | Select-Object FullName)",
+      "PowerShell(Get-ChildItem *)"
     ]
   }
 }

@@ -1,9 +1,9 @@
+import concurrent.futures
 import hashlib
 import hmac
 import json
 import logging
 import secrets
-import threading
 
 import httpx
 from django.db.transaction import on_commit
@@ -127,11 +127,17 @@ class WebhookService:
             _schedule_delivery(hook.url, hook.secret, body)
 
 
+_delivery_pool = concurrent.futures.ThreadPoolExecutor(
+    max_workers=20,
+    thread_name_prefix="webhook-delivery",
+)
+
+
 def _schedule_delivery(url: str, secret: str, body: str) -> None:
     sig = _sign_payload(secret, body)
 
     def _deliver():
-        threading.Thread(target=_dispatch, args=(url, body, sig), daemon=True).start()
+        _delivery_pool.submit(_dispatch, url, body, sig)
 
     on_commit(_deliver)
 

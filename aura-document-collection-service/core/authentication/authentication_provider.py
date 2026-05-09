@@ -22,6 +22,8 @@ _HEADER_USER_EMAIL = "X-User-Email"
 _HEADER_USER_ROLES = "X-User-Roles"
 _HEADER_USER_PERMISSIONS = "X-User-Permissions"
 
+_http_client = httpx.Client(timeout=10.0)
+
 
 class AuthenticationProvider:
     def evaluate_service_auth(self, request: HttpRequest) -> Optional[AuthenticatedUser]:
@@ -104,11 +106,10 @@ class AuthenticationProvider:
         logger.debug("Validating bearer token with the authentication service.")
         auth_header = _format_bearer_token(token)
         try:
-            with httpx.Client(timeout=10.0) as client:
-                response = client.get(
-                    settings.AUTHENTICATION_PROVIDER_URL,
-                    headers={"Authorization": auth_header},
-                )
+            response = _http_client.get(
+                settings.AUTHENTICATION_PROVIDER_URL,
+                headers={"Authorization": auth_header},
+            )
         except httpx.TimeoutException as e:
             logger.error("Authentication service timed out.")
             raise AuthenticationProviderServiceUnavailableException(
@@ -136,6 +137,14 @@ class AuthenticationProvider:
             )
             raise AuthenticationProviderServiceUnavailableException(
                 f"Authentication service error (HTTP {response.status_code})"
+            )
+        if response.status_code != 200:
+            logger.error(
+                "Authentication service returned an unexpected status code.",
+                extra={"status_code": response.status_code},
+            )
+            raise AuthenticationProviderServiceUnavailableException(
+                f"Unexpected authentication service response (HTTP {response.status_code})"
             )
 
         try:

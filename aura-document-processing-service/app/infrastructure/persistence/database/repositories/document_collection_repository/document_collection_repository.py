@@ -6,7 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.persistence.database.orm.document import Document
 from app.infrastructure.persistence.database.orm.document_in_document_collection import DocumentInDocumentCollection
-from app.infrastructure.persistence.database.orm.user_in_document_collection import UserInDocumentCollection
 from app.infrastructure.persistence.database.repositories.document_collection_repository.document_collection_repository_interface import (
     DocumentCollectionRepositoryInterface,
 )
@@ -22,7 +21,8 @@ class DocumentCollectionRepository(DocumentCollectionRepositoryInterface):
             user_id: int,
             document_ids: list[int],
             chat_id: Optional[int],
-            database_session: AsyncSession
+            accessible_collection_ids: frozenset[int],
+            database_session: AsyncSession,
     ) -> set[int]:
         if not document_ids:
             return set()
@@ -39,37 +39,33 @@ class DocumentCollectionRepository(DocumentCollectionRepositoryInterface):
                     select(Document.id).where(
                         Document.id.in_(chunk),
                         Document.deleted_at.is_(None),
-                        or_(*conditions)
+                        or_(*conditions),
                     )
                 )
                 accessible.update(row[0] for row in simple_result)
 
             remaining_ordered = [did for did in dict.fromkeys(document_ids) if did not in accessible]
-            if remaining_ordered:
-                for chunk in chunked_ids(remaining_ordered):
-                    collection_result = await database_session.execute(
-                        select(DocumentInDocumentCollection.document_id).join(
-                            UserInDocumentCollection,
-                            and_(
-                                UserInDocumentCollection.document_collection_id
-                                == DocumentInDocumentCollection.document_collection_id,
-                                UserInDocumentCollection.user_id == user_id,
-                                UserInDocumentCollection.deleted_at.is_(None)
-                            )
-                        ).where(
+            if remaining_ordered and accessible_collection_ids:
+                coll_tuple = tuple(accessible_collection_ids)
+                if coll_tuple:
+                    for chunk in chunked_ids(remaining_ordered):
+                        conditions = (
                             DocumentInDocumentCollection.document_id.in_(chunk),
-                            DocumentInDocumentCollection.deleted_at.is_(None)
+                            DocumentInDocumentCollection.deleted_at.is_(None),
+                            DocumentInDocumentCollection.document_collection_id.in_(coll_tuple),
                         )
-                    )
-                    accessible.update(row[0] for row in collection_result)
+                        collection_result = await database_session.execute(
+                            select(DocumentInDocumentCollection.document_id).where(and_(*conditions))
+                        )
+                        accessible.update(row[0] for row in collection_result)
 
             logger.debug(
                 "Accessible document IDs resolved.",
                 extra={
                     "user_id": user_id,
                     "requested": len(document_ids),
-                    "accessible": len(accessible)
-                }
+                    "accessible": len(accessible),
+                },
             )
             return accessible
 
@@ -84,6 +80,7 @@ class DocumentCollectionRepository(DocumentCollectionRepositoryInterface):
             self,
             user_id: int,
             database_session: AsyncSession,
+            accessible_collection_ids: frozenset[int],
             chat_id: Optional[int] = None,
             limit: int = 10_000,
     ) -> list[int]:
@@ -104,23 +101,22 @@ class DocumentCollectionRepository(DocumentCollectionRepositoryInterface):
             accessible: set[int] = {row[0] for row in owned_result}
 
             remaining = max(0, limit - len(accessible))
-            if remaining > 0:
-                shared_result = await database_session.execute(
-                    select(DocumentInDocumentCollection.document_id)
-                    .join(
-                        UserInDocumentCollection,
-                        and_(
-                            UserInDocumentCollection.document_collection_id
-                            == DocumentInDocumentCollection.document_collection_id,
-                            UserInDocumentCollection.user_id == user_id,
-                            UserInDocumentCollection.deleted_at.is_(None),
-                        ),
+            if remaining > 0 and accessible_collection_ids:
+                coll_tuple = tuple(accessible_collection_ids)
+                if coll_tuple:
+                    owned_subq = select(Document.id).where(*owned_conditions)
+                    shared_result = await database_session.execute(
+                        select(DocumentInDocumentCollection.document_id)
+                        .where(
+                            DocumentInDocumentCollection.deleted_at.is_(None),
+                            DocumentInDocumentCollection.document_collection_id.in_(coll_tuple),
+                            ~DocumentInDocumentCollection.document_id.in_(owned_subq),
+                        )
+                        .distinct()
+                        .order_by(DocumentInDocumentCollection.document_id)
+                        .limit(remaining)
                     )
-                    .where(DocumentInDocumentCollection.deleted_at.is_(None))
-                    .order_by(DocumentInDocumentCollection.document_id)
-                    .limit(remaining)
-                )
-                accessible.update(row[0] for row in shared_result)
+                    accessible.update(row[0] for row in shared_result)
 
             return sorted(accessible)[:limit]
 

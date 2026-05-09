@@ -8,8 +8,6 @@ from apps.membership.models.chat_membership import ChatMembership
 from apps.membership.serializers.request import AddMemberRequest, UpdateMemberRequest
 from apps.membership.serializers.response import MembershipResponse
 from apps.membership.services.membership_service import membership_service
-from core.authorization import AccessControl
-from core.authorization.permissions import ADD_MEMBER, LEAVE_CHAT, LIST_MEMBERS, REMOVE_MEMBER, UPDATE_MEMBER
 from core.openapi.common import standard_error_responses
 from core.pagination.pagination import StandardPagination
 
@@ -38,7 +36,6 @@ class MemberListView(APIView):
         responses={200: MembershipResponse(many=True), **standard_error_responses(401, 403, 404)},
     )
     def get(self, request: Request, chat_id: int) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({LIST_MEMBERS}))
         raw_status = request.query_params.get("status", "active")
         if raw_status not in _STATUS_CHOICES:
             return Response(
@@ -75,7 +72,6 @@ class MemberListView(APIView):
         responses={201: MembershipResponse(many=True), **standard_error_responses(400, 401, 403, 404, 409)},
     )
     def post(self, request: Request, chat_id: int) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({ADD_MEMBER}))
         serializer = AddMemberRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -107,7 +103,6 @@ class MemberDetailView(APIView):
         responses={200: MembershipResponse, **standard_error_responses(400, 401, 403, 404)},
     )
     def patch(self, request: Request, chat_id: int, member_id: int) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({UPDATE_MEMBER}))
         serializer = UpdateMemberRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -130,7 +125,6 @@ class MemberDetailView(APIView):
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     def delete(self, request: Request, chat_id: int, member_id: int) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({REMOVE_MEMBER}))
         membership_service.remove_member(
             user=request.user,
             chat_id=chat_id,
@@ -153,6 +147,5 @@ class LeaveChatView(APIView):
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     def post(self, request: Request, chat_id: int) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({LEAVE_CHAT}))
         membership_service.leave_chat(user=request.user, chat_id=chat_id)
         return Response(status=status.HTTP_204_NO_CONTENT)

@@ -10,7 +10,8 @@ class DocumentCollectionRepositoryInterface(ABC):
             user_id: int,
             document_ids: list[int],
             chat_id: Optional[int],
-            database_session: AsyncSession
+            accessible_collection_ids: frozenset[int],
+            database_session: AsyncSession,
     ) -> set[int]:
         pass
 
@@ -19,6 +20,7 @@ class DocumentCollectionRepositoryInterface(ABC):
             self,
             user_id: int,
             database_session: AsyncSession,
+            accessible_collection_ids: frozenset[int],
             chat_id: Optional[int] = None,
             limit: int = 10_000,
     ) -> list[int]:

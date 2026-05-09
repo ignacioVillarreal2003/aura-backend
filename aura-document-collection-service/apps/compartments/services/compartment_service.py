@@ -22,17 +22,13 @@ from core.domain.document_collection_exceptions import (
 logger = logging.getLogger(__name__)
 
 
-def _permissions_gate(user: AuthenticatedUser, permission: str) -> None:
-    AccessControl.require_permissions(user, frozenset({permission}))
-
-
 class CompartmentService:
     def list_compartments(self, user: AuthenticatedUser) -> QuerySet[Compartment]:
-        _permissions_gate(user, LIST_COMPARTMENTS)
+        AccessControl.require_permission(user, LIST_COMPARTMENTS)
         return compartment_repository.list_all()
 
     def get_compartment(self, user: AuthenticatedUser, compartment_id: int) -> Compartment:
-        _permissions_gate(user, GET_COMPARTMENT)
+        AccessControl.require_permission(user, GET_COMPARTMENT)
         obj = compartment_repository.get_by_id(compartment_id)
         if obj is None:
             raise CompartmentNotFoundException()
@@ -44,7 +40,7 @@ class CompartmentService:
         name: str,
         description: str,
     ) -> Compartment:
-        _permissions_gate(user, CREATE_COMPARTMENT)
+        AccessControl.require_permission(user, CREATE_COMPARTMENT)
         try:
             obj = compartment_repository.create(name=name, description=description)
         except IntegrityError as e:
@@ -61,7 +57,7 @@ class CompartmentService:
         compartment_id: int,
         **kwargs: object,
     ) -> Compartment:
-        _permissions_gate(user, UPDATE_COMPARTMENT)
+        AccessControl.require_permission(user, UPDATE_COMPARTMENT)
         obj = compartment_repository.get_by_id(compartment_id)
         if obj is None:
             raise CompartmentNotFoundException()
@@ -73,7 +69,7 @@ class CompartmentService:
             raise DuplicateCompartmentException() from e
 
     def delete_compartment(self, user: AuthenticatedUser, compartment_id: int) -> None:
-        _permissions_gate(user, DELETE_COMPARTMENT)
+        AccessControl.require_permission(user, DELETE_COMPARTMENT)
         obj = compartment_repository.get_by_id(compartment_id)
         if obj is None:
             raise CompartmentNotFoundException()

@@ -8,8 +8,6 @@ from rest_framework.views import APIView
 
 from apps.message.serializers.response import MessageResponse
 from apps.message.services.bookmark_service import bookmark_service
-from core.authorization import AccessControl
-from core.authorization.permissions import BOOKMARK_MESSAGE, LIST_BOOKMARKS
 from core.openapi.common import standard_error_responses
 from core.pagination.pagination import MessageCursorPagination
 
@@ -32,7 +30,6 @@ class BookmarkView(APIView):
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     def post(self, request: Request, chat_id: int, message_id: int) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({BOOKMARK_MESSAGE}))
         bookmark_service.bookmark(user=request.user, chat_id=chat_id, message_id=message_id)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -45,7 +42,6 @@ class BookmarkView(APIView):
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     def delete(self, request: Request, chat_id: int, message_id: int) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({BOOKMARK_MESSAGE}))
         bookmark_service.unbookmark(user=request.user, chat_id=chat_id, message_id=message_id)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -65,7 +61,6 @@ class BookmarkedMessageListView(APIView):
         responses={200: MessageResponse(many=True), **standard_error_responses(401, 403, 404)},
     )
     def get(self, request: Request, chat_id: int) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({LIST_BOOKMARKS}))
         messages = bookmark_service.list_bookmarked(user=request.user, chat_id=chat_id)
         paginator = MessageCursorPagination()
         page = paginator.paginate_queryset(messages, request)

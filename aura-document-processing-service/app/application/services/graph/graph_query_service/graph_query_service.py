@@ -23,6 +23,9 @@ from app.domain.dtos.graph.graph_query.graph_query_request import GraphQueryRequ
 from app.domain.dtos.graph.graph_query.graph_query_response import GraphQueryResponse
 from app.infrastructure.http.llm_provider.dtos.translate_graph_query_request import GraphOntology
 from app.infrastructure.http.llm_provider.llm_provider_interface import LlmProviderInterface
+from app.infrastructure.http.document_collection_catalog.document_collection_catalog_client_interface import (
+    DocumentCollectionCatalogClientInterface,
+)
 from app.infrastructure.persistence.database.repositories.document_collection_repository.document_collection_repository_interface import (
     DocumentCollectionRepositoryInterface,
 )
@@ -54,6 +57,7 @@ class GraphQueryService(GraphQueryServiceInterface):
             entity_repository: GraphEntityRepositoryInterface,
             relation_repository: GraphRelationRepositoryInterface,
             document_collection_repository: DocumentCollectionRepositoryInterface,
+            document_collection_catalog_client: DocumentCollectionCatalogClientInterface,
             authorizer: Authorizer,
             knowledge_graph_settings: Optional[KnowledgeGraphSettings] = None,
     ) -> None:
@@ -61,6 +65,7 @@ class GraphQueryService(GraphQueryServiceInterface):
         self._entity_repository = entity_repository
         self._relation_repository = relation_repository
         self._document_collection_repository = document_collection_repository
+        self._document_collection_catalog_client = document_collection_catalog_client
         self._authorizer = authorizer
         self._settings = knowledge_graph_settings or KnowledgeGraphSettings()
 
@@ -70,6 +75,7 @@ class GraphQueryService(GraphQueryServiceInterface):
             request: GraphQueryRequest,
             authenticated_user: AuthenticatedUser,
             database_session: AsyncSession,
+            authorization_header: str | None = None,
     ) -> GraphQueryResponse:
         self._authorizer.require_permissions(
             authenticated_user=authenticated_user,
@@ -80,6 +86,7 @@ class GraphQueryService(GraphQueryServiceInterface):
             user_id=int(authenticated_user.id),
             chat_id=request.chat_id,
             database_session=database_session,
+            authorization_header=authorization_header,
         )
         if not accessible_ids:
             logger.info(
@@ -283,10 +290,16 @@ class GraphQueryService(GraphQueryServiceInterface):
             user_id: int,
             chat_id: Optional[int],
             database_session: AsyncSession,
+            authorization_header: str | None,
     ) -> list[int]:
+        collection_ids = await self._document_collection_catalog_client.fetch_all_accessible_collection_ids(
+            user_id=user_id,
+            authorization_header=authorization_header,
+        )
         return await self._document_collection_repository.list_all_accessible_document_ids(
             user_id=user_id,
             chat_id=chat_id,
+            accessible_collection_ids=collection_ids,
             database_session=database_session,
             limit=self._settings.accessible_documents_max,
         )

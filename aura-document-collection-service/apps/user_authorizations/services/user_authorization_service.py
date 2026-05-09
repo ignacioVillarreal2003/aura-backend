@@ -34,17 +34,13 @@ from core.domain.document_collection_exceptions import (
 logger = logging.getLogger(__name__)
 
 
-def _permissions_gate(user: AuthenticatedUser, permission: str) -> None:
-    AccessControl.require_permissions(user, frozenset({permission}))
-
-
 class UserAuthorizationService:
     def get_user_authorization(
         self,
         user: AuthenticatedUser,
         target_user_id: int,
     ) -> dict:
-        _permissions_gate(user, GET_USER_AUTHORIZATION)
+        AccessControl.require_permission(user, GET_USER_AUTHORIZATION)
         clearance = user_clearance_repository.get_by_user_id(target_user_id)
         compartments = user_compartment_repository.list_by_user_id(target_user_id)
         return {
@@ -60,7 +56,7 @@ class UserAuthorizationService:
         target_user_id: int,
         classification_level_id: int,
     ) -> UserClearance:
-        _permissions_gate(user, SET_USER_CLEARANCE)
+        AccessControl.require_permission(user, SET_USER_CLEARANCE)
         if classification_level_repository.get_by_id(classification_level_id) is None:
             raise ClassificationLevelNotFoundException()
         user_clearance_repository.set(
@@ -84,7 +80,7 @@ class UserAuthorizationService:
         user: AuthenticatedUser,
         target_user_id: int,
     ) -> None:
-        _permissions_gate(user, DELETE_USER_CLEARANCE)
+        AccessControl.require_permission(user, DELETE_USER_CLEARANCE)
         deleted = user_clearance_repository.delete_by_user_id(target_user_id)
         if not deleted:
             raise UserClearanceNotFoundException()
@@ -98,7 +94,7 @@ class UserAuthorizationService:
         user: AuthenticatedUser,
         target_user_id: int,
     ) -> QuerySet[UserCompartment]:
-        _permissions_gate(user, LIST_USER_COMPARTMENTS)
+        AccessControl.require_permission(user, LIST_USER_COMPARTMENTS)
         return user_compartment_repository.list_by_user_id(target_user_id)
 
     @transaction.atomic
@@ -108,7 +104,7 @@ class UserAuthorizationService:
         target_user_id: int,
         compartment_id: int,
     ) -> UserCompartment:
-        _permissions_gate(user, ADD_USER_COMPARTMENT)
+        AccessControl.require_permission(user, ADD_USER_COMPARTMENT)
         if compartment_repository.get_by_id(compartment_id) is None:
             raise CompartmentNotFoundException()
         existing = user_compartment_repository.get_by_user_id_and_compartment_id(
@@ -142,7 +138,7 @@ class UserAuthorizationService:
         target_user_id: int,
         compartment_id: int,
     ) -> None:
-        _permissions_gate(user, REMOVE_USER_COMPARTMENT)
+        AccessControl.require_permission(user, REMOVE_USER_COMPARTMENT)
         entry = user_compartment_repository.get_by_user_id_and_compartment_id(
             user_id=target_user_id,
             compartment_id=compartment_id,
@@ -164,7 +160,7 @@ class UserAuthorizationService:
         user: AuthenticatedUser,
         target_user_id: int,
     ) -> QuerySet[DocumentCollection]:
-        _permissions_gate(user, GET_USER_ACCESSIBLE_COLLECTIONS)
+        AccessControl.require_permission(user, GET_USER_ACCESSIBLE_COLLECTIONS)
         clearance = user_clearance_repository.get_by_user_id(target_user_id)
         if clearance is None:
             return DocumentCollection.objects.none()

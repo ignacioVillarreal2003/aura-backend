@@ -48,7 +48,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             self,
             document_id: int,
             database_session: AsyncSession,
-            authenticated_user: AuthenticatedUser
+            authenticated_user: AuthenticatedUser,
     ) -> DocumentResponse:
         logger.info(
             "Fetching a single document was initiated.",
@@ -103,7 +103,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             category: Optional[str] = None,
             document_type: Optional[DocumentType] = None,
             created_from: Optional[datetime] = None,
-            created_to: Optional[datetime] = None
+            created_to: Optional[datetime] = None,
     ) -> DocumentListResponse:
         has_filters = any(
             f is not None
@@ -146,7 +146,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
                 category=category,
                 document_type=document_type,
                 created_from=created_from,
-                created_to=created_to
+                created_to=created_to,
             )
 
             logger.info(
@@ -184,7 +184,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             self,
             chat_id: int,
             database_session: AsyncSession,
-            authenticated_user: AuthenticatedUser
+            authenticated_user: AuthenticatedUser,
     ) -> DocumentListResponse:
         logger.info(
             "Fetching documents by chat was initiated.",
@@ -204,7 +204,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
 
             documents = await self._document_repository.get_documents_by_chat_id(
                 chat_id=chat_id,
-                database_session=database_session
+                database_session=database_session,
             )
 
             if len(documents) > MAX_DOCUMENTS_IN_LIST:
@@ -245,25 +245,25 @@ class DocumentQueryService(DocumentQueryServiceInterface):
     async def _get_document_or_raise(
             self,
             document_id: int,
-            database_session: AsyncSession
+            database_session: AsyncSession,
     ) -> Document:
         document = await self._document_repository.get_document_by_id(
             document_id=document_id,
-            database_session=database_session
+            database_session=database_session,
         )
         if document is None:
             logger.warning(
                 "The document was not found.",
                 extra={
-                    "document_id": document_id
-                }
+                    "document_id": document_id,
+                },
             )
             raise DocumentQueryNotFoundException("The document was not found.")
         return document
 
 
 async def get_document_query_service(
-        request: Request
+        request: Request,
 ) -> DocumentQueryServiceInterface:
     try:
         return request.app.state.document_query_service
@@ -271,5 +271,5 @@ async def get_document_query_service(
         logger.error("DocumentQueryService is not registered on the application state.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="DocumentQueryService is not registered on the application state."
+            detail="DocumentQueryService is not registered on the application state.",
         )

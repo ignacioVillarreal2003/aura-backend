@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+from typing import Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.dtos.fragment.fragment_query.documents_context_fragments_request import (
@@ -15,7 +17,8 @@ class FragmentQueryServiceInterface(ABC):
             self,
             question_context_fragments_request: QuestionContextFragmentsRequest,
             database_session: AsyncSession,
-            authenticated_user: AuthenticatedUser
+            authenticated_user: AuthenticatedUser,
+            authorization_header: Optional[str] = None,
     ) -> FragmentListResponse:
         pass
 
@@ -24,6 +27,7 @@ class FragmentQueryServiceInterface(ABC):
             self,
             documents_context_fragments_request: DocumentsContextFragmentsRequest,
             database_session: AsyncSession,
-            authenticated_user: AuthenticatedUser
+            authenticated_user: AuthenticatedUser,
+            authorization_header: Optional[str] = None,
     ) -> FragmentListResponse:
         pass

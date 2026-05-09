@@ -25,8 +25,6 @@ from apps.message.services.message_service import (
     broadcast_chat_ai_lock_change,
     message_service,
 )
-from core.authorization import AccessControl
-from core.authorization.permissions import LIST_MESSAGES, SEND_MESSAGE
 from core.openapi.common import standard_error_responses
 from core.pagination.pagination import MessageCursorPagination
 
@@ -47,7 +45,6 @@ class MessageListView(APIView):
         responses={200: MessageResponse(many=True), **standard_error_responses(401, 403, 404)},
     )
     def get(self, request: Request, chat_id: int) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({LIST_MESSAGES}))
         messages = message_service.get_messages(user=request.user, chat_id=chat_id)
         paginator = MessageCursorPagination()
         page = paginator.paginate_queryset(messages, request)
@@ -76,7 +73,6 @@ class MessageListView(APIView):
         },
     )
     def post(self, request: Request, chat_id: int) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({SEND_MESSAGE}))
         return async_to_sync(self._post_async)(request, chat_id)
 
     async def _post_async(self, request: Request, chat_id: int) -> Response:

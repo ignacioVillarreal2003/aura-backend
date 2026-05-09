@@ -1,6 +1,12 @@
 from core.exceptions import ConflictException, ForbiddenException, NotFoundException, ServiceException, ServiceUnavailableException, ValidationException
 
 
+class ExportTooLargeException(ServiceException):
+    status_code = 413
+    error_code = "export_too_large"
+    detail = "Chat exceeds the maximum message count allowed for export"
+
+
 class ChatAiReplyInProgressException(ConflictException):
     error_code = "chat_ai_reply_in_progress"
     detail = "Wait until the assistant finishes the current reply."

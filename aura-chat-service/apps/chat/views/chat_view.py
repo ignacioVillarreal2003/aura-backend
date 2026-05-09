@@ -10,21 +10,6 @@ from apps.chat.repositories.chat_repository import ALLOWED_ORDERINGS
 from apps.chat.serializers.request import BulkChatIdsRequest, CreateChatRequest, MuteChatRequest, UpdateChatRequest
 from apps.chat.serializers.response import ChatListResponse, ChatResponse
 from apps.chat.services.chat_service import chat_service
-from core.authorization import AccessControl
-from core.authorization.permissions import (
-    ARCHIVE_CHAT,
-    CREATE_CHAT,
-    DELETE_CHAT,
-    GET_CHAT,
-    LIST_ARCHIVED_CHATS,
-    LIST_CHATS,
-    LIST_MY_CHATS,
-    LOCK_CHAT,
-    MUTE_CHAT,
-    PIN_CHAT,
-    UNARCHIVE_CHAT,
-    UPDATE_CHAT,
-)
 from core.openapi.common import standard_error_responses
 from core.pagination.pagination import StandardPagination
 
@@ -124,7 +109,6 @@ class ChatViewSet(ViewSet):
     serializer_class = ChatResponse
 
     def create(self, request: Request) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({CREATE_CHAT}))
         serializer = CreateChatRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -135,7 +119,6 @@ class ChatViewSet(ViewSet):
         return Response(ChatResponse(chat).data, status=status.HTTP_201_CREATED)
 
     def list(self, request: Request) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({LIST_CHATS}))
         search = request.query_params.get("search") or None
         ordering = request.query_params.get("ordering") or None
         if ordering not in ALLOWED_ORDERINGS:
@@ -148,12 +131,10 @@ class ChatViewSet(ViewSet):
         return paginator.get_paginated_response(ChatListResponse(page, many=True).data)
 
     def retrieve(self, request: Request, pk=None) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({GET_CHAT}))
         chat = chat_service.get_chat(user=request.user, chat_id=int(pk))
         return Response(ChatResponse(chat).data)
 
     def partial_update(self, request: Request, pk=None) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({UPDATE_CHAT}))
         serializer = UpdateChatRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -165,13 +146,11 @@ class ChatViewSet(ViewSet):
         return Response(ChatResponse(chat).data)
 
     def destroy(self, request: Request, pk=None) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({DELETE_CHAT}))
         chat_service.delete_chat(user=request.user, chat_id=int(pk))
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=["get"], url_path="me")
     def my_chats(self, request: Request) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({LIST_MY_CHATS}))
         search = request.query_params.get("search") or None
         ordering = request.query_params.get("ordering") or None
         if ordering not in ALLOWED_ORDERINGS:
@@ -201,7 +180,6 @@ class ChatViewSet(ViewSet):
     )
     @action(detail=True, methods=["post", "delete"], url_path="pin")
     def pin(self, request: Request, pk=None) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({PIN_CHAT}))
         if request.method == "POST":
             chat_service.pin_chat(user=request.user, chat_id=int(pk))
         else:
@@ -220,7 +198,6 @@ class ChatViewSet(ViewSet):
     )
     @action(detail=False, methods=["get"], url_path="archived")
     def archived(self, request: Request) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({LIST_ARCHIVED_CHATS}))
         search = request.query_params.get("search") or None
         ordering = request.query_params.get("ordering") or None
         if ordering not in ALLOWED_ORDERINGS:
@@ -251,7 +228,6 @@ class ChatViewSet(ViewSet):
     )
     @action(detail=False, methods=["post"], url_path="archive")
     def archive(self, request: Request) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({ARCHIVE_CHAT}))
         serializer = BulkChatIdsRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
         count = chat_service.archive_chats(
@@ -273,7 +249,6 @@ class ChatViewSet(ViewSet):
     )
     @action(detail=False, methods=["post"], url_path="unarchive")
     def unarchive(self, request: Request) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({UNARCHIVE_CHAT}))
         serializer = BulkChatIdsRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
         count = chat_service.unarchive_chats(
@@ -299,7 +274,6 @@ class ChatViewSet(ViewSet):
     )
     @action(detail=True, methods=["post", "delete"], url_path="lock")
     def lock(self, request: Request, pk=None) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({LOCK_CHAT}))
         if request.method == "POST":
             chat_service.lock_chat(user=request.user, chat_id=int(pk))
         else:
@@ -325,7 +299,6 @@ class ChatViewSet(ViewSet):
     )
     @action(detail=True, methods=["post", "delete"], url_path="mute")
     def mute(self, request: Request, pk=None) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({MUTE_CHAT}))
         if request.method == "POST":
             serializer = MuteChatRequest(data=request.data)
             serializer.is_valid(raise_exception=True)

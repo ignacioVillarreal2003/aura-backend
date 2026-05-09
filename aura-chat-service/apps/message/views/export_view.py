@@ -1,5 +1,6 @@
 import logging
 
+from django.conf import settings as _settings
 from django.http import HttpResponse
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework.request import Request
@@ -8,7 +9,8 @@ from rest_framework.views import APIView
 from apps.chat.exceptions import ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.membership.repositories.membership_repository import membership_repository
-from apps.message.exceptions import MessageAccessDeniedException, MessageNotFoundException
+from apps.message.exceptions import ExportTooLargeException, MessageAccessDeniedException, MessageNotFoundException
+from apps.message.models.chat_message import ChatMessage
 from apps.message.repositories.message_repository import message_repository
 from apps.message.services.export_service import (
     generate_ai_responses_markdown,
@@ -23,6 +25,8 @@ from core.openapi.common import standard_error_responses
 
 logger = logging.getLogger(__name__)
 
+_MAX_EXPORT_MESSAGES: int = getattr(_settings, "EXPORT_MAX_MESSAGES", 2_000)
+
 
 def _get_chat_or_raise(chat_id: int, user_id: int):
     chat = chat_repository.get_by_id(chat_id)
@@ -31,6 +35,14 @@ def _get_chat_or_raise(chat_id: int, user_id: int):
     if not membership_repository.is_active_member(chat_id, user_id):
         raise MessageAccessDeniedException()
     return chat
+
+
+def _load_messages(chat_id: int) -> list[ChatMessage]:
+    qs = message_repository.get_messages_by_chat(chat_id).order_by("created_at")
+    messages = list(qs[: _MAX_EXPORT_MESSAGES + 1])
+    if len(messages) > _MAX_EXPORT_MESSAGES:
+        raise ExportTooLargeException()
+    return messages
 
 
 class ChatExportPDFView(APIView):
@@ -47,15 +59,13 @@ class ChatExportPDFView(APIView):
         ],
         responses={
             200: OpenApiResponse(description="PDF binary — Content-Type: application/pdf"),
-            **standard_error_responses(401, 403, 404),
+            **standard_error_responses(401, 403, 404, 413),
         },
     )
     def get(self, request: Request, chat_id: int) -> HttpResponse:
         AccessControl.require_permissions(request.user, frozenset({EXPORT_CHAT}))
         chat = _get_chat_or_raise(chat_id, request.user.id)
-        messages = list(
-            message_repository.get_messages_by_chat(chat_id).order_by("created_at")
-        )
+        messages = _load_messages(chat_id)
         pdf = generate_chat_pdf(chat, messages)
         response = HttpResponse(pdf, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="chat_{chat_id}.pdf"'
@@ -73,13 +83,13 @@ class ChatExportMarkdownView(APIView):
         ],
         responses={
             200: OpenApiResponse(description="Markdown text — Content-Type: text/markdown"),
-            **standard_error_responses(401, 403, 404),
+            **standard_error_responses(401, 403, 404, 413),
         },
     )
     def get(self, request: Request, chat_id: int) -> HttpResponse:
         AccessControl.require_permissions(request.user, frozenset({EXPORT_CHAT}))
         chat = _get_chat_or_raise(chat_id, request.user.id)
-        messages = list(message_repository.get_messages_by_chat(chat_id).order_by("created_at"))
+        messages = _load_messages(chat_id)
         content = generate_chat_markdown(chat, messages)
         response = HttpResponse(content, content_type="text/markdown; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="chat_{chat_id}.md"'
@@ -97,13 +107,13 @@ class ChatExportJSONView(APIView):
         ],
         responses={
             200: OpenApiResponse(description="JSON backup — Content-Type: application/json"),
-            **standard_error_responses(401, 403, 404),
+            **standard_error_responses(401, 403, 404, 413),
         },
     )
     def get(self, request: Request, chat_id: int) -> HttpResponse:
         AccessControl.require_permissions(request.user, frozenset({EXPORT_CHAT}))
         chat = _get_chat_or_raise(chat_id, request.user.id)
-        messages = list(message_repository.get_messages_by_chat(chat_id).order_by("created_at"))
+        messages = _load_messages(chat_id)
         content = generate_chat_json(chat, messages)
         response = HttpResponse(content, content_type="application/json; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="chat_{chat_id}.json"'
@@ -121,13 +131,13 @@ class AIResponsesExportView(APIView):
         ],
         responses={
             200: OpenApiResponse(description="Markdown text — Content-Type: text/markdown"),
-            **standard_error_responses(401, 403, 404),
+            **standard_error_responses(401, 403, 404, 413),
         },
     )
     def get(self, request: Request, chat_id: int) -> HttpResponse:
         AccessControl.require_permissions(request.user, frozenset({EXPORT_CHAT}))
         chat = _get_chat_or_raise(chat_id, request.user.id)
-        messages = list(message_repository.get_messages_by_chat(chat_id).order_by("created_at"))
+        messages = _load_messages(chat_id)
         content = generate_ai_responses_markdown(chat, messages)
         response = HttpResponse(content, content_type="text/markdown; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="chat_{chat_id}_ai.md"'

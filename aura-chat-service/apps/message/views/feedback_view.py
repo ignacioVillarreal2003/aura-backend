@@ -9,8 +9,6 @@ from rest_framework.views import APIView
 from apps.message.serializers.request import SetFeedbackRequest
 from apps.message.serializers.response import FeedbackResponse
 from apps.message.services.feedback_service import feedback_service
-from core.authorization import AccessControl
-from core.authorization.permissions import SET_MESSAGE_FEEDBACK
 from core.openapi.common import standard_error_responses
 
 logger = logging.getLogger(__name__)
@@ -35,7 +33,6 @@ class FeedbackView(APIView):
         responses={200: FeedbackResponse, **standard_error_responses(400, 401, 403, 404)},
     )
     def post(self, request: Request, chat_id: int, message_id: int) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({SET_MESSAGE_FEEDBACK}))
         serializer = SetFeedbackRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
         fb = feedback_service.set_feedback(
@@ -54,7 +51,6 @@ class FeedbackView(APIView):
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     def delete(self, request: Request, chat_id: int, message_id: int) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({SET_MESSAGE_FEEDBACK}))
         feedback_service.delete_feedback(
             user=request.user, chat_id=chat_id, message_id=message_id
         )

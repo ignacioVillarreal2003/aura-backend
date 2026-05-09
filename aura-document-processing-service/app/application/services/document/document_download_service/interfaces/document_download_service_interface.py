@@ -11,6 +11,6 @@ class DocumentDownloadServiceInterface(ABC):
             self,
             document_id: int,
             database_session: AsyncSession,
-            authenticated_user: AuthenticatedUser
+            authenticated_user: AuthenticatedUser,
     ) -> tuple[AsyncIterator[bytes], str, str]:
         pass

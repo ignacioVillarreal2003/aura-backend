@@ -52,7 +52,7 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
             self,
             document_id: int,
             database_session: AsyncSession,
-            authenticated_user: AuthenticatedUser
+            authenticated_user: AuthenticatedUser,
     ) -> tuple[AsyncIterator[bytes], str, str]:
         logger.info(
             "Document download was initiated.",

@@ -78,6 +78,14 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
 
         if authenticated_user is not None:
             request.state.authenticated_user = authenticated_user
+            auth_hdr = request.headers.get("Authorization")
+            if auth_hdr and auth_hdr.strip():
+                stripped = auth_hdr.strip()
+                request.state.authorization_header_outbound = (
+                    stripped if stripped.lower().startswith("bearer ") else f"Bearer {stripped}"
+                )
+            else:
+                request.state.authorization_header_outbound = None
             logger.debug(
                 "Request authenticated with service credentials.",
                 extra={
@@ -135,6 +143,7 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
         try:
             authenticated_user = await authentication_provider.validate_token(token)
             request.state.authenticated_user = AuthenticatedUser.model_validate(authenticated_user)
+            request.state.authorization_header_outbound = f"Bearer {token}"
             logger.debug(
                 "Request authenticated with a valid bearer token.",
                 extra={

@@ -4,10 +4,8 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.chat.serializers.webhook import WebhookCreateRequest, WebhookResponse, WebhookUpdateRequest
+from apps.chat.serializers.webhook import WebhookCreateRequest, WebhookCreateResponse, WebhookResponse, WebhookUpdateRequest
 from apps.chat.services.webhook_service import webhook_service
-from core.authorization import AccessControl
-from core.authorization.permissions import CREATE_WEBHOOK, DELETE_WEBHOOK, LIST_WEBHOOKS, UPDATE_WEBHOOK
 from core.openapi.common import standard_error_responses
 from core.pagination.pagination import StandardPagination
 
@@ -23,7 +21,6 @@ class WebhookListView(APIView):
         responses={200: WebhookResponse(many=True), **standard_error_responses(401, 403, 404)},
     )
     def get(self, request: Request, chat_id: int) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({LIST_WEBHOOKS}))
         hooks = webhook_service.list_webhooks(user=request.user, chat_id=chat_id)
         paginator = StandardPagination()
         page = paginator.paginate_queryset(hooks, request)
@@ -32,15 +29,18 @@ class WebhookListView(APIView):
     @extend_schema(
         tags=["Webhooks"],
         summary="Create a webhook",
-        description="Registers an HTTPS URL and a non-empty list of event names (see schema enum / `WEBHOOK_EVENTS`).",
+        description=(
+            "Registers an HTTPS URL and a non-empty list of event names. "
+            "The `secret` field is returned **only** in this response — store it to verify "
+            "`X-Webhook-Signature` on incoming deliveries."
+        ),
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
         ],
         request=WebhookCreateRequest,
-        responses={201: WebhookResponse, **standard_error_responses(400, 401, 403, 404)},
+        responses={201: WebhookCreateResponse, **standard_error_responses(400, 401, 403, 404)},
     )
     def post(self, request: Request, chat_id: int) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({CREATE_WEBHOOK}))
         serializer = WebhookCreateRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
         hook = webhook_service.create_webhook(
@@ -49,7 +49,7 @@ class WebhookListView(APIView):
             url=serializer.validated_data["url"],
             events=serializer.validated_data["events"],
         )
-        return Response(WebhookResponse(hook).data, status=status.HTTP_201_CREATED)
+        return Response(WebhookCreateResponse(hook).data, status=status.HTTP_201_CREATED)
 
 
 class WebhookDetailView(APIView):
@@ -65,7 +65,6 @@ class WebhookDetailView(APIView):
         responses={200: WebhookResponse, **standard_error_responses(400, 401, 403, 404)},
     )
     def patch(self, request: Request, chat_id: int, webhook_id: int) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({UPDATE_WEBHOOK}))
         serializer = WebhookUpdateRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
         hook = webhook_service.update_webhook(
@@ -87,7 +86,6 @@ class WebhookDetailView(APIView):
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     def delete(self, request: Request, chat_id: int, webhook_id: int) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({DELETE_WEBHOOK}))
         webhook_service.delete_webhook(
             user=request.user,
             chat_id=chat_id,

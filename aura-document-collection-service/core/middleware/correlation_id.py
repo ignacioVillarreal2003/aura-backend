@@ -26,7 +26,10 @@ class CorrelationIdMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        cid = request.headers.get(HEADER_NAME) or str(uuid.uuid4())
+        incoming = request.headers.get(HEADER_NAME, "")
+        cid = incoming[:128].strip() if incoming else str(uuid.uuid4())
+        if not cid:
+            cid = str(uuid.uuid4())
         set_correlation_id(cid)
         request.correlation_id = cid
 

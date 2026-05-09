@@ -22,13 +22,9 @@ from core.domain.document_collection_exceptions import (
 logger = logging.getLogger(__name__)
 
 
-def _permissions_gate(user: AuthenticatedUser, permission: str) -> None:
-    AccessControl.require_permissions(user, frozenset({permission}))
-
-
 class ClassificationLevelService:
     def list_classification_levels(self, user: AuthenticatedUser) -> QuerySet[ClassificationLevel]:
-        _permissions_gate(user, LIST_CLASSIFICATION_LEVELS)
+        AccessControl.require_permission(user, LIST_CLASSIFICATION_LEVELS)
         return classification_level_repository.list_all()
 
     def get_classification_level(
@@ -36,7 +32,7 @@ class ClassificationLevelService:
         user: AuthenticatedUser,
         classification_level_id: int,
     ) -> ClassificationLevel:
-        _permissions_gate(user, GET_CLASSIFICATION_LEVEL)
+        AccessControl.require_permission(user, GET_CLASSIFICATION_LEVEL)
         obj = classification_level_repository.get_by_id(classification_level_id)
         if obj is None:
             raise ClassificationLevelNotFoundException()
@@ -48,7 +44,7 @@ class ClassificationLevelService:
         name: str,
         rank: int,
     ) -> ClassificationLevel:
-        _permissions_gate(user, CREATE_CLASSIFICATION_LEVEL)
+        AccessControl.require_permission(user, CREATE_CLASSIFICATION_LEVEL)
         try:
             obj = classification_level_repository.create(name=name, rank=rank)
         except IntegrityError as e:
@@ -65,7 +61,7 @@ class ClassificationLevelService:
         classification_level_id: int,
         **kwargs: object,
     ) -> ClassificationLevel:
-        _permissions_gate(user, UPDATE_CLASSIFICATION_LEVEL)
+        AccessControl.require_permission(user, UPDATE_CLASSIFICATION_LEVEL)
         obj = classification_level_repository.get_by_id(classification_level_id)
         if obj is None:
             raise ClassificationLevelNotFoundException()
@@ -81,7 +77,7 @@ class ClassificationLevelService:
         user: AuthenticatedUser,
         classification_level_id: int,
     ) -> None:
-        _permissions_gate(user, DELETE_CLASSIFICATION_LEVEL)
+        AccessControl.require_permission(user, DELETE_CLASSIFICATION_LEVEL)
         obj = classification_level_repository.get_by_id(classification_level_id)
         if obj is None:
             raise ClassificationLevelNotFoundException()

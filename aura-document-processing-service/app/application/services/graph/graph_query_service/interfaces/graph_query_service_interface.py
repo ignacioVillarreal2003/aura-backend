@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+from typing import Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.authentication.authenticated_user import AuthenticatedUser
@@ -14,5 +16,6 @@ class GraphQueryServiceInterface(ABC):
             request: GraphQueryRequest,
             authenticated_user: AuthenticatedUser,
             database_session: AsyncSession,
+            authorization_header: Optional[str] = None,
     ) -> GraphQueryResponse:
         pass

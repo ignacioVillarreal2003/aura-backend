@@ -15,8 +15,6 @@ from apps.message.serializers.response import (
     RegenerateResponseSerializer,
 )
 from apps.message.services.message_service import broadcast_chat_ai_lock_change, message_service
-from core.authorization import AccessControl
-from core.authorization.permissions import REGENERATE_AI_RESPONSE
 from core.openapi.common import standard_error_responses
 
 logger = logging.getLogger(__name__)
@@ -42,7 +40,6 @@ class RegenerateResponseView(APIView):
         },
     )
     def post(self, request: Request, chat_id: int) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({REGENERATE_AI_RESPONSE}))
         return async_to_sync(self._post_async)(request, chat_id)
 
     async def _post_async(self, request: Request, chat_id: int) -> Response:

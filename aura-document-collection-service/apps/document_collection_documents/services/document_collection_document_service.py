@@ -25,17 +25,13 @@ from core.authorization.permissions import (
 logger = logging.getLogger(__name__)
 
 
-def _permissions_gate(user: AuthenticatedUser, permission: str) -> None:
-    AccessControl.require_permissions(user, frozenset({permission}))
-
-
 class DocumentCollectionDocumentService:
     def list_document_collection_documents(
         self,
         user: AuthenticatedUser,
         document_collection_id: int,
     ) -> QuerySet[DocumentInDocumentCollection]:
-        _permissions_gate(user, LIST_DOCUMENT_COLLECTION_DOCUMENTS)
+        AccessControl.require_permission(user, LIST_DOCUMENT_COLLECTION_DOCUMENTS)
         if document_collection_repository.get_active_by_id(document_collection_id) is None:
             raise CollectionNotFoundException()
         return document_in_document_collection_repository.list_active_by_document_collection_id(
@@ -49,7 +45,7 @@ class DocumentCollectionDocumentService:
         document_collection_id: int,
         document_id: int,
     ) -> DocumentInDocumentCollection:
-        _permissions_gate(user, ADD_DOCUMENT_COLLECTION_DOCUMENT)
+        AccessControl.require_permission(user, ADD_DOCUMENT_COLLECTION_DOCUMENT)
         document_collection = document_collection_repository.get_active_by_id(document_collection_id)
         if document_collection is None:
             raise CollectionNotFoundException()
@@ -87,7 +83,7 @@ class DocumentCollectionDocumentService:
         document_collection_id: int,
         document_id: int,
     ) -> None:
-        _permissions_gate(user, REMOVE_DOCUMENT_COLLECTION_DOCUMENT)
+        AccessControl.require_permission(user, REMOVE_DOCUMENT_COLLECTION_DOCUMENT)
         document_collection = document_collection_repository.get_active_by_id(document_collection_id)
         if document_collection is None:
             raise CollectionNotFoundException()

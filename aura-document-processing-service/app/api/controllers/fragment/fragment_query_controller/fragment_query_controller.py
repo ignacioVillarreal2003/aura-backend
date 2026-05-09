@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio.session import AsyncSession
 from app.api.controllers.fragment.fragment_query_controller.fragment_query_controller_interface import (
     FragmentQueryControllerInterface,
 )
+from app.api.dependencies.document_catalog_auth import get_document_catalog_authorization_header
 from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
 from app.application.services.fragment.fragment_query_service.fragment_query_service import get_fragment_query_service
@@ -29,12 +30,14 @@ class FragmentQueryController(FragmentQueryControllerInterface):
             fragment_query_service: FragmentQueryServiceInterface = Depends(get_fragment_query_service),
             database_session: AsyncSession = Depends(get_database_session),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
+            authorization_header: str | None = Depends(get_document_catalog_authorization_header),
             _rl: None = Depends(default_rate_limit),
     ) -> FragmentListResponse:
         return await fragment_query_service.retrieve_context_fragments_by_question(
             question_context_fragments_request=question_context_fragments_request,
             database_session=database_session,
             authenticated_user=authenticated_user,
+            authorization_header=authorization_header,
         )
 
     async def retrieve_context_fragments_by_documents(
@@ -43,12 +46,14 @@ class FragmentQueryController(FragmentQueryControllerInterface):
             fragment_query_service: FragmentQueryServiceInterface = Depends(get_fragment_query_service),
             database_session: AsyncSession = Depends(get_database_session),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
+            authorization_header: str | None = Depends(get_document_catalog_authorization_header),
             _rl: None = Depends(default_rate_limit),
     ) -> FragmentListResponse:
         return await fragment_query_service.retrieve_context_fragments_by_documents(
             documents_context_fragments_request=documents_context_fragments_request,
             database_session=database_session,
             authenticated_user=authenticated_user,
+            authorization_header=authorization_header,
         )
 
 

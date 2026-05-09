@@ -6,8 +6,6 @@ from rest_framework.views import APIView
 
 from apps.message.serializers.response import PinnedMessageResponse
 from apps.message.services.pinned_message_service import pinned_message_service
-from core.authorization import AccessControl
-from core.authorization.permissions import LIST_PINNED_MESSAGES, PIN_MESSAGE
 from core.openapi.common import standard_error_responses
 from core.pagination.pagination import StandardPagination
 
@@ -26,7 +24,6 @@ class PinnedMessageListView(APIView):
         responses={200: PinnedMessageResponse(many=True), **standard_error_responses(401, 403, 404)},
     )
     def get(self, request: Request, chat_id: int) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({LIST_PINNED_MESSAGES}))
         pins = pinned_message_service.list_pinned(user=request.user, chat_id=chat_id)
         paginator = StandardPagination()
         page = paginator.paginate_queryset(pins, request)
@@ -46,7 +43,6 @@ class PinMessageView(APIView):
         responses={201: PinnedMessageResponse, **standard_error_responses(401, 403, 404)},
     )
     def post(self, request: Request, chat_id: int, message_id: int) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({PIN_MESSAGE}))
         pin = pinned_message_service.pin_message(
             user=request.user,
             chat_id=chat_id,
@@ -65,7 +61,6 @@ class PinMessageView(APIView):
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     def delete(self, request: Request, chat_id: int, message_id: int) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({PIN_MESSAGE}))
         pinned_message_service.unpin_message(
             user=request.user,
             chat_id=chat_id,

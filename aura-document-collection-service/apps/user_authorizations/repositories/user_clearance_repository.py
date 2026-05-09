@@ -13,18 +13,14 @@ class UserClearanceRepository:
         )
 
     def set(self, user_id: int, classification_level_id: int, created_by: int) -> UserClearance:
-        obj, created = UserClearance.objects.get_or_create(
+        obj, _ = UserClearance.objects.update_or_create(
             user_id=user_id,
             defaults={
                 "classification_level_id": classification_level_id,
                 "created_by": created_by,
+                "created_at": timezone.now(),
             },
         )
-        if not created:
-            obj.classification_level_id = classification_level_id
-            obj.created_by = created_by
-            obj.created_at = timezone.now()
-            obj.save(update_fields=["classification_level_id", "created_by", "created_at"])
         return obj
 
     def delete_by_user_id(self, user_id: int) -> bool:

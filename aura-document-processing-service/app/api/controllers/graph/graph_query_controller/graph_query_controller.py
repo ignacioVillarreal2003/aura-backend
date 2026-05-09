@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.controllers.graph.graph_query_controller.graph_query_controller_interface import (
     GraphQueryControllerInterface,
 )
+from app.api.dependencies.document_catalog_auth import get_document_catalog_authorization_header
 from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
 from app.application.services.graph.graph_query_service.graph_query_service import get_graph_query_service
@@ -24,12 +25,14 @@ class GraphQueryController(GraphQueryControllerInterface):
             graph_query_service: GraphQueryServiceInterface = Depends(get_graph_query_service),
             database_session: AsyncSession = Depends(get_database_session),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
+            authorization_header: str | None = Depends(get_document_catalog_authorization_header),
             _rl: None = Depends(default_rate_limit),
     ) -> GraphQueryResponse:
         return await graph_query_service.execute(
             request=graph_query_request,
             authenticated_user=authenticated_user,
             database_session=database_session,
+            authorization_header=authorization_header,
         )
 
 

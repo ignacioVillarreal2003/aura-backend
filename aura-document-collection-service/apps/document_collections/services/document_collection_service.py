@@ -27,13 +27,9 @@ from core.domain.document_collection_exceptions import (
 logger = logging.getLogger(__name__)
 
 
-def _permissions_gate(user: AuthenticatedUser, permission: str) -> None:
-    AccessControl.require_permissions(user, frozenset({permission}))
-
-
 class DocumentCollectionService:
     def list_document_collections(self, user: AuthenticatedUser) -> QuerySet[DocumentCollection]:
-        _permissions_gate(user, LIST_DOCUMENT_COLLECTIONS)
+        AccessControl.require_permission(user, LIST_DOCUMENT_COLLECTIONS)
         return document_collection_repository.list_active()
 
     @transaction.atomic
@@ -44,7 +40,7 @@ class DocumentCollectionService:
         classification_level_id: int,
         compartment_ids: list[int],
     ) -> DocumentCollection:
-        _permissions_gate(user, CREATE_DOCUMENT_COLLECTION)
+        AccessControl.require_permission(user, CREATE_DOCUMENT_COLLECTION)
         if classification_level_repository.get_by_id(classification_level_id) is None:
             raise ClassificationLevelNotFoundException()
         unique_compartment_ids = list(set(compartment_ids))
@@ -72,7 +68,7 @@ class DocumentCollectionService:
         user: AuthenticatedUser,
         document_collection_id: int,
     ) -> DocumentCollection:
-        _permissions_gate(user, GET_DOCUMENT_COLLECTION)
+        AccessControl.require_permission(user, GET_DOCUMENT_COLLECTION)
         document_collection = document_collection_repository.get_active_by_id(document_collection_id)
         if document_collection is None:
             raise CollectionNotFoundException()
@@ -87,7 +83,7 @@ class DocumentCollectionService:
         classification_level_id: int | None = None,
         compartment_ids: list[int] | None = None,
     ) -> DocumentCollection:
-        _permissions_gate(user, UPDATE_DOCUMENT_COLLECTION)
+        AccessControl.require_permission(user, UPDATE_DOCUMENT_COLLECTION)
         document_collection = document_collection_repository.get_active_by_id(document_collection_id)
         if document_collection is None:
             raise CollectionNotFoundException()
@@ -119,7 +115,7 @@ class DocumentCollectionService:
         user: AuthenticatedUser,
         document_collection_id: int,
     ) -> None:
-        _permissions_gate(user, DELETE_DOCUMENT_COLLECTION)
+        AccessControl.require_permission(user, DELETE_DOCUMENT_COLLECTION)
         document_collection = document_collection_repository.get_active_by_id(document_collection_id)
         if document_collection is None:
             raise CollectionNotFoundException()

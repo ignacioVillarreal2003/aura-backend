@@ -1,3 +1,4 @@
+import concurrent.futures
 import html
 import io
 import json
@@ -109,13 +110,26 @@ def _fmt_dt(dt) -> str:
     return local.strftime("%Y-%m-%d %H:%M")
 
 
-def _build_pdf(html_content: str) -> bytes:
+_PDF_TIMEOUT_SECONDS = 30
+
+
+def _build_pdf_sync(html_content: str) -> bytes:
     buf = io.BytesIO()
     result = pisa.CreatePDF(io.StringIO(html_content), dest=buf, encoding="utf-8")
     if result.err:
         logger.error("xhtml2pdf reported %d error(s) during PDF generation", result.err)
         raise PDFGenerationException()
     return buf.getvalue()
+
+
+def _build_pdf(html_content: str) -> bytes:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(_build_pdf_sync, html_content)
+        try:
+            return future.result(timeout=_PDF_TIMEOUT_SECONDS)
+        except concurrent.futures.TimeoutError:
+            logger.error("PDF generation timed out after %ds", _PDF_TIMEOUT_SECONDS)
+            raise PDFGenerationException()
 
 
 def generate_chat_pdf(chat: Chat, messages: list[ChatMessage]) -> bytes:

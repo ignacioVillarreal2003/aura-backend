@@ -14,6 +14,7 @@ class RequestLoggingMiddleware:
         response = self.get_response(request)
 
         duration_ms = (time.monotonic() - start) * 1000
+        user = getattr(request, "authenticated_user", None)
         logger.info(
             "%s %s %s %.1fms",
             request.method,
@@ -25,6 +26,7 @@ class RequestLoggingMiddleware:
                 "path": request.path,
                 "status_code": response.status_code,
                 "duration_ms": round(duration_ms, 1),
+                "user_id": user.id if user is not None else None,
             },
         )
         return response

@@ -34,6 +34,9 @@ from app.domain.dtos.fragment.fragment_query.question_context_fragments_request 
     QuestionContextFragmentsRequest,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
+from app.infrastructure.http.document_collection_catalog.document_collection_catalog_client_interface import (
+    DocumentCollectionCatalogClientInterface,
+)
 from app.infrastructure.persistence.database.orm.document import Document
 from app.infrastructure.persistence.database.orm.fragment import Fragment
 from app.infrastructure.persistence.database.repositories.document_collection_repository.document_collection_repository_interface import (
@@ -57,6 +60,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             embedder_factory: EmbedderFactory,
             authorizer: Authorizer,
             document_collection_repository: DocumentCollectionRepositoryInterface,
+            document_collection_catalog_client: DocumentCollectionCatalogClientInterface,
             fragment_query_service_settings: Optional[FragmentQueryServiceSettings] = None,
     ) -> None:
         self._document_repository = document_repository
@@ -65,6 +69,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
         self._settings = fragment_query_service_settings or FragmentQueryServiceSettings()
         self._authorizer = authorizer
         self._document_collection_repository = document_collection_repository
+        self._document_collection_catalog_client = document_collection_catalog_client
         self._reranker = FragmentReranker(fragment_query_service_settings=self._settings)
 
     async def retrieve_context_fragments_by_question(
@@ -72,6 +77,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             question_context_fragments_request: QuestionContextFragmentsRequest,
             database_session: AsyncSession,
             authenticated_user: AuthenticatedUser,
+            authorization_header: str | None = None,
     ) -> FragmentListResponse:
         logger.info(
             "Retrieving context fragments by question was initiated.",
@@ -143,6 +149,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 user_id=authenticated_user.id,
                 chat_id=question_context_fragments_request.chat_id,
                 database_session=database_session,
+                authorization_header=authorization_header,
             )
             pre_rerank_count = len(fragments)
 
@@ -203,6 +210,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             documents_context_fragments_request: DocumentsContextFragmentsRequest,
             database_session: AsyncSession,
             authenticated_user: AuthenticatedUser,
+            authorization_header: str | None = None,
     ) -> FragmentListResponse:
         logger.info(
             "Retrieving context fragments by documents was initiated.",
@@ -231,11 +239,26 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 document_ids=documents_context_fragments_request.document_ids,
                 database_session=database_session,
             )
-            for document in documents:
-                self._authorizer.require_document_ownership(
-                    document=document,
-                    authenticated_user=authenticated_user,
+            collection_ids = await self._document_collection_catalog_client.fetch_all_accessible_collection_ids(
+                user_id=int(authenticated_user.id),
+                authorization_header=authorization_header,
+            )
+            allowed_ids = await self._document_collection_repository.get_accessible_document_ids(
+                user_id=int(authenticated_user.id),
+                document_ids=documents_context_fragments_request.document_ids,
+                chat_id=None,
+                accessible_collection_ids=collection_ids,
+                database_session=database_session,
+            )
+            if len(allowed_ids) != len(documents_context_fragments_request.document_ids):
+                logger.warning(
+                    "Unauthorized or missing documents in fragments-by-documents request.",
+                    extra={
+                        "user_id": authenticated_user.id,
+                        "requested_ids": documents_context_fragments_request.document_ids,
+                    },
                 )
+                raise UnauthorizedException("You are not authorized to access one or more of these documents.")
 
             fragments = await self._retrieve_documents_fragments(
                 database_session=database_session,
@@ -362,15 +385,21 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             user_id: int,
             chat_id: Optional[int],
             database_session: AsyncSession,
+            authorization_header: str | None,
     ) -> list[Fragment]:
         document_ids = list({fragment.document_id for fragment in fragments})
         if not document_ids:
             return fragments
 
+        collection_ids = await self._document_collection_catalog_client.fetch_all_accessible_collection_ids(
+            user_id=int(user_id),
+            authorization_header=authorization_header,
+        )
         accessible_ids = await self._document_collection_repository.get_accessible_document_ids(
             user_id=user_id,
             document_ids=document_ids,
             chat_id=chat_id,
+            accessible_collection_ids=collection_ids,
             database_session=database_session,
         )
 

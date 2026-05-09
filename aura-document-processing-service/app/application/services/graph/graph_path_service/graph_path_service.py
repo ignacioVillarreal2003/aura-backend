@@ -14,6 +14,9 @@ from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.graph.graph_field_limits import MAX_PATHS_RETURNED
 from app.domain.dtos.graph.graph_path.find_path_request import FindPathRequest
 from app.domain.dtos.graph.graph_path.graph_path_response import FindPathResponse
+from app.infrastructure.http.document_collection_catalog.document_collection_catalog_client_interface import (
+    DocumentCollectionCatalogClientInterface,
+)
 from app.infrastructure.persistence.database.repositories.document_collection_repository.document_collection_repository_interface import (
     DocumentCollectionRepositoryInterface,
 )
@@ -30,11 +33,13 @@ class GraphPathService(GraphPathServiceInterface):
             *,
             path_repository: GraphPathRepositoryInterface,
             document_collection_repository: DocumentCollectionRepositoryInterface,
+            document_collection_catalog_client: DocumentCollectionCatalogClientInterface,
             authorizer: Authorizer,
             knowledge_graph_settings: Optional[KnowledgeGraphSettings] = None,
     ) -> None:
         self._path_repository = path_repository
         self._document_collection_repository = document_collection_repository
+        self._document_collection_catalog_client = document_collection_catalog_client
         self._authorizer = authorizer
         self._settings = knowledge_graph_settings or KnowledgeGraphSettings()
 
@@ -44,15 +49,21 @@ class GraphPathService(GraphPathServiceInterface):
             request: FindPathRequest,
             authenticated_user: AuthenticatedUser,
             database_session: AsyncSession,
+            authorization_header: str | None = None,
     ) -> FindPathResponse:
         self._authorizer.require_permissions(
             authenticated_user=authenticated_user,
             required_permissions=frozenset({Permissions.GRAPH_PATH}),
         )
 
+        collection_ids = await self._document_collection_catalog_client.fetch_all_accessible_collection_ids(
+            user_id=int(authenticated_user.id),
+            authorization_header=authorization_header,
+        )
         accessible_ids = await self._document_collection_repository.list_all_accessible_document_ids(
             user_id=int(authenticated_user.id),
             database_session=database_session,
+            accessible_collection_ids=collection_ids,
             chat_id=None,
             limit=self._settings.accessible_documents_max,
         )

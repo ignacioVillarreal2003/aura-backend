@@ -8,6 +8,10 @@ logger = logging.getLogger(__name__)
 
 class AccessControl:
     @staticmethod
+    def require_permission(authenticated_user: AuthenticatedUser, permission: str) -> None:
+        AccessControl.require_permissions(authenticated_user, frozenset({permission}))
+
+    @staticmethod
     def require_permissions(
             authenticated_user: AuthenticatedUser,
             required_permissions: frozenset[str],

@@ -131,6 +131,9 @@ CORS_ALLOW_CREDENTIALS = True
 THROTTLE_ANON_RATE = config("THROTTLE_ANON_RATE", default="30/minute")
 THROTTLE_USER_RATE = config("THROTTLE_USER_RATE", default="120/minute")
 
+DEFAULT_PAGE_SIZE = config("DEFAULT_PAGE_SIZE", default=20, cast=int)
+MAX_PAGE_SIZE = config("MAX_PAGE_SIZE", default=100, cast=int)
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "core.authentication.service_authentication.ServiceAuthentication",
@@ -140,7 +143,7 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ],
     "DEFAULT_PAGINATION_CLASS": "core.pagination.pagination.StandardPagination",
-    "PAGE_SIZE": 20,
+    "PAGE_SIZE": DEFAULT_PAGE_SIZE,
     "EXCEPTION_HANDLER": "core.exceptions.handler.custom_exception_handler",
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",

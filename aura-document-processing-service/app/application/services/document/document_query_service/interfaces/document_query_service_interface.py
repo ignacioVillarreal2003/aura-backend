@@ -15,7 +15,7 @@ class DocumentQueryServiceInterface(ABC):
             self,
             document_id: int,
             database_session: AsyncSession,
-            authenticated_user: AuthenticatedUser
+            authenticated_user: AuthenticatedUser,
     ) -> DocumentResponse:
         pass
 
@@ -31,7 +31,7 @@ class DocumentQueryServiceInterface(ABC):
             category: Optional[str] = None,
             document_type: Optional[DocumentType] = None,
             created_from: Optional[datetime] = None,
-            created_to: Optional[datetime] = None
+            created_to: Optional[datetime] = None,
     ) -> DocumentListResponse:
         pass
 
@@ -40,6 +40,6 @@ class DocumentQueryServiceInterface(ABC):
             self,
             chat_id: int,
             database_session: AsyncSession,
-            authenticated_user: AuthenticatedUser
+            authenticated_user: AuthenticatedUser,
     ) -> DocumentListResponse:
         pass

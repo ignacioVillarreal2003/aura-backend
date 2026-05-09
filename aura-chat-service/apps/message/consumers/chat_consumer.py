@@ -1,7 +1,5 @@
 import asyncio
 import logging
-import time
-from collections import deque
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
@@ -13,18 +11,14 @@ from apps.message.services.message_service import (
     broadcast_chat_ai_lock_change,
     message_service,
 )
+from apps.message.ws_rate_limit import check_message_rate_limit, check_typing_rate_limit
 from apps.membership.repositories.membership_repository import membership_repository
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.exceptions import ServiceUnavailableException
 
 logger = logging.getLogger(__name__)
 
-
 _MAX_MESSAGE_LENGTH = 10_000
-_RATE_LIMIT_MAX = 10
-_RATE_LIMIT_WINDOW = 60
-_TYPING_RATE_LIMIT_MAX = 20
-_TYPING_RATE_LIMIT_WINDOW = 10
 
 
 class ChatConsumer(AsyncJsonWebsocketConsumer):
@@ -34,8 +28,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.group_name: str | None = None
         self.user: AuthenticatedUser | None = None
         self._document_question_task: asyncio.Task | None = None
-        self._message_timestamps: deque[float] = deque()
-        self._typing_timestamps: deque[float] = deque()
 
     async def connect(self):
         self.chat_id = int(self.scope["url_route"]["kwargs"]["chat_id"])
@@ -142,17 +134,16 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             })
             return
 
-        now = time.monotonic()
-        while self._message_timestamps and now - self._message_timestamps[0] > _RATE_LIMIT_WINDOW:
-            self._message_timestamps.popleft()
-        if len(self._message_timestamps) >= _RATE_LIMIT_MAX:
+        allowed = await database_sync_to_async(check_message_rate_limit)(
+            self.user.id, self.chat_id
+        )
+        if not allowed:
             await self.send_json({
                 "type": "error",
                 "error_code": "rate_limit_exceeded",
                 "detail": "Too many messages. Please wait before sending more.",
             })
             return
-        self._message_timestamps.append(now)
 
         prev = self._document_question_task
         if prev is not None and not prev.done():
@@ -277,12 +268,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             })
             return
 
-        now = time.monotonic()
-        while self._typing_timestamps and now - self._typing_timestamps[0] > _TYPING_RATE_LIMIT_WINDOW:
-            self._typing_timestamps.popleft()
-        if len(self._typing_timestamps) >= _TYPING_RATE_LIMIT_MAX:
+        allowed = await database_sync_to_async(check_typing_rate_limit)(self.user.id)
+        if not allowed:
             return
-        self._typing_timestamps.append(now)
 
         await self.channel_layer.group_send(
             self.group_name,

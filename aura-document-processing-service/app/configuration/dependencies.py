@@ -43,6 +43,12 @@ from app.infrastructure.http.authentication_provider.authentication_provider imp
 from app.infrastructure.http.authentication_provider.authentication_provider_settings import (
     AuthenticationProviderSettings,
 )
+from app.infrastructure.http.document_collection_catalog.document_collection_catalog_client import (
+    DocumentCollectionCatalogClient,
+)
+from app.infrastructure.http.document_collection_catalog.document_collection_catalog_settings import (
+    DocumentCollectionCatalogSettings,
+)
 from app.infrastructure.http.http_client.http_client import HttpClient
 from app.infrastructure.http.llm_provider.llm_provider import LlmProvider
 from app.infrastructure.messaging.rabbitmq.consumer.document_ingestion_consumer import DocumentIngestionConsumer
@@ -210,6 +216,17 @@ async def startup_dependencies(app: FastAPI) -> None:
         app.state.authentication_provider_settings = authentication_provider_settings
         app.state.authentication_provider = authentication_provider
 
+        document_collection_catalog_settings = DocumentCollectionCatalogSettings()
+        document_collection_catalog_client = DocumentCollectionCatalogClient(
+            http_client=http_client,
+            settings=document_collection_catalog_settings,
+        )
+        app.state.document_collection_catalog_settings = document_collection_catalog_settings
+        app.state.document_collection_catalog_client = document_collection_catalog_client
+        fb = document_collection_catalog_settings.fallback_bearer_token
+        if fb and str(fb).strip():
+            app.state.document_collection_catalog_fallback_bearer = str(fb).strip()
+
         document_repository: DocumentRepository = DocumentRepository()
         app.state.document_repository = document_repository
 
@@ -252,6 +269,7 @@ async def startup_dependencies(app: FastAPI) -> None:
             embedder_factory=embedder_factory,
             authorizer=authorizer,
             document_collection_repository=document_collection_repository,
+            document_collection_catalog_client=document_collection_catalog_client,
         )
         app.state.fragment_query_service = fragment_query_service
 
@@ -440,6 +458,7 @@ async def startup_dependencies(app: FastAPI) -> None:
                 document_repository=document_repository,
                 fragment_repository=fragment_repository,
                 document_collection_repository=document_collection_repository,
+                document_collection_catalog_client=document_collection_catalog_client,
                 authorizer=authorizer,
                 llm_provider=llm_provider,
             )
@@ -465,6 +484,7 @@ async def _wire_knowledge_graph_module(
         document_repository: DocumentRepository,
         fragment_repository: FragmentRepository,
         document_collection_repository: DocumentCollectionRepository,
+        document_collection_catalog_client: DocumentCollectionCatalogClient,
         authorizer: Authorizer,
         llm_provider: LlmProvider,
 ) -> None:
@@ -524,6 +544,7 @@ async def _wire_knowledge_graph_module(
         entity_repository=graph_entity_repository,
         relation_repository=graph_relation_repository,
         document_collection_repository=document_collection_repository,
+        document_collection_catalog_client=document_collection_catalog_client,
         authorizer=authorizer,
         knowledge_graph_settings=knowledge_graph_settings,
     )
@@ -533,6 +554,7 @@ async def _wire_knowledge_graph_module(
         entity_repository=graph_entity_repository,
         relation_repository=graph_relation_repository,
         document_collection_repository=document_collection_repository,
+        document_collection_catalog_client=document_collection_catalog_client,
         authorizer=authorizer,
         knowledge_graph_settings=knowledge_graph_settings,
     )
@@ -541,6 +563,7 @@ async def _wire_knowledge_graph_module(
     graph_path_service = GraphPathService(
         path_repository=graph_path_repository,
         document_collection_repository=document_collection_repository,
+        document_collection_catalog_client=document_collection_catalog_client,
         authorizer=authorizer,
         knowledge_graph_settings=knowledge_graph_settings,
     )

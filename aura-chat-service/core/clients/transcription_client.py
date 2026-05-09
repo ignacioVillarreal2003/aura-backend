@@ -18,7 +18,7 @@ def _get_model():
         if _model is None:
             from faster_whisper import WhisperModel
             model_size = getattr(settings, "WHISPER_MODEL_SIZE", "small")
-            device = getattr(settings, "WHISPER_DEVICE", "cpu")
+            device = getattr(settings, "WHISPER_DEVICE", "cuda")
             compute_type = getattr(settings, "WHISPER_COMPUTE_TYPE", "float16")
             logger.info(
                 "Loading Whisper model.",
@@ -51,7 +51,10 @@ class TranscriptionClient:
             logger.error("Transcription failed: %s", e, exc_info=True)
             raise
         finally:
-            os.unlink(tmp_path)
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
 
 
 transcription_client = TranscriptionClient()
