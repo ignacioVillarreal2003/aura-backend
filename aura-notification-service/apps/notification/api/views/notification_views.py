@@ -20,10 +20,13 @@ from apps.notification.api.serializers import (
 from apps.notification.services import notification_service
 from core.authorization import AccessControl
 from core.authorization.permissions import (
-    DELETE_NOTIFICATION,
-    LIST_NOTIFICATIONS,
-    READ_NOTIFICATION,
-    UPDATE_NOTIFICATION,
+    NOTIFICATION_DETAIL_GET,
+    NOTIFICATION_HARD_DELETE,
+    NOTIFICATION_INBOX_LIST,
+    NOTIFICATION_MARK_ALL_READ_POST,
+    NOTIFICATION_SOFT_DELETE,
+    NOTIFICATION_STATUS_PATCH,
+    NOTIFICATION_UNREAD_COUNT_GET,
 )
 
 logger = logging.getLogger(__name__)
@@ -56,7 +59,7 @@ class NotificationListView(APIView):
     )
     def get(self, request):
         user = request.user
-        AccessControl.require_permissions(user, frozenset({LIST_NOTIFICATIONS}))
+        AccessControl.require_permissions(user, frozenset({NOTIFICATION_INBOX_LIST}))
 
         status_filter = request.query_params.getlist("status") or None
         event_type = request.query_params.get("event_type")
@@ -86,7 +89,7 @@ class NotificationUnreadCountView(APIView):
         responses={200: UnreadCountSerializer, 401: ErrorResponseSerializer},
     )
     def get(self, request):
-        AccessControl.require_permissions(request.user, frozenset({LIST_NOTIFICATIONS}))
+        AccessControl.require_permissions(request.user, frozenset({NOTIFICATION_UNREAD_COUNT_GET}))
         count = notification_service.unread_count(request.user.id)
         return Response({"count": count})
 
@@ -102,7 +105,7 @@ class NotificationDetailView(APIView):
         },
     )
     def get(self, request, pk: int):
-        AccessControl.require_permissions(request.user, frozenset({READ_NOTIFICATION}))
+        AccessControl.require_permissions(request.user, frozenset({NOTIFICATION_DETAIL_GET}))
         notification = notification_service.get_for_user(request.user.id, pk)
         return Response(NotificationSerializer(notification).data)
 
@@ -117,7 +120,7 @@ class NotificationDetailView(APIView):
         },
     )
     def patch(self, request, pk: int):
-        AccessControl.require_permissions(request.user, frozenset({UPDATE_NOTIFICATION}))
+        AccessControl.require_permissions(request.user, frozenset({NOTIFICATION_STATUS_PATCH}))
         serializer = NotificationStatusUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         notification = notification_service.update_status(
@@ -134,7 +137,7 @@ class NotificationDetailView(APIView):
         },
     )
     def delete(self, request, pk: int):
-        AccessControl.require_permissions(request.user, frozenset({DELETE_NOTIFICATION}))
+        AccessControl.require_permissions(request.user, frozenset({NOTIFICATION_SOFT_DELETE}))
         notification_service.soft_delete(request.user.id, pk)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -147,7 +150,7 @@ class MarkAllReadView(APIView):
         responses={200: BulkMarkReadResponseSerializer, 401: ErrorResponseSerializer},
     )
     def post(self, request):
-        AccessControl.require_permissions(request.user, frozenset({UPDATE_NOTIFICATION}))
+        AccessControl.require_permissions(request.user, frozenset({NOTIFICATION_MARK_ALL_READ_POST}))
         serializer = MarkAllReadRequestSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
         updated = notification_service.mark_all_read(
@@ -160,7 +163,7 @@ class MarkAllReadView(APIView):
 @extend_schema(tags=["Notifications"])
 class NotificationHardDeleteView(APIView):
     @extend_schema(
-        summary="Hard delete (super-admin only)",
+        summary="Hard delete (`NOTIFICATION_HARD_DELETE`)",
         responses={
             204: None,
             401: ErrorResponseSerializer,
@@ -169,6 +172,6 @@ class NotificationHardDeleteView(APIView):
         },
     )
     def delete(self, request, pk: int):
-        AccessControl.require_super_admin(request.user)
+        AccessControl.require_permissions(request.user, frozenset({NOTIFICATION_HARD_DELETE}))
         notification_service.hard_delete(pk)
         return Response(status=status.HTTP_204_NO_CONTENT)

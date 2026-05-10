@@ -54,7 +54,7 @@ Hay tres formas típicas de llamar al servicio. La clase concreta de middleware 
 ### 1. Usuario final — `Authorization: Bearer <JWT>`
 
 - El middleware valida el JWT contra el servicio de autenticación central (`AUTHENTICATION_SERVICE_URL`, habitualmente **`/auth/validate`**).
-- Las operaciones sobre inbox, preferencias y SSE exigen los permisos que aplica **`AccessControl`** en cada vista (por ejemplo listar notificaciones).
+- Inbox, preferencias y SSE revisan **`AccessControl.require_permissions`** con **un único permiso por endpoint** (strings en el JWT, ver tabla más abajo; definiciones en `core/authorization/permissions.py`).
 
 ### 2. Otro microservicio “suplantando” al usuario — `X-Service-Api-Key`
 
@@ -78,19 +78,22 @@ Las URLs efectivas combinan el prefijo (`/api/v1/` + path en `apps/notification/
 
 ### Usuario final (JWT o equivalente via service key)
 
-| Método | Ruta | Descripción breve |
-| ------ | ---- | ----------------- |
-| `GET` | `/api/v1/notifications/` | Bandeja paginada con filtros (`status`, `event_type`, `type`, `since`, `unread_only`, paginación) |
-| `GET` | `/api/v1/notifications/unread-count/` | `{ "count": <int> }` |
-| `GET` | `/api/v1/notifications/{id}/` | Detalle |
-| `PATCH` | `/api/v1/notifications/{id}/` | Actualizar estado: `read` \| `unread` \| `archived` |
-| `DELETE` | `/api/v1/notifications/{id}/` | Borrado **soft** |
-| `DELETE` | `/api/v1/notifications/{id}/hard/` | Borrado **hard** |
-| `POST` | `/api/v1/notifications/mark-all-read/` | Cuerpo opcional `{ "until_id": <int> }` |
-| `GET` | `/api/v1/notifications/stream/` | **SSE** — deltas in-app en tiempo casi real |
-| `GET`/`PUT` | `/api/v1/me/notification-preferences/` | Preferencias globales (mute, quiet hours, in-app/email global) |
-| `GET` | `/api/v1/me/notification-preferences/event-types/` | Matriz por tipo de evento + metadatos |
-| `PUT` | `/api/v1/me/notification-preferences/event-types/{event_type}/` | Toggle por canal (`inapp_enabled`, `email_enabled`) |
+| Método | Ruta | Permiso JWT (`permissions`) | Descripción breve |
+| ------ | ---- | ----------------------------- | ----------------- |
+| `GET` | `/api/v1/notifications/` | `NOTIFICATION_INBOX_LIST` | Bandeja paginada (`status`, `event_type`, `type`, `since`, `unread_only`, paginación) |
+| `GET` | `/api/v1/notifications/unread-count/` | `NOTIFICATION_UNREAD_COUNT_GET` | `{ "count": <int> }` |
+| `GET` | `/api/v1/notifications/{id}/` | `NOTIFICATION_DETAIL_GET` | Detalle |
+| `PATCH` | `/api/v1/notifications/{id}/` | `NOTIFICATION_STATUS_PATCH` | Estado: `read` \| `unread` \| `archived` |
+| `DELETE` | `/api/v1/notifications/{id}/` | `NOTIFICATION_SOFT_DELETE` | Borrado **soft** |
+| `DELETE` | `/api/v1/notifications/{id}/hard/` | `NOTIFICATION_HARD_DELETE` | Borrado **hard** |
+| `POST` | `/api/v1/notifications/mark-all-read/` | `NOTIFICATION_MARK_ALL_READ_POST` | Cuerpo opcional `{ "until_id": <int> }` |
+| `GET` | `/api/v1/notifications/stream/` | `NOTIFICATION_STREAM_SUBSCRIBE` | **SSE** — deltas in-app en tiempo casi real |
+| `GET` | `/api/v1/me/notification-preferences/` | `NOTIFICATION_PREFERENCES_GLOBAL_GET` | Preferencias globales (lectura) |
+| `PUT` | `/api/v1/me/notification-preferences/` | `NOTIFICATION_PREFERENCES_GLOBAL_PUT` | Preferencias globales (mute, quiet hours, toggles globales) |
+| `GET` | `/api/v1/me/notification-preferences/event-types/` | `NOTIFICATION_PREFERENCES_EVENT_TYPES_GET` | Matriz por tipo de evento + metadatos |
+| `PUT` | `/api/v1/me/notification-preferences/event-types/{event_type}/` | `NOTIFICATION_PREFERENCES_EVENT_TYPE_PUT` | Toggle por canal (`inapp_enabled`, `email_enabled`) |
+
+El central auth debe emitir en el JWT la cadena exacta de cada permiso. Para usuarios estándar con inbox completa, conviene agruparlos desde el lado de autorización (roles que incluyen este conjunto) en lugar de listarlos cliente a cliente.
 
 Serializers de ejemplo: `apps/notification/api/serializers/` (`notification.py`, `preferences.py`).
 

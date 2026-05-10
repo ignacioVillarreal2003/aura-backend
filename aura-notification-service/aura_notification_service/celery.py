@@ -12,9 +12,11 @@ import os
 
 from celery import Celery
 
+# Align with manage.py for local runs. Production/staging must set
+# DJANGO_SETTINGS_MODULE explicitly (e.g. in systemd, Docker CMD, K8s env).
 os.environ.setdefault(
     "DJANGO_SETTINGS_MODULE",
-    "aura_notification_service.settings.production",
+    "aura_notification_service.settings.development",
 )
 
 app = Celery("aura_notification_service")

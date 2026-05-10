@@ -33,7 +33,7 @@ from rest_framework.views import APIView
 
 from apps.notification.api.serializers import ErrorResponseSerializer
 from core.authorization import AccessControl
-from core.authorization.permissions import LIST_NOTIFICATIONS
+from core.authorization.permissions import NOTIFICATION_STREAM_SUBSCRIBE
 from core.pubsub import subscribe_user_events
 
 logger = logging.getLogger(__name__)
@@ -92,7 +92,7 @@ class NotificationStreamView(APIView):
         responses={200: None, 401: ErrorResponseSerializer},
     )
     def get(self, request):
-        AccessControl.require_permissions(request.user, frozenset({LIST_NOTIFICATIONS}))
+        AccessControl.require_permissions(request.user, frozenset({NOTIFICATION_STREAM_SUBSCRIBE}))
 
         response = StreamingHttpResponse(
             _stream(request.user.id),
@@ -101,5 +101,4 @@ class NotificationStreamView(APIView):
         )
         response["Cache-Control"] = "no-cache, no-transform"
         response["X-Accel-Buffering"] = "no"  # disable nginx proxy buffering
-        response["Connection"] = "keep-alive"
         return response

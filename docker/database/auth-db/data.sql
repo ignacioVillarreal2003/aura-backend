@@ -91,7 +91,19 @@ INSERT INTO permission (name, description) VALUES
     ('SET_MESSAGE_FEEDBACK', 'Feedback sobre mensaje del asistente'),
     ('LIST_THREAD_REPLIES', 'Listar respuestas de hilo'),
     ('ADD_THREAD_REPLY', 'Añadir respuesta en hilo'),
-    ('EXPORT_CHAT', 'Exportar chat o mensaje');
+    ('EXPORT_CHAT', 'Exportar chat o mensaje'),
+    ('NOTIFICATION_INBOX_LIST', 'Listar bandeja de notificaciones del propio usuario'),
+    ('NOTIFICATION_UNREAD_COUNT_GET', 'Consultar contador de notificaciones no leídas'),
+    ('NOTIFICATION_STREAM_SUBSCRIBE', 'Suscribirse al stream SSE de notificaciones del propio usuario'),
+    ('NOTIFICATION_DETAIL_GET', 'Ver detalle de una notificación propia'),
+    ('NOTIFICATION_STATUS_PATCH', 'Marcar notificación propia como leída / no leída / archivada'),
+    ('NOTIFICATION_SOFT_DELETE', 'Borrado lógico de una notificación propia'),
+    ('NOTIFICATION_MARK_ALL_READ_POST', 'Marcar todas las notificaciones propias como leídas'),
+    ('NOTIFICATION_HARD_DELETE', 'Borrado físico de cualquier notificación (admin / mantenimiento)'),
+    ('NOTIFICATION_PREFERENCES_GLOBAL_GET', 'Ver preferencias globales de notificación del propio usuario'),
+    ('NOTIFICATION_PREFERENCES_GLOBAL_PUT', 'Actualizar preferencias globales de notificación del propio usuario'),
+    ('NOTIFICATION_PREFERENCES_EVENT_TYPES_GET', 'Ver matriz de canales por tipo de evento del propio usuario'),
+    ('NOTIFICATION_PREFERENCES_EVENT_TYPE_PUT', 'Actualizar canales para un tipo de evento del propio usuario');
 
 INSERT INTO role (name, description) VALUES
     ('superadmin', 'Super administrador con acceso total'),
@@ -170,7 +182,18 @@ JOIN permission p ON p.name IN (
     'SET_MESSAGE_FEEDBACK',
     'LIST_THREAD_REPLIES',
     'ADD_THREAD_REPLY',
-    'EXPORT_CHAT'
+    'EXPORT_CHAT',
+    'NOTIFICATION_INBOX_LIST',
+    'NOTIFICATION_UNREAD_COUNT_GET',
+    'NOTIFICATION_STREAM_SUBSCRIBE',
+    'NOTIFICATION_DETAIL_GET',
+    'NOTIFICATION_STATUS_PATCH',
+    'NOTIFICATION_SOFT_DELETE',
+    'NOTIFICATION_MARK_ALL_READ_POST',
+    'NOTIFICATION_PREFERENCES_GLOBAL_GET',
+    'NOTIFICATION_PREFERENCES_GLOBAL_PUT',
+    'NOTIFICATION_PREFERENCES_EVENT_TYPES_GET',
+    'NOTIFICATION_PREFERENCES_EVENT_TYPE_PUT'
 )
 WHERE r.name = 'user';
 

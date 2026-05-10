@@ -89,9 +89,11 @@ services:
       - -A
       - aura_notification_service
       - worker
-      - --loglevel=info
-      - --concurrency=2
-      - --queues=notifications
+      - -l
+      - info
+      - -Q
+      - notifications
+      - --pool=solo
     env_file:
       - ../../aura-notification-service/.env.docker
     depends_on:

@@ -1,8 +1,11 @@
 from pathlib import Path
 
-from decouple import Csv, config
+from decouple import AutoConfig, Csv
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+# Always resolve `.env` from the project root (not the process cwd).
+config = AutoConfig(search_path=str(BASE_DIR))
 
 APP_NAME = "Aura Notification Service"
 APP_VERSION = "1.0.0"
@@ -214,13 +217,17 @@ CACHES = {
 # -----------------------------------------------------------------------------
 # Celery (broker = RabbitMQ, results = Redis)
 # -----------------------------------------------------------------------------
-CELERY_BROKER_URL = config(
-    "CELERY_BROKER_URL",
-    default="amqp://aura_root:aura_password@127.0.0.1:5672//",
+_DEFAULT_CELERY_BROKER_URL = "amqp://aura_root:aura_password@127.0.0.1:5672//"
+_DEFAULT_CELERY_RESULT_BACKEND = "redis://127.0.0.1:6379/3"
+
+# Empty OS env (e.g. CELERY_BROKER_URL=) overrides .env and breaks Kombu URL parsing.
+CELERY_BROKER_URL = (
+    config("CELERY_BROKER_URL", default=_DEFAULT_CELERY_BROKER_URL).strip()
+    or _DEFAULT_CELERY_BROKER_URL
 )
-CELERY_RESULT_BACKEND = config(
-    "CELERY_RESULT_BACKEND",
-    default="redis://127.0.0.1:6379/3",
+CELERY_RESULT_BACKEND = (
+    config("CELERY_RESULT_BACKEND", default=_DEFAULT_CELERY_RESULT_BACKEND).strip()
+    or _DEFAULT_CELERY_RESULT_BACKEND
 )
 CELERY_TASK_ACKS_LATE = True
 CELERY_TASK_REJECT_ON_WORKER_LOST = True
@@ -275,11 +282,9 @@ NOTIFICATION_REDIS_CHANNEL_PREFIX = config(
 )
 
 # -----------------------------------------------------------------------------
-# Logging
+# Logging — stdout only (JSON). Avoid `logs/` files so deployments rely on process
+# output (Kubernetes/Docker agents → your log stack) instead of duplicating sinks.
 # -----------------------------------------------------------------------------
-LOGS_DIR = BASE_DIR / "logs"
-LOGS_DIR.mkdir(exist_ok=True)
-
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -304,30 +309,24 @@ LOGGING = {
             "formatter": "verbose",
             "filters": ["correlation_id"],
         },
-        "file": {
-            "class": "logging.FileHandler",
-            "filename": LOGS_DIR / "debug.log",
-            "formatter": "verbose",
-            "filters": ["correlation_id"],
-        },
     },
     "root": {
-        "handlers": ["console", "file"],
+        "handlers": ["console"],
         "level": "INFO",
     },
     "loggers": {
         "django": {
-            "handlers": ["console", "file"],
+            "handlers": ["console"],
             "level": "WARNING",
             "propagate": False,
         },
         "apps": {
-            "handlers": ["console", "file"],
+            "handlers": ["console"],
             "level": "DEBUG",
             "propagate": False,
         },
         "core": {
-            "handlers": ["console", "file"],
+            "handlers": ["console"],
             "level": "DEBUG",
             "propagate": False,
         },

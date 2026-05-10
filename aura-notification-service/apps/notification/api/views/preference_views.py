@@ -14,7 +14,12 @@ from apps.notification.api.serializers import (
 from apps.notification.events import get_event, is_known_event
 from apps.notification.services import preference_service
 from core.authorization import AccessControl
-from core.authorization.permissions import MANAGE_NOTIFICATION_PREFERENCES
+from core.authorization.permissions import (
+    NOTIFICATION_PREFERENCES_EVENT_TYPE_PUT,
+    NOTIFICATION_PREFERENCES_EVENT_TYPES_GET,
+    NOTIFICATION_PREFERENCES_GLOBAL_GET,
+    NOTIFICATION_PREFERENCES_GLOBAL_PUT,
+)
 from core.exceptions.base import NotFoundException
 
 
@@ -26,7 +31,7 @@ class GlobalPreferenceView(APIView):
     )
     def get(self, request):
         AccessControl.require_permissions(
-            request.user, frozenset({MANAGE_NOTIFICATION_PREFERENCES})
+            request.user, frozenset({NOTIFICATION_PREFERENCES_GLOBAL_GET})
         )
         prefs = preference_service.get_global(request.user.id)
         return Response(NotificationPreferenceSerializer(prefs).data)
@@ -38,7 +43,7 @@ class GlobalPreferenceView(APIView):
     )
     def put(self, request):
         AccessControl.require_permissions(
-            request.user, frozenset({MANAGE_NOTIFICATION_PREFERENCES})
+            request.user, frozenset({NOTIFICATION_PREFERENCES_GLOBAL_PUT})
         )
         serializer = NotificationPreferenceUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -75,7 +80,7 @@ class EventPreferenceListView(APIView):
     )
     def get(self, request):
         AccessControl.require_permissions(
-            request.user, frozenset({MANAGE_NOTIFICATION_PREFERENCES})
+            request.user, frozenset({NOTIFICATION_PREFERENCES_EVENT_TYPES_GET})
         )
         catalogue = preference_service.event_catalogue_for(request.user.id)
         return Response(catalogue)
@@ -95,7 +100,7 @@ class EventPreferenceDetailView(APIView):
     )
     def put(self, request, event_type: str):
         AccessControl.require_permissions(
-            request.user, frozenset({MANAGE_NOTIFICATION_PREFERENCES})
+            request.user, frozenset({NOTIFICATION_PREFERENCES_EVENT_TYPE_PUT})
         )
         if not is_known_event(event_type):
             raise NotFoundException("Unknown event_type.", error_code="event_type_not_found")
