@@ -267,30 +267,6 @@
                 </div>
                 {% endif %}
 
-                {% if form.fau_roles %}
-                <div style="display: none;">{{ form.fau_roles }}</div>
-                <div class="selector-block">
-                    <label class="selector-label" for="search-fau_roles">Roles FAU</label>
-                    <div class="search-container">
-                        <input id="search-fau_roles" type="text" class="search-input" placeholder="Buscar rol FAU...">
-                    </div>
-                    <div class="dual-panel-container">
-                        <div class="panel">
-                            <div class="panel-header">Disponibles</div>
-                            <div class="panel-content" id="available-fau_roles"></div>
-                        </div>
-                        <div class="panel">
-                            <div class="panel-header">Seleccionados</div>
-                            <div class="panel-content" id="selected-fau_roles"></div>
-                        </div>
-                    </div>
-                    {% if form.fau_roles.errors %}
-                    <div class="error-messages" style="margin-top: 10px;">
-                        {% for error in form.fau_roles.errors %}<div>{{ error }}</div>{% endfor %}
-                    </div>
-                    {% endif %}
-                </div>
-                {% endif %}
             </div>
 
             <div class="form-section">
@@ -318,7 +294,6 @@
     window.recipients_data = {{ users_json|default:'[]'|safe }};
     window.groups_data = {{ groups_json|default:'[]'|safe }};
     window.roles_data = {{ roles_json|default:'[]'|safe }};
-    window.fau_roles_data = {{ fau_roles_json|default:'[]'|safe }};
 </script>
 <script>
 (function() {
@@ -396,7 +371,6 @@
     initDualSelector('recipients');
     initDualSelector('groups');
     initDualSelector('roles');
-    initDualSelector('fau_roles');
 })();
 </script>
 {% endblock %}

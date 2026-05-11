@@ -3,7 +3,7 @@
 from django import forms
 from django.contrib.admin.widgets import FilteredSelectMultiple
 from django.db import connections
-from accounts.models import Role, CustomGroup, User, FauRole
+from accounts.models import Role, CustomGroup, User
 
 
 class UserAdminForm(forms.ModelForm):
@@ -32,13 +32,6 @@ class UserAdminForm(forms.ModelForm):
         required=False,
         widget=forms.RadioSelect(),
         label='Rol',
-    )
-
-    fau_role = forms.ModelChoiceField(
-        queryset=FauRole.objects.order_by('-power', 'name'),
-        required=True,
-        label='Rol FAU',
-        help_text='',
     )
 
     class Meta:
@@ -72,9 +65,6 @@ class UserAdminForm(forms.ModelForm):
         else:
             if 'roles' in self.fields:
                 self.fields['roles'].initial = Role.objects.filter(name='user').first()
-        if self.instance and self.instance.pk:
-            if 'fau_role' in self.fields:
-                self.fields['fau_role'].initial = self.instance.fau_role_id
         if 'roles' in self.fields:
             def _role_label(role):
                 if role.name == 'user':

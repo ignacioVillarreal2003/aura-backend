@@ -3,7 +3,7 @@
 from django import forms
 from django.contrib.admin.widgets import FilteredSelectMultiple
 from django.db import connections
-from accounts.models import User, CustomGroup, Role, UserRole, FauRole
+from accounts.models import User, CustomGroup, Role, UserRole
 
 
 class SendNotificationForm(forms.Form):
@@ -39,13 +39,6 @@ class SendGroupNotificationForm(forms.Form):
         label='Roles de sistema',
         help_text='',
     )
-    fau_roles = forms.ModelMultipleChoiceField(
-        queryset=FauRole.objects.order_by('power', 'name'),
-        widget=FilteredSelectMultiple('Roles FAU', is_stacked=False),
-        required=False,
-        label='Roles FAU',
-        help_text='',
-    )
     message = forms.CharField(
         max_length=500,
         widget=forms.Textarea(attrs={'rows': 4}),
@@ -56,9 +49,8 @@ class SendGroupNotificationForm(forms.Form):
         cleaned_data = super().clean()
         groups = cleaned_data.get('groups')
         roles = cleaned_data.get('roles')
-        fau_roles = cleaned_data.get('fau_roles')
-        if (not groups or groups.count() == 0) and (not roles or roles.count() == 0) and (not fau_roles or fau_roles.count() == 0):
-            raise forms.ValidationError('Debes seleccionar al menos un grupo, un rol de sistema o un Rol FAU.')
+        if (not groups or groups.count() == 0) and (not roles or roles.count() == 0):
+            raise forms.ValidationError('Debes seleccionar al menos un grupo o un rol de sistema.')
         return cleaned_data
 
     def resolve_target_user_ids(self) -> list[int]:
@@ -66,14 +58,12 @@ class SendGroupNotificationForm(forms.Form):
         cleaned_data = self.cleaned_data
         groups = cleaned_data.get('groups')
         roles = cleaned_data.get('roles')
-        fau_roles = cleaned_data.get('fau_roles')
 
         user_ids = set()
         if groups:
             # Cross-DB M2M: User (auth_db) ↔ auth_user_custom_groups (aura_db).
             # ORM JOIN would fail; resolve user_ids via raw SQL on aura_db then
             # filter active/non-deleted users from auth_db.
-            # Raw SQL: SELECT user_id FROM auth_user_custom_groups WHERE customgroup_id IN (...)
             group_ids = [str(g.pk) for g in groups]
             with connections['aura_db'].cursor() as cursor:
                 placeholders = ','.join(['%s::uuid'] * len(group_ids))
@@ -99,25 +89,14 @@ class SendGroupNotificationForm(forms.Form):
             ).values_list('user_id', flat=True)
             user_ids.update(role_user_ids)
 
-        if fau_roles:
-            fau_role_user_ids = User.objects.filter(
-                fau_role__in=fau_roles,
-                deleted_at__isnull=True,
-                status='active',
-            ).values_list('id', flat=True)
-            user_ids.update(fau_role_user_ids)
-
         return sorted(user_ids)
 
     def build_target_label(self) -> str:
         groups = self.cleaned_data.get('groups')
         roles = self.cleaned_data.get('roles')
-        fau_roles = self.cleaned_data.get('fau_roles')
         labels = []
         if groups and groups.count() > 0:
             labels.append('Grupos: ' + ', '.join(groups.values_list('name', flat=True)))
         if roles and roles.count() > 0:
             labels.append('Roles sistema: ' + ', '.join(roles.values_list('name', flat=True)))
-        if fau_roles and fau_roles.count() > 0:
-            labels.append('Roles FAU: ' + ', '.join(fau_roles.values_list('name', flat=True)))
         return ' | '.join(labels)

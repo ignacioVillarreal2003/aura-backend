@@ -23,7 +23,6 @@ def _custom_get_app_list(self, request, app_label=None):
             'User',
             'CustomGroup',
             'Role',
-            'FauRole',
             'Permission',
         ]
     order_map = {name: index for index, name in enumerate(desired_order)}
@@ -70,6 +69,34 @@ def _custom_get_app_list(self, request, app_label=None):
                 ],
             }
         )
+        placeholder_apps.append(
+            {
+                'app_label': 'mac',
+                'name': 'Control de Acceso (MAC)',
+                'app_url': reverse('admin:mac_classification_levels_list'),
+                'has_module_perms': True,
+                'models': [
+                    {
+                        'name': 'Niveles de Clasificación',
+                        'object_name': 'ClassificationLevel',
+                        'admin_url': reverse('admin:mac_classification_levels_list'),
+                        'view_only': True,
+                    },
+                    {
+                        'name': 'Compartimentos',
+                        'object_name': 'Compartment',
+                        'admin_url': reverse('admin:mac_compartments_list'),
+                        'view_only': True,
+                    },
+                    {
+                        'name': 'Colecciones de Documentos',
+                        'object_name': 'DocumentCollection',
+                        'admin_url': reverse('admin:mac_document_collections_list'),
+                        'view_only': True,
+                    },
+                ],
+            }
+        )
 
     app_order = {
         'dashboard': 0,
@@ -78,6 +105,7 @@ def _custom_get_app_list(self, request, app_label=None):
         'chat': 3,
         'notifications': 4,
         'auditoria': 5,
+        'mac': 6,
     }
 
     for app in app_list:

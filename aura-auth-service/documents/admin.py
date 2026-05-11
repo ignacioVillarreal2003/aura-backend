@@ -13,7 +13,7 @@ from django.forms.formsets import all_valid
 from django.utils.translation import gettext as _
 from django.utils.html import format_html
 from django.conf import settings
-from accounts.models import CustomGroup, FauRole
+from accounts.models import CustomGroup
 from accounts.admin_parts.utils.audit import log_audit
 from documents.models import Document
 from documents.services.document_processing_client import (
@@ -60,42 +60,21 @@ class DocumentUploadForm(forms.ModelForm):
         label='Grupos',
         help_text='',
     )
-    minimum_fau_role = forms.ModelChoiceField(
-        queryset=FauRole.objects.order_by('power', 'name'),
-        required=False,
-        label='Rol FAU mínimo',
-        help_text='Ese rol y todos los de mayor jerarquía podrán acceder.',
-    )
     visible_to_all = forms.BooleanField(
         required=False,
         label='Disponible para todos',
-        help_text='Si está activo, no se aplican restricciones por grupos ni jerarquía FAU.',
+        help_text='Si está activo, no se aplican restricciones por grupos.',
     )
 
     class Meta:
         model = Document
-        fields = ('name', 'description', 'raw_collection', 'groups', 'minimum_fau_role', 'visible_to_all')
+        fields = ('name', 'description', 'raw_collection', 'groups', 'visible_to_all')
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.instance and not self.instance._state.adding:
             self.fields['raw_collection'].required = False
             self.fields['groups'].initial = self.instance.groups.all()
-            # minimum_fau_role is a form-only ModelChoiceField (cross-DB).
-            # Populate its initial value manually from the stored BigInt id.
-            if self.instance.minimum_fau_role_id:
-                from accounts.models import FauRole
-                self.fields['minimum_fau_role'].initial = (
-                    FauRole.objects.filter(pk=self.instance.minimum_fau_role_id).first()
-                )
-
-    def clean(self):
-        cleaned_data = super().clean()
-        visible_to_all = cleaned_data.get('visible_to_all')
-        minimum_fau_role = cleaned_data.get('minimum_fau_role')
-        if not visible_to_all and minimum_fau_role is None:
-            raise ValidationError('Debes marcar "Disponible para todos" o seleccionar un Rol FAU mínimo.')
-        return cleaned_data
 
 
 @admin.register(Document)
@@ -135,7 +114,7 @@ class DocumentAdmin(admin.ModelAdmin):
             'fields': ('id', 'name', 'description', 'size_display'),
         }),
         ('Acceso', {
-            'fields': ('visible_to_all', 'minimum_fau_role', 'groups'),
+            'fields': ('visible_to_all', 'groups'),
         }),
         ('Integración', {
             'fields': ('external_document_id', 'external_storage_url'),
@@ -160,7 +139,7 @@ class DocumentAdmin(admin.ModelAdmin):
                     'fields': ('name', 'description', 'raw_collection'),
                 }),
                 ('Acceso', {
-                    'fields': ('visible_to_all', 'minimum_fau_role', 'groups'),
+                    'fields': ('visible_to_all', 'groups'),
                 }),
             )
         return self.fieldsets
@@ -170,9 +149,7 @@ class DocumentAdmin(admin.ModelAdmin):
         return super().get_form(request, obj, **kwargs)
 
     def get_queryset(self, request):
-        queryset = super().get_queryset(request)
-        # minimum_fau_role is now a cross-DB BigInt — cannot use select_related.
-        return queryset.prefetch_related('groups')
+        return super().get_queryset(request).prefetch_related('groups')
 
     def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
         with transaction.atomic(using=router.db_for_write(self.model)):
@@ -310,21 +287,11 @@ class DocumentAdmin(admin.ModelAdmin):
     def access_scope_display(self, obj):
         if obj.visible_to_all:
             return format_html('<span style="color: green; font-weight: bold;">Todos</span>')
-        if obj.minimum_fau_role_id:
-            # Cross-DB lookup: FauRole lives in auth_db, Document in aura_db.
-            fau_role = FauRole.objects.filter(pk=obj.minimum_fau_role_id).first()
-            name = fau_role.name if fau_role else f'ID:{obj.minimum_fau_role_id}'
-            return format_html(
-                '<span style="color: #417690; font-weight: bold;">{} y superiores</span>',
-                name,
-            )
         return '-'
     access_scope_display.short_description = 'Acceso'
 
     def save_model(self, request, obj, form, change):
         if change:
-            if obj.visible_to_all:
-                obj.minimum_fau_role_id = None
             _apply_audit_fields(obj, request.user.pk, is_create=False)
             super().save_model(request, obj, form, change)
             if obj.visible_to_all:
@@ -359,8 +326,6 @@ class DocumentAdmin(admin.ModelAdmin):
         obj.external_document_id = response_payload.get('id')
         obj.external_storage_url = response_payload.get('storage_url', '')
         obj.visible_to_all = form.cleaned_data.get('visible_to_all', False)
-        fau_role_obj = form.cleaned_data.get('minimum_fau_role')
-        obj.minimum_fau_role_id = None if obj.visible_to_all else (fau_role_obj.pk if fau_role_obj else None)
         _apply_audit_fields(obj, request.user.pk, is_create=True)
         super().save_model(request, obj, form, change)
         if obj.visible_to_all:

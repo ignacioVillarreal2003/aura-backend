@@ -3,9 +3,8 @@
 Both Document and DocumentRole live in aura_db (routed via AuraDbRouter).
 
 Cross-DB references (fields pointing to auth_db tables) are stored as plain
-BigIntegerField — no SQL FK constraint, same pattern as receiver_id in notifications:
-  - Document.minimum_fau_role_id  → fau_role.id  in auth_db
-  - DocumentRole.role_id          → role.id       in auth_db
+BigIntegerField — no SQL FK constraint:
+  - DocumentRole.role_id  → role.id in auth_db
 """
 
 import uuid
@@ -49,15 +48,7 @@ class Document(AuditedModel):
     visible_to_all = models.BooleanField(
         default=False,
         verbose_name='Disponible para todos',
-        help_text='Si está activo, el documento queda disponible para todos y no se restringe por grupos ni jerarquía FAU.',
-    )
-    # Cross-DB reference: fau_role.id lives in auth_db; Document lives in aura_db.
-    # Stored as plain BIGINT — no SQL FK constraint.
-    minimum_fau_role_id = models.BigIntegerField(
-        null=True,
-        blank=True,
-        verbose_name='Rol FAU mínimo',
-        help_text='fau_role.id (cross-DB ref to auth_db). Ese rol y los de mayor jerarquía pueden acceder.',
+        help_text='Si está activo, el documento queda disponible para todos sin restricciones de grupos.',
     )
 
     class Meta:
@@ -72,16 +63,6 @@ class Document(AuditedModel):
 
     def __str__(self):
         return self.name
-
-    def access_scope_label(self):
-        if self.visible_to_all:
-            return 'Todos'
-        if self.minimum_fau_role_id:
-            from accounts.models import FauRole
-            fau_role = FauRole.objects.filter(pk=self.minimum_fau_role_id).first()
-            name = fau_role.name if fau_role else str(self.minimum_fau_role_id)
-            return f'{name} y superiores'
-        return 'Restringido'
 
 
 class DocumentRole(models.Model):

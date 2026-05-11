@@ -229,6 +229,10 @@ NOTIFICATION_SERVICE_TIMEOUT_SECONDS = config(
     cast=int,
 )
 
+# Document Collection Service (MAC — Mandatory Access Control)
+DOC_COLLECTION_SERVICE_URL = config('DOC_COLLECTION_SERVICE_URL', default='http://localhost:8005')
+DOC_COLLECTION_SERVICE_API_KEY = config('DOC_COLLECTION_SERVICE_API_KEY', default='dev-doc-collection-key')
+
 # Logging Configuration
 LOGGING = {
     'version': 1,

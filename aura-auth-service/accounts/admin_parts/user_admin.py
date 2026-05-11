@@ -1,9 +1,10 @@
 """User admin configuration."""
 
 from django.contrib import admin
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html
-from accounts.models import User, Role, UserRole, FauRole
+from accounts.models import User, Role, UserRole
 from accounts.admin_parts.common import (
     StatusFilter,
     CreatedDateFilter,
@@ -43,15 +44,14 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
         'username',
         'email',
         'roles_display',
-        'fau_role_display',
         'status_badge',
         'created_date',
         'created_by_display',
         'last_login_display',
+        'mac_profile_link',
     )
     list_filter = (
         RoleFilter,
-        ('fau_role', admin.RelatedOnlyFieldListFilter),
         StatusFilter,
         ('created_at', CreatedDateFilter),
     )
@@ -80,9 +80,6 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             'fields': ('custom_groups',),
             'classes': ('groups-section',),
         }),
-        ('Rol FAU', {
-            'fields': ('fau_role',),
-        }),
     )
 
     def status_badge(self, obj):
@@ -110,13 +107,6 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
         return ', '.join(labels) if labels else '-'
     roles_display.short_description = 'Rol'
 
-    def fau_role_display(self, obj):
-        if obj.fau_role:
-            return obj.fau_role.name
-        return '-'
-    fau_role_display.short_description = 'Rol FAU'
-    fau_role_display.admin_order_field = 'fau_role__name'
-
     def created_date(self, obj):
         if obj.created_at:
             return obj.created_at.strftime('%d/%m/%Y')
@@ -140,6 +130,18 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
     last_login_display.short_description = 'Ultimo login'
     last_login_display.admin_order_field = 'last_login'
 
+    def mac_profile_link(self, obj):
+        url = reverse('admin:mac_user_mac', args=[obj.pk])
+        return format_html(
+            '<a href="{}" style="'
+            'display:inline-block;padding:3px 9px;background:#205067;color:#fff;'
+            'border-radius:4px;font-size:11px;font-weight:600;text-decoration:none;'
+            '">MAC</a>',
+            url,
+        )
+    mac_profile_link.short_description = 'Perfil MAC'
+    mac_profile_link.allow_tags = True
+
     def get_readonly_fields(self, request, obj=None):
         if obj:
             return self.readonly_fields + ('username', 'email', 'roles_display')
@@ -148,7 +150,6 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
     def get_fieldsets(self, request, obj=None):
         if obj is None:
             return self.fieldsets
-        fau_section = ('Rol FAU', {'fields': ('fau_role',)})
         if _is_super_admin_user(request.user):
             return (
                 ('Identidad', {
@@ -157,7 +158,6 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
                 ('Grupos', {
                     'fields': ('custom_groups',),
                 }),
-                fau_section,
                 ('Auditoría', {
                     'fields': (
                         'created_by',
@@ -178,7 +178,6 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             ('Grupos', {
                 'fields': ('custom_groups',),
             }),
-            fau_section,
         )
 
     def get_form(self, request, obj=None, **kwargs):
@@ -214,14 +213,10 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
                 form.base_fields['roles'].queryset = Role.objects.exclude(
                     name__in=['superadmin', 'admin']
                 )
-        if 'fau_role' in form.base_fields:
-            form.base_fields['fau_role'].queryset = FauRole.objects.order_by('-power', 'name')
         return form
 
     def get_list_filter(self, request):
-        if _is_super_admin_user(request.user):
-            return self.list_filter
-        return (self.RoleFilter, StatusFilter, ('created_at', CreatedDateFilter))
+        return self.list_filter
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)

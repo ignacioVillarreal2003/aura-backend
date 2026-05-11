@@ -19,4 +19,6 @@ class AuthenticatedUser:
     def has_all_permissions(self, required: frozenset[str]) -> bool:
         if not required:
             return True
+        if '*' in self.permissions:
+            return True
         return required <= set(self.permissions)

@@ -2,7 +2,19 @@
   "permissions": {
     "allow": [
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\ignac\\\\Desktop\\\\aura-backend\" -Directory)",
-      "Bash(Select-Object Name)"
+      "Bash(Select-Object Name)",
+      "WebFetch(domain:localhost)",
+      "Bash(curl -s \"http://localhost:8005/api/schema/?format=json\")",
+      "Bash(python -m json.tool)",
+      "Bash(docker compose *)",
+      "Bash(docker exec *)",
+      "Bash(docker restart aura-auth-service *)",
+      "Bash(docker network ls *)",
+      "Bash(docker network inspect *)",
+      "Bash(docker network connect *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\albin\\\\Desktop\\\\tesis\\\\aura-backend\\\\aura-document-collection-service\" -Recurse -Directory)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\albin\\\\Desktop\\\\tesis\\\\aura-backend\" -Directory)"
     ]
   }
 }

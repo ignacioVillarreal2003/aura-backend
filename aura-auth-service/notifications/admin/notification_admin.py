@@ -294,25 +294,18 @@ class GroupNotificationAdmin(BaseNotificationAdmin):
         else:
             form = SendGroupNotificationForm()
 
-        # Prepare JSON data for groups/roles/fau_roles
-        from accounts.models import CustomGroup, Role, FauRole
-        
+        from accounts.models import CustomGroup, Role
+
         groups_data = CustomGroup.objects.filter(deleted_at__isnull=True).order_by('name')
         groups_json = json.dumps([
             {'id': str(group.pk), 'label': group.name}
             for group in groups_data
         ])
-        
+
         roles_data = Role.objects.order_by('name')
         roles_json = json.dumps([
             {'id': str(role.pk), 'label': role.name}
             for role in roles_data
-        ])
-        
-        fau_roles_data = FauRole.objects.order_by('power', 'name')
-        fau_roles_json = json.dumps([
-            {'id': str(role.pk), 'label': role.name}
-            for role in fau_roles_data
         ])
 
         context = {
@@ -322,7 +315,6 @@ class GroupNotificationAdmin(BaseNotificationAdmin):
             'show_search': False,
             'groups_json': groups_json,
             'roles_json': roles_json,
-            'fau_roles_json': fau_roles_json,
         }
         return render(request, 'admin/notifications/send_notification.html', context)
 
