@@ -1,10 +1,3 @@
-"""User notification preferences.
-
-Two tables:
-- `notification_preference`     -> 1 row per user, global toggles + quiet hours.
-- `notification_event_preference` -> per (user, event_type, channel) opt-in/out.
-"""
-
 from django.db import models
 
 
@@ -18,15 +11,9 @@ class NotificationPreference(models.Model):
     inapp_enabled = models.BooleanField(default=True, verbose_name="In-app habilitado")
     email_enabled = models.BooleanField(default=True, verbose_name="Email habilitado")
     mute_until = models.DateTimeField(null=True, blank=True, verbose_name="Silenciar hasta")
-    quiet_hours_start = models.TimeField(null=True, blank=True, verbose_name="Inicio horas tranquilas")
-    quiet_hours_end = models.TimeField(null=True, blank=True, verbose_name="Fin horas tranquilas")
-    quiet_hours_tz = models.CharField(
-        max_length=64,
-        default="UTC",
-        verbose_name="Zona horaria",
-    )
 
     created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.BigIntegerField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
     updated_by = models.BigIntegerField(null=True, blank=True)
 
@@ -49,6 +36,7 @@ class NotificationEventPreference(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
+    updated_by = models.BigIntegerField(null=True, blank=True)
 
     class Meta:
         db_table = "notification_event_preference"

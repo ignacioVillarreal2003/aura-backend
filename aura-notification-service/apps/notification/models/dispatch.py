@@ -1,13 +1,9 @@
-"""Dispatch log row for every notification delivery attempt."""
-
 from django.db import models
 
 
 class DispatchChannel(models.TextChoices):
     INAPP = "inapp", "In-app"
     EMAIL = "email", "Email"
-    WEBPUSH = "webpush", "Web push"
-    SMS = "sms", "SMS"
 
 
 class DispatchStatus(models.TextChoices):
@@ -34,6 +30,7 @@ class NotificationDispatch(models.Model):
     metadata = models.JSONField(default=dict, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     sent_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:

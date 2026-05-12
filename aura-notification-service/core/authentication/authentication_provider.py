@@ -1,20 +1,10 @@
-"""Authentication provider used by the AuthenticationMiddleware.
-
-Resolves bearer tokens against the central authentication service
-(`/auth/validate`) and additionally accepts trusted service-to-service
-calls through the `X-Service-Api-Key` + `X-User-Id`/`X-User-Email`
-header set, mirroring the convention used by the other Aura services.
-"""
-
 import hashlib
 import logging
 import secrets
-import threading
-import time
 from typing import Optional
-
 import requests
 from django.conf import settings
+from django.core.cache import cache as _cache
 from django.http import HttpRequest
 
 from core.authentication.authenticated_user import AuthenticatedUser
@@ -28,9 +18,7 @@ from core.authentication.authentication_exceptions import (
 
 logger = logging.getLogger(__name__)
 
-_TOKEN_CACHE_MAX_SIZE = 2000
-_token_cache: dict[str, tuple[AuthenticatedUser, float]] = {}
-_token_cache_lock = threading.Lock()
+_CACHE_PREFIX = "auth_token:"
 
 _HEADER_SERVICE_API_KEY = "X-Service-Api-Key"
 _HEADER_USER_ID = "X-User-Id"
@@ -39,40 +27,48 @@ _HEADER_USER_ROLES = "X-User-Roles"
 _HEADER_USER_PERMISSIONS = "X-User-Permissions"
 
 
-def _token_cache_ttl() -> float:
-    return float(getattr(settings, "AUTH_TOKEN_CACHE_TTL_SECONDS", 60))
+def _token_cache_ttl() -> int:
+    return int(getattr(settings, "AUTH_TOKEN_CACHE_TTL_SECONDS", 60))
 
 
 def _cache_key(token: str) -> str:
-    return hashlib.sha256(token.encode()).hexdigest()
+    return f"{_CACHE_PREFIX}{hashlib.sha256(token.encode()).hexdigest()}"
 
 
 def _get_cached_user(token: str) -> Optional[AuthenticatedUser]:
-    key = _cache_key(token)
-    with _token_cache_lock:
-        entry = _token_cache.get(key)
-        if entry is None:
+    try:
+        data = _cache.get(_cache_key(token))
+        if data is None:
             return None
-        user, expires_at = entry
-        if time.monotonic() >= expires_at:
-            del _token_cache[key]
-            return None
-        return user
+        return AuthenticatedUser(
+            id=data["id"],
+            email=data["email"],
+            username=data.get("username", ""),
+            roles=tuple(data.get("roles") or []),
+            permissions=tuple(data.get("permissions") or []),
+            is_super_admin=bool(data.get("is_super_admin")),
+        )
+    except Exception:
+        logger.warning("Redis token cache read failed; falling back to auth service.", exc_info=True)
+        return None
 
 
 def _cache_user(token: str, user: AuthenticatedUser) -> None:
-    key = _cache_key(token)
-    expires_at = time.monotonic() + _token_cache_ttl()
-    with _token_cache_lock:
-        if len(_token_cache) >= _TOKEN_CACHE_MAX_SIZE:
-            now = time.monotonic()
-            expired = [k for k, (_, exp) in _token_cache.items() if exp <= now]
-            for k in expired:
-                del _token_cache[k]
-            if len(_token_cache) >= _TOKEN_CACHE_MAX_SIZE:
-                oldest = min(_token_cache, key=lambda k: _token_cache[k][1])
-                del _token_cache[oldest]
-        _token_cache[key] = (user, expires_at)
+    try:
+        _cache.set(
+            _cache_key(token),
+            {
+                "id": user.id,
+                "email": user.email,
+                "username": user.username,
+                "roles": list(user.roles),
+                "permissions": list(user.permissions),
+                "is_super_admin": user.is_super_admin,
+            },
+            timeout=_token_cache_ttl(),
+        )
+    except Exception:
+        logger.warning("Redis token cache write failed; token will not be cached.", exc_info=True)
 
 
 def _validate_url() -> str:
@@ -139,7 +135,7 @@ class AuthenticationProvider:
             logger.error("Authentication service timed out.")
             raise AuthenticationProviderServiceUnavailableException("Authentication service timeout") from exc
         except requests.RequestException as exc:
-            logger.error("Could not reach the authentication service: %s", exc)
+            logger.error("Could not reach the authentication service.", exc_info=True)
             raise AuthenticationProviderServiceUnavailableException("Cannot connect to authentication service") from exc
 
         if response.status_code == 401:
@@ -151,6 +147,10 @@ class AuthenticationProvider:
         if response.status_code >= 500:
             raise AuthenticationProviderServiceUnavailableException(
                 f"Authentication service error (HTTP {response.status_code})"
+            )
+        if response.status_code not in (200, 201):
+            raise AuthenticationProviderInvalidTokenException(
+                f"Unexpected authentication response (HTTP {response.status_code})"
             )
 
         try:

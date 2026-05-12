@@ -1,22 +1,6 @@
-"""Catalogue of every notification event the platform knows about.
-
-The registry is the single source of truth for:
-
-- Default channels per event (`inapp`, `email`).
-- Severity (drives the badge colour on the frontend).
-- Whether the user can silence the event (security events cannot).
-- Template IDs used by `template_service` to render in-app message and email.
-- Optional deep-link builder.
-
-Adding a new event = add an `EventType` constant + `_EVENTS` entry +
-template files under `apps/notification/templates/email/<template_id>/`.
-"""
-
 from __future__ import annotations
-
 from dataclasses import dataclass, field
 from typing import Callable, Iterable
-
 from django.conf import settings
 
 from apps.notification.models import (
@@ -27,21 +11,17 @@ from apps.notification.models import (
 
 
 class EventType:
-    # Chat events
     CHAT_MEMBER_INVITED = "chat.member.invited"
     CHAT_MEMBER_REMOVED = "chat.member.removed"
     CHAT_MESSAGE_MENTIONED = "chat.message.mentioned"
     CHAT_LOCKED = "chat.locked"
 
-    # Auth / security events
     AUTH_PASSWORD_CHANGED = "auth.password.changed"
     AUTH_NEW_LOGIN = "auth.new_login"
 
-    # Document events
     DOCUMENT_PROCESSING_DONE = "document.processing.done"
     DOCUMENT_PROCESSING_FAILED = "document.processing.failed"
 
-    # Admin / system events
     ADMIN_BROADCAST = "admin.broadcast"
     SYSTEM_ANNOUNCEMENT = "system.announcement"
 
@@ -147,7 +127,7 @@ _EVENTS: dict[str, EventDefinition] = {
         type=NotificationType.SYSTEM,
         severity=NotificationSeverity.WARNING,
         description="Inicio de sesion desde un dispositivo nuevo.",
-        default_channels=(PreferenceChannel.EMAIL,),
+        default_channels=(PreferenceChannel.INAPP, PreferenceChannel.EMAIL),
         template_id="auth_new_login",
     ),
     EventType.DOCUMENT_PROCESSING_DONE: EventDefinition(
