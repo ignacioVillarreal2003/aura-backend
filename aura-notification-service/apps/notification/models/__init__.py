@@ -9,6 +9,7 @@ from apps.notification.models.notification import (
     NotificationSeverity,
     NotificationStatus,
     NotificationType,
+    TargetScope,
 )
 from apps.notification.models.preference import (
     NotificationEventPreference,
@@ -22,6 +23,7 @@ __all__ = [
     "NotificationStatus",
     "NotificationType",
     "NotificationSeverity",
+    "TargetScope",
     "NotificationPreference",
     "NotificationEventPreference",
     "PreferenceChannel",

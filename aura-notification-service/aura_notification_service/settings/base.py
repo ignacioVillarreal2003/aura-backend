@@ -1,25 +1,21 @@
 from pathlib import Path
-
 from decouple import AutoConfig, Csv
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-# Always resolve `.env` from the project root (not the process cwd).
 config = AutoConfig(search_path=str(BASE_DIR))
 
 APP_NAME = "Aura Notification Service"
 APP_VERSION = "1.0.0"
 
-SECRET_KEY = config("SECRET_KEY", default="django-insecure-change-me-in-production")
+SECRET_KEY = config("SECRET_KEY")
 DEBUG = config("DEBUG", default=False, cast=bool)
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="127.0.0.1,localhost", cast=Csv())
+_LOG_LEVEL = config("LOG_LEVEL", default="INFO")
 
 INSTALLED_APPS = [
-    "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
-    "django.contrib.sessions",
-    "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.postgres",
     "django_extensions",
@@ -31,20 +27,21 @@ INSTALLED_APPS = [
     "apps.notification.apps.NotificationConfig",
 ]
 
-_LOCAL_APPS = ["notification"]
-MIGRATION_MODULES = {app: None for app in _LOCAL_APPS}
+# Disable migrations for apps whose tables are not needed in this service.
+MIGRATION_MODULES = {
+    "notification": None,
+    "auth": None,
+    "contenttypes": None,
+}
 
 MIDDLEWARE = [
     "django_prometheus.middleware.PrometheusBeforeMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "core.middleware.correlation_id.CorrelationIdMiddleware",
     "core.middleware.request_logging.RequestLoggingMiddleware",
     "core.authentication.authentication_middleware.AuthenticationMiddleware",
-    "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_prometheus.middleware.PrometheusAfterMiddleware",
 ]
@@ -58,10 +55,7 @@ TEMPLATES = [
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
-                "django.template.context_processors.debug",
                 "django.template.context_processors.request",
-                "django.contrib.auth.context_processors.auth",
-                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
@@ -73,10 +67,10 @@ ASGI_APPLICATION = "aura_notification_service.asgi.application"
 DATABASES = {
     "default": {
         "ENGINE": config("DB_ENGINE", default="django.db.backends.postgresql"),
-        "NAME": config("DB_NAME", default="aura_db"),
-        "USER": config("DB_USER", default="aura_root"),
-        "PASSWORD": config("DB_PASSWORD", default="aura_password"),
-        "HOST": config("DB_HOST", default="127.0.0.1"),
+        "NAME": config("DB_NAME"),
+        "USER": config("DB_USER"),
+        "PASSWORD": config("DB_PASSWORD"),
+        "HOST": config("DB_HOST"),
         "PORT": config("DB_PORT", default="5432"),
         "CONN_MAX_AGE": config("DB_CONN_MAX_AGE", default=60, cast=int),
         "OPTIONS": {
@@ -111,7 +105,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "DEFAULT_PAGINATION_CLASS": "core.pagination.pagination.StandardPagination",
     "PAGE_SIZE": 20,
     "EXCEPTION_HANDLER": "core.exceptions.handler.custom_exception_handler",
     "DEFAULT_FILTER_BACKENDS": [
@@ -125,6 +119,7 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": "60/minute",
         "user": "240/minute",
+        "internal": "120/minute",
     },
     "DEFAULT_RENDERER_CLASSES": [
         "rest_framework.renderers.JSONRenderer",
@@ -170,20 +165,12 @@ SPECTACULAR_SETTINGS = {
         },
     },
     "ENUM_GENERATE_CHOICE_DESCRIPTION": True,
+    "ENUM_ADD_EXPLICIT_BLANK_NULL_CHOICE": False,
 }
 
-# -----------------------------------------------------------------------------
-# Authentication
-# -----------------------------------------------------------------------------
-AUTHENTICATION_SERVICE_URL = config(
-    "AUTHENTICATION_SERVICE_URL",
-    default=config("AUTH_SERVICE_URL", default="http://127.0.0.1:8080"),
-).strip()
-SERVICE_API_KEY = config("SERVICE_API_KEY", default="dev-service-api-key")
-NOTIFICATION_INTERNAL_API_TOKEN = config(
-    "NOTIFICATION_INTERNAL_API_TOKEN",
-    default="dev-notification-internal-token",
-)
+AUTHENTICATION_SERVICE_URL = config("AUTHENTICATION_SERVICE_URL").strip()
+SERVICE_API_KEY = config("SERVICE_API_KEY")
+NOTIFICATION_INTERNAL_API_TOKEN = config("NOTIFICATION_INTERNAL_API_TOKEN")
 AUTH_TOKEN_CACHE_TTL_SECONDS = config(
     "AUTH_TOKEN_CACHE_TTL_SECONDS",
     default=60,
@@ -193,19 +180,14 @@ AUTH_TOKEN_CACHE_TTL_SECONDS = config(
 AUTHENTICATION_EXCLUDED_PATHS = [
     "/api/v1/health",
     "/metrics",
-    "/admin/*",
     "/api/schema*",
     "/api/docs*",
     "/api/redoc*",
     "/api/v1/internal/*",
-    "/api/internal/*",
     "/api/v1/event-types/",
 ]
 
-# -----------------------------------------------------------------------------
-# Redis (cache + pub/sub for SSE)
-# -----------------------------------------------------------------------------
-REDIS_URL = config("REDIS_URL", default="redis://127.0.0.1:6379/2")
+REDIS_URL = config("REDIS_URL")
 
 CACHES = {
     "default": {
@@ -214,21 +196,8 @@ CACHES = {
     }
 }
 
-# -----------------------------------------------------------------------------
-# Celery (broker = RabbitMQ, results = Redis)
-# -----------------------------------------------------------------------------
-_DEFAULT_CELERY_BROKER_URL = "amqp://aura_root:aura_password@127.0.0.1:5672//"
-_DEFAULT_CELERY_RESULT_BACKEND = "redis://127.0.0.1:6379/3"
-
-# Empty OS env (e.g. CELERY_BROKER_URL=) overrides .env and breaks Kombu URL parsing.
-CELERY_BROKER_URL = (
-    config("CELERY_BROKER_URL", default=_DEFAULT_CELERY_BROKER_URL).strip()
-    or _DEFAULT_CELERY_BROKER_URL
-)
-CELERY_RESULT_BACKEND = (
-    config("CELERY_RESULT_BACKEND", default=_DEFAULT_CELERY_RESULT_BACKEND).strip()
-    or _DEFAULT_CELERY_RESULT_BACKEND
-)
+CELERY_BROKER_URL = config("CELERY_BROKER_URL").strip()
+CELERY_RESULT_BACKEND = config("CELERY_RESULT_BACKEND").strip()
 CELERY_TASK_ACKS_LATE = True
 CELERY_TASK_REJECT_ON_WORKER_LOST = True
 CELERY_TASK_DEFAULT_QUEUE = "notifications"
@@ -238,9 +207,26 @@ CELERY_TASK_SOFT_TIME_LIMIT = 45
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 CELERY_TIMEZONE = "UTC"
 
-# -----------------------------------------------------------------------------
-# Email
-# -----------------------------------------------------------------------------
+from kombu import Exchange as _Exchange, Queue as _Queue
+
+_notifications_dlx = _Exchange("notifications.dlx", type="direct")
+CELERY_QUEUES = (
+    _Queue(
+        "notifications",
+        _Exchange("notifications", type="direct"),
+        routing_key="notifications",
+        queue_arguments={
+            "x-dead-letter-exchange": "notifications.dlx",
+            "x-dead-letter-routing-key": "notifications.dlq",
+        },
+    ),
+    _Queue(
+        "notifications.dlq",
+        _notifications_dlx,
+        routing_key="notifications.dlq",
+    ),
+)
+
 EMAIL_BACKEND = config(
     "EMAIL_BACKEND",
     default="django.core.mail.backends.console.EmailBackend",
@@ -258,14 +244,7 @@ DEFAULT_FROM_EMAIL = config(
 )
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
-# -----------------------------------------------------------------------------
-# Notification subsystem
-# -----------------------------------------------------------------------------
-NOTIFICATION_HARD_DELETE_DAYS = config("NOTIFICATION_HARD_DELETE_DAYS", default=90, cast=int)
-NOTIFICATION_DEFAULT_LINK_BASE_URL = config(
-    "NOTIFICATION_DEFAULT_LINK_BASE_URL",
-    default="http://localhost:3000",
-)
+NOTIFICATION_DEFAULT_LINK_BASE_URL = config("NOTIFICATION_DEFAULT_LINK_BASE_URL")
 NOTIFICATION_SSE_HEARTBEAT_SECONDS = config(
     "NOTIFICATION_SSE_HEARTBEAT_SECONDS",
     default=15,
@@ -281,10 +260,6 @@ NOTIFICATION_REDIS_CHANNEL_PREFIX = config(
     default="notif:user",
 )
 
-# -----------------------------------------------------------------------------
-# Logging — stdout only (JSON). Avoid `logs/` files so deployments rely on process
-# output (Kubernetes/Docker agents → your log stack) instead of duplicating sinks.
-# -----------------------------------------------------------------------------
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -322,12 +297,12 @@ LOGGING = {
         },
         "apps": {
             "handlers": ["console"],
-            "level": "DEBUG",
+            "level": _LOG_LEVEL,
             "propagate": False,
         },
         "core": {
             "handlers": ["console"],
-            "level": "DEBUG",
+            "level": _LOG_LEVEL,
             "propagate": False,
         },
     },

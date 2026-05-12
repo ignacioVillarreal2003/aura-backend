@@ -1,7 +1,21 @@
 {
   "permissions": {
     "allow": [
-      "PowerShell($env:CELERY_BROKER_URL; [System.Environment]::GetEnvironmentVariable\\('CELERY_BROKER_URL', 'Machine'\\); [System.Environment]::GetEnvironmentVariable\\('CELERY_BROKER_URL', 'User'\\))"
+      "PowerShell($env:CELERY_BROKER_URL; [System.Environment]::GetEnvironmentVariable\\('CELERY_BROKER_URL', 'Machine'\\); [System.Environment]::GetEnvironmentVariable\\('CELERY_BROKER_URL', 'User'\\))",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\ignac\\\\Desktop\\\\aura-backend\\\\aura-notification-service\" -Recurse -Force)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Sort-Object)",
+      "Bash(Remove-Item *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\ignac\\\\Desktop\\\\aura-backend\\\\aura-notification-service\\\\apps\\\\notification\" -Recurse -File)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\ignac\\\\Desktop\\\\aura-backend\\\\aura-notification-service\" -Recurse -Name)",
+      "Bash(Test-Path *)",
+      "Bash(git *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\ignac\\\\Desktop\\\\aura-backend\\\\aura-notification-service\" -Recurse -Directory)",
+      "Bash(Select-Object FullName)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\ignac\\\\Desktop\\\\aura-backend\\\\aura-notification-service\\\\apps\\\\notification\" -Recurse -Directory)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/ --collect-only)",
+      "Bash(.venv/Scripts/pip install *)",
+      "Bash(python -m pytest tests/ --tb=short)"
     ]
   }
 }

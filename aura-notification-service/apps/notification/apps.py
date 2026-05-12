@@ -6,3 +6,6 @@ class NotificationConfig(AppConfig):
     name = "apps.notification"
     label = "notification"
     verbose_name = "Notifications"
+
+    def ready(self):
+        import core.authentication.spectacular  # noqa: F401

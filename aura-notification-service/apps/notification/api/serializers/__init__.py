@@ -3,12 +3,9 @@ from apps.notification.api.serializers.events import (
     EventEmissionRequestSerializer,
     EventEmissionResponseSerializer,
     EventTypeCatalogueEntrySerializer,
-    LegacyAdminCreateRequestSerializer,
-    LegacyAdminCreateResponseSerializer,
 )
 from apps.notification.api.serializers.notification import (
     BulkMarkReadResponseSerializer,
-    ErrorResponseSerializer,
     MarkAllReadRequestSerializer,
     NotificationSerializer,
     NotificationStatusUpdateSerializer,
@@ -27,7 +24,6 @@ __all__ = [
     "MarkAllReadRequestSerializer",
     "BulkMarkReadResponseSerializer",
     "UnreadCountSerializer",
-    "ErrorResponseSerializer",
     "NotificationPreferenceSerializer",
     "NotificationPreferenceUpdateSerializer",
     "EventPreferencesEntrySerializer",
@@ -36,6 +32,4 @@ __all__ = [
     "EventEmissionResponseSerializer",
     "EventDispatchOutcomeSerializer",
     "EventTypeCatalogueEntrySerializer",
-    "LegacyAdminCreateRequestSerializer",
-    "LegacyAdminCreateResponseSerializer",
 ]

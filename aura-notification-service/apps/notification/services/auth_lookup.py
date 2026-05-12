@@ -1,18 +1,6 @@
-"""Best-effort recipient lookup against the central authentication service.
-
-Used by the email task when the producer of an event did not embed
-`recipient_email` in the context. The auth-service is expected to expose
-a `/auth/users/{id}` endpoint returning at least `email` and optionally
-`username`. If the call fails or the endpoint is missing, the email is
-considered unsendable and the dispatch is marked failed (with the
-in-app row already saved, so nothing is silently lost).
-"""
-
 from __future__ import annotations
-
 import logging
 from typing import Optional
-
 import requests
 from django.conf import settings
 
@@ -25,16 +13,22 @@ def lookup_recipient(user_id: int) -> Optional[dict]:
     try:
         response = requests.get(
             url,
-            headers={
-                "X-Service-Api-Key": str(settings.SERVICE_API_KEY),
-                "X-Internal-Token": str(settings.NOTIFICATION_INTERNAL_API_TOKEN),
-            },
+            headers={"X-Service-Api-Key": str(settings.SERVICE_API_KEY)},
             timeout=5,
         )
     except requests.RequestException as exc:
-        logger.warning("Recipient lookup failed for user %s: %s", user_id, exc)
+        logger.warning("Recipient lookup network error for user %s: %s", user_id, exc)
+        raise
+    if response.status_code == 404:
         return None
-    if response.status_code != 200:
+    if response.status_code >= 500:
+        logger.warning(
+            "Recipient lookup returned %s for user %s — retryable.",
+            response.status_code,
+            user_id,
+        )
+        response.raise_for_status()
+    if not response.ok:
         logger.warning(
             "Recipient lookup returned %s for user %s.",
             response.status_code,

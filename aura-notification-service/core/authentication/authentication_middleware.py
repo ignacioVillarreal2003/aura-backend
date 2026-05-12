@@ -1,13 +1,4 @@
-"""Authentication middleware.
-
-Validates incoming requests against the central authentication service when
-they carry a `Bearer` token, or against the `X-Service-Api-Key` header set
-when they originate from another aura microservice. Internal `X-Internal-Token`
-calls are excluded here and validated inside the internal views themselves.
-"""
-
 import logging
-
 from django.conf import settings
 from django.http import JsonResponse
 

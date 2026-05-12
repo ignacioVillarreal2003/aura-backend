@@ -1,10 +1,3 @@
-"""In-app notification record.
-
-Mirror of the `notification` table owned by `sql/schema.sql`.
-`receiver_id` and audit `*_by` columns reference `auth_user.id`
-(cross-service, no FK constraint).
-"""
-
 from django.db import models
 from django.utils import timezone
 
@@ -31,14 +24,29 @@ class NotificationSeverity(models.TextChoices):
     CRITICAL = "critical", "Critical"
 
 
+class TargetScope(models.TextChoices):
+    INDIVIDUAL = "individual", "Individual"
+    BROADCAST = "broadcast", "Broadcast"
+    ROLE = "role", "Rol"
+
+
 class Notification(AuditedModel):
     id = models.BigAutoField(primary_key=True)
     receiver_id = models.BigIntegerField(db_index=True, verbose_name="Receptor")
+
+    title = models.CharField(
+        max_length=150,
+        null=True,
+        blank=True,
+        verbose_name="Título",
+        help_text="Short title shown in notification lists and used as email subject.",
+    )
 
     message = models.CharField(max_length=500, verbose_name="Mensaje")
 
     type = models.CharField(
         max_length=64,
+        choices=NotificationType.choices,
         default=NotificationType.SYSTEM,
         verbose_name="Tipo",
     )
@@ -55,6 +63,7 @@ class Notification(AuditedModel):
         max_length=128,
         null=True,
         blank=True,
+        db_index=True,
         verbose_name="Idempotency key",
         help_text="Optional unique key per receiver to deduplicate retries.",
     )
@@ -68,7 +77,8 @@ class Notification(AuditedModel):
 
     target_scope = models.CharField(
         max_length=64,
-        default="individual",
+        choices=TargetScope.choices,
+        default=TargetScope.INDIVIDUAL,
         db_index=True,
         verbose_name="Alcance",
     )
@@ -94,7 +104,7 @@ class Notification(AuditedModel):
         verbose_name="Severidad",
     )
 
-    link_url = models.TextField(null=True, blank=True, verbose_name="Link")
+    link_url = models.URLField(max_length=2048, null=True, blank=True, verbose_name="Link")
 
     status = models.CharField(
         max_length=64,
@@ -112,6 +122,13 @@ class Notification(AuditedModel):
         verbose_name = "Notificacion"
         verbose_name_plural = "Notificaciones"
         ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["receiver_id", "event_key"],
+                condition=models.Q(event_key__isnull=False),
+                name="uq_notification_receiver_event_key",
+            )
+        ]
 
     def __str__(self):
         return f"[{self.event_type or self.type}] -> user:{self.receiver_id} | {self.message[:60]}"

@@ -1,23 +1,7 @@
-"""Pipeline that materialises an event into notifications and dispatches.
-
-For every recipient the dispatcher:
-
-1. Resolves the user preferences and decides which channels apply.
-2. Honours idempotency via `event_key` (the database has a partial
-   unique index on `(receiver_id, event_key)` for active rows).
-3. Writes the in-app `Notification` row when the inapp channel is
-   enabled, and publishes a realtime frame on `transaction.on_commit`.
-4. Logs every channel decision in `notification_dispatch`.
-5. Schedules an email Celery task for the email channel (the worker
-   updates the dispatch row with the final status).
-"""
-
 from __future__ import annotations
-
 import logging
 from dataclasses import dataclass, field
 from typing import Iterable, Optional
-
 from django.db import IntegrityError, transaction
 
 from apps.notification.events import EventDefinition, get_event
@@ -29,6 +13,7 @@ from apps.notification.models import (
     NotificationStatus,
     NotificationType,
     PreferenceChannel,
+    TargetScope,
 )
 from apps.notification.services.preference_service import preference_service
 from apps.notification.services.realtime_service import realtime_service
@@ -63,9 +48,10 @@ class DispatchService:
         actor_name: Optional[str],
         context: Optional[dict] = None,
         idempotency_key: Optional[str] = None,
+        title: Optional[str] = None,
         link_url: Optional[str] = None,
         channels_override: Optional[Iterable[str]] = None,
-        target_scope: str = "individual",
+        target_scope: str = TargetScope.INDIVIDUAL,
         target_label: Optional[str] = None,
     ) -> list[DispatchOutcome]:
         event = get_event(event_type)
@@ -76,7 +62,10 @@ class DispatchService:
         forced_channels = (
             tuple(channels_override) if channels_override else None
         )
-        for receiver_id in recipient_ids:
+        all_ids = list(recipient_ids)
+        prefs_map = preference_service.get_global_map(all_ids)
+        overrides_map = preference_service.event_override_map_bulk(all_ids)
+        for receiver_id in all_ids:
             outcomes.append(
                 self._dispatch_one(
                     event=event,
@@ -85,15 +74,17 @@ class DispatchService:
                     actor_name=actor_name,
                     context=context,
                     idempotency_key=idempotency_key,
+                    title=title,
                     link_url=link_url,
                     forced_channels=forced_channels,
                     target_scope=target_scope,
                     target_label=target_label,
+                    prefetched_prefs=prefs_map.get(receiver_id),
+                    prefetched_overrides=overrides_map.get(receiver_id, {}),
                 )
             )
         return outcomes
 
-    # ------------------------------------------------------------------
     def _dispatch_one(
         self,
         *,
@@ -103,15 +94,18 @@ class DispatchService:
         actor_name: Optional[str],
         context: dict,
         idempotency_key: Optional[str],
+        title: Optional[str],
         link_url: Optional[str],
         forced_channels: Optional[tuple[str, ...]],
         target_scope: str,
         target_label: Optional[str],
+        prefetched_prefs=None,
+        prefetched_overrides=None,
     ) -> DispatchOutcome:
         outcome = DispatchOutcome(receiver_id=receiver_id, notification_id=None)
 
-        prefs = preference_service.get_global(receiver_id)
-        overrides = preference_service.event_override_map(receiver_id)
+        prefs = prefetched_prefs if prefetched_prefs is not None else preference_service.get_global(receiver_id)
+        overrides = prefetched_overrides if prefetched_overrides is not None else preference_service.event_override_map(receiver_id)
         candidate_channels = forced_channels or event.default_channels
 
         decisions: dict[str, tuple[bool, str]] = {}
@@ -121,9 +115,8 @@ class DispatchService:
             )
             decisions[channel] = (decision.delivered, decision.reason)
 
-        # ---- in-app channel ----
         notification_id: Optional[int] = None
-        link = link_url or event.link_builder(context) if event.link_builder else link_url
+        link = link_url or (event.link_builder(context) if event.link_builder else None)
         if PreferenceChannel.INAPP in decisions:
             delivered, reason = decisions[PreferenceChannel.INAPP]
             if delivered:
@@ -133,6 +126,7 @@ class DispatchService:
                     receiver_id=receiver_id,
                     actor_id=actor_id,
                     actor_name=actor_name,
+                    title=title,
                     message=rendered.message,
                     data=context,
                     idempotency_key=idempotency_key,
@@ -170,7 +164,6 @@ class DispatchService:
 
         outcome.notification_id = notification_id
 
-        # ---- email channel ----
         if PreferenceChannel.EMAIL in decisions:
             delivered, reason = decisions[PreferenceChannel.EMAIL]
             if delivered:
@@ -190,6 +183,7 @@ class DispatchService:
                         **context,
                         "actor_name": actor_name or context.get("actor_name"),
                         "link_url": link,
+                        "title": title,
                     },
                 )
                 outcome.channels[PreferenceChannel.EMAIL] = DispatchStatus.PENDING
@@ -206,7 +200,6 @@ class DispatchService:
 
         return outcome
 
-    # ------------------------------------------------------------------
     def _create_notification_row(
         self,
         *,
@@ -214,6 +207,7 @@ class DispatchService:
         receiver_id: int,
         actor_id: Optional[int],
         actor_name: Optional[str],
+        title: Optional[str],
         message: str,
         data: dict,
         idempotency_key: Optional[str],
@@ -222,34 +216,33 @@ class DispatchService:
         target_label: Optional[str],
     ) -> tuple[Optional[Notification], bool]:
         try:
-            notification = Notification(
-                receiver_id=receiver_id,
-                message=message,
-                type=event.type,
-                event_type=event.event_type,
-                event_key=idempotency_key,
-                data=data,
-                link_url=link_url,
-                severity=event.severity,
-                target_scope=target_scope,
-                target_label=target_label,
-                sender_name=actor_name,
-                status=NotificationStatus.UNREAD,
-                created_by=actor_id,
-                updated_by=actor_id,
-            )
-            notification.save()
+            with transaction.atomic():
+                notification = Notification(
+                    receiver_id=receiver_id,
+                    title=title,
+                    message=message,
+                    type=event.type,
+                    event_type=event.event_type,
+                    event_key=idempotency_key,
+                    data=data,
+                    link_url=link_url,
+                    severity=event.severity,
+                    target_scope=target_scope,
+                    target_label=target_label,
+                    sender_name=actor_name,
+                    status=NotificationStatus.UNREAD,
+                    created_by=actor_id,
+                    updated_by=actor_id,
+                )
+                notification.save()
             return notification, False
         except IntegrityError:
-            # Duplicate idempotency key — find the existing one.
             existing = Notification.objects.filter(
                 receiver_id=receiver_id,
                 event_key=idempotency_key,
-                deleted_at__isnull=True,
             ).first()
             return existing, True
 
-    # ------------------------------------------------------------------
     def _log_dispatch(
         self,
         *,
@@ -274,19 +267,27 @@ class DispatchService:
             sent_at=dj_timezone.now() if sent else None,
         )
 
-    # ------------------------------------------------------------------
     @staticmethod
     def _publish_created(receiver_id: int, notification: Notification) -> None:
         payload = {
             "id": notification.id,
+            "receiver_id": notification.receiver_id,
+            "title": notification.title,
             "message": notification.message,
             "type": notification.type,
             "event_type": notification.event_type,
+            "event_key": notification.event_key,
             "severity": notification.severity,
             "status": notification.status,
             "link_url": notification.link_url,
             "data": notification.data,
+            "target_scope": notification.target_scope,
+            "target_label": notification.target_label,
+            "sender_name": notification.sender_name,
+            "read_at": None,
+            "created_by": notification.created_by,
             "created_at": notification.created_at.isoformat() if notification.created_at else None,
+            "updated_at": notification.updated_at.isoformat() if notification.updated_at else None,
         }
 
         def _publish():
@@ -295,13 +296,11 @@ class DispatchService:
             except Exception:
                 logger.exception("Failed to publish realtime created event.")
 
-        # Defer the publish until after the transaction commits.
         if transaction.get_connection().in_atomic_block:
             transaction.on_commit(_publish)
         else:
             _publish()
 
-    # ------------------------------------------------------------------
     @staticmethod
     def _enqueue_email(
         *,
@@ -310,7 +309,6 @@ class DispatchService:
         receiver_id: int,
         context: dict,
     ) -> None:
-        # Lazy import to avoid pulling Celery during model migrations / admin.
         from apps.notification.tasks.send_email import send_email_dispatch
 
         def _enqueue():
