@@ -167,8 +167,9 @@ class AuthenticationProvider:
         logger.debug("Validating bearer token with the authentication service.")
         auth_header = _format_bearer_token(token)
 
+        timeout = float(getattr(settings, "AUTH_SERVICE_TIMEOUT", 10.0))
         try:
-            with httpx.Client(timeout=10.0) as client:
+            with httpx.Client(timeout=timeout) as client:
                 response = client.get(
                     settings.AUTHENTICATION_SERVICE_URL,
                     headers={"Authorization": auth_header},

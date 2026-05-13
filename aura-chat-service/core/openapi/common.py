@@ -20,6 +20,7 @@ ApiErrorBody = inline_serializer(
         "error": drf_serializers.CharField(help_text="Stable machine-readable error code"),
         "detail": drf_serializers.CharField(help_text="Human-readable message"),
         "status_code": drf_serializers.IntegerField(help_text="HTTP status code"),
+        "correlation_id": drf_serializers.CharField(help_text="Request trace ID (matches X-Correlation-Id header)"),
     },
 )
 
@@ -31,6 +32,7 @@ def standard_error_responses(*status_codes: int) -> dict[int, OpenApiResponse]:
         403: "Forbidden: authenticated but lacking permissions.",
         404: "Resource not found.",
         409: "Conflict (e.g. user already a member).",
+        413: "Payload too large (e.g. chat exceeds export message limit).",
         502: "AI service unavailable.",
         503: "Dependency service temporarily unavailable.",
     }

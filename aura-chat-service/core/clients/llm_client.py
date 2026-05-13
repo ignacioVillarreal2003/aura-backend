@@ -27,7 +27,7 @@ class DocumentQuestionResult:
 
 class LLMClient:
     def __init__(self):
-        self._http_client = AsyncHttpClient(timeout=settings.LLM_SERVICE_TIMEOUT)
+        self._http_client = AsyncHttpClient(timeout=getattr(settings, "LLM_SERVICE_TIMEOUT", 30))
 
     async def document_question(
         self,

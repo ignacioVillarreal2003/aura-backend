@@ -2,7 +2,6 @@ import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any
-
 from asgiref.sync import async_to_sync, sync_to_async
 from channels.layers import get_channel_layer
 from django.conf import settings
@@ -43,7 +42,6 @@ def _broadcast_user_message_to_chat_group(chat_id: int, msg: ChatMessage) -> Non
 
 
 def broadcast_chat_ai_lock_change(chat_id: int, locked: bool) -> None:
-    """Tell all subscribers whether new user messages are accepted (AI turn in progress)."""
     channel_layer = get_channel_layer()
     if channel_layer is None:
         return
@@ -95,13 +93,6 @@ class MessageService:
             extra={"chat_id": chat_id, "message_id": msg.id, "user_id": user.id},
         )
         _broadcast_user_message_to_chat_group(chat_id, msg)
-        from apps.chat.services.webhook_service import webhook_service
-        webhook_service.fire_event(chat_id, "message.created", {
-            "message_id": msg.id,
-            "sender_type": msg.sender_type,
-            "created_by": msg.created_by,
-            "created_at": msg.created_at,
-        })
         return msg
 
     def _save_ai_message(self, chat_id: int, user_id: int, answer: str) -> ChatMessage:

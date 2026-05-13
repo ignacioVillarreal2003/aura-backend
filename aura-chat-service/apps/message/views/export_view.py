@@ -1,5 +1,4 @@
 import logging
-
 from django.conf import settings as _settings
 from django.http import HttpResponse
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema

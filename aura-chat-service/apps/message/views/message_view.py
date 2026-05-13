@@ -1,13 +1,10 @@
 import logging
-
 from asgiref.sync import async_to_sync, sync_to_async
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
-logger = logging.getLogger(__name__)
 
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.message.chat_ai_reply_lock import release, try_acquire
@@ -28,6 +25,8 @@ from apps.message.services.message_service import (
 from core.openapi.common import standard_error_responses
 from core.pagination.pagination import MessageCursorPagination
 
+logger = logging.getLogger(__name__)
+
 
 class MessageListView(APIView):
 
@@ -35,9 +34,9 @@ class MessageListView(APIView):
         tags=["Messages"],
         summary="List messages",
         description=(
-            "Returns the chat message history with **cursor pagination** (newest first by default). "
-            "Each item may include user-specific annotations when applicable: `is_bookmarked`, "
-            "`user_feedback` (1/-1 or null), and `thread_reply_count`."
+                "Returns the chat message history with **cursor pagination** (newest first by default). "
+                "Each item may include user-specific annotations when applicable: `is_bookmarked`, "
+                "`user_feedback` (1/-1 or null), and `thread_reply_count`."
         ),
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
@@ -56,12 +55,12 @@ class MessageListView(APIView):
         tags=["Messages"],
         summary="Send message",
         description=(
-            "Send **either** plain text (`message`) **or** a voice clip (`audio` multipart field)—not both. "
-            "Audio is transcribed server-side; the transcript may appear in `transcript` in the response. "
-            "After storing the user message, the service runs the document-question flow: the response body "
-            "includes `message` (persisted user row), optional `assistant` / `assistant_error`, and applies "
-            "to **non-ephemeral** chats the same pipeline; **ephemeral** chats use an ephemeral AI path. "
-            "Returns **409** if another AI reply is already in progress for this chat (`ChatAiReplyInProgressException`)."
+                "Send **either** plain text (`message`) **or** a voice clip (`audio` multipart field)—not both. "
+                "Audio is transcribed server-side; the transcript may appear in `transcript` in the response. "
+                "After storing the user message, the service runs the document-question flow: the response body "
+                "includes `message` (persisted user row), optional `assistant` / `assistant_error`, and applies "
+                "to **non-ephemeral** chats the same pipeline; **ephemeral** chats use an ephemeral AI path. "
+                "Returns **409** if another AI reply is already in progress for this chat (`ChatAiReplyInProgressException`)."
         ),
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),

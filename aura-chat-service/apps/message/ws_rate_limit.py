@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from functools import lru_cache
-
 import redis
 from django.conf import settings
 
@@ -12,6 +11,7 @@ _MESSAGE_RATE_LIMIT_MAX = 10
 _MESSAGE_RATE_LIMIT_WINDOW = 60
 _TYPING_RATE_LIMIT_MAX = 20
 _TYPING_RATE_LIMIT_WINDOW = 10
+_WS_CONNECTION_TTL = 3600
 
 
 @lru_cache(maxsize=1)
@@ -49,3 +49,36 @@ def check_typing_rate_limit(user_id: int) -> bool:
             extra={"user_id": user_id},
         )
         return True
+
+
+def acquire_ws_connection(user_id: int) -> bool:
+    max_conns = int(getattr(settings, "WS_MAX_CONNECTIONS_PER_USER", 5))
+    key = f"aura:ws_connections:{user_id}"
+    try:
+        r = _redis()
+        count = r.incr(key)
+        r.expire(key, _WS_CONNECTION_TTL)
+        if count > max_conns:
+            r.decr(key)
+            return False
+        return True
+    except redis.RedisError:
+        logger.warning(
+            "Redis error acquiring WS connection slot, failing open.",
+            extra={"user_id": user_id},
+        )
+        return True
+
+
+def release_ws_connection(user_id: int) -> None:
+    key = f"aura:ws_connections:{user_id}"
+    try:
+        r = _redis()
+        current = r.get(key)
+        if current is not None and int(current) > 0:
+            r.decr(key)
+    except redis.RedisError:
+        logger.warning(
+            "Redis error releasing WS connection slot.",
+            extra={"user_id": user_id},
+        )

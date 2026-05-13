@@ -1,5 +1,4 @@
 import logging
-
 import redis as redis_lib
 from django.conf import settings
 from django.contrib import admin

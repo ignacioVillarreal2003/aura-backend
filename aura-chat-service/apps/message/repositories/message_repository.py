@@ -1,5 +1,4 @@
 import logging
-
 from django.db.models import Count, Exists, IntegerField, OuterRef, QuerySet, SmallIntegerField, Subquery
 from django.db.models.functions import Coalesce
 

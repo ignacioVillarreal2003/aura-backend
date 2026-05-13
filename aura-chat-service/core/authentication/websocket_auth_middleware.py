@@ -1,7 +1,8 @@
 import logging
 from urllib.parse import parse_qs
-from channels.db import database_sync_to_async
+from asgiref.sync import sync_to_async
 from channels.middleware import BaseMiddleware
+from django.conf import settings
 
 from core.authentication.authentication_exceptions import AuthenticationProviderException
 from core.authentication.authentication_provider import authentication_provider
@@ -9,8 +10,29 @@ from core.authentication.authentication_provider import authentication_provider
 logger = logging.getLogger(__name__)
 
 
+def _get_header(scope, name: bytes) -> str | None:
+    for key, value in scope.get("headers", []):
+        if key == name:
+            return value.decode("utf-8", errors="replace")
+    return None
+
+
+def _is_origin_allowed(origin: str) -> bool:
+    allowed = getattr(settings, "CORS_ALLOWED_ORIGINS", [])
+    return origin.rstrip("/") in [o.rstrip("/") for o in allowed]
+
+
 class WebSocketAuthMiddleware(BaseMiddleware):
     async def __call__(self, scope, receive, send):
+        origin = _get_header(scope, b"origin")
+        if origin is not None and not _is_origin_allowed(origin):
+            logger.warning(
+                "WebSocket connection rejected: origin not allowed.",
+                extra={"origin": origin},
+            )
+            await send({"type": "websocket.close", "code": 4003})
+            return
+
         query_string = scope.get("query_string", b"").decode("utf-8")
         params = parse_qs(query_string)
         token_list = params.get("token", [])
@@ -23,8 +45,8 @@ class WebSocketAuthMiddleware(BaseMiddleware):
         token = token_list[0]
 
         try:
-            authenticated_user = await database_sync_to_async(
-                authentication_provider.validate_token
+            authenticated_user = await sync_to_async(
+                authentication_provider.validate_token, thread_sensitive=False
             )(token)
             scope["user"] = authenticated_user
             logger.debug(

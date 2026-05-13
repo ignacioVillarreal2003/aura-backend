@@ -26,5 +26,5 @@ class AuthenticatedUser:
 
     def has_any_role(self, allowed: frozenset[str]) -> bool:
         if not allowed:
-            return False
+            return True
         return bool(allowed & set(self.roles))

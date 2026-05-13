@@ -25,7 +25,17 @@
       "Bash(python3)",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\ignac\\\\Desktop\\\\AURA\\\\aura-backend\\\\aura-chat-service\\\\apps\" -Recurse -File)",
       "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\ignac\\\\Desktop\\\\AURA\\\\aura-backend\\\\aura-chat-service\\\\apps\" -Recurse | Where-Object { $_.PSIsContainer -eq $false } | Select-Object FullName)",
-      "PowerShell(Get-ChildItem *)"
+      "PowerShell(Get-ChildItem *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\ignac\\\\Desktop\\\\aura-backend\\\\aura-chat-service\" -Recurse -Force)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\ignac\\\\Desktop\\\\aura-backend\\\\aura-chat-service\\\\core\" -Recurse -File -Filter \"*.py\")",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Sort-Object)",
+      "Bash(Get-ChildItem *)",
+      "Bash(Remove-Item \"C:\\\\Users\\\\ignac\\\\Desktop\\\\aura-backend\\\\aura-chat-service\\\\apps\\\\chat\\\\models\\\\webhook.py\" -Force)",
+      "Bash(Remove-Item \"C:\\\\Users\\\\ignac\\\\Desktop\\\\aura-backend\\\\aura-chat-service\\\\apps\\\\chat\\\\repositories\\\\webhook_repository.py\" -Force)",
+      "Bash(Remove-Item \"C:\\\\Users\\\\ignac\\\\Desktop\\\\aura-backend\\\\aura-chat-service\\\\apps\\\\chat\\\\serializers\\\\webhook.py\" -Force)",
+      "Bash(Remove-Item \"C:\\\\Users\\\\ignac\\\\Desktop\\\\aura-backend\\\\aura-chat-service\\\\apps\\\\chat\\\\services\\\\webhook_service.py\" -Force)",
+      "Bash(Remove-Item \"C:\\\\Users\\\\ignac\\\\Desktop\\\\aura-backend\\\\aura-chat-service\\\\apps\\\\chat\\\\views\\\\webhook_view.py\" -Force)"
     ]
   }
 }

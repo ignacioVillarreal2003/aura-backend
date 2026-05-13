@@ -22,6 +22,15 @@ class AsyncHttpClient:
         self._max_retries = max_retries
         self._client = httpx.AsyncClient(timeout=self._timeout)
 
+    async def aclose(self) -> None:
+        await self._client.aclose()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_):
+        await self.aclose()
+
     async def get(self, url: str, headers: dict | None = None) -> httpx.Response:
         return await self._request("GET", url, headers=headers)
 

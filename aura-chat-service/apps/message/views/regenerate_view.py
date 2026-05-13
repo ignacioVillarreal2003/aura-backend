@@ -1,5 +1,4 @@
 import logging
-
 from asgiref.sync import async_to_sync, sync_to_async
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status

@@ -1,10 +1,13 @@
 import logging
+import re
 import uuid
 from contextvars import ContextVar
 
 _correlation_id: ContextVar[str] = ContextVar("correlation_id", default="-")
 
 HEADER_NAME = "X-Correlation-Id"
+
+_SAFE_CID = re.compile(r'^[a-zA-Z0-9\-]{1,64}$')
 
 
 def get_correlation_id() -> str:
@@ -27,7 +30,7 @@ class CorrelationIdMiddleware:
 
     def __call__(self, request):
         raw = request.headers.get(HEADER_NAME)
-        cid = raw[:64] if raw else str(uuid.uuid4())
+        cid = raw if raw and _SAFE_CID.match(raw) else str(uuid.uuid4())
         set_correlation_id(cid)
         request.correlation_id = cid
 

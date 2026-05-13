@@ -145,6 +145,11 @@ CORS_ALLOW_CREDENTIALS = True
 AUTHENTICATION_SERVICE_URL = config("AUTHENTICATION_SERVICE_URL").strip()
 SERVICE_API_KEY = config("SERVICE_API_KEY")
 AUTH_TOKEN_CACHE_TTL_SECONDS = config("AUTH_TOKEN_CACHE_TTL_SECONDS", default=60, cast=int)
+AUTH_SERVICE_TIMEOUT = config("AUTH_SERVICE_TIMEOUT", default=10, cast=float)
+
+AUDIO_MAX_UPLOAD_MB = config("AUDIO_MAX_UPLOAD_MB", default=25, cast=int)
+
+WS_MAX_CONNECTIONS_PER_USER = config("WS_MAX_CONNECTIONS_PER_USER", default=5, cast=int)
 
 AUTHENTICATION_EXCLUDED_PATHS = [
     "/api/v1/health",
@@ -159,7 +164,7 @@ AUTHENTICATION_EXCLUDED_PATHS = [
 SPECTACULAR_SETTINGS = {
     "TITLE": APP_NAME,
     "DESCRIPTION": (
-        "REST API under `/api/v1/` for **chats**, **messages**, **memberships**, **share links**, and **webhooks**. "
+        "REST API under `/api/v1/` for **chats**, **messages**, **memberships**, and **share links**. "
         "Most operations require `Authorization: Bearer <JWT>` and **application permissions** on the authenticated "
         "user (e.g. `LIST_CHATS`, `SEND_MESSAGE`) enforced per endpoint. "
         "See also Markdown docs in the repository `docs/` folder.\n\n"
@@ -202,10 +207,6 @@ SPECTACULAR_SETTINGS = {
                 "`GET /api/v1/share/{token}/messages/` (AllowAny)."
             ),
         },
-        {
-            "name": "Webhooks",
-            "description": "Configure HTTP callbacks for chat events (create, update, delete).",
-        },
     ],
     "SECURITY": [{"BearerAuth": []}],
     "APPEND_COMPONENTS": {
@@ -230,6 +231,7 @@ WHISPER_DEVICE = config("WHISPER_DEVICE", default="cpu")
 WHISPER_COMPUTE_TYPE = config("WHISPER_COMPUTE_TYPE", default="int8")
 
 NOTIFICATION_SERVICE_URL = config("NOTIFICATION_SERVICE_URL").strip()
+NOTIFICATION_INTERNAL_API_TOKEN = config("NOTIFICATION_INTERNAL_API_TOKEN")
 
 LLM_DOCUMENT_QUESTION_URL = config("LLM_DOCUMENT_QUESTION_URL").strip()
 LLM_DOCUMENT_QUESTION_STREAM_URL = config("LLM_DOCUMENT_QUESTION_STREAM_URL").strip()

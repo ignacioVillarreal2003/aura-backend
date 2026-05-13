@@ -12,7 +12,7 @@ class ChatMessage(CreatedAuditModel, SoftDeleteModel):
         on_delete=models.CASCADE,
         related_name="messages",
     )
-    message = models.TextField()
+    message = models.TextField(max_length=10000)
     sender_type = models.CharField(max_length=64, choices=SenderType.choices)
 
     class Meta:

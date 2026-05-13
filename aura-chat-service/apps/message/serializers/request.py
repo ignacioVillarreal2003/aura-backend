@@ -1,3 +1,4 @@
+from django.conf import settings
 from rest_framework import serializers
 
 
@@ -20,7 +21,7 @@ _SUPPORTED_AUDIO_TYPES = {
     "audio/mpeg", "audio/mp4", "audio/wav", "audio/webm",
     "audio/ogg", "audio/flac", "audio/x-wav", "audio/x-m4a",
 }
-_MAX_AUDIO_MB = 25
+_MAX_AUDIO_MB = int(getattr(settings, "AUDIO_MAX_UPLOAD_MB", 25))
 
 
 class SendMessageRequest(serializers.Serializer):

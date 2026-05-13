@@ -11,6 +11,7 @@ from core.authentication.authentication_exceptions import (
     ServiceAuthenticationRejected,
 )
 from core.authentication.authentication_provider import authentication_provider
+from core.middleware.correlation_id import get_correlation_id
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,7 @@ class AuthenticationMiddleware:
             service_user = authentication_provider.evaluate_service_auth(request)
         except ServiceAuthenticationRejected as e:
             return JsonResponse(
-                {"detail": e.detail, "error": e.error},
+                {"detail": e.detail, "error": e.error, "correlation_id": get_correlation_id()},
                 status=e.status_code,
             )
 
@@ -57,6 +58,7 @@ class AuthenticationMiddleware:
                 {
                     "detail": "Authentication required",
                     "error": "missing_token",
+                    "correlation_id": get_correlation_id(),
                 },
                 status=401,
                 headers=_WWW_AUTH,
@@ -79,7 +81,7 @@ class AuthenticationMiddleware:
                 extra={"path": request.path, "error": str(e)},
             )
             return JsonResponse(
-                {"detail": "Invalid or expired token", "error": "invalid_token"},
+                {"detail": "Invalid or expired token", "error": "invalid_token", "correlation_id": get_correlation_id()},
                 status=401,
                 headers=_WWW_AUTH,
             )
@@ -89,7 +91,7 @@ class AuthenticationMiddleware:
                 extra={"path": request.path, "error": str(e)},
             )
             return JsonResponse(
-                {"detail": "Access forbidden", "error": "unauthorized"},
+                {"detail": "Access forbidden", "error": "unauthorized", "correlation_id": get_correlation_id()},
                 status=403,
             )
         except AuthenticationProviderUserNotFoundException as e:
@@ -98,7 +100,7 @@ class AuthenticationMiddleware:
                 extra={"path": request.path, "error": str(e)},
             )
             return JsonResponse(
-                {"detail": "User not found", "error": "user_not_found"},
+                {"detail": "User not found", "error": "user_not_found", "correlation_id": get_correlation_id()},
                 status=404,
             )
         except AuthenticationProviderServiceUnavailableException as e:
@@ -110,6 +112,7 @@ class AuthenticationMiddleware:
                 {
                     "detail": "Authentication service temporarily unavailable",
                     "error": "service_unavailable",
+                    "correlation_id": get_correlation_id(),
                 },
                 status=503,
             )
@@ -119,7 +122,7 @@ class AuthenticationMiddleware:
                 extra={"path": request.path, "error": str(e)},
             )
             return JsonResponse(
-                {"detail": "Authentication error", "error": "authentication_error"},
+                {"detail": "Authentication error", "error": "authentication_error", "correlation_id": get_correlation_id()},
                 status=500,
             )
         except Exception:
@@ -128,7 +131,7 @@ class AuthenticationMiddleware:
                 extra={"path": request.path},
             )
             return JsonResponse(
-                {"detail": "Internal server error", "error": "internal_error"},
+                {"detail": "Internal server error", "error": "internal_error", "correlation_id": get_correlation_id()},
                 status=500,
             )
 
