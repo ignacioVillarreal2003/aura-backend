@@ -57,3 +57,5 @@ htmlcov/
 # mypy / ruff
 .mypy_cache/
 .ruff_cache/
+
+.claude
