@@ -65,6 +65,7 @@ class UserAuthorizationViewSet(GenericViewSet):
         return Response(UserAuthorizationResponse(data).data)
 
     @extend_schema(
+        methods=["put"],
         tags=["UserAuthorizations"],
         summary="Upsert Mandatory Access clearance ceiling",
         description=(
@@ -76,18 +77,8 @@ class UserAuthorizationViewSet(GenericViewSet):
         request=SetUserClearanceRequest,
         responses={200: UserClearanceResponse, **_ERR_WRITE},
     )
-    @action(detail=True, methods=["put"], url_path="clearance", url_name="set-clearance")
-    def set_clearance(self, request: Request, user_id: str | None = None) -> Response:
-        serializer = SetUserClearanceRequest(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        clearance = user_authorization_service.set_user_clearance(
-            request.user,
-            int(user_id),
-            classification_level_id=serializer.validated_data["classification_level_id"],
-        )
-        return Response(UserClearanceResponse(clearance).data)
-
     @extend_schema(
+        methods=["delete"],
         tags=["UserAuthorizations"],
         summary="Revoke clearance if present",
         description=(
@@ -97,12 +88,22 @@ class UserAuthorizationViewSet(GenericViewSet):
         parameters=[_TARGET_USER],
         responses={204: OpenApiResponse(description="Clears clearance without response body."), **_ERR_BASE},
     )
-    @action(detail=True, methods=["delete"], url_path="clearance", url_name="delete-clearance")
-    def delete_clearance(self, request: Request, user_id: str | None = None) -> Response:
+    @action(detail=True, methods=["put", "delete"], url_path="clearance", url_name="clearance")
+    def clearance(self, request: Request, user_id: str | None = None) -> Response:
+        if request.method == "PUT":
+            serializer = SetUserClearanceRequest(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            clearance = user_authorization_service.set_user_clearance(
+                request.user,
+                int(user_id),
+                classification_level_id=serializer.validated_data["classification_level_id"],
+            )
+            return Response(UserClearanceResponse(clearance).data)
         user_authorization_service.delete_user_clearance(request.user, int(user_id))
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(
+        methods=["get"],
         tags=["UserAuthorizations"],
         summary="Enumerate compartment memberships",
         description=(
@@ -116,13 +117,8 @@ class UserAuthorizationViewSet(GenericViewSet):
         ],
         responses={200: UserCompartmentResponse(many=True), **_ERR_BASE},
     )
-    @action(detail=True, methods=["get"], url_path="compartments", url_name="list-compartments")
-    def list_compartments(self, request: Request, user_id: str | None = None) -> Response:
-        qs = user_authorization_service.list_user_compartments(request.user, int(user_id))
-        page = self.paginate_queryset(qs)
-        return self.get_paginated_response(UserCompartmentResponse(page, many=True).data)
-
     @extend_schema(
+        methods=["post"],
         tags=["UserAuthorizations"],
         summary="Grant compartment membership",
         description=(
@@ -133,8 +129,12 @@ class UserAuthorizationViewSet(GenericViewSet):
         request=AddUserCompartmentRequest,
         responses={201: UserCompartmentResponse, **_ERR_CONFLICT},
     )
-    @action(detail=True, methods=["post"], url_path="compartments", url_name="add-compartment")
-    def add_compartment(self, request: Request, user_id: str | None = None) -> Response:
+    @action(detail=True, methods=["get", "post"], url_path="compartments", url_name="compartments")
+    def compartments(self, request: Request, user_id: str | None = None) -> Response:
+        if request.method == "GET":
+            qs = user_authorization_service.list_user_compartments(request.user, int(user_id))
+            page = self.paginate_queryset(qs)
+            return self.get_paginated_response(UserCompartmentResponse(page, many=True).data)
         serializer = AddUserCompartmentRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
         entry = user_authorization_service.add_user_compartment(

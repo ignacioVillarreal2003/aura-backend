@@ -1,3 +1,4 @@
+from django.db.models import QuerySet
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import status
@@ -147,7 +148,8 @@ class DocumentCollectionViewSet(GenericViewSet):
 
     def list(self, request: Request) -> Response:
         qs = document_collection_service.list_document_collections(request.user)
-        qs = self.filter_queryset(qs)
+        if isinstance(qs, QuerySet):
+            qs = self.filter_queryset(qs)
         page = self.paginate_queryset(qs)
         return self.get_paginated_response(DocumentCollectionResponse(page, many=True).data)
 
