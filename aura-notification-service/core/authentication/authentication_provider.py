@@ -46,7 +46,6 @@ def _get_cached_user(token: str) -> Optional[AuthenticatedUser]:
             username=data.get("username", ""),
             roles=tuple(data.get("roles") or []),
             permissions=tuple(data.get("permissions") or []),
-            is_super_admin=bool(data.get("is_super_admin")),
         )
     except Exception:
         logger.warning("Redis token cache read failed; falling back to auth service.", exc_info=True)
@@ -63,7 +62,6 @@ def _cache_user(token: str, user: AuthenticatedUser) -> None:
                 "username": user.username,
                 "roles": list(user.roles),
                 "permissions": list(user.permissions),
-                "is_super_admin": user.is_super_admin,
             },
             timeout=_token_cache_ttl(),
         )
@@ -169,11 +167,6 @@ class AuthenticationProvider:
             username=str(data.get("username", "")),
             roles=tuple(data.get("roles") or []),
             permissions=tuple(data.get("permissions") or []),
-            is_super_admin=bool(
-                data.get("is_super_admin")
-                or "SUPERADMIN" in (data.get("roles") or [])
-                or "superadmin" in (data.get("roles") or [])
-            ),
         )
         _cache_user(token, user)
         return user
