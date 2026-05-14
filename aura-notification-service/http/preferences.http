@@ -1,0 +1,69 @@
+@notifBase = http://localhost:8002/api/v1
+@authToken = user_token_123
+
+### Leer preferencias globales del usuario
+GET {{notifBase}}/me/notification-preferences/
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Deshabilitar email globalmente
+PUT {{notifBase}}/me/notification-preferences/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "email_enabled": false
+}
+
+
+### Silenciar notificaciones hasta una fecha
+PUT {{notifBase}}/me/notification-preferences/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "mute_until": "2024-05-15T08:00:00Z"
+}
+
+
+### Eliminar mute activo (enviar null)
+PUT {{notifBase}}/me/notification-preferences/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "mute_until": null
+}
+
+
+### Listar preferencias por tipo de evento (catálogo con overrides del usuario)
+GET {{notifBase}}/me/notification-preferences/event-types/
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Actualizar preferencia para un tipo de evento — deshabilitar email
+PUT {{notifBase}}/me/notification-preferences/event-types/chat.member.invited/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "email_enabled": false
+}
+
+
+### Actualizar preferencia para un tipo de evento — habilitar ambos canales
+PUT {{notifBase}}/me/notification-preferences/event-types/chat.member.invited/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "inapp_enabled": true,
+  "email_enabled": true
+}

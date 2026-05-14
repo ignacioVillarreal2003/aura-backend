@@ -1,0 +1,16 @@
+@notifBase = http://localhost:8002/api/v1
+@authToken = user_token_123
+
+### Stream SSE de notificaciones en tiempo real
+# Mantiene la conexión abierta y recibe eventos:
+#   stream.opened       — al conectar
+#   notification.created  — nueva notificación in-app
+#   notification.updated  — cambio de estado o mark-all-read
+#   notification.deleted  — soft-delete
+#   stream.closed       — timeout máximo (30 min por defecto)
+#   : keepalive         — heartbeat cada 15 s (ignorar)
+# El cliente debe reconectar al recibir stream.closed.
+# @timeout 1800000
+GET {{notifBase}}/notifications/stream/
+Accept: text/event-stream
+Authorization: Bearer {{authToken}}

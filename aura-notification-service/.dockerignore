@@ -21,3 +21,6 @@ build
 htmlcov
 docs
 *.md
+.claude
+test/
+docs/

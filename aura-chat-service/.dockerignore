@@ -40,3 +40,6 @@ docker-compose*.yml
 pytest.ini
 setup.cfg
 .coveragerc
+
+docs/
+.claude

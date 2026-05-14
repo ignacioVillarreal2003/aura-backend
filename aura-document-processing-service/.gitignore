@@ -43,13 +43,11 @@ dmypy.json
 *.tar
 **/.dockerignore
 
-# --- Environment Files ---
-!.env
-!.env.docker
-
 # --- Database dumps ---
 *.sql
 *.sqlite
 
 # --- Static generated ---
 staticfiles/
+
+.claude

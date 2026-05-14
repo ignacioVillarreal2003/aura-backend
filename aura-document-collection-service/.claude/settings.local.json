@@ -23,7 +23,12 @@
       "Bash(.venv/Scripts/python.exe -m pytest test/integration/ -q)",
       "Bash(.venv/Scripts/python.exe -m pytest test/integration/test_document_collection_documents_integration.py::test_add_document_persists_link -v)",
       "Bash(.venv/Scripts/python.exe -c ' *)",
-      "Bash(.venv/Scripts/python.exe -m pytest test/ -q)"
+      "Bash(.venv/Scripts/python.exe -m pytest test/ -q)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\ignac\\\\Desktop\\\\aura-backend\\\\aura-document-collection-service\" -Recurse -Force)",
+      "Bash(ConvertTo-Csv -NoTypeInformation)",
+      "Bash(Select-Object -Skip 1)",
+      "Bash(Sort-Object)",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\ignac\\\\Desktop\\\\aura-backend\\\\aura-document-collection-service\" -Depth 2 | Where-Object { $_.Name -notmatch '^\\\\.' -and $_.Name -ne '.venv' } | Format-List FullName)"
     ]
   }
 }

@@ -5,21 +5,21 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="541f8908-7e23-4d18-b532-96aae5c81a7c" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/../.claude/settings.local.json" beforeDir="false" afterPath="$PROJECT_DIR$/../.claude/settings.local.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.claude/settings.local.json" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/settings.local.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/aura-document-collection-service.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/aura-document-collection-service.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/dataSources.local.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dataSources.local.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.dockerignore" beforeDir="false" afterPath="$PROJECT_DIR$/.dockerignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/classification_levels/views/classification_level_viewset.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/classification_levels/views/classification_level_viewset.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/compartments/views/compartment_viewset.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/compartments/views/compartment_viewset.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/document_collection_documents/models/document.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/document_collection_documents/models/document.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/document_collection_documents/views/document_collection_document_viewset.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/document_collection_documents/views/document_collection_document_viewset.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/document_collections/views/document_collection_viewset.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/document_collections/views/document_collection_viewset.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/apps/user_authorizations/views/user_authorization_viewset.py" beforeDir="false" afterPath="$PROJECT_DIR$/apps/user_authorizations/views/user_authorization_viewset.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/aura_document_collection_service/settings/base.py" beforeDir="false" afterPath="$PROJECT_DIR$/aura_document_collection_service/settings/base.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/authentication/authenticated_user.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/authentication/authenticated_user.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/authentication/authentication_provider.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/authentication/authentication_provider.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-document-processing-service/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-document-processing-service/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-llm-service/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-llm-service/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-notification-service/.dockerignore" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-notification-service/.dockerignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-notification-service/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-notification-service/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-notification-service/tests/conftest.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-notification-service/test/conftest.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-notification-service/tests/settings_test.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-notification-service/test/settings_test.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-notification-service/tests/test_event_type_views.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-notification-service/test/test_event_type_views.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-notification-service/tests/test_health_view.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-notification-service/test/test_health_view.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-notification-service/tests/test_internal_views.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-notification-service/test/test_internal_views.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-notification-service/tests/test_notification_views.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-notification-service/test/test_notification_views.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-notification-service/tests/test_preference_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-notification-service/test/test_preference_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aura-notification-service/tests/test_preference_views.py" beforeDir="false" afterPath="$PROJECT_DIR$/../aura-notification-service/test/test_preference_views.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -122,6 +122,8 @@
       <workItem from="1778332847228" duration="989000" />
       <workItem from="1778706722283" duration="1587000" />
       <workItem from="1778720509412" duration="2443000" />
+      <workItem from="1778784328506" duration="1181000" />
+      <workItem from="1778790352094" duration="72000" />
     </task>
     <servers />
   </component>

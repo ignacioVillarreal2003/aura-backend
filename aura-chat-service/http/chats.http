@@ -1,0 +1,139 @@
+@chatBase = http://localhost:8003/api/v1
+@authToken = user_token_123
+
+### Listar chats (paginado)
+GET {{chatBase}}/chats/
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Listar chats — filtrar por nombre
+GET {{chatBase}}/chats/?search=proyecto
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Listar chats — ordenar y filtrar por tags (ALL deben coincidir)
+GET {{chatBase}}/chats/?ordering=-created_at&tags=work,urgent
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Listar chats creados por mí
+GET {{chatBase}}/chats/me/
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Listar chats archivados
+GET {{chatBase}}/chats/archived/
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Crear chat
+POST {{chatBase}}/chats/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "name": "Proyecto Alpha",
+  "system_prompt": "Eres un asistente experto en análisis de documentos.",
+  "response_style": "Responde de forma concisa y estructurada.",
+  "tags": ["trabajo", "documentos"],
+  "is_ephemeral": false
+}
+
+
+### Crear chat efímero
+POST {{chatBase}}/chats/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "name": "Consulta rápida",
+  "is_ephemeral": true
+}
+
+
+### Detalle de un chat
+GET {{chatBase}}/chats/1/
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Actualizar chat (partial update)
+PATCH {{chatBase}}/chats/1/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "name": "Proyecto Alpha v2",
+  "tags": ["trabajo", "documentos", "urgente"]
+}
+
+
+### Eliminar chat — responde 204
+DELETE {{chatBase}}/chats/1/
+Authorization: Bearer {{authToken}}
+
+
+### Archivar uno o varios chats
+POST {{chatBase}}/chats/archive/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "ids": [1, 2, 3]
+}
+
+
+### Desarchivar uno o varios chats
+POST {{chatBase}}/chats/unarchive/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "ids": [1, 2, 3]
+}
+
+
+### Pinear chat — responde 204
+POST {{chatBase}}/chats/1/pin/
+Authorization: Bearer {{authToken}}
+
+
+### Despinear chat — responde 204
+DELETE {{chatBase}}/chats/1/pin/
+Authorization: Bearer {{authToken}}
+
+
+### Bloquear chat (solo owner) — responde 204
+POST {{chatBase}}/chats/1/lock/
+Authorization: Bearer {{authToken}}
+
+
+### Desbloquear chat — responde 204
+DELETE {{chatBase}}/chats/1/lock/
+Authorization: Bearer {{authToken}}
+
+
+### Silenciar chat hasta una fecha
+POST {{chatBase}}/chats/1/mute/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "muted_until": "2026-06-01T08:00:00Z"
+}
+
+
+### Quitar silencio del chat — responde 204
+DELETE {{chatBase}}/chats/1/mute/
+Authorization: Bearer {{authToken}}
