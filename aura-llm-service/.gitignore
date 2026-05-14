@@ -50,4 +50,4 @@ dmypy.json
 # --- Static generated ---
 staticfiles/
 
-.claude
+.claude/

@@ -44,4 +44,4 @@ setup.cfg
 # HTTP request files (dev tooling only)
 http/
 docs/
-.claude
+.claude/

@@ -58,8 +58,4 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 
-<<<<<<< HEAD
-.claude
-=======
-.claude
->>>>>>> 477bfc7cae7611e0f019737493198a1543f51adc
+.claude/
