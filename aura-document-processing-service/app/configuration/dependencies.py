@@ -208,10 +208,17 @@ async def startup_dependencies(app: FastAPI) -> None:
         app.state.http_client = http_client
         cleanup_stack.append(("http_client", http_client.stop))
 
+        redis_client_settings = RedisClientSettings()
+        redis_client = RedisClient(redis_client_settings=redis_client_settings)
+        await redis_client.initialize()
+        app.state.redis_client = redis_client
+        cleanup_stack.append(("redis_client", redis_client.dispose))
+
         authentication_provider_settings = AuthenticationProviderSettings()
         authentication_provider = AuthenticationProvider(
             http_client=http_client,
             authentication_provider_settings=authentication_provider_settings,
+            redis_client=redis_client.client,
         )
         app.state.authentication_provider_settings = authentication_provider_settings
         app.state.authentication_provider = authentication_provider
@@ -272,12 +279,6 @@ async def startup_dependencies(app: FastAPI) -> None:
             document_collection_catalog_client=document_collection_catalog_client,
         )
         app.state.fragment_query_service = fragment_query_service
-
-        redis_client_settings = RedisClientSettings()
-        redis_client = RedisClient(redis_client_settings=redis_client_settings)
-        await redis_client.initialize()
-        app.state.redis_client = redis_client
-        cleanup_stack.append(("redis_client", redis_client.dispose))
 
         document_job_progress_store = DocumentPostProcessJobProgressStore(
             redis_client=redis_client.client,
