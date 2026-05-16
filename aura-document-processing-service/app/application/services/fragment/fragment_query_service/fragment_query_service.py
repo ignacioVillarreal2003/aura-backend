@@ -102,29 +102,31 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 vectors = await asyncio.gather(*[
                     self._get_query_embedding(q.text) for q in question_context_fragments_request.semantic_queries
                 ])
-                fragment_lists = await asyncio.gather(*[
-                    self._retrieve_similar_fragments(
-                        database_session=database_session,
-                        query_vector=vector,
-                        k=q.max_fragments,
+                fragment_lists: list[list[Fragment]] = []
+                for q, vector in zip(question_context_fragments_request.semantic_queries, vectors):
+                    fragment_lists.append(
+                        await self._retrieve_similar_fragments(
+                            database_session=database_session,
+                            query_vector=vector,
+                            k=q.max_fragments,
+                        )
                     )
-                    for q, vector in zip(question_context_fragments_request.semantic_queries, vectors)
-                ])
-                semantic_ranked_lists = list(fragment_lists)
+                semantic_ranked_lists = fragment_lists
 
             bm25_ranked_lists: list[list[Fragment]] = []
             bm25_used = False
             if question_context_fragments_request.bm25_queries and self._settings.bm25_enabled:
                 try:
-                    bm25_results = await asyncio.gather(*[
-                        self._retrieve_bm25_fragments(
-                            database_session=database_session,
-                            query_text=q.text,
-                            k=q.max_fragments,
+                    bm25_results: list[list[Fragment]] = []
+                    for q in question_context_fragments_request.bm25_queries:
+                        bm25_results.append(
+                            await self._retrieve_bm25_fragments(
+                                database_session=database_session,
+                                query_text=q.text,
+                                k=q.max_fragments,
+                            )
                         )
-                        for q in question_context_fragments_request.bm25_queries
-                    ])
-                    bm25_ranked_lists = list(bm25_results)
+                    bm25_ranked_lists = bm25_results
                     bm25_used = True
                 except FragmentQueryRetrievalException:
                     logger.warning(

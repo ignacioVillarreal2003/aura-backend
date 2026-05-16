@@ -184,7 +184,10 @@ class DatabaseManager(DatabaseManagerInterface):
                         logger.exception("The session could not be rolled back after a failed commit.")
                     raise
         finally:
-            await db_session.close()
+            try:
+                await db_session.close()
+            except Exception:
+                logger.exception("The session could not be closed cleanly; the connection will be reclaimed by the pool.")
 
     async def health_check(
             self,
@@ -296,7 +299,10 @@ class DatabaseManager(DatabaseManagerInterface):
                 await db_session.rollback()
                 raise
             finally:
-                await db_session.close()
+                try:
+                    await db_session.close()
+                except Exception:
+                    logger.exception("The session could not be closed cleanly; the connection will be reclaimed by the pool.")
 
     async def __aenter__(
             self

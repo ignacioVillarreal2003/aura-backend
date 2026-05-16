@@ -171,7 +171,7 @@ AUTH_USER_MODEL = 'accounts.User'
 DATABASE_ROUTERS = ['authservice.db_routers.AuraDbRouter']
 
 # CORS Configuration
-CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000', cast=Csv())
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000,http://localhost:4200', cast=Csv())
 
 # REST Framework Configuration
 REST_FRAMEWORK = {

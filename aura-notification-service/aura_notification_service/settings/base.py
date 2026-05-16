@@ -92,7 +92,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 CORS_ALLOWED_ORIGINS = config(
     "CORS_ALLOWED_ORIGINS",
-    default="http://localhost:3000",
+    default="http://localhost:3000,http://localhost:4200",
     cast=Csv(),
 )
 CORS_ALLOW_CREDENTIALS = True

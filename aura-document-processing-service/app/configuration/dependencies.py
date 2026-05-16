@@ -80,6 +80,7 @@ from app.infrastructure.persistence.database.repositories.fragment_repository.fr
     FragmentRepository,
 )
 from app.infrastructure.persistence.graph.neo4j_manager.neo4j_manager import Neo4jManager
+from app.infrastructure.persistence.graph.neo4j_manager.neo4j_manager_exception import Neo4jConnectionException
 from app.infrastructure.persistence.graph.repositories.graph_entity_repository.graph_entity_repository import (
     GraphEntityRepository,
 )
@@ -497,7 +498,14 @@ async def _wire_knowledge_graph_module(
     )
 
     neo4j_manager = Neo4jManager()
-    await neo4j_manager.start()
+    try:
+        await neo4j_manager.start()
+    except Neo4jConnectionException:
+        logger.warning(
+            "Neo4j is unavailable; the knowledge graph module will be disabled for this run.",
+            extra={"uri": neo4j_manager.settings.uri_safe},
+        )
+        return
     app.state.neo4j_manager = neo4j_manager
     cleanup_stack.append(("neo4j_manager", neo4j_manager.dispose))
 
