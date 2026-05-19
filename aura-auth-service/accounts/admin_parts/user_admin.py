@@ -1,9 +1,13 @@
 """User admin configuration."""
 
+import logging
+
 from django.contrib import admin
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html
+
+logger = logging.getLogger(__name__)
 from accounts.models import User, Role, UserRole
 from accounts.admin_parts.common import (
     StatusFilter,
@@ -46,9 +50,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
         'roles_display',
         'status_badge',
         'created_date',
-        'created_by_display',
         'last_login_display',
-        'mac_profile_link',
     )
     list_filter = (
         RoleFilter,
@@ -75,10 +77,6 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
     fieldsets = (
         ('Identidad', {
             'fields': ('roles', 'username', 'email', 'password', 'active'),
-        }),
-        ('Grupos', {
-            'fields': ('custom_groups',),
-            'classes': ('groups-section',),
         }),
     )
 
@@ -147,16 +145,32 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             return self.readonly_fields + ('username', 'email', 'roles_display')
         return self.readonly_fields
 
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        extra_context['is_superadmin'] = _is_super_admin_user(request.user)
+        return super().changelist_view(request, extra_context=extra_context)
+
     def get_fieldsets(self, request, obj=None):
         if obj is None:
-            return self.fieldsets
+            role_type = request.GET.get('role', 'user')
+            if role_type == 'user':
+                return (
+                    ('Identidad', {
+                        'fields': ('username', 'email', 'password', 'active'),
+                    }),
+                    ('Habilitación MAC', {
+                        'fields': ('classification_level_id', 'compartment_ids'),
+                    }),
+                )
+            return (
+                ('Identidad', {
+                    'fields': ('username', 'email', 'password', 'active'),
+                }),
+            )
         if _is_super_admin_user(request.user):
             return (
                 ('Identidad', {
                     'fields': ('roles_display', 'username', 'email', 'active'),
-                }),
-                ('Grupos', {
-                    'fields': ('custom_groups',),
                 }),
                 ('Auditoría', {
                     'fields': (
@@ -175,12 +189,12 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             ('Identidad', {
                 'fields': ('roles_display', 'username', 'email', 'active'),
             }),
-            ('Grupos', {
-                'fields': ('custom_groups',),
-            }),
         )
 
     def get_form(self, request, obj=None, **kwargs):
+        from django import forms as dj_forms
+        from accounts.services.mac_client import mac_client
+
         form = super().get_form(request, obj, **kwargs)
         for field_name in ('created_by', 'updated_by', 'deleted_by'):
             if field_name in form.base_fields:
@@ -188,10 +202,10 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
         for field_name in ('username', 'email'):
             if field_name in form.base_fields:
                 form.base_fields[field_name].help_text = ''
+
         if obj:
-            for field_name in ('roles', 'password'):
-                if field_name in form.base_fields:
-                    form.base_fields.pop(field_name)
+            for field_name in ('roles', 'password', 'classification_level_id', 'compartment_ids'):
+                form.base_fields.pop(field_name, None)
             audit_labels = {
                 'created_by': 'Creado por',
                 'created_at': 'Fecha creado',
@@ -205,14 +219,40 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             for field_name, label in audit_labels.items():
                 if field_name in form.base_fields:
                     form.base_fields[field_name].label = label
-        if _is_super_admin_user(request.user):
-            if 'roles' in form.base_fields:
-                form.base_fields['roles'].queryset = Role.objects.exclude(name='superadmin')
         else:
-            if 'roles' in form.base_fields:
-                form.base_fields['roles'].queryset = Role.objects.exclude(
-                    name__in=['superadmin', 'admin']
+            # Role is determined by URL param — remove the radio field
+            form.base_fields.pop('roles', None)
+
+            role_type = request.GET.get('role', 'user')
+            if role_type == 'user':
+                try:
+                    levels = sorted(
+                        mac_client.list_classification_levels(request.user),
+                        key=lambda x: x.get('rank', 0),
+                    )
+                except Exception:
+                    levels = []
+                try:
+                    compartments = mac_client.list_compartments(request.user)
+                except Exception:
+                    compartments = []
+                form.base_fields['classification_level_id'] = dj_forms.ChoiceField(
+                    choices=[('', '-- Sin habilitación --')] + [
+                        (str(l['id']), l['name']) for l in levels
+                    ],
+                    required=False,
+                    label='Nivel de habilitación',
                 )
+                form.base_fields['compartment_ids'] = dj_forms.MultipleChoiceField(
+                    choices=[(str(c['id']), c['name']) for c in compartments],
+                    required=False,
+                    label='Comportamientos',
+                    widget=dj_forms.CheckboxSelectMultiple(),
+                )
+            else:
+                form.base_fields.pop('classification_level_id', None)
+                form.base_fields.pop('compartment_ids', None)
+
         return form
 
     def get_list_filter(self, request):
@@ -226,37 +266,6 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             .prefetch_related('user_roles__role')
             .order_by('username')
         )
-
-    def save_related(self, request, form, formsets, change):
-        # custom_groups is a manual cross-DB form field (not a model field).
-        # User lives in auth_db; auth_user_custom_groups lives in aura_db.
-        # super() handles all other relations; we write those rows manually here.
-        super().save_related(request, form, formsets, change)
-        if 'custom_groups' not in form.cleaned_data:
-            return
-        from django.db import connections
-        user_id = form.instance.pk
-        selected_groups = list(form.cleaned_data['custom_groups'])
-        with connections['aura_db'].cursor() as cursor:
-            if selected_groups:
-                group_ids = [str(g.pk) for g in selected_groups]
-                placeholders = ','.join(['%s::uuid'] * len(group_ids))
-                cursor.execute(
-                    f'DELETE FROM auth_user_custom_groups '
-                    f'WHERE user_id = %s AND customgroup_id NOT IN ({placeholders})',
-                    [user_id] + group_ids,
-                )
-                for gid in group_ids:
-                    cursor.execute(
-                        'INSERT INTO auth_user_custom_groups (user_id, customgroup_id) '
-                        'VALUES (%s, %s::uuid) ON CONFLICT DO NOTHING',
-                        [user_id, gid],
-                    )
-            else:
-                cursor.execute(
-                    'DELETE FROM auth_user_custom_groups WHERE user_id = %s',
-                    [user_id],
-                )
 
     def has_add_permission(self, request):
         if _is_admin_or_super_user(request.user):
@@ -313,38 +322,30 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             entity_label=obj.username,
             details=details,
         )
-        if 'roles' in form.cleaned_data:
-            selected_roles = []
-            selected_role = form.cleaned_data['roles']
-            if selected_role:
-                selected_roles.append(selected_role)
-            if not _is_super_admin_user(request.user):
-                protected_roles = Role.objects.filter(
-                    name__in=['superadmin', 'admin'],
-                    user_assignments__user=obj,
-                    user_assignments__deleted_at__isnull=True,
-                )
-                for role in protected_roles:
-                    if role not in selected_roles:
-                        selected_roles.append(role)
-            UserRole.objects.filter(
-                user=obj,
-                deleted_at__isnull=True,
-            ).exclude(role__in=selected_roles).update(
-                deleted_at=timezone.now(),
-                deleted_by=request.user,
-            )
-            existing_roles = set(
-                UserRole.objects.filter(user=obj, deleted_at__isnull=True)
-                .values_list('role_id', flat=True)
-            )
-            to_create = [
-                UserRole(user=obj, role=role, created_by=request.user)
-                for role in selected_roles
-                if role.id not in existing_roles
-            ]
-            if to_create:
-                UserRole.objects.bulk_create(to_create)
+        if not change:
+            from accounts.services.mac_client import mac_client
+            role_type = request.GET.get('role', 'user')
+            # Non-superadmins cannot create admin accounts
+            if role_type == 'admin' and not _is_super_admin_user(request.user):
+                role_type = 'user'
+            try:
+                role = Role.objects.get(name=role_type)
+                UserRole.objects.create(user=obj, role=role, created_by=request.user)
+            except Role.DoesNotExist:
+                pass
+            if role_type == 'user':
+                cl_id = form.cleaned_data.get('classification_level_id', '')
+                comp_ids = form.cleaned_data.get('compartment_ids') or []
+                if cl_id:
+                    try:
+                        mac_client.set_user_clearance(request.user, obj.pk, int(cl_id))
+                    except Exception as exc:
+                        logger.warning('Could not set clearance for user %s: %s', obj.pk, exc)
+                for comp_id in comp_ids:
+                    try:
+                        mac_client.add_user_compartment(request.user, obj.pk, int(comp_id))
+                    except Exception as exc:
+                        logger.warning('Could not add compartment %s for user %s: %s', comp_id, obj.pk, exc)
 
     def delete_model(self, request, obj):
         # Soft-delete active role assignments before soft-deleting the user.

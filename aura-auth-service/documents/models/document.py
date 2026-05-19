@@ -1,107 +1,38 @@
-"""Document models for admin visualization.
+"""Document model mapped to the shared aura_db `document` table."""
 
-Both Document and DocumentRole live in aura_db (routed via AuraDbRouter).
-
-Cross-DB references (fields pointing to auth_db tables) are stored as plain
-BigIntegerField — no SQL FK constraint:
-  - DocumentRole.role_id  → role.id in auth_db
-"""
-
-import uuid
 from django.db import models
-from accounts.models import AuditedModel
+from django.utils import timezone
 
 
-class Document(AuditedModel):
-    """Document metadata for admin listing."""
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(
-        max_length=255,
-        db_index=True,
-        verbose_name='Nombre',
-        help_text='Nombre del documento',
-    )
-    description = models.TextField(
-        blank=True,
-        verbose_name='Descripción',
-        help_text='Descripción opcional',
-    )
-    size_bytes = models.PositiveBigIntegerField(
-        default=0,
-        verbose_name='Tamaño (bytes)',
-        help_text='Tamaño del archivo en bytes',
-    )
-    external_document_id = models.BigIntegerField(
-        null=True,
-        blank=True,
-        unique=True,
-        verbose_name='ID externo',
-        help_text='Identificador del documento en document-processing.',
-    )
-    external_storage_url = models.CharField(
-        max_length=1000,
-        blank=True,
-        verbose_name='Storage URL externa',
-        help_text='Referencia devuelta por document-processing.',
-    )
-    visible_to_all = models.BooleanField(
-        default=False,
-        verbose_name='Disponible para todos',
-        help_text='Si está activo, el documento queda disponible para todos sin restricciones de grupos.',
-    )
+class Document(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    name = models.CharField(max_length=255, verbose_name='Nombre')
+    description = models.TextField(blank=True, verbose_name='Descripción')
+    file_size_bytes = models.BigIntegerField(default=0, verbose_name='Tamaño (bytes)')
+    storage_url = models.CharField(max_length=255, blank=True, verbose_name='Storage URL')
+    status = models.CharField(max_length=64, blank=True, verbose_name='Estado')
+    mime_type = models.CharField(max_length=64, blank=True, verbose_name='Tipo MIME')
+    created_by = models.BigIntegerField(null=True, blank=True, verbose_name='Creado por')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Creado el')
+    updated_by = models.BigIntegerField(null=True, blank=True, verbose_name='Actualizado por')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Actualizado el')
+    deleted_by = models.BigIntegerField(null=True, blank=True, verbose_name='Eliminado por')
+    deleted_at = models.DateTimeField(null=True, blank=True, verbose_name='Eliminado el')
 
     class Meta:
-        db_table = 'documents'
+        db_table = 'document'
         managed = False
         verbose_name = 'Documento'
         verbose_name_plural = 'Documentos'
-        indexes = [
-            models.Index(fields=['name'], name='documents_name_7e31f9_idx'),
-            models.Index(fields=['deleted_at'], name='documents_deleted_4df53c_idx'),
-        ]
 
     def __str__(self):
         return self.name
 
+    def soft_delete(self, deleted_by=None):
+        self.deleted_at = timezone.now()
+        self.deleted_by = deleted_by
+        self.save(update_fields=['deleted_at', 'deleted_by', 'updated_at'])
 
-class DocumentRole(models.Model):
-    """Assign documents to roles for access control."""
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    document = models.ForeignKey(
-        Document,
-        on_delete=models.CASCADE,
-        related_name='role_assignments',
-        verbose_name='Documento',
-    )
-    # Cross-DB reference: role.id lives in auth_db; DocumentRole lives in aura_db.
-    # Stored as plain BIGINT — no SQL FK constraint.
-    role_id = models.BigIntegerField(
-        verbose_name='Rol',
-        help_text='role.id (cross-DB ref to auth_db)',
-    )
-    assigned_at = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name='Asignado el',
-    )
-    assigned_by = models.BigIntegerField(
-        null=True,
-        blank=True,
-        verbose_name='Asignado por',
-        help_text='auth_user.id who assigned this role',
-    )
-
-    class Meta:
-        db_table = 'document_roles'
-        managed = False
-        verbose_name = 'Documento por Rol'
-        verbose_name_plural = 'Documentos por Rol'
-        unique_together = [('document', 'role_id')]
-        indexes = [
-            models.Index(fields=['document'], name='docrole_doc_50d0b6_idx'),
-            models.Index(fields=['role_id'], name='docrole_role_4a3c85_idx'),
-        ]
-
-    def __str__(self):
-        return f"{self.document.name} → role_id:{self.role_id}"
+    @property
+    def is_deleted(self):
+        return self.deleted_at is not None

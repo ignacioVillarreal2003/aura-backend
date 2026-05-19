@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'accounts.apps.AccountsConfig',
     'documents.apps.DocumentsConfig',
     'notifications.apps.NotificationsConfig',
+    'chat.apps.ChatConfig',
 ]
 
 # Local apps whose tables are owned by docker/auth-db/init.sql or docker/aura-db/init.sql.
@@ -202,10 +203,10 @@ ADMIN_CHAT_ID = config('ADMIN_CHAT_ID', default=12345, cast=int)
 # Document Processing Service
 DOCUMENT_PROCESSING_URL = config(
     'DOCUMENT_PROCESSING_URL',
-    default='http://localhost:8000/api/create-document',
+    default='http://localhost:8000',
 )
-DOCUMENT_PROCESSING_INTERNAL_API_TOKEN = config(
-    'DOCUMENT_PROCESSING_INTERNAL_API_TOKEN',
+DOCUMENT_PROCESSING_SERVICE_API_KEY = config(
+    'DOCUMENT_PROCESSING_SERVICE_API_KEY',
     default='service_api_key',
 )
 DOCUMENT_PROCESSING_TIMEOUT_SECONDS = config(

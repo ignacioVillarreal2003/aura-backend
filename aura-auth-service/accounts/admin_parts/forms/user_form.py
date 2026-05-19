@@ -1,9 +1,16 @@
 """User admin form."""
 
 from django import forms
-from django.contrib.admin.widgets import FilteredSelectMultiple
-from django.db import connections
-from accounts.models import Role, CustomGroup, User
+from accounts.models import Role, User
+
+
+class RoleRadioSelect(forms.RadioSelect):
+    """RadioSelect that stamps data-role-name on each <input> so JS can detect the role."""
+
+    def create_option(self, name, value, label, selected, index, **kwargs):
+        option = super().create_option(name, value, label, selected, index, **kwargs)
+        option['attrs']['data-role-name'] = str(label).strip().lower()
+        return option
 
 
 class UserAdminForm(forms.ModelForm):
@@ -19,19 +26,24 @@ class UserAdminForm(forms.ModelForm):
         label='Activo',
     )
 
-    custom_groups = forms.ModelMultipleChoiceField(
-        queryset=CustomGroup.objects.all(),
-        required=False,
-        widget=FilteredSelectMultiple('Grupos', is_stacked=False),
-        label='',
-        help_text='',
-    )
-
     roles = forms.ModelChoiceField(
         queryset=Role.objects.filter(name__in=['admin', 'user']),
         required=False,
-        widget=forms.RadioSelect(),
+        widget=RoleRadioSelect(),
         label='Rol',
+    )
+
+    classification_level_id = forms.ChoiceField(
+        choices=[('', '-- Sin habilitación --')],
+        required=False,
+        label='Nivel de habilitación',
+    )
+
+    compartment_ids = forms.MultipleChoiceField(
+        choices=[],
+        required=False,
+        label='Comportamientos',
+        widget=forms.CheckboxSelectMultiple(),
     )
 
     class Meta:
@@ -52,16 +64,6 @@ class UserAdminForm(forms.ModelForm):
                     user_assignments__user=self.instance,
                     user_assignments__deleted_at__isnull=True,
                 ).first()
-            if 'custom_groups' in self.fields:
-                # Cross-DB M2M: load current group membership via raw SQL on aura_db.
-                # Raw SQL: SELECT customgroup_id FROM auth_user_custom_groups WHERE user_id = %s
-                with connections['aura_db'].cursor() as cursor:
-                    cursor.execute(
-                        'SELECT customgroup_id FROM auth_user_custom_groups WHERE user_id = %s',
-                        [self.instance.pk],
-                    )
-                    group_ids = [row[0] for row in cursor.fetchall()]
-                self.initial['custom_groups'] = group_ids
         else:
             if 'roles' in self.fields:
                 self.fields['roles'].initial = Role.objects.filter(name='user').first()

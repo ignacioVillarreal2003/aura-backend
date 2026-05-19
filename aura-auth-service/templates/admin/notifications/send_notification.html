@@ -217,26 +217,51 @@
                 </div>
                 {% endif %}
 
-                {% if form.groups %}
-                <div style="display: none;">{{ form.groups }}</div>
+                {% if form.levels %}
+                <div style="display: none;">{{ form.levels }}</div>
                 <div class="selector-block">
-                    <label class="selector-label" for="search-groups">Grupos</label>
+                    <label class="selector-label" for="search-levels">Niveles</label>
                     <div class="search-container">
-                        <input id="search-groups" type="text" class="search-input" placeholder="Buscar grupo...">
+                        <input id="search-levels" type="text" class="search-input" placeholder="Buscar nivel...">
                     </div>
                     <div class="dual-panel-container">
                         <div class="panel">
                             <div class="panel-header">Disponibles</div>
-                            <div class="panel-content" id="available-groups"></div>
+                            <div class="panel-content" id="available-levels"></div>
                         </div>
                         <div class="panel">
                             <div class="panel-header">Seleccionados</div>
-                            <div class="panel-content" id="selected-groups"></div>
+                            <div class="panel-content" id="selected-levels"></div>
                         </div>
                     </div>
-                    {% if form.groups.errors %}
+                    {% if form.levels.errors %}
                     <div class="error-messages" style="margin-top: 10px;">
-                        {% for error in form.groups.errors %}<div>{{ error }}</div>{% endfor %}
+                        {% for error in form.levels.errors %}<div>{{ error }}</div>{% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                {% if form.compartments %}
+                <div style="display: none;">{{ form.compartments }}</div>
+                <div class="selector-block">
+                    <label class="selector-label" for="search-compartments">Comportamientos</label>
+                    <div class="search-container">
+                        <input id="search-compartments" type="text" class="search-input" placeholder="Buscar comportamiento...">
+                    </div>
+                    <div class="dual-panel-container">
+                        <div class="panel">
+                            <div class="panel-header">Disponibles</div>
+                            <div class="panel-content" id="available-compartments"></div>
+                        </div>
+                        <div class="panel">
+                            <div class="panel-header">Seleccionados</div>
+                            <div class="panel-content" id="selected-compartments"></div>
+                        </div>
+                    </div>
+                    {% if form.compartments.errors %}
+                    <div class="error-messages" style="margin-top: 10px;">
+                        {% for error in form.compartments.errors %}<div>{{ error }}</div>{% endfor %}
                     </div>
                     {% endif %}
                 </div>
@@ -292,7 +317,8 @@
 
 <script>
     window.recipients_data = {{ users_json|default:'[]'|safe }};
-    window.groups_data = {{ groups_json|default:'[]'|safe }};
+    window.levels_data = {{ levels_json|default:'[]'|safe }};
+    window.compartments_data = {{ compartments_json|default:'[]'|safe }};
     window.roles_data = {{ roles_json|default:'[]'|safe }};
 </script>
 <script>
@@ -369,7 +395,8 @@
     }
 
     initDualSelector('recipients');
-    initDualSelector('groups');
+    initDualSelector('levels');
+    initDualSelector('compartments');
     initDualSelector('roles');
 })();
 </script>

@@ -14,7 +14,16 @@
       "Bash(docker network connect *)",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\albin\\\\Desktop\\\\tesis\\\\aura-backend\\\\aura-document-collection-service\" -Recurse -Directory)",
       "Bash(Select-Object -ExpandProperty FullName)",
-      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\albin\\\\Desktop\\\\tesis\\\\aura-backend\" -Directory)"
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\albin\\\\Desktop\\\\tesis\\\\aura-backend\" -Directory)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\albin\\\\Desktop\\\\tesis\\\\aura-backend\\\\aura-auth-service\" -Recurse -Directory)",
+      "Bash(Sort-Object)",
+      "Bash(Select-Object FullName)",
+      "Bash(python -c \"import os, django; os.environ.setdefault\\('DJANGO_SETTINGS_MODULE', 'authservice.settings'\\); django.setup\\(\\); from django.apps import apps; print\\([app.name for app in apps.get_app_configs\\(\\)]\\)\")",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\albin\\\\Desktop\\\\tesis\\\\aura-backend\\\\aura-document-processing-service\" -Recurse -Force)",
+      "Bash(Select-Object -Property FullName)",
+      "Bash(Sort-Object FullName)",
+      "Bash(docker run *)",
+      "Bash(dir /s /b \"C:\\\\Users\\\\albin\\\\Desktop\\\\tesis\\\\aura-backend\\\\aura-auth-service\\\\accounts\\\\admin_parts\\\\*.py\")"
     ]
   }
 }

@@ -34,26 +34,8 @@ def _serialize_id(value):
 
 
 def _candidate_base_urls(configured_url: str) -> list[str]:
-    """Return candidate base URLs with localhost port fallback for dev."""
-
-    base = _normalize_base_url(configured_url)
-    parsed = urlsplit(base)
-    candidates = [base]
-
-    if parsed.hostname in {'localhost', '127.0.0.1'}:
-        if parsed.port == 8004:
-            candidates.append(base.replace(':8004', ':8005'))
-        elif parsed.port == 8005:
-            candidates.append(base.replace(':8005', ':8004'))
-
-    # Keep order but remove duplicates.
-    seen = set()
-    ordered = []
-    for item in candidates:
-        if item not in seen:
-            ordered.append(item)
-            seen.add(item)
-    return ordered
+    """Return a single normalized base URL for the notification service."""
+    return [_normalize_base_url(configured_url)]
 
 
 def create_notifications_from_admin(*, receiver_ids, message, notification_type, target_scope, target_label, actor_user_id):
@@ -83,7 +65,7 @@ def create_notifications_from_admin(*, receiver_ids, message, notification_type,
     last_response = None
 
     for base_url in base_urls:
-        url = f"{base_url}/api/internal/notifications/admin-create/"
+        url = f"{base_url}/api/v1/internal/notifications/admin-create/"
         try:
             response = requests.post(url, **request_kwargs)
 

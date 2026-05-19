@@ -9,3 +9,4 @@ from accounts.admin_parts import dashboard_admin as _dashboard_admin  # noqa: F4
 from accounts.admin_parts import audit_admin as _audit_admin  # noqa: F401
 from notifications.admin import notification_admin as _notification_admin  # noqa: F401
 from accounts.admin_parts import mac_admin as _mac_admin  # noqa: F401
+from chat import admin as _chat_admin  # noqa: F401
