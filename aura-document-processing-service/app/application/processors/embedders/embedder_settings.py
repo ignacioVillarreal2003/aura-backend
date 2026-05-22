@@ -63,6 +63,9 @@ class EmbedderSettings(BaseSettings):
                        ] | str = Field(default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     huggingface_device: Literal["cpu", "cuda"] = "cpu"
     huggingface_normalize_embeddings: bool = Field(default=True)
+    # e5 models require asymmetric prefixes; set to "" to disable. Auto-detected when blank.
+    huggingface_query_instruction: str = Field(default="")
+    huggingface_embed_instruction: str = Field(default="")
 
     @model_validator(
         mode="after"
@@ -124,3 +127,10 @@ class EmbedderSettings(BaseSettings):
         self.huggingface_model = self.huggingface_model.strip()
         if self.huggingface_device == "cuda" and self.active_type != EmbedderType.huggingface:
             raise ValueError("huggingface_device can only be configured when active_type is huggingface.")
+
+        # Auto-apply e5 asymmetric prefixes when not explicitly set
+        if "e5" in self.huggingface_model.lower():
+            if not self.huggingface_query_instruction:
+                self.huggingface_query_instruction = "query: "
+            if not self.huggingface_embed_instruction:
+                self.huggingface_embed_instruction = "passage: "

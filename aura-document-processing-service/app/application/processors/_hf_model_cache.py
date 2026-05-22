@@ -2,7 +2,7 @@ import threading
 from langchain_huggingface import HuggingFaceEmbeddings
 
 _lock = threading.Lock()
-_cache: dict[tuple[str, str], HuggingFaceEmbeddings] = {}
+_cache: dict[tuple[str, str, bool], HuggingFaceEmbeddings] = {}
 
 
 def get_or_create(
@@ -10,7 +10,7 @@ def get_or_create(
         device: str,
         normalize_embeddings: bool = True,
 ) -> HuggingFaceEmbeddings:
-    key = (model_name, device)
+    key = (model_name, device, normalize_embeddings)
     if key in _cache:
         return _cache[key]
     with _lock:

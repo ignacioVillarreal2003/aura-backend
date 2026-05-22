@@ -97,6 +97,19 @@ class FragmentQueryService(FragmentQueryServiceInterface):
 
             self._validate_query_request_against_settings(question_context_fragments_request)
 
+            # Resolve accessible document IDs once and pre-filter all searches
+            collection_ids = await self._document_collection_catalog_client.fetch_all_accessible_collection_ids(
+                user_id=int(authenticated_user.id),
+                authorization_header=authorization_header,
+            )
+            accessible_doc_ids = await self._document_collection_repository.list_all_accessible_document_ids(
+                user_id=int(authenticated_user.id),
+                database_session=database_session,
+                accessible_collection_ids=collection_ids,
+                chat_id=question_context_fragments_request.chat_id,
+            )
+            accessible_doc_set: set[int] = set(accessible_doc_ids)
+
             semantic_ranked_lists: list[list[Fragment]] = []
             if question_context_fragments_request.semantic_queries:
                 vectors = await asyncio.gather(*[
@@ -109,6 +122,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                             database_session=database_session,
                             query_vector=vector,
                             k=q.max_fragments,
+                            document_ids=accessible_doc_ids,
                         )
                     )
                 semantic_ranked_lists = fragment_lists
@@ -124,6 +138,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                                 database_session=database_session,
                                 query_text=q.text,
                                 k=q.max_fragments,
+                                document_ids=accessible_doc_ids,
                             )
                         )
                     bm25_ranked_lists = bm25_results
@@ -146,13 +161,8 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             else:
                 fragments = []
 
-            fragments = await self._filter_accessible_fragments(
-                fragments=fragments,
-                user_id=authenticated_user.id,
-                chat_id=question_context_fragments_request.chat_id,
-                database_session=database_session,
-                authorization_header=authorization_header,
-            )
+            # Fast in-process safety check (no extra DB round-trip)
+            fragments = [f for f in fragments if f.document_id in accessible_doc_set]
             pre_rerank_count = len(fragments)
 
             rerank_applied = False
@@ -174,6 +184,20 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                         },
                     )
 
+            # Expand with adjacent chunks if requested (applied after reranking)
+            adjacent_added = 0
+            if question_context_fragments_request.adjacent_chunks > 0 and fragments:
+                retrieved_ids = {f.id for f in fragments}
+                adjacent = await self._fragment_repository.get_adjacent_fragments(
+                    fragments=fragments,
+                    window=question_context_fragments_request.adjacent_chunks,
+                    database_session=database_session,
+                    exclude_ids=retrieved_ids,
+                )
+                adjacent = [f for f in adjacent if f.document_id in accessible_doc_set]
+                adjacent_added = len(adjacent)
+                fragments = fragments + adjacent
+
             fragment_responses = await self._build_fragment_responses(
                 fragments=fragments,
                 database_session=database_session,
@@ -186,6 +210,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                     "rerank_applied": rerank_applied,
                     "bm25_used": bm25_used,
                     "pre_rerank_count": pre_rerank_count,
+                    "adjacent_added": adjacent_added,
                 },
             )
             return FragmentListResponse(fragments=fragment_responses)
@@ -381,35 +406,6 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             )
         return responses
 
-    async def _filter_accessible_fragments(
-            self,
-            fragments: list[Fragment],
-            user_id: int,
-            chat_id: Optional[int],
-            database_session: AsyncSession,
-            authorization_header: str | None,
-    ) -> list[Fragment]:
-        document_ids = list({fragment.document_id for fragment in fragments})
-        if not document_ids:
-            return fragments
-
-        collection_ids = await self._document_collection_catalog_client.fetch_all_accessible_collection_ids(
-            user_id=int(user_id),
-            authorization_header=authorization_header,
-        )
-        accessible_ids = await self._document_collection_repository.get_accessible_document_ids(
-            user_id=user_id,
-            document_ids=document_ids,
-            chat_id=chat_id,
-            accessible_collection_ids=collection_ids,
-            database_session=database_session,
-        )
-
-        if not accessible_ids:
-            return []
-
-        return [f for f in fragments if f.document_id in accessible_ids]
-
     async def _get_documents_by_ids_or_raise(
             self,
             document_ids: list[int],
@@ -442,6 +438,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             database_session: AsyncSession,
             query_vector: list[float],
             k: int,
+            document_ids: list[int] | None = None,
     ) -> list[Fragment]:
         try:
             fragments = await self._fragment_repository.get_most_similar_fragments(
@@ -449,6 +446,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 database_session=database_session,
                 k=k,
                 threshold=self._settings.similarity_threshold,
+                document_ids=document_ids,
             )
             logger.debug("Similar fragments retrieved.", extra={"fragment_count": len(fragments)})
             return fragments
@@ -460,15 +458,20 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             database_session: AsyncSession,
             query_text: str,
             k: int,
+            document_ids: list[int] | None = None,
     ) -> list[Fragment]:
         try:
-            return await self._fragment_repository.get_most_relevant_fragments_bm25(
+            fragments = await self._fragment_repository.get_most_relevant_fragments_bm25(
                 query=query_text,
                 database_session=database_session,
                 k=k,
                 min_score=self._settings.bm25_min_score,
                 query_max_chars=self._settings.bm25_query_max_chars,
             )
+            if document_ids is not None:
+                doc_set = set(document_ids)
+                fragments = [f for f in fragments if f.document_id in doc_set]
+            return fragments
         except Exception as e:
             raise FragmentQueryRetrievalException("Failed to retrieve BM25-ranked fragments.") from e
 

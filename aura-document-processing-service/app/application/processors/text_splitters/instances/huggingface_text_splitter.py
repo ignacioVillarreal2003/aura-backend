@@ -39,6 +39,7 @@ class HuggingFaceTextSplitter(BaseTextSplitter):
                 splitter_kwargs["breakpoint_threshold_amount"] = self._settings.huggingface_breakpoint_threshold_amount
 
             self._splitter = SemanticChunker(embeddings, **splitter_kwargs)
+            self._min_chunk_chars = self._settings.min_chunk_chars
 
             tokenizer = AutoTokenizer.from_pretrained(self._settings.huggingface_model)
             self._size_splitter = RecursiveCharacterTextSplitter.from_huggingface_tokenizer(
@@ -57,6 +58,7 @@ class HuggingFaceTextSplitter(BaseTextSplitter):
                     "breakpoint_amount": self._settings.huggingface_breakpoint_threshold_amount,
                     "max_chunk_tokens": self._settings.huggingface_max_chunk_tokens,
                     "chunk_token_overlap": self._settings.huggingface_chunk_token_overlap,
+                    "min_chunk_chars": self._settings.min_chunk_chars,
                 }
             )
 
@@ -84,6 +86,7 @@ class HuggingFaceTextSplitter(BaseTextSplitter):
         try:
             splits = self._splitter.split_text(text)
             splits = self._enforce_token_limit(splits)
+            splits = self._merge_short_chunks(splits)
 
             logger.info(
                 "The text was split successfully with semantic chunking.",

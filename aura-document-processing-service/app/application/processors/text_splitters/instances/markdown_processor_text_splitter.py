@@ -22,6 +22,7 @@ class MarkdownProcessorTextSplitter(BaseTextSplitter):
         self._splitter: Optional[MarkdownTextSplitter] = None
 
         try:
+            self._min_chunk_chars = self._settings.min_chunk_chars
             self._splitter = MarkdownTextSplitter.from_tiktoken_encoder(
                 encoding_name=self._settings.markdown_processor_encoding_name,
                 chunk_size=self._settings.markdown_processor_split_size,
@@ -33,7 +34,8 @@ class MarkdownProcessorTextSplitter(BaseTextSplitter):
                 extra={
                     "encoding": self._settings.markdown_processor_encoding_name,
                     "split_size": self._settings.markdown_processor_split_size,
-                    "split_overlap": self._settings.markdown_processor_split_overlap
+                    "split_overlap": self._settings.markdown_processor_split_overlap,
+                    "min_chunk_chars": self._settings.min_chunk_chars
                 }
             )
 
@@ -62,6 +64,7 @@ class MarkdownProcessorTextSplitter(BaseTextSplitter):
 
         try:
             splits = self._splitter.split_text(text)
+            splits = self._merge_short_chunks(splits)
 
             logger.info(
                 "The markdown text was split successfully.",

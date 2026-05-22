@@ -96,6 +96,9 @@ class HuggingFaceEmbedder(BaseEmbedder):
     ) -> list[float]:
         self._validate_text(text)
 
+        if self._settings.huggingface_query_instruction:
+            text = self._settings.huggingface_query_instruction + text
+
         logger.debug(
             "Generating a query embedding.",
             extra={
@@ -126,6 +129,9 @@ class HuggingFaceEmbedder(BaseEmbedder):
             self,
             texts: list[str]
     ) -> list[list[float]]:
+        if self._settings.huggingface_embed_instruction:
+            texts = [self._settings.huggingface_embed_instruction + t for t in texts]
+
         logger.debug(
             "Generating document embeddings.",
             extra={

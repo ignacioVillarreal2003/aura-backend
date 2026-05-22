@@ -16,13 +16,13 @@ class FragmentQueryServiceSettings(BaseSettings):
     max_document_ids: int = Field(default=50, ge=1, le=100)
     min_question_length: int = Field(default=1, ge=1)
     max_question_length: int = Field(default=16_000, ge=1, le=100_000)
-    similarity_threshold: float = Field(default=0.4, ge=0.0, le=1.0)
+    similarity_threshold: float = Field(default=0.65, ge=0.0, le=1.0)
 
     rerank_enabled: bool = Field(default=True)
     rerank_model_name: str = Field(default="BAAI/bge-reranker-v2-m3")
     rerank_device: Optional[str] = Field(default=None)
     rerank_min_fragments: int = Field(default=1, ge=1, le=50)
-    rerank_min_score: float = Field(default=0.0)
+    rerank_min_score: float = Field(default=0.35)
     rerank_batch_size: int = Field(default=16, ge=1, le=512)
 
     bm25_enabled: bool = Field(default=True)

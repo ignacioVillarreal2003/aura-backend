@@ -9,6 +9,10 @@ logger = logging.getLogger(__name__)
 
 _NOISE_LINE_PATTERN = re.compile(r"^[\-=*#~_\s$%!@^&|+]{3,}$")
 
+# Matches section/article label lines like "2.B.9.", "10.5.", "2.", "A.1." — their
+# trailing "." is part of the numbering, not a sentence end.
+_SECTION_LABEL_RE = re.compile(r"^[\dA-ZÁÉÍÓÚÜÑ]+(?:[.\-][\dA-ZÁÉÍÓÚÜÑ]*)*\.?$")
+
 _MARKDOWN_BOLD_ITALIC = re.compile(r"\*{1,3}(.+?)\*{1,3}")
 _MARKDOWN_CODE_INLINE = re.compile(r"`(.+?)`")
 _MARKDOWN_LINK = re.compile(r"\[(.+?)\]\(.*?\)")
@@ -160,6 +164,11 @@ class SimpleTextCleaner(TextCleanerInterface):
                 words = line.split()
                 is_short_fragment = len(words) <= 2
                 starts_lowercase = line[0].islower()
+                # Standalone number fragment: "1", "2.", "10.", etc. — always orphaned
+                is_numeric_fragment = (
+                    len(words) == 1
+                    and line.rstrip(".:,;)").isdigit()
+                )
 
                 if output:
                     j = len(output) - 1
@@ -168,11 +177,30 @@ class SimpleTextCleaner(TextCleanerInterface):
 
                     if j >= 0:
                         empty_count = (len(output) - 1) - j
-                        prev_ends_sentence = output[j][-1] in ".!?:;"
+                        prev = output[j]
+                        prev_ends_sentence = prev[-1] in ".!?:;"
+                        prev_words = prev.split()
+                        # "2.B.9." ends with "." but it's a label, not a sentence end
+                        prev_is_section_label = (
+                            len(prev_words) == 1
+                            and bool(_SECTION_LABEL_RE.match(prev_words[0]))
+                        )
+                        prev_is_short_nonfinal = (
+                            len(prev_words) <= 2
+                            and (not prev_ends_sentence or prev_is_section_label)
+                        )
 
                         should_merge = (
-                                starts_lowercase and empty_count <= 1
-                                and (is_short_fragment or not prev_ends_sentence)
+                            empty_count <= 1 and (
+                                # Existing: lowercase continuation of previous line
+                                (starts_lowercase and (is_short_fragment or not prev_ends_sentence))
+                                # Numeric orphan ("1.", "2") always glues to adjacent line
+                                or (is_numeric_fragment and empty_count == 0)
+                                # Two consecutive short non-final fragments ("Art" + "2.") merge
+                                or (prev_is_short_nonfinal and is_short_fragment and empty_count == 0)
+                                # Section label ("2.B.9.") always captures its content line
+                                or (prev_is_section_label and empty_count == 0)
+                            )
                         )
 
                         if should_merge:

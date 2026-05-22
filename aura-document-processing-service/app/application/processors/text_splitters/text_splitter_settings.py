@@ -20,6 +20,7 @@ class TextSplitterSettings(BaseSettings):
     active_type: TextSplitterType = Field(default=TextSplitterType.recursive)
 
     max_text_length: int = Field(default=10_000_000, gt=0)
+    min_chunk_chars: int = Field(default=150, ge=0)
 
     huggingface_model: Literal[
                            "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
