@@ -20,7 +20,8 @@ _HUGGINGFACE_MODEL_DIMENSIONS: dict[str, int] = {
     "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2": 384,
     "sentence-transformers/paraphrase-multilingual-mpnet-base-v2": 768,
     "intfloat/multilingual-e5-large": 1024,
-    "sentence-transformers/distiluse-base-multilingual-cased-v2": 512
+    "sentence-transformers/distiluse-base-multilingual-cased-v2": 512,
+    "BAAI/bge-m3": 1024,
 }
 
 
@@ -59,10 +60,14 @@ class EmbedderSettings(BaseSettings):
                            "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
                            "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
                            "intfloat/multilingual-e5-large",
-                           "sentence-transformers/distiluse-base-multilingual-cased-v2"
+                           "sentence-transformers/distiluse-base-multilingual-cased-v2",
+                           "BAAI/bge-m3",
                        ] | str = Field(default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     huggingface_device: Literal["cpu", "cuda"] = "cpu"
     huggingface_normalize_embeddings: bool = Field(default=True)
+
+    huggingface_query_instruction: str = Field(default="")
+    huggingface_embed_instruction: str = Field(default="")
 
     @model_validator(
         mode="after"
@@ -122,5 +127,10 @@ class EmbedderSettings(BaseSettings):
             raise ValueError("The Hugging Face model name cannot be empty.")
 
         self.huggingface_model = self.huggingface_model.strip()
-        if self.huggingface_device == "cuda" and self.active_type != EmbedderType.huggingface:
-            raise ValueError("huggingface_device can only be configured when active_type is huggingface.")
+
+        # Auto-apply e5 asymmetric prefixes when not explicitly set
+        if "e5" in self.huggingface_model.lower():
+            if not self.huggingface_query_instruction:
+                self.huggingface_query_instruction = "query: "
+            if not self.huggingface_embed_instruction:
+                self.huggingface_embed_instruction = "passage: "

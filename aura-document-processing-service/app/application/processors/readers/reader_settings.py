@@ -25,7 +25,7 @@ class ReaderSettings(BaseSettings):
     pdf_max_workers: Optional[int] = Field(default=None, ge=1, le=16)
 
     docling_enabled: bool = Field(default=False)
-    docling_device: Literal["cpu", "cuda", "auto"] = "auto"
+    docling_device: Literal["cpu", "cuda", "mps", "auto"] = "auto"
     docling_num_threads: int = Field(default=4, ge=1, le=16)
 
     @model_validator(

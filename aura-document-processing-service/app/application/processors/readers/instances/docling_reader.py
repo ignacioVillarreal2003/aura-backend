@@ -1,7 +1,8 @@
 import logging
 from pathlib import Path
+
 from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import AcceleratorDevice, PdfPipelineOptions, AcceleratorOptions
+from docling.datamodel.pipeline_options import AcceleratorDevice, AcceleratorOptions, PdfPipelineOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
 
 from app.application.processors.readers.exceptions.reader_exception import (
@@ -9,17 +10,26 @@ from app.application.processors.readers.exceptions.reader_exception import (
     DoclingInitializationException,
     DoclingReadException,
     ReaderFileNotFoundException,
-    UnsupportedDoclingFormatException
+    UnsupportedDoclingFormatException,
 )
 from app.application.processors.readers.instances.base_reader import BaseReader
 from app.application.processors.readers.reader_settings import ReaderSettings
 
 logger = logging.getLogger(__name__)
 
+_DOCLING_SUPPORTED_EXTENSIONS: frozenset[str] = frozenset({
+    ".pdf",
+    ".docx",
+    ".pptx",
+    ".xlsx",
+    ".png", ".jpg", ".jpeg", ".tiff", ".tif", ".bmp", ".webp",
+})
+
+
 class DoclingReader(BaseReader):
     def __init__(
             self,
-            reader_settings: ReaderSettings
+            reader_settings: ReaderSettings,
     ) -> None:
         self._settings = reader_settings
 
@@ -32,54 +42,57 @@ class DoclingReader(BaseReader):
             }
             device = device_map.get(
                 reader_settings.docling_device.lower(),
-                AcceleratorDevice.CPU
+                AcceleratorDevice.CPU,
             )
 
             pipeline_options = PdfPipelineOptions()
             pipeline_options.accelerator_options = AcceleratorOptions(
                 num_threads=reader_settings.docling_num_threads,
-                device=device
+                device=device,
             )
 
             self._converter = DocumentConverter(
+                allowed_formats=[
+                    InputFormat.PDF,
+                    InputFormat.DOCX,
+                    InputFormat.PPTX,
+                    InputFormat.XLSX,
+                    InputFormat.IMAGE,
+                ],
                 format_options={
-                    InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
-                }
+                    InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options),
+                },
             )
 
             logger.info(
                 "The Docling reader was initialized successfully.",
                 extra={
                     "device": reader_settings.docling_device,
-                    "num_threads": reader_settings.docling_num_threads
-                }
+                    "num_threads": reader_settings.docling_num_threads,
+                    "supported_extensions": sorted(_DOCLING_SUPPORTED_EXTENSIONS),
+                },
             )
         except Exception as e:
             logger.exception("Failed to initialize the Docling reader.")
             raise DoclingInitializationException("Failed to initialize the Docling reader.") from e
 
-    def can_handle(
-            self,
-            file_path: Path
-    ) -> bool:
-        suffix = file_path.suffix.lower()
-        return suffix in {".pdf", ".docx"}
+    def can_handle(self, file_path: Path) -> bool:
+        return file_path.suffix.lower() in _DOCLING_SUPPORTED_EXTENSIONS
 
-    def read(
-            self,
-            file_path: Path
-    ) -> str:
+    def read(self, file_path: Path) -> str:
         self._validate_file_exists(file_path)
 
         if not self.can_handle(file_path):
-            raise UnsupportedDoclingFormatException("This file format is not supported by the Docling reader.")
+            raise UnsupportedDoclingFormatException(
+                "This file format is not supported by the Docling reader."
+            )
 
         logger.info(
             "Reading the file with Docling.",
             extra={
                 "file_name": file_path.name,
-                "format": file_path.suffix.lower()
-            }
+                "format": file_path.suffix.lower(),
+            },
         )
 
         try:
@@ -89,36 +102,42 @@ class DoclingReader(BaseReader):
             if document is None:
                 raise DoclingReadException("Docling returned no document after conversion.")
 
-            if not hasattr(document, "export_to_markdown"):
-                raise DoclingReadException("The Docling document cannot be exported to Markdown.")
-
-            markdown = document.export_to_markdown()
-            text = (markdown or "").strip()
+            text = self._export_plain_text(document)
 
             if not text:
-                raise DoclingExtractionException("Docling finished but produced no extractable text.")
+                raise DoclingExtractionException(
+                    "Docling finished conversion but produced no extractable text."
+                )
 
             logger.info(
                 "The file was read successfully with Docling.",
                 extra={
                     "file_name": file_path.name,
-                    "chars": len(text)
-                }
+                    "chars": len(text),
+                },
             )
             return text
 
         except (
-                ReaderFileNotFoundException,
-                UnsupportedDoclingFormatException,
-                DoclingExtractionException,
-                DoclingReadException
+            ReaderFileNotFoundException,
+            UnsupportedDoclingFormatException,
+            DoclingExtractionException,
+            DoclingReadException,
         ):
             raise
         except Exception as e:
             logger.exception(
                 "Failed to read the file with Docling.",
-                extra={
-                    "file_name": file_path.name
-                }
+                extra={"file_name": file_path.name},
             )
-            raise DoclingReadException("An unexpected error occurred while processing the file with Docling.") from e
+            raise DoclingReadException(
+                "An unexpected error occurred while processing the file with Docling."
+            ) from e
+
+    @staticmethod
+    def _export_plain_text(document) -> str:
+        if hasattr(document, "export_to_text"):
+            return (document.export_to_text() or "").strip()
+        # Fallback for older Docling versions: markdown output is handled
+        # downstream by the text cleaner's markdown-stripping step.
+        return (document.export_to_markdown() or "").strip()

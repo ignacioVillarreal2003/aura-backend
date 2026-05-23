@@ -34,7 +34,14 @@ class DocumentStorageSettings(BaseSettings):
     uuid_prefix_on_preserved_stem: bool = Field(default=True)
     max_object_stem_length: int = Field(default=255, gt=0, le=1024)
 
-    allowed_file_extensions: Optional[list[str]] = Field(default=["pdf", "doc", "docx"])
+    allowed_file_extensions: Optional[list[str]] = Field(
+        default=[
+            "pdf", "doc", "docx",
+            "pptx", "xlsx",
+            "txt", "md", "csv",
+            "png", "jpg", "jpeg", "tiff", "tif", "bmp", "webp",
+        ]
+    )
     max_file_size_bytes: Optional[int] = Field(default=100 * 1024 * 1024, gt=0)
     min_file_size_bytes: int = Field(default=1, gt=0)
 

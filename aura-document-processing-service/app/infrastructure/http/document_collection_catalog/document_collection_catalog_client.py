@@ -1,6 +1,5 @@
 import logging
 from typing import Any, Optional
-
 import httpx
 
 from app.infrastructure.http.document_collection_catalog.document_collection_catalog_client_interface import (
@@ -24,19 +23,12 @@ class DocumentCollectionCatalogClient(DocumentCollectionCatalogClientInterface):
         self._http_client = http_client
         self._settings = settings or DocumentCollectionCatalogSettings()
 
-    def is_configured(self) -> bool:
-        return self._settings.normalized_base_url() is not None
-
     async def fetch_all_accessible_collection_ids(
             self,
             *,
             user_id: int,
             authorization_header: str | None,
     ) -> frozenset[int]:
-        base = self._settings.normalized_base_url()
-        if base is None:
-            return frozenset()
-
         bearer = self._normalize_bearer(authorization_header or self._settings.fallback_bearer_token)
         if bearer is None:
             logger.debug(
@@ -45,10 +37,7 @@ class DocumentCollectionCatalogClient(DocumentCollectionCatalogClientInterface):
             )
             return frozenset()
 
-        url = (
-            f"{base}/api/v1/user-authorizations/{user_id}"
-            "/accessible-collections/"
-        )
+        url = f"{self._settings.accessible_collections_url.rstrip('/')}/{user_id}/accessible-collections/"
         ids: set[int] = set()
         pages_read = 0
         headers = {

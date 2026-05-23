@@ -107,12 +107,15 @@ class DigitalDOCXReader(BaseReader):
 
         for table in doc.tables:
             for row in table.rows:
-                row_text = " | ".join(
-                    cell.text.strip()
-                    for cell in row.cells
-                    if cell.text and cell.text.strip()
-                )
-                if row_text:
-                    text_parts.append(row_text)
+                seen: set[int] = set()
+                row_cells: list[str] = []
+                for cell in row.cells:
+                    if id(cell) in seen:
+                        continue
+                    seen.add(id(cell))
+                    if cell.text and cell.text.strip():
+                        row_cells.append(cell.text.strip())
+                if row_cells:
+                    text_parts.append(" | ".join(row_cells))
 
         return text_parts

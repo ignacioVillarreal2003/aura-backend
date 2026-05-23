@@ -14,7 +14,6 @@ from app.application.processors.readers.exceptions.reader_exception import (
     ReaderInitializationException,
     ScannedPDFOCRExtractionException,
     ScannedPDFReadException,
-    UnsupportedScannedPDFFormatException
 )
 from app.application.processors.readers.instances.base_reader import BaseReader
 from app.application.processors.readers.reader_settings import ReaderSettings
@@ -22,13 +21,14 @@ from app.application.processors.readers.reader_settings import ReaderSettings
 logger = logging.getLogger(__name__)
 
 def _ocr_page_worker(
-        args: Tuple[bytes, int, str, int],
+        args: Tuple[bytes, int, str, int, str],
 ) -> Tuple[int, str, Optional[str]]:
     import io
     import pytesseract
     from PIL import Image
 
-    image_bytes, page_num, lang, timeout = args
+    image_bytes, page_num, lang, timeout, tesseract_path = args
+    pytesseract.pytesseract.tesseract_cmd = tesseract_path
     try:
         image = Image.open(io.BytesIO(image_bytes))
         text = pytesseract.image_to_string(image, lang=lang, timeout=timeout)
@@ -99,11 +99,6 @@ class ScannedPDFReader(BaseReader):
     ) -> str:
         self._validate_file_exists(file_path)
 
-        if not self.can_handle(file_path):
-            raise UnsupportedScannedPDFFormatException(
-                "The PDF file is not a supported scanned document format for OCR processing."
-            )
-
         logger.info(
             "Reading a scanned PDF with OCR.",
             extra={
@@ -153,7 +148,6 @@ class ScannedPDFReader(BaseReader):
 
         except (
                 ReaderFileNotFoundException,
-                UnsupportedScannedPDFFormatException,
                 ScannedPDFOCRExtractionException,
         ):
             raise
@@ -251,11 +245,12 @@ class ScannedPDFReader(BaseReader):
                     try:
                         buf = io.BytesIO()
                         page.save(buf, format="PNG")
-                        payload: Tuple[bytes, int, str, int] = (
+                        payload: Tuple[bytes, int, str, int, str] = (
                             buf.getvalue(),
                             next_page_to_submit,
                             self._settings.tesseract_lang,
-                            self._settings.tesseract_timeout
+                            self._settings.tesseract_timeout,
+                            self._settings.tesseract_path,
                         )
                         future = executor.submit(_ocr_page_worker, payload)
                         future_to_page[future] = next_page_to_submit

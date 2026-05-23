@@ -532,6 +532,7 @@ class MinioManager(MinioManagerInterface):
     ) -> None:
         client = self.client
         try:
+            file_size = Path(file_path).stat().st_size
             logger.debug(
                 "Uploading file to MinIO.",
                 extra={
@@ -552,6 +553,18 @@ class MinioManager(MinioManagerInterface):
                 file_path,
                 content_type=content_type,
                 metadata=metadata
+            )
+
+            logger.info(
+                "File uploaded successfully.",
+                extra={
+                    "bucket": bucket_name,
+                    "object_key_suffix": object_name[
+                        -self._settings.object_key_log_suffix_chars:
+                    ] if object_name else "",
+                    "size_bytes": file_size,
+                    "etag": result.etag
+                }
             )
 
         except S3Error as e:
@@ -581,20 +594,6 @@ class MinioManager(MinioManagerInterface):
 
         except Exception:
             raise
-
-        file_size = Path(file_path).stat().st_size
-
-        logger.info(
-            "File uploaded successfully.",
-            extra={
-                "bucket": bucket_name,
-                "object_key_suffix": object_name[
-                    -self._settings.object_key_log_suffix_chars:
-                ] if object_name else "",
-                "size_bytes": file_size,
-                "etag": result.etag
-            }
-        )
 
     async def _upload_data_core(
             self,
@@ -691,6 +690,18 @@ class MinioManager(MinioManagerInterface):
 
             await asyncio.to_thread(client.fget_object, bucket_name, object_name, file_path)
 
+            file_size = Path(file_path).stat().st_size
+            logger.info(
+                "File downloaded successfully.",
+                extra={
+                    "bucket": bucket_name,
+                    "object_key_suffix": object_name[
+                        -self._settings.object_key_log_suffix_chars:
+                    ] if object_name else "",
+                    "size_bytes": file_size
+                }
+            )
+
         except S3Error as e:
             logger.error(
                 "S3 error while downloading file.",
@@ -718,19 +729,6 @@ class MinioManager(MinioManagerInterface):
 
         except Exception:
             raise
-
-        file_size = Path(file_path).stat().st_size
-
-        logger.info(
-            "File downloaded successfully.",
-            extra={
-                "bucket": bucket_name,
-                "object_key_suffix": object_name[
-                    -self._settings.object_key_log_suffix_chars:
-                ] if object_name else "",
-                "size_bytes": file_size
-            }
-        )
 
     async def _download_data_core(
             self,

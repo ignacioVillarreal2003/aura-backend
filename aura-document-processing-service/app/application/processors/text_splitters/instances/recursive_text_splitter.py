@@ -20,6 +20,7 @@ class RecursiveTextSplitter(BaseTextSplitter):
         self._max_text_length = self._settings.max_text_length
 
         try:
+            self._min_chunk_chars = self._settings.min_chunk_chars
             self._splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
                 encoding_name=self._settings.recursive_encoding_name,
                 chunk_size=self._settings.recursive_split_size,
@@ -30,7 +31,8 @@ class RecursiveTextSplitter(BaseTextSplitter):
                 extra={
                     "encoding": self._settings.recursive_encoding_name,
                     "split_size": self._settings.recursive_split_size,
-                    "split_overlap": self._settings.recursive_split_overlap
+                    "split_overlap": self._settings.recursive_split_overlap,
+                    "min_chunk_chars": self._settings.min_chunk_chars
                 }
             )
         except Exception as e:
@@ -58,6 +60,7 @@ class RecursiveTextSplitter(BaseTextSplitter):
 
         try:
             splits = self._splitter.split_text(text)
+            splits = self._merge_short_chunks(splits)
 
             logger.info(
                 "The text was split successfully.",

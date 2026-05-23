@@ -21,7 +21,9 @@ _BASE_READER_PRIORITY: list[ReaderType] = [
     ReaderType.digital_pdf,
     ReaderType.digital_docx,
     ReaderType.scanned_pdf,
-    ReaderType.scanned_docx
+    ReaderType.scanned_docx,
+    ReaderType.plain_text,
+    ReaderType.csv,
 ]
 
 _WINDOWS_TESSERACT_PATHS = [
@@ -253,19 +255,23 @@ class ReaderFactory:
     def _initialize_readers(
             self
     ) -> None:
-        from app.application.processors.readers.instances.digital.digital_pdf_reader import DigitalPDFReader
-        from app.application.processors.readers.instances.digital.digital_docx_reader import DigitalDOCXReader
+        from app.application.processors.readers.instances.digital_pdf_reader import DigitalPDFReader
+        from app.application.processors.readers.instances.digital_docx_reader import DigitalDOCXReader
+        from app.application.processors.readers.instances.plain_text_reader import PlainTextReader
+        from app.application.processors.readers.instances.csv_reader import CSVReader
 
         self._register(ReaderType.digital_pdf, DigitalPDFReader, self._settings)
         self._register(ReaderType.digital_docx, DigitalDOCXReader, self._settings)
+        self._register(ReaderType.plain_text, PlainTextReader, self._settings)
+        self._register(ReaderType.csv, CSVReader, self._settings)
 
         if self._settings.docling_enabled:
             from app.application.processors.readers.instances.docling_reader import DoclingReader
             self._register(ReaderType.docling, DoclingReader, self._settings)
 
         if self._ocr_settings.ocr_enabled:
-            from app.application.processors.readers.instances.scanned.scanned_pdf_reader import ScannedPDFReader
-            from app.application.processors.readers.instances.scanned.scanned_docx_reader import ScannedDOCXReader
+            from app.application.processors.readers.instances.scanned_pdf_reader import ScannedPDFReader
+            from app.application.processors.readers.instances.scanned_docx_reader import ScannedDOCXReader
 
             self._register(ReaderType.scanned_pdf, ScannedPDFReader, self._ocr_settings)
             self._register(ReaderType.scanned_docx, ScannedDOCXReader, self._ocr_settings)

@@ -1,0 +1,62 @@
+# Virtual environments
+.venv/
+venv/
+
+# Version control
+.git/
+.gitignore
+.gitattributes
+
+# IDE
+.idea/
+.vscode/
+
+# Python cache (all levels)
+**/__pycache__/
+**/*.py[cod]
+**/*.pyo
+**/*.pyd
+**/*.so
+**/*.egg
+**/*.egg-info
+dist/
+build/
+.tox/
+.coverage
+.coverage.*
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+
+# Logs
+*.log
+
+# Environment files (secrets must come from env vars / secrets manager)
+.env
+.env.*
+
+# Database
+db.sqlite3
+
+# Tests
+test/
+
+# Docker files (no need to copy into image)
+.dockerignore
+Dockerfile
+docker-compose*.yml
+
+# Docs
+*.md
+docs/
+
+# Dev config
+pytest.ini
+setup.cfg
+.coveragerc
+
+# HTTP request files (dev tooling only)
+http/
+
+.claude/

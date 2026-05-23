@@ -20,6 +20,33 @@ else
 end
 """
 
+_MARK_PROGRESS_SCRIPT = """
+local raw = redis.call("GET", KEYS[1])
+if not raw then return 0 end
+local snap = cjson.decode(raw)
+if snap["job_id"] ~= ARGV[1] then return 0 end
+if ARGV[2] ~= "" then snap["current_fragment_id"] = tonumber(ARGV[2]) end
+snap["processed_fragments"]  = (snap["processed_fragments"]  or 0) + tonumber(ARGV[3])
+snap["failed_fragments"]     = (snap["failed_fragments"]     or 0) + tonumber(ARGV[4])
+snap["extracted_entities"]   = (snap["extracted_entities"]   or 0) + tonumber(ARGV[5])
+snap["extracted_relations"]  = (snap["extracted_relations"]  or 0) + tonumber(ARGV[6])
+redis.call("SET", KEYS[1], cjson.encode(snap), "EX", tonumber(ARGV[7]))
+return 1
+"""
+
+_APPEND_ERROR_SCRIPT = """
+local raw = redis.call("GET", KEYS[1])
+if not raw then return 0 end
+local snap = cjson.decode(raw)
+if snap["job_id"] ~= ARGV[1] then return 0 end
+local errors = snap["errors"] or {}
+if #errors >= tonumber(ARGV[2]) then return 0 end
+table.insert(errors, cjson.decode(ARGV[3]))
+snap["errors"] = errors
+redis.call("SET", KEYS[1], cjson.encode(snap), "EX", tonumber(ARGV[4]))
+return 1
+"""
+
 
 class GraphExtractionJobProgressStore(GraphExtractionJobProgressStoreInterface):
     def __init__(
@@ -105,27 +132,18 @@ class GraphExtractionJobProgressStore(GraphExtractionJobProgressStoreInterface):
             extracted_entities_increment: int = 0,
             extracted_relations_increment: int = 0,
     ) -> None:
-        snapshot = await self._get_snapshot(document_id)
-        if snapshot is None or snapshot.get("job_id") != job_id:
-            return
-        if current_fragment_id is not None:
-            snapshot["current_fragment_id"] = current_fragment_id
-        snapshot["processed_fragments"] = (
-                int(snapshot.get("processed_fragments", 0)) + processed_increment
-        )
-        snapshot["failed_fragments"] = (
-                int(snapshot.get("failed_fragments", 0)) + failed_increment
-        )
-        snapshot["extracted_entities"] = (
-                int(snapshot.get("extracted_entities", 0)) + extracted_entities_increment
-        )
-        snapshot["extracted_relations"] = (
-                int(snapshot.get("extracted_relations", 0)) + extracted_relations_increment
-        )
-        await self._redis.set(
+        fragment_id_arg = str(current_fragment_id) if current_fragment_id is not None else ""
+        await self._redis.eval(
+            _MARK_PROGRESS_SCRIPT,
+            1,
             self._snapshot_key(document_id),
-            json.dumps(snapshot),
-            ex=self._snapshot_ttl_seconds,
+            job_id,
+            fragment_id_arg,
+            str(processed_increment),
+            str(failed_increment),
+            str(extracted_entities_increment),
+            str(extracted_relations_increment),
+            str(self._snapshot_ttl_seconds),
         )
 
     async def append_error(
@@ -135,18 +153,14 @@ class GraphExtractionJobProgressStore(GraphExtractionJobProgressStoreInterface):
             document_id: int,
             error: dict[str, Any],
     ) -> None:
-        snapshot = await self._get_snapshot(document_id)
-        if snapshot is None or snapshot.get("job_id") != job_id:
-            return
-        errors = list(snapshot.get("errors") or [])
-        if len(errors) >= MAX_KNOWLEDGE_GRAPH_ERRORS:
-            return
-        errors.append(error)
-        snapshot["errors"] = errors
-        await self._redis.set(
+        await self._redis.eval(
+            _APPEND_ERROR_SCRIPT,
+            1,
             self._snapshot_key(document_id),
-            json.dumps(snapshot),
-            ex=self._snapshot_ttl_seconds,
+            job_id,
+            str(MAX_KNOWLEDGE_GRAPH_ERRORS),
+            json.dumps(error),
+            str(self._snapshot_ttl_seconds),
         )
 
     async def complete_job(
