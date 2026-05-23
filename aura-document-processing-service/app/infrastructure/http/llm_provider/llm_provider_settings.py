@@ -135,7 +135,7 @@ class LlmProviderSettings(BaseSettings):
         return float(self.enrich_timeout_seconds or self.timeout_seconds)
 
     def effective_extract_entities_relations_timeout_seconds(self) -> float:
-        return float(self.extract_entities_relations_timeout_seconds)
+        return self.extract_entities_relations_timeout_seconds
 
     def effective_translate_graph_query_timeout_seconds(self) -> float:
         return float(

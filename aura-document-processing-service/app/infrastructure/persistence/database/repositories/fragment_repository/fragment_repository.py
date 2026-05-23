@@ -279,10 +279,6 @@ class FragmentRepository(FragmentRepositoryInterface):
             raise DatabaseException("The BM25 result count k must be at least 1.")
 
         try:
-            # ParadeDB does not support parameterized BM25 queries via prepared
-            # statements ($1/$2/$3). All values must be inlined as literals.
-            # sanitized is already stripped of quotes by _sanitize_bm25_search_input.
-            escaped_query = sanitized.replace("'", "''")
             doc_id_filter = ""
             if document_ids:
                 ids_literal = ",".join(str(int(d)) for d in document_ids)
@@ -306,7 +302,7 @@ class FragmentRepository(FragmentRepositoryInterface):
                        deleted_at
                 FROM fragment
                 WHERE deleted_at IS NULL
-                  AND content @@@ '{escaped_query}'
+                  AND content @@@ '{sanitized}'
                   {doc_id_filter}
                   AND paradedb.score(id) >= {float(min_score)}
                 ORDER BY paradedb.score(id) DESC
@@ -496,6 +492,7 @@ class FragmentRepository(FragmentRepositoryInterface):
                     or_(*conditions),
                 )
                 .order_by(Fragment.document_id, Fragment.fragment_index)
+                .limit(MAX_FRAGMENTS_IN_LIST)
             )
 
             result = await database_session.execute(stmt)

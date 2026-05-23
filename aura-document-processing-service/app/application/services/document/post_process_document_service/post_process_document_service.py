@@ -176,7 +176,13 @@ class PostProcessDocumentService(PostProcessDocumentServiceInterface):
         try:
             await self._job_publisher.publish_job(job_id)
         except Exception as e:
-            await self._job_progress_store.abort_document_job(job_id)
+            try:
+                await self._job_progress_store.abort_document_job(job_id)
+            except Exception:
+                logger.exception(
+                    "Failed to abort the document job after a publish failure; the lock will expire by TTL.",
+                    extra={"job_id": job_id},
+                )
             raise RabbitMQPublishException("Failed to enqueue the document post-processing job.") from e
 
         return PostProcessDocumentsStartResponse(

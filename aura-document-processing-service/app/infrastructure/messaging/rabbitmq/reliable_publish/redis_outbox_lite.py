@@ -108,8 +108,10 @@ class RedisOutboxLite:
             "updated_at": int(time.time()),
         }
         event_key = self._event_key(event_id)
-        await self._redis.set(event_key, json.dumps(payload), ex=self._settings.outbox_pending_ttl_seconds)
-        await self._redis.sadd(self._pending_set_key, event_id)
+        async with self._redis.pipeline(transaction=True) as pipe:
+            pipe.set(event_key, json.dumps(payload), ex=self._settings.outbox_pending_ttl_seconds)
+            pipe.sadd(self._pending_set_key, event_id)
+            await pipe.execute()
 
     async def mark_published(
             self,

@@ -324,7 +324,6 @@ class AuthenticationProvider(AuthenticationProviderInterface):
                 HttpClientTimeoutException
         ) as e:
             self._handle_http_error(e, operation="token validation")
-            raise
 
         try:
             payload = response.json()
@@ -373,8 +372,7 @@ class AuthenticationProvider(AuthenticationProviderInterface):
     def _format_bearer_token(
             token: str
     ) -> str:
-        stripped = token.strip()
-        return stripped if stripped.lower().startswith("bearer ") else f"Bearer {stripped}"
+        return token if token.lower().startswith("bearer ") else f"Bearer {token}"
 
     @staticmethod
     def _parse_comma_list(

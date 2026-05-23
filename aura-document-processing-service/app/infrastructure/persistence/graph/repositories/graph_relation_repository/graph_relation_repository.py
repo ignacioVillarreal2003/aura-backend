@@ -27,8 +27,10 @@ ON CREATE SET
     r.created_at = datetime(),
     r.updated_at = datetime()
 ON MATCH SET
-    r.source_document_ids = apoc.coll.toSet(coalesce(r.source_document_ids, []) + [$document_id]),
-    r.evidence_fragment_ids = apoc.coll.toSet(coalesce(r.evidence_fragment_ids, []) + [$fragment_id]),
+    r.source_document_ids = coalesce(r.source_document_ids, []) +
+                    CASE WHEN $document_id IN coalesce(r.source_document_ids, []) THEN [] ELSE [$document_id] END,
+    r.evidence_fragment_ids = coalesce(r.evidence_fragment_ids, []) +
+                    CASE WHEN $fragment_id IN coalesce(r.evidence_fragment_ids, []) THEN [] ELSE [$fragment_id] END,
     r.confidence = CASE
         WHEN $confidence > coalesce(r.confidence, 0.0) THEN $confidence
         ELSE r.confidence

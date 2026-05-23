@@ -122,6 +122,7 @@ class RabbitMQManagerSettings(BaseSettings):
             from urllib.parse import urlparse
 
             parsed = urlparse(raw)
-            return f"{parsed.scheme}://***:***@{parsed.hostname}:{parsed.port}{parsed.path}"
+            host = f"{parsed.hostname}:{parsed.port}" if parsed.port else parsed.hostname
+            return f"{parsed.scheme}://***:***@{host}{parsed.path}"
         except Exception:
             return "amqp://<redacted>"

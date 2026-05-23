@@ -5,6 +5,7 @@ from fastapi import FastAPI
 
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
 from app.application.processors.readers.reader_factory import ReaderFactory
+from app.application.processors.rerankers.reranker_factory import RerankerFactory
 from app.application.processors.text_cleaners.text_cleaner_factory import TextCleanerFactory
 from app.application.processors.text_splitters.text_splitter_factory import TextSplitterFactory
 from app.application.authorization.authorizer import Authorizer
@@ -271,10 +272,14 @@ async def startup_dependencies(app: FastAPI) -> None:
         )
         app.state.document_query_service = document_query_service
 
+        reranker_factory = RerankerFactory()
+        app.state.reranker_factory = reranker_factory
+
         fragment_query_service = FragmentQueryService(
             document_repository=document_repository,
             fragment_repository=fragment_repository,
             embedder_factory=embedder_factory,
+            reranker_factory=reranker_factory,
             authorizer=authorizer,
             document_collection_repository=document_collection_repository,
             document_collection_catalog_client=document_collection_catalog_client,

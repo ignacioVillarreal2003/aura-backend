@@ -65,7 +65,6 @@ class QuestionContextFragmentsRequest(BaseModel):
 
     rerank: _RerankConfig = Field(default_factory=_RerankConfig)
 
-    # When > 0, each retrieved fragment is expanded with this many neighbors on each side
     adjacent_chunks: int = Field(default=0, ge=0, le=3)
 
     @model_validator(mode="after")

@@ -25,10 +25,13 @@ ON CREATE SET
     e.updated_at = datetime()
 ON MATCH SET
     e.display_name = coalesce(e.display_name, $display_name),
-    e.aliases = apoc.coll.toSet(coalesce(e.aliases, []) + $aliases),
+    e.aliases = reduce(acc = coalesce(e.aliases, []), item IN $aliases |
+                    CASE WHEN item IN acc THEN acc ELSE acc + [item] END),
     e.description = coalesce(e.description, $description),
-    e.source_document_ids = apoc.coll.toSet(coalesce(e.source_document_ids, []) + [$document_id]),
-    e.source_fragment_ids = apoc.coll.toSet(coalesce(e.source_fragment_ids, []) + [$fragment_id]),
+    e.source_document_ids = coalesce(e.source_document_ids, []) +
+                    CASE WHEN $document_id IN coalesce(e.source_document_ids, []) THEN [] ELSE [$document_id] END,
+    e.source_fragment_ids = coalesce(e.source_fragment_ids, []) +
+                    CASE WHEN $fragment_id IN coalesce(e.source_fragment_ids, []) THEN [] ELSE [$fragment_id] END,
     e.updated_at = datetime()
 """
 

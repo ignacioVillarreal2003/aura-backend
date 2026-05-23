@@ -52,6 +52,7 @@ class FragmentPostProcessJobProgressStore(FragmentPostProcessJobProgressStoreInt
             return False
 
         try:
+            ttl = self._settings.post_process_job_lock_ttl_seconds
             manifest = {
                 "job_id": job_id,
                 "document_ids": document_ids,
@@ -71,8 +72,10 @@ class FragmentPostProcessJobProgressStore(FragmentPostProcessJobProgressStoreInt
                 "finished_at": None,
                 "errors": [],
             }
-            await self._redis.set(self._manifest_key(job_id), json.dumps(manifest), ex=self._settings.post_process_job_lock_ttl_seconds)
-            await self._redis.set(self._snapshot_key, json.dumps(snapshot))
+            async with self._redis.pipeline(transaction=True) as pipe:
+                pipe.set(self._manifest_key(job_id), json.dumps(manifest), ex=ttl)
+                pipe.set(self._snapshot_key, json.dumps(snapshot), ex=ttl)
+                await pipe.execute()
             return True
         except Exception:
             await self._redis.delete(self._lock_key)

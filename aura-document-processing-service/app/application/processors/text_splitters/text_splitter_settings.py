@@ -26,6 +26,7 @@ class TextSplitterSettings(BaseSettings):
                            "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
                            "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
                            "intfloat/multilingual-e5-large",
+                           "BAAI/bge-m3",
                        ] | str = Field(default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     huggingface_device: Literal["cpu", "cuda"] = Field(default="cpu")
     huggingface_breakpoint_threshold_type: Literal[

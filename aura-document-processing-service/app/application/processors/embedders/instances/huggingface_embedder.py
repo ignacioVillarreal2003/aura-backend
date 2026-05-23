@@ -83,9 +83,19 @@ class HuggingFaceEmbedder(BaseEmbedder):
             self,
             texts: list[str]
     ) -> list[list[float]]:
+        if self._settings.huggingface_embed_instruction:
+            texts = [self._settings.huggingface_embed_instruction + t for t in texts]
+
         self._validate_texts(texts)
 
         if len(texts) > self._max_batch_size:
+            logger.info(
+                "Splitting a large batch into smaller embedding batches.",
+                extra={
+                    "total_texts": len(texts),
+                    "batch_size": self._max_batch_size
+                }
+            )
             return self._embed_in_batches(texts)
 
         return self._embed_single_batch(texts)
@@ -94,10 +104,10 @@ class HuggingFaceEmbedder(BaseEmbedder):
             self,
             text: str
     ) -> list[float]:
-        self._validate_text(text)
-
         if self._settings.huggingface_query_instruction:
             text = self._settings.huggingface_query_instruction + text
+
+        self._validate_text(text)
 
         logger.debug(
             "Generating a query embedding.",
@@ -129,9 +139,6 @@ class HuggingFaceEmbedder(BaseEmbedder):
             self,
             texts: list[str]
     ) -> list[list[float]]:
-        if self._settings.huggingface_embed_instruction:
-            texts = [self._settings.huggingface_embed_instruction + t for t in texts]
-
         logger.debug(
             "Generating document embeddings.",
             extra={

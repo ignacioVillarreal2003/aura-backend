@@ -1,11 +1,12 @@
 import asyncio
 import logging
-from typing import Optional
+from typing import Optional, Protocol, TypeVar
 from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.authorization.permissions import Permissions
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
+from app.application.processors.rerankers.reranker_factory import RerankerFactory
 from app.application.services.fragment.fragment_query_service.exceptions.fragment_query_service_exception import (
     FragmentQueryEmbeddingException,
     FragmentQueryInvalidRequestException,
@@ -15,10 +16,6 @@ from app.application.services.fragment.fragment_query_service.exceptions.fragmen
 )
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
-from app.application.services.fragment.fragment_query_service.fragment_reranker import FragmentReranker
-from app.application.services.fragment.fragment_query_service.hybrid_fusion import (
-    reciprocal_rank_fusion,
-)
 from app.application.services.fragment.fragment_query_service.fragment_query_service_settings import (
     FragmentQueryServiceSettings,
 )
@@ -52,12 +49,33 @@ from app.infrastructure.persistence.database.repositories.fragment_repository.fr
 logger = logging.getLogger(__name__)
 
 
+class _HasId(Protocol):
+    id: int
+
+
+_T = TypeVar("_T", bound=_HasId)
+
+
+def _reciprocal_rank_fusion(*, ranked_lists: list[list[_T]], k: int = 60) -> list[_T]:
+    if not ranked_lists:
+        return []
+    scores: dict[int, float] = {}
+    by_id: dict[int, _T] = {}
+    for ranked in ranked_lists:
+        for rank, item in enumerate(ranked, start=1):
+            fid = int(item.id)
+            scores[fid] = scores.get(fid, 0.0) + 1.0 / (float(k) + float(rank))
+            by_id.setdefault(fid, item)
+    return sorted(by_id.values(), key=lambda f: scores[int(f.id)], reverse=True)
+
+
 class FragmentQueryService(FragmentQueryServiceInterface):
     def __init__(
             self,
             document_repository: DocumentRepositoryInterface,
             fragment_repository: FragmentRepositoryInterface,
             embedder_factory: EmbedderFactory,
+            reranker_factory: RerankerFactory,
             authorizer: Authorizer,
             document_collection_repository: DocumentCollectionRepositoryInterface,
             document_collection_catalog_client: DocumentCollectionCatalogClientInterface,
@@ -66,11 +84,11 @@ class FragmentQueryService(FragmentQueryServiceInterface):
         self._document_repository = document_repository
         self._fragment_repository = fragment_repository
         self._embedder_factory = embedder_factory
+        self._reranker_factory = reranker_factory
         self._settings = fragment_query_service_settings or FragmentQueryServiceSettings()
         self._authorizer = authorizer
         self._document_collection_repository = document_collection_repository
         self._document_collection_catalog_client = document_collection_catalog_client
-        self._reranker = FragmentReranker(fragment_query_service_settings=self._settings)
 
     async def retrieve_context_fragments_by_question(
             self,
@@ -94,8 +112,6 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 authenticated_user=authenticated_user,
                 required_permissions=frozenset({Permissions.LIST_CONTEXT_FRAGMENTS_BY_QUESTION}),
             )
-
-            self._validate_query_request_against_settings(question_context_fragments_request)
 
             collection_ids = await self._document_collection_catalog_client.fetch_all_accessible_collection_ids(
                 user_id=int(authenticated_user.id),
@@ -128,7 +144,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
 
             bm25_ranked_lists: list[list[Fragment]] = []
             bm25_used = False
-            if question_context_fragments_request.bm25_queries and self._settings.bm25_enabled:
+            if question_context_fragments_request.bm25_queries:
                 try:
                     bm25_results: list[list[Fragment]] = []
                     for q in question_context_fragments_request.bm25_queries:
@@ -143,7 +159,6 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                     bm25_ranked_lists = bm25_results
                     bm25_used = True
                 except FragmentQueryRetrievalException:
-                    # Roll back the aborted transaction so the session stays usable.
                     await database_session.rollback()
                     logger.warning(
                         "BM25 retrieval failed; falling back to vector-only pool.",
@@ -153,7 +168,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
 
             all_ranked_lists = semantic_ranked_lists + bm25_ranked_lists
             if len(all_ranked_lists) > 1:
-                fragments: list[Fragment] = reciprocal_rank_fusion(
+                fragments: list[Fragment] = _reciprocal_rank_fusion(
                     ranked_lists=all_ranked_lists,
                     k=self._settings.bm25_rrf_k,
                 )
@@ -162,30 +177,20 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             else:
                 fragments = []
 
-            # Fast in-process safety check (no extra DB round-trip)
             fragments = [f for f in fragments if f.document_id in accessible_doc_set]
-            pre_rerank_count = len(fragments)
 
             rerank_applied = False
-            if question_context_fragments_request.rerank.enabled and self._settings.rerank_enabled:
-                if pre_rerank_count >= self._settings.rerank_min_fragments:
-                    rerank_query = self._build_rerank_query(question_context_fragments_request)
-                    fragments = await self._reranker.rerank_fragments(
-                        query=rerank_query,
-                        fragments=fragments,
-                        top_n=question_context_fragments_request.rerank.max_fragments,
-                    )
-                    rerank_applied = True
-                else:
-                    logger.info(
-                        "Rerank skipped: fragment count is below rerank_min_fragments.",
-                        extra={
-                            "fragment_count": pre_rerank_count,
-                            "rerank_min_fragments": self._settings.rerank_min_fragments,
-                        },
-                    )
+            if question_context_fragments_request.rerank.enabled and fragments:
+                rerank_query = self._build_rerank_query(question_context_fragments_request)
+                top_n = question_context_fragments_request.rerank.max_fragments
+                indices = await self._reranker_factory.reranker.rerank(
+                    query=rerank_query,
+                    candidates=[f.content for f in fragments],
+                    top_n=top_n,
+                )
+                fragments = [fragments[i] for i in indices]
+                rerank_applied = True
 
-            # Expand with adjacent chunks if requested (applied after reranking)
             adjacent_added = 0
             if question_context_fragments_request.adjacent_chunks > 0 and fragments:
                 retrieved_ids = {f.id for f in fragments}
@@ -199,6 +204,16 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 adjacent_added = len(adjacent)
                 fragments = fragments + adjacent
 
+            # Deduplicate by fragment ID preserving insertion order
+            # (main fragments take priority; adjacent are appended after)
+            seen_ids: set[int] = set()
+            deduped: list[Fragment] = []
+            for f in fragments:
+                if f.id not in seen_ids:
+                    seen_ids.add(f.id)
+                    deduped.append(f)
+            fragments = deduped
+
             fragment_responses = await self._build_fragment_responses(
                 fragments=fragments,
                 database_session=database_session,
@@ -210,7 +225,6 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                     "fragment_count": len(fragment_responses),
                     "rerank_applied": rerank_applied,
                     "bm25_used": bm25_used,
-                    "pre_rerank_count": pre_rerank_count,
                     "adjacent_added": adjacent_added,
                 },
             )
@@ -258,11 +272,6 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 required_permissions=frozenset({Permissions.LIST_CONTEXT_FRAGMENTS_BY_DOCUMENTS}),
             )
 
-            if len(documents_context_fragments_request.document_ids) > self._settings.max_document_ids:
-                raise FragmentQueryInvalidRequestException(
-                    "The number of document identifiers exceeds the configured limit."
-                )
-
             documents = await self._get_documents_by_ids_or_raise(
                 document_ids=documents_context_fragments_request.document_ids,
                 database_session=database_session,
@@ -278,7 +287,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 accessible_collection_ids=collection_ids,
                 database_session=database_session,
             )
-            if len(allowed_ids) != len(documents_context_fragments_request.document_ids):
+            if len(allowed_ids) != len(set(documents_context_fragments_request.document_ids)):
                 logger.warning(
                     "Unauthorized or missing documents in fragments-by-documents request.",
                     extra={
@@ -324,29 +333,6 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             raise FragmentQueryServiceException(
                 "An unexpected error occurred while retrieving context fragments for the documents."
             ) from e
-
-    def _validate_query_request_against_settings(
-            self,
-            question_context_fragments_request: QuestionContextFragmentsRequest,
-    ) -> None:
-        for q in question_context_fragments_request.semantic_queries:
-            if q.max_fragments > self._settings.max_fragments:
-                raise FragmentQueryInvalidRequestException(
-                    "A semantic query requests more fragments than the configured limit."
-                )
-        if question_context_fragments_request.bm25_queries and not self._settings.bm25_enabled:
-            raise FragmentQueryInvalidRequestException(
-                "BM25 retrieval is disabled on this service."
-            )
-        for q in question_context_fragments_request.bm25_queries:
-            if q.max_fragments > self._settings.max_fragments:
-                raise FragmentQueryInvalidRequestException(
-                    "A BM25 query requests more fragments than the configured limit."
-                )
-        if question_context_fragments_request.rerank.enabled and not self._settings.rerank_enabled:
-            raise FragmentQueryInvalidRequestException(
-                "Reranking is disabled on this service."
-            )
 
     @staticmethod
     def _build_rerank_query(question_context_fragments_request: QuestionContextFragmentsRequest) -> str:
