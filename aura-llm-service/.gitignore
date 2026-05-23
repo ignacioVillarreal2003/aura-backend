@@ -41,7 +41,6 @@ dmypy.json
 # --- Docker ---
 *.pid
 *.tar
-**/.dockerignore
 
 # --- Database dumps ---
 *.sql
