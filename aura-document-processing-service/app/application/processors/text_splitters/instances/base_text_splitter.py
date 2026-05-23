@@ -29,7 +29,6 @@ class BaseTextSplitter(TextSplitterInterface):
         if not chunks or self._min_chunk_chars <= 0:
             return chunks
 
-        # Backward pass: short chunk sticks to the previous one
         result: list[str] = []
         for chunk in chunks:
             stripped = chunk.strip()
@@ -44,7 +43,6 @@ class BaseTextSplitter(TextSplitterInterface):
             else:
                 result.append(stripped)
 
-        # Forward pass: if the first chunk is still short, push it into the second
         if len(result) >= 2 and len(result[0]) < self._min_chunk_chars:
             logger.debug(
                 "Merged short leading chunk into next.",
