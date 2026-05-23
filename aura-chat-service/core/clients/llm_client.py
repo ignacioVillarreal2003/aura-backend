@@ -25,6 +25,13 @@ class DocumentQuestionResult:
     fragments: list[dict[str, Any]] = field(default_factory=list)
 
 
+@dataclass
+class DocumentSummaryResult:
+    document_ids: list[int]
+    summary: str
+    fragments: list[dict[str, Any]] = field(default_factory=list)
+
+
 class LLMClient:
     def __init__(self):
         self._http_client = AsyncHttpClient(timeout=getattr(settings, "LLM_SERVICE_TIMEOUT", 30))
@@ -65,6 +72,45 @@ class LLMClient:
         return DocumentQuestionResult(
             question=str(data.get("question", "")),
             answer=str(data.get("answer", "")),
+            fragments=fragments,
+        )
+
+    async def document_summary(
+        self,
+        document_ids: list[int],
+        user: AuthenticatedUser,
+    ) -> DocumentSummaryResult:
+        payload = {"document_ids": document_ids}
+
+        logger.debug(
+            "Calling LLM document-summary.",
+            extra={
+                "user_id": user.id,
+                "document_count": len(document_ids),
+                "url": settings.LLM_DOCUMENT_SUMMARY_URL,
+            },
+        )
+
+        response = await self._http_client.post(
+            url=settings.LLM_DOCUMENT_SUMMARY_URL,
+            json=payload,
+            headers=self._build_service_headers(user),
+        )
+
+        try:
+            data = response.json()
+        except ValueError as e:
+            logger.error("LLM returned non-JSON body for document-summary.")
+            raise HttpClientException(
+                "Invalid LLM response format",
+                status_code=response.status_code,
+            ) from e
+
+        fragments = self.normalize_fragments(data.get("fragments"))
+
+        return DocumentSummaryResult(
+            document_ids=data.get("document_ids", document_ids),
+            summary=str(data.get("summary", "")),
             fragments=fragments,
         )
 

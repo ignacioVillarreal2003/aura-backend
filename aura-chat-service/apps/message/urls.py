@@ -15,6 +15,7 @@ from apps.message.views.message_delete_view import MessageDeleteView
 from apps.message.views.message_view import MessageListView
 from apps.message.views.pin_view import PinMessageView, PinnedMessageListView
 from apps.message.views.regenerate_view import RegenerateResponseView
+from apps.message.views.summary_view import DocumentSummaryView
 from apps.message.views.thread_view import ThreadView
 
 urlpatterns = [
@@ -23,6 +24,7 @@ urlpatterns = [
     path("read/", MarkAsReadView.as_view(), name="message-mark-read"),
     path("pinned/", PinnedMessageListView.as_view(), name="message-pinned-list"),
     path("regenerate/", RegenerateResponseView.as_view(), name="message-regenerate"),
+    path("summary/", DocumentSummaryView.as_view(), name="message-summary"),
     path("bookmarked/", BookmarkedMessageListView.as_view(), name="message-bookmarked"),
     path("export/pdf/", ChatExportPDFView.as_view(), name="chat-export-pdf"),
     path("export/markdown/", ChatExportMarkdownView.as_view(), name="chat-export-markdown"),

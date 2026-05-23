@@ -24,7 +24,7 @@ from core.authorization.permissions import (
     SEND_MESSAGE,
 )
 from core.clients.exceptions import HttpClientException
-from core.clients.llm_client import DocumentQuestionResult, llm_client
+from core.clients.llm_client import DocumentQuestionResult, DocumentSummaryResult, llm_client
 from core.clients.transcription_client import transcription_client
 
 logger = logging.getLogger(__name__)
@@ -55,6 +55,13 @@ def broadcast_chat_ai_lock_change(chat_id: int, locked: bool) -> None:
 class DocumentQuestionRunResult:
     question: str
     answer: str
+    fragments: list[dict[str, Any]]
+    assistant_message: ChatMessage | None = None
+
+
+@dataclass
+class DocumentSummaryRunResult:
+    summary: str
     fragments: list[dict[str, Any]]
     assistant_message: ChatMessage | None = None
 
@@ -327,6 +334,46 @@ class MessageService:
             answer=llm_out.answer,
             fragments=llm_out.fragments,
             assistant_message=None,
+        )
+
+    async def run_document_summary(
+        self,
+        user: AuthenticatedUser,
+        chat_id: int,
+        document_ids: list[int],
+    ) -> DocumentSummaryRunResult:
+        await sync_to_async(self._require_access)(chat_id, user.id)
+
+        try:
+            llm_out: DocumentSummaryResult = await llm_client.document_summary(document_ids, user)
+        except HttpClientException as e:
+            logger.error(
+                "LLM document-summary failed: %s",
+                str(e),
+                extra={
+                    "chat_id": chat_id,
+                    "user_id": user.id,
+                    "status_code": e.status_code,
+                    "llm_url": getattr(settings, "LLM_DOCUMENT_SUMMARY_URL", ""),
+                },
+                exc_info=True,
+            )
+            raise LLMServiceException() from e
+
+        assistant_msg: ChatMessage | None = None
+        if llm_out.summary.strip():
+            assistant_msg = await sync_to_async(self._save_ai_message)(
+                chat_id, user.id, llm_out.summary
+            )
+            logger.info(
+                "Document summary saved.",
+                extra={"chat_id": chat_id, "message_id": assistant_msg.id},
+            )
+
+        return DocumentSummaryRunResult(
+            summary=llm_out.summary,
+            fragments=llm_out.fragments,
+            assistant_message=assistant_msg,
         )
 
     def _require_access(self, chat_id: int, user_id: int):
