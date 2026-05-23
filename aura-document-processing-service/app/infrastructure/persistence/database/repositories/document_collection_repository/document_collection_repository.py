@@ -85,16 +85,16 @@ class DocumentCollectionRepository(DocumentCollectionRepositoryInterface):
             limit: int = 10_000,
     ) -> list[int]:
         try:
-            owned_conditions = [
-                Document.created_by == user_id,
-                Document.deleted_at.is_(None),
-            ]
+            access_clauses = [Document.created_by == user_id]
             if chat_id is not None:
-                owned_conditions.append(Document.chat_id == chat_id)
+                access_clauses.append(Document.chat_id == chat_id)
+
+            not_deleted = Document.deleted_at.is_(None)
+            access_filter = or_(*access_clauses)
 
             owned_result = await database_session.execute(
                 select(Document.id)
-                .where(*owned_conditions)
+                .where(not_deleted, access_filter)
                 .order_by(Document.id)
                 .limit(limit)
             )
@@ -104,7 +104,7 @@ class DocumentCollectionRepository(DocumentCollectionRepositoryInterface):
             if remaining > 0 and accessible_collection_ids:
                 coll_tuple = tuple(accessible_collection_ids)
                 if coll_tuple:
-                    owned_subq = select(Document.id).where(*owned_conditions)
+                    owned_subq = select(Document.id).where(not_deleted, access_filter)
                     shared_result = await database_session.execute(
                         select(DocumentInDocumentCollection.document_id)
                         .where(

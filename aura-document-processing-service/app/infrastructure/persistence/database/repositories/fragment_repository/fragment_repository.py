@@ -265,6 +265,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             k: int,
             min_score: float = 0.0,
             query_max_chars: int = 512,
+            document_ids: list[int] | None = None,
     ) -> List[Fragment]:
         sanitized = _sanitize_bm25_search_input(query, query_max_chars)
         if not sanitized:
@@ -278,8 +279,17 @@ class FragmentRepository(FragmentRepositoryInterface):
             raise DatabaseException("The BM25 result count k must be at least 1.")
 
         try:
+            # ParadeDB does not support parameterized BM25 queries via prepared
+            # statements ($1/$2/$3). All values must be inlined as literals.
+            # sanitized is already stripped of quotes by _sanitize_bm25_search_input.
+            escaped_query = sanitized.replace("'", "''")
+            doc_id_filter = ""
+            if document_ids:
+                ids_literal = ",".join(str(int(d)) for d in document_ids)
+                doc_id_filter = f"AND document_id IN ({ids_literal})"
+
             sql = text(
-                """
+                f"""
                 SELECT id,
                        document_id,
                        content,
@@ -296,20 +306,14 @@ class FragmentRepository(FragmentRepositoryInterface):
                        deleted_at
                 FROM fragment
                 WHERE deleted_at IS NULL
-                  AND content @@@ :search_query
-                  AND paradedb.score(id) >= :min_score
+                  AND content @@@ '{escaped_query}'
+                  {doc_id_filter}
+                  AND paradedb.score(id) >= {float(min_score)}
                 ORDER BY paradedb.score(id) DESC
-                LIMIT :k
+                LIMIT {int(k)}
                 """
             )
-            result = await database_session.execute(
-                sql,
-                {
-                    "search_query": sanitized,
-                    "min_score": min_score,
-                    "k": k,
-                },
-            )
+            result = await database_session.execute(sql)
             rows = result.fetchall()
 
             fragments = [
@@ -525,9 +529,6 @@ class FragmentRepository(FragmentRepositoryInterface):
 
             database_session.add_all(fragments)
             await database_session.flush()
-
-            for fragment in fragments:
-                await database_session.refresh(fragment)
 
             logger.info(
                 "The fragments were created successfully.",

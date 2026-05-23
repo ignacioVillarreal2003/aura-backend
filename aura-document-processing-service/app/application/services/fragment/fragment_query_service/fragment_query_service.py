@@ -97,7 +97,6 @@ class FragmentQueryService(FragmentQueryServiceInterface):
 
             self._validate_query_request_against_settings(question_context_fragments_request)
 
-            # Resolve accessible document IDs once and pre-filter all searches
             collection_ids = await self._document_collection_catalog_client.fetch_all_accessible_collection_ids(
                 user_id=int(authenticated_user.id),
                 authorization_header=authorization_header,
@@ -144,6 +143,8 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                     bm25_ranked_lists = bm25_results
                     bm25_used = True
                 except FragmentQueryRetrievalException:
+                    # Roll back the aborted transaction so the session stays usable.
+                    await database_session.rollback()
                     logger.warning(
                         "BM25 retrieval failed; falling back to vector-only pool.",
                         exc_info=True,
@@ -461,17 +462,14 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             document_ids: list[int] | None = None,
     ) -> list[Fragment]:
         try:
-            fragments = await self._fragment_repository.get_most_relevant_fragments_bm25(
+            return await self._fragment_repository.get_most_relevant_fragments_bm25(
                 query=query_text,
                 database_session=database_session,
                 k=k,
                 min_score=self._settings.bm25_min_score,
                 query_max_chars=self._settings.bm25_query_max_chars,
+                document_ids=document_ids,
             )
-            if document_ids is not None:
-                doc_set = set(document_ids)
-                fragments = [f for f in fragments if f.document_id in doc_set]
-            return fragments
         except Exception as e:
             raise FragmentQueryRetrievalException("Failed to retrieve BM25-ranked fragments.") from e
 

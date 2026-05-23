@@ -67,6 +67,7 @@ class FragmentRepositoryInterface(ABC):
             k: int,
             min_score: float = 0.0,
             query_max_chars: int = 512,
+            document_ids: list[int] | None = None,
     ) -> list[Fragment]:
         pass
 

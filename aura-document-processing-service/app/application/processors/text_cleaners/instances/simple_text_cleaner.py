@@ -7,6 +7,23 @@ from app.application.processors.text_cleaners.text_cleaner_settings import TextC
 
 logger = logging.getLogger(__name__)
 
+# Common short Spanish words that are legitimate standalone tokens and should
+# never be glued to the preceding line fragment without a space.
+_SPANISH_STOP_WORDS: frozenset[str] = frozenset({
+    "de", "la", "las", "los", "el", "un", "una", "y", "o", "a", "en",
+    "con", "por", "que", "del", "al", "se", "le", "su", "sus", "si",
+    "no", "ni", "ya", "es", "ha", "lo", "me", "te", "nos", "les",
+    "eso", "aun", "mas", "muy", "bien", "son", "fue", "ser", "hay",
+    "ver", "dar", "han", "era", "iba", "sin", "tan", "tal", "cual",
+    "mas", "fue", "ahi", "ahi",
+})
+
+# Explicit hyphen at end-of-line: "word-\ncontinuation" (common PDF artifact).
+_HYPHEN_LINEBREAK_RE = re.compile(
+    r'([a-záéíóúüñA-ZÁÉÍÓÚÜÑ]+)-[ \t]*\n[ \t]*([a-záéíóúüñ])',
+    re.UNICODE,
+)
+
 _NOISE_LINE_PATTERN = re.compile(r"^[\-=*#~_\s$%!@^&|+]{3,}$")
 
 # Matches section/article label lines like "2.B.9.", "10.5.", "2.", "A.1." — their
@@ -70,6 +87,7 @@ class SimpleTextCleaner(TextCleanerInterface):
             text = self._remove_markdown(text)
             text = self._remove_urls(text)
             text = self._remove_noise_lines(text)
+            text = self._repair_explicit_hyphens(text)
             text = self._join_fragmented_lines(text)
             text = self._remove_normalize_whitespace(text)
 
@@ -146,6 +164,10 @@ class SimpleTextCleaner(TextCleanerInterface):
             return "\n".join(cleaned)
         return text
 
+    def _repair_explicit_hyphens(self, text: str) -> str:
+        # "word-\ncontinuation" → "wordcontinuation": the most reliable PDF artifact.
+        return _HYPHEN_LINEBREAK_RE.sub(r'\1\2', text)
+
     def _join_fragmented_lines(
             self,
             text: str
@@ -204,7 +226,23 @@ class SimpleTextCleaner(TextCleanerInterface):
                         )
 
                         if should_merge:
-                            output[j] += " " + line
+                            # If the previous line ends with a bare letter (no punctuation)
+                            # and the incoming line starts with a short non-stop-word fragment,
+                            # the PDF likely split a word across lines without a hyphen.
+                            # Join without a space to reconstruct the original word.
+                            first_word = words[0] if words else ""
+                            join_without_space = (
+                                not prev_ends_sentence
+                                and prev
+                                and prev[-1].isalpha()
+                                and 1 <= len(first_word) <= 5
+                                and first_word.isalpha()
+                                and first_word.lower() not in _SPANISH_STOP_WORDS
+                            )
+                            if join_without_space:
+                                output[j] += line
+                            else:
+                                output[j] += " " + line
                             del output[j + 1:]
                             continue
 

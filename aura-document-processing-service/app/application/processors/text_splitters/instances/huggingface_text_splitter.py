@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Optional
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -84,15 +85,20 @@ class HuggingFaceTextSplitter(BaseTextSplitter):
         )
 
         try:
-            splits = self._splitter.split_text(text)
-            splits = self._enforce_token_limit(splits)
+            segments = self._pre_segment(text)
+            raw_chunks: list[str] = []
+            for segment in segments:
+                raw_chunks.extend(self._splitter.split_text(segment))
+
+            splits = self._enforce_token_limit(raw_chunks)
             splits = self._merge_short_chunks(splits)
 
             logger.info(
                 "The text was split successfully with semantic chunking.",
                 extra={
                     "splits_created": len(splits),
-                    "avg_split_length": sum(len(c) for c in splits) // len(splits) if splits else 0
+                    "segments": len(segments),
+                    "avg_split_length": sum(len(c) for c in splits) // len(splits) if splits else 0,
                 }
             )
 
@@ -108,6 +114,52 @@ class HuggingFaceTextSplitter(BaseTextSplitter):
                 }
             )
             raise TextSplitterExecutionException("Failed to split the text with semantic chunking.") from e
+
+    def _pre_segment(self, text: str) -> list[str]:
+        """Group paragraphs into windows before semantic chunking.
+
+        SemanticChunker embeds each sentence it detects; if a 'sentence' exceeds
+        the model's 512-token limit, the embedding is truncated and breakpoints
+        become inaccurate. Pre-segmenting by paragraph keeps each window small
+        enough that individual sentences fit within the model's context window.
+        """
+        max_tokens_per_window = self._settings.huggingface_max_chunk_tokens * 3
+
+        paragraphs = [p.strip() for p in re.split(r"\n{2,}", text) if p.strip()]
+        if not paragraphs:
+            return [text]
+
+        windows: list[str] = []
+        current_parts: list[str] = []
+        current_tokens = 0
+
+        for para in paragraphs:
+            para_tokens = len(self._tokenizer.encode(para, add_special_tokens=False))
+
+            if para_tokens > max_tokens_per_window:
+                if current_parts:
+                    windows.append("\n\n".join(current_parts))
+                    current_parts, current_tokens = [], 0
+                windows.extend(self._size_splitter.split_text(para))
+            elif current_tokens + para_tokens > max_tokens_per_window and current_parts:
+                windows.append("\n\n".join(current_parts))
+                current_parts, current_tokens = [para], para_tokens
+            else:
+                current_parts.append(para)
+                current_tokens += para_tokens
+
+        if current_parts:
+            windows.append("\n\n".join(current_parts))
+
+        logger.debug(
+            "Pre-segmentation completed.",
+            extra={
+                "paragraphs": len(paragraphs),
+                "windows": len(windows),
+                "max_tokens_per_window": max_tokens_per_window,
+            },
+        )
+        return windows
 
     def _enforce_token_limit(self, chunks: list[str]) -> list[str]:
         result: list[str] = []
