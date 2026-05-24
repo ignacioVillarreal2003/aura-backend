@@ -44,6 +44,7 @@ class AnswerDocumentQuestionProcessor:
         llm_input = self.build_llm_input(
             document_question_state=document_question_state,
             history_messages_window=self._settings.history_messages_window,
+            max_context_chars=self._settings.max_context_chars,
         )
 
         try:
@@ -70,6 +71,7 @@ class AnswerDocumentQuestionProcessor:
         llm_input = self.build_llm_input(
             document_question_state=document_question_state,
             history_messages_window=self._settings.history_messages_window,
+            max_context_chars=self._settings.max_context_chars,
         )
         llm = await self._ollama_llm_facade.get_llm_base()
 
@@ -91,8 +93,11 @@ class AnswerDocumentQuestionProcessor:
     def build_llm_input(
             document_question_state: DocumentQuestionState,
             history_messages_window: int,
+            max_context_chars: int = 12_000,
     ) -> list[BaseMessage]:
         context = "\n\n---\n\n".join(f.content for f in document_question_state.fragments)
+        if len(context) > max_context_chars:
+            context = context[:max_context_chars]
 
         tail = (
             document_question_state.history_messages[-history_messages_window:]

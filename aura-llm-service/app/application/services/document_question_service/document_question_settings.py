@@ -24,6 +24,10 @@ class DocumentQuestionServiceSettings(BaseSettings):
     rerank_max_fragments: Optional[int] = Field(default=8, ge=1, le=100)
     adjacent_chunks: int = Field(default=1, ge=0, le=3)
 
+    # Maximum characters for the context string passed to the LLM.
+    # Prevents context overflow when many/large fragments are retrieved.
+    max_context_chars: int = Field(default=12_000, ge=1_000, le=50_000)
+
     @model_validator(mode="after")
     def validate_coherence(self) -> "DocumentQuestionServiceSettings":
         if not self.use_rerank:

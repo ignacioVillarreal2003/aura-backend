@@ -24,6 +24,7 @@ class MessageResponse(serializers.ModelSerializer):
             "is_bookmarked",
             "user_feedback",
             "thread_reply_count",
+            "fragments",
         ]
 
     @extend_schema_field(

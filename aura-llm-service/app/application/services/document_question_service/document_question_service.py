@@ -10,6 +10,7 @@ from app.application.exceptions.app_exception import RequestValidationException
 from app.application.services.document_question_service.document_question_settings import (
     DocumentQuestionServiceSettings,
 )
+from app.domain.field_limits import MAX_CONTENT_CHARS
 from app.application.services.document_question_service.document_question_state import DocumentQuestionState
 from app.application.services.document_question_service.exceptions.document_question_service_exceptions import (
     DocumentQuestionServiceException,
@@ -172,6 +173,8 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
             state.answer = state.answer.strip()
             if not state.answer:
                 state.answer = _STATIC_FALLBACK_MESSAGE
+            if len(state.answer) > MAX_CONTENT_CHARS:
+                state.answer = state.answer[:MAX_CONTENT_CHARS]
 
             yield DocumentQuestionStreamComplete(
                 result=DocumentQuestionResponse(

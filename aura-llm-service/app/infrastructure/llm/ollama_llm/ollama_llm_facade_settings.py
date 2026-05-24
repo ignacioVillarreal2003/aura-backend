@@ -25,7 +25,8 @@ class OllamaLLMFacadeSettings(BaseSettings):
     seed: Optional[int] = Field(default=None, ge=0)
 
     num_ctx: Optional[int] = Field(default=None, ge=512, le=131_072)
-    num_predict: Optional[int] = Field(default=None, ge=1, le=32_768)
+    # -1 = generate until EOS (unlimited), -2 = fill context window, positive = max tokens
+    num_predict: Optional[int] = Field(default=None, ge=-2, le=32_768)
 
     request_timeout: Optional[float] = Field(default=600.0, gt=0, le=3600.0)
     keep_alive: Optional[str] = Field(default=None)

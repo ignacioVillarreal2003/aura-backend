@@ -14,12 +14,14 @@ class MessageRepository:
         message: str,
         sender_type: str,
         created_by: int,
+        fragments: list | None = None,
     ) -> ChatMessage:
         return ChatMessage.objects.create(
             chat_id=chat_id,
             message=message,
             sender_type=sender_type,
             created_by=created_by,
+            fragments=fragments or None,
         )
 
     @staticmethod

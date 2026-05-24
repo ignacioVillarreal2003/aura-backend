@@ -319,6 +319,13 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             "fragments": event.get("fragments", []),
         })
 
+    async def ai_progress(self, event):
+        await self.send_json({
+            "type": "ai_progress",
+            "step": event.get("step", ""),
+            "message": event.get("message", ""),
+        })
+
     async def ai_delta(self, event):
         await self.send_json({
             "type": "ai_delta",
