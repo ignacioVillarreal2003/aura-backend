@@ -5,6 +5,8 @@ from django.db.models import QuerySet
 
 from apps.classification_levels.repositories import classification_level_repository
 from apps.compartments.repositories import compartment_repository
+from apps.document_collection_documents.models import DocumentInDocumentCollection
+from apps.document_collection_documents.repositories import document_in_document_collection_repository
 from apps.document_collections.models import DocumentCollection
 from apps.document_collections.repositories import document_collection_repository
 from apps.user_authorizations.models import UserClearance, UserCompartment
@@ -19,6 +21,7 @@ from core.authorization.permissions import (
     DELETE_USER_CLEARANCE,
     GET_USER_AUTHORIZATION,
     GET_USER_ACCESSIBLE_COLLECTIONS,
+    GET_USER_ACCESSIBLE_DOCUMENTS,
     LIST_USER_COMPARTMENTS,
     REMOVE_USER_COMPARTMENT,
     SET_USER_CLEARANCE,
@@ -171,6 +174,25 @@ class UserAuthorizationService:
             max_rank=clearance.classification_level.rank,
             compartment_ids=compartment_ids,
         )
+
+    def get_accessible_documents(
+        self,
+        user: AuthenticatedUser,
+        target_user_id: int,
+    ) -> QuerySet[DocumentInDocumentCollection]:
+        AccessControl.require_permission(user, GET_USER_ACCESSIBLE_DOCUMENTS)
+        clearance = user_clearance_repository.get_by_user_id(target_user_id)
+        if clearance is None:
+            return DocumentInDocumentCollection.objects.none()
+        compartment_ids = user_compartment_repository.list_compartment_ids_by_user_id(target_user_id)
+        if not compartment_ids:
+            return DocumentInDocumentCollection.objects.none()
+        accessible_collections = document_collection_repository.list_accessible(
+            max_rank=clearance.classification_level.rank,
+            compartment_ids=compartment_ids,
+        )
+        collection_ids = list(accessible_collections.values_list("id", flat=True))
+        return document_in_document_collection_repository.list_accessible_by_collection_ids(collection_ids)
 
 
 user_authorization_service = UserAuthorizationService()

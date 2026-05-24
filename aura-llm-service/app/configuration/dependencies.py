@@ -117,6 +117,7 @@ async def startup_dependencies(app: FastAPI) -> None:
         document_summary_service = DocumentSummaryService(
             ollama_llm_facade=ollama_facade,
             ollama_llm_invoker=ollama_llm_invoker,
+            ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
             document_context_provider=document_context_provider,
             authorizer=authorizer,
         )
@@ -125,6 +126,7 @@ async def startup_dependencies(app: FastAPI) -> None:
         document_action_service = DocumentActionService(
             ollama_llm_facade=ollama_facade,
             ollama_llm_invoker=ollama_llm_invoker,
+            ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
             document_context_provider=document_context_provider,
             authorizer=authorizer,
         )

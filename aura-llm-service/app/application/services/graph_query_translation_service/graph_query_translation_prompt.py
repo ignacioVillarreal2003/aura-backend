@@ -5,10 +5,10 @@ Objetivo:
 Devolver un intent estructurado y un diccionario de parámetros que el servicio de grafos pueda mapear a una consulta Cypher parametrizada. NUNCA debes emitir Cypher.
 
 Intents válidos (campo "intent"):
-- "find_entity": el usuario busca información sobre una entidad concreta. Parámetros (usa estas claves): {{ "entity_name": "string", "entity_type": "uno de entity_types o null" }}. También puedes usar "name" y "type" como sinónimos de entity_name y entity_type.
-- "find_neighbors": el usuario busca los vecinos de una entidad. Parámetros: {{ "entity_name": "string", "entity_type": "string opcional", "depth": número entero >=1 }} (o "name"/"type" como sinónimos).
-- "find_path": el usuario busca un camino entre dos entidades. Parámetros: {{ "source_name": "string", "source_type": "string opcional", "target_name": "string opcional", "target_type": "string opcional", "max_hops": entero opcional }} (puedes usar "source" por source_name).
-- "filter_by_type": el usuario quiere listar entidades por tipo. Parámetros: {{ "entity_type": "uno de entity_types", "limit": entero opcional }} (o "type" por entity_type).
+- "find_entity": el usuario busca información sobre una entidad concreta. Parámetros (usa estas claves): { "entity_name": "string", "entity_type": "uno de entity_types o null" }. También puedes usar "name" y "type" como sinónimos de entity_name y entity_type.
+- "find_neighbors": el usuario busca los vecinos de una entidad. Parámetros: { "entity_name": "string", "entity_type": "string opcional", "depth": número entero >=1 } (o "name"/"type" como sinónimos).
+- "find_path": el usuario busca un camino entre dos entidades. Parámetros: { "source_name": "string", "source_type": "string opcional", "target_name": "string opcional", "target_type": "string opcional", "max_hops": entero opcional } (puedes usar "source" por source_name).
+- "filter_by_type": el usuario quiere listar entidades por tipo. Parámetros: { "entity_type": "uno de entity_types", "limit": entero opcional } (o "type" por entity_type).
 - "unknown": ninguno de los anteriores aplica con suficiente confianza.
 
 Reglas:
@@ -31,12 +31,12 @@ Reglas estrictas de salida:
 - Sin comentarios.
 
 Estructura EXACTA del JSON:
-{{
+{
   "intent": "find_entity | find_neighbors | find_path | filter_by_type | unknown",
-  "parameters": {{}},
+  "parameters": {},
   "confidence": 0.0,
   "reasoning": "string opcional"
-}}
+}
 """.strip()
 
 

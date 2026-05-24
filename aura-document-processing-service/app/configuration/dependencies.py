@@ -314,18 +314,16 @@ async def startup_dependencies(app: FastAPI) -> None:
         knowledge_graph_settings = KnowledgeGraphSettings()
         app.state.knowledge_graph_settings = knowledge_graph_settings
 
-        graph_extraction_publisher = None
-        if knowledge_graph_settings.enabled:
-            graph_extraction_publisher = GraphExtractionPublisher(
-                rabbitmq_manager=rabbitmq_manager,
-                knowledge_graph_settings=knowledge_graph_settings,
-                outbox_lite=outbox_lite,
-            )
-            app.state.graph_extraction_publisher = graph_extraction_publisher
-            logger.info(
-                "Knowledge graph extraction publisher was registered.",
-                extra={"queue": rabbitmq_manager_settings.graph_extraction_queue},
-            )
+        graph_extraction_publisher = GraphExtractionPublisher(
+            rabbitmq_manager=rabbitmq_manager,
+            knowledge_graph_settings=knowledge_graph_settings,
+            outbox_lite=outbox_lite,
+        )
+        app.state.graph_extraction_publisher = graph_extraction_publisher
+        logger.info(
+            "Knowledge graph extraction publisher was registered.",
+            extra={"queue": rabbitmq_manager_settings.graph_extraction_queue},
+        )
 
         document_ingestion_service = DocumentIngestionService(
             database_manager=database_manager,
@@ -453,22 +451,21 @@ async def startup_dependencies(app: FastAPI) -> None:
         )
         app.state.post_process_fragment_service = post_process_fragment_service
 
-        if knowledge_graph_settings.enabled:
-            await _wire_knowledge_graph_module(
-                app=app,
-                cleanup_stack=cleanup_stack,
-                knowledge_graph_settings=knowledge_graph_settings,
-                rabbitmq_manager=rabbitmq_manager,
-                redis_client=redis_client,
-                redis_client_settings=redis_client_settings,
-                database_manager=database_manager,
-                document_repository=document_repository,
-                fragment_repository=fragment_repository,
-                document_collection_repository=document_collection_repository,
-                document_collection_catalog_client=document_collection_catalog_client,
-                authorizer=authorizer,
-                llm_provider=llm_provider,
-            )
+        await _wire_knowledge_graph_module(
+            app=app,
+            cleanup_stack=cleanup_stack,
+            knowledge_graph_settings=knowledge_graph_settings,
+            rabbitmq_manager=rabbitmq_manager,
+            redis_client=redis_client,
+            redis_client_settings=redis_client_settings,
+            database_manager=database_manager,
+            document_repository=document_repository,
+            fragment_repository=fragment_repository,
+            document_collection_repository=document_collection_repository,
+            document_collection_catalog_client=document_collection_catalog_client,
+            authorizer=authorizer,
+            llm_provider=llm_provider,
+        )
 
         logger.info("All dependencies started successfully")
         cleanup_stack.clear()

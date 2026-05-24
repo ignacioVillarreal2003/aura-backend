@@ -27,8 +27,6 @@ class RagAgentStateBuilder:
             keywords=[],
             retrieved_fragments=[],
             context="",
-            context_sufficient=False,
-            reasoning="",
             answer="",
             fallback_triggered=False,
         )

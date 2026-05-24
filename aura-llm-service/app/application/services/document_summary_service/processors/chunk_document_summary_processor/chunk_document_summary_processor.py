@@ -82,9 +82,9 @@ class ChunkDocumentSummaryProcessor:
         max_attempts = self._settings.max_retry_attempts + 1
         last_error: Optional[Exception] = None
 
-        async with self._semaphore:
-            for attempt in range(max_attempts):
-                try:
+        for attempt in range(max_attempts):
+            try:
+                async with self._semaphore:
                     logger.debug(
                         "Processing chunk",
                         extra={
@@ -95,35 +95,37 @@ class ChunkDocumentSummaryProcessor:
                         },
                     )
                     summary = await self._summarize_chunk(chunk=chunk)
-                    logger.debug(
-                        "Chunk processed successfully",
-                        extra={"chunk_index": chunk_index, "attempt": attempt + 1},
-                    )
-                    return summary
+                logger.debug(
+                    "Chunk processed successfully",
+                    extra={"chunk_index": chunk_index, "attempt": attempt + 1},
+                )
+                return summary
 
-                except Exception as e:
-                    last_error = e
-                    is_last_attempt = attempt == max_attempts - 1
-                    if not is_last_attempt:
-                        logger.warning(
-                            "Chunk processing failed — retrying",
-                            extra={
-                                "chunk_index": chunk_index,
-                                "attempt": attempt + 1,
-                                "error_type": type(e).__name__,
-                                "retry_delay": self._settings.retry_delay,
-                            },
-                        )
-                        await asyncio.sleep(self._settings.retry_delay)
-                    else:
-                        logger.error(
-                            "Chunk processing failed after all attempts",
-                            extra={
-                                "chunk_index": chunk_index,
-                                "total_attempts": max_attempts,
-                                "error_type": type(e).__name__,
-                            },
-                        )
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                last_error = e
+                is_last_attempt = attempt == max_attempts - 1
+                if not is_last_attempt:
+                    logger.warning(
+                        "Chunk processing failed — retrying",
+                        extra={
+                            "chunk_index": chunk_index,
+                            "attempt": attempt + 1,
+                            "error_type": type(e).__name__,
+                            "retry_delay": self._settings.retry_delay,
+                        },
+                    )
+                    await asyncio.sleep(self._settings.retry_delay)
+                else:
+                    logger.error(
+                        "Chunk processing failed after all attempts",
+                        extra={
+                            "chunk_index": chunk_index,
+                            "total_attempts": max_attempts,
+                            "error_type": type(e).__name__,
+                        },
+                    )
 
         raise DocumentSummaryServiceException(
             f"Failed to process chunk {chunk_index} after {max_attempts} attempt(s)"
@@ -151,7 +153,7 @@ class ChunkDocumentSummaryProcessor:
         successful: list[str] = []
         failed_count = 0
         for i, result in enumerate(results):
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 logger.warning(
                     "Chunk failed after all retries",
                     extra={"chunk_index": i, "error_type": type(result).__name__, "error": str(result)},

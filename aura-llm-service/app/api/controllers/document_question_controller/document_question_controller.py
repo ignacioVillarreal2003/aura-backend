@@ -9,6 +9,8 @@ from app.api.controllers.document_question_controller.document_question_controll
     DocumentQuestionControllerInterface
 )
 from app.api.openapi.common import default_error_responses
+from app.application.authorization.authorizer import Authorizer
+from app.application.authorization.permissions import Permissions
 from app.application.services.document_question_service.document_question_service import get_document_question_service
 from app.application.services.document_question_service.interfaces.document_question_service_interface import (
     DocumentQuestionServiceInterface
@@ -43,6 +45,11 @@ class DocumentQuestionController(DocumentQuestionControllerInterface):
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
             _rl: None = Depends(strict_rate_limit),
     ) -> StreamingResponse:
+        Authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LLM_DOCUMENT_QUESTION}),
+        )
+
         async def sse_bytes() -> AsyncIterator[bytes]:
             async for event in document_question_service.execute_document_question_stream(
                     document_question_request=document_question_request,

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from collections.abc import AsyncIterator
 from typing import Optional
 from fastapi import HTTPException, Request, status
 
@@ -11,12 +12,19 @@ from app.application.services.agent_service.agent_settings import AgentServiceSe
 from app.application.services.agent_service.agent_state.agent_state import AgentState
 from app.application.services.agent_service.agent_state.agent_state_builder import AgentStateBuilder
 from app.application.services.agent_service.agent_workflow import AgentWorkflow
+from app.application.services.agent_service.constants.node_name import NodeName
 from app.application.services.agent_service.exceptions.agent_service_exceptions import AgentServiceException
 from app.application.services.agent_service.interfaces.agent_service_interface import AgentServiceInterface
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.agent.agent_request import AgentRequest
 from app.domain.dtos.agent.agent_response import AgentResponse
+from app.domain.dtos.agent.agent_stream_events import (
+    AgentStreamComplete,
+    AgentStreamError,
+    AgentStreamEvent,
+    AgentStreamProgress,
+)
 from app.domain.dtos.message import Message
 from app.domain.field_limits import MAX_MESSAGE_CONTENT_CHARS
 from app.infrastructure.http.document_context_provider.interfaces.document_context_provider_interface import (
@@ -36,6 +44,49 @@ _KNOWN_EXCEPTIONS = (
     AgentServiceException,
     UnauthorizedException,
 )
+
+_STREAM_PROGRESS_MESSAGES: dict[str, tuple[str, str]] = {
+    NodeName.input_normalizer.value: (
+        NodeName.input_normalizer.value,
+        "Normalizando la consulta...",
+    ),
+    NodeName.context_resolver.value: (
+        NodeName.context_resolver.value,
+        "Reformulando la consulta en contexto...",
+    ),
+    NodeName.intent_classifier.value: (
+        NodeName.intent_classifier.value,
+        "Identificando la intención de la consulta...",
+    ),
+    NodeName.keyword_extractor.value: (
+        NodeName.keyword_extractor.value,
+        "Extrayendo palabras clave...",
+    ),
+    NodeName.retriever.value: (
+        NodeName.retriever.value,
+        "Recuperando contexto documental...",
+    ),
+    NodeName.document_fetcher.value: (
+        NodeName.document_fetcher.value,
+        "Recuperando el documento solicitado...",
+    ),
+    NodeName.context_builder.value: (
+        NodeName.context_builder.value,
+        "Construyendo el contexto para la respuesta...",
+    ),
+    NodeName.answer_generator.value: (
+        NodeName.answer_generator.value,
+        "Generando la respuesta...",
+    ),
+    NodeName.guardrails.value: (
+        NodeName.guardrails.value,
+        "Validando la respuesta...",
+    ),
+    NodeName.fallback.value: (
+        NodeName.fallback.value,
+        "Preparando respuesta alternativa...",
+    ),
+}
 
 
 class AgentService(AgentServiceInterface):
@@ -96,6 +147,45 @@ class AgentService(AgentServiceInterface):
                 status_code=500,
             ) from e
 
+    async def execute_agent_stream(
+            self,
+            agent_request: AgentRequest,
+            authenticated_user: AuthenticatedUser,
+    ) -> AsyncIterator[AgentStreamEvent]:
+        logger.info("Agent stream initiated", extra={"user_id": authenticated_user.id})
+
+        try:
+            await self._ensure_workflow_built()
+        except Exception:
+            logger.exception("Failed to build workflow for streaming")
+            yield AgentStreamError(message="Error al inicializar el servicio.", code="workflow_build_error")
+            return
+
+        initial_state = self._agent_state_builder.build_agent_state(
+            agent_request=agent_request,
+            authenticated_user=authenticated_user,
+        )
+
+        try:
+            async for event_type, data in self._agent_workflow.stream(initial_state):
+                if event_type == "progress":
+                    step, message = _STREAM_PROGRESS_MESSAGES.get(
+                        data, (data, f"Procesando {data}...")
+                    )
+                    yield AgentStreamProgress(step=step, message=message)
+                elif event_type == "done":
+                    result = self._build_response(data)
+                    yield AgentStreamComplete(result=result)
+                    logger.info("Agent stream completed", extra={"user_id": authenticated_user.id})
+                elif event_type == "error":
+                    logger.error("Agent workflow stream error", exc_info=data)
+                    yield AgentStreamError(message="Error procesando la consulta.", code="workflow_error")
+        except _KNOWN_EXCEPTIONS:
+            raise
+        except Exception:
+            logger.exception("Unexpected error during agent stream")
+            yield AgentStreamError(message="Error inesperado al procesar la consulta.", code="unexpected_error")
+
     async def _ensure_workflow_built(self) -> None:
         if self._workflow_built:
             return
@@ -114,8 +204,11 @@ class AgentService(AgentServiceInterface):
 
         answer = answer[:MAX_MESSAGE_CONTENT_CHARS]
 
+        fragments = final_state.get("retrieved_fragments") or []
+
         return AgentResponse(
-            messages=[Message(role=MessageRole.assistant, content=answer)]
+            messages=[Message(role=MessageRole.assistant, content=answer)],
+            fragments=fragments,
         )
 
 

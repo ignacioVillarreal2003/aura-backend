@@ -25,7 +25,6 @@ class KeywordExtractorNode(NodeInterface):
         self._ollama_llm_facade = ollama_llm_facade
         self._settings = settings
         self._llm: Optional[Runnable] = None
-        self._llm_init_failed: bool = False
         self._llm_lock = asyncio.Lock()
         logger.debug("KeywordExtractorNode initialized")
 
@@ -78,23 +77,14 @@ class KeywordExtractorNode(NodeInterface):
 
     @staticmethod
     def _fallback_keywords(raw: str) -> List[str]:
-        # Best-effort: split by commas or newlines and take non-empty tokens
         tokens = re.split(r"[,\n]+", raw)
         return [t.strip().strip('"\'[]') for t in tokens if t.strip().strip('"\'[]')][:10]
 
     async def _ensure_llm_initialized(self) -> None:
         if self._llm is not None:
             return
-        if self._llm_init_failed:
-            raise RuntimeError("LLM initialization previously failed")
         async with self._llm_lock:
             if self._llm is not None:
                 return
-            if self._llm_init_failed:
-                raise RuntimeError("LLM initialization previously failed")
-            try:
-                self._llm = await self._ollama_llm_facade.get_llm_base()
-                logger.debug("LLM initialized for keyword extractor")
-            except Exception as e:
-                self._llm_init_failed = True
-                raise RuntimeError("Failed to initialize LLM for keyword extractor") from e
+            self._llm = await self._ollama_llm_facade.get_llm_base()
+            logger.debug("LLM initialized for keyword extractor")

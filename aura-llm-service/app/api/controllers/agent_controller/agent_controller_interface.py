@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 
+from starlette.responses import StreamingResponse
+
 from app.application.services.agent_service.interfaces.agent_service_interface import AgentServiceInterface
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.agent.agent_request import AgentRequest
@@ -12,6 +14,15 @@ class AgentControllerInterface(ABC):
             self,
             agent_request: AgentRequest,
             agent_service: AgentServiceInterface,
-            authenticated_user: AuthenticatedUser
+            authenticated_user: AuthenticatedUser,
     ) -> AgentResponse:
+        pass
+
+    @abstractmethod
+    async def execute_agent_stream(
+            self,
+            agent_request: AgentRequest,
+            agent_service: AgentServiceInterface,
+            authenticated_user: AuthenticatedUser,
+    ) -> StreamingResponse:
         pass
