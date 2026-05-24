@@ -4,6 +4,22 @@ from apps.document_collection_documents.models import DocumentInDocumentCollecti
 
 
 class DocumentInDocumentCollectionRepository:
+    def list_accessible_by_collection_ids(
+        self,
+        collection_ids: list[int],
+    ) -> QuerySet[DocumentInDocumentCollection]:
+        if not collection_ids:
+            return DocumentInDocumentCollection.objects.none()
+        return (
+            DocumentInDocumentCollection.objects.filter(
+                document_collection_id__in=collection_ids,
+                deleted_at__isnull=True,
+                document__deleted_at__isnull=True,
+            )
+            .select_related("document")
+            .order_by("document_id", "document_collection_id")
+        )
+
     def list_active_by_document_collection_id(
         self, document_collection_id: int
     ) -> QuerySet[DocumentInDocumentCollection]:

@@ -16,18 +16,16 @@ class DocumentQuestionServiceSettings(BaseSettings):
     history_messages_window: int = Field(default=4, ge=1, le=20)
     use_keywords: bool = Field(default=True)
 
-    semantic_fragments_per_lane: int = Field(default=2, ge=1, le=50)
-    bm25_fragments_per_lane: int = Field(default=1, ge=1, le=50)
-    enable_dual_bm25: bool = Field(
-        default=True,
-        description="When true, BM25 uses original + contextualized question when history applies.",
-    )
+    semantic_fragments_per_lane: int = Field(default=5, ge=1, le=50)
+    bm25_fragments_per_lane: int = Field(default=2, ge=1, le=50)
+    enable_dual_bm25: bool = Field(default=True)
 
     use_rerank: bool = Field(default=True)
-    rerank_max_fragments: Optional[int] = Field(default=5, ge=1, le=100)
+    rerank_max_fragments: Optional[int] = Field(default=8, ge=1, le=100)
+    adjacent_chunks: int = Field(default=1, ge=0, le=3)
 
     @model_validator(mode="after")
     def validate_coherence(self) -> "DocumentQuestionServiceSettings":
-        if self.rerank_max_fragments is not None and not self.use_rerank:
-            raise ValueError("rerank_max_fragments requires use_rerank to be true.")
+        if not self.use_rerank:
+            self.rerank_max_fragments = None
         return self

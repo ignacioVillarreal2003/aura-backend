@@ -27,7 +27,6 @@ class AnswerSynthesizerNode(RagNodeInterface):
         self._ollama_llm_facade = ollama_llm_facade
         self._settings = settings
         self._llm: Optional[Runnable] = None
-        self._llm_init_failed: bool = False
         self._llm_lock = asyncio.Lock()
         logger.debug("AnswerSynthesizerNode initialized")
 
@@ -36,7 +35,6 @@ class AnswerSynthesizerNode(RagNodeInterface):
 
         query: str = state.get("query", "")
         context: str = state.get("context", "")
-        reasoning: str = state.get("reasoning", "")
 
         if not query or not context:
             logger.info("Missing query or context — returning fallback answer")
@@ -44,7 +42,7 @@ class AnswerSynthesizerNode(RagNodeInterface):
 
         try:
             await self._ensure_llm_initialized()
-            answer = await self._synthesize(query, context, reasoning)
+            answer = await self._synthesize(query, context)
 
             if not answer:
                 return {"answer": _NO_ANSWER_RESPONSE}
@@ -52,15 +50,13 @@ class AnswerSynthesizerNode(RagNodeInterface):
             logger.info("Answer synthesized", extra={"answer_length": len(answer)})
             return {"answer": answer}
         except Exception:
-            logger.error("Answer synthesis failed", exc_info=True)
-            raise RuntimeError("Failed to synthesize answer")
+            logger.error("Answer synthesis failed — returning fallback", exc_info=True)
+            return {"answer": _NO_ANSWER_RESPONSE}
 
-    async def _synthesize(self, query: str, context: str, reasoning: str) -> str:
-        reasoning_section = f"\n\nAnálisis previo:\n{reasoning}" if reasoning else ""
+    async def _synthesize(self, query: str, context: str) -> str:
         user_content = (
             f"Consulta: {query}\n\n"
-            f"Contexto documental:\n{context}"
-            f"{reasoning_section}\n\n"
+            f"Contexto documental:\n{context}\n\n"
             "Sintetiza la respuesta final."
         )
         prompt: List = [
@@ -73,16 +69,8 @@ class AnswerSynthesizerNode(RagNodeInterface):
     async def _ensure_llm_initialized(self) -> None:
         if self._llm is not None:
             return
-        if self._llm_init_failed:
-            raise RuntimeError("LLM initialization previously failed")
         async with self._llm_lock:
             if self._llm is not None:
                 return
-            if self._llm_init_failed:
-                raise RuntimeError("LLM initialization previously failed")
-            try:
-                self._llm = await self._ollama_llm_facade.get_llm_base()
-                logger.debug("LLM initialized for answer synthesizer")
-            except Exception as e:
-                self._llm_init_failed = True
-                raise RuntimeError("Failed to initialize LLM for answer synthesizer") from e
+            self._llm = await self._ollama_llm_facade.get_llm_base()
+            logger.debug("LLM initialized for answer synthesizer")

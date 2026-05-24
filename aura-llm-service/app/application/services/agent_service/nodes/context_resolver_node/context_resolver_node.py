@@ -23,7 +23,6 @@ class ContextResolverNode(NodeInterface):
         self._ollama_llm_facade = ollama_llm_facade
         self._settings = settings
         self._llm: Optional[Runnable] = None
-        self._llm_init_failed: bool = False
         self._llm_lock = asyncio.Lock()
         logger.debug("ContextResolverNode initialized")
 
@@ -59,7 +58,6 @@ class ContextResolverNode(NodeInterface):
 
     def _build_prompt(self, query: str, history: List[BaseMessage]) -> List[BaseMessage]:
         messages: List[BaseMessage] = [SystemMessage(content=self._settings.system_prompt)]
-        # Include recent conversation turns (excluding the last — that's the current query)
         recent = history[:-1][-_MAX_HISTORY_TURNS:]
         messages.extend(recent)
         messages.append(HumanMessage(content=f"Consulta a reformular: {query}"))
@@ -68,16 +66,8 @@ class ContextResolverNode(NodeInterface):
     async def _ensure_llm_initialized(self) -> None:
         if self._llm is not None:
             return
-        if self._llm_init_failed:
-            raise RuntimeError("LLM initialization previously failed")
         async with self._llm_lock:
             if self._llm is not None:
                 return
-            if self._llm_init_failed:
-                raise RuntimeError("LLM initialization previously failed")
-            try:
-                self._llm = await self._ollama_llm_facade.get_llm_base()
-                logger.debug("LLM initialized for context resolver")
-            except Exception as e:
-                self._llm_init_failed = True
-                raise RuntimeError("Failed to initialize LLM for context resolver") from e
+            self._llm = await self._ollama_llm_facade.get_llm_base()
+            logger.debug("LLM initialized for context resolver")

@@ -23,7 +23,6 @@ class GuardrailsNode(NodeInterface):
         self._ollama_llm_facade = ollama_llm_facade
         self._settings = settings
         self._llm: Optional[Runnable] = None
-        self._llm_init_failed: bool = False
         self._llm_lock = asyncio.Lock()
         logger.debug("GuardrailsNode initialized")
 
@@ -43,7 +42,6 @@ class GuardrailsNode(NodeInterface):
             if redacted is None:
                 logger.warning("Redaction failed or not possible — rejecting")
                 return {"guardrail_passed": False}
-            # Re-validate the redacted answer
             if not self._rule_based_check(redacted)["passed"]:
                 logger.warning("Redacted answer still fails rule check — rejecting")
                 return {"guardrail_passed": False}
@@ -133,16 +131,8 @@ class GuardrailsNode(NodeInterface):
     async def _ensure_llm_initialized(self) -> None:
         if self._llm is not None:
             return
-        if self._llm_init_failed:
-            raise RuntimeError("LLM initialization previously failed")
         async with self._llm_lock:
             if self._llm is not None:
                 return
-            if self._llm_init_failed:
-                raise RuntimeError("LLM initialization previously failed")
-            try:
-                self._llm = await self._ollama_llm_facade.get_llm_base()
-                logger.debug("LLM initialized for guardrails")
-            except Exception as e:
-                self._llm_init_failed = True
-                raise RuntimeError("Failed to initialize LLM for guardrails") from e
+            self._llm = await self._ollama_llm_facade.get_llm_base()
+            logger.debug("LLM initialized for guardrails")

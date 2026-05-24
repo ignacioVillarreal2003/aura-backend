@@ -10,3 +10,12 @@ class DocumentCollectionCatalogClientInterface(ABC):
             authorization_header: str | None,
     ) -> frozenset[int]:
         pass
+
+    @abstractmethod
+    async def fetch_all_accessible_document_ids(
+            self,
+            *,
+            user_id: int,
+            authorization_header: str | None,
+    ) -> frozenset[int]:
+        pass

@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 
+from starlette.responses import StreamingResponse
+
 from app.application.services.document_summary_service.interfaces.document_summary_service_interface import (
     DocumentSummaryServiceInterface
 )
@@ -14,6 +16,15 @@ class DocumentSummaryControllerInterface(ABC):
             self,
             document_summary_request: DocumentSummaryRequest,
             document_summary_service: DocumentSummaryServiceInterface,
-            authenticated_user: AuthenticatedUser
+            authenticated_user: AuthenticatedUser,
     ) -> DocumentSummaryResponse:
         pass
+
+    @abstractmethod
+    async def execute_document_summary_stream(
+            self,
+            document_summary_request: DocumentSummaryRequest,
+            document_summary_service: DocumentSummaryServiceInterface,
+            authenticated_user: AuthenticatedUser,
+    ) -> StreamingResponse:
+        ...

@@ -23,9 +23,6 @@ from app.application.services.document_question_service.processors.answer_docume
 from app.application.services.document_question_service.processors.context_document_question_processor.context_document_question_processor import (
     ContextDocumentQuestionProcessor,
 )
-from app.application.services.document_question_service.processors.fallback_document_question_processor.fallback_document_question_processor import (
-    FallbackDocumentQuestionProcessor,
-)
 from app.application.services.document_question_service.processors.question_document_question_processor.question_document_question_processor import (
     QuestionDocumentQuestionProcessor,
 )
@@ -50,6 +47,11 @@ from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_streaming_invoker_i
 )
 
 logger = logging.getLogger(__name__)
+
+_STATIC_FALLBACK_MESSAGE = (
+    "No se encontró información relevante en la base documental para responder su consulta. "
+    "Por favor, reformule su pregunta o consulte directamente la documentación disponible."
+)
 
 
 class DocumentQuestionService(DocumentQuestionServiceInterface):
@@ -85,10 +87,6 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
             ollama_llm_facade=ollama_llm_facade,
             ollama_llm_invoker=ollama_llm_invoker,
             ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
-        )
-        self._fallback_processor = FallbackDocumentQuestionProcessor(
-            ollama_llm_facade=ollama_llm_facade,
-            ollama_llm_invoker=ollama_llm_invoker,
         )
 
     async def execute_document_question(
@@ -127,10 +125,6 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
             document_question_request: DocumentQuestionRequest,
             authenticated_user: AuthenticatedUser,
     ) -> AsyncIterator[DocumentQuestionStreamEvent]:
-        self._authorizer.require_permissions(
-            authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.LLM_DOCUMENT_QUESTION_STREAM}),
-        )
         try:
             state = DocumentQuestionState.from_request(document_question_request, authenticated_user)
 
@@ -177,13 +171,7 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
 
             state.answer = state.answer.strip()
             if not state.answer:
-                reason = (
-                    "La respuesta generada no fue suficiente, generando respuesta alternativa..."
-                    if state.fragments
-                    else "Sin contexto en la base documental, generando respuesta alternativa..."
-                )
-                yield DocumentQuestionStreamProgress(step="fallback", message=reason)
-                await self._fallback_processor.run(state)
+                state.answer = _STATIC_FALLBACK_MESSAGE
 
             yield DocumentQuestionStreamComplete(
                 result=DocumentQuestionResponse(
@@ -212,7 +200,8 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
         await self._question_processor.run(state)
         await self._context_processor.run(state)
         await self._answer_processor.run(state)
-        await self._fallback_processor.run(state)
+        if not state.answer.strip():
+            state.answer = _STATIC_FALLBACK_MESSAGE
 
 
 async def get_document_question_service(request: Request) -> DocumentQuestionServiceInterface:

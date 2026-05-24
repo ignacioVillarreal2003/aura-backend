@@ -12,10 +12,8 @@ class AgentState(TypedDict):
     normalized_query: str
     resolved_query: str
     intent: str
-    entities: dict
     keywords: List[str]
     retrieved_fragments: List[FragmentResponse]
-    reranked_fragments: List[FragmentResponse]
     context: str
     answer: str
     guardrail_passed: bool

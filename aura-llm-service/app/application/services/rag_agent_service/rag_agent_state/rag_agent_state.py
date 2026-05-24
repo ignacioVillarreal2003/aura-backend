@@ -14,7 +14,5 @@ class RagAgentState(TypedDict):
     keywords: List[str]
     retrieved_fragments: List[FragmentResponse]
     context: str
-    context_sufficient: bool
-    reasoning: str
     answer: str
     fallback_triggered: bool

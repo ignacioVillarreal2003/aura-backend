@@ -7,12 +7,8 @@ _PROMPT_MAX_CHARS = 10_000
 
 _DEFAULT_SENSITIVE_PATTERNS: tuple[str, ...] = (
     "clasificado",
-    "confidencial",
     "secreto",
-    "reservado",
-    "uso interno",
     "no divulgar",
-    "restringido",
 )
 
 _VALID_INTENTS_LINE = (
@@ -82,36 +78,6 @@ class IntentClassifierSettings(BaseModel):
             "- comparacion: compara dos o más elementos, leyes o procedimientos\n"
             "- otro: consulta que no encaja en las categorías anteriores\n\n"
             "Responde con ÚNICAMENTE la palabra de la categoría, sin explicaciones ni puntuación."
-        )
-
-
-class EntityExtractorSettings(BaseModel):
-    model_config = ConfigDict(frozen=True)
-    custom_system_prompt: Optional[str] = None
-
-    @field_validator("custom_system_prompt")
-    @classmethod
-    def _check_prompt(cls, v: Optional[str]) -> Optional[str]:
-        return _validate_optional_prompt("custom_system_prompt", v)
-
-    @property
-    def system_prompt(self) -> str:
-        if self.custom_system_prompt is not None:
-            return self.custom_system_prompt
-        return (
-            "Eres un extractor de entidades nombradas para un sistema documental institucional. "
-            "A partir de la consulta, extrae entidades jurídico-institucionales organizadas por tipo.\n\n"
-            "Tipos de entidades a extraer:\n"
-            "- leyes: leyes, decretos, resoluciones, ordenanzas, circulares (con número y año si se mencionan)\n"
-            "- organismos: ministerios, secretarías, subsecretarías, organismos, entes, agencias\n"
-            "- cargos: puestos, roles, cargos jerárquicos (director, secretario, ministro, etc.)\n"
-            "- fechas: años, períodos, vigencias, plazos mencionados\n\n"
-            "Devuelve ÚNICAMENTE un objeto JSON con estas cuatro claves. "
-            "Si no hay entidades de un tipo, devuelve una lista vacía para esa clave.\n\n"
-            'Ejemplo: {"leyes": ["Ley 26.206", "Decreto 160/2023"], '
-            '"organismos": ["Ministerio de Educación"], '
-            '"cargos": ["Director Nacional"], "fechas": ["2023"]}\n\n'
-            "No incluyas explicaciones ni texto fuera del JSON."
         )
 
 
@@ -223,7 +189,7 @@ class GuardrailsSettings(BaseModel):
             "antes de ser entregada al usuario.\n\n"
             "Instrucciones:\n"
             "1. Elimina o reemplaza con '[REDACTADO]' cualquier referencia a información "
-            "clasificada, confidencial, secreta o de uso interno\n"
+            "clasificada, secreta o que no deba divulgarse\n"
             "2. Conserva el resto de la respuesta con el mismo formato y estructura\n"
             "3. Si la respuesta completa es inapropiada y no puede redactarse, responde exactamente: CANNOT_REDACT\n\n"
             "Devuelve directamente la respuesta redactada o CANNOT_REDACT. "
@@ -245,10 +211,10 @@ class AgentServiceSettings(BaseSettings):
     max_keyword_fragments: int = Field(default=10, ge=1, le=50)
     max_rerank_fragments: int = Field(default=8, ge=1, le=50)
     max_context_chars: int = Field(default=8_000, ge=1_000, le=50_000)
+    adjacent_chunks: int = Field(default=1, ge=0, le=3)
 
     context_resolver: ContextResolverSettings = Field(default_factory=ContextResolverSettings)
     intent_classifier: IntentClassifierSettings = Field(default_factory=IntentClassifierSettings)
-    entity_extractor: EntityExtractorSettings = Field(default_factory=EntityExtractorSettings)
     keyword_extractor: KeywordExtractorSettings = Field(default_factory=KeywordExtractorSettings)
     answer_generator: AnswerGeneratorSettings = Field(default_factory=AnswerGeneratorSettings)
     guardrails: GuardrailsSettings = Field(default_factory=GuardrailsSettings)

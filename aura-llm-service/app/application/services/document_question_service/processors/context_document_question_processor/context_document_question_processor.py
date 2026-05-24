@@ -67,6 +67,7 @@ def _build_question_context_fragments_request(
         semantic_queries=semantic_queries,
         bm25_queries=bm25_queries,
         rerank=rerank,
+        adjacent_chunks=settings.adjacent_chunks,
     )
 
 

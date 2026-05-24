@@ -18,7 +18,7 @@ class ContextBuilderNode(NodeInterface):
     async def process(self, agent_state: AgentState) -> Dict[str, Any]:
         logger.debug("Processing context builder")
 
-        fragments: List[FragmentResponse] = agent_state.get("reranked_fragments", [])
+        fragments: List[FragmentResponse] = agent_state.get("retrieved_fragments", [])
         if not fragments:
             logger.info("No fragments available — context will be empty")
             return {"context": ""}

@@ -1,4 +1,6 @@
 import logging
+from collections.abc import AsyncIterator
+from typing import Optional
 
 from langgraph.graph import END, StateGraph
 
@@ -6,15 +8,11 @@ from app.application.services.rag_agent_service.constants.rag_node_name import R
 from app.application.services.rag_agent_service.nodes.answer_synthesizer_node.answer_synthesizer_node import (
     AnswerSynthesizerNode,
 )
-from app.application.services.rag_agent_service.nodes.context_evaluator_node.context_evaluator_node import (
-    ContextEvaluatorNode,
-)
 from app.application.services.rag_agent_service.nodes.context_retriever_node.context_retriever_node import (
     ContextRetrieverNode,
 )
 from app.application.services.rag_agent_service.nodes.fallback_node.fallback_node import FallbackNode
 from app.application.services.rag_agent_service.nodes.query_analyzer_node.query_analyzer_node import QueryAnalyzerNode
-from app.application.services.rag_agent_service.nodes.reasoning_node.reasoning_node import ReasoningNode
 from app.application.services.rag_agent_service.rag_agent_settings import RagAgentServiceSettings
 from app.application.services.rag_agent_service.rag_agent_state.rag_agent_state import RagAgentState
 from app.infrastructure.http.document_context_provider.interfaces.document_context_provider_interface import (
@@ -25,9 +23,9 @@ from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface im
 logger = logging.getLogger(__name__)
 
 
-def _route_after_context_evaluator(state: RagAgentState) -> str:
-    if state.get("context_sufficient", False):
-        return RagNodeName.reasoning.value
+def _route_after_context_retriever(state: RagAgentState) -> str:
+    if state.get("retrieved_fragments"):
+        return RagNodeName.answer_synthesizer.value
     return RagNodeName.fallback.value
 
 
@@ -44,6 +42,11 @@ class RagAgentWorkflow:
 
         self._graph = StateGraph(RagAgentState)
         self._compiled_workflow = None
+
+        self._query_analyzer_node: Optional[QueryAnalyzerNode] = None
+        self._context_retriever_node: Optional[ContextRetrieverNode] = None
+        self._answer_synthesizer_node: Optional[AnswerSynthesizerNode] = None
+        self._fallback_node: Optional[FallbackNode] = None
 
         logger.debug("RagAgentWorkflow initialized")
 
@@ -63,64 +66,68 @@ class RagAgentWorkflow:
             raise RuntimeError("Workflow not built. Call build() first.")
         return await self._compiled_workflow.ainvoke(state)
 
+    async def stream(self, state: RagAgentState) -> AsyncIterator[tuple]:
+        if self._compiled_workflow is None:
+            raise RuntimeError("Workflow not built. Call build() first.")
+
+        try:
+            yield ("progress", RagNodeName.query_analyzer.value)
+            delta = await self._query_analyzer_node.process(state)
+            state = {**state, **delta}
+
+            yield ("progress", RagNodeName.context_retriever.value)
+            delta = await self._context_retriever_node.process(state)
+            state = {**state, **delta}
+
+            if state.get("retrieved_fragments"):
+                yield ("progress", RagNodeName.answer_synthesizer.value)
+                delta = await self._answer_synthesizer_node.process(state)
+            else:
+                yield ("progress", RagNodeName.fallback.value)
+                delta = await self._fallback_node.process(state)
+            state = {**state, **delta}
+
+            yield ("done", state)
+
+        except Exception as e:
+            logger.exception("Error during streaming RAG workflow")
+            yield ("error", e)
+
     def _add_nodes(self) -> None:
         s = self._settings
 
-        self._graph.add_node(
-            RagNodeName.query_analyzer.value,
-            QueryAnalyzerNode(
-                ollama_llm_facade=self._ollama_llm_facade,
-                settings=s.query_analyzer,
-            ).process,
+        self._query_analyzer_node = QueryAnalyzerNode(
+            ollama_llm_facade=self._ollama_llm_facade,
+            settings=s.query_analyzer,
         )
-        self._graph.add_node(
-            RagNodeName.context_retriever.value,
-            ContextRetrieverNode(
-                document_context_provider=self._document_context_provider,
-                settings=s,
-            ).process,
+        self._context_retriever_node = ContextRetrieverNode(
+            document_context_provider=self._document_context_provider,
+            settings=s,
         )
-        self._graph.add_node(
-            RagNodeName.context_evaluator.value,
-            ContextEvaluatorNode(
-                ollama_llm_facade=self._ollama_llm_facade,
-                settings=s.context_evaluator,
-            ).process,
+        self._answer_synthesizer_node = AnswerSynthesizerNode(
+            ollama_llm_facade=self._ollama_llm_facade,
+            settings=s.answer_synthesizer,
         )
-        self._graph.add_node(
-            RagNodeName.reasoning.value,
-            ReasoningNode(
-                ollama_llm_facade=self._ollama_llm_facade,
-                settings=s.reasoning,
-            ).process,
-        )
-        self._graph.add_node(
-            RagNodeName.answer_synthesizer.value,
-            AnswerSynthesizerNode(
-                ollama_llm_facade=self._ollama_llm_facade,
-                settings=s.answer_synthesizer,
-            ).process,
-        )
-        self._graph.add_node(
-            RagNodeName.fallback.value,
-            FallbackNode().process,
-        )
+        self._fallback_node = FallbackNode()
+
+        self._graph.add_node(RagNodeName.query_analyzer.value, self._query_analyzer_node.process)
+        self._graph.add_node(RagNodeName.context_retriever.value, self._context_retriever_node.process)
+        self._graph.add_node(RagNodeName.answer_synthesizer.value, self._answer_synthesizer_node.process)
+        self._graph.add_node(RagNodeName.fallback.value, self._fallback_node.process)
 
     def _add_edges(self) -> None:
         self._graph.set_entry_point(RagNodeName.query_analyzer.value)
 
         self._graph.add_edge(RagNodeName.query_analyzer.value, RagNodeName.context_retriever.value)
-        self._graph.add_edge(RagNodeName.context_retriever.value, RagNodeName.context_evaluator.value)
 
         self._graph.add_conditional_edges(
-            RagNodeName.context_evaluator.value,
-            _route_after_context_evaluator,
+            RagNodeName.context_retriever.value,
+            _route_after_context_retriever,
             {
-                RagNodeName.reasoning.value: RagNodeName.reasoning.value,
+                RagNodeName.answer_synthesizer.value: RagNodeName.answer_synthesizer.value,
                 RagNodeName.fallback.value: RagNodeName.fallback.value,
             },
         )
 
-        self._graph.add_edge(RagNodeName.reasoning.value, RagNodeName.answer_synthesizer.value)
         self._graph.add_edge(RagNodeName.answer_synthesizer.value, END)
         self._graph.add_edge(RagNodeName.fallback.value, END)
