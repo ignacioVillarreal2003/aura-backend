@@ -180,7 +180,13 @@ class PostProcessFragmentService(PostProcessFragmentServiceInterface):
         try:
             await self._job_publisher.publish_job(job_id)
         except Exception as e:
-            await self._job_progress_store.abort_fragment_job(job_id)
+            try:
+                await self._job_progress_store.abort_fragment_job(job_id)
+            except Exception:
+                logger.exception(
+                    "Failed to abort the fragment job after a publish failure; the lock will expire by TTL.",
+                    extra={"job_id": job_id},
+                )
             raise RabbitMQPublishException("Failed to enqueue the fragment post-processing job.") from e
 
         return PostProcessFragmentsStartResponse(

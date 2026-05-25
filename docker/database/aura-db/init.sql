@@ -72,7 +72,8 @@ CREATE TABLE chat_message (
     created_by  BIGINT,
     created_at  TIMESTAMPTZ                 NOT NULL DEFAULT NOW(),
     deleted_by  BIGINT,
-    deleted_at  TIMESTAMPTZ
+    deleted_at  TIMESTAMPTZ,
+    fragments   JSONB
 );
 
 CREATE TABLE chat_membership (

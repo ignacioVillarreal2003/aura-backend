@@ -43,7 +43,18 @@ class FragmentRepositoryInterface(ABC):
             query_vector: list[float],
             database_session: AsyncSession,
             k: int = 3,
-            threshold: float = 0.3
+            threshold: float = 0.3,
+            document_ids: list[int] | None = None,
+    ) -> list[Fragment]:
+        pass
+
+    @abstractmethod
+    async def get_adjacent_fragments(
+            self,
+            fragments: list[Fragment],
+            window: int,
+            database_session: AsyncSession,
+            exclude_ids: set[int],
     ) -> list[Fragment]:
         pass
 
@@ -56,6 +67,7 @@ class FragmentRepositoryInterface(ABC):
             k: int,
             min_score: float = 0.0,
             query_max_chars: int = 512,
+            document_ids: list[int] | None = None,
     ) -> list[Fragment]:
         pass
 

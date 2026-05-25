@@ -10,14 +10,13 @@ from app.application.processors.readers.exceptions.reader_exception import (
     ReaderInitializationException,
     ScannedDOCXOCRExtractionException,
     ScannedDOCXReadException,
-    UnsupportedScannedDOCXFormatException
 )
 from app.application.processors.readers.instances.base_reader import BaseReader
 from app.application.processors.readers.reader_settings import ReaderSettings
 
 logger = logging.getLogger(__name__)
 
-_SUPPORTED_IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".gif"})
+_SUPPORTED_IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".gif", ".webp"})
 
 
 class ScannedDOCXReader(BaseReader):
@@ -60,11 +59,6 @@ class ScannedDOCXReader(BaseReader):
             file_path: Path
     ) -> str:
         self._validate_file_exists(file_path)
-
-        if not self.can_handle(file_path):
-            raise UnsupportedScannedDOCXFormatException(
-                "The DOCX file is not a supported scanned document format for OCR processing."
-            )
 
         logger.info(
             "Reading a scanned DOCX with OCR.",
@@ -111,7 +105,6 @@ class ScannedDOCXReader(BaseReader):
 
         except (
                 ReaderFileNotFoundException,
-                UnsupportedScannedDOCXFormatException,
                 ScannedDOCXOCRExtractionException
         ):
             raise

@@ -253,7 +253,7 @@ class LlmProvider(LlmProviderInterface):
             )
             raise LlmProviderException(
                 "The LLM service returned an error response.",
-                status_code=e.status_code,
+                status_code=getattr(e, "status_code", 500),
             ) from e
 
         except LlmProviderException:

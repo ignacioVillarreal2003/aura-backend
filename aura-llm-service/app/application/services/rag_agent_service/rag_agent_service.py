@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from collections.abc import AsyncIterator
 from typing import Optional
 
 from fastapi import HTTPException, Request, status
@@ -8,6 +9,8 @@ from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
 from app.application.authorization.permissions import Permissions
 from app.application.exceptions.app_exception import RequestValidationException
+from app.application.services.rag_agent_service.constants.rag_node_name import RagNodeName
+from app.application.services.rag_agent_service.exceptions.rag_agent_service_exceptions import RagAgentServiceException
 from app.application.services.rag_agent_service.interfaces.rag_agent_service_interface import RagAgentServiceInterface
 from app.application.services.rag_agent_service.rag_agent_settings import RagAgentServiceSettings
 from app.application.services.rag_agent_service.rag_agent_state.rag_agent_state import RagAgentState
@@ -17,6 +20,12 @@ from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.agent.agent_request import AgentRequest
 from app.domain.dtos.agent.agent_response import AgentResponse
+from app.domain.dtos.agent.agent_stream_events import (
+    AgentStreamComplete,
+    AgentStreamError,
+    AgentStreamEvent,
+    AgentStreamProgress,
+)
 from app.domain.dtos.message import Message
 from app.domain.field_limits import MAX_MESSAGE_CONTENT_CHARS
 from app.infrastructure.http.document_context_provider.interfaces.document_context_provider_interface import (
@@ -33,8 +42,28 @@ _FALLBACK_ANSWER = (
 
 _KNOWN_EXCEPTIONS = (
     RequestValidationException,
+    RagAgentServiceException,
     UnauthorizedException,
 )
+
+_STREAM_PROGRESS_MESSAGES: dict[str, tuple[str, str]] = {
+    RagNodeName.query_analyzer.value: (
+        RagNodeName.query_analyzer.value,
+        "Analizando y reformulando la consulta...",
+    ),
+    RagNodeName.context_retriever.value: (
+        RagNodeName.context_retriever.value,
+        "Recuperando contexto documental...",
+    ),
+    RagNodeName.answer_synthesizer.value: (
+        RagNodeName.answer_synthesizer.value,
+        "Sintetizando la respuesta...",
+    ),
+    RagNodeName.fallback.value: (
+        RagNodeName.fallback.value,
+        "No se encontró contexto relevante. Preparando respuesta alternativa...",
+    ),
+}
 
 
 class RagAgentService(RagAgentServiceInterface):
@@ -90,7 +119,49 @@ class RagAgentService(RagAgentServiceInterface):
                 "Unexpected error during RAG agent execution",
                 extra={"user_id": authenticated_user.id, "error_type": type(e).__name__},
             )
-            raise RuntimeError(f"Unexpected error executing the RAG agent: {e}") from e
+            raise RagAgentServiceException(
+                "Unexpected error while processing the RAG agent request",
+                status_code=500,
+            ) from e
+
+    async def execute_stream(
+            self,
+            agent_request: AgentRequest,
+            authenticated_user: AuthenticatedUser,
+    ) -> AsyncIterator[AgentStreamEvent]:
+        logger.info("RAG agent stream initiated", extra={"user_id": authenticated_user.id})
+
+        try:
+            await self._ensure_workflow_built()
+        except Exception as e:
+            logger.exception("Failed to build workflow for streaming")
+            yield AgentStreamError(message="Error al inicializar el servicio.", code="workflow_build_error")
+            return
+
+        initial_state = self._state_builder.build(
+            agent_request=agent_request,
+            authenticated_user=authenticated_user,
+        )
+
+        try:
+            async for event_type, data in self._workflow.stream(initial_state):
+                if event_type == "progress":
+                    step, message = _STREAM_PROGRESS_MESSAGES.get(
+                        data, (data, f"Procesando {data}...")
+                    )
+                    yield AgentStreamProgress(step=step, message=message)
+                elif event_type == "done":
+                    result = self._build_response(data)
+                    yield AgentStreamComplete(result=result)
+                    logger.info("RAG agent stream completed", extra={"user_id": authenticated_user.id})
+                elif event_type == "error":
+                    logger.error("RAG workflow stream error", exc_info=data)
+                    yield AgentStreamError(message="Error procesando la consulta.", code="workflow_error")
+        except _KNOWN_EXCEPTIONS:
+            raise
+        except Exception:
+            logger.exception("Unexpected error during RAG agent stream")
+            yield AgentStreamError(message="Error inesperado al procesar la consulta.", code="unexpected_error")
 
     async def _ensure_workflow_built(self) -> None:
         if self._workflow_built:
@@ -107,8 +178,10 @@ class RagAgentService(RagAgentServiceInterface):
         if not answer:
             answer = _FALLBACK_ANSWER
         answer = answer[:MAX_MESSAGE_CONTENT_CHARS]
+        fragments = final_state.get("retrieved_fragments") or []
         return AgentResponse(
-            messages=[Message(role=MessageRole.assistant, content=answer)]
+            messages=[Message(role=MessageRole.assistant, content=answer)],
+            fragments=fragments,
         )
 
 

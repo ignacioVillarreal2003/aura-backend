@@ -2,7 +2,7 @@ import logging
 import re
 from datetime import datetime, timezone
 from typing import List, Optional
-from sqlalchemy import func, or_, select, text, update
+from sqlalchemy import and_, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -148,7 +148,8 @@ class FragmentRepository(FragmentRepositoryInterface):
             query_vector: List[float],
             database_session: AsyncSession,
             k: int = 3,
-            threshold: float = 0.3
+            threshold: float = 0.3,
+            document_ids: List[int] | None = None,
     ) -> List[Fragment]:
         if not query_vector:
             raise DatabaseException("The search vector cannot be empty.")
@@ -166,14 +167,20 @@ class FragmentRepository(FragmentRepositoryInterface):
                 "Executing vector similarity search.",
                 extra={
                     "k": k,
-                    "threshold": threshold
+                    "threshold": threshold,
+                    "doc_filter": len(document_ids) if document_ids else "none",
                 }
             )
 
             query_vector_str = "[" + ",".join(str(float(v)) for v in query_vector) + "]"
 
+            doc_id_filter = ""
+            if document_ids:
+                ids_literal = ",".join(str(int(d)) for d in document_ids)
+                doc_id_filter = f"AND document_id IN ({ids_literal})"
+
             sql = text(
-                """
+                f"""
                 SELECT id,
                        document_id,
                        content,
@@ -193,6 +200,7 @@ class FragmentRepository(FragmentRepositoryInterface):
                 WHERE vector IS NOT NULL
                   AND deleted_at IS NULL
                   AND 1 - (vector <=> :query_vector) >= :threshold
+                  {doc_id_filter}
                 ORDER BY cosine_similarity DESC
                 LIMIT :k
                 """
@@ -203,7 +211,7 @@ class FragmentRepository(FragmentRepositoryInterface):
                 {
                     "query_vector": query_vector_str,
                     "threshold": threshold,
-                    "k": k
+                    "k": k,
                 }
             )
             rows = result.fetchall()
@@ -257,6 +265,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             k: int,
             min_score: float = 0.0,
             query_max_chars: int = 512,
+            document_ids: list[int] | None = None,
     ) -> List[Fragment]:
         sanitized = _sanitize_bm25_search_input(query, query_max_chars)
         if not sanitized:
@@ -270,8 +279,13 @@ class FragmentRepository(FragmentRepositoryInterface):
             raise DatabaseException("The BM25 result count k must be at least 1.")
 
         try:
+            doc_id_filter = ""
+            if document_ids:
+                ids_literal = ",".join(str(int(d)) for d in document_ids)
+                doc_id_filter = f"AND document_id IN ({ids_literal})"
+
             sql = text(
-                """
+                f"""
                 SELECT id,
                        document_id,
                        content,
@@ -288,20 +302,14 @@ class FragmentRepository(FragmentRepositoryInterface):
                        deleted_at
                 FROM fragment
                 WHERE deleted_at IS NULL
-                  AND content @@@ :search_query
-                  AND paradedb.score(id) >= :min_score
+                  AND content @@@ '{sanitized}'
+                  {doc_id_filter}
+                  AND paradedb.score(id) >= {float(min_score)}
                 ORDER BY paradedb.score(id) DESC
-                LIMIT :k
+                LIMIT {int(k)}
                 """
             )
-            result = await database_session.execute(
-                sql,
-                {
-                    "search_query": sanitized,
-                    "min_score": min_score,
-                    "k": k,
-                },
-            )
+            result = await database_session.execute(sql)
             rows = result.fetchall()
 
             fragments = [
@@ -454,6 +462,52 @@ class FragmentRepository(FragmentRepositoryInterface):
                 "Failed to fetch paginated fragment IDs missing metadata for the given document IDs."
             ) from e
 
+    async def get_adjacent_fragments(
+            self,
+            fragments: List[Fragment],
+            window: int,
+            database_session: AsyncSession,
+            exclude_ids: set[int],
+    ) -> List[Fragment]:
+        if not fragments or window <= 0:
+            return []
+
+        try:
+            conditions = [
+                and_(
+                    Fragment.document_id == f.document_id,
+                    Fragment.fragment_index.between(
+                        max(0, int(f.fragment_index) - window),
+                        int(f.fragment_index) + window,
+                    ),
+                )
+                for f in fragments
+            ]
+
+            stmt = (
+                select(Fragment)
+                .where(
+                    Fragment.deleted_at.is_(None),
+                    Fragment.id.not_in(exclude_ids) if exclude_ids else True,
+                    or_(*conditions),
+                )
+                .order_by(Fragment.document_id, Fragment.fragment_index)
+                .limit(MAX_FRAGMENTS_IN_LIST)
+            )
+
+            result = await database_session.execute(stmt)
+            adjacent = list(result.scalars().all())
+
+            logger.debug(
+                "Adjacent fragments retrieved.",
+                extra={"window": window, "count": len(adjacent)},
+            )
+            return adjacent
+
+        except SQLAlchemyError as e:
+            logger.exception("Database error while fetching adjacent fragments.")
+            raise DatabaseException("Failed to fetch adjacent fragments.") from e
+
     async def create_fragments(
             self,
             fragments: List[Fragment],
@@ -472,9 +526,6 @@ class FragmentRepository(FragmentRepositoryInterface):
 
             database_session.add_all(fragments)
             await database_session.flush()
-
-            for fragment in fragments:
-                await database_session.refresh(fragment)
 
             logger.info(
                 "The fragments were created successfully.",

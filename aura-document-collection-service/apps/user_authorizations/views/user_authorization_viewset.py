@@ -6,6 +6,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
+from apps.document_collection_documents.serializers.response import AccessibleDocumentResponse
 from apps.document_collections.serializers.response import DocumentCollectionResponse
 from apps.user_authorizations.serializers.request import (
     AddUserCompartmentRequest,
@@ -208,3 +209,32 @@ class UserAuthorizationViewSet(GenericViewSet):
         qs = user_authorization_service.get_accessible_collections(request.user, int(user_id))
         page = self.paginate_queryset(qs)
         return self.get_paginated_response(DocumentCollectionResponse(page, many=True).data)
+
+    @extend_schema(
+        tags=["UserAuthorizations"],
+        summary="List all documents accessible to a user across their permitted collections",
+        description=(
+            "Applies the full MAC intersection (clearance rank + compartment membership) to resolve every "
+            "collection the user can access, then returns every active document linked to those collections. "
+            "A document linked to more than one accessible collection appears once per collection so callers "
+            "retain full provenance. Pagination mirrors other list endpoints. "
+            "Requires **GET_USER_ACCESSIBLE_DOCUMENTS**."
+        ),
+        auth=_AUTH,
+        parameters=[
+            _TARGET_USER,
+            OpenApiParameter(name="page", type=int, location=OpenApiParameter.QUERY, required=False),
+            OpenApiParameter(name="page_size", type=int, location=OpenApiParameter.QUERY, required=False),
+        ],
+        responses={200: AccessibleDocumentResponse(many=True), **_ERR_BASE},
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="accessible-documents",
+        url_name="accessible-documents",
+    )
+    def accessible_documents(self, request: Request, user_id: str | None = None) -> Response:
+        qs = user_authorization_service.get_accessible_documents(request.user, int(user_id))
+        page = self.paginate_queryset(qs)
+        return self.get_paginated_response(AccessibleDocumentResponse(page, many=True).data)

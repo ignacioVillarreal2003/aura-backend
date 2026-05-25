@@ -20,11 +20,13 @@ class TextSplitterSettings(BaseSettings):
     active_type: TextSplitterType = Field(default=TextSplitterType.recursive)
 
     max_text_length: int = Field(default=10_000_000, gt=0)
+    min_chunk_chars: int = Field(default=150, ge=0)
 
     huggingface_model: Literal[
                            "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
                            "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
                            "intfloat/multilingual-e5-large",
+                           "BAAI/bge-m3",
                        ] | str = Field(default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     huggingface_device: Literal["cpu", "cuda"] = Field(default="cpu")
     huggingface_breakpoint_threshold_type: Literal[
@@ -44,13 +46,6 @@ class TextSplitterSettings(BaseSettings):
                                  "gpt2"
                              ] | str = Field(default="cl100k_base")
 
-    markdown_processor_split_size: int = Field(default=512, gt=0, le=8192)
-    markdown_processor_split_overlap: int = Field(default=50, ge=0, le=8192)
-    markdown_processor_encoding_name: Literal[
-                                          "cl100k_base",
-                                          "gpt2"
-                                      ] | str = Field(default="cl100k_base")
-
     @model_validator(
         mode="after"
     )
@@ -62,14 +57,13 @@ class TextSplitterSettings(BaseSettings):
             self._validate_recursive()
         elif self.active_type == TextSplitterType.huggingface:
             self._validate_huggingface()
-        elif self.active_type == TextSplitterType.markdown_processor:
-            self._validate_markdown_processor()
         return self
 
     def _validate_common(
             self
     ) -> None:
-        if self.max_text_length < min(self.recursive_split_size, self.markdown_processor_split_size, self.huggingface_max_chunk_tokens):
+        smallest_chunk = min(self.recursive_split_size, self.huggingface_max_chunk_tokens)
+        if self.max_text_length < smallest_chunk:
             raise ValueError("max_text_length must be greater than or equal to configured split sizes.")
 
     def _validate_huggingface(
@@ -83,14 +77,11 @@ class TextSplitterSettings(BaseSettings):
         if self.huggingface_breakpoint_threshold_amount is not None and self.huggingface_breakpoint_threshold_amount <= 0:
             raise ValueError("The Hugging Face breakpoint threshold amount must be greater than zero.")
 
+        if self.huggingface_chunk_token_overlap >= self.huggingface_max_chunk_tokens:
+            raise ValueError("huggingface_chunk_token_overlap must be strictly smaller than huggingface_max_chunk_tokens.")
+
     def _validate_recursive(
             self
     ) -> None:
         if self.recursive_split_overlap >= self.recursive_split_size:
             raise ValueError("Chunk overlap must be strictly smaller than chunk size for the recursive splitter.")
-
-    def _validate_markdown_processor(
-            self
-    ) -> None:
-        if self.markdown_processor_split_overlap >= self.markdown_processor_split_size:
-            raise ValueError("Chunk overlap must be strictly smaller than chunk size for the markdown splitter.")

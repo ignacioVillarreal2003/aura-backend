@@ -1,6 +1,5 @@
 import logging
 from typing import Any, Optional
-
 import httpx
 
 from app.infrastructure.http.document_collection_catalog.document_collection_catalog_client_interface import (
@@ -24,19 +23,12 @@ class DocumentCollectionCatalogClient(DocumentCollectionCatalogClientInterface):
         self._http_client = http_client
         self._settings = settings or DocumentCollectionCatalogSettings()
 
-    def is_configured(self) -> bool:
-        return self._settings.normalized_base_url() is not None
-
     async def fetch_all_accessible_collection_ids(
             self,
             *,
             user_id: int,
             authorization_header: str | None,
     ) -> frozenset[int]:
-        base = self._settings.normalized_base_url()
-        if base is None:
-            return frozenset()
-
         bearer = self._normalize_bearer(authorization_header or self._settings.fallback_bearer_token)
         if bearer is None:
             logger.debug(
@@ -45,10 +37,7 @@ class DocumentCollectionCatalogClient(DocumentCollectionCatalogClientInterface):
             )
             return frozenset()
 
-        url = (
-            f"{base}/api/v1/user-authorizations/{user_id}"
-            "/accessible-collections/"
-        )
+        url = f"{self._settings.accessible_collections_url.rstrip('/')}/{user_id}/accessible-collections/"
         ids: set[int] = set()
         pages_read = 0
         headers = {
@@ -123,6 +112,101 @@ class DocumentCollectionCatalogClient(DocumentCollectionCatalogClientInterface):
         except ValueError:
             logger.exception(
                 "Invalid JSON while fetching accessible collections.",
+                extra={"user_id": user_id},
+            )
+            return frozenset()
+
+        return frozenset(ids)
+
+    async def fetch_all_accessible_document_ids(
+            self,
+            *,
+            user_id: int,
+            authorization_header: str | None,
+    ) -> frozenset[int]:
+        bearer = self._normalize_bearer(authorization_header or self._settings.fallback_bearer_token)
+        if bearer is None:
+            logger.debug(
+                "Skipping accessible-documents fetch: no bearer token.",
+                extra={"user_id": user_id},
+            )
+            return frozenset()
+
+        url = f"{self._settings.accessible_collections_url.rstrip('/')}/{user_id}/accessible-documents/"
+        ids: set[int] = set()
+        pages_read = 0
+        headers = {
+            "Authorization": bearer,
+            "Accept": "application/json",
+        }
+        timeout = self._settings.request_timeout_seconds
+
+        try:
+            while url and pages_read < self._settings.max_pages:
+                if pages_read == 0:
+                    response = await self._http_client.get(
+                        url,
+                        headers=headers,
+                        params={"page_size": self._settings.page_size},
+                        timeout=timeout,
+                    )
+                else:
+                    response = await self._http_client.get(
+                        url,
+                        headers=headers,
+                        timeout=timeout,
+                    )
+                pages_read += 1
+                if response.status_code >= 400:
+                    logger.warning(
+                        "Accessible documents request failed.",
+                        extra={
+                            "user_id": user_id,
+                            "status_code": response.status_code,
+                        },
+                    )
+                    return frozenset()
+
+                payload_any: Any = response.json()
+                if not isinstance(payload_any, dict):
+                    logger.warning(
+                        "Unexpected accessible-documents payload shape.",
+                        extra={"user_id": user_id},
+                    )
+                    return frozenset()
+
+                payload = payload_any
+                results = payload.get("results")
+                if isinstance(results, list):
+                    for row in results:
+                        if isinstance(row, dict):
+                            doc_id = row.get("document_id")
+                            if isinstance(doc_id, int):
+                                ids.add(doc_id)
+                            elif isinstance(doc_id, str) and doc_id.isdigit():
+                                ids.add(int(doc_id))
+
+                nxt = payload.get("next")
+                if isinstance(nxt, str) and nxt.strip():
+                    url = nxt.strip()
+                else:
+                    url = ""
+
+            if pages_read >= self._settings.max_pages:
+                logger.warning(
+                    "Stopped paginating accessible-documents after max_pages.",
+                    extra={"user_id": user_id, "max_pages": self._settings.max_pages},
+                )
+
+        except (HttpClientException, httpx.RequestError):
+            logger.exception(
+                "Error while fetching accessible documents.",
+                extra={"user_id": user_id},
+            )
+            return frozenset()
+        except ValueError:
+            logger.exception(
+                "Invalid JSON while fetching accessible documents.",
                 extra={"user_id": user_id},
             )
             return frozenset()

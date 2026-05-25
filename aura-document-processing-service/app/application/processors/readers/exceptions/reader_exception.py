@@ -66,22 +66,6 @@ class ScannedPDFReadException(ReaderException):
     pass
 
 
-class DoclingPDFInitializationException(ReaderInitializationException):
-    pass
-
-
-class UnsupportedDoclingPDFFormatException(UnsupportedReaderFormatException):
-    pass
-
-
-class DoclingPDFExtractionException(ReaderException):
-    pass
-
-
-class DoclingPDFReadException(ReaderException):
-    pass
-
-
 class DoclingExtractionException(ReaderException):
     pass
 
@@ -95,4 +79,20 @@ class DoclingReadException(ReaderException):
 
 
 class UnsupportedDoclingFormatException(UnsupportedReaderFormatException):
+    pass
+
+
+class PlainTextReadException(ReaderException):
+    pass
+
+
+class PlainTextHasNoContentException(ReaderException):
+    pass
+
+
+class CSVReadException(ReaderException):
+    pass
+
+
+class CSVHasNoContentException(ReaderException):
     pass

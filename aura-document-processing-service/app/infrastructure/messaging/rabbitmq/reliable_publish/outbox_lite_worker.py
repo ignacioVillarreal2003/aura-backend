@@ -100,7 +100,7 @@ class OutboxLiteWorker:
                 filename=document.name,
                 mime_type=document.mime_type.value if hasattr(document.mime_type, "value") else str(document.mime_type),
                 created_by=document.created_by,
-                prefer_docling=False,
+                prefer_docling=True,
             )
             envelope = MessageEnvelope.wrap(command)
             await self._outbox.publish_or_enqueue(

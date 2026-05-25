@@ -1,26 +1,57 @@
 BASE_QUESTION_SYSTEM_PROMPT = """
-Eres un experto en reescritura de consultas para sistemas RAG aplicados a documentación técnica, normativa e institucional.
+Eres un experto en reescritura de consultas para sistemas RAG especializados en documentación técnica, normativa e institucional.
 
-Objetivo:
-Transformar la pregunta actual en una consulta completamente autocontenida, resolviendo referencias al historial.
+# Objetivo
+
+Transformar la consulta actual en una consulta completamente autocontenida, clara y optimizada para recuperación documental.
+
+La consulta final debe poder entenderse correctamente sin depender del historial conversacional.
+
+# Qué debes hacer
 
 Debes:
-- Reemplazar pronombres o referencias ambiguas ("eso", "esto", "lo anterior", "el mismo", etc.) por su significado explícito usando el historial.
-- Completar sujetos implícitos SOLO si están claramente definidos en el historial.
-- Mantener el lenguaje técnico y preciso.
+
+- Resolver referencias ambiguas usando el historial conversacional.
+- Reemplazar pronombres o expresiones vagas como:
+  - "eso"
+  - "esto"
+  - "lo anterior"
+  - "el mismo"
+  - "esa normativa"
+  - "ese procedimiento"
+
+  por su significado explícito.
+
+- Completar sujetos implícitos SOLO si el historial los define claramente.
+- Mantener la intención original de la consulta.
+- Mantener terminología técnica, normativa y contextual.
+- Preservar el alcance exacto de la pregunta original.
+- Reorganizar la redacción si mejora claridad o recuperación semántica.
+
+# Qué NO debes hacer
 
 NO debes:
-- Agregar información, requisitos o conceptos que no estén en la pregunta actual.
-- Inferir nuevas intenciones.
-- Generalizar ni expandir el alcance de la pregunta.
 
-Regla clave:
-Si la pregunta ya es autocontenida, devuélvela EXACTAMENTE igual.
+- Inventar información.
+- Agregar requisitos no mencionados.
+- Introducir nuevos conceptos.
+- Cambiar la intención del usuario.
+- Generalizar más allá del contexto conversacional.
+- Expandir el alcance de la consulta.
 
-Formato de salida:
+# Reglas importantes
+
+- Si la consulta ya es autocontenida, devuélvela sin modificaciones innecesarias.
+- Prioriza claridad semántica sobre similitud textual.
+- La consulta debe sonar natural y técnica.
+- Evita reescrituras excesivamente literales o redundantes.
+
+# Formato de salida
+
 - Una única línea
 - Sin comillas
 - Sin explicaciones
+- Sin markdown
 
 Ejemplos:
 
@@ -59,36 +90,85 @@ Salida:
 """.strip()
 
 BASE_QUESTION_HUMAN_PROMPT = """
-Historial de conversación:
+# Historial de conversación
+
 {history_messages}
 
-Pregunta actual:
+---
+
+# Consulta actual
+
 {question}
 
-Consulta autocontenida:
+---
+
+# Consulta autocontenida
 """.strip()
 
 KEYWORD_QUESTION_SYSTEM_PROMPT = """
-Eres un motor de extracción de keywords para sistemas RAG orientados a documentación técnica, normativa e institucional.
+Eres un sistema de extracción de keywords para motores RAG especializados en documentación técnica, normativa e institucional.
 
-Objetivo:
-Convertir una consulta en términos de búsqueda que maximicen la recuperación de documentos relevantes (leyes, reglamentos, procedimientos, resoluciones).
+# Objetivo
 
-Debes:
-- Extraer términos clave como: conceptos normativos, entidades, acciones, procesos, condiciones.
-- Incluir términos técnicos o jurídicos relevantes.
-- Usar sinónimos directos SOLO si son equivalentes claros en contexto técnico o normativo.
+Convertir una consulta en términos optimizados para recuperación semántica y lexical de documentos relevantes.
+
+Los términos deben maximizar la probabilidad de encontrar:
+
+- leyes
+- reglamentos
+- resoluciones
+- procedimientos
+- normativa técnica
+- documentación institucional
+
+# Qué debes extraer
+
+Debes priorizar:
+
+- conceptos normativos
+- entidades
+- acciones
+- procesos
+- cargos
+- organismos
+- condiciones
+- términos técnicos
+- términos jurídicos
+- nombres de procedimientos
+- tipos documentales
+
+# Qué puedes hacer
+
+Puedes:
+
+- Reordenar términos para mejorar recuperación.
+- Incluir variantes técnicas directas.
+- Incluir sinónimos técnicos SOLO si son equivalentes claros.
+- Expandir términos compuestos relevantes.
+- Omitir palabras sin valor semántico para búsqueda.
+
+# Qué NO debes hacer
 
 NO debes:
-- Incluir palabras vacías (artículos, preposiciones, conectores).
-- Reformular la consulta como una frase.
-- Agregar conceptos no presentes en la consulta.
 
-Reglas:
-- Salida en una sola línea
-- Separar por espacios
+- Escribir frases completas.
+- Agregar conceptos ajenos a la consulta.
+- Inventar entidades o normativa.
+- Explicar resultados.
+- Generar texto conversacional.
+
+# Reglas de salida
+
+- Una única línea
+- Términos separados por espacios
 - Sin puntuación
-- Sin explicaciones
+- Sin comillas
+- Sin markdown
+- Priorizar términos más relevantes primero
+
+# Prioridad
+
+Prioriza precisión semántica antes que cantidad de keywords.
 
 Ejemplos:
 
@@ -124,8 +204,11 @@ reglamento interno definición
 """.strip()
 
 KEYWORD_QUESTION_HUMAN_PROMPT = """
-Consulta:
+# Consulta
+
 {question}
 
-Keywords:
+---
+
+# Keywords
 """.strip()

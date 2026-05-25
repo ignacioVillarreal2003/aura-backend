@@ -1,5 +1,4 @@
-from typing import Optional
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -12,33 +11,8 @@ class FragmentQueryServiceSettings(BaseSettings):
         extra="ignore",
     )
 
-    max_fragments: int = Field(default=50, ge=1, le=100)
-    max_document_ids: int = Field(default=50, ge=1, le=100)
-    min_question_length: int = Field(default=1, ge=1)
-    max_question_length: int = Field(default=16_000, ge=1, le=100_000)
-    similarity_threshold: float = Field(default=0.4, ge=0.0, le=1.0)
+    similarity_threshold: float = Field(default=0.65, ge=0.0, le=1.0)
 
-    rerank_enabled: bool = Field(default=True)
-    rerank_model_name: str = Field(default="BAAI/bge-reranker-v2-m3")
-    rerank_device: Optional[str] = Field(default=None)
-    rerank_min_fragments: int = Field(default=1, ge=1, le=50)
-    rerank_min_score: float = Field(default=0.0)
-    rerank_batch_size: int = Field(default=16, ge=1, le=512)
-
-    bm25_enabled: bool = Field(default=True)
     bm25_rrf_k: int = Field(default=60, ge=1, le=10_000)
     bm25_min_score: float = Field(default=0.0)
     bm25_query_max_chars: int = Field(default=512, ge=1, le=4_000)
-
-    @field_validator("rerank_device", mode="before")
-    @classmethod
-    def normalize_rerank_device(cls, value: Optional[str]) -> Optional[str]:
-        if value is None or (isinstance(value, str) and not value.strip()):
-            return None
-        return value.strip().lower()
-
-    @model_validator(mode="after")
-    def validate_coherence(self) -> "FragmentQueryServiceSettings":
-        if self.min_question_length >= self.max_question_length:
-            raise ValueError("The minimum question length must be strictly less than the maximum question length.")
-        return self

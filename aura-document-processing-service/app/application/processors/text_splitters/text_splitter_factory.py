@@ -22,10 +22,6 @@ _TEXT_SPLITTER_REGISTRY: dict[TextSplitterType, str] = {
         "app.application.processors.text_splitters.instances"
         ".huggingface_text_splitter.HuggingFaceTextSplitter"
     ),
-    TextSplitterType.markdown_processor: (
-        "app.application.processors.text_splitters.instances"
-        ".markdown_processor_text_splitter.MarkdownProcessorTextSplitter"
-    )
 }
 
 

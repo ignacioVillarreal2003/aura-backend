@@ -8,7 +8,7 @@ class EmbedderException(AppException):
 
 class UnsupportedEmbedderTypeException(EmbedderException):
     def __init__(self, message: str) -> None:
-        super().__init__(message, status_code=415)
+        super().__init__(message, status_code=400)
 
 
 class EmbedderInitializationException(EmbedderException):

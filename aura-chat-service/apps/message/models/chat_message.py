@@ -14,6 +14,7 @@ class ChatMessage(CreatedAuditModel, SoftDeleteModel):
     )
     message = models.TextField(max_length=10000)
     sender_type = models.CharField(max_length=64, choices=SenderType.choices)
+    fragments = models.JSONField(null=True, blank=True, default=None)
 
     class Meta:
         db_table = "chat_message"

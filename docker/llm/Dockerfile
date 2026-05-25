@@ -1,4 +1,4 @@
-FROM ollama/ollama:latest
+FROM ollama/ollama:0.30.0-rc23
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \

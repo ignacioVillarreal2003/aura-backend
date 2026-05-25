@@ -26,7 +26,6 @@ class AnswerGeneratorNode(NodeInterface):
         self._ollama_llm_facade = ollama_llm_facade
         self._settings = settings
         self._llm: Optional[Runnable] = None
-        self._llm_init_failed: bool = False
         self._llm_lock = asyncio.Lock()
         logger.debug("AnswerGeneratorNode initialized")
 
@@ -38,21 +37,21 @@ class AnswerGeneratorNode(NodeInterface):
 
         if not context:
             logger.info("No context available — returning no-information response")
-            return {"answer": _NO_CONTEXT_RESPONSE, "guardrail_passed": False}
+            return {"answer": _NO_CONTEXT_RESPONSE}
 
         try:
             await self._ensure_llm_initialized()
             answer = (await self._generate(resolved_query, context)).strip()
 
             if not answer:
-                return {"answer": _NO_CONTEXT_RESPONSE, "guardrail_passed": False}
+                return {"answer": _NO_CONTEXT_RESPONSE}
 
             logger.info("Answer generated", extra={"answer_length": len(answer)})
             return {"answer": answer}
 
         except Exception:
-            logger.error("Answer generation failed", exc_info=True)
-            raise RuntimeError("Failed to generate answer")
+            logger.error("Answer generation failed — returning fallback", exc_info=True)
+            return {"answer": _NO_CONTEXT_RESPONSE}
 
     async def _generate(self, query: str, context: str) -> str:
         response = await self._llm.ainvoke(self._build_prompt(query, context))
@@ -71,16 +70,8 @@ class AnswerGeneratorNode(NodeInterface):
     async def _ensure_llm_initialized(self) -> None:
         if self._llm is not None:
             return
-        if self._llm_init_failed:
-            raise RuntimeError("LLM initialization previously failed")
         async with self._llm_lock:
             if self._llm is not None:
                 return
-            if self._llm_init_failed:
-                raise RuntimeError("LLM initialization previously failed")
-            try:
-                self._llm = await self._ollama_llm_facade.get_llm_base()
-                logger.debug("LLM initialized for answer generator")
-            except Exception as e:
-                self._llm_init_failed = True
-                raise RuntimeError("Failed to initialize LLM for answer generator") from e
+            self._llm = await self._ollama_llm_facade.get_llm_base()
+            logger.debug("LLM initialized for answer generator")
