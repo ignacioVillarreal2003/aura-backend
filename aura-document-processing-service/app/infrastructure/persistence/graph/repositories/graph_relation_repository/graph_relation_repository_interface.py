@@ -33,3 +33,13 @@ class GraphRelationRepositoryInterface(ABC):
             limit: int,
     ) -> list[GraphRelationResponse]:
         pass
+
+    @abstractmethod
+    async def list_by_document(
+            self,
+            *,
+            document_id: int,
+            accessible_document_ids: list[int],
+            limit: int,
+    ) -> list[GraphRelationResponse]:
+        pass

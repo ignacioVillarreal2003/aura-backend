@@ -14,6 +14,7 @@ from app.application.services.graph_extraction_service.graph_extraction_service 
 from app.application.services.graph_query_translation_service.graph_query_translation_service import (
     GraphQueryTranslationService,
 )
+from app.application.services.general_chat_service.general_chat_service import GeneralChatService
 from app.application.services.rag_agent_service.rag_agent_service import RagAgentService
 from app.infrastructure.http.authentication_provider.authentication_provider import AuthenticationProvider
 from app.infrastructure.http.document_context_provider.document_context_provider import DocumentContextProvider
@@ -47,6 +48,7 @@ async def _rollback_partial_startup(
             )
 
     to_clear = [
+        "general_chat_service",
         "rag_agent_service",
         "agent_service",
         "graph_query_translation_service",
@@ -173,6 +175,14 @@ async def startup_dependencies(app: FastAPI) -> None:
             authorizer=authorizer,
         )
         app.state.rag_agent_service = rag_agent_service
+
+        general_chat_service = GeneralChatService(
+            ollama_llm_facade=ollama_facade,
+            ollama_llm_invoker=ollama_llm_invoker,
+            ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
+            authorizer=authorizer,
+        )
+        app.state.general_chat_service = general_chat_service
 
         logger.info("All dependencies started successfully")
         cleanup_stack.clear()

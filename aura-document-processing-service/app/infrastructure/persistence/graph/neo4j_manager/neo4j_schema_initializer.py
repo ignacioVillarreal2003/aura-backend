@@ -29,6 +29,11 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
     CREATE INDEX rel_type IF NOT EXISTS
     FOR ()-[r:REL]-() ON (r.type)
     """,
+    """
+    CREATE FULLTEXT INDEX entity_fulltext IF NOT EXISTS
+    FOR (n:Entity)
+    ON EACH [n.canonical_name, n.display_name, n.aliases]
+    """,
 )
 
 
