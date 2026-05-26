@@ -34,7 +34,7 @@ class SendGroupNotificationForm(forms.Form):
     compartments = forms.MultipleChoiceField(
         choices=[],
         required=False,
-        label='Comportamientos',
+        label='Agrupaciones',
         widget=forms.SelectMultiple(),
     )
     roles = forms.ModelMultipleChoiceField(
@@ -64,7 +64,7 @@ class SendGroupNotificationForm(forms.Form):
         roles = cleaned_data.get('roles')
         if not levels and not compartments and (not roles or roles.count() == 0):
             raise forms.ValidationError(
-                'Debes seleccionar al menos un nivel, un comportamiento o un rol de sistema.'
+                'Debes seleccionar al menos un nivel, una agrupación o un rol de sistema.'
             )
         return cleaned_data
 
@@ -87,7 +87,6 @@ class SendGroupNotificationForm(forms.Form):
                         JOIN classification_level cl_target
                             ON cl_target.id = %s
                         WHERE cl_user.rank >= cl_target.rank
-                          AND uc.deleted_at IS NULL
                     """, [lid])
                     user_ids.update(row[0] for row in cursor.fetchall())
 
@@ -98,7 +97,6 @@ class SendGroupNotificationForm(forms.Form):
                         SELECT DISTINCT user_id
                         FROM user_compartment
                         WHERE compartment_id = %s
-                          AND deleted_at IS NULL
                     """, [cid])
                     user_ids.update(row[0] for row in cursor.fetchall())
 
@@ -140,7 +138,7 @@ class SendGroupNotificationForm(forms.Form):
                 if str(value) in compartment_ids
             ]
             if names:
-                labels.append('Comportamientos: ' + ', '.join(names))
+                labels.append('Agrupaciones: ' + ', '.join(names))
         if roles and roles.count() > 0:
             labels.append('Roles sistema: ' + ', '.join(roles.values_list('name', flat=True)))
         return ' | '.join(labels)

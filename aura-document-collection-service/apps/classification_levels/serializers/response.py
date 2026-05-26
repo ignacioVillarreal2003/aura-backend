@@ -11,7 +11,7 @@ from apps.classification_levels.models import ClassificationLevel
 class ClassificationLevelResponse(serializers.ModelSerializer):
     class Meta:
         model = ClassificationLevel
-        fields = ["id", "name", "rank"]
+        fields = ["id", "name", "rank", "description"]
         extra_kwargs = {
             "id": {"help_text": "Primary key for FK references from collections/users."},
             "name": {"help_text": "Short label surfaced in approvals or policy editors."},

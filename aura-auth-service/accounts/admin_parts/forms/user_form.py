@@ -34,15 +34,15 @@ class UserAdminForm(forms.ModelForm):
     )
 
     classification_level_id = forms.ChoiceField(
-        choices=[('', '-- Sin habilitación --')],
+        choices=[('', '-- Sin nivel --')],
         required=False,
-        label='Nivel de habilitación',
+        label='Nivel',
     )
 
     compartment_ids = forms.MultipleChoiceField(
         choices=[],
         required=False,
-        label='Comportamientos',
+        label='Agrupaciones',
         widget=forms.CheckboxSelectMultiple(),
     )
 

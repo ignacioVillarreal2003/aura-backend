@@ -65,6 +65,7 @@ class UserAuthorizationViewSet(GenericViewSet):
         return Response(UserAuthorizationResponse(data).data)
 
     @extend_schema(
+        methods=["PUT"],
         tags=["UserAuthorizations"],
         summary="Upsert Mandatory Access clearance ceiling",
         description=(
@@ -76,18 +77,8 @@ class UserAuthorizationViewSet(GenericViewSet):
         request=SetUserClearanceRequest,
         responses={200: UserClearanceResponse, **_ERR_WRITE},
     )
-    @action(detail=True, methods=["put"], url_path="clearance", url_name="set-clearance")
-    def set_clearance(self, request: Request, user_id: str | None = None) -> Response:
-        serializer = SetUserClearanceRequest(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        clearance = user_authorization_service.set_user_clearance(
-            request.user,
-            int(user_id),
-            classification_level_id=serializer.validated_data["classification_level_id"],
-        )
-        return Response(UserClearanceResponse(clearance).data)
-
     @extend_schema(
+        methods=["DELETE"],
         tags=["UserAuthorizations"],
         summary="Revoke clearance if present",
         description=(
@@ -97,10 +88,19 @@ class UserAuthorizationViewSet(GenericViewSet):
         parameters=[_TARGET_USER],
         responses={204: OpenApiResponse(description="Clears clearance without response body."), **_ERR_BASE},
     )
-    @action(detail=True, methods=["delete"], url_path="clearance", url_name="delete-clearance")
-    def delete_clearance(self, request: Request, user_id: str | None = None) -> Response:
-        user_authorization_service.delete_user_clearance(request.user, int(user_id))
-        return Response(status=status.HTTP_204_NO_CONTENT)
+    @action(detail=True, methods=["put", "delete"], url_path="clearance", url_name="clearance")
+    def clearance(self, request: Request, user_id: str | None = None) -> Response:
+        if request.method == "DELETE":
+            user_authorization_service.delete_user_clearance(request.user, int(user_id))
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        serializer = SetUserClearanceRequest(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = user_authorization_service.set_user_clearance(
+            request.user,
+            int(user_id),
+            classification_level_id=serializer.validated_data["classification_level_id"],
+        )
+        return Response(UserClearanceResponse(result).data)
 
     @extend_schema(
         tags=["UserAuthorizations"],

@@ -14,7 +14,7 @@ class RoleAdminForm(forms.ModelForm):
         queryset=Permission.objects.order_by('name'),
         required=False,
         widget=FilteredSelectMultiple('Permisos', is_stacked=False),
-        label='Permisos',
+        label='',
     )
 
     class Meta:
@@ -38,13 +38,13 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
     list_display = ('name', 'description_short', 'permission_count')
     list_filter = ()
     search_fields = ('name', 'description')
-    readonly_fields = ('id',)
+    readonly_fields = ()
     actions = None
     actions_selection_counter = False
 
     fieldsets = (
-        ('Información Básica', {
-            'fields': ('id', 'name', 'description'),
+        ('Información del Rol', {
+            'fields': ('name', 'description'),
         }),
         ('Permisos', {
             'fields': ('permissions',),
@@ -53,8 +53,18 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
 
     def get_readonly_fields(self, request, obj=None):
         if obj:
-            return self.readonly_fields + ('name',)
-        return self.readonly_fields
+            return ('name', 'description')
+        return ()
+
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        extra_context = extra_context or {}
+        try:
+            role = Role.objects.get(pk=object_id)
+            extra_context['title'] = f'Rol - {role.name.capitalize()}'
+            extra_context['subtitle'] = None
+        except Role.DoesNotExist:
+            pass
+        return super().change_view(request, object_id, form_url, extra_context)
 
     def has_module_permission(self, request):
         return _is_admin_or_super_user(request.user)
@@ -69,18 +79,7 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
         return _is_super_admin_user(request.user)
 
     def has_delete_permission(self, request, obj=None):
-        if not _is_super_admin_user(request.user):
-            return False
-        if obj is None:
-            return True
-        if obj.name in ['superadmin', 'admin']:
-            return False
-        if request.user and obj.user_assignments.filter(
-            user=request.user,
-            deleted_at__isnull=True,
-        ).exists():
-            return False
-        return True
+        return False
 
     def save_related(self, request, form, formsets, change):
         super().save_related(request, form, formsets, change)

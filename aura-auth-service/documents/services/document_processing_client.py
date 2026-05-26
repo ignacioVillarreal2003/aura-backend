@@ -27,7 +27,7 @@ def _extract_error_message(response: requests.Response) -> str:
     )
 
 
-def create_document_from_admin(*, raw_document, chat_id, actor_user):
+def create_document_from_admin(*, raw_document, chat_id, actor_user, name=None, description=None):
     """Create a document in document-processing using service-to-service auth."""
 
     url = f"{settings.DOCUMENT_PROCESSING_URL.rstrip('/')}/api/v1/create-document"
@@ -44,6 +44,10 @@ def create_document_from_admin(*, raw_document, chat_id, actor_user):
     data = {}
     if chat_id:
         data['chat_id'] = str(chat_id)
+    if name:
+        data['name'] = name
+    if description:
+        data['description'] = description
 
     headers = {
         'X-Service-Api-Key': settings.DOCUMENT_PROCESSING_SERVICE_API_KEY,

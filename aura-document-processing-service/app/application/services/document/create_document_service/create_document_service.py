@@ -143,7 +143,8 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             now = datetime.now(timezone.utc)
             document = Document(
                 chat_id=create_document_request.chat_id,
-                name=raw_document.filename,
+                name=create_document_request.name or raw_document.filename,
+                description=create_document_request.description,
                 mime_type=document_mime_type,
                 status=DocumentStatus.uploaded,
                 storage_url=object_name,

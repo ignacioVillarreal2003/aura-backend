@@ -60,7 +60,7 @@ def _custom_get_app_list(self, request, app_label=None):
                 'view_only': True,
             },
             {
-                'name': 'Comportamientos',
+                'name': 'Agrupaciones',
                 'object_name': 'Compartment',
                 'admin_url': reverse('admin:mac_compartments_list'),
                 'view_only': True,
