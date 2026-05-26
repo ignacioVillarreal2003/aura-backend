@@ -1,0 +1,62 @@
+@chatBase = http://localhost:8003/api/v1
+@authToken = user_token_123
+
+### Listar miembros activos del chat
+GET {{chatBase}}/chats/1/members/
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Listar miembros — filtrar por estado
+GET {{chatBase}}/chats/1/members/?status=pending
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Listar todos los miembros (cualquier estado)
+GET {{chatBase}}/chats/1/members/?status=all
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Invitar miembros al chat
+POST {{chatBase}}/chats/1/members/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "member_ids": [10, 20, 30]
+}
+
+
+### Actualizar estado de un miembro (ej. pending → active)
+PATCH {{chatBase}}/chats/1/members/10/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "status": "active"
+}
+
+
+### Eliminar un miembro del chat — responde 204
+DELETE {{chatBase}}/chats/1/members/10/
+Authorization: Bearer {{authToken}}
+
+
+### Cambiar rol de un miembro
+PATCH {{chatBase}}/chats/1/members/10/role/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "role": "editor"
+}
+
+
+### Abandonar el chat (self-serve) — responde 204
+POST {{chatBase}}/chats/1/members/leave/
+Authorization: Bearer {{authToken}}

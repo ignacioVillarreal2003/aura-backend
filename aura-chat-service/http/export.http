@@ -1,0 +1,26 @@
+@chatBase = http://localhost:8003/api/v1
+@authToken = user_token_123
+
+### Exportar chat completo como PDF — descarga chat_1.pdf
+GET {{chatBase}}/chats/1/messages/export/pdf/
+Authorization: Bearer {{authToken}}
+
+
+### Exportar chat completo como Markdown — descarga chat_1.md
+GET {{chatBase}}/chats/1/messages/export/markdown/
+Authorization: Bearer {{authToken}}
+
+
+### Exportar chat completo como JSON — descarga chat_1.json
+GET {{chatBase}}/chats/1/messages/export/json/
+Authorization: Bearer {{authToken}}
+
+
+### Exportar solo respuestas de IA como Markdown — descarga chat_1_ai.md
+GET {{chatBase}}/chats/1/messages/export/ai/
+Authorization: Bearer {{authToken}}
+
+
+### Exportar un mensaje individual como PDF — descarga message_55.pdf
+GET {{chatBase}}/chats/1/messages/55/export/pdf/
+Authorization: Bearer {{authToken}}

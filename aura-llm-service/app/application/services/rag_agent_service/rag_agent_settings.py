@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _PROMPT_MAX_CHARS = 10_000
@@ -44,57 +44,6 @@ class QueryAnalyzerSettings(BaseModel):
         )
 
 
-class ContextEvaluatorSettings(BaseModel):
-    model_config = ConfigDict(frozen=True)
-    custom_system_prompt: Optional[str] = None
-
-    @field_validator("custom_system_prompt")
-    @classmethod
-    def _check_prompt(cls, v: Optional[str]) -> Optional[str]:
-        return _validate_optional_prompt("custom_system_prompt", v)
-
-    @property
-    def system_prompt(self) -> str:
-        if self.custom_system_prompt is not None:
-            return self.custom_system_prompt
-        return (
-            "Eres un evaluador de relevancia de contexto documental. "
-            "Dado una consulta y un contexto recuperado, determina si el contexto "
-            "contiene información suficiente para responder la consulta.\n\n"
-            "Responde ÚNICAMENTE con:\n"
-            "- 'SUFICIENTE' si el contexto permite responder la consulta\n"
-            "- 'INSUFICIENTE' si el contexto no contiene información relevante\n\n"
-            "No incluyas explicaciones adicionales."
-        )
-
-
-class ReasoningSettings(BaseModel):
-    model_config = ConfigDict(frozen=True)
-    custom_system_prompt: Optional[str] = None
-
-    @field_validator("custom_system_prompt")
-    @classmethod
-    def _check_prompt(cls, v: Optional[str]) -> Optional[str]:
-        return _validate_optional_prompt("custom_system_prompt", v)
-
-    @property
-    def system_prompt(self) -> str:
-        if self.custom_system_prompt is not None:
-            return self.custom_system_prompt
-        return (
-            "Eres un asistente experto en análisis documental institucional. "
-            "Tu tarea es razonar paso a paso sobre cómo responder una consulta basándote "
-            "EXCLUSIVAMENTE en el contexto documental proporcionado.\n\n"
-            "Instrucciones:\n"
-            "1. Identifica qué información del contexto es relevante para la consulta\n"
-            "2. Analiza las relaciones entre los fragmentos relevantes\n"
-            "3. Determina qué partes de la respuesta pueden sustentarse en el contexto\n"
-            "4. Identifica posibles lagunas de información\n\n"
-            "Expresa tu razonamiento de forma estructurada y concisa. "
-            "No generes la respuesta final, solo el análisis."
-        )
-
-
 class AnswerSynthesizerSettings(BaseModel):
     model_config = ConfigDict(frozen=True)
     custom_system_prompt: Optional[str] = None
@@ -111,7 +60,7 @@ class AnswerSynthesizerSettings(BaseModel):
         return (
             "Eres un asistente especializado en documentación institucional, normativa legal y procedimientos "
             "administrativos. Tu función es sintetizar una respuesta clara y precisa basándote EXCLUSIVAMENTE "
-            "en el contexto documental y el análisis previo proporcionados.\n\n"
+            "en el contexto documental proporcionado.\n\n"
             "Instrucciones obligatorias:\n"
             "1. Responde únicamente con información presente en el contexto\n"
             "2. Cita las fuentes usando el formato [Documento #ID] al final de cada afirmación relevante\n"
@@ -132,9 +81,23 @@ class RagAgentServiceSettings(BaseSettings):
     )
 
     max_fragments: int = Field(default=12, ge=1, le=50)
+    bm25_fragments: int = Field(default=5, ge=1, le=50)
     max_context_chars: int = Field(default=10_000, ge=1_000, le=50_000)
 
+    use_rerank: bool = Field(default=True)
+    rerank_max_fragments: int = Field(default=10, ge=1, le=100)
+    adjacent_chunks: int = Field(default=1, ge=0, le=3)
+
     query_analyzer: QueryAnalyzerSettings = Field(default_factory=QueryAnalyzerSettings)
-    context_evaluator: ContextEvaluatorSettings = Field(default_factory=ContextEvaluatorSettings)
-    reasoning: ReasoningSettings = Field(default_factory=ReasoningSettings)
     answer_synthesizer: AnswerSynthesizerSettings = Field(default_factory=AnswerSynthesizerSettings)
+
+    @model_validator(mode="after")
+    def validate_rerank(self) -> "RagAgentServiceSettings":
+        if self.use_rerank:
+            max_pool = self.max_fragments + self.bm25_fragments
+            if self.rerank_max_fragments > max_pool:
+                raise ValueError(
+                    f"rerank_max_fragments ({self.rerank_max_fragments}) cannot exceed "
+                    f"max_fragments + bm25_fragments ({max_pool})"
+                )
+        return self

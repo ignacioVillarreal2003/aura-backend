@@ -18,21 +18,17 @@ class OllamaLLMFacadeSettings(BaseSettings):
     model_name: str = Field(...)
     base_url: str = Field(...)
 
-    temperature: float = Field(default=0.2, ge=0.0, le=2.0)
-    top_p: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    top_k: Optional[int] = Field(default=None, ge=1, le=500)
-    repeat_penalty: Optional[float] = Field(default=None, ge=0.0, le=2.0)
+    temperature: float = Field(default=0.3, ge=0.0, le=2.0)
+    top_p: Optional[float] = Field(default=0.9, ge=0.0, le=1.0)
+    top_k: Optional[int] = Field(default=40, ge=1, le=500)
+    repeat_penalty: Optional[float] = Field(default=1.1, ge=0.0, le=2.0)
     seed: Optional[int] = Field(default=None, ge=0)
 
     num_ctx: Optional[int] = Field(default=None, ge=512, le=131_072)
-    num_predict: Optional[int] = Field(default=None, ge=1, le=32_768)
+    # -1 = generate until EOS (unlimited), -2 = fill context window, positive = max tokens
+    num_predict: Optional[int] = Field(default=None, ge=-2, le=32_768)
 
-    request_timeout: Optional[float] = Field(
-        default=600.0,
-        gt=0,
-        le=3600.0,
-        description="Overall timeout passed to LangChain ChatOllama toward Ollama (long graphs need more).",
-    )
+    request_timeout: Optional[float] = Field(default=600.0, gt=0, le=3600.0)
     keep_alive: Optional[str] = Field(default=None)
 
     @field_validator("model_name", mode="before")

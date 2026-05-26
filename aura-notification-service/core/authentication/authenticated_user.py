@@ -8,7 +8,6 @@ class AuthenticatedUser:
     username: str = ""
     roles: tuple[str, ...] = field(default_factory=tuple)
     permissions: tuple[str, ...] = field(default_factory=tuple)
-    is_super_admin: bool = False
 
     @property
     def pk(self) -> int:

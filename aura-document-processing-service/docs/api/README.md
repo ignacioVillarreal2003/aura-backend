@@ -20,8 +20,9 @@ Las rutas anteriores **no requieren autenticación** a nivel de middleware (est�
 
 | Archivo | Descripción |
 |---------|-------------|
-| [overview.md](overview.md) | Prefijo `/api`, CORS, métricas y dependencias típicas del servicio. |
+| [overview.md](overview.md) | Prefijo `/api/v1`, CORS, métricas y dependencias típicas del servicio. |
 | [authentication.md](authentication.md) | Bearer JWT, llamadas servicio-a-servicio y rutas públicas. |
-| [documents.md](documents.md) | Creación/ingesta, consulta, descarga, borrados y post-procesado de documentos; mención breve de fragmentos. |
+| [endpoints.md](endpoints.md) | Referencia completa de todos los endpoints: campos, tipos, restricciones, enums y códigos de respuesta. |
+| [documents.md](documents.md) | Resumen narrativo de los flujos de documentos (ingesta, consulta, descarga, borrado). |
 
-Para el detalle de cada endpoint, usar siempre **OpenAPI** o **Swagger/ReDoc**.
+La **fuente de verdad ejecutable** sigue siendo OpenAPI (`/api/openapi.json`) y Swagger (`/api/docs`); `endpoints.md` documenta los contratos con el detalle derivado del código fuente.

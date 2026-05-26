@@ -25,24 +25,24 @@ Reglas estrictas de salida:
 - Sin comentarios.
 
 Estructura EXACTA del JSON:
-{{
+{
   "entities": [
-    {{
+    {
       "name": "string",
       "type": "uno de allowed_entity_types",
       "aliases": ["string"],
       "description": "string opcional"
-    }}
+    }
   ],
   "relations": [
-    {{
+    {
       "type": "uno de allowed_relation_types (snake_case)",
-      "source": {{ "name": "string", "type": "uno de allowed_entity_types" }},
-      "target": {{ "name": "string", "type": "uno de allowed_entity_types" }},
+      "source": { "name": "string", "type": "uno de allowed_entity_types" },
+      "target": { "name": "string", "type": "uno de allowed_entity_types" },
       "confidence": 0.0
-    }}
+    }
   ]
-}}
+}
 
 Reglas por campo:
 - "name": el texto literal de la entidad como aparece en el fragmento (puede ir en minúsculas).

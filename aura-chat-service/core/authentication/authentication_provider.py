@@ -1,11 +1,10 @@
 import hashlib
 import logging
 import secrets
-import threading
-import time
 from typing import Optional
 import httpx
 from django.conf import settings
+from django.core.cache import cache as _cache
 from django.http import HttpRequest
 
 from core.authentication.authenticated_user import AuthenticatedUser
@@ -20,46 +19,49 @@ from core.authentication.authentication_exceptions import (
 
 logger = logging.getLogger(__name__)
 
-_TOKEN_CACHE_MAX_SIZE = 2000
-
-_token_cache: dict[str, tuple[AuthenticatedUser, float]] = {}
-_token_cache_lock = threading.Lock()
+_CACHE_PREFIX = "auth_token:"
 
 
-def _token_cache_ttl() -> float:
-    return float(getattr(settings, "TOKEN_CACHE_TTL_SECONDS", 60))
+def _token_cache_ttl() -> int:
+    return int(getattr(settings, "AUTH_TOKEN_CACHE_TTL_SECONDS", 60))
 
 
 def _cache_key(token: str) -> str:
-    return hashlib.sha256(token.encode()).hexdigest()
+    return f"{_CACHE_PREFIX}{hashlib.sha256(token.encode()).hexdigest()}"
 
 
 def _get_cached_user(token: str) -> Optional[AuthenticatedUser]:
-    key = _cache_key(token)
-    with _token_cache_lock:
-        entry = _token_cache.get(key)
-        if entry is None:
+    try:
+        data = _cache.get(_cache_key(token))
+        if data is None:
             return None
-        user, expires_at = entry
-        if time.monotonic() >= expires_at:
-            del _token_cache[key]
-            return None
-        return user
+        return AuthenticatedUser(
+            id=data["id"],
+            email=data["email"],
+            username=data.get("username", ""),
+            roles=tuple(data.get("roles") or []),
+            permissions=tuple(data.get("permissions") or []),
+        )
+    except Exception:
+        logger.warning("Redis token cache read failed; falling back to auth service.", exc_info=True)
+        return None
 
 
 def _cache_user(token: str, user: AuthenticatedUser) -> None:
-    key = _cache_key(token)
-    expires_at = time.monotonic() + _token_cache_ttl()
-    with _token_cache_lock:
-        if len(_token_cache) >= _TOKEN_CACHE_MAX_SIZE:
-            now = time.monotonic()
-            expired = [k for k, (_, exp) in _token_cache.items() if exp <= now]
-            for k in expired:
-                del _token_cache[k]
-            if len(_token_cache) >= _TOKEN_CACHE_MAX_SIZE:
-                oldest = min(_token_cache, key=lambda k: _token_cache[k][1])
-                del _token_cache[oldest]
-        _token_cache[key] = (user, expires_at)
+    try:
+        _cache.set(
+            _cache_key(token),
+            {
+                "id": user.id,
+                "email": user.email,
+                "username": user.username,
+                "roles": list(user.roles),
+                "permissions": list(user.permissions),
+            },
+            timeout=_token_cache_ttl(),
+        )
+    except Exception:
+        logger.warning("Redis token cache write failed; token will not be cached.", exc_info=True)
 
 
 _HEADER_SERVICE_API_KEY = "X-Service-Api-Key"
@@ -165,8 +167,9 @@ class AuthenticationProvider:
         logger.debug("Validating bearer token with the authentication service.")
         auth_header = _format_bearer_token(token)
 
+        timeout = float(getattr(settings, "AUTH_SERVICE_TIMEOUT", 10.0))
         try:
-            with httpx.Client(timeout=10.0) as client:
+            with httpx.Client(timeout=timeout) as client:
                 response = client.get(
                     settings.AUTHENTICATION_SERVICE_URL,
                     headers={"Authorization": auth_header},

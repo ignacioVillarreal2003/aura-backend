@@ -1,24 +1,7 @@
-"""Template rendering for notifications.
-
-Each event in the registry references a `template_id`; the service looks
-for templates under `apps/notification/templates/notifications/<id>/`:
-
-    inapp.txt           -> short message persisted in `notification.message`
-    email_subject.txt   -> email subject
-    email.html          -> rich body (preferred for HTML clients)
-    email.txt           -> plain-text body fallback
-
-If a template is missing the service falls back to the event description
-plus an inline payload dump, so a misconfigured event never causes a
-silent failure.
-"""
-
 from __future__ import annotations
-
 import logging
 from dataclasses import dataclass
 from typing import Optional
-
 from django.template import TemplateDoesNotExist
 from django.template.loader import render_to_string
 
@@ -58,7 +41,6 @@ class TemplateService:
         except Exception:
             logger.exception("link_builder failed for %s", event.event_type)
             link_url = None
-        # Allow callers to override the computed link via context["link_url"].
         return RenderedInApp(
             message=message,
             link_url=context.get("link_url") or link_url,

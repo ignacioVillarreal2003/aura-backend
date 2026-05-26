@@ -158,6 +158,9 @@ python manage.py runserver 0.0.0.0:8004
 
 # 4. (in another shell) run the Celery worker
 celery -A aura_notification_service worker -l info -Q notifications
+
+# On Windows the default prefork pool often crashes (billiard spawn); use solo or threads:
+# celery -A aura_notification_service worker -l info -Q notifications --pool=solo
 ```
 
 ## Testing the SSE stream

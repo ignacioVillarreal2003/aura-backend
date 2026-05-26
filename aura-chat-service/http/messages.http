@@ -1,0 +1,130 @@
+@chatBase = http://localhost:8003/api/v1
+@authToken = user_token_123
+
+### Listar mensajes (cursor pagination, newest first)
+GET {{chatBase}}/chats/1/messages/
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Enviar mensaje de texto
+POST {{chatBase}}/chats/1/messages/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "message": "¿Qué dice el documento sobre los plazos de entrega?"
+}
+
+
+### Enviar mensaje de voz (multipart/form-data)
+# POST {{chatBase}}/chats/1/messages/
+# Accept: application/json
+# Content-Type: multipart/form-data; boundary=boundary
+# Authorization: Bearer {{authToken}}
+#
+# --boundary
+# Content-Disposition: form-data; name="audio"; filename="voice.webm"
+# Content-Type: audio/webm
+#
+# < ./voice.webm
+# --boundary--
+
+
+### Eliminar un mensaje — responde 204
+DELETE {{chatBase}}/chats/1/messages/55/
+Authorization: Bearer {{authToken}}
+
+
+### Borrar todo el historial del chat (soft-delete) — solo el creador
+DELETE {{chatBase}}/chats/1/messages/clear/
+Authorization: Bearer {{authToken}}
+
+
+### Marcar chat como leído — responde 204
+POST {{chatBase}}/chats/1/messages/read/
+Authorization: Bearer {{authToken}}
+
+
+### Regenerar última respuesta de IA
+POST {{chatBase}}/chats/1/messages/regenerate/
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Listar mensajes pineados en el chat
+GET {{chatBase}}/chats/1/messages/pinned/
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Pinear un mensaje — responde 201
+POST {{chatBase}}/chats/1/messages/55/pin/
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Despinear un mensaje — responde 204
+DELETE {{chatBase}}/chats/1/messages/55/pin/
+Authorization: Bearer {{authToken}}
+
+
+### Listar mensajes marcados como favoritos
+GET {{chatBase}}/chats/1/messages/bookmarked/
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Agregar bookmark en un mensaje — responde 204
+POST {{chatBase}}/chats/1/messages/55/bookmark/
+Authorization: Bearer {{authToken}}
+
+
+### Quitar bookmark de un mensaje — responde 204
+DELETE {{chatBase}}/chats/1/messages/55/bookmark/
+Authorization: Bearer {{authToken}}
+
+
+### Listar respuestas del hilo de un mensaje
+GET {{chatBase}}/chats/1/messages/55/thread/
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Agregar respuesta al hilo de un mensaje
+POST {{chatBase}}/chats/1/messages/55/thread/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "message": "Interesante punto, ¿podés ampliar?"
+}
+
+
+### Enviar feedback (thumbs up) sobre un mensaje de IA
+POST {{chatBase}}/chats/1/messages/55/feedback/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "value": 1
+}
+
+
+### Enviar feedback (thumbs down)
+POST {{chatBase}}/chats/1/messages/55/feedback/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "value": -1
+}
+
+
+### Eliminar feedback — responde 204
+DELETE {{chatBase}}/chats/1/messages/55/feedback/
+Authorization: Bearer {{authToken}}

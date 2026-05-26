@@ -6,6 +6,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
+from apps.document_collection_documents.serializers.response import AccessibleDocumentResponse
 from apps.document_collections.serializers.response import DocumentCollectionResponse
 from apps.user_authorizations.serializers.request import (
     AddUserCompartmentRequest,
@@ -65,7 +66,11 @@ class UserAuthorizationViewSet(GenericViewSet):
         return Response(UserAuthorizationResponse(data).data)
 
     @extend_schema(
+<<<<<<< HEAD
         methods=["PUT"],
+=======
+        methods=["put"],
+>>>>>>> 77038e11f288cca6bae7148aae17c2140da516b3
         tags=["UserAuthorizations"],
         summary="Upsert Mandatory Access clearance ceiling",
         description=(
@@ -78,7 +83,11 @@ class UserAuthorizationViewSet(GenericViewSet):
         responses={200: UserClearanceResponse, **_ERR_WRITE},
     )
     @extend_schema(
+<<<<<<< HEAD
         methods=["DELETE"],
+=======
+        methods=["delete"],
+>>>>>>> 77038e11f288cca6bae7148aae17c2140da516b3
         tags=["UserAuthorizations"],
         summary="Revoke clearance if present",
         description=(
@@ -90,6 +99,7 @@ class UserAuthorizationViewSet(GenericViewSet):
     )
     @action(detail=True, methods=["put", "delete"], url_path="clearance", url_name="clearance")
     def clearance(self, request: Request, user_id: str | None = None) -> Response:
+<<<<<<< HEAD
         if request.method == "DELETE":
             user_authorization_service.delete_user_clearance(request.user, int(user_id))
             return Response(status=status.HTTP_204_NO_CONTENT)
@@ -101,8 +111,22 @@ class UserAuthorizationViewSet(GenericViewSet):
             classification_level_id=serializer.validated_data["classification_level_id"],
         )
         return Response(UserClearanceResponse(result).data)
+=======
+        if request.method == "PUT":
+            serializer = SetUserClearanceRequest(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            clearance = user_authorization_service.set_user_clearance(
+                request.user,
+                int(user_id),
+                classification_level_id=serializer.validated_data["classification_level_id"],
+            )
+            return Response(UserClearanceResponse(clearance).data)
+        user_authorization_service.delete_user_clearance(request.user, int(user_id))
+        return Response(status=status.HTTP_204_NO_CONTENT)
+>>>>>>> 77038e11f288cca6bae7148aae17c2140da516b3
 
     @extend_schema(
+        methods=["get"],
         tags=["UserAuthorizations"],
         summary="Enumerate compartment memberships",
         description=(
@@ -116,13 +140,8 @@ class UserAuthorizationViewSet(GenericViewSet):
         ],
         responses={200: UserCompartmentResponse(many=True), **_ERR_BASE},
     )
-    @action(detail=True, methods=["get"], url_path="compartments", url_name="list-compartments")
-    def list_compartments(self, request: Request, user_id: str | None = None) -> Response:
-        qs = user_authorization_service.list_user_compartments(request.user, int(user_id))
-        page = self.paginate_queryset(qs)
-        return self.get_paginated_response(UserCompartmentResponse(page, many=True).data)
-
     @extend_schema(
+        methods=["post"],
         tags=["UserAuthorizations"],
         summary="Grant compartment membership",
         description=(
@@ -133,8 +152,12 @@ class UserAuthorizationViewSet(GenericViewSet):
         request=AddUserCompartmentRequest,
         responses={201: UserCompartmentResponse, **_ERR_CONFLICT},
     )
-    @action(detail=True, methods=["post"], url_path="compartments", url_name="add-compartment")
-    def add_compartment(self, request: Request, user_id: str | None = None) -> Response:
+    @action(detail=True, methods=["get", "post"], url_path="compartments", url_name="compartments")
+    def compartments(self, request: Request, user_id: str | None = None) -> Response:
+        if request.method == "GET":
+            qs = user_authorization_service.list_user_compartments(request.user, int(user_id))
+            page = self.paginate_queryset(qs)
+            return self.get_paginated_response(UserCompartmentResponse(page, many=True).data)
         serializer = AddUserCompartmentRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
         entry = user_authorization_service.add_user_compartment(
@@ -208,3 +231,32 @@ class UserAuthorizationViewSet(GenericViewSet):
         qs = user_authorization_service.get_accessible_collections(request.user, int(user_id))
         page = self.paginate_queryset(qs)
         return self.get_paginated_response(DocumentCollectionResponse(page, many=True).data)
+
+    @extend_schema(
+        tags=["UserAuthorizations"],
+        summary="List all documents accessible to a user across their permitted collections",
+        description=(
+            "Applies the full MAC intersection (clearance rank + compartment membership) to resolve every "
+            "collection the user can access, then returns every active document linked to those collections. "
+            "A document linked to more than one accessible collection appears once per collection so callers "
+            "retain full provenance. Pagination mirrors other list endpoints. "
+            "Requires **GET_USER_ACCESSIBLE_DOCUMENTS**."
+        ),
+        auth=_AUTH,
+        parameters=[
+            _TARGET_USER,
+            OpenApiParameter(name="page", type=int, location=OpenApiParameter.QUERY, required=False),
+            OpenApiParameter(name="page_size", type=int, location=OpenApiParameter.QUERY, required=False),
+        ],
+        responses={200: AccessibleDocumentResponse(many=True), **_ERR_BASE},
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="accessible-documents",
+        url_name="accessible-documents",
+    )
+    def accessible_documents(self, request: Request, user_id: str | None = None) -> Response:
+        qs = user_authorization_service.get_accessible_documents(request.user, int(user_id))
+        page = self.paginate_queryset(qs)
+        return self.get_paginated_response(AccessibleDocumentResponse(page, many=True).data)

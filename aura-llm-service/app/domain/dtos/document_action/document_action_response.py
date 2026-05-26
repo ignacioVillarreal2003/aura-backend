@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from app.domain.constants.document_action_type import DocumentActionType
 from app.domain.field_limits import MAX_ID, MAX_DOCUMENT_IDS_PER_REQUEST, MAX_INSTRUCTION_CHARS, MAX_CONTENT_CHARS
+from app.infrastructure.http.document_context_provider.dtos.fragment_response import FragmentResponse
 
 
 class DocumentActionResponse(BaseModel):
@@ -11,6 +12,7 @@ class DocumentActionResponse(BaseModel):
     document_ids: list[int] = Field(..., min_length=1, max_length=MAX_DOCUMENT_IDS_PER_REQUEST)
     instruction: str = Field(..., min_length=1, max_length=MAX_INSTRUCTION_CHARS)
     action: Optional[DocumentActionType] = Field(default=None)
+    fragments: list[FragmentResponse] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_response(self) -> "DocumentActionResponse":

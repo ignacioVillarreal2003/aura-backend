@@ -1,3 +1,4 @@
+from django.db.models import QuerySet
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import status
@@ -97,7 +98,8 @@ class CompartmentViewSet(GenericViewSet):
 
     def list(self, request: Request) -> Response:
         qs = compartment_service.list_compartments(request.user)
-        qs = self.filter_queryset(qs)
+        if isinstance(qs, QuerySet):
+            qs = self.filter_queryset(qs)
         page = self.paginate_queryset(qs)
         return self.get_paginated_response(CompartmentResponse(page, many=True).data)
 

@@ -1,0 +1,38 @@
+@chatBase = http://localhost:8003/api/v1
+@authToken = user_token_123
+
+### Listar share links de un chat
+GET {{chatBase}}/chats/1/share-links/
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Crear share link sin expiración
+POST {{chatBase}}/chats/1/share-links/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{}
+
+
+### Crear share link con fecha de expiración
+POST {{chatBase}}/chats/1/share-links/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "expires_at": "2026-12-31T23:59:59Z"
+}
+
+
+### Revocar un share link — responde 204
+DELETE {{chatBase}}/chats/1/share-links/7/
+Authorization: Bearer {{authToken}}
+
+
+### Leer historial público via token (sin Bearer)
+# Sustituir <uuid-token> por el valor de ShareLinkResponse.token
+GET {{chatBase}}/share/550e8400-e29b-41d4-a716-446655440000/messages/
+Accept: application/json

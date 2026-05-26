@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 
 class AuditModel(models.Model):
@@ -9,6 +10,14 @@ class AuditModel(models.Model):
 
     class Meta:
         abstract = True
+
+    def save(self, *args, **kwargs):
+        if self.pk is not None:
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None and "updated_at" not in update_fields:
+                self.updated_at = timezone.now()
+                kwargs["update_fields"] = (*update_fields, "updated_at")
+        super().save(*args, **kwargs)
 
 
 class CreatedAuditModel(models.Model):

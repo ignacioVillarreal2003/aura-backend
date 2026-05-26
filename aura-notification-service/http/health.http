@@ -1,0 +1,4 @@
+@notifBase = http://localhost:8002/api/v1
+
+### Health check — 200 si todas las dependencias OK, 503 si alguna falla
+GET {{notifBase}}/health

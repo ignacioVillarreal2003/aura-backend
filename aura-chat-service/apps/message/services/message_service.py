@@ -2,7 +2,6 @@ import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any
-
 from asgiref.sync import async_to_sync, sync_to_async
 from channels.layers import get_channel_layer
 from django.conf import settings
@@ -43,7 +42,6 @@ def _broadcast_user_message_to_chat_group(chat_id: int, msg: ChatMessage) -> Non
 
 
 def broadcast_chat_ai_lock_change(chat_id: int, locked: bool) -> None:
-    """Tell all subscribers whether new user messages are accepted (AI turn in progress)."""
     channel_layer = get_channel_layer()
     if channel_layer is None:
         return
@@ -95,22 +93,22 @@ class MessageService:
             extra={"chat_id": chat_id, "message_id": msg.id, "user_id": user.id},
         )
         _broadcast_user_message_to_chat_group(chat_id, msg)
-        from apps.chat.services.webhook_service import webhook_service
-        webhook_service.fire_event(chat_id, "message.created", {
-            "message_id": msg.id,
-            "sender_type": msg.sender_type,
-            "created_by": msg.created_by,
-            "created_at": msg.created_at,
-        })
         return msg
 
-    def _save_ai_message(self, chat_id: int, user_id: int, answer: str) -> ChatMessage:
+    def _save_ai_message(
+        self,
+        chat_id: int,
+        user_id: int,
+        answer: str,
+        fragments: list | None = None,
+    ) -> ChatMessage:
         with transaction.atomic():
             msg = message_repository.create(
                 chat_id=chat_id,
                 message=answer,
                 sender_type=ChatMessage.SenderType.SYSTEM,
                 created_by=user_id,
+                fragments=fragments or None,
             )
             chat_repository.touch_last_message_at(chat_id, updated_by=user_id)
         return msg
@@ -181,7 +179,7 @@ class MessageService:
         assistant_msg: ChatMessage | None = None
         if llm_out.answer.strip():
             assistant_msg = await sync_to_async(self._save_ai_message)(
-                chat_id, user.id, llm_out.answer
+                chat_id, user.id, llm_out.answer, llm_out.fragments or None
             )
             logger.info(
                 "AI response saved.",
@@ -204,38 +202,85 @@ class MessageService:
 
         messages = await self._build_llm_messages(chat_id)
 
+        accumulated_answer = ""
+        received_complete = False
+        had_error = False
+        last_question = ""
+        last_fragments: list[Any] = []
+
+        async def _build_and_save_complete() -> dict[str, Any] | None:
+            answer = accumulated_answer.strip()
+            if not answer:
+                return None
+            assistant_msg: ChatMessage | None = None
+            try:
+                assistant_msg = await sync_to_async(self._save_ai_message)(
+                    chat_id, user.id, answer, last_fragments or None
+                )
+                logger.info(
+                    "AI response saved (stream fallback).",
+                    extra={"chat_id": chat_id, "message_id": assistant_msg.id},
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to save fallback AI message.",
+                    extra={"chat_id": chat_id},
+                )
+            event: dict[str, Any] = {
+                "type": "ai_complete",
+                "message": answer,
+                "answer": answer,
+                "question": last_question,
+                "fragments": last_fragments,
+            }
+            if assistant_msg:
+                event["id"] = assistant_msg.id
+                event["sender_type"] = assistant_msg.sender_type
+                event["created_by"] = assistant_msg.created_by
+                event["created_at"] = assistant_msg.created_at.isoformat()
+            return event
+
         try:
             async for sse in llm_client.document_question_stream_events(
                 messages, user
             ):
                 et = sse.get("type")
                 if et == "meta":
+                    last_question = str(sse.get("question", ""))
+                    last_fragments = llm_client.normalize_fragments(sse.get("fragments"))
                     yield {
                         "type": "ai_context",
-                        "question": str(sse.get("question", "")),
-                        "fragments": llm_client.normalize_fragments(
-                            sse.get("fragments")
-                        ),
+                        "question": last_question,
+                        "fragments": last_fragments,
+                    }
+                elif et == "progress":
+                    yield {
+                        "type": "ai_progress",
+                        "step": str(sse.get("step", "")),
+                        "message": str(sse.get("message", "")),
                     }
                 elif et == "delta":
+                    delta = str(sse.get("text", ""))
+                    accumulated_answer += delta
                     yield {
                         "type": "ai_delta",
-                        "delta": str(sse.get("text", "")),
+                        "delta": delta,
                     }
                 elif et == "complete":
+                    received_complete = True
                     result = sse.get("result") or {}
                     if not isinstance(result, dict):
                         result = {}
-                    q = str(result.get("question", ""))
-                    answer = str(result.get("answer", "")).strip()
+                    q = str(result.get("question", "")).strip() or last_question
+                    answer = str(result.get("answer", "")).strip() or accumulated_answer.strip()
                     fragments = llm_client.normalize_fragments(
                         result.get("fragments")
-                    )
+                    ) or last_fragments
 
                     assistant_msg: ChatMessage | None = None
                     if answer:
                         assistant_msg = await sync_to_async(self._save_ai_message)(
-                            chat_id, user.id, answer
+                            chat_id, user.id, answer, fragments or None
                         )
                         logger.info(
                             "AI response saved (stream).",
@@ -259,6 +304,7 @@ class MessageService:
                         event["created_at"] = assistant_msg.created_at.isoformat()
                     yield event
                 elif et == "error":
+                    had_error = True
                     yield {
                         "type": "ai_error",
                         "detail": str(sse.get("message", "AI error")),
@@ -279,7 +325,16 @@ class MessageService:
                 },
                 exc_info=True,
             )
+            fallback = await _build_and_save_complete()
+            if fallback:
+                yield fallback
+                return
             raise LLMServiceException() from e
+
+        if not received_complete and not had_error:
+            fallback = await _build_and_save_complete()
+            if fallback:
+                yield fallback
 
     def delete_message(self, user: AuthenticatedUser, chat_id: int, message_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({DELETE_MESSAGE}))

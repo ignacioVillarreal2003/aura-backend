@@ -22,19 +22,57 @@ class CreateDocumentServiceSettings(BaseSettings):
 
     allowed_content_types: list[str] = [
         "application/pdf",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "text/plain",
+        "text/markdown",
+        "text/csv",
+        "application/csv",
+        "image/png",
+        "image/jpeg",
+        "image/tiff",
+        "image/bmp",
+        "image/webp",
     ]
     content_type_mapping: dict[str, str] = {
         "application/pdf": "pdf",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx"
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+        "text/plain": "txt",
+        "text/markdown": "md",
+        "text/csv": "csv",
+        "application/csv": "csv",
+        "image/png": "png",
+        "image/jpeg": "jpeg",
+        "image/tiff": "tiff",
+        "image/bmp": "bmp",
+        "image/webp": "webp",
     }
     magic_number_validation: dict[str, list[bytes]] = {
         "application/pdf": [b"%PDF"],
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [
             b"PK\x03\x04",
             b"PK\x05\x06",
-            b"PK\x07\x08"
-        ]
+            b"PK\x07\x08",
+        ],
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation": [
+            b"PK\x03\x04",
+            b"PK\x05\x06",
+            b"PK\x07\x08",
+        ],
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [
+            b"PK\x03\x04",
+            b"PK\x05\x06",
+            b"PK\x07\x08",
+        ],
+        "image/png": [b"\x89PNG"],
+        "image/jpeg": [b"\xff\xd8\xff"],
+        "image/tiff": [b"II*\x00", b"MM\x00*"],
+        "image/bmp": [b"BM"],
+        "image/webp": [b"RIFF"],
+        # text/plain, text/markdown, text/csv, application/csv: no magic bytes
     }
 
     @field_validator(

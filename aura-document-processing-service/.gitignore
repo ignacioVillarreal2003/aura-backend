@@ -41,11 +41,6 @@ dmypy.json
 # --- Docker ---
 *.pid
 *.tar
-**/.dockerignore
-
-# --- Environment Files ---
-!.env
-!.env.docker
 
 # --- Database dumps ---
 *.sql
@@ -53,3 +48,5 @@ dmypy.json
 
 # --- Static generated ---
 staticfiles/
+
+.claude/

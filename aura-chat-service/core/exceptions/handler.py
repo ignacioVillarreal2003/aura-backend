@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
 from core.exceptions.base import ServiceException
+from core.middleware.correlation_id import get_correlation_id
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ def custom_exception_handler(exc, context):
                 "error": exc.error_code,
                 "detail": exc.detail,
                 "status_code": exc.status_code,
+                "correlation_id": get_correlation_id(),
             },
             status=exc.status_code,
         )
@@ -33,12 +35,14 @@ def custom_exception_handler(exc, context):
     if response is not None:
         error_detail = response.data
         error_code = _status_to_error_code(response.status_code)
+        cid = get_correlation_id()
 
         if isinstance(error_detail, dict) and "detail" in error_detail:
             response.data = {
                 "error": error_code,
                 "detail": str(error_detail["detail"]),
                 "status_code": response.status_code,
+                "correlation_id": cid,
             }
         elif isinstance(error_detail, dict):
             response.data = {
@@ -46,6 +50,7 @@ def custom_exception_handler(exc, context):
                 "detail": "Validation failed",
                 "fields": _serialize_validation_errors(error_detail),
                 "status_code": response.status_code,
+                "correlation_id": cid,
             }
         elif isinstance(error_detail, list):
             first = str(error_detail[0]) if error_detail else "Validation error"
@@ -53,12 +58,14 @@ def custom_exception_handler(exc, context):
                 "error": error_code,
                 "detail": first,
                 "status_code": response.status_code,
+                "correlation_id": cid,
             }
         else:
             response.data = {
                 "error": error_code,
                 "detail": str(error_detail),
                 "status_code": response.status_code,
+                "correlation_id": cid,
             }
         return response
 
@@ -71,6 +78,7 @@ def custom_exception_handler(exc, context):
             "error": "internal_error",
             "detail": "An unexpected error occurred",
             "status_code": 500,
+            "correlation_id": get_correlation_id(),
         },
         status=status.HTTP_500_INTERNAL_SERVER_ERROR,
     )
@@ -92,6 +100,7 @@ def _status_to_error_code(status_code: int) -> str:
         404: "not_found",
         405: "method_not_allowed",
         409: "conflict",
+        413: "payload_too_large",
         429: "throttled",
         500: "internal_error",
         502: "bad_gateway",

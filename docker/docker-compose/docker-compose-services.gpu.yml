@@ -1,3 +1,36 @@
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 15s
+  timeout: 5s
+  retries: 5
+  start_period: 30s
+
+x-healthcheck-api-v1: &healthcheck-api-v1
+  <<: *healthcheck-defaults
+  test:
+    - CMD-SHELL
+    - python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=5)"
+
+x-healthcheck-metrics: &healthcheck-metrics
+  <<: *healthcheck-defaults
+  test:
+    - CMD-SHELL
+    - python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/metrics', timeout=5)"
+
+x-healthcheck-mock-auth: &healthcheck-mock-auth
+  <<: *healthcheck-defaults
+  test:
+    - CMD-SHELL
+    - python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/openapi.json', timeout=5)"
+
+x-healthcheck-celery-worker: &healthcheck-celery-worker
+  interval: 30s
+  timeout: 10s
+  retries: 5
+  start_period: 45s
+  test:
+    - CMD-SHELL
+    - celery -A aura_notification_service inspect ping --timeout 10 2>/dev/null | grep -q pong || exit 1
+
 services:
   aura-document-processing-service:
     build:
@@ -19,7 +52,12 @@ services:
         condition: service_healthy
       neo4j:
         condition: service_healthy
+    healthcheck:
+      <<: *healthcheck-api-v1
+      start_period: 180s
     restart: on-failure
+    volumes:
+      - huggingface_cache:/root/.cache/huggingface
     deploy:
       resources:
         reservations:
@@ -40,6 +78,9 @@ services:
     depends_on:
       llm:
         condition: service_healthy
+    healthcheck:
+      <<: *healthcheck-api-v1
+      start_period: 60s
     restart: on-failure
     deploy:
       resources:
@@ -63,6 +104,7 @@ services:
         condition: service_healthy
       aura_db:
         condition: service_healthy
+    healthcheck: *healthcheck-metrics
     restart: on-failure
 
   aura-chat-service:
@@ -78,9 +120,10 @@ services:
       memory_db:
         condition: service_healthy
       aura-llm-service:
-        condition: service_started
+        condition: service_healthy
       mock-auth:
-        condition: service_started
+        condition: service_healthy
+    healthcheck: *healthcheck-api-v1
     restart: on-failure
 
   aura-notification-service:
@@ -93,8 +136,38 @@ services:
     depends_on:
       aura_db:
         condition: service_healthy
+      memory_db:
+        condition: service_healthy
+      queue:
+        condition: service_healthy
       aura-auth-service:
-        condition: service_started
+        condition: service_healthy
+    healthcheck: *healthcheck-api-v1
+    restart: on-failure
+
+  aura-notification-worker:
+    build: ../../aura-notification-service
+    container_name: aura-notification-worker
+    command:
+      - celery
+      - -A
+      - aura_notification_service
+      - worker
+      - --loglevel=info
+      - --concurrency=2
+      - --queues=notifications
+    env_file:
+      - ../../aura-notification-service/.env.docker
+    depends_on:
+      aura_db:
+        condition: service_healthy
+      memory_db:
+        condition: service_healthy
+      queue:
+        condition: service_healthy
+      aura-notification-service:
+        condition: service_healthy
+    healthcheck: *healthcheck-celery-worker
     restart: on-failure
 
   aura-document-collection-service:
@@ -108,7 +181,8 @@ services:
       aura_db:
         condition: service_healthy
       mock-auth:
-        condition: service_started
+        condition: service_healthy
+    healthcheck: *healthcheck-api-v1
     restart: on-failure
 
   mock-auth:
@@ -116,6 +190,8 @@ services:
     container_name: mock-auth
     ports:
       - "8080:8000"
+    healthcheck: *healthcheck-mock-auth
+    restart: on-failure
 
   llm:
     build:
@@ -175,3 +251,4 @@ volumes:
   llm_data:
   neo4j_data:
   neo4j_logs:
+  huggingface_cache:

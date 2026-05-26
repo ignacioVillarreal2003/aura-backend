@@ -1,8 +1,10 @@
+import hashlib
 import logging
 import secrets
 from typing import Optional
 import httpx
 from django.conf import settings
+from django.core.cache import cache as _cache
 from django.http import HttpRequest
 
 from core.authentication.authenticated_user import AuthenticatedUser
@@ -16,13 +18,56 @@ from core.authentication.authentication_exceptions import (
 
 logger = logging.getLogger(__name__)
 
+_CACHE_PREFIX = "auth_token:"
+
+
+def _token_cache_ttl() -> int:
+    return int(getattr(settings, "AUTH_TOKEN_CACHE_TTL_SECONDS", 60))
+
+
+def _cache_key(token: str) -> str:
+    return f"{_CACHE_PREFIX}{hashlib.sha256(token.encode()).hexdigest()}"
+
+
+def _get_cached_user(token: str) -> Optional[AuthenticatedUser]:
+    try:
+        data = _cache.get(_cache_key(token))
+        if data is None:
+            return None
+        return AuthenticatedUser(
+            id=data["id"],
+            email=data["email"],
+            username=data.get("username", ""),
+            roles=tuple(data.get("roles") or []),
+            permissions=tuple(data.get("permissions") or []),
+        )
+    except Exception:
+        logger.warning("Redis token cache read failed; falling back to auth service.", exc_info=True)
+        return None
+
+
+def _cache_user(token: str, user: AuthenticatedUser) -> None:
+    try:
+        _cache.set(
+            _cache_key(token),
+            {
+                "id": user.id,
+                "email": user.email,
+                "username": user.username,
+                "roles": list(user.roles),
+                "permissions": list(user.permissions),
+            },
+            timeout=_token_cache_ttl(),
+        )
+    except Exception:
+        logger.warning("Redis token cache write failed; token will not be cached.", exc_info=True)
+
+
 _HEADER_SERVICE_API_KEY = "X-Service-Api-Key"
 _HEADER_USER_ID = "X-User-Id"
 _HEADER_USER_EMAIL = "X-User-Email"
 _HEADER_USER_ROLES = "X-User-Roles"
 _HEADER_USER_PERMISSIONS = "X-User-Permissions"
-
-_http_client = httpx.Client(timeout=10.0)
 
 
 class AuthenticationProvider:
@@ -103,13 +148,21 @@ class AuthenticationProvider:
         )
 
     def validate_token(self, token: str) -> AuthenticatedUser:
+        cached = _get_cached_user(token)
+        if cached is not None:
+            logger.debug("Token resolved from cache.", extra={"user_id": cached.id})
+            return cached
+
         logger.debug("Validating bearer token with the authentication service.")
         auth_header = _format_bearer_token(token)
+
+        timeout = float(getattr(settings, "AUTH_SERVICE_TIMEOUT", 10.0))
         try:
-            response = _http_client.get(
-                settings.AUTHENTICATION_PROVIDER_URL,
-                headers={"Authorization": auth_header},
-            )
+            with httpx.Client(timeout=timeout) as client:
+                response = client.get(
+                    settings.AUTHENTICATION_PROVIDER_URL,
+                    headers={"Authorization": auth_header},
+                )
         except httpx.TimeoutException as e:
             logger.error("Authentication service timed out.")
             raise AuthenticationProviderServiceUnavailableException(
@@ -163,12 +216,15 @@ class AuthenticationProvider:
                 "Invalid authentication response format"
             ) from e
 
-        return AuthenticatedUser(
+        user = AuthenticatedUser(
             id=user_id,
             email=str(data.get("email", "")),
+            username=str(data.get("username", "")),
             roles=tuple(data.get("roles") or []),
             permissions=tuple(data.get("permissions") or []),
         )
+        _cache_user(token, user)
+        return user
 
 
 def _format_bearer_token(token: str) -> str:

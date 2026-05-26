@@ -18,6 +18,7 @@ from app.application.services.rag_agent_service.rag_agent_service import RagAgen
 from app.infrastructure.http.authentication_provider.authentication_provider import AuthenticationProvider
 from app.infrastructure.http.document_context_provider.document_context_provider import DocumentContextProvider
 from app.infrastructure.http.http_client.http_client import HttpClient
+from app.infrastructure.persistence.memory_database.redis_client.redis_client import RedisClient
 from app.infrastructure.llm.ollama_llm.ollama_llm_facade import OllamaLLMFacade
 from app.infrastructure.llm.ollama_llm.ollama_llm_facade_settings import OllamaLLMFacadeSettings
 from app.infrastructure.llm.ollama_llm.ollama_llm_invoker import OllamaLLMInvoker
@@ -60,6 +61,7 @@ async def _rollback_partial_startup(
         "authorizer",
         "authentication_provider",
         "http_client",
+        "redis_client",
     ]
     for attr in to_clear:
         if hasattr(app.state, attr):
@@ -77,7 +79,15 @@ async def startup_dependencies(app: FastAPI) -> None:
         app.state.http_client = http_client
         cleanup_stack.append(("http_client", http_client.stop))
 
-        authentication_provider = AuthenticationProvider(http_client=http_client)
+        redis_client = RedisClient()
+        await redis_client.initialize()
+        app.state.redis_client = redis_client
+        cleanup_stack.append(("redis_client", redis_client.dispose))
+
+        authentication_provider = AuthenticationProvider(
+            http_client=http_client,
+            redis_client=redis_client.client,
+        )
         app.state.authentication_provider = authentication_provider
 
         authorizer = Authorizer()
@@ -107,6 +117,7 @@ async def startup_dependencies(app: FastAPI) -> None:
         document_summary_service = DocumentSummaryService(
             ollama_llm_facade=ollama_facade,
             ollama_llm_invoker=ollama_llm_invoker,
+            ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
             document_context_provider=document_context_provider,
             authorizer=authorizer,
         )
@@ -115,6 +126,7 @@ async def startup_dependencies(app: FastAPI) -> None:
         document_action_service = DocumentActionService(
             ollama_llm_facade=ollama_facade,
             ollama_llm_invoker=ollama_llm_invoker,
+            ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
             document_context_provider=document_context_provider,
             authorizer=authorizer,
         )
@@ -178,5 +190,8 @@ async def shutdown_dependencies(app: FastAPI) -> None:
 
     if http_client := getattr(state, "http_client", None):
         await http_client.stop()
+
+    if redis_client := getattr(state, "redis_client", None):
+        await redis_client.dispose()
 
     logger.info("All dependencies shut down successfully")

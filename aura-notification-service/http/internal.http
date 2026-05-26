@@ -1,0 +1,63 @@
+@notifBase = http://localhost:8002/api/v1
+@internalToken = internal_secret_token
+
+### Emitir evento — notificación de chat a múltiples usuarios
+POST {{notifBase}}/internal/events/
+Accept: application/json
+Content-Type: application/json
+X-Internal-Token: {{internalToken}}
+
+{
+  "event_type": "chat.member.invited",
+  "recipient_ids": [10, 20, 30],
+  "actor_id": 5,
+  "actor_name": "admin.user",
+  "context": {"chat_id": 99, "chat_name": "Equipo de diseño"},
+  "idempotency_key": "chat-99-invite-batch-2026-05"
+}
+
+
+### Emitir evento — email de seguridad (con recipient_email para evitar round-trip al auth service)
+POST {{notifBase}}/internal/events/
+Accept: application/json
+Content-Type: application/json
+X-Internal-Token: {{internalToken}}
+
+{
+  "event_type": "auth.password.changed",
+  "recipient_ids": [42],
+  "context": {
+    "recipient_email": "usuario@ejemplo.com",
+    "recipient_name": "Usuario Ejemplo"
+  }
+}
+
+
+### Emitir evento — forzar solo canal email
+POST {{notifBase}}/internal/events/
+Accept: application/json
+Content-Type: application/json
+X-Internal-Token: {{internalToken}}
+
+{
+  "event_type": "document.processing.failed",
+  "recipient_ids": [7],
+  "context": {"document_id": 303, "recipient_email": "usuario@ejemplo.com"},
+  "channels_override": ["email"]
+}
+
+
+### Emitir evento — anuncio administrativo broadcast
+POST {{notifBase}}/internal/events/
+Accept: application/json
+Content-Type: application/json
+X-Internal-Token: {{internalToken}}
+
+{
+  "event_type": "admin.broadcast",
+  "recipient_ids": [1, 2, 3, 4, 5],
+  "actor_name": "Equipo Aura",
+  "context": {"message": "Mantenimiento programado el viernes a las 22:00 hs."},
+  "target_scope": "broadcast",
+  "target_label": "Mantenimiento Mayo 2026"
+}

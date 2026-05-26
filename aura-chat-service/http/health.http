@@ -1,0 +1,4 @@
+@chatBase = http://localhost:8003/api/v1
+
+### Health check — 200 si database+redis OK, 503 si alguna dependencia falla
+GET {{chatBase}}/health

@@ -62,6 +62,8 @@ WSGI_APPLICATION = "aura_document_collection_service.wsgi.application"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+_db_connect_timeout = config("DB_CONNECT_TIMEOUT", default=5, cast=int)
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
@@ -71,14 +73,17 @@ DATABASES = {
         "HOST": config("DB_HOST"),
         "PORT": config("DB_PORT", default="5432"),
         "OPTIONS": {
-            "connect_timeout": 5,
+            "connect_timeout": _db_connect_timeout,
         },
+        "CONN_MAX_AGE": config("DB_CONN_MAX_AGE", default=60, cast=int),
     }
 }
 
 SERVICE_API_KEY = config("SERVICE_API_KEY")
 
 AUTHENTICATION_PROVIDER_URL = config("AUTHENTICATION_SERVICE_URL").strip()
+AUTH_TOKEN_CACHE_TTL_SECONDS = config("AUTH_TOKEN_CACHE_TTL_SECONDS", default=60, cast=int)
+AUTH_SERVICE_TIMEOUT = config("AUTH_SERVICE_TIMEOUT", default=10, cast=float)
 
 
 _redis_url = config("REDIS_URL").strip()

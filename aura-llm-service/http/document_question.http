@@ -11,7 +11,7 @@ Authorization: Bearer {{authToken}}
   "messages": [
     {
       "role": "human",
-      "content": "hablame de que es la factura a Francisco"
+      "content": "Hablame de la ia"
     }
   ]
 }

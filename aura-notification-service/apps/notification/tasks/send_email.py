@@ -1,18 +1,7 @@
-"""Celery task that sends a single email dispatch row.
-
-The dispatcher creates the `notification_dispatch` row with
-`status=pending` and enqueues this task. The worker:
-
-1. Resolves the recipient email (from context or via auth lookup).
-2. Renders the email subject + bodies through the template service.
-3. Sends through Django's configured email backend.
-4. Updates the dispatch row with `status` and `sent_at`/`error`.
-"""
-
 from __future__ import annotations
-
 import logging
-
+import smtplib
+import requests
 from celery import shared_task
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
@@ -25,11 +14,13 @@ from apps.notification.services.template_service import template_service
 
 logger = logging.getLogger(__name__)
 
+_RETRYABLE_EXCEPTIONS = (OSError, smtplib.SMTPException, requests.RequestException)
+
 
 @shared_task(
     name="apps.notification.tasks.send_email_dispatch",
     bind=True,
-    autoretry_for=(Exception,),
+    autoretry_for=_RETRYABLE_EXCEPTIONS,
     retry_backoff=True,
     retry_backoff_max=600,
     retry_jitter=True,
@@ -48,6 +39,9 @@ def send_email_dispatch(
     if dispatch is None:
         logger.error("Dispatch row %s vanished before send.", dispatch_id)
         return "missing_dispatch_row"
+
+    if dispatch.status in (DispatchStatus.SENT, DispatchStatus.FAILED):
+        return f"already_{dispatch.status}"
 
     NotificationDispatch.objects.filter(pk=dispatch_id).update(
         attempt=(dispatch.attempt or 0) + 1,
@@ -79,14 +73,26 @@ def send_email_dispatch(
         if rendered.html_body:
             message.attach_alternative(rendered.html_body, "text/html")
         message.send(fail_silently=False)
-    except Exception as exc:
+    except _RETRYABLE_EXCEPTIONS as exc:
+        is_last_attempt = self.request.retries >= self.max_retries
         logger.warning(
-            "Email send failed (dispatch=%s, attempt=%s): %s",
+            "Email send failed (dispatch=%s, attempt=%s, final=%s): %s",
             dispatch_id,
             self.request.retries,
+            is_last_attempt,
             exc,
         )
-        # Update error eagerly so operators can see in-flight failures.
+        NotificationDispatch.objects.filter(pk=dispatch_id).update(
+            status=DispatchStatus.FAILED if is_last_attempt else DispatchStatus.PENDING,
+            error=str(exc)[:500] if is_last_attempt else None,
+        )
+        raise
+    except Exception as exc:
+        logger.warning(
+            "Email send failed (non-retryable, dispatch=%s): %s",
+            dispatch_id,
+            exc,
+        )
         NotificationDispatch.objects.filter(pk=dispatch_id).update(
             status=DispatchStatus.FAILED,
             error=str(exc)[:500],

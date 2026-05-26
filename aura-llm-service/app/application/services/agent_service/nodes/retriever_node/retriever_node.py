@@ -6,6 +6,12 @@ from app.application.services.agent_service.agent_state.agent_state import Agent
 from app.application.services.agent_service.interfaces.node_interface import NodeInterface
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.document_context_provider.dtos.fragment_response import FragmentResponse
+from app.infrastructure.http.document_context_provider.dtos.question_context_fragments_request import (
+    BM25Query,
+    QuestionContextFragmentsRequest,
+    RerankConfig,
+    SemanticQuery,
+)
 from app.infrastructure.http.document_context_provider.interfaces.document_context_provider_interface import (
     DocumentContextProviderInterface,
 )
@@ -28,7 +34,6 @@ class RetrieverNode(NodeInterface):
 
         resolved_query = agent_state.get("resolved_query", "") or agent_state.get("normalized_query", "")
         keywords: List[str] = agent_state.get("keywords", [])
-        entities: dict = agent_state.get("entities", {})
         authenticated_user: AuthenticatedUser = agent_state["authenticated_user"]
 
         if not resolved_query:
@@ -36,7 +41,7 @@ class RetrieverNode(NodeInterface):
             return {"retrieved_fragments": []}
 
         try:
-            fragments = await self._retrieve(authenticated_user, resolved_query, keywords, entities)
+            fragments = await self._retrieve(authenticated_user, resolved_query, keywords)
             logger.info("Retrieval completed", extra={"fragments_count": len(fragments)})
             return {"retrieved_fragments": fragments}
 
@@ -49,34 +54,35 @@ class RetrieverNode(NodeInterface):
             authenticated_user: AuthenticatedUser,
             query: str,
             keywords: List[str],
-            entities: dict,
     ) -> List[FragmentResponse]:
-        keywords_str = self._build_keywords_string(keywords, entities)
-        use_keywords = bool(keywords_str)
+        keywords_str = self._build_keywords_string(keywords)
 
-        response = await self._provider.retrieve_context_fragments_by_question(
+        semantic_queries = [SemanticQuery(text=query, max_fragments=self._settings.max_vector_fragments)]
+        bm25_queries = (
+            [BM25Query(text=keywords_str, max_fragments=self._settings.max_keyword_fragments)]
+            if keywords_str
+            else []
+        )
+
+        pool = sum(q.max_fragments for q in semantic_queries) + sum(q.max_fragments for q in bm25_queries)
+        effective_rerank = min(self._settings.max_rerank_fragments, pool)
+        rerank = RerankConfig(enabled=True, max_fragments=effective_rerank)
+
+        request = QuestionContextFragmentsRequest(
+            semantic_queries=semantic_queries,
+            bm25_queries=bm25_queries,
+            rerank=rerank,
+            adjacent_chunks=self._settings.adjacent_chunks,
+        )
+        response = await self._provider.retrieve_context_fragments_by_question_request(
             authenticated_user=authenticated_user,
-            question=query,
-            question_max_fragments=self._settings.max_vector_fragments,
-            use_keywords=use_keywords if use_keywords else None,
-            keywords=keywords_str if use_keywords else None,
-            keywords_max_fragments=self._settings.max_keyword_fragments if use_keywords else None,
-            use_rerank=None,
-            rerank_max_fragments=None,
+            request=request,
         )
         return response.fragments
 
     @staticmethod
-    def _build_keywords_string(keywords: List[str], entities: dict) -> Optional[str]:
-        # Entity terms first (higher precision), then generic keywords
-        entity_terms: List[str] = (
-            entities.get("leyes", []) +
-            entities.get("organismos", []) +
-            entities.get("cargos", []) +
-            entities.get("fechas", [])
-        )
-        all_terms = entity_terms + keywords
-        if not all_terms:
+    def _build_keywords_string(keywords: List[str]) -> Optional[str]:
+        if not keywords:
             return None
-        joined = " ".join(all_terms)
+        joined = " ".join(keywords)
         return joined[:16_000] if joined else None

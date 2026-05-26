@@ -1,3 +1,4 @@
+from django.db.models import QuerySet
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import status
@@ -116,7 +117,8 @@ class ClassificationLevelViewSet(GenericViewSet):
 
     def list(self, request: Request) -> Response:
         qs = classification_level_service.list_classification_levels(request.user)
-        qs = self.filter_queryset(qs)
+        if isinstance(qs, QuerySet):
+            qs = self.filter_queryset(qs)
         page = self.paginate_queryset(qs)
         return self.get_paginated_response(ClassificationLevelResponse(page, many=True).data)
 

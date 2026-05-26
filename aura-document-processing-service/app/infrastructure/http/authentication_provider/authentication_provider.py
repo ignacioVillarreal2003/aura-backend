@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 import secrets
@@ -33,6 +34,41 @@ from app.infrastructure.http.http_client.http_client_interface import HttpClient
 
 logger = logging.getLogger(__name__)
 
+_CACHE_PREFIX = "auth_token:"
+
+
+def _cache_key(token: str) -> str:
+    return f"{_CACHE_PREFIX}{hashlib.sha256(token.encode()).hexdigest()}"
+
+
+async def _get_cached_user(redis_client, token: str) -> Optional[AuthenticatedUserResponse]:
+    try:
+        raw = await redis_client.get(_cache_key(token))
+        if raw is None:
+            return None
+        return AuthenticatedUserResponse.model_validate(json.loads(raw))
+    except Exception:
+        logger.warning("Redis token cache read failed; falling back to auth service.", exc_info=True)
+        return None
+
+
+async def _cache_user(redis_client, token: str, user: AuthenticatedUserResponse, ttl: int) -> None:
+    try:
+        await redis_client.setex(
+            _cache_key(token),
+            ttl,
+            json.dumps({
+                "id": user.id,
+                "email": user.email,
+                "username": user.username,
+                "roles": list(user.roles),
+                "permissions": list(user.permissions),
+            }),
+        )
+    except Exception:
+        logger.warning("Redis token cache write failed; token will not be cached.", exc_info=True)
+
+
 _HEADER_SERVICE_API_KEY = "X-Service-Api-Key"
 _HEADER_USER_ID = "X-User-Id"
 _HEADER_USER_EMAIL = "X-User-Email"
@@ -44,10 +80,12 @@ class AuthenticationProvider(AuthenticationProviderInterface):
     def __init__(
             self,
             http_client: HttpClientInterface,
-            authentication_provider_settings: Optional[AuthenticationProviderSettings] = None
+            authentication_provider_settings: Optional[AuthenticationProviderSettings] = None,
+            redis_client=None,
     ) -> None:
         self._http_client = http_client
         self._settings = authentication_provider_settings or AuthenticationProviderSettings()
+        self._redis_client = redis_client
 
     def evaluate_service_auth(
             self,
@@ -260,6 +298,15 @@ class AuthenticationProvider(AuthenticationProviderInterface):
             )
             raise AuthenticationProviderInvalidTokenException("Bearer token is too long.")
 
+        if self._redis_client is not None:
+            cached = await _get_cached_user(self._redis_client, stripped)
+            if cached is not None:
+                logger.debug(
+                    "Bearer token resolved from cache.",
+                    extra={"user_id": cached.id}
+                )
+                return cached
+
         logger.debug("Validating bearer token with the authentication service.")
         try:
             response = await self._http_client.get(
@@ -277,7 +324,6 @@ class AuthenticationProvider(AuthenticationProviderInterface):
                 HttpClientTimeoutException
         ) as e:
             self._handle_http_error(e, operation="token validation")
-            raise
 
         try:
             payload = response.json()
@@ -308,11 +354,17 @@ class AuthenticationProvider(AuthenticationProviderInterface):
                 "Unexpected authentication response shape",
             ) from e
 
+        if self._redis_client is not None:
+            await _cache_user(
+                self._redis_client,
+                stripped,
+                authenticated_user,
+                self._settings.token_cache_ttl_seconds,
+            )
+
         logger.debug(
             "Bearer token validated successfully.",
-            extra={
-                "user_id": authenticated_user.id
-            }
+            extra={"user_id": authenticated_user.id}
         )
         return authenticated_user
 
@@ -320,8 +372,7 @@ class AuthenticationProvider(AuthenticationProviderInterface):
     def _format_bearer_token(
             token: str
     ) -> str:
-        stripped = token.strip()
-        return stripped if stripped.lower().startswith("bearer ") else f"Bearer {stripped}"
+        return token if token.lower().startswith("bearer ") else f"Bearer {token}"
 
     @staticmethod
     def _parse_comma_list(

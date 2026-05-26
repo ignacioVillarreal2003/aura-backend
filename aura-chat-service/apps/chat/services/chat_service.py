@@ -1,7 +1,6 @@
 import logging
 from django.db import transaction
 from django.db.models import QuerySet
-
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
@@ -184,8 +183,6 @@ class ChatService:
                 raise ChatAccessDeniedException("Only the chat owner can lock the chat")
             chat_repository.update(chat, updated_by=user.id, is_locked=True)
         _broadcast_chat_locked_changed(chat_id, is_locked=True, by=user.id)
-        from apps.chat.services.webhook_service import webhook_service
-        webhook_service.fire_event(chat_id, "chat.locked", {"locked_by": user.id})
         logger.info("Chat locked.", extra={"chat_id": chat_id, "user_id": user.id})
 
     def unlock_chat(self, user: AuthenticatedUser, chat_id: int) -> None:
@@ -198,8 +195,6 @@ class ChatService:
                 raise ChatAccessDeniedException("Only the chat owner can unlock the chat")
             chat_repository.update(chat, updated_by=user.id, is_locked=False)
         _broadcast_chat_locked_changed(chat_id, is_locked=False, by=user.id)
-        from apps.chat.services.webhook_service import webhook_service
-        webhook_service.fire_event(chat_id, "chat.unlocked", {"unlocked_by": user.id})
         logger.info("Chat unlocked.", extra={"chat_id": chat_id, "user_id": user.id})
 
     def mute_chat(self, user: AuthenticatedUser, chat_id: int, muted_until) -> None:

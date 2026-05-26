@@ -184,7 +184,10 @@ class DatabaseManager(DatabaseManagerInterface):
                         logger.exception("The session could not be rolled back after a failed commit.")
                     raise
         finally:
-            await db_session.close()
+            try:
+                await db_session.close()
+            except Exception:
+                logger.exception("The session could not be closed cleanly; the connection will be reclaimed by the pool.")
 
     async def health_check(
             self,
@@ -296,7 +299,10 @@ class DatabaseManager(DatabaseManagerInterface):
                 await db_session.rollback()
                 raise
             finally:
-                await db_session.close()
+                try:
+                    await db_session.close()
+                except Exception:
+                    logger.exception("The session could not be closed cleanly; the connection will be reclaimed by the pool.")
 
     async def __aenter__(
             self
@@ -424,6 +430,15 @@ class DatabaseManager(DatabaseManagerInterface):
             orig = exception_context.original_exception
             stmt = exception_context.statement
             stmt_len = len(str(stmt)) if stmt is not None else 0
+            is_pre_ping = getattr(exception_context, "is_pre_ping", False)
+            if is_pre_ping:
+                logger.debug(
+                    "A stale pool connection was detected and discarded by the pre-ping check.",
+                    extra={
+                        "exception_type": type(orig).__name__ if orig is not None else None,
+                    }
+                )
+                return
             logger.error(
                 "The database engine reported an error.",
                 extra={

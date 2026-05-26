@@ -1,5 +1,4 @@
 import logging
-
 from django.db.models import Count, Exists, IntegerField, OuterRef, QuerySet, SmallIntegerField, Subquery
 from django.db.models.functions import Coalesce
 
@@ -15,12 +14,14 @@ class MessageRepository:
         message: str,
         sender_type: str,
         created_by: int,
+        fragments: list | None = None,
     ) -> ChatMessage:
         return ChatMessage.objects.create(
             chat_id=chat_id,
             message=message,
             sender_type=sender_type,
             created_by=created_by,
+            fragments=fragments or None,
         )
 
     @staticmethod

@@ -15,17 +15,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN mkdir -p logs staticfiles
+RUN mkdir -p staticfiles
 
 EXPOSE 8000
 
-# `gthread` workers + multiple threads keep the SSE long-poll connections alive
-# while still serving regular REST traffic. Tune via env if needed.
-CMD ["gunicorn", \
-     "aura_notification_service.wsgi:application", \
-     "--bind", "0.0.0.0:8000", \
-     "--workers", "2", \
-     "--threads", "8", \
-     "--worker-class", "gthread", \
-     "--timeout", "120", \
-     "--keep-alive", "30"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:8000/api/v1/health || exit 1
+
+CMD gunicorn aura_notification_service.wsgi:application \
+    --bind 0.0.0.0:8000 \
+    --workers ${GUNICORN_WORKERS:-2} \
+    --threads ${GUNICORN_THREADS:-16} \
+    --worker-class gthread \
+    --timeout 120 \
+    --keep-alive 30

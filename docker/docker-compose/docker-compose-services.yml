@@ -1,3 +1,36 @@
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 15s
+  timeout: 5s
+  retries: 5
+  start_period: 30s
+
+x-healthcheck-api-v1: &healthcheck-api-v1
+  <<: *healthcheck-defaults
+  test:
+    - CMD-SHELL
+    - python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=5)"
+
+x-healthcheck-metrics: &healthcheck-metrics
+  <<: *healthcheck-defaults
+  test:
+    - CMD-SHELL
+    - python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/metrics', timeout=5)"
+
+x-healthcheck-mock-auth: &healthcheck-mock-auth
+  <<: *healthcheck-defaults
+  test:
+    - CMD-SHELL
+    - python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/openapi.json', timeout=5)"
+
+x-healthcheck-celery-worker: &healthcheck-celery-worker
+  interval: 30s
+  timeout: 10s
+  retries: 5
+  start_period: 45s
+  test:
+    - CMD-SHELL
+    - celery -A aura_notification_service inspect ping --timeout 10 2>/dev/null | grep -q pong || exit 1
+
 services:
   aura-document-processing-service:
     build:
@@ -17,7 +50,14 @@ services:
         condition: service_healthy
       llm:
         condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    healthcheck:
+      <<: *healthcheck-api-v1
+      start_period: 90s
     restart: on-failure
+    volumes:
+      - huggingface_cache:/root/.cache/huggingface
 
   aura-llm-service:
     build: ../../aura-llm-service
@@ -29,8 +69,11 @@ services:
     depends_on:
       llm:
         condition: service_healthy
+    healthcheck:
+      <<: *healthcheck-api-v1
+      start_period: 60s
     restart: on-failure
-    
+
   aura-auth-service:
     build: ../../aura-auth-service
     container_name: aura-auth-service
@@ -43,6 +86,7 @@ services:
         condition: service_healthy
       aura_db:
         condition: service_healthy
+    healthcheck: *healthcheck-metrics
     restart: on-failure
 
   aura-chat-service:
@@ -58,9 +102,10 @@ services:
       memory_db:
         condition: service_healthy
       aura-llm-service:
-        condition: service_started
+        condition: service_healthy
       mock-auth:
-        condition: service_started
+        condition: service_healthy
+    healthcheck: *healthcheck-api-v1
     restart: on-failure
 
   aura-notification-service:
@@ -78,7 +123,8 @@ services:
       queue:
         condition: service_healthy
       aura-auth-service:
-        condition: service_started
+        condition: service_healthy
+    healthcheck: *healthcheck-api-v1
     restart: on-failure
 
   aura-notification-worker:
@@ -101,6 +147,9 @@ services:
         condition: service_healthy
       queue:
         condition: service_healthy
+      aura-notification-service:
+        condition: service_healthy
+    healthcheck: *healthcheck-celery-worker
     restart: on-failure
 
   aura-document-collection-service:
@@ -114,7 +163,33 @@ services:
       aura_db:
         condition: service_healthy
       mock-auth:
-        condition: service_started
+        condition: service_healthy
+    healthcheck: *healthcheck-api-v1
+    restart: on-failure
+
+  aura-gateway:
+    build: ../../aura-gateway
+    container_name: aura-gateway
+    ports:
+      - "80:80"
+    depends_on:
+      aura-auth-service:
+        condition: service_healthy
+      aura-chat-service:
+        condition: service_healthy
+      aura-llm-service:
+        condition: service_healthy
+      aura-document-processing-service:
+        condition: service_healthy
+      aura-document-collection-service:
+        condition: service_healthy
+      aura-notification-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
     restart: on-failure
 
   mock-auth:
@@ -122,6 +197,8 @@ services:
     container_name: mock-auth
     ports:
       - "8080:8000"
+    healthcheck: *healthcheck-mock-auth
+    restart: on-failure
 
   llm:
     build:
@@ -141,5 +218,32 @@ services:
       retries: 10
       start_period: 30s
 
+  neo4j:
+    image: neo4j:5-community
+    container_name: neo4j
+    environment:
+      NEO4J_AUTH: neo4j/aura_password
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_security_procedures_unrestricted: apoc.*
+      NEO4J_server_default__listen__address: 0.0.0.0
+      NEO4J_dbms_memory_pagecache_size: 512M
+      NEO4J_dbms_memory_heap_max__size: 1G
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:7474 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
 volumes:
   llm_data:
+  neo4j_data:
+  neo4j_logs:
+  huggingface_cache:

@@ -1,6 +1,5 @@
 import asyncio
 import logging
-
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
@@ -11,7 +10,12 @@ from apps.message.services.message_service import (
     broadcast_chat_ai_lock_change,
     message_service,
 )
-from apps.message.ws_rate_limit import check_message_rate_limit, check_typing_rate_limit
+from apps.message.ws_rate_limit import (
+    acquire_ws_connection,
+    check_message_rate_limit,
+    check_typing_rate_limit,
+    release_ws_connection,
+)
 from apps.membership.repositories.membership_repository import membership_repository
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.exceptions import ServiceUnavailableException
@@ -46,6 +50,15 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             await self.close(code=4003)
             return
 
+        allowed = await database_sync_to_async(acquire_ws_connection)(self.user.id)
+        if not allowed:
+            logger.warning(
+                "WebSocket connection rejected: too many concurrent connections.",
+                extra={"user_id": self.user.id},
+            )
+            await self.close(code=4029)
+            return
+
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
 
@@ -76,6 +89,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             await self.channel_layer.group_discard(
                 self.group_name, self.channel_name
             )
+        if self.user is not None:
+            await database_sync_to_async(release_ws_connection)(self.user.id)
         logger.info(
             "WebSocket disconnected.",
             extra={
@@ -302,6 +317,13 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             "type": "ai_context",
             "question": event.get("question", ""),
             "fragments": event.get("fragments", []),
+        })
+
+    async def ai_progress(self, event):
+        await self.send_json({
+            "type": "ai_progress",
+            "step": event.get("step", ""),
+            "message": event.get("message", ""),
         })
 
     async def ai_delta(self, event):

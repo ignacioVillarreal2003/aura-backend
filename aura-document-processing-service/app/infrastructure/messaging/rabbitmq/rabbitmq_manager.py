@@ -224,7 +224,10 @@ class RabbitMQManager(RabbitMQManagerInterface):
             )
             while True:
                 try:
-                    channel = await self._connection.channel()
+                    connection = self._connection
+                    if connection is None or connection.is_closed:
+                        raise ConnectionClosed("Connection is not available.")
+                    channel = await connection.channel()
                     await channel.set_qos(prefetch_count=effective_prefetch)
                     queue = await channel.get_queue(queue_name)
 

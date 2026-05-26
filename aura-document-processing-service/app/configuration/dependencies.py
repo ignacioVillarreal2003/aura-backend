@@ -5,6 +5,7 @@ from fastapi import FastAPI
 
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
 from app.application.processors.readers.reader_factory import ReaderFactory
+from app.application.processors.rerankers.reranker_factory import RerankerFactory
 from app.application.processors.text_cleaners.text_cleaner_factory import TextCleanerFactory
 from app.application.processors.text_splitters.text_splitter_factory import TextSplitterFactory
 from app.application.authorization.authorizer import Authorizer
@@ -80,6 +81,7 @@ from app.infrastructure.persistence.database.repositories.fragment_repository.fr
     FragmentRepository,
 )
 from app.infrastructure.persistence.graph.neo4j_manager.neo4j_manager import Neo4jManager
+from app.infrastructure.persistence.graph.neo4j_manager.neo4j_manager_exception import Neo4jConnectionException
 from app.infrastructure.persistence.graph.repositories.graph_entity_repository.graph_entity_repository import (
     GraphEntityRepository,
 )
@@ -208,10 +210,17 @@ async def startup_dependencies(app: FastAPI) -> None:
         app.state.http_client = http_client
         cleanup_stack.append(("http_client", http_client.stop))
 
+        redis_client_settings = RedisClientSettings()
+        redis_client = RedisClient(redis_client_settings=redis_client_settings)
+        await redis_client.initialize()
+        app.state.redis_client = redis_client
+        cleanup_stack.append(("redis_client", redis_client.dispose))
+
         authentication_provider_settings = AuthenticationProviderSettings()
         authentication_provider = AuthenticationProvider(
             http_client=http_client,
             authentication_provider_settings=authentication_provider_settings,
+            redis_client=redis_client.client,
         )
         app.state.authentication_provider_settings = authentication_provider_settings
         app.state.authentication_provider = authentication_provider
@@ -263,21 +272,19 @@ async def startup_dependencies(app: FastAPI) -> None:
         )
         app.state.document_query_service = document_query_service
 
+        reranker_factory = RerankerFactory()
+        app.state.reranker_factory = reranker_factory
+
         fragment_query_service = FragmentQueryService(
             document_repository=document_repository,
             fragment_repository=fragment_repository,
             embedder_factory=embedder_factory,
+            reranker_factory=reranker_factory,
             authorizer=authorizer,
             document_collection_repository=document_collection_repository,
             document_collection_catalog_client=document_collection_catalog_client,
         )
         app.state.fragment_query_service = fragment_query_service
-
-        redis_client_settings = RedisClientSettings()
-        redis_client = RedisClient(redis_client_settings=redis_client_settings)
-        await redis_client.initialize()
-        app.state.redis_client = redis_client
-        cleanup_stack.append(("redis_client", redis_client.dispose))
 
         document_job_progress_store = DocumentPostProcessJobProgressStore(
             redis_client=redis_client.client,
@@ -462,6 +469,8 @@ async def startup_dependencies(app: FastAPI) -> None:
                 authorizer=authorizer,
                 llm_provider=llm_provider,
             )
+        else:
+            logger.info("Knowledge graph module is disabled (KNOWLEDGE_GRAPH_ENABLED=false); skipping Neo4j bootstrap.")
 
         logger.info("All dependencies started successfully")
         cleanup_stack.clear()
@@ -496,7 +505,14 @@ async def _wire_knowledge_graph_module(
     )
 
     neo4j_manager = Neo4jManager()
-    await neo4j_manager.start()
+    try:
+        await neo4j_manager.start()
+    except Neo4jConnectionException:
+        logger.warning(
+            "Neo4j is unavailable; the knowledge graph module will be disabled for this run.",
+            extra={"uri": neo4j_manager.settings.uri_safe},
+        )
+        return
     app.state.neo4j_manager = neo4j_manager
     cleanup_stack.append(("neo4j_manager", neo4j_manager.dispose))
 

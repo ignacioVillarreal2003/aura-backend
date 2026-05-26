@@ -1,0 +1,96 @@
+@notifBase = http://localhost:8002/api/v1
+@authToken = user_token_123
+
+### Listar notificaciones (bandeja paginada)
+GET {{notifBase}}/notifications/
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Listar — filtrar por estado unread
+GET {{notifBase}}/notifications/?status=unread
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Listar — filtrar por múltiples estados
+GET {{notifBase}}/notifications/?status=unread&status=read
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Listar — filtrar por tipo de evento
+GET {{notifBase}}/notifications/?event_type=chat.member.invited
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Listar — filtrar por categoría y desde una fecha
+GET {{notifBase}}/notifications/?type=event&since=2024-01-15T10:30:00Z
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Listar — con paginación explícita
+GET {{notifBase}}/notifications/?page=2&page_size=10
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Cantidad de notificaciones no leídas (badge)
+GET {{notifBase}}/notifications/unread-count/
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Marcar todas las notificaciones como leídas
+POST {{notifBase}}/notifications/mark-all-read/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{}
+
+
+### Marcar como leídas solo hasta un ID específico
+POST {{notifBase}}/notifications/mark-all-read/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "until_id": 200
+}
+
+
+### Detalle de una notificación
+GET {{notifBase}}/notifications/123/
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Cambiar estado de una notificación — marcar como leída
+PATCH {{notifBase}}/notifications/123/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "status": "read"
+}
+
+
+### Cambiar estado de una notificación — archivar
+PATCH {{notifBase}}/notifications/123/
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "status": "archived"
+}
+
+
+### Borrar notificación (soft-delete) — responde 204 sin cuerpo
+DELETE {{notifBase}}/notifications/123/
+Authorization: Bearer {{authToken}}

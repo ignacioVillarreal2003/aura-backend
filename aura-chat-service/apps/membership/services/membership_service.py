@@ -1,6 +1,4 @@
 import logging
-import threading
-
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.db import IntegrityError, transaction
@@ -73,7 +71,6 @@ class MembershipService:
         user: AuthenticatedUser,
         chat_id: int,
         member_ids: list[int],
-        access_token: str = "",
     ) -> list[ChatMembership]:
         AccessControl.require_permissions(user, frozenset({ADD_MEMBER}))
         chat = chat_repository.get_by_id(chat_id)
@@ -114,27 +111,20 @@ class MembershipService:
             },
         )
 
-        if created and access_token:
+        if created:
             receiver_ids = [m.member_id for m in created]
-            message = f'Te agregaron al chat "{chat.name}"'
-            sender_id = user.id
-            sender_name = user.username or user.email
-
-            def _send_notification():
-                threading.Thread(
-                    target=notification_client.notify_members_added,
-                    kwargs={
-                        "receiver_ids": receiver_ids,
-                        "chat_name": chat.name,
-                        "sender_id": sender_id,
-                        "sender_name": sender_name,
-                        "access_token": access_token,
-                        "message": message,
-                    },
-                    daemon=True,
-                ).start()
-
-            on_commit(_send_notification)
+            actor_id = user.id
+            actor_name = user.username or user.email
+            context = {"chat_id": chat_id, "chat_name": chat.name}
+            idem_key = f"chat-{chat_id}-invite-{'-'.join(str(i) for i in sorted(receiver_ids))}"
+            on_commit(lambda: notification_client.emit_event(
+                event_type="chat.member.invited",
+                recipient_ids=receiver_ids,
+                actor_id=actor_id,
+                actor_name=actor_name,
+                context=context,
+                idempotency_key=idem_key,
+            ))
 
         return created
 
@@ -180,8 +170,6 @@ class MembershipService:
 
         if new_status == ChatMembership.Status.ACTIVE:
             on_commit(lambda: _broadcast_member_joined(chat_id, member_id))
-            from apps.chat.services.webhook_service import webhook_service
-            webhook_service.fire_event(chat_id, "member.joined", {"member_id": member_id})
 
         logger.info(
             "Membership updated.",
@@ -223,8 +211,15 @@ class MembershipService:
 
         membership_repository.soft_delete(membership, deleted_by=user.id)
         on_commit(lambda: _broadcast_member_left(chat_id, member_id))
-        from apps.chat.services.webhook_service import webhook_service
-        webhook_service.fire_event(chat_id, "member.left", {"member_id": member_id})
+        actor_id = user.id
+        actor_name = user.username or user.email
+        on_commit(lambda m=member_id: notification_client.emit_event(
+            event_type="chat.member.removed",
+            recipient_ids=[m],
+            actor_id=actor_id,
+            actor_name=actor_name,
+            context={"chat_id": chat_id},
+        ))
         logger.info(
             "Member removed from chat.",
             extra={
@@ -252,8 +247,6 @@ class MembershipService:
 
         membership_repository.soft_delete(membership, deleted_by=user.id)
         on_commit(lambda: _broadcast_member_left(chat_id, user.id))
-        from apps.chat.services.webhook_service import webhook_service
-        webhook_service.fire_event(chat_id, "member.left", {"member_id": user.id})
         logger.info(
             "User left chat.",
             extra={"chat_id": chat_id, "user_id": user.id},

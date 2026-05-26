@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 
+from starlette.responses import StreamingResponse
+
 from app.application.services.document_action_service.interfaces.document_action_service_interface import (
     DocumentActionServiceInterface
 )
@@ -14,6 +16,15 @@ class DocumentActionControllerInterface(ABC):
             self,
             document_action_request: DocumentActionRequest,
             document_action_service: DocumentActionServiceInterface,
-            authenticated_user: AuthenticatedUser
+            authenticated_user: AuthenticatedUser,
     ) -> DocumentActionResponse:
+        pass
+
+    @abstractmethod
+    async def execute_document_action_stream(
+            self,
+            document_action_request: DocumentActionRequest,
+            document_action_service: DocumentActionServiceInterface,
+            authenticated_user: AuthenticatedUser,
+    ) -> StreamingResponse:
         pass

@@ -1,5 +1,4 @@
 import logging
-
 from django.db.models import Count, DateTimeField, F, IntegerField, Q, QuerySet, Subquery
 from django.db.models.expressions import OuterRef
 from django.db.models.functions import Coalesce

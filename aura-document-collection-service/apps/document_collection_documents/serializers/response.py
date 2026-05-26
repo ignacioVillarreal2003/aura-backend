@@ -8,6 +8,47 @@ from rest_framework import serializers
 from apps.document_collection_documents.models import DocumentInDocumentCollection
 
 
+@extend_schema_serializer(
+    component_name="AccessibleDocument",
+    description=(
+        "Flat projection of a document reachable by the requesting user's MAC profile. "
+        "Each row represents one (document, collection) pair—a document linked to two "
+        "accessible collections will appear twice, once per collection."
+    ),
+)
+class AccessibleDocumentResponse(serializers.ModelSerializer):
+    document_id = serializers.IntegerField(
+        source="document.id",
+        help_text="Surrogate key of the underlying document.",
+    )
+    document_name = serializers.CharField(
+        source="document.name",
+        help_text="Human-readable document name.",
+    )
+    mime_type = serializers.CharField(
+        source="document.mime_type",
+        help_text="MIME type of the document binary.",
+    )
+    file_size_bytes = serializers.IntegerField(
+        source="document.file_size_bytes",
+        help_text="Size of the document binary in bytes.",
+    )
+    collection_id = serializers.IntegerField(
+        source="document_collection_id",
+        help_text="ID of the collection through which this document is accessible.",
+    )
+
+    class Meta:
+        model = DocumentInDocumentCollection
+        fields = [
+            "document_id",
+            "document_name",
+            "mime_type",
+            "file_size_bytes",
+            "collection_id",
+        ]
+
+
 class LinkedDocumentSnippetSerializer(serializers.Serializer):
     id = serializers.IntegerField(
         help_text="Underlying document surrogate key (`document.id`).",

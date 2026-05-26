@@ -1,0 +1,5 @@
+@notifBase = http://localhost:8002/api/v1
+
+### Catálogo de tipos de evento (sin autenticación)
+GET {{notifBase}}/event-types/
+Accept: application/json

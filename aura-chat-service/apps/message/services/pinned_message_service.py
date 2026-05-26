@@ -1,5 +1,4 @@
 import logging
-
 from django.db.models import QuerySet
 
 from apps.membership.repositories.membership_repository import membership_repository

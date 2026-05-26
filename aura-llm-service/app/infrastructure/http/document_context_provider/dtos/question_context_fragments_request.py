@@ -63,6 +63,7 @@ class QuestionContextFragmentsRequest(BaseModel):
     )
 
     rerank: RerankConfig = Field(default_factory=RerankConfig)
+    adjacent_chunks: int = Field(default=0, ge=0, le=3)
 
     @model_validator(mode="after")
     def _validate_queries(self) -> "QuestionContextFragmentsRequest":
