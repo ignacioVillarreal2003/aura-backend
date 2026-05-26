@@ -1,0 +1,339 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  .audit-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .audit-filters {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .audit-filters input[type="text"] {
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+    width: 200px;
+  }
+  .audit-filters select {
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+    background: #fff;
+  }
+  .audit-filters button {
+    padding: 6px 14px;
+    background: #205067;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .audit-filters a.clear-btn {
+    font-size: 12px;
+    color: #697688;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .audit-meta {
+    font-size: 13px;
+    color: #697688;
+    margin-bottom: 10px;
+  }
+  .audit-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    border: 1px solid #e6e9ef;
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 13px;
+  }
+  .audit-table th {
+    background: #f4f6fa;
+    padding: 10px 12px;
+    text-align: left;
+    font-size: 11px;
+    color: #4d5b6c;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    border-bottom: 1px solid #e6e9ef;
+    white-space: nowrap;
+  }
+  .audit-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #f0f2f7;
+    vertical-align: middle;
+  }
+  .audit-table tr:last-child td {
+    border-bottom: none;
+  }
+  .audit-table tr:hover td {
+    background: #f9fafc;
+  }
+  .muted {
+    color: #697688;
+    font-size: 12px;
+  }
+  .action-badge {
+    display: inline-block;
+    border-radius: 999px;
+    padding: 2px 9px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+    white-space: nowrap;
+  }
+  .entity-tag {
+    display: inline-block;
+    background: #e8edf5;
+    color: #374151;
+    border-radius: 4px;
+    padding: 1px 7px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .source-tag {
+    display: inline-block;
+    border-radius: 4px;
+    padding: 1px 7px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .source-admin { background: #dbeafe; color: #1e40af; }
+  .source-api   { background: #dcfce7; color: #14532d; }
+  .details-btn {
+    background: none;
+    border: 1px solid #d1d8e4;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 11px;
+    color: #374151;
+    cursor: pointer;
+  }
+  .details-popup {
+    display: none;
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: #fff;
+    border: 1px solid #d1d8e4;
+    border-radius: 8px;
+    padding: 20px 24px;
+    max-width: 560px;
+    width: 90%;
+    z-index: 9999;
+    box-shadow: 0 10px 40px rgba(0,0,0,.15);
+    font-size: 13px;
+  }
+  .details-popup pre {
+    background: #f4f6fa;
+    border-radius: 6px;
+    padding: 12px;
+    overflow: auto;
+    max-height: 360px;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .details-popup .close-btn {
+    float: right;
+    cursor: pointer;
+    font-size: 18px;
+    color: #697688;
+    background: none;
+    border: none;
+    line-height: 1;
+  }
+  .overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.35);
+    z-index: 9998;
+  }
+  .pagination {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 16px;
+    font-size: 13px;
+    flex-wrap: wrap;
+  }
+  .pagination a, .pagination span {
+    padding: 5px 10px;
+    border: 1px solid #d1d8e4;
+    border-radius: 4px;
+    text-decoration: none;
+    color: #205067;
+  }
+  .pagination .current-page {
+    background: #205067;
+    color: #fff;
+    border-color: #205067;
+  }
+  .pagination .disabled {
+    color: #aab4c2;
+    pointer-events: none;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <div class="audit-header">
+    <div>
+      <h1>{{ title }}</h1>
+      <p class="muted">{{ subtitle }} &mdash; Generado: {{ generated_at|date:"d/m/Y H:i:s" }}</p>
+    </div>
+    <form class="audit-filters" method="get" action="">
+      <input type="text" name="q" value="{{ search }}" placeholder="Buscar usuario, entidad&hellip;">
+      <select name="action">
+        <option value="">Todas las acciones</option>
+        {% for a in available_actions %}
+          <option value="{{ a }}" {% if a == filter_action %}selected{% endif %}>{{ a }}</option>
+        {% endfor %}
+      </select>
+      <select name="entity">
+        <option value="">Todas las entidades</option>
+        {% for e in available_entities %}
+          <option value="{{ e }}" {% if e == filter_entity %}selected{% endif %}>{{ e }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit">Filtrar</button>
+      {% if search or filter_action or filter_entity %}
+        <a class="clear-btn" href="?">Limpiar</a>
+      {% endif %}
+    </form>
+  </div>
+
+  <p class="audit-meta">
+    Total: <strong>{{ total }}</strong> registro{{ total|pluralize }}
+    {% if search %} &mdash; búsqueda: &ldquo;<em>{{ search }}</em>&rdquo;{% endif %}
+    {% if filter_action %} &mdash; acción: <strong>{{ filter_action }}</strong>{% endif %}
+    {% if filter_entity %} &mdash; entidad: <strong>{{ filter_entity }}</strong>{% endif %}
+  </p>
+
+  <table class="audit-table">
+    <thead>
+      <tr>
+        <th>Fecha/Hora</th>
+        <th>Usuario</th>
+        <th>Acción</th>
+        <th>Entidad</th>
+        <th>ID</th>
+        <th>Nombre</th>
+        <th>Origen</th>
+        <th>Detalles</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in entries %}
+      <tr>
+        <td class="muted" style="white-space:nowrap;">{{ entry.timestamp|date:"d/m/Y H:i:s" }}</td>
+        <td>
+          {% if entry.actor_username %}
+            <strong>{{ entry.actor_username }}</strong>
+            {% if entry.actor_id %}<span class="muted"> #{{ entry.actor_id }}</span>{% endif %}
+          {% else %}
+            <span class="muted">—</span>
+          {% endif %}
+        </td>
+        <td>
+          <span class="action-badge" style="background:{{ entry.action_color }};">
+            {{ entry.action_label }}
+          </span>
+        </td>
+        <td><span class="entity-tag">{{ entry.entity_type_label }}</span></td>
+        <td class="muted">{{ entry.entity_id|default:"—" }}</td>
+        <td>{{ entry.entity_label|default:"—" }}</td>
+        <td>
+          <span class="source-tag source-{{ entry.source }}">{{ entry.source }}</span>
+        </td>
+        <td>
+          {% if entry.details %}
+            <button class="details-btn" onclick="showDetails({{ entry.id }})">Ver</button>
+            <div id="details-{{ entry.id }}" class="details-data" style="display:none;">{{ entry.details }}</div>
+          {% else %}
+            <span class="muted">—</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="8" class="muted" style="text-align:center;padding:24px;">
+          No hay registros de auditoría{% if search or filter_action or filter_entity %} para los filtros seleccionados{% endif %}.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if total_pages > 1 %}
+  <div class="pagination">
+    {% if has_prev %}
+      <a href="?p={{ page|add:"-1" }}&q={{ search }}&action={{ filter_action }}&entity={{ filter_entity }}">&laquo; Anterior</a>
+    {% else %}
+      <span class="disabled">&laquo; Anterior</span>
+    {% endif %}
+
+    {% for pg in page_range %}
+      {% if pg == page %}
+        <span class="current-page">{{ pg }}</span>
+      {% else %}
+        <a href="?p={{ pg }}&q={{ search }}&action={{ filter_action }}&entity={{ filter_entity }}">{{ pg }}</a>
+      {% endif %}
+    {% endfor %}
+
+    {% if has_next %}
+      <a href="?p={{ page|add:"1" }}&q={{ search }}&action={{ filter_action }}&entity={{ filter_entity }}">Siguiente &raquo;</a>
+    {% else %}
+      <span class="disabled">Siguiente &raquo;</span>
+    {% endif %}
+
+    <span class="muted">Página {{ page }} de {{ total_pages }}</span>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Modal -->
+<div class="overlay" id="overlay" onclick="closeDetails()"></div>
+<div class="details-popup" id="details-popup">
+  <button class="close-btn" onclick="closeDetails()">&times;</button>
+  <h3 style="margin:0 0 12px;">Detalles del registro</h3>
+  <pre id="details-content"></pre>
+</div>
+
+<script>
+function showDetails(id) {
+  var raw = document.getElementById('details-' + id).textContent;
+  var content;
+  try {
+    content = JSON.stringify(JSON.parse(raw.replace(/'/g, '"')), null, 2);
+  } catch(e) {
+    content = raw;
+  }
+  document.getElementById('details-content').textContent = content;
+  document.getElementById('details-popup').style.display = 'block';
+  document.getElementById('overlay').style.display = 'block';
+}
+function closeDetails() {
+  document.getElementById('details-popup').style.display = 'none';
+  document.getElementById('overlay').style.display = 'none';
+}
+</script>
+{% endblock %}

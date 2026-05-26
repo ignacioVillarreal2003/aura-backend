@@ -1,0 +1,56 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'admin/css/changelists.css' %}">
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Inicio</a>
+  &rsaquo; Agrupaciones
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+
+  <ul class="object-tools">
+    <li><a href="{% url 'admin:mac_compartments_create' %}" class="addlink">Agregar Agrupación</a></li>
+  </ul>
+
+  <div class="module" id="changelist">
+    <table id="result_list">
+      <thead>
+        <tr>
+          <th scope="col" class="column-id" style="width:60px">
+            <div class="text"><span>ID</span></div>
+            <div class="clear"></div>
+          </th>
+          <th scope="col" class="column-name">
+            <div class="text"><span>Nombre</span></div>
+            <div class="clear"></div>
+          </th>
+          <th scope="col" class="column-description">
+            <div class="text"><span>Descripción</span></div>
+            <div class="clear"></div>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for comp in compartments %}
+        <tr class="{% cycle 'row1' 'row2' %}">
+          <td style="text-align:center;color:#777">{{ comp.id }}</td>
+          <td><a href="{% url 'admin:mac_compartments_edit' comp.id %}">{{ comp.name }}</a></td>
+          <td style="color:#555">{{ comp.description|default:"-" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="3" style="color:#888;font-style:italic;padding:10px 14px">No hay agrupaciones registradas.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block bodyclass %}{{ block.super }} delete-confirmation{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<script src="{% static 'admin/js/cancel.js' %}" async></script>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Inicio</a>
+  &rsaquo; <a href="{% url 'admin:mac_classification_levels_list' %}">Niveles</a>
+  &rsaquo; Eliminar
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <h1>¿Está seguro?</h1>
+  <p>Va a eliminar el nivel <strong>"{{ level.name }}"</strong> (rango {{ level.rank }}). Esta acción no se puede deshacer.</p>
+  <form method="post">
+    {% csrf_token %}
+    <div>
+      <input type="submit" value="Sí, eliminar">
+      <a href="{% url 'admin:mac_classification_levels_list' %}" class="button cancel-link">No, cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

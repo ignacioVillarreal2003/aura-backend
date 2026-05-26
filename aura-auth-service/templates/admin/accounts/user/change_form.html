@@ -1,0 +1,131 @@
+{% extends "admin/change_form.html" %}
+{% load i18n %}
+
+{% block extrastyle %}
+{{ block.super }}
+{% if show_compartments_panel %}
+<style>
+  .compartments-section { margin-top:8px; }
+  .compartments-section .search-container { margin-bottom:12px; }
+  .compartments-section .search-input { width:100%;padding:9px 12px;border:1px solid #ccc;border-radius:4px;font-size:13px;box-sizing:border-box;background:#fff; }
+  .compartments-section .search-input:focus { outline:none;border-color:#417690;box-shadow:0 0 0 2px rgba(65,118,144,.12); }
+  .compartments-section .dual-panel-container { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
+  .compartments-section .panel { display:flex;flex-direction:column;border:1px solid #ccc;border-radius:4px;background:#fff;min-height:200px; }
+  .compartments-section .panel-header { background:#f5f5f5;padding:10px 12px;border-bottom:1px solid #ddd;font-weight:600;font-size:12px;color:#333;text-transform:uppercase;letter-spacing:.2px; }
+  .compartments-section .panel-content { flex:1;overflow-y:auto;max-height:280px; }
+  .compartments-section .panel-item { padding:9px 12px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:8px;cursor:pointer; }
+  .compartments-section .panel-item:last-child { border-bottom:none; }
+  .compartments-section .panel-item:hover { background:#f8fbff; }
+  .compartments-section .panel-item input[type="checkbox"] { margin:0;cursor:pointer; }
+  .compartments-section .panel-item label { margin:0;cursor:pointer;flex:1;font-size:13px; }
+  .compartments-section .empty-panel { padding:12px;color:#888;font-size:12px; }
+  @media (max-width:900px) { .compartments-section .dual-panel-container { grid-template-columns:1fr; } }
+</style>
+{% endif %}
+{% endblock %}
+
+{% block content_title %}
+{% if custom_verbose_name %}
+  <h1>{% if add %}Agregar {{ custom_verbose_name }}{% else %}Modificar {{ custom_verbose_name }}{% endif %}</h1>
+{% else %}
+  {{ block.super }}
+{% endif %}
+{% endblock %}
+
+{% block after_field_sets %}
+{% if show_compartments_panel %}
+<div id="compartments-panel" style="display:none">
+  <select name="compartment_ids" id="id_compartment_ids" multiple style="display:none"></select>
+  <div class="form-row compartments-section">
+    <div style="width:100%">
+      <p style="margin:0 0 10px 0;font-size:13px">Agrupaciones:</p>
+      <div class="search-container">
+        <input type="text" class="search-input" id="search-compartments" placeholder="Buscar agrupación...">
+      </div>
+      <div class="dual-panel-container">
+        <div class="panel">
+          <div class="panel-header">Sin asignar</div>
+          <div class="panel-content" id="available-compartments"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">Asignadas</div>
+          <div class="panel-content" id="selected-compartments"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function() {
+  var compartmentsData = {{ compartments_json|safe }};
+  var hiddenSelect = document.getElementById('id_compartment_ids');
+  var availPanel = document.getElementById('available-compartments');
+  var selPanel = document.getElementById('selected-compartments');
+  var searchInput = document.getElementById('search-compartments');
+
+  var assignedCompIds = new Set({{ assigned_comp_ids_json|safe }}.map(String));
+  compartmentsData.forEach(function(item) {
+    var opt = document.createElement('option');
+    opt.value = item.id; opt.textContent = item.label;
+    if (assignedCompIds.has(String(item.id))) opt.selected = true;
+    hiddenSelect.appendChild(opt);
+  });
+
+  function getSelectedIds() {
+    return new Set(Array.from(hiddenSelect.options).filter(o => o.selected).map(o => o.value));
+  }
+
+  function render(filter) {
+    filter = (filter || '').toLowerCase();
+    availPanel.innerHTML = ''; selPanel.innerHTML = '';
+    var selectedIds = getSelectedIds();
+    compartmentsData.forEach(function(item) {
+      var id = String(item.id);
+      var isSelected = selectedIds.has(id);
+      if (!isSelected && filter && !item.label.toLowerCase().includes(filter)) return;
+      var row = document.createElement('div'); row.className = 'panel-item';
+      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = isSelected; cb.id = 'comp-' + id;
+      var lbl = document.createElement('label'); lbl.setAttribute('for', cb.id); lbl.textContent = item.label;
+      row.appendChild(cb); row.appendChild(lbl);
+      cb.addEventListener('change', function(e) {
+        var opt = Array.from(hiddenSelect.options).find(o => o.value === id);
+        if (opt) opt.selected = e.target.checked;
+        render(searchInput.value);
+      });
+      (isSelected ? selPanel : availPanel).appendChild(row);
+    });
+    if (!availPanel.children.length) availPanel.innerHTML = '<div class="empty-panel">Sin agrupaciones disponibles</div>';
+    if (!selPanel.children.length) selPanel.innerHTML = '<div class="empty-panel">Sin agrupaciones asignadas</div>';
+  }
+  searchInput.addEventListener('input', function() { render(this.value); });
+  render('');
+})();
+
+document.addEventListener('DOMContentLoaded', function() {
+  var panel = document.getElementById('compartments-panel');
+  if (!panel) return;
+  var gruposFieldset = null;
+  var fieldsets = document.querySelectorAll('fieldset.module');
+  for (var i = 0; i < fieldsets.length; i++) {
+    var h2 = fieldsets[i].querySelector('h2');
+    if (h2 && h2.textContent.trim() === 'Grupos') {
+      gruposFieldset = fieldsets[i];
+      break;
+    }
+  }
+  if (gruposFieldset) {
+    while (panel.firstChild) {
+      gruposFieldset.appendChild(panel.firstChild);
+    }
+    panel.parentNode.removeChild(panel);
+  } else {
+    panel.style.display = '';
+  }
+});
+</script>
+{% endif %}
+{% endblock %}
+
+{% block object_history %}
+{{ block.super }}
+{% endblock %}

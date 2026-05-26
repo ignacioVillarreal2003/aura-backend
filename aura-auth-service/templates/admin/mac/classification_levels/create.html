@@ -1,0 +1,42 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'admin/css/forms.css' %}">
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Inicio</a>
+  &rsaquo; <a href="{% url 'admin:mac_classification_levels_list' %}">Niveles</a>
+  &rsaquo; Agregar
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <form method="post">
+    {% csrf_token %}
+    <fieldset class="module aligned">
+      <div class="form-row field-name">
+        <div style="display:flex;align-items:center;gap:12px">
+          <label class="required" for="id_name" style="font-weight:bold;min-width:110px;flex-shrink:0">Nombre:</label>
+          <input type="text" id="id_name" name="name" maxlength="100" required autofocus style="flex:1">
+        </div>
+      </div>
+      <div class="form-row field-description">
+        <div style="display:flex;align-items:flex-start;gap:12px">
+          <label for="id_description" style="font-weight:bold;min-width:110px;flex-shrink:0;padding-top:4px">Descripción:</label>
+          <textarea id="id_description" name="description" rows="3" style="flex:1;resize:vertical"></textarea>
+        </div>
+      </div>
+    </fieldset>
+    <div class="submit-row">
+      <input type="submit" name="_addanother" value="Guardar y añadir otro">
+      <input type="submit" name="_continue" value="Guardar y continuar editando">
+      <input type="submit" name="_save" value="Guardar" class="default">
+    </div>
+  </form>
+</div>
+{% endblock %}
