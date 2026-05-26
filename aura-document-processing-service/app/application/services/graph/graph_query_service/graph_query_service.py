@@ -180,6 +180,8 @@ class GraphQueryService(GraphQueryServiceInterface):
                 alias = merged.get("source_entity_type") or merged.get("from_type")
                 if alias is not None and str(alias).strip():
                     merged["source_type"] = alias
+        elif intent == QueryIntent.LIST_BY_DOCUMENT:
+            copy_alias_if_blank("document_id", "doc_id")
         return merged
 
     async def _dispatch_intent(
@@ -198,6 +200,8 @@ class GraphQueryService(GraphQueryServiceInterface):
             return await self._handle_find_path(params, accessible_ids, max_results)
         if intent == QueryIntent.FILTER_BY_TYPE:
             return await self._handle_filter_by_type(params, accessible_ids, max_results)
+        if intent == QueryIntent.LIST_BY_DOCUMENT:
+            return await self._handle_list_by_document(params, accessible_ids, max_results)
         return [], []
 
     async def _handle_find_entity(
@@ -214,6 +218,13 @@ class GraphQueryService(GraphQueryServiceInterface):
             accessible_document_ids=accessible_ids,
             limit=max_results,
         )
+        if not results:
+            results = await self._entity_repository.fulltext_search(
+                query_string=canonical,
+                entity_type=entity_type,
+                accessible_document_ids=accessible_ids,
+                limit=max_results,
+            )
         return results, []
 
     async def _handle_find_neighbors(
@@ -283,6 +294,35 @@ class GraphQueryService(GraphQueryServiceInterface):
             limit=max_results,
         )
         return results, []
+
+    async def _handle_list_by_document(
+            self,
+            params: dict[str, Any],
+            accessible_ids: list[int],
+            max_results: int,
+    ) -> tuple[list[GraphEntityResponse], list[GraphRelationResponse]]:
+        raw = params.get("document_id")
+        try:
+            document_id = int(raw)
+            if document_id <= 0:
+                raise ValueError("document_id must be positive")
+        except (TypeError, ValueError) as exc:
+            raise _GraphIntentParameterError(
+                "Missing or invalid 'document_id' parameter."
+            ) from exc
+
+        entities = await self._entity_repository.list_by_document(
+            document_id=document_id,
+            entity_type=None,
+            accessible_document_ids=accessible_ids,
+            limit=max_results,
+        )
+        relations = await self._relation_repository.list_by_document(
+            document_id=document_id,
+            accessible_document_ids=accessible_ids,
+            limit=max_results,
+        )
+        return entities, relations
 
     async def _resolve_accessible_ids(
             self,

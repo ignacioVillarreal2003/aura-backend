@@ -50,3 +50,25 @@ class GraphEntityRepositoryInterface(ABC):
             limit: int,
     ) -> list[GraphEntityResponse]:
         pass
+
+    @abstractmethod
+    async def list_by_document(
+            self,
+            *,
+            document_id: int,
+            entity_type: Optional[EntityType],
+            accessible_document_ids: list[int],
+            limit: int,
+    ) -> list[GraphEntityResponse]:
+        pass
+
+    @abstractmethod
+    async def fulltext_search(
+            self,
+            *,
+            query_string: str,
+            entity_type: Optional[EntityType],
+            accessible_document_ids: list[int],
+            limit: int,
+    ) -> list[GraphEntityResponse]:
+        pass

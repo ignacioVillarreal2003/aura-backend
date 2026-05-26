@@ -29,6 +29,9 @@ INSTALLED_APPS = [
     "apps.chat",
     "apps.message",
     "apps.membership",
+    "apps.report",
+    "apps.checklist",
+    "apps.assistant",
 ]
 
 MIDDLEWARE = [
@@ -205,6 +208,28 @@ SPECTACULAR_SETTINGS = {
             "description": (
                 "Authenticated management of share tokens; **public** read-only message list uses "
                 "`GET /api/v1/share/{token}/messages/` (AllowAny)."
+            ),
+        },
+        {
+            "name": "Reports",
+            "description": (
+                "Creación, listado, detalle, actualización y eliminación de informes estandarizados "
+                "(SITREP, INTSUM, OPORD). Incluye exportación en PDF y Markdown."
+            ),
+        },
+        {
+            "name": "Checklists",
+            "description": (
+                "Generación, listado, detalle, actualización y eliminación de checklists de procedimientos. "
+                "Soporta marcado de ítems y exportación en PDF y Markdown."
+            ),
+        },
+        {
+            "name": "Assistants",
+            "description": (
+                "Asistentes especializados configurables (Custom GPTs equivalent). "
+                "Los admins crean asistentes con system prompts fijos; "
+                "los usuarios inician sesiones de chat pre-configuradas."
             ),
         },
     ],

@@ -18,7 +18,8 @@ class KnowledgeGraphSettings(BaseSettings):
     enabled: bool = Field(default=False)
 
     extraction_max_fragments_per_document: int = Field(default=500, ge=1, le=10_000)
-    extraction_concurrency: int = Field(default=1,ge=1,le=32)
+    extraction_concurrency: int = Field(default=1, ge=1, le=32)
+    extraction_sliding_window_chars: int = Field(default=500, ge=0, le=2000)
     extraction_lock_ttl_seconds: int = Field(default=1800, ge=60, le=86_400)
     extraction_snapshot_ttl_seconds: int = Field(default=86_400, ge=60, le=2_592_000)
 

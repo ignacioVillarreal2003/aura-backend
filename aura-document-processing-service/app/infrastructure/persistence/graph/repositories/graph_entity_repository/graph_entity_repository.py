@@ -61,6 +61,26 @@ ORDER BY e.canonical_name ASC
 LIMIT $limit
 """
 
+_LIST_BY_DOCUMENT_CYPHER = """
+MATCH (e:Entity)
+WHERE $document_id IN coalesce(e.source_document_ids, [])
+  AND ($entity_type IS NULL OR e.type = $entity_type)
+  AND any(d IN coalesce(e.source_document_ids, []) WHERE d IN $accessible_ids)
+RETURN e
+ORDER BY e.canonical_name ASC
+LIMIT $limit
+"""
+
+_FULLTEXT_SEARCH_CYPHER = """
+CALL db.index.fulltext.queryNodes("entity_fulltext", $query_string)
+YIELD node AS e, score
+WHERE ($entity_type IS NULL OR e.type = $entity_type)
+  AND any(d IN coalesce(e.source_document_ids, []) WHERE d IN $accessible_ids)
+RETURN e, score
+ORDER BY score DESC
+LIMIT $limit
+"""
+
 
 class GraphEntityRepository(GraphEntityRepositoryInterface):
     def __init__(self, neo4j_manager: Neo4jManagerInterface) -> None:
@@ -192,4 +212,62 @@ class GraphEntityRepository(GraphEntityRepositoryInterface):
             raise GraphPersistenceException(
                 "Failed to list entities in the knowledge graph."
             ) from e
+        return [map_entity_node(record["e"]) for record in records]
+
+    async def list_by_document(
+            self,
+            *,
+            document_id: int,
+            entity_type: Optional[EntityType],
+            accessible_document_ids: list[int],
+            limit: int,
+    ) -> list[GraphEntityResponse]:
+        if not accessible_document_ids:
+            return []
+        params = {
+            "document_id": document_id,
+            "entity_type": entity_type.value if entity_type is not None else None,
+            "accessible_ids": accessible_document_ids,
+            "limit": int(limit),
+        }
+        try:
+            records = await self._neo4j_manager.execute_read(
+                _LIST_BY_DOCUMENT_CYPHER, params
+            )
+        except Neo4jError as e:
+            logger.exception(
+                "Neo4j error while listing entities by document.",
+                extra={"document_id": document_id, "neo4j_code": getattr(e, "code", None)},
+            )
+            raise GraphPersistenceException(
+                "Failed to list entities by document in the knowledge graph."
+            ) from e
+        return [map_entity_node(record["e"]) for record in records]
+
+    async def fulltext_search(
+            self,
+            *,
+            query_string: str,
+            entity_type: Optional[EntityType],
+            accessible_document_ids: list[int],
+            limit: int,
+    ) -> list[GraphEntityResponse]:
+        if not accessible_document_ids or not query_string.strip():
+            return []
+        params = {
+            "query_string": query_string.strip(),
+            "entity_type": entity_type.value if entity_type is not None else None,
+            "accessible_ids": accessible_document_ids,
+            "limit": int(limit),
+        }
+        try:
+            records = await self._neo4j_manager.execute_read(
+                _FULLTEXT_SEARCH_CYPHER, params
+            )
+        except Neo4jError as e:
+            logger.warning(
+                "Neo4j error during fulltext entity search (non-fatal).",
+                extra={"neo4j_code": getattr(e, "code", None)},
+            )
+            return []
         return [map_entity_node(record["e"]) for record in records]
