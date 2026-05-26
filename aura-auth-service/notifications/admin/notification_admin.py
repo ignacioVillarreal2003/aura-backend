@@ -8,7 +8,7 @@ from django.shortcuts import render
 from django.urls import path, reverse
 from django.utils.html import format_html
 
-from accounts.models import User
+from accounts.models import User, UserRole
 from accounts.admin_parts.common import _is_admin_or_super_user, _is_super_admin_user
 from accounts.admin_parts.utils.audit import log_audit
 from notifications.models import (
@@ -179,15 +179,37 @@ class BaseNotificationAdmin(admin.ModelAdmin):
 class IndividualNotificationAdmin(BaseNotificationAdmin):
     """Admin section: Individuales."""
 
+    def _recipients_queryset(self, request):
+        """Active users the current actor is allowed to target."""
+        base = User.objects.filter(deleted_at__isnull=True, status='active')
+        if _is_super_admin_user(request.user):
+            return base.order_by('username')
+        # Admin: exclude users that hold an admin or superadmin role
+        privileged_ids = UserRole.objects.filter(
+            role__name__in=['admin', 'superadmin'],
+            deleted_at__isnull=True,
+        ).values_list('user_id', flat=True)
+        return base.exclude(pk__in=privileged_ids).order_by('username')
+
     def get_queryset(self, request):
-        return Notification.objects.filter(target_scope='individual').order_by('-created_at')
+        qs = Notification.objects.filter(target_scope='individual').order_by('-created_at')
+        if not _is_super_admin_user(request.user):
+            # Admin: only show notifications whose receiver is a plain user
+            privileged_ids = UserRole.objects.filter(
+                role__name__in=['admin', 'superadmin'],
+                deleted_at__isnull=True,
+            ).values_list('user_id', flat=True)
+            qs = qs.exclude(receiver_id__in=privileged_ids)
+        return qs
 
     def send_notification_view(self, request):
         if not _is_admin_or_super_user(request.user):
             raise PermissionDenied
 
+        recipients_qs = self._recipients_queryset(request)
+
         if request.method == 'POST':
-            form = SendNotificationForm(request.POST)
+            form = SendNotificationForm(request.POST, recipients_queryset=recipients_qs)
             if form.is_valid():
                 recipients = form.cleaned_data['recipients']
                 message = form.cleaned_data['message']
@@ -224,13 +246,11 @@ class IndividualNotificationAdmin(BaseNotificationAdmin):
                 except NotificationServiceError as exc:
                     self.message_user(request, f'Error al enviar notificaciones al servicio: {exc}', level=messages.ERROR)
         else:
-            form = SendNotificationForm()
+            form = SendNotificationForm(recipients_queryset=recipients_qs)
 
-        # Get all available users for the panel
-        available_users = User.objects.filter(deleted_at__isnull=True, status='active').order_by('username')
         users_json = json.dumps([
             {'id': str(user.pk), 'label': f"{user.username} ({user.email})"}
-            for user in available_users
+            for user in recipients_qs
         ])
 
         context = {
@@ -324,7 +344,7 @@ class GroupNotificationAdmin(BaseNotificationAdmin):
             {'id': str(c['id']), 'label': c['name']} for c in raw_compartments
         ])
 
-        roles_data = Role.objects.order_by('name')
+        roles_data = Role.objects.filter(name='user')
         roles_json = json.dumps([
             {'id': str(role.pk), 'label': role.name}
             for role in roles_data

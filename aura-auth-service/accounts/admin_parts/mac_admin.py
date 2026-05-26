@@ -14,7 +14,7 @@ from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
 
-from accounts.admin_parts.common import _is_super_admin_user, _is_admin_or_super_user
+from accounts.admin_parts.common import _is_super_admin_user, _is_admin_or_super_user, _is_effective_superadmin
 from accounts.admin_parts.utils.audit import log_audit
 from accounts.services.mac_client import MacServiceError, mac_client
 
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 def _check_superadmin(request):
-    if not _is_super_admin_user(request.user):
+    if not _is_effective_superadmin(request):
         raise PermissionDenied
 
 
@@ -35,6 +35,46 @@ def _check_admin_or_superadmin(request):
 
 def _ctx(request, **extra):
     return {**admin.site.each_context(request), **extra}
+
+
+def _delete_collections_for_level(user, level_id):
+    """Null out the level FK on all collections (including soft-deleted) so the level can be hard-deleted."""
+    from django.db import connections
+    with connections['aura_db'].cursor() as cursor:
+        cursor.execute(
+            'UPDATE document_collection SET classification_level_id = NULL WHERE classification_level_id = %s',
+            [level_id],
+        )
+
+
+def _delete_collections_for_comp(user, compartment_id):
+    """Remove all junction rows for this compartment so it can be hard-deleted."""
+    from django.db import connections
+    with connections['aura_db'].cursor() as cursor:
+        cursor.execute(
+            'DELETE FROM document_collection_compartment WHERE compartment_id = %s',
+            [compartment_id],
+        )
+
+
+def _get_all_level_doc_ids():
+    """Return set of document IDs already assigned to any classification level collection."""
+    from django.db import connections
+    try:
+        with connections['aura_db'].cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT DISTINCT dc_doc.document_id
+                FROM document_in_document_collection dc_doc
+                JOIN document_collection dc ON dc_doc.document_collection_id = dc.id
+                WHERE dc.classification_level_id IS NOT NULL
+                  AND dc_doc.deleted_at IS NULL
+                  AND dc.deleted_at IS NULL
+                """,
+            )
+            return {row[0] for row in cursor.fetchall()}
+    except Exception:
+        return set()
 
 
 def _get_level_doc_ids(level_id):
@@ -99,16 +139,29 @@ def _get_or_create_admin_collection_for_level(user, level_id, level_name):
 
 
 def _get_or_create_admin_collection_for_comp(user, compartment_id):
-    """Find or create the dedicated admin collection for a compartment."""
+    """Find or create the dedicated admin collection for a compartment.
+
+    The document collection API requires a classification_level_id on every
+    collection, so we use the lowest-rank available level as a technical
+    requirement. The actual access control for the document is governed by
+    the compartment membership, not by this level.
+    """
     admin_name = f'__admin_comp_{compartment_id}__'
     try:
         collections = mac_client.list_document_collections(user)
         for col in collections:
             if col.get('name') == admin_name:
                 return col
+        levels = mac_client.list_classification_levels(user)
+        if not levels:
+            raise MacServiceError(
+                'No hay niveles de clasificación disponibles. '
+                'Cree al menos un nivel antes de asignar documentos a agrupaciones.'
+            )
+        lowest_level = min(levels, key=lambda l: l.get('rank', 0))
         return mac_client.create_document_collection(
             user, admin_name,
-            classification_level_id=None,
+            classification_level_id=lowest_level['id'],
             compartment_ids=[compartment_id],
         )
     except MacServiceError:
@@ -178,7 +231,7 @@ def _remove_doc_from_comp_collections(user, doc_id, compartment_id):
 # ── Classification Levels views ───────────────────────────────────────────────
 
 def _cl_list_view(request):
-    _check_superadmin(request)
+    _check_admin_or_superadmin(request)
 
     if request.method == 'POST':
         action = request.POST.get('action', '')
@@ -197,18 +250,26 @@ def _cl_list_view(request):
 
         sorted_levels = sorted(levels, key=lambda x: x.get('rank', 0))
         idx = next((i for i, l in enumerate(sorted_levels) if l['id'] == moved_id), None)
+        n = len(sorted_levels)
 
         if idx is None:
             messages.error(request, 'Nivel no encontrado.')
-        elif action == 'move_up' and idx == 0:
+        elif action == 'move_up' and idx == n - 1:
             pass
-        elif action == 'move_down' and idx == len(sorted_levels) - 1:
+        elif action == 'move_down' and idx == 0:
             pass
         else:
+            level_a = sorted_levels[idx]
             if action == 'move_up':
-                sorted_levels[idx], sorted_levels[idx - 1] = sorted_levels[idx - 1], sorted_levels[idx]
-            else:
+                level_b = sorted_levels[idx + 1]
+                pos_a_before = n - idx
+                pos_b_before = n - (idx + 1)
                 sorted_levels[idx], sorted_levels[idx + 1] = sorted_levels[idx + 1], sorted_levels[idx]
+            else:
+                level_b = sorted_levels[idx - 1]
+                pos_a_before = n - idx
+                pos_b_before = n - (idx - 1)
+                sorted_levels[idx], sorted_levels[idx - 1] = sorted_levels[idx - 1], sorted_levels[idx]
             try:
                 changing = [
                     (new_rank, level)
@@ -222,6 +283,18 @@ def _cl_list_view(request):
                     for new_rank, level in changing:
                         mac_client.update_classification_level(request.user, level['id'], rank=new_rank)
                 messages.success(request, 'Orden actualizado.')
+                name_a = level_a.get('name', str(level_a.get('id')))
+                name_b = level_b.get('name', str(level_b.get('id')))
+                log_audit(
+                    actor=request.user, action='UPDATE',
+                    entity_type='classification_level',
+                    entity_id=level_a.get('id'),
+                    entity_label=f'{request.user.username} reordenó nivel {name_a}',
+                    details={
+                        name_a: f'posición {pos_a_before} → {pos_b_before}',
+                        name_b: f'posición {pos_b_before} → {pos_a_before}',
+                    },
+                )
             except MacServiceError as exc:
                 messages.error(request, str(exc))
 
@@ -244,11 +317,17 @@ def _cl_list_view(request):
 
 
 def _cl_create_view(request):
-    _check_superadmin(request)
+    _check_admin_or_superadmin(request)
+
+    from accounts.models import User as AuthUser
+    from documents.models import Document
+    from django.db import connections
 
     if request.method == 'POST':
         name = request.POST.get('name', '').strip()
         description = request.POST.get('description', '').strip()
+        new_user_ids = set(int(uid) for uid in request.POST.getlist('user_ids') if uid)
+        new_doc_ids = set(int(d) for d in request.POST.getlist('doc_ids') if d)
         result = None
         if not name:
             messages.error(request, 'El nombre es obligatorio.')
@@ -257,13 +336,51 @@ def _cl_create_view(request):
             existing = mac_client.list_classification_levels(request.user)
             next_rank = max((l.get('rank', 0) for l in existing), default=0) + 1
             result = mac_client.create_classification_level(request.user, name, next_rank, description)
+
+            for uid in new_user_ids:
+                try:
+                    mac_client.set_user_clearance(request.user, uid, result['id'])
+                except MacServiceError as exc:
+                    logger.warning('Could not set clearance for user %s: %s', uid, exc)
+
+            if new_doc_ids:
+                try:
+                    admin_col = _get_or_create_admin_collection_for_level(
+                        request.user, result['id'], name
+                    )
+                    for doc_id in new_doc_ids:
+                        try:
+                            mac_client.add_document_to_collection(
+                                request.user, admin_col['id'], doc_id
+                            )
+                        except MacServiceError as exc:
+                            logger.warning('Could not add doc %s to level %s: %s', doc_id, result['id'], exc)
+                except MacServiceError as exc:
+                    logger.warning('Could not create admin collection for level %s: %s', result['id'], exc)
+
             messages.success(request, f'Nivel "{name}" creado.')
+            total_after = len(existing) + 1
+            details = {'posición': f'1 de {total_after}'}
+            if description:
+                details['descripción'] = description
+            if new_user_ids:
+                usernames = list(
+                    AuthUser.objects.filter(pk__in=new_user_ids)
+                    .order_by('username').values_list('username', flat=True)
+                )
+                details['usuarios_asignados'] = usernames
+            if new_doc_ids:
+                doc_names = list(
+                    Document.objects.filter(pk__in=new_doc_ids)
+                    .order_by('name').values_list('name', flat=True)
+                )
+                details['documentos_asignados'] = doc_names
             log_audit(
                 actor=request.user, action='CREATE',
                 entity_type='classification_level',
                 entity_id=result.get('id') if result else None,
-                entity_label=name,
-                details={'rank': next_rank, 'description': description},
+                entity_label=f'{request.user.username} creó nivel {name}',
+                details=details,
             )
         except MacServiceError as exc:
             messages.error(request, str(exc))
@@ -275,12 +392,41 @@ def _cl_create_view(request):
             return redirect(reverse('admin:mac_classification_levels_edit', args=[result['id']]))
         return redirect(reverse('admin:mac_classification_levels_list'))
 
-    ctx = _ctx(request, title='Agregar Nivel')
+    all_users = list(AuthUser.objects.filter(deleted_at__isnull=True, status='active').order_by('username'))
+    all_docs = list(Document.objects.filter(deleted_at__isnull=True).order_by('name'))
+
+    try:
+        with connections['aura_db'].cursor() as cursor:
+            cursor.execute('SELECT user_id FROM user_clearance')
+            blocked_user_ids = {row[0] for row in cursor.fetchall()}
+    except Exception:
+        blocked_user_ids = set()
+
+    blocked_doc_ids = _get_all_level_doc_ids()
+
+    ctx = _ctx(
+        request,
+        title='Agregar Nivel',
+        users_json=json.dumps([
+            {
+                'id': str(u.pk),
+                'label': f'{u.username} ({u.email})',
+                'blocked': u.pk in blocked_user_ids,
+            }
+            for u in all_users
+        ]),
+        assigned_ids_json=json.dumps([]),
+        docs_json=json.dumps([
+            {'id': str(d.pk), 'label': d.name, 'blocked': d.pk in blocked_doc_ids}
+            for d in all_docs
+        ]),
+        assigned_doc_ids_json=json.dumps([]),
+    )
     return TemplateResponse(request, 'admin/mac/classification_levels/create.html', ctx)
 
 
 def _cl_edit_view(request, level_id):
-    _check_superadmin(request)
+    _check_admin_or_superadmin(request)
 
     from accounts.models import User as AuthUser
     from documents.models import Document
@@ -307,9 +453,6 @@ def _cl_edit_view(request, level_id):
             else:
                 try:
                     mac_client.update_classification_level(request.user, level_id, name=name, description=description)
-                    log_audit(actor=request.user, action='UPDATE',
-                              entity_type='classification_level', entity_id=level_id,
-                              entity_label=name, details={'name': name, 'description': description})
                 except MacServiceError as exc:
                     errors.append(str(exc))
 
@@ -359,6 +502,29 @@ def _cl_edit_view(request, level_id):
                     messages.error(request, e)
             else:
                 messages.success(request, 'Nivel actualizado correctamente.')
+                details = {}
+                if name and name != level.get('name'):
+                    details['nombre'] = name
+                if description != (level.get('description') or ''):
+                    details['descripción'] = description or None
+                if new_user_ids:
+                    usernames = list(
+                        AuthUser.objects.filter(pk__in=new_user_ids)
+                        .order_by('username').values_list('username', flat=True)
+                    )
+                    details['usuarios_asignados'] = usernames
+                if new_doc_ids:
+                    doc_names = list(
+                        Document.objects.filter(pk__in=new_doc_ids)
+                        .order_by('name').values_list('name', flat=True)
+                    )
+                    details['documentos_asignados'] = doc_names
+                log_audit(
+                    actor=request.user, action='UPDATE',
+                    entity_type='classification_level', entity_id=level_id,
+                    entity_label=f'{request.user.username} modificó nivel {name}',
+                    details=details if details else None,
+                )
 
             if '_addanother' in request.POST:
                 return redirect(reverse('admin:mac_classification_levels_create'))
@@ -369,11 +535,12 @@ def _cl_edit_view(request, level_id):
 
         elif action == 'delete':
             try:
+                _delete_collections_for_level(request.user, level_id)
                 mac_client.delete_classification_level(request.user, level_id)
                 messages.success(request, 'Nivel eliminado.')
                 log_audit(actor=request.user, action='DELETE',
                           entity_type='classification_level', entity_id=level_id,
-                          entity_label=level.get('name', str(level_id)))
+                          entity_label=f'{request.user.username} eliminó nivel {level.get("name", str(level_id))}')
                 return redirect(reverse('admin:mac_classification_levels_list'))
             except MacServiceError as exc:
                 messages.error(request, str(exc))
@@ -404,6 +571,8 @@ def _cl_edit_view(request, level_id):
     )
 
     assigned_doc_ids = _get_level_doc_ids(level_id)
+    all_level_doc_ids = _get_all_level_doc_ids()
+    blocked_doc_ids = all_level_doc_ids - assigned_doc_ids
     all_docs = list(Document.objects.filter(deleted_at__isnull=True).order_by('name'))
 
     ctx = _ctx(
@@ -420,7 +589,7 @@ def _cl_edit_view(request, level_id):
         ]),
         assigned_ids_json=json.dumps([str(uid) for uid in assigned_ids]),
         docs_json=json.dumps([
-            {'id': str(d.pk), 'label': d.name}
+            {'id': str(d.pk), 'label': d.name, 'blocked': d.pk in blocked_doc_ids}
             for d in all_docs
         ]),
         assigned_doc_ids_json=json.dumps([str(did) for did in assigned_doc_ids]),
@@ -431,7 +600,7 @@ def _cl_edit_view(request, level_id):
 # ── Compartments views ────────────────────────────────────────────────────────
 
 def _comp_list_view(request):
-    _check_superadmin(request)
+    _check_admin_or_superadmin(request)
 
     try:
         compartments = mac_client.list_compartments(request.user)
@@ -448,24 +617,66 @@ def _comp_list_view(request):
 
 
 def _comp_create_view(request):
-    _check_superadmin(request)
+    _check_admin_or_superadmin(request)
+
+    from accounts.models import User as AuthUser
+    from documents.models import Document
 
     if request.method == 'POST':
         name = request.POST.get('name', '').strip()
         description = request.POST.get('description', '').strip()
+        new_user_ids = set(int(uid) for uid in request.POST.getlist('user_ids') if uid)
+        new_doc_ids = set(int(d) for d in request.POST.getlist('doc_ids') if d)
         result = None
         if not name:
             messages.error(request, 'El nombre es obligatorio.')
             return redirect(reverse('admin:mac_compartments_create'))
         try:
             result = mac_client.create_compartment(request.user, name, description)
+
+            for uid in new_user_ids:
+                try:
+                    mac_client.add_user_compartment(request.user, uid, result['id'])
+                except MacServiceError as exc:
+                    logger.warning('Could not add compartment %s for user %s: %s', result['id'], uid, exc)
+
+            if new_doc_ids:
+                try:
+                    admin_col = _get_or_create_admin_collection_for_comp(
+                        request.user, result['id']
+                    )
+                    for doc_id in new_doc_ids:
+                        try:
+                            mac_client.add_document_to_collection(
+                                request.user, admin_col['id'], doc_id
+                            )
+                        except MacServiceError as exc:
+                            logger.warning('Could not add doc %s to comp %s: %s', doc_id, result['id'], exc)
+                except MacServiceError as exc:
+                    logger.warning('Could not create admin collection for comp %s: %s', result['id'], exc)
+
             messages.success(request, f'Agrupación "{name}" creada.')
+            details = {}
+            if description:
+                details['descripción'] = description
+            if new_user_ids:
+                usernames = list(
+                    AuthUser.objects.filter(pk__in=new_user_ids)
+                    .order_by('username').values_list('username', flat=True)
+                )
+                details['usuarios_asignados'] = usernames
+            if new_doc_ids:
+                doc_names = list(
+                    Document.objects.filter(pk__in=new_doc_ids)
+                    .order_by('name').values_list('name', flat=True)
+                )
+                details['documentos_asignados'] = doc_names
             log_audit(
                 actor=request.user, action='CREATE',
                 entity_type='compartment',
                 entity_id=result.get('id') if result else None,
-                entity_label=name,
-                details={'description': description} if description else None,
+                entity_label=f'{request.user.username} creó agrupación {name}',
+                details=details if details else None,
             )
         except MacServiceError as exc:
             messages.error(request, str(exc))
@@ -477,12 +688,25 @@ def _comp_create_view(request):
             return redirect(reverse('admin:mac_compartments_edit', args=[result['id']]))
         return redirect(reverse('admin:mac_compartments_list'))
 
-    ctx = _ctx(request, title='Agregar Agrupación')
+    all_users = list(AuthUser.objects.filter(deleted_at__isnull=True, status='active').order_by('username'))
+    all_docs = list(Document.objects.filter(deleted_at__isnull=True).order_by('name'))
+
+    ctx = _ctx(
+        request,
+        title='Agregar Agrupación',
+        users_json=json.dumps([
+            {'id': str(u.pk), 'label': f'{u.username} ({u.email})'}
+            for u in all_users
+        ]),
+        assigned_ids_json=json.dumps([]),
+        docs_json=json.dumps([{'id': str(d.pk), 'label': d.name} for d in all_docs]),
+        assigned_doc_ids_json=json.dumps([]),
+    )
     return TemplateResponse(request, 'admin/mac/compartments/create.html', ctx)
 
 
 def _comp_edit_view(request, compartment_id):
-    _check_superadmin(request)
+    _check_admin_or_superadmin(request)
 
     from accounts.models import User as AuthUser
     from documents.models import Document
@@ -510,10 +734,6 @@ def _comp_edit_view(request, compartment_id):
                 try:
                     mac_client.update_compartment(request.user, compartment_id,
                                                   name=name, description=description)
-                    log_audit(actor=request.user, action='UPDATE',
-                              entity_type='compartment', entity_id=compartment_id,
-                              entity_label=name,
-                              details={'name': name, 'description': description})
                 except MacServiceError as exc:
                     errors.append(str(exc))
 
@@ -562,14 +782,28 @@ def _comp_edit_view(request, compartment_id):
                     messages.error(request, e)
             else:
                 messages.success(request, 'Agrupación actualizada correctamente.')
+                effective_name = name or compartment.get('name', str(compartment_id))
+                details = {}
+                if name and name != compartment.get('name'):
+                    details['nombre'] = name
+                if description != (compartment.get('description') or ''):
+                    details['descripción'] = description or None
+                if new_user_ids:
+                    usernames = list(
+                        AuthUser.objects.filter(pk__in=new_user_ids)
+                        .order_by('username').values_list('username', flat=True)
+                    )
+                    details['usuarios_asignados'] = usernames
+                if new_doc_ids:
+                    doc_names = list(
+                        Document.objects.filter(pk__in=new_doc_ids)
+                        .order_by('name').values_list('name', flat=True)
+                    )
+                    details['documentos_asignados'] = doc_names
                 log_audit(actor=request.user, action='UPDATE',
                           entity_type='compartment', entity_id=compartment_id,
-                          entity_label=name or compartment.get('name', str(compartment_id)),
-                          details={
-                              'name': name, 'description': description,
-                              'users_added': list(added_users), 'users_removed': list(removed_users),
-                              'docs_added': list(to_add), 'docs_removed': list(to_remove),
-                          })
+                          entity_label=f'{request.user.username} modificó agrupación {effective_name}',
+                          details=details if details else None)
 
             if '_addanother' in request.POST:
                 return redirect(reverse('admin:mac_compartments_create'))
@@ -580,11 +814,12 @@ def _comp_edit_view(request, compartment_id):
 
         elif action == 'delete':
             try:
+                _delete_collections_for_comp(request.user, compartment_id)
                 mac_client.delete_compartment(request.user, compartment_id)
                 messages.success(request, 'Agrupación eliminada.')
                 log_audit(actor=request.user, action='DELETE',
                           entity_type='compartment', entity_id=compartment_id,
-                          entity_label=compartment.get('name', str(compartment_id)))
+                          entity_label=f'{request.user.username} eliminó agrupación {compartment.get("name", str(compartment_id))}')
                 return redirect(reverse('admin:mac_compartments_list'))
             except MacServiceError as exc:
                 messages.error(request, str(exc))

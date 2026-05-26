@@ -260,7 +260,7 @@
         </td>
         <td><span class="entity-tag">{{ entry.entity_type_label }}</span></td>
         <td class="muted">{{ entry.entity_id|default:"—" }}</td>
-        <td>{{ entry.entity_label|default:"—" }}</td>
+        <td>{{ entry.entity_label_html|safe }}</td>
         <td>
           <span class="source-tag source-{{ entry.source }}">{{ entry.source }}</span>
         </td>

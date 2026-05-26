@@ -26,9 +26,15 @@
 
 {% block content_title %}
 {% if custom_verbose_name %}
-  <h1>{% if add %}Agregar {{ custom_verbose_name }}{% else %}Modificar {{ custom_verbose_name }}{% endif %}</h1>
+  {% if view_only_user %}
+    <h1>Ver {{ custom_verbose_name }}</h1>
+  {% elif add %}
+    <h1>Agregar {{ custom_verbose_name }}</h1>
+  {% else %}
+    <h1>Modificar {{ custom_verbose_name }}</h1>
+  {% endif %}
 {% else %}
-  {{ block.super }}
+  <h1>{{ title }}</h1>
 {% endif %}
 {% endblock %}
 
@@ -108,7 +114,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var fieldsets = document.querySelectorAll('fieldset.module');
   for (var i = 0; i < fieldsets.length; i++) {
     var h2 = fieldsets[i].querySelector('h2');
-    if (h2 && h2.textContent.trim() === 'Grupos') {
+    if (h2 && h2.textContent.trim().startsWith('Grupos')) {
       gruposFieldset = fieldsets[i];
       break;
     }

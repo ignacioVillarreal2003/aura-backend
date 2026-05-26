@@ -16,7 +16,7 @@ from django.utils.translation import gettext as _
 from django.utils.html import format_html
 from django.conf import settings
 
-from accounts.admin_parts.utils.audit import log_audit
+from accounts.admin_parts.utils.audit import log_audit, _is_admin_or_super_user
 from accounts.services.mac_client import mac_client
 from documents.models import Document
 from documents.services.document_processing_client import (
@@ -333,6 +333,21 @@ class DocumentAdmin(admin.ModelAdmin):
             )
         return self.fieldsets
 
+    def has_module_permission(self, request):
+        return _is_admin_or_super_user(request.user)
+
+    def has_view_permission(self, request, obj=None):
+        return _is_admin_or_super_user(request.user)
+
+    def has_add_permission(self, request):
+        return _is_admin_or_super_user(request.user)
+
+    def has_change_permission(self, request, obj=None):
+        return _is_admin_or_super_user(request.user)
+
+    def has_delete_permission(self, request, obj=None):
+        return _is_admin_or_super_user(request.user)
+
     def get_readonly_fields(self, request, obj=None):
         if obj is not None:
             return self.readonly_fields
@@ -460,6 +475,10 @@ class DocumentAdmin(admin.ModelAdmin):
                         reverse('admin:documents_document_change', args=[object_id])
                     )
 
+                # Capture before-state for audit (meta already fetched above for title).
+                prev_name = meta['name'] if meta else ''
+                prev_description = (meta['description'] if meta else '') or ''
+
                 # Save to local meta (survives processing-service overwrites).
                 _save_doc_meta(doc_id, name, description)
 
@@ -491,10 +510,34 @@ class DocumentAdmin(admin.ModelAdmin):
                 for comp_id in current_comp_ids - new_comp_ids:
                     _db_unlink_doc_from_comp(doc_id, comp_id, request.user.pk)
 
+                # Build audit details — only include fields that actually changed.
+                level_name_map = {l['id']: l['name'] for l in all_levels}
+                comp_name_map = {c['id']: c['name'] for c in all_compartments}
+                changes = {}
+                if name != prev_name:
+                    changes['nombre'] = {'antes': prev_name, 'después': name}
+                if description != prev_description:
+                    changes['descripción'] = {
+                        'antes': prev_description or None,
+                        'después': description or None,
+                    }
+                if new_level_id != current_level_id:
+                    changes['nivel'] = {
+                        'antes': level_name_map.get(current_level_id) if current_level_id else None,
+                        'después': level_name_map.get(new_level_id) if new_level_id else None,
+                    }
+                if new_comp_ids != current_comp_ids:
+                    changes['agrupaciones'] = {
+                        'antes': sorted(comp_name_map.get(c, str(c)) for c in current_comp_ids),
+                        'después': sorted(comp_name_map.get(c, str(c)) for c in new_comp_ids),
+                    }
+
                 log_audit(
                     actor=request.user, action='UPDATE',
                     entity_type='Document', entity_id=str(doc_id),
-                    entity_label=name, source='admin',
+                    entity_label=f'{request.user.username} modificó documento {name}',
+                    details=changes if changes else None,
+                    source='admin',
                 )
                 messages.success(request, 'Documento actualizado correctamente.')
 
@@ -622,22 +665,46 @@ class DocumentAdmin(admin.ModelAdmin):
         except Document.DoesNotExist:
             new_object = Document(pk=document_id, name=name_from_form)
 
-        log_audit(
-            actor=request.user, action='CREATE',
-            entity_type='Document', entity_id=str(document_id),
-            entity_label=name_from_form or new_object.name, source='admin',
-        )
-
         # Assign MAC groups (direct DB — API rejects None level or empty compartments).
         cl_id_raw = request.POST.get('classification_level_id', '').strip()
         if cl_id_raw:
             col_id = _db_ensure_level_collection(int(cl_id_raw), request.user.pk)
             _db_link_doc(col_id, document_id, request.user.pk)
-        for comp_id_raw in request.POST.getlist('compartment_ids'):
-            if not comp_id_raw:
-                continue
-            col_id = _db_ensure_comp_collection(int(comp_id_raw), request.user.pk)
+        comp_ids_raw_list = [int(c) for c in request.POST.getlist('compartment_ids') if c]
+        for comp_id_int in comp_ids_raw_list:
+            col_id = _db_ensure_comp_collection(comp_id_int, request.user.pk)
             _db_link_doc(col_id, document_id, request.user.pk)
+
+        # Build audit details with resolved names.
+        try:
+            _audit_levels = mac_client.list_classification_levels(request.user)
+            _level_name_map = {l['id']: l['name'] for l in _audit_levels}
+        except Exception:
+            _level_name_map = {}
+        try:
+            _audit_comps = mac_client.list_compartments(request.user)
+            _comp_name_map = {c['id']: c['name'] for c in _audit_comps}
+        except Exception:
+            _comp_name_map = {}
+
+        doc_name = name_from_form or new_object.name
+        audit_details = {'nombre': doc_name}
+        if description_from_form:
+            audit_details['descripción'] = description_from_form
+        if cl_id_raw:
+            audit_details['nivel'] = _level_name_map.get(int(cl_id_raw), cl_id_raw)
+        if comp_ids_raw_list:
+            audit_details['agrupaciones'] = [
+                _comp_name_map.get(c, str(c)) for c in comp_ids_raw_list
+            ]
+
+        log_audit(
+            actor=request.user, action='CREATE',
+            entity_type='Document', entity_id=str(document_id),
+            entity_label=f'{request.user.username} creó documento {doc_name}',
+            details=audit_details,
+            source='admin',
+        )
 
         return self.response_add(request, new_object)
 

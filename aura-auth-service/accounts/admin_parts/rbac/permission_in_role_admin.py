@@ -3,7 +3,7 @@
 from django.contrib import admin
 from accounts.models import PermissionInRole
 from accounts.admin_parts.utils.mixins import HelpTextStripMixin
-from accounts.admin_parts.utils.audit import _is_super_admin_user, _is_admin_or_super_user
+from accounts.admin_parts.utils.audit import _is_super_admin_user, _is_admin_or_super_user, _is_effective_superadmin
 
 
 @admin.register(PermissionInRole)
@@ -28,10 +28,10 @@ class PermissionInRoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
         return _is_admin_or_super_user(request.user)
 
     def has_add_permission(self, request):
-        return _is_super_admin_user(request.user)
+        return _is_effective_superadmin(request)
 
     def has_change_permission(self, request, obj=None):
-        return _is_super_admin_user(request.user)
+        return _is_effective_superadmin(request)
 
     def has_delete_permission(self, request, obj=None):
-        return _is_super_admin_user(request.user)
+        return _is_effective_superadmin(request)

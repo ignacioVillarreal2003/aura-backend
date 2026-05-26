@@ -84,3 +84,11 @@ def _is_admin_user(user: User) -> bool:
 
 def _is_admin_or_super_user(user: User) -> bool:
     return _is_super_admin_user(user) or _is_admin_user(user)
+
+
+def _is_effective_superadmin(request) -> bool:
+    """True for real superadmins AND for admins currently in elevated (sudo) mode."""
+    user = getattr(request, 'user', None)
+    if _is_super_admin_user(user):
+        return True
+    return _is_admin_user(user) and getattr(request, 'is_elevated', False)
