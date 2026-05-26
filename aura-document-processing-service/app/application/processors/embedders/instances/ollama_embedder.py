@@ -54,7 +54,6 @@ class OllamaEmbedder(BaseEmbedder):
             self._model = OllamaEmbeddings(
                 model=self._settings.ollama_model,
                 base_url=self._settings.ollama_url,
-                request_timeout=float(self._settings.ollama_request_timeout),
             )
 
             self._embed_query_with_retry: Callable[[str], list[float]] = _retry(

@@ -27,23 +27,33 @@ def _extract_error_message(response: requests.Response) -> str:
     )
 
 
-def create_document_from_admin(*, raw_document, chat_id, actor_user):
-    """Create a document in document-processing using the trusted internal endpoint."""
+def create_document_from_admin(*, raw_document, chat_id, actor_user, name=None, description=None):
+    """Create a document in document-processing using service-to-service auth."""
 
-    url = f"{settings.DOCUMENT_PROCESSING_URL.rstrip('/')}/internal"
+    url = f"{settings.DOCUMENT_PROCESSING_URL.rstrip('/')}/api/v1/create-document"
     timeout_seconds = getattr(settings, 'DOCUMENT_PROCESSING_TIMEOUT_SECONDS', 300)
-    content_type = getattr(raw_document, 'content_type', None) or mimetypes.guess_type(raw_document.name)[0] or 'application/octet-stream'
+    content_type = (
+        getattr(raw_document, 'content_type', None)
+        or mimetypes.guess_type(raw_document.name)[0]
+        or 'application/octet-stream'
+    )
+
     files = {
-        'raw_document': (
-            raw_document.name,
-            raw_document,
-            content_type,
-        ),
+        'file': (raw_document.name, raw_document, content_type),
     }
-    data = {
-        'chat_id': str(chat_id),
-        'actor_user_id': str(actor_user.pk),
-        'actor_email': actor_user.email or f'{actor_user.username}@local',
+    data = {}
+    if chat_id:
+        data['chat_id'] = str(chat_id)
+    if name:
+        data['name'] = name
+    if description:
+        data['description'] = description
+
+    headers = {
+        'X-Service-Api-Key': settings.DOCUMENT_PROCESSING_SERVICE_API_KEY,
+        'X-User-Id': str(actor_user.pk),
+        'X-User-Email': actor_user.email or f'{actor_user.username}@local',
+        'X-User-Permissions': 'INGEST_DOCUMENT',
     }
 
     logger.info(
@@ -51,8 +61,8 @@ def create_document_from_admin(*, raw_document, chat_id, actor_user):
         url,
         raw_document.name,
         getattr(raw_document, 'size', '?'),
-        data['chat_id'],
-        data['actor_user_id'],
+        data.get('chat_id'),
+        actor_user.pk,
     )
 
     try:
@@ -60,7 +70,7 @@ def create_document_from_admin(*, raw_document, chat_id, actor_user):
             url,
             files=files,
             data=data,
-            headers={'X-Internal-Token': settings.DOCUMENT_PROCESSING_INTERNAL_API_TOKEN},
+            headers=headers,
             timeout=(10, timeout_seconds),
         )
     except requests.ConnectionError as exc:

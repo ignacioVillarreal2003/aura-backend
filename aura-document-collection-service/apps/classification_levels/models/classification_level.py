@@ -5,6 +5,7 @@ class ClassificationLevel(models.Model):
     id = models.BigAutoField(primary_key=True)
     name = models.CharField(max_length=100, unique=True)
     rank = models.PositiveSmallIntegerField(unique=True)
+    description = models.TextField(blank=True, default='')
 
     class Meta:
         managed = False

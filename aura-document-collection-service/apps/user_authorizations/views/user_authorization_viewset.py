@@ -66,7 +66,11 @@ class UserAuthorizationViewSet(GenericViewSet):
         return Response(UserAuthorizationResponse(data).data)
 
     @extend_schema(
+<<<<<<< HEAD
+        methods=["PUT"],
+=======
         methods=["put"],
+>>>>>>> 77038e11f288cca6bae7148aae17c2140da516b3
         tags=["UserAuthorizations"],
         summary="Upsert Mandatory Access clearance ceiling",
         description=(
@@ -79,7 +83,11 @@ class UserAuthorizationViewSet(GenericViewSet):
         responses={200: UserClearanceResponse, **_ERR_WRITE},
     )
     @extend_schema(
+<<<<<<< HEAD
+        methods=["DELETE"],
+=======
         methods=["delete"],
+>>>>>>> 77038e11f288cca6bae7148aae17c2140da516b3
         tags=["UserAuthorizations"],
         summary="Revoke clearance if present",
         description=(
@@ -91,6 +99,19 @@ class UserAuthorizationViewSet(GenericViewSet):
     )
     @action(detail=True, methods=["put", "delete"], url_path="clearance", url_name="clearance")
     def clearance(self, request: Request, user_id: str | None = None) -> Response:
+<<<<<<< HEAD
+        if request.method == "DELETE":
+            user_authorization_service.delete_user_clearance(request.user, int(user_id))
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        serializer = SetUserClearanceRequest(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = user_authorization_service.set_user_clearance(
+            request.user,
+            int(user_id),
+            classification_level_id=serializer.validated_data["classification_level_id"],
+        )
+        return Response(UserClearanceResponse(result).data)
+=======
         if request.method == "PUT":
             serializer = SetUserClearanceRequest(data=request.data)
             serializer.is_valid(raise_exception=True)
@@ -102,6 +123,7 @@ class UserAuthorizationViewSet(GenericViewSet):
             return Response(UserClearanceResponse(clearance).data)
         user_authorization_service.delete_user_clearance(request.user, int(user_id))
         return Response(status=status.HTTP_204_NO_CONTENT)
+>>>>>>> 77038e11f288cca6bae7148aae17c2140da516b3
 
     @extend_schema(
         methods=["get"],

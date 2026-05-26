@@ -129,6 +129,7 @@ class ClassificationLevelViewSet(GenericViewSet):
             request.user,
             name=serializer.validated_data["name"],
             rank=serializer.validated_data["rank"],
+            description=serializer.validated_data.get("description", ""),
         )
         return Response(ClassificationLevelResponse(obj).data, status=status.HTTP_201_CREATED)
 

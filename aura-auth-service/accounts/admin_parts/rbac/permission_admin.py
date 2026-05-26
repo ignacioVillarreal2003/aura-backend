@@ -10,10 +10,12 @@ from accounts.admin_parts.utils.audit import _is_super_admin_user, _is_admin_or_
 class PermissionAdmin(HelpTextStripMixin, admin.ModelAdmin):
     """Admin for Permission model."""
 
+    change_form_template = 'admin/accounts/permission/change_form.html'
+
     list_display = ('name', 'description_short')
     list_filter = ()
     search_fields = ('name', 'description')
-    readonly_fields = ()
+    readonly_fields = ('name', 'description')
     actions = None
     actions_selection_counter = False
 
@@ -33,13 +35,23 @@ class PermissionAdmin(HelpTextStripMixin, admin.ModelAdmin):
         return _is_admin_or_super_user(request.user)
 
     def has_add_permission(self, request):
-        return _is_super_admin_user(request.user)
+        return False
 
     def has_change_permission(self, request, obj=None):
-        return _is_super_admin_user(request.user)
+        return False
 
     def has_delete_permission(self, request, obj=None):
-        return _is_super_admin_user(request.user)
+        return False
+
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        extra_context = extra_context or {}
+        try:
+            perm = Permission.objects.get(pk=object_id)
+            extra_context['title'] = f'Permiso - {perm.name}'
+            extra_context['subtitle'] = None
+        except Permission.DoesNotExist:
+            pass
+        return super().change_view(request, object_id, form_url, extra_context)
 
     def description_short(self, obj):
         if obj.description:

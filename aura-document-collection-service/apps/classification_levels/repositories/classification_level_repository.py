@@ -10,13 +10,16 @@ class ClassificationLevelRepository:
     def get_by_id(self, classification_level_id: int) -> ClassificationLevel | None:
         return ClassificationLevel.objects.filter(pk=classification_level_id).first()
 
-    def create(self, name: str, rank: int) -> ClassificationLevel:
-        return ClassificationLevel.objects.create(name=name, rank=rank)
+    def create(self, name: str, rank: int, description: str = '') -> ClassificationLevel:
+        return ClassificationLevel.objects.create(name=name, rank=rank, description=description)
 
-    def update(self, classification_level: ClassificationLevel, name: str, rank: int) -> ClassificationLevel:
+    def update(self, classification_level: ClassificationLevel, name: str, rank: int, description: str | None = None) -> ClassificationLevel:
         classification_level.name = name
         classification_level.rank = rank
-        classification_level.save(update_fields=["name", "rank"])
+        if description is not None:
+            classification_level.description = description
+        fields = ["name", "rank", "description"] if description is not None else ["name", "rank"]
+        classification_level.save(update_fields=fields)
         return classification_level
 
     def delete(self, classification_level: ClassificationLevel) -> None:

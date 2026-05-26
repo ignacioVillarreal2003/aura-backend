@@ -229,9 +229,10 @@ CREATE TABLE notification_event_preference (
 );
 
 CREATE TABLE classification_level (
-    id      BIGSERIAL PRIMARY KEY,
-    name    VARCHAR(100) NOT NULL UNIQUE,
-    rank    SMALLINT NOT NULL UNIQUE CHECK (rank >= 0)
+    id          BIGSERIAL PRIMARY KEY,
+    name        VARCHAR(100) NOT NULL UNIQUE,
+    rank        SMALLINT NOT NULL UNIQUE CHECK (rank >= 0),
+    description TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE compartment (

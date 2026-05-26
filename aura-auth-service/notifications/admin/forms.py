@@ -3,7 +3,7 @@
 from django import forms
 from django.contrib.admin.widgets import FilteredSelectMultiple
 from django.db import connections
-from accounts.models import User, CustomGroup, Role, UserRole, FauRole
+from accounts.models import User, Role, UserRole
 
 
 class SendNotificationForm(forms.Form):
@@ -23,14 +23,19 @@ class SendNotificationForm(forms.Form):
 
 
 class SendGroupNotificationForm(forms.Form):
-    """Create notifications targeting users by groups and/or roles."""
+    """Create notifications targeting users by classification levels, compartments, and/or roles."""
 
-    groups = forms.ModelMultipleChoiceField(
-        queryset=CustomGroup.objects.filter(deleted_at__isnull=True).order_by('name'),
-        widget=FilteredSelectMultiple('Grupos', is_stacked=False),
+    levels = forms.MultipleChoiceField(
+        choices=[],
         required=False,
-        label='Grupos',
-        help_text='',
+        label='Niveles',
+        widget=forms.SelectMultiple(),
+    )
+    compartments = forms.MultipleChoiceField(
+        choices=[],
+        required=False,
+        label='Agrupaciones',
+        widget=forms.SelectMultiple(),
     )
     roles = forms.ModelMultipleChoiceField(
         queryset=Role.objects.order_by('name'),
@@ -39,56 +44,70 @@ class SendGroupNotificationForm(forms.Form):
         label='Roles de sistema',
         help_text='',
     )
-    fau_roles = forms.ModelMultipleChoiceField(
-        queryset=FauRole.objects.order_by('power', 'name'),
-        widget=FilteredSelectMultiple('Roles FAU', is_stacked=False),
-        required=False,
-        label='Roles FAU',
-        help_text='',
-    )
     message = forms.CharField(
         max_length=500,
         widget=forms.Textarea(attrs={'rows': 4}),
         label='Mensaje',
     )
 
+    def __init__(self, *args, level_choices=None, compartment_choices=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if level_choices:
+            self.fields['levels'].choices = level_choices
+        if compartment_choices:
+            self.fields['compartments'].choices = compartment_choices
+
     def clean(self):
         cleaned_data = super().clean()
-        groups = cleaned_data.get('groups')
+        levels = cleaned_data.get('levels')
+        compartments = cleaned_data.get('compartments')
         roles = cleaned_data.get('roles')
-        fau_roles = cleaned_data.get('fau_roles')
-        if (not groups or groups.count() == 0) and (not roles or roles.count() == 0) and (not fau_roles or fau_roles.count() == 0):
-            raise forms.ValidationError('Debes seleccionar al menos un grupo, un rol de sistema o un Rol FAU.')
+        if not levels and not compartments and (not roles or roles.count() == 0):
+            raise forms.ValidationError(
+                'Debes seleccionar al menos un nivel, una agrupación o un rol de sistema.'
+            )
         return cleaned_data
 
     def resolve_target_user_ids(self) -> list[int]:
-        """Resolve final target users from selected groups and roles."""
-        cleaned_data = self.cleaned_data
-        groups = cleaned_data.get('groups')
-        roles = cleaned_data.get('roles')
-        fau_roles = cleaned_data.get('fau_roles')
+        """Resolve users targeted by selected levels, compartments, and/or roles."""
+        level_ids = [int(lid) for lid in (self.cleaned_data.get('levels') or [])]
+        compartment_ids = [int(cid) for cid in (self.cleaned_data.get('compartments') or [])]
+        roles = self.cleaned_data.get('roles')
 
         user_ids = set()
-        if groups:
-            # Cross-DB M2M: User (auth_db) ↔ auth_user_custom_groups (aura_db).
-            # ORM JOIN would fail; resolve user_ids via raw SQL on aura_db then
-            # filter active/non-deleted users from auth_db.
-            # Raw SQL: SELECT user_id FROM auth_user_custom_groups WHERE customgroup_id IN (...)
-            group_ids = [str(g.pk) for g in groups]
+
+        if level_ids:
             with connections['aura_db'].cursor() as cursor:
-                placeholders = ','.join(['%s::uuid'] * len(group_ids))
-                cursor.execute(
-                    f'SELECT DISTINCT user_id FROM auth_user_custom_groups WHERE customgroup_id IN ({placeholders})',
-                    group_ids,
-                )
-                raw_ids = [row[0] for row in cursor.fetchall()]
-            if raw_ids:
-                group_user_ids = User.objects.filter(
-                    pk__in=raw_ids,
+                for lid in level_ids:
+                    cursor.execute("""
+                        SELECT DISTINCT uc.user_id
+                        FROM user_clearance uc
+                        JOIN classification_level cl_user
+                            ON uc.classification_level_id = cl_user.id
+                        JOIN classification_level cl_target
+                            ON cl_target.id = %s
+                        WHERE cl_user.rank >= cl_target.rank
+                    """, [lid])
+                    user_ids.update(row[0] for row in cursor.fetchall())
+
+        if compartment_ids:
+            with connections['aura_db'].cursor() as cursor:
+                for cid in compartment_ids:
+                    cursor.execute("""
+                        SELECT DISTINCT user_id
+                        FROM user_compartment
+                        WHERE compartment_id = %s
+                    """, [cid])
+                    user_ids.update(row[0] for row in cursor.fetchall())
+
+        if user_ids:
+            user_ids = set(
+                User.objects.filter(
+                    pk__in=user_ids,
                     deleted_at__isnull=True,
                     status='active',
                 ).values_list('id', flat=True)
-                user_ids.update(group_user_ids)
+            )
 
         if roles:
             role_user_ids = UserRole.objects.filter(
@@ -99,25 +118,27 @@ class SendGroupNotificationForm(forms.Form):
             ).values_list('user_id', flat=True)
             user_ids.update(role_user_ids)
 
-        if fau_roles:
-            fau_role_user_ids = User.objects.filter(
-                fau_role__in=fau_roles,
-                deleted_at__isnull=True,
-                status='active',
-            ).values_list('id', flat=True)
-            user_ids.update(fau_role_user_ids)
-
         return sorted(user_ids)
 
     def build_target_label(self) -> str:
-        groups = self.cleaned_data.get('groups')
+        level_ids = set(str(lid) for lid in (self.cleaned_data.get('levels') or []))
+        compartment_ids = set(str(cid) for cid in (self.cleaned_data.get('compartments') or []))
         roles = self.cleaned_data.get('roles')
-        fau_roles = self.cleaned_data.get('fau_roles')
         labels = []
-        if groups and groups.count() > 0:
-            labels.append('Grupos: ' + ', '.join(groups.values_list('name', flat=True)))
+        if level_ids:
+            names = [
+                label for value, label in self.fields['levels'].choices
+                if str(value) in level_ids
+            ]
+            if names:
+                labels.append('Niveles: ' + ', '.join(names))
+        if compartment_ids:
+            names = [
+                label for value, label in self.fields['compartments'].choices
+                if str(value) in compartment_ids
+            ]
+            if names:
+                labels.append('Agrupaciones: ' + ', '.join(names))
         if roles and roles.count() > 0:
             labels.append('Roles sistema: ' + ', '.join(roles.values_list('name', flat=True)))
-        if fau_roles and fau_roles.count() > 0:
-            labels.append('Roles FAU: ' + ', '.join(fau_roles.values_list('name', flat=True)))
         return ' | '.join(labels)
