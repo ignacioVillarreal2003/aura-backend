@@ -408,3 +408,68 @@ CREATE INDEX idx_user_compartment_user_id
     ON user_compartment (user_id);
 CREATE INDEX idx_user_compartment_compartment_id
     ON user_compartment (compartment_id);
+
+-- ─── Reports ───────────────────────────────────────────────────────────────────
+
+CREATE TABLE report (
+    id          BIGSERIAL PRIMARY KEY,
+    type        VARCHAR(16)     NOT NULL
+        CONSTRAINT chk_report_type CHECK (type IN ('SITREP', 'INTSUM', 'OPORD')),
+    title       VARCHAR(500)    NOT NULL,
+    content     TEXT            NOT NULL,
+    mode        VARCHAR(16)     NOT NULL
+        CONSTRAINT chk_report_mode CHECK (mode IN ('direct', 'rag')),
+    metadata    JSONB           NOT NULL DEFAULT '{}',
+    created_by  BIGINT          NOT NULL,
+    created_at  TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    updated_by  BIGINT,
+    updated_at  TIMESTAMPTZ,
+    deleted_by  BIGINT,
+    deleted_at  TIMESTAMPTZ
+);
+
+CREATE INDEX idx_report_created_by         ON report (created_by);
+CREATE INDEX idx_report_type               ON report (type);
+CREATE INDEX idx_report_created_at         ON report (created_at DESC);
+CREATE INDEX idx_report_active_user        ON report (created_by, created_at DESC) WHERE deleted_at IS NULL;
+
+-- ─── Checklists ────────────────────────────────────────────────────────────────
+
+CREATE TABLE checklist (
+    id              BIGSERIAL PRIMARY KEY,
+    title           VARCHAR(500)    NOT NULL,
+    items           JSONB           NOT NULL DEFAULT '[]',
+    mode            VARCHAR(16)     NOT NULL
+        CONSTRAINT chk_checklist_mode CHECK (mode IN ('direct', 'rag')),
+    metadata        JSONB           NOT NULL DEFAULT '{}',
+    created_by      BIGINT          NOT NULL,
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    updated_by      BIGINT,
+    updated_at      TIMESTAMPTZ,
+    deleted_by      BIGINT,
+    deleted_at      TIMESTAMPTZ
+);
+
+CREATE INDEX idx_checklist_created_by   ON checklist (created_by);
+CREATE INDEX idx_checklist_created_at   ON checklist (created_at DESC);
+CREATE INDEX idx_checklist_active_user  ON checklist (created_by, created_at DESC) WHERE deleted_at IS NULL;
+
+-- ─── Assistants ────────────────────────────────────────────────────────────────
+
+CREATE TABLE assistant (
+    id              BIGSERIAL PRIMARY KEY,
+    name            VARCHAR(200)    NOT NULL,
+    description     TEXT            NOT NULL DEFAULT '',
+    system_prompt   TEXT            NOT NULL,
+    avatar_emoji    VARCHAR(10)     NOT NULL DEFAULT '',
+    is_active       BOOLEAN         NOT NULL DEFAULT TRUE,
+    created_by      BIGINT          NOT NULL,
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    updated_by      BIGINT,
+    updated_at      TIMESTAMPTZ,
+    deleted_by      BIGINT,
+    deleted_at      TIMESTAMPTZ
+);
+
+CREATE INDEX idx_assistant_active      ON assistant (is_active) WHERE deleted_at IS NULL;
+CREATE INDEX idx_assistant_created_by  ON assistant (created_by);

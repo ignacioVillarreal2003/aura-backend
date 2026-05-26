@@ -16,6 +16,8 @@ from app.application.services.graph_query_translation_service.graph_query_transl
 )
 from app.application.services.general_chat_service.general_chat_service import GeneralChatService
 from app.application.services.rag_agent_service.rag_agent_service import RagAgentService
+from app.application.services.report_service.report_service import ReportService
+from app.application.services.checklist_service.checklist_service import ChecklistService
 from app.infrastructure.http.authentication_provider.authentication_provider import AuthenticationProvider
 from app.infrastructure.http.document_context_provider.document_context_provider import DocumentContextProvider
 from app.infrastructure.http.http_client.http_client import HttpClient
@@ -48,6 +50,8 @@ async def _rollback_partial_startup(
             )
 
     to_clear = [
+        "checklist_service",
+        "report_service",
         "general_chat_service",
         "rag_agent_service",
         "agent_service",
@@ -183,6 +187,22 @@ async def startup_dependencies(app: FastAPI) -> None:
             authorizer=authorizer,
         )
         app.state.general_chat_service = general_chat_service
+
+        report_service = ReportService(
+            ollama_llm_facade=ollama_facade,
+            ollama_llm_invoker=ollama_llm_invoker,
+            document_context_provider=document_context_provider,
+            authorizer=authorizer,
+        )
+        app.state.report_service = report_service
+
+        checklist_service = ChecklistService(
+            ollama_llm_facade=ollama_facade,
+            ollama_llm_invoker=ollama_llm_invoker,
+            document_context_provider=document_context_provider,
+            authorizer=authorizer,
+        )
+        app.state.checklist_service = checklist_service
 
         logger.info("All dependencies started successfully")
         cleanup_stack.clear()

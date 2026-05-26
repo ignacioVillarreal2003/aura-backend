@@ -94,5 +94,8 @@ urlpatterns = [
     path("api/v1/chats/<int:chat_id>/messages/", include("apps.message.urls")),
     path("api/v1/chats/<int:chat_id>/members/", include("apps.membership.urls")),
     path("api/v1/share/<uuid:token>/messages/", include("apps.chat.share_urls")),
+    path("api/v1/reports/", include("apps.report.urls")),
+    path("api/v1/checklists/", include("apps.checklist.urls")),
+    path("api/v1/assistants/", include("apps.assistant.urls")),
     path("", include("django_prometheus.urls")),
 ]

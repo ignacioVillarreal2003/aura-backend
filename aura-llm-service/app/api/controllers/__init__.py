@@ -11,6 +11,8 @@ from app.api.controllers import (
     graph_extraction_controller,
     graph_query_translation_controller,
     general_chat_controller,
+    report_controller,
+    checklist_controller,
 )
 from app.api.controllers.health_controller import health_controller
 
@@ -79,4 +81,16 @@ router.include_router(
     general_chat_controller.router,
     prefix="/general-chat",
     tags=["general-chat"],
+)
+
+router.include_router(
+    report_controller.router,
+    prefix="/report-generate",
+    tags=["report"],
+)
+
+router.include_router(
+    checklist_controller.router,
+    prefix="/checklist-generate",
+    tags=["checklist"],
 )
