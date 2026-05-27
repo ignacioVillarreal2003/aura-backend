@@ -28,6 +28,12 @@ _ACTION_LABELS = {
     'ELEVATION_FAILED': ('Elevación fallida', '#dc2626'),
 }
 
+_SOURCE_LABELS = {
+    'admin': 'Admin',
+    'superadmin': 'SUPERADMIN',
+    'api': 'API',
+}
+
 _ENTITY_LABELS = {
     'auth_user': 'Usuario',
     'custom_group': 'Grupo',
@@ -89,6 +95,7 @@ def _audit_list_view(request):
         entry['action_label'] = label
         entry['action_color'] = color
         entry['entity_type_label'] = _ENTITY_LABELS.get(entry['entity_type'], entry['entity_type'])
+        entry['source_label'] = _SOURCE_LABELS.get(entry['source'], entry['source'].upper() if entry['source'] else '—')
 
         raw_label = entry.get('entity_label') or ''
         words = raw_label.split(' ')

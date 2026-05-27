@@ -61,12 +61,59 @@ def is_elevated(request) -> bool:
         elapsed = (timezone.now() - started_at).total_seconds() / 60
         if elapsed > timeout_minutes:
             drop_elevation(request)
+            try:
+                from accounts.admin_parts.utils.audit import log_audit
+                log_audit(
+                    actor=request.user,
+                    action='ELEVATION_END',
+                    entity_type='Session',
+                    entity_label=f'{request.user.username} finalizó elevación (tiempo agotado)',
+                    details={'reason': 'timeout'},
+                    source='admin',
+                )
+            except Exception:
+                pass
             return False
     except (ValueError, TypeError):
         drop_elevation(request)
         return False
 
     return True
+
+
+def close_stale_elevation(user) -> None:
+    """
+    Called on login. If this user had an active elevation that was never formally
+    ended (session expired or browser was closed), log ELEVATION_END automatically.
+    """
+    try:
+        from accounts.models import AuditLog
+        last_start = AuditLog.objects.filter(
+            actor_id=user.pk,
+            action='ELEVATION_START',
+        ).order_by('-timestamp').first()
+
+        if not last_start:
+            return
+
+        has_end = AuditLog.objects.filter(
+            actor_id=user.pk,
+            action='ELEVATION_END',
+            timestamp__gt=last_start.timestamp,
+        ).exists()
+
+        if not has_end:
+            from accounts.admin_parts.utils.audit import log_audit
+            log_audit(
+                actor=user,
+                action='ELEVATION_END',
+                entity_type='Session',
+                entity_label=f'{user.username} finalizó elevación (sesión expirada)',
+                details={'reason': 'session_expired'},
+                source='admin',
+            )
+    except Exception:
+        pass
 
 
 def get_real_user(request):

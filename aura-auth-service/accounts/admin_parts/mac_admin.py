@@ -294,6 +294,7 @@ def _cl_list_view(request):
                         name_a: f'posición {pos_a_before} → {pos_b_before}',
                         name_b: f'posición {pos_b_before} → {pos_a_before}',
                     },
+                    request=request,
                 )
             except MacServiceError as exc:
                 messages.error(request, str(exc))
@@ -381,6 +382,7 @@ def _cl_create_view(request):
                 entity_id=result.get('id') if result else None,
                 entity_label=f'{request.user.username} creó nivel {name}',
                 details=details,
+                request=request,
             )
         except MacServiceError as exc:
             messages.error(request, str(exc))
@@ -524,6 +526,7 @@ def _cl_edit_view(request, level_id):
                     entity_type='classification_level', entity_id=level_id,
                     entity_label=f'{request.user.username} modificó nivel {name}',
                     details=details if details else None,
+                    request=request,
                 )
 
             if '_addanother' in request.POST:
@@ -540,7 +543,8 @@ def _cl_edit_view(request, level_id):
                 messages.success(request, 'Nivel eliminado.')
                 log_audit(actor=request.user, action='DELETE',
                           entity_type='classification_level', entity_id=level_id,
-                          entity_label=f'{request.user.username} eliminó nivel {level.get("name", str(level_id))}')
+                          entity_label=f'{request.user.username} eliminó nivel {level.get("name", str(level_id))}',
+                          request=request)
                 return redirect(reverse('admin:mac_classification_levels_list'))
             except MacServiceError as exc:
                 messages.error(request, str(exc))
@@ -677,6 +681,7 @@ def _comp_create_view(request):
                 entity_id=result.get('id') if result else None,
                 entity_label=f'{request.user.username} creó agrupación {name}',
                 details=details if details else None,
+                request=request,
             )
         except MacServiceError as exc:
             messages.error(request, str(exc))
@@ -803,7 +808,8 @@ def _comp_edit_view(request, compartment_id):
                 log_audit(actor=request.user, action='UPDATE',
                           entity_type='compartment', entity_id=compartment_id,
                           entity_label=f'{request.user.username} modificó agrupación {effective_name}',
-                          details=details if details else None)
+                          details=details if details else None,
+                          request=request)
 
             if '_addanother' in request.POST:
                 return redirect(reverse('admin:mac_compartments_create'))
@@ -819,7 +825,8 @@ def _comp_edit_view(request, compartment_id):
                 messages.success(request, 'Agrupación eliminada.')
                 log_audit(actor=request.user, action='DELETE',
                           entity_type='compartment', entity_id=compartment_id,
-                          entity_label=f'{request.user.username} eliminó agrupación {compartment.get("name", str(compartment_id))}')
+                          entity_label=f'{request.user.username} eliminó agrupación {compartment.get("name", str(compartment_id))}',
+                          request=request)
                 return redirect(reverse('admin:mac_compartments_list'))
             except MacServiceError as exc:
                 messages.error(request, str(exc))
@@ -911,6 +918,7 @@ def _user_mac_view(request, user_id):
                         entity_id=user_id,
                         entity_label=target_user.username,
                         details={'classification_level_id': int(cl_id_raw)},
+                        request=request,
                     )
                 except (ValueError, TypeError):
                     messages.error(request, 'ID inválido.')
@@ -926,6 +934,7 @@ def _user_mac_view(request, user_id):
                     entity_type='user_clearance',
                     entity_id=user_id,
                     entity_label=target_user.username,
+                    request=request,
                 )
             except MacServiceError as exc:
                 messages.error(request, str(exc))
@@ -944,6 +953,7 @@ def _user_mac_view(request, user_id):
                         entity_id=user_id,
                         entity_label=target_user.username,
                         details={'added_compartment_id': int(comp_id_raw)},
+                        request=request,
                     )
                 except (ValueError, TypeError):
                     messages.error(request, 'ID inválido.')
@@ -962,6 +972,7 @@ def _user_mac_view(request, user_id):
                         entity_id=user_id,
                         entity_label=target_user.username,
                         details={'removed_compartment_id': int(comp_id_raw)},
+                        request=request,
                     )
                 except (ValueError, TypeError):
                     messages.error(request, 'ID inválido.')
@@ -990,6 +1001,60 @@ def _user_mac_view(request, user_id):
     return TemplateResponse(request, 'admin/mac/user_mac.html', ctx)
 
 
+# ── History views ─────────────────────────────────────────────────────────────
+
+def _cl_history_view(request, level_id):
+    _check_admin_or_superadmin(request)
+    from django.template.response import TemplateResponse
+    from accounts.admin_parts.utils.history import build_entity_history
+
+    try:
+        level = mac_client.get_classification_level(request.user, level_id)
+        level_name = level.get('name', str(level_id))
+    except MacServiceError:
+        level_name = str(level_id)
+
+    entries = build_entity_history('classification_level', level_id)
+    back_url = reverse('admin:mac_classification_levels_edit', args=[level_id])
+
+    ctx = _ctx(
+        request,
+        title=f'Historial — Nivel {level_name}',
+        entries=entries,
+        back_url=back_url,
+        entity_name=level_name,
+        breadcrumb_list_url=reverse('admin:mac_classification_levels_list'),
+        breadcrumb_list_label='Niveles',
+    )
+    return TemplateResponse(request, 'admin/history/entity_history.html', ctx)
+
+
+def _comp_history_view(request, compartment_id):
+    _check_admin_or_superadmin(request)
+    from django.template.response import TemplateResponse
+    from accounts.admin_parts.utils.history import build_entity_history
+
+    try:
+        compartment = mac_client.get_compartment(request.user, compartment_id)
+        comp_name = compartment.get('name', str(compartment_id))
+    except MacServiceError:
+        comp_name = str(compartment_id)
+
+    entries = build_entity_history('compartment', compartment_id)
+    back_url = reverse('admin:mac_compartments_edit', args=[compartment_id])
+
+    ctx = _ctx(
+        request,
+        title=f'Historial — Agrupación {comp_name}',
+        entries=entries,
+        back_url=back_url,
+        entity_name=comp_name,
+        breadcrumb_list_url=reverse('admin:mac_compartments_list'),
+        breadcrumb_list_label='Agrupaciones',
+    )
+    return TemplateResponse(request, 'admin/history/entity_history.html', ctx)
+
+
 # ── URL registration ──────────────────────────────────────────────────────────
 
 _prev_get_urls = admin.site.get_urls
@@ -1014,6 +1079,11 @@ def _mac_get_urls(self):
             self.admin_view(_cl_edit_view),
             name='mac_classification_levels_edit',
         ),
+        path(
+            'mac/classification-levels/<int:level_id>/history/',
+            self.admin_view(_cl_history_view),
+            name='mac_classification_levels_history',
+        ),
         # Compartments
         path(
             'mac/compartments/',
@@ -1029,6 +1099,11 @@ def _mac_get_urls(self):
             'mac/compartments/<int:compartment_id>/edit/',
             self.admin_view(_comp_edit_view),
             name='mac_compartments_edit',
+        ),
+        path(
+            'mac/compartments/<int:compartment_id>/history/',
+            self.admin_view(_comp_history_view),
+            name='mac_compartments_history',
         ),
         # User MAC
         path(

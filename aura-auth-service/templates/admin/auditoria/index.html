@@ -114,8 +114,9 @@
     text-transform: uppercase;
     letter-spacing: .04em;
   }
-  .source-admin { background: #dbeafe; color: #1e40af; }
-  .source-api   { background: #dcfce7; color: #14532d; }
+  .source-admin      { background: #dbeafe; color: #1e40af; }
+  .source-superadmin { background: #fef3c7; color: #92400e; }
+  .source-api        { background: #dcfce7; color: #14532d; }
   .details-btn {
     background: none;
     border: 1px solid #d1d8e4;
@@ -262,7 +263,7 @@
         <td class="muted">{{ entry.entity_id|default:"—" }}</td>
         <td>{{ entry.entity_label_html|safe }}</td>
         <td>
-          <span class="source-tag source-{{ entry.source }}">{{ entry.source }}</span>
+          <span class="source-tag source-{{ entry.source }}">{{ entry.source_label }}</span>
         </td>
         <td>
           {% if entry.details %}

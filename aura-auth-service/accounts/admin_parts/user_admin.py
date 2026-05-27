@@ -554,6 +554,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
                 entity_id=obj.pk,
                 entity_label=f'{request.user.username} modificó usuario {obj.username}',
                 details=changes if changes else None,
+                request=request,
             )
         else:
             from accounts.services.mac_client import mac_client
@@ -612,6 +613,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
                     'nivel': nivel_nombre,
                     'agrupaciones': agrupaciones,
                 },
+                request=request,
             )
 
     def delete_model(self, request, obj):
@@ -627,6 +629,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             entity_type='auth_user',
             entity_id=obj.pk,
             entity_label=obj.username,
+            request=request,
         )
 
     def delete_queryset(self, request, queryset):
@@ -643,4 +646,38 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
                 entity_type='auth_user',
                 entity_id=obj.pk,
                 entity_label=obj.username,
+                request=request,
             )
+
+    def history_view(self, request, object_id, extra_context=None):
+        from django.core.exceptions import PermissionDenied
+        from django.template.response import TemplateResponse
+        from accounts.admin_parts.utils.history import build_entity_history
+
+        if not self.has_view_permission(request):
+            raise PermissionDenied
+
+        try:
+            obj = self.get_object(request, object_id)
+        except Exception:
+            obj = None
+
+        entity_name = obj.username if obj else object_id
+        entries = build_entity_history('auth_user', object_id)
+        back_url = reverse('admin:accounts_user_change', args=[object_id])
+
+        context = {
+            **self.admin_site.each_context(request),
+            'title': f'Historial — {entity_name}',
+            'entries': entries,
+            'back_url': back_url,
+            'entity_name': entity_name,
+            'object_id': object_id,
+            'opts': self.model._meta,
+            'original': obj,
+            'breadcrumb_list_url': reverse('admin:accounts_user_changelist'),
+            'breadcrumb_list_label': 'Usuarios',
+        }
+        if extra_context:
+            context.update(extra_context)
+        return TemplateResponse(request, 'admin/history/entity_history.html', context)

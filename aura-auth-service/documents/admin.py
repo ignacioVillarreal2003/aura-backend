@@ -537,7 +537,7 @@ class DocumentAdmin(admin.ModelAdmin):
                     entity_type='Document', entity_id=str(doc_id),
                     entity_label=f'{request.user.username} modificó documento {name}',
                     details=changes if changes else None,
-                    source='admin',
+                    source='admin', request=request,
                 )
                 messages.success(request, 'Documento actualizado correctamente.')
 
@@ -703,7 +703,7 @@ class DocumentAdmin(admin.ModelAdmin):
             entity_type='Document', entity_id=str(document_id),
             entity_label=f'{request.user.username} creó documento {doc_name}',
             details=audit_details,
-            source='admin',
+            source='admin', request=request,
         )
 
         return self.response_add(request, new_object)
@@ -782,7 +782,7 @@ class DocumentAdmin(admin.ModelAdmin):
             actor=request.user, action='DELETE',
             entity_type='Document', entity_id=str(obj.pk),
             entity_label=obj.name,
-            details={'deleted_at': str(obj.deleted_at)}, source='admin',
+            details={'deleted_at': str(obj.deleted_at)}, source='admin', request=request,
         )
 
     def delete_queryset(self, request, queryset):
@@ -794,3 +794,41 @@ class DocumentAdmin(admin.ModelAdmin):
                 entity_label=obj.name,
                 details={'deleted_at': str(obj.deleted_at)}, source='admin',
             )
+
+    def history_view(self, request, object_id, extra_context=None):
+        from django.core.exceptions import PermissionDenied
+        from django.template.response import TemplateResponse
+        from accounts.admin_parts.utils.history import build_entity_history
+
+        if not self.has_view_permission(request):
+            raise PermissionDenied
+
+        try:
+            obj = self.get_object(request, object_id)
+        except Exception:
+            obj = None
+
+        if obj is not None:
+            meta = _get_doc_meta(obj.pk)
+            entity_name = meta['name'] if meta else obj.name
+        else:
+            entity_name = str(object_id)
+
+        entries = build_entity_history('Document', object_id)
+        back_url = reverse('admin:documents_document_change', args=[object_id])
+
+        context = {
+            **self.admin_site.each_context(request),
+            'title': f'Historial — {entity_name}',
+            'entries': entries,
+            'back_url': back_url,
+            'entity_name': entity_name,
+            'object_id': object_id,
+            'opts': self.model._meta,
+            'original': obj,
+            'breadcrumb_list_url': reverse('admin:documents_document_changelist'),
+            'breadcrumb_list_label': 'Documentos',
+        }
+        if extra_context:
+            context.update(extra_context)
+        return TemplateResponse(request, 'admin/history/entity_history.html', context)

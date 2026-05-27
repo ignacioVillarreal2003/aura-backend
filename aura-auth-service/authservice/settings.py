@@ -284,6 +284,10 @@ LOGS_DIR.mkdir(exist_ok=True)
 # Environment
 ENVIRONMENT = config('ENVIRONMENT', default='development')
 
+# Session — 1 hour for admin/superadmin panel
+SESSION_COOKIE_AGE = 3600
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+
 # Security Settings (for production)
 if not DEBUG:
     SECURE_SSL_REDIRECT = True

@@ -9,7 +9,8 @@ logger = logging.getLogger(__name__)
 
 def log_audit(actor, action: str, entity_type: str,
               entity_id=None, entity_label: str = None,
-              details: dict = None, source: str = 'admin') -> None:
+              details: dict = None, source: str = 'admin',
+              request=None) -> None:
     """
     Append one row to audit_log.
 
@@ -19,8 +20,15 @@ def log_audit(actor, action: str, entity_type: str,
     :param entity_id:    PK of the affected record (will be coerced to str).
     :param entity_label: Human-readable identifier cached at write time (e.g. username).
     :param details:      Optional dict with extra context (changed fields, old values, …).
-    :param source:       'admin' | 'api' — where the action originated.
+    :param source:       'admin' | 'superadmin' | 'api' — where the action originated.
+    :param request:      Current HttpRequest; when provided, auto-upgrades source to
+                         'superadmin' for real superadmins and elevated admins.
     """
+    if source == 'admin':
+        if request is not None and _is_effective_superadmin(request):
+            source = 'superadmin'
+        elif actor is not None and _is_super_admin_user(actor):
+            source = 'superadmin'
     try:
         from accounts.models import AuditLog
     except ImportError:
