@@ -24,6 +24,8 @@ ON CREATE SET
     r.source_document_ids = [$document_id],
     r.evidence_fragment_ids = [$fragment_id],
     r.confidence = $confidence,
+    r.confidence_sum = $confidence,
+    r.confidence_count = 1,
     r.created_at = datetime(),
     r.updated_at = datetime()
 ON MATCH SET
@@ -31,11 +33,19 @@ ON MATCH SET
                     CASE WHEN $document_id IN coalesce(r.source_document_ids, []) THEN [] ELSE [$document_id] END,
     r.evidence_fragment_ids = coalesce(r.evidence_fragment_ids, []) +
                     CASE WHEN $fragment_id IN coalesce(r.evidence_fragment_ids, []) THEN [] ELSE [$fragment_id] END,
-    r.confidence = CASE
-        WHEN $confidence > coalesce(r.confidence, 0.0) THEN $confidence
-        ELSE r.confidence
-    END,
+    r.confidence_sum = coalesce(r.confidence_sum, r.confidence) + $confidence,
+    r.confidence_count = coalesce(r.confidence_count, 1) + 1,
+    r.confidence = (coalesce(r.confidence_sum, r.confidence) + $confidence) / (coalesce(r.confidence_count, 1) + 1),
     r.updated_at = datetime()
+"""
+
+_LIST_BY_DOCUMENT_CYPHER = """
+MATCH (source:Entity)-[r:REL]->(target:Entity)
+WHERE $document_id IN coalesce(r.source_document_ids, [])
+  AND any(d IN coalesce(r.source_document_ids, []) WHERE d IN $accessible_ids)
+RETURN r, source, target
+ORDER BY r.confidence DESC
+LIMIT $limit
 """
 
 _LIST_NEIGHBORS_CYPHER_TEMPLATE = """
@@ -147,4 +157,36 @@ class GraphRelationRepository(GraphRelationRepositoryInterface):
             source_entity = map_entity_node(record["source_node"])
             target_entity = map_entity_node(record["target_node"])
             out.append(map_relationship(record["rel"], source_entity, target_entity))
+        return out
+
+    async def list_by_document(
+            self,
+            *,
+            document_id: int,
+            accessible_document_ids: list[int],
+            limit: int,
+    ) -> list[GraphRelationResponse]:
+        if not accessible_document_ids:
+            return []
+        params = {
+            "document_id": document_id,
+            "accessible_ids": accessible_document_ids,
+            "limit": int(limit),
+        }
+        try:
+            records = await self._neo4j_manager.execute_read(_LIST_BY_DOCUMENT_CYPHER, params)
+        except Neo4jError as e:
+            logger.exception(
+                "Neo4j error while listing relations by document.",
+                extra={"document_id": document_id, "neo4j_code": getattr(e, "code", None)},
+            )
+            raise GraphPersistenceException(
+                "Failed to list relations by document in the knowledge graph."
+            ) from e
+
+        out: list[GraphRelationResponse] = []
+        for record in records:
+            source_entity = map_entity_node(record["source"])
+            target_entity = map_entity_node(record["target"])
+            out.append(map_relationship(record["r"], source_entity, target_entity))
         return out

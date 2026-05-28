@@ -1,0 +1,210 @@
+{% extends "admin/change_form.html" %}
+{% load i18n %}
+
+{% block content_title %}
+<h1>{% if original %}{{ title }}{% else %}{{ block.super }}{% endif %}</h1>
+{% endblock %}
+
+{% block after_field_sets %}
+{% if show_groups_panel and not original %}
+<style>
+  .doc-groups-section .search-container { margin-bottom:12px; }
+  .doc-groups-section .search-input { width:100%;padding:9px 12px;border:1px solid #ccc;border-radius:4px;font-size:13px;box-sizing:border-box;background:#fff; }
+  .doc-groups-section .search-input:focus { outline:none;border-color:#417690;box-shadow:0 0 0 2px rgba(65,118,144,.12); }
+  .doc-groups-section .dual-panel-container { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
+  .doc-groups-section .panel { display:flex;flex-direction:column;border:1px solid #ccc;border-radius:4px;background:#fff;min-height:200px; }
+  .doc-groups-section .panel-header { background:#f5f5f5;padding:10px 12px;border-bottom:1px solid #ddd;font-weight:600;font-size:12px;color:#333;text-transform:uppercase;letter-spacing:.2px; }
+  .doc-groups-section .panel-content { flex:1;overflow-y:auto;max-height:280px; }
+  .doc-groups-section .panel-item { padding:9px 12px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:8px;cursor:pointer; }
+  .doc-groups-section .panel-item:last-child { border-bottom:none; }
+  .doc-groups-section .panel-item:hover { background:#f8fbff; }
+  .doc-groups-section .panel-item input[type="checkbox"] { margin:0;cursor:pointer; }
+  .doc-groups-section .panel-item label { margin:0;cursor:pointer;flex:1;font-size:13px; }
+  .doc-groups-section .empty-panel { padding:12px;color:#888;font-size:12px; }
+  @media (max-width:900px) { .doc-groups-section .dual-panel-container { grid-template-columns:1fr; } }
+</style>
+
+<fieldset class="module aligned">
+  <h2>Grupos</h2>
+  <div class="form-row">
+    <div style="display:flex;align-items:center;gap:12px">
+      <label for="id_classification_level_id" style="min-width:110px;flex-shrink:0;font-size:13px">Nivel máximo:</label>
+      <select name="classification_level_id" id="id_classification_level_id" style="max-width:300px;width:100%">
+        <option value="">-- Sin nivel --</option>
+        {% for level in levels_for_doc %}
+        <option value="{{ level.id }}">{{ level.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="form-row doc-groups-section" style="margin-top:12px">
+    <div style="width:100%">
+      <p style="margin:0 0 10px 0;font-size:13px">Agrupaciones:</p>
+      <select name="compartment_ids" id="id_doc_compartment_ids" multiple style="display:none"></select>
+      <div class="search-container">
+        <input type="text" class="search-input" id="search-doc-compartments" placeholder="Buscar agrupación...">
+      </div>
+      <div class="dual-panel-container">
+        <div class="panel">
+          <div class="panel-header">Sin asignar</div>
+          <div class="panel-content" id="available-doc-compartments"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">Asignadas</div>
+          <div class="panel-content" id="selected-doc-compartments"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</fieldset>
+<script>
+(function() {
+  var compartmentsData = {{ compartments_json_doc|safe }};
+  var hiddenSelect = document.getElementById('id_doc_compartment_ids');
+  var availPanel = document.getElementById('available-doc-compartments');
+  var selPanel = document.getElementById('selected-doc-compartments');
+  var searchInput = document.getElementById('search-doc-compartments');
+  compartmentsData.forEach(function(item) {
+    var opt = document.createElement('option');
+    opt.value = item.id; opt.textContent = item.label;
+    hiddenSelect.appendChild(opt);
+  });
+  function getSelectedIds() { return new Set(Array.from(hiddenSelect.options).filter(o => o.selected).map(o => o.value)); }
+  function render(filter) {
+    filter = (filter || '').toLowerCase();
+    availPanel.innerHTML = ''; selPanel.innerHTML = '';
+    var selectedIds = getSelectedIds();
+    compartmentsData.forEach(function(item) {
+      var id = String(item.id);
+      var isSelected = selectedIds.has(id);
+      if (!isSelected && filter && !item.label.toLowerCase().includes(filter)) return;
+      var row = document.createElement('div'); row.className = 'panel-item';
+      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = isSelected; cb.id = 'doccomp-' + id;
+      var lbl = document.createElement('label'); lbl.setAttribute('for', cb.id); lbl.textContent = item.label;
+      row.appendChild(cb); row.appendChild(lbl);
+      cb.addEventListener('change', function(e) {
+        var opt = Array.from(hiddenSelect.options).find(o => o.value === id);
+        if (opt) opt.selected = e.target.checked;
+        render(searchInput.value);
+      });
+      (isSelected ? selPanel : availPanel).appendChild(row);
+    });
+    if (!availPanel.children.length) availPanel.innerHTML = '<div class="empty-panel">Sin agrupaciones disponibles</div>';
+    if (!selPanel.children.length) selPanel.innerHTML = '<div class="empty-panel">Sin agrupaciones asignadas</div>';
+  }
+  searchInput.addEventListener('input', function() { render(this.value); });
+  render('');
+})();
+</script>
+{% endif %}
+
+{% if show_change_groups_panel and original %}
+<style>
+  .doc-groups-section .search-container { margin-bottom:12px; }
+  .doc-groups-section .search-input { width:100%;padding:9px 12px;border:1px solid #ccc;border-radius:4px;font-size:13px;box-sizing:border-box;background:#fff; }
+  .doc-groups-section .search-input:focus { outline:none;border-color:#417690;box-shadow:0 0 0 2px rgba(65,118,144,.12); }
+  .doc-groups-section .dual-panel-container { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
+  .doc-groups-section .panel { display:flex;flex-direction:column;border:1px solid #ccc;border-radius:4px;background:#fff;min-height:200px; }
+  .doc-groups-section .panel-header { background:#f5f5f5;padding:10px 12px;border-bottom:1px solid #ddd;font-weight:600;font-size:12px;color:#333;text-transform:uppercase;letter-spacing:.2px; }
+  .doc-groups-section .panel-content { flex:1;overflow-y:auto;max-height:280px; }
+  .doc-groups-section .panel-item { padding:9px 12px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:8px;cursor:pointer; }
+  .doc-groups-section .panel-item:last-child { border-bottom:none; }
+  .doc-groups-section .panel-item:hover { background:#f8fbff; }
+  .doc-groups-section .panel-item input[type="checkbox"] { margin:0;cursor:pointer; }
+  .doc-groups-section .panel-item label { margin:0;cursor:pointer;flex:1;font-size:13px; }
+  .doc-groups-section .empty-panel { padding:12px;color:#888;font-size:12px; }
+  @media (max-width:900px) { .doc-groups-section .dual-panel-container { grid-template-columns:1fr; } }
+</style>
+
+<fieldset class="module aligned">
+  <h2>Grupos</h2>
+  <div class="form-row">
+    <div style="display:flex;align-items:center;gap:12px">
+      <label for="id_cl_change" style="min-width:110px;flex-shrink:0;font-size:13px">Nivel máximo:</label>
+      <select name="classification_level_id" id="id_cl_change" style="max-width:300px;width:100%">
+        <option value="">-- Sin nivel --</option>
+        {% for level in levels_for_doc %}
+        <option value="{{ level.id }}" {% if current_level_id == level.id|stringformat:"s" %}selected{% endif %}>{{ level.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="form-row doc-groups-section" style="margin-top:12px">
+    <div style="width:100%">
+      <p style="margin:0 0 10px 0;font-size:13px">Agrupaciones:</p>
+      <select name="compartment_ids" id="id_doc_ch_comp_ids" multiple style="display:none"></select>
+      <div class="search-container">
+        <input type="text" class="search-input" id="search-doc-ch-comps" placeholder="Buscar agrupación...">
+      </div>
+      <div class="dual-panel-container">
+        <div class="panel">
+          <div class="panel-header">Sin asignar</div>
+          <div class="panel-content" id="available-doc-ch-comps"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">Asignadas</div>
+          <div class="panel-content" id="selected-doc-ch-comps"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</fieldset>
+<script>
+(function() {
+  var compartmentsData = {{ compartments_json_doc|safe }};
+  var assignedIds = new Set({{ assigned_comp_ids_doc|safe }}.map(String));
+  var hiddenSelect = document.getElementById('id_doc_ch_comp_ids');
+  var availPanel = document.getElementById('available-doc-ch-comps');
+  var selPanel = document.getElementById('selected-doc-ch-comps');
+  var searchInput = document.getElementById('search-doc-ch-comps');
+  compartmentsData.forEach(function(item) {
+    var opt = document.createElement('option');
+    opt.value = item.id; opt.textContent = item.label;
+    if (assignedIds.has(String(item.id))) opt.selected = true;
+    hiddenSelect.appendChild(opt);
+  });
+  function getSelectedIds() { return new Set(Array.from(hiddenSelect.options).filter(o => o.selected).map(o => o.value)); }
+  function render(filter) {
+    filter = (filter || '').toLowerCase();
+    availPanel.innerHTML = ''; selPanel.innerHTML = '';
+    var selectedIds = getSelectedIds();
+    compartmentsData.forEach(function(item) {
+      var id = String(item.id);
+      var isSelected = selectedIds.has(id);
+      if (!isSelected && filter && !item.label.toLowerCase().includes(filter)) return;
+      var row = document.createElement('div'); row.className = 'panel-item';
+      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = isSelected; cb.id = 'doccch-' + id;
+      var lbl = document.createElement('label'); lbl.setAttribute('for', cb.id); lbl.textContent = item.label;
+      row.appendChild(cb); row.appendChild(lbl);
+      cb.addEventListener('change', function(e) {
+        var opt = Array.from(hiddenSelect.options).find(o => o.value === id);
+        if (opt) opt.selected = e.target.checked;
+        render(searchInput.value);
+      });
+      (isSelected ? selPanel : availPanel).appendChild(row);
+    });
+    if (!availPanel.children.length) availPanel.innerHTML = '<div class="empty-panel">Sin agrupaciones disponibles</div>';
+    if (!selPanel.children.length) selPanel.innerHTML = '<div class="empty-panel">Sin agrupaciones asignadas</div>';
+  }
+  searchInput.addEventListener('input', function() { render(this.value); });
+  render('');
+})();
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var allFieldsets = document.querySelectorAll('fieldset.module');
+  var gruposFieldset = null, auditFieldset = null;
+  allFieldsets.forEach(function(fs) {
+    var h2 = fs.querySelector('h2');
+    if (!h2) return;
+    if (h2.textContent.trim() === 'Grupos') gruposFieldset = fs;
+    if (h2.textContent.trim() === 'Auditoría') auditFieldset = fs;
+  });
+  if (gruposFieldset && auditFieldset) {
+    auditFieldset.parentNode.insertBefore(gruposFieldset, auditFieldset);
+  }
+});
+</script>
+{% endif %}
+{{ block.super }}
+{% endblock %}

@@ -1,0 +1,64 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'admin/css/forms.css' %}">
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Inicio</a>
+  &rsaquo; <a href="{% url 'admin:mac_document_collections_list' %}">Colecciones de Documentos</a>
+  &rsaquo; {% if collection %}Editar{% else %}Nueva Colección{% endif %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <h1>{{ title }}</h1>
+  <form method="post">
+    {% csrf_token %}
+    <fieldset class="module aligned">
+      <div class="form-row field-name">
+        <div>
+          <label for="id_name" class="required">Nombre:</label>
+          <input type="text" id="id_name" name="name" value="{{ collection.name|default:'' }}" maxlength="200" required>
+        </div>
+      </div>
+      <div class="form-row field-classification_level_id">
+        <div>
+          <label for="id_classification_level_id" class="required">Nivel de Clasificación:</label>
+          <select id="id_classification_level_id" name="classification_level_id" required>
+            <option value="">-- Seleccionar --</option>
+            {% for level in levels %}
+            <option value="{{ level.id }}"
+              {% if collection and collection.classification_level and collection.classification_level.id == level.id %}selected{% endif %}>
+              {{ level.name }} (rango {{ level.rank }})
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="form-row field-compartment_ids">
+        <div>
+          <label for="id_compartment_ids">Compartimentos:</label>
+          <select id="id_compartment_ids" name="compartment_ids" multiple style="min-height:140px">
+            {% for comp in compartments %}
+            <option value="{{ comp.id }}"
+              {% if current_comp_ids and comp.id in current_comp_ids %}selected{% endif %}>
+              {{ comp.name }}
+            </option>
+            {% endfor %}
+          </select>
+          <p class="help">Mantenga Ctrl (o Cmd) para seleccionar múltiples.</p>
+        </div>
+      </div>
+    </fieldset>
+    <div class="submit-row">
+      <input type="submit" value="{% if collection %}Guardar{% else %}Crear{% endif %}" class="default">
+      <a href="{% url 'admin:mac_document_collections_list' %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

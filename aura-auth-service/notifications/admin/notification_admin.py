@@ -254,8 +254,28 @@ class GroupNotificationAdmin(BaseNotificationAdmin):
         if not _is_admin_or_super_user(request.user):
             raise PermissionDenied
 
+        from accounts.models import Role
+        from accounts.services.mac_client import mac_client, MacServiceError as MacError
+
+        try:
+            raw_levels = mac_client.list_classification_levels(request.user)
+        except MacError:
+            raw_levels = []
+
+        try:
+            raw_compartments = mac_client.list_compartments(request.user)
+        except MacError:
+            raw_compartments = []
+
+        level_choices = [(str(l['id']), f"{l['name']} (rango {l['rank']})") for l in raw_levels]
+        compartment_choices = [(str(c['id']), c['name']) for c in raw_compartments]
+
         if request.method == 'POST':
-            form = SendGroupNotificationForm(request.POST)
+            form = SendGroupNotificationForm(
+                request.POST,
+                level_choices=level_choices,
+                compartment_choices=compartment_choices,
+            )
             if form.is_valid():
                 target_user_ids = form.resolve_target_user_ids()
                 target_label = form.build_target_label()
@@ -292,27 +312,22 @@ class GroupNotificationAdmin(BaseNotificationAdmin):
                 except NotificationServiceError as exc:
                     self.message_user(request, f'Error al enviar notificaciones al servicio: {exc}', level=messages.ERROR)
         else:
-            form = SendGroupNotificationForm()
+            form = SendGroupNotificationForm(
+                level_choices=level_choices,
+                compartment_choices=compartment_choices,
+            )
 
-        # Prepare JSON data for groups/roles/fau_roles
-        from accounts.models import CustomGroup, Role, FauRole
-        
-        groups_data = CustomGroup.objects.filter(deleted_at__isnull=True).order_by('name')
-        groups_json = json.dumps([
-            {'id': str(group.pk), 'label': group.name}
-            for group in groups_data
+        levels_json = json.dumps([
+            {'id': str(l['id']), 'label': f"{l['name']} (rango {l['rank']})"} for l in raw_levels
         ])
-        
+        compartments_json = json.dumps([
+            {'id': str(c['id']), 'label': c['name']} for c in raw_compartments
+        ])
+
         roles_data = Role.objects.order_by('name')
         roles_json = json.dumps([
             {'id': str(role.pk), 'label': role.name}
             for role in roles_data
-        ])
-        
-        fau_roles_data = FauRole.objects.order_by('power', 'name')
-        fau_roles_json = json.dumps([
-            {'id': str(role.pk), 'label': role.name}
-            for role in fau_roles_data
         ])
 
         context = {
@@ -320,9 +335,9 @@ class GroupNotificationAdmin(BaseNotificationAdmin):
             'form': form,
             'opts': self.model._meta,
             'show_search': False,
-            'groups_json': groups_json,
+            'levels_json': levels_json,
+            'compartments_json': compartments_json,
             'roles_json': roles_json,
-            'fau_roles_json': fau_roles_json,
         }
         return render(request, 'admin/notifications/send_notification.html', context)
 

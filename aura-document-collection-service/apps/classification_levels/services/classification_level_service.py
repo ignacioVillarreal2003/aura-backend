@@ -43,10 +43,11 @@ class ClassificationLevelService:
         user: AuthenticatedUser,
         name: str,
         rank: int,
+        description: str = '',
     ) -> ClassificationLevel:
         AccessControl.require_permission(user, CREATE_CLASSIFICATION_LEVEL)
         try:
-            obj = classification_level_repository.create(name=name, rank=rank)
+            obj = classification_level_repository.create(name=name, rank=rank, description=description)
         except IntegrityError as e:
             raise DuplicateClassificationLevelException() from e
         logger.info(
@@ -67,8 +68,9 @@ class ClassificationLevelService:
             raise ClassificationLevelNotFoundException()
         name = kwargs.get("name", obj.name)
         rank = kwargs.get("rank", obj.rank)
+        description = kwargs.get("description", None)
         try:
-            return classification_level_repository.update(obj, name=name, rank=rank)
+            return classification_level_repository.update(obj, name=name, rank=rank, description=description)
         except IntegrityError as e:
             raise DuplicateClassificationLevelException() from e
 

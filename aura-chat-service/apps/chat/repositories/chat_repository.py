@@ -190,6 +190,28 @@ class ChatRepository:
         return qs.order_by(F("pinned_at").desc(nulls_last=True), order_expr)
 
     @staticmethod
+    def list_all(
+        search: str | None = None,
+        ordering: str = "-created_at",
+        tags: list[str] | None = None,
+    ) -> QuerySet[Chat]:
+        order_expr = _ORDERING_MAP.get(ordering, _ORDERING_MAP["-created_at"])
+        qs = Chat.objects.annotate(
+            member_count=Count(
+                "chatmembership",
+                filter=Q(
+                    chatmembership__status="active",
+                    chatmembership__deleted_at__isnull=True,
+                ),
+            )
+        )
+        if search:
+            qs = qs.filter(name__icontains=search)
+        if tags:
+            qs = qs.filter(tags__contains=tags)
+        return qs.order_by(order_expr)
+
+    @staticmethod
     def update(chat: Chat, updated_by: int, **fields) -> Chat:
         for key, value in fields.items():
             setattr(chat, key, value)

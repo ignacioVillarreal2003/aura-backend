@@ -1,35 +1,99 @@
-"""Django Admin customization for document models."""
+"""Django Admin for Document model."""
+
+import json
+import re
 
 from django import forms
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.contrib.admin import helpers
 from django.contrib.admin.exceptions import DisallowedModelAdminToField
 from django.contrib.admin.options import IS_POPUP_VAR, TO_FIELD_VAR
-from django.contrib.admin.utils import flatten_fieldsets, unquote
-from django.contrib.admin.widgets import FilteredSelectMultiple
-from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.exceptions import PermissionDenied
 from django.db import connections, router, transaction
-from django.forms.formsets import all_valid
+from django.http import HttpResponseRedirect
+from django.urls import reverse
 from django.utils.translation import gettext as _
 from django.utils.html import format_html
 from django.conf import settings
-from accounts.models import CustomGroup, FauRole
+
 from accounts.admin_parts.utils.audit import log_audit
+from accounts.services.mac_client import mac_client
 from documents.models import Document
 from documents.services.document_processing_client import (
     DocumentProcessingServiceError,
     create_document_from_admin,
 )
 
+_ADMIN_LEVEL_RE = re.compile(r'^__admin_level_(\d+)__$')
+_ADMIN_COMP_RE = re.compile(r'^__admin_comp_(\d+)__$')
 
-def _apply_audit_fields(obj, user_id: int, is_create: bool):
-    if is_create and not obj.created_by:
-        obj.created_by = user_id
-    obj.updated_by = user_id
+# ── Local meta table (default DB) — immune to processing-service overwrites ───
 
+_meta_table_ensured = False
+
+
+def _ensure_meta_table():
+    global _meta_table_ensured
+    if _meta_table_ensured:
+        return
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS document_admin_meta (
+                    document_id BIGINT PRIMARY KEY,
+                    admin_name  VARCHAR(255) NOT NULL DEFAULT '',
+                    admin_description TEXT NOT NULL DEFAULT ''
+                )
+            """)
+        _meta_table_ensured = True
+    except Exception:
+        pass
+
+
+def _save_doc_meta(doc_id, name, description):
+    _ensure_meta_table()
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO document_admin_meta (document_id, admin_name, admin_description)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (document_id) DO UPDATE
+                SET admin_name = EXCLUDED.admin_name,
+                    admin_description = EXCLUDED.admin_description
+            """, [doc_id, name or '', description or ''])
+    except Exception:
+        pass
+
+
+def _get_doc_meta(doc_id):
+    _ensure_meta_table()
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute(
+                "SELECT admin_name, admin_description FROM document_admin_meta WHERE document_id = %s",
+                [doc_id],
+            )
+            row = cursor.fetchone()
+            return {'name': row[0], 'description': row[1]} if row else None
+    except Exception:
+        return None
+
+
+def _batch_get_doc_meta_all():
+    _ensure_meta_table()
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute(
+                "SELECT document_id, admin_name, admin_description FROM document_admin_meta"
+            )
+            return {row[0]: {'name': row[1], 'description': row[2]} for row in cursor.fetchall()}
+    except Exception:
+        return {}
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _ensure_admin_chat(actor_user_id: int) -> int:
-    """Ensure the shared admin chat exists in aura_db for document-processing."""
     admin_chat_id = settings.ADMIN_CHAT_ID
     with connections['aura_db'].cursor() as cursor:
         cursor.execute(
@@ -43,363 +107,623 @@ def _ensure_admin_chat(actor_user_id: int) -> int:
     return admin_chat_id
 
 
+def _get_doc_mac_assignments(doc_id):
+    """Return (current_level_id, current_comp_ids_set) for a document."""
+    current_level_id = None
+    current_comp_ids = set()
+    try:
+        with connections['aura_db'].cursor() as cursor:
+            cursor.execute("""
+                SELECT dc.classification_level_id
+                FROM document_in_document_collection dic
+                JOIN document_collection dc ON dic.document_collection_id = dc.id
+                WHERE dic.document_id = %s
+                  AND dic.deleted_at IS NULL
+                  AND dc.deleted_at IS NULL
+                  AND dc.classification_level_id IS NOT NULL
+                LIMIT 1
+            """, [doc_id])
+            row = cursor.fetchone()
+            if row:
+                current_level_id = row[0]
+            cursor.execute("""
+                SELECT DISTINCT dcc.compartment_id
+                FROM document_in_document_collection dic
+                JOIN document_collection dc ON dic.document_collection_id = dc.id
+                JOIN document_collection_compartment dcc ON dcc.document_collection_id = dc.id
+                WHERE dic.document_id = %s
+                  AND dic.deleted_at IS NULL
+                  AND dc.deleted_at IS NULL
+            """, [doc_id])
+            current_comp_ids = {row[0] for row in cursor.fetchall()}
+    except Exception:
+        pass
+    return current_level_id, current_comp_ids
+
+
+def _db_ensure_level_collection(level_id, actor_user_id):
+    """Find or create the admin collection for a level, writing directly to the DB."""
+    admin_name = f'__admin_level_{level_id}__'
+    with connections['aura_db'].cursor() as cursor:
+        cursor.execute(
+            "SELECT id FROM document_collection WHERE name = %s AND deleted_at IS NULL LIMIT 1",
+            [admin_name],
+        )
+        row = cursor.fetchone()
+        if row:
+            return row[0]
+        cursor.execute(
+            """
+            INSERT INTO document_collection (name, classification_level_id, created_by, created_at)
+            VALUES (%s, %s, %s, NOW()) RETURNING id
+            """,
+            [admin_name, level_id, actor_user_id],
+        )
+        return cursor.fetchone()[0]
+
+
+def _db_ensure_comp_collection(compartment_id, actor_user_id):
+    """Find or create the admin collection for a compartment, writing directly to the DB."""
+    admin_name = f'__admin_comp_{compartment_id}__'
+    with connections['aura_db'].cursor() as cursor:
+        cursor.execute(
+            "SELECT id FROM document_collection WHERE name = %s AND deleted_at IS NULL LIMIT 1",
+            [admin_name],
+        )
+        row = cursor.fetchone()
+        if row:
+            return row[0]
+        cursor.execute(
+            """
+            INSERT INTO document_collection (name, classification_level_id, created_by, created_at)
+            VALUES (%s, NULL, %s, NOW()) RETURNING id
+            """,
+            [admin_name, actor_user_id],
+        )
+        col_id = cursor.fetchone()[0]
+        cursor.execute(
+            """
+            INSERT INTO document_collection_compartment
+                (document_collection_id, compartment_id, created_by, created_at)
+            VALUES (%s, %s, %s, NOW())
+            ON CONFLICT ON CONSTRAINT doc_coll_comp_coll_compartment_unique DO NOTHING
+            """,
+            [col_id, compartment_id, actor_user_id],
+        )
+        return col_id
+
+
+def _db_link_doc(collection_id, document_id, actor_user_id):
+    """Link a document to a collection (idempotent) via direct DB insert."""
+    with connections['aura_db'].cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO document_in_document_collection
+                (document_collection_id, document_id, created_by, created_at)
+            SELECT %s, %s, %s, NOW()
+            WHERE NOT EXISTS (
+                SELECT 1 FROM document_in_document_collection
+                WHERE document_collection_id = %s AND document_id = %s AND deleted_at IS NULL
+            )
+            """,
+            [collection_id, document_id, actor_user_id, collection_id, document_id],
+        )
+
+
+def _db_unlink_doc_from_level(doc_id, level_id, actor_user_id):
+    """Soft-delete all active links from a document to collections at a given level."""
+    with connections['aura_db'].cursor() as cursor:
+        cursor.execute(
+            """
+            UPDATE document_in_document_collection
+            SET deleted_at = NOW(), deleted_by = %s
+            WHERE document_id = %s
+              AND deleted_at IS NULL
+              AND document_collection_id IN (
+                SELECT id FROM document_collection
+                WHERE classification_level_id = %s AND deleted_at IS NULL
+              )
+            """,
+            [actor_user_id, doc_id, level_id],
+        )
+
+
+def _db_unlink_doc_from_comp(doc_id, compartment_id, actor_user_id):
+    """Soft-delete all active links from a document to collections for a given compartment."""
+    with connections['aura_db'].cursor() as cursor:
+        cursor.execute(
+            """
+            UPDATE document_in_document_collection
+            SET deleted_at = NOW(), deleted_by = %s
+            WHERE document_id = %s
+              AND deleted_at IS NULL
+              AND document_collection_id IN (
+                SELECT dc.id FROM document_collection dc
+                JOIN document_collection_compartment dcc ON dcc.document_collection_id = dc.id
+                WHERE dcc.compartment_id = %s AND dc.deleted_at IS NULL
+              )
+            """,
+            [actor_user_id, doc_id, compartment_id],
+        )
+
+
+# ── Forms ─────────────────────────────────────────────────────────────────────
+
 class DocumentUploadForm(forms.ModelForm):
+    name = forms.CharField(max_length=255, label='Nombre')
     description = forms.CharField(
-        label='Descripción',
-        required=False,
+        label='Descripción', required=False,
         widget=forms.Textarea(attrs={'rows': 4}),
     )
-    raw_collection = forms.FileField(
-        label='Documento',
-        required=True,
-    )
-    groups = forms.ModelMultipleChoiceField(
-        queryset=CustomGroup.objects.filter(deleted_at__isnull=True).order_by('name'),
-        required=False,
-        widget=FilteredSelectMultiple('Grupos', is_stacked=False),
-        label='Grupos',
-        help_text='',
-    )
-    minimum_fau_role = forms.ModelChoiceField(
-        queryset=FauRole.objects.order_by('power', 'name'),
-        required=False,
-        label='Rol FAU mínimo',
-        help_text='Ese rol y todos los de mayor jerarquía podrán acceder.',
-    )
-    visible_to_all = forms.BooleanField(
-        required=False,
-        label='Disponible para todos',
-        help_text='Si está activo, no se aplican restricciones por grupos ni jerarquía FAU.',
+    raw_collection = forms.FileField(label='Archivo', required=True)
+
+    class Meta:
+        model = Document
+        fields = []
+
+    def _post_clean(self):
+        pass
+
+
+class DocumentChangeForm(forms.ModelForm):
+    name = forms.CharField(max_length=255, label='Nombre')
+    description = forms.CharField(
+        label='Descripción', required=False,
+        widget=forms.Textarea(attrs={'rows': 3}),
     )
 
     class Meta:
         model = Document
-        fields = ('name', 'description', 'raw_collection', 'groups', 'minimum_fau_role', 'visible_to_all')
+        fields = ['name', 'description']
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if self.instance and not self.instance._state.adding:
-            self.fields['raw_collection'].required = False
-            self.fields['groups'].initial = self.instance.groups.all()
-            # minimum_fau_role is a form-only ModelChoiceField (cross-DB).
-            # Populate its initial value manually from the stored BigInt id.
-            if self.instance.minimum_fau_role_id:
-                from accounts.models import FauRole
-                self.fields['minimum_fau_role'].initial = (
-                    FauRole.objects.filter(pk=self.instance.minimum_fau_role_id).first()
-                )
+    def _post_clean(self):
+        pass
 
-    def clean(self):
-        cleaned_data = super().clean()
-        visible_to_all = cleaned_data.get('visible_to_all')
-        minimum_fau_role = cleaned_data.get('minimum_fau_role')
-        if not visible_to_all and minimum_fau_role is None:
-            raise ValidationError('Debes marcar "Disponible para todos" o seleccionar un Rol FAU mínimo.')
-        return cleaned_data
 
+# ── Admin ─────────────────────────────────────────────────────────────────────
 
 @admin.register(Document)
 class DocumentAdmin(admin.ModelAdmin):
-    """
-    Admin for Document model.
-    """
+    change_form_template = 'admin/documents/document/change_form.html'
     list_display = (
-        'name',
-        'description',
+        'name_display',
+        'description_short',
         'size_display',
-        'group_count',
-        'access_scope_display',
-        'modified_date',
+        'status_badge',
+        'nivel_display',
+        'agrupaciones_count',
         'created_by_display',
     )
-    list_filter = ('created_at', ('deleted_at', admin.EmptyFieldListFilter))
+    list_display_links = ('name_display',)
+    list_filter = ()
     search_fields = ('name', 'description')
     readonly_fields = (
-        'id',
         'size_display',
-        'external_document_id',
-        'external_storage_url',
+        'status',
+        'mime_type_display',
+        'storage_url',
         'created_at',
         'created_by',
-        'updated_at',
-        'updated_by',
-        'deleted_at',
-        'deleted_by',
     )
-
     actions = None
     actions_selection_counter = False
 
     fieldsets = (
         ('Información Básica', {
-            'fields': ('id', 'name', 'description', 'size_display'),
+            'fields': ('name', 'description', 'size_display', 'status', 'mime_type_display', 'storage_url'),
         }),
-        ('Acceso', {
-            'fields': ('visible_to_all', 'minimum_fau_role', 'groups'),
-        }),
-        ('Integración', {
-            'fields': ('external_document_id', 'external_storage_url'),
-        }),
-        ('Información de Auditoría', {
-            'fields': (
-                'created_at',
-                'created_by',
-                'updated_at',
-                'updated_by',
-                'deleted_at',
-                'deleted_by',
-            ),
+        ('Auditoría', {
+            'fields': ('created_at', 'created_by'),
             'classes': ('collapse',),
         }),
     )
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(deleted_at__isnull=True)
+
+    def get_form(self, request, obj=None, **kwargs):
+        return DocumentUploadForm if obj is None else DocumentChangeForm
+
     def get_fieldsets(self, request, obj=None):
         if obj is None:
             return (
-                ('Información Básica', {
+                ('Subir documento', {
                     'fields': ('name', 'description', 'raw_collection'),
-                }),
-                ('Acceso', {
-                    'fields': ('visible_to_all', 'minimum_fau_role', 'groups'),
                 }),
             )
         return self.fieldsets
 
-    def get_form(self, request, obj=None, **kwargs):
-        kwargs['form'] = DocumentUploadForm
-        return super().get_form(request, obj, **kwargs)
+    def get_readonly_fields(self, request, obj=None):
+        if obj is not None:
+            return self.readonly_fields
+        return ('id',)
 
-    def get_queryset(self, request):
-        queryset = super().get_queryset(request)
-        # minimum_fau_role is now a cross-DB BigInt — cannot use select_related.
-        return queryset.prefetch_related('groups')
+    def get_object(self, request, object_id, from_field=None):
+        """Patch name/description from local meta so form shows admin values."""
+        obj = super().get_object(request, object_id, from_field)
+        if obj is not None:
+            meta = _get_doc_meta(obj.pk)
+            if meta:
+                obj.name = meta['name']
+                obj.description = meta['description']
+        return obj
+
+    # ── List view ────────────────────────────────────────────────────────────
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        extra_context['title'] = 'Documentos'
+
+        self._doc_meta_map = _batch_get_doc_meta_all()
+
+        # Batch-fetch collection assignments using direct column queries.
+        try:
+            with connections['aura_db'].cursor() as cursor:
+                cursor.execute("""
+                    SELECT dic.document_id, MAX(dc.classification_level_id)
+                    FROM document_in_document_collection dic
+                    JOIN document_collection dc ON dic.document_collection_id = dc.id
+                    WHERE dic.deleted_at IS NULL
+                      AND dc.deleted_at IS NULL
+                      AND dc.classification_level_id IS NOT NULL
+                    GROUP BY dic.document_id
+                """)
+                level_ids_by_doc = {row[0]: row[1] for row in cursor.fetchall()}
+                cursor.execute("""
+                    SELECT dic.document_id, COUNT(DISTINCT dcc.compartment_id)
+                    FROM document_in_document_collection dic
+                    JOIN document_collection dc ON dic.document_collection_id = dc.id
+                    JOIN document_collection_compartment dcc ON dcc.document_collection_id = dc.id
+                    WHERE dic.deleted_at IS NULL
+                      AND dc.deleted_at IS NULL
+                    GROUP BY dic.document_id
+                """)
+                comp_counts = {row[0]: row[1] for row in cursor.fetchall()}
+        except Exception:
+            level_ids_by_doc = {}
+            comp_counts = {}
+
+        try:
+            all_levels = mac_client.list_classification_levels(request.user)
+            level_names = {l['id']: l['name'] for l in all_levels}
+        except Exception:
+            level_names = {}
+
+        self._doc_level_names = {
+            doc_id: level_names.get(lvl_id, str(lvl_id))
+            for doc_id, lvl_id in level_ids_by_doc.items()
+        }
+        self._doc_comp_counts = comp_counts
+
+        try:
+            from accounts.models import User
+            self._user_map = {u.pk: u.username for u in User.objects.only('id', 'username')}
+        except Exception:
+            self._user_map = {}
+
+        return super().changelist_view(request, extra_context)
+
+    # ── Change / add view ─────────────────────────────────────────────────────
 
     def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
+        extra_context = extra_context or {}
+
+        if object_id:
+            doc_id = int(object_id)
+
+            # Title uses meta name when available.
+            meta = _get_doc_meta(doc_id)
+            if meta:
+                display_name = meta['name']
+            else:
+                try:
+                    display_name = Document.objects.get(pk=doc_id).name
+                except Document.DoesNotExist:
+                    display_name = str(doc_id)
+            extra_context['title'] = f'Modificar documento - {display_name}'
+            extra_context['subtitle'] = None
+
+            # Current MAC assignments.
+            current_level_id, current_comp_ids = _get_doc_mac_assignments(doc_id)
+
+            try:
+                all_levels = sorted(
+                    mac_client.list_classification_levels(request.user),
+                    key=lambda x: x.get('rank', 0),
+                )
+            except Exception:
+                all_levels = []
+            try:
+                all_compartments = mac_client.list_compartments(request.user)
+            except Exception:
+                all_compartments = []
+
+            extra_context.update({
+                'current_level_id': str(current_level_id) if current_level_id else '',
+                'levels_for_doc': all_levels,
+                'compartments_json_doc': json.dumps([
+                    {'id': str(c['id']), 'label': c['name']}
+                    for c in all_compartments
+                ]),
+                'assigned_comp_ids_doc': json.dumps([str(c) for c in current_comp_ids]),
+                'show_change_groups_panel': True,
+            })
+
+            # Handle change POST.
+            if request.method == 'POST':
+                name = request.POST.get('name', '').strip()
+                description = request.POST.get('description', '') or ''
+
+                if not name:
+                    messages.error(request, 'El nombre es obligatorio.')
+                    return HttpResponseRedirect(
+                        reverse('admin:documents_document_change', args=[object_id])
+                    )
+
+                # Save to local meta (survives processing-service overwrites).
+                _save_doc_meta(doc_id, name, description)
+
+                # Also update the document table directly.
+                try:
+                    with connections['aura_db'].cursor() as cursor:
+                        cursor.execute(
+                            'UPDATE document SET name = %s, description = %s WHERE id = %s',
+                            [name, description, doc_id],
+                        )
+                except Exception:
+                    pass
+
+                # Level change (direct DB — API rejects None level or empty compartments).
+                new_level_id_raw = request.POST.get('classification_level_id', '').strip()
+                new_level_id = int(new_level_id_raw) if new_level_id_raw else None
+                if new_level_id != current_level_id:
+                    if current_level_id:
+                        _db_unlink_doc_from_level(doc_id, current_level_id, request.user.pk)
+                    if new_level_id:
+                        col_id = _db_ensure_level_collection(new_level_id, request.user.pk)
+                        _db_link_doc(col_id, doc_id, request.user.pk)
+
+                # Compartments change (direct DB).
+                new_comp_ids = set(int(c) for c in request.POST.getlist('compartment_ids') if c)
+                for comp_id in new_comp_ids - current_comp_ids:
+                    col_id = _db_ensure_comp_collection(comp_id, request.user.pk)
+                    _db_link_doc(col_id, doc_id, request.user.pk)
+                for comp_id in current_comp_ids - new_comp_ids:
+                    _db_unlink_doc_from_comp(doc_id, comp_id, request.user.pk)
+
+                log_audit(
+                    actor=request.user, action='UPDATE',
+                    entity_type='Document', entity_id=str(doc_id),
+                    entity_label=name, source='admin',
+                )
+                messages.success(request, 'Documento actualizado correctamente.')
+
+                if '_continue' in request.POST:
+                    return HttpResponseRedirect(
+                        reverse('admin:documents_document_change', args=[object_id])
+                    )
+                return HttpResponseRedirect(reverse('admin:documents_document_changelist'))
+
+        else:
+            # Add view context.
+            try:
+                all_levels = sorted(
+                    mac_client.list_classification_levels(request.user),
+                    key=lambda x: x.get('rank', 0),
+                )
+            except Exception:
+                all_levels = []
+            try:
+                all_compartments_doc = mac_client.list_compartments(request.user)
+            except Exception:
+                all_compartments_doc = []
+            extra_context.update({
+                'levels_for_doc': all_levels,
+                'compartments_json_doc': json.dumps([
+                    {'id': str(c['id']), 'label': c['name']}
+                    for c in all_compartments_doc
+                ]),
+                'show_groups_panel': True,
+            })
+
         with transaction.atomic(using=router.db_for_write(self.model)):
             return self._changeform_view(request, object_id, form_url, extra_context)
 
     def _changeform_view(self, request, object_id, form_url, extra_context):
-        if object_id is not None or request.method != 'POST':
+        if object_id is not None:
+            return super()._changeform_view(request, object_id, form_url, extra_context)
+
+        if request.method != 'POST':
             return super()._changeform_view(request, object_id, form_url, extra_context)
 
         to_field = request.POST.get(TO_FIELD_VAR, request.GET.get(TO_FIELD_VAR))
         if to_field and not self.to_field_allowed(request, to_field):
-            raise DisallowedModelAdminToField(
-                'The field %s cannot be referenced.' % to_field
-            )
-
+            raise DisallowedModelAdminToField('The field %s cannot be referenced.' % to_field)
         if not self.has_add_permission(request):
             raise PermissionDenied
 
-        fieldsets = self.get_fieldsets(request, None)
-        ModelForm = self.get_form(
-            request,
-            None,
-            change=False,
-            fields=flatten_fieldsets(fieldsets),
-        )
-        form = ModelForm(request.POST, request.FILES)
-        formsets, inline_instances = self._create_formsets(
-            request,
-            form.instance,
-            change=False,
-        )
-        form_validated = form.is_valid()
-        if form_validated:
-            new_object = self.save_form(request, form, change=False)
-        else:
-            new_object = form.instance
+        form_class = self.get_form(request, None)
+        form = form_class(request.POST, request.FILES)
 
-        if all_valid(formsets) and form_validated:
+        if not form.is_valid():
+            fieldsets = self.get_fieldsets(request, None)
+            admin_form = helpers.AdminForm(form, list(fieldsets), {}, (), model_admin=self)
+            context = {
+                **self.admin_site.each_context(request),
+                'title': _('Add %s') % self.opts.verbose_name,
+                'subtitle': None,
+                'adminform': admin_form,
+                'object_id': None,
+                'original': None,
+                'is_popup': IS_POPUP_VAR in request.POST or IS_POPUP_VAR in request.GET,
+                'to_field': to_field,
+                'media': self.media + admin_form.media,
+                'inline_admin_formsets': [],
+                'errors': helpers.AdminErrorList(form, []),
+                'preserved_filters': self.get_preserved_filters(request),
+            }
+            context.update(extra_context or {})
+            return self.render_change_form(
+                request, context, add=True, change=False, obj=None, form_url=form_url
+            )
+
+        raw_collection = form.cleaned_data['raw_collection']
+        name_from_form = form.cleaned_data.get('name', '').strip()
+        description_from_form = form.cleaned_data.get('description', '') or ''
+
+        try:
+            chat_id = _ensure_admin_chat(request.user.pk)
+            response_payload = create_document_from_admin(
+                raw_document=raw_collection,
+                chat_id=chat_id,
+                actor_user=request.user,
+                name=name_from_form or None,
+                description=description_from_form or None,
+            )
+        except DocumentProcessingServiceError as exc:
+            form.add_error(None, str(exc))
+            fieldsets = self.get_fieldsets(request, None)
+            admin_form = helpers.AdminForm(form, list(fieldsets), {}, (), model_admin=self)
+            context = {
+                **self.admin_site.each_context(request),
+                'title': _('Add %s') % self.opts.verbose_name,
+                'subtitle': None,
+                'adminform': admin_form,
+                'object_id': None,
+                'original': None,
+                'is_popup': IS_POPUP_VAR in request.POST or IS_POPUP_VAR in request.GET,
+                'to_field': to_field,
+                'media': self.media + admin_form.media,
+                'inline_admin_formsets': [],
+                'errors': helpers.AdminErrorList(form, []),
+                'preserved_filters': self.get_preserved_filters(request),
+            }
+            return self.render_change_form(
+                request, context, add=True, change=False, obj=None, form_url=form_url
+            )
+
+        document_id = response_payload.get('id')
+
+        # Save to local meta so processing-service overwrites don't affect us.
+        if name_from_form or description_from_form:
+            _save_doc_meta(document_id, name_from_form, description_from_form)
+            # Best-effort update on aura_db too.
             try:
-                self.save_model(request, new_object, form, False)
-            except DocumentProcessingServiceError as exc:
-                form.add_error(None, str(exc))
-                form_validated = False
-            else:
-                self.save_related(request, form, formsets, False)
-                change_message = self.construct_change_message(
-                    request,
-                    form,
-                    formsets,
-                    True,
-                )
-                self.log_addition(request, new_object, change_message)
-                return self.response_add(request, new_object)
+                with connections['aura_db'].cursor() as cursor:
+                    cursor.execute(
+                        'UPDATE document SET name = %s, description = %s WHERE id = %s',
+                        [name_from_form, description_from_form, document_id],
+                    )
+            except Exception:
+                pass
 
-        admin_form = helpers.AdminForm(
-            form,
-            list(fieldsets),
-            self.get_prepopulated_fields(request, None),
-            self.get_readonly_fields(request, None),
-            model_admin=self,
-        )
-        media = self.media + admin_form.media
-        inline_formsets = self.get_inline_formsets(
-            request,
-            formsets,
-            inline_instances,
-            None,
-        )
-        for inline_formset in inline_formsets:
-            media += inline_formset.media
+        try:
+            new_object = Document.objects.get(pk=document_id)
+        except Document.DoesNotExist:
+            new_object = Document(pk=document_id, name=name_from_form)
 
-        context = {
-            **self.admin_site.each_context(request),
-            'title': _('Add %s') % self.opts.verbose_name,
-            'subtitle': None,
-            'adminform': admin_form,
-            'object_id': object_id,
-            'original': None,
-            'is_popup': IS_POPUP_VAR in request.POST or IS_POPUP_VAR in request.GET,
-            'to_field': to_field,
-            'media': media,
-            'inline_admin_formsets': inline_formsets,
-            'errors': helpers.AdminErrorList(form, formsets),
-            'preserved_filters': self.get_preserved_filters(request),
-        }
-        context.update(extra_context or {})
-        return self.render_change_form(
-            request,
-            context,
-            add=True,
-            change=False,
-            obj=None,
-            form_url=form_url,
+        log_audit(
+            actor=request.user, action='CREATE',
+            entity_type='Document', entity_id=str(document_id),
+            entity_label=name_from_form or new_object.name, source='admin',
         )
+
+        # Assign MAC groups (direct DB — API rejects None level or empty compartments).
+        cl_id_raw = request.POST.get('classification_level_id', '').strip()
+        if cl_id_raw:
+            col_id = _db_ensure_level_collection(int(cl_id_raw), request.user.pk)
+            _db_link_doc(col_id, document_id, request.user.pk)
+        for comp_id_raw in request.POST.getlist('compartment_ids'):
+            if not comp_id_raw:
+                continue
+            col_id = _db_ensure_comp_collection(int(comp_id_raw), request.user.pk)
+            _db_link_doc(col_id, document_id, request.user.pk)
+
+        return self.response_add(request, new_object)
+
+    # ── List display helpers ──────────────────────────────────────────────────
+
+    def name_display(self, obj):
+        meta = getattr(self, '_doc_meta_map', {}).get(obj.pk)
+        return meta['name'] if meta else obj.name
+    name_display.short_description = 'Nombre'
+    name_display.admin_order_field = 'name'
+
+    def description_short(self, obj):
+        meta = getattr(self, '_doc_meta_map', {}).get(obj.pk)
+        desc = meta['description'] if meta else obj.description
+        if not desc:
+            return '-'
+        return desc[:80] + ('…' if len(desc) > 80 else '')
+    description_short.short_description = 'Descripción'
 
     def size_display(self, obj):
-        if obj.size_bytes is None:
+        if not obj.file_size_bytes:
             return '-'
-        size = float(obj.size_bytes)
+        size = float(obj.file_size_bytes)
         for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
             if size < 1024.0:
                 return f"{size:.2f} {unit}"
             size /= 1024.0
         return f"{size:.2f} PB"
     size_display.short_description = 'Tamaño'
-    size_display.admin_order_field = 'size_bytes'
+    size_display.admin_order_field = 'file_size_bytes'
 
-    def modified_date(self, obj):
-        if obj.updated_at:
-            return obj.updated_at.strftime('%d/%m/%Y')
-        return '-'
-    modified_date.short_description = 'Modificado'
-    modified_date.admin_order_field = 'updated_at'
+    def mime_type_display(self, obj):
+        return obj.mime_type or '-'
+    mime_type_display.short_description = 'Tipo'
 
-    def is_deleted_badge(self, obj):
-        if obj.is_deleted:
+    def status_badge(self, obj):
+        status = (obj.status or '').lower()
+        if status == 'processed':
+            return format_html('<span style="color:#2e7d32;font-weight:600">&#10003; Procesado</span>')
+        if status == 'failed':
+            return format_html('<span style="color:#c62828;font-weight:600">&#10007; Fallido</span>')
+        if status == 'uploaded':
+            return format_html('<span style="color:#757575">&#9201; Cargado</span>')
+        return format_html('<span style="color:#888">{}</span>', obj.status or '-')
+    status_badge.short_description = 'Estado'
+
+    def nivel_display(self, obj):
+        name = getattr(self, '_doc_level_names', {}).get(obj.pk)
+        if name:
             return format_html(
-                '<span style="color: red; font-weight: bold;">Eliminado</span>'
-            )
-        return format_html('<span style="color: green;">Activo</span>')
-    is_deleted_badge.short_description = 'Estado'
-
-    def created_by_display(self, obj):
-        return obj.created_by or '-'
-    created_by_display.short_description = 'Subido por'
-
-    def group_count(self, obj):
-        count = obj.groups.count()
-        return format_html(
-            '<span style="background-color: #417690; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>',
-            count,
-        )
-    group_count.short_description = 'Grupos'
-
-    def access_scope_display(self, obj):
-        if obj.visible_to_all:
-            return format_html('<span style="color: green; font-weight: bold;">Todos</span>')
-        if obj.minimum_fau_role_id:
-            # Cross-DB lookup: FauRole lives in auth_db, Document in aura_db.
-            fau_role = FauRole.objects.filter(pk=obj.minimum_fau_role_id).first()
-            name = fau_role.name if fau_role else f'ID:{obj.minimum_fau_role_id}'
-            return format_html(
-                '<span style="color: #417690; font-weight: bold;">{} y superiores</span>',
+                '<span style="background-color:#417690;color:white;padding:3px 10px;border-radius:3px;">{}</span>',
                 name,
             )
-        return '-'
-    access_scope_display.short_description = 'Acceso'
+        return format_html('<span style="color:#bbb">—</span>')
+    nivel_display.short_description = 'Nivel'
 
-    def save_model(self, request, obj, form, change):
-        if change:
-            if obj.visible_to_all:
-                obj.minimum_fau_role_id = None
-            _apply_audit_fields(obj, request.user.pk, is_create=False)
-            super().save_model(request, obj, form, change)
-            if obj.visible_to_all:
-                obj.groups.clear()
-            else:
-                obj.groups.set(form.cleaned_data.get('groups'))
-            log_audit(
-                actor=request.user,
-                action='UPDATE',
-                entity_type='Document',
-                entity_id=str(obj.pk),
-                entity_label=obj.name,
-                details={'changed_fields': form.changed_data} if form.changed_data else None,
-                source='admin',
-            )
-            return
-
-        description = form.cleaned_data.get('description')
-        raw_collection = form.cleaned_data.get('raw_collection')
-        if not raw_collection:
-            raise ValidationError('Debe seleccionar un documento.')
-        chat_id = _ensure_admin_chat(request.user.pk)
-
-        response_payload = create_document_from_admin(
-            raw_document=raw_collection,
-            chat_id=chat_id,
-            actor_user=request.user,
+    def agrupaciones_count(self, obj):
+        count = getattr(self, '_doc_comp_counts', {}).get(obj.pk, 0)
+        return format_html(
+            '<span style="background-color:#417690;color:white;padding:3px 10px;border-radius:3px;">{}</span>',
+            count,
         )
+    agrupaciones_count.short_description = 'Agrupaciones'
 
-        obj.description = description
-        obj.size_bytes = raw_collection.size or 0
-        obj.external_document_id = response_payload.get('id')
-        obj.external_storage_url = response_payload.get('storage_url', '')
-        obj.visible_to_all = form.cleaned_data.get('visible_to_all', False)
-        fau_role_obj = form.cleaned_data.get('minimum_fau_role')
-        obj.minimum_fau_role_id = None if obj.visible_to_all else (fau_role_obj.pk if fau_role_obj else None)
-        _apply_audit_fields(obj, request.user.pk, is_create=True)
-        super().save_model(request, obj, form, change)
-        if obj.visible_to_all:
-            obj.groups.clear()
-        else:
-            obj.groups.set(form.cleaned_data.get('groups'))
-        log_audit(
-            actor=request.user,
-            action='CREATE',
-            entity_type='Document',
-            entity_id=str(obj.pk),
-            entity_label=obj.name,
-            details={'name': obj.name, 'size_bytes': obj.size_bytes},
-            source='admin',
-        )
+    def created_by_display(self, obj):
+        if not obj.created_by:
+            return '-'
+        username = getattr(self, '_user_map', {}).get(obj.created_by)
+        return username or str(obj.created_by)
+    created_by_display.short_description = 'Subido por'
 
     def delete_model(self, request, obj):
         obj.soft_delete(deleted_by=request.user.pk)
         log_audit(
-            actor=request.user,
-            action='DELETE',
-            entity_type='Document',
-            entity_id=str(obj.pk),
+            actor=request.user, action='DELETE',
+            entity_type='Document', entity_id=str(obj.pk),
             entity_label=obj.name,
-            details={'deleted_at': str(obj.deleted_at)},
-            source='admin',
+            details={'deleted_at': str(obj.deleted_at)}, source='admin',
         )
 
     def delete_queryset(self, request, queryset):
         for obj in queryset:
             obj.soft_delete(deleted_by=request.user.pk)
             log_audit(
-                actor=request.user,
-                action='DELETE',
-                entity_type='Document',
-                entity_id=str(obj.pk),
+                actor=request.user, action='DELETE',
+                entity_type='Document', entity_id=str(obj.pk),
                 entity_label=obj.name,
-                details={'deleted_at': str(obj.deleted_at)},
-                source='admin',
+                details={'deleted_at': str(obj.deleted_at)}, source='admin',
             )
-
-

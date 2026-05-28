@@ -78,3 +78,25 @@ class ChatListResponse(serializers.ModelSerializer):
         if muted_until is None:
             return False
         return muted_until > timezone.now()
+
+
+class ChatManageListResponse(serializers.ModelSerializer):
+    member_count = serializers.IntegerField(
+        read_only=True,
+        help_text="Number of active members in the chat (annotated).",
+    )
+
+    class Meta:
+        model = Chat
+        fields = [
+            "id",
+            "name",
+            "tags",
+            "is_ephemeral",
+            "is_locked",
+            "last_message_at",
+            "created_by",
+            "created_at",
+            "member_count",
+        ]
+        read_only_fields = fields

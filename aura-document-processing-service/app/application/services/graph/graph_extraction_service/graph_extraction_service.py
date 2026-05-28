@@ -222,23 +222,38 @@ class GraphExtractionService(GraphExtractionServiceInterface):
         allowed_entity_types = self._settings.resolve_allowed_entity_types()
         allowed_relation_types = self._settings.resolve_allowed_relation_types() or None
 
-        semaphore = asyncio.Semaphore(self._settings.extraction_concurrency)
-
-        async def _runner(fragment: Fragment) -> None:
-            async with semaphore:
-                await self._process_single_fragment(
+        window_chars = self._settings.extraction_sliding_window_chars
+        if window_chars > 0:
+            fragments.sort(key=lambda f: (f.fragment_index, int(f.id)))
+            prev_tail = ""
+            for fragment in fragments:
+                prev_tail = await self._process_single_fragment(
                     job_id=job_id,
                     document_id=document_id,
                     fragment=fragment,
                     user=user,
                     allowed_entity_types=allowed_entity_types,
                     allowed_relation_types=allowed_relation_types,
+                    prev_context_tail=prev_tail,
                 )
+        else:
+            semaphore = asyncio.Semaphore(self._settings.extraction_concurrency)
 
-        await asyncio.gather(
-            *(_runner(fragment) for fragment in fragments),
-            return_exceptions=False,
-        )
+            async def _runner(fragment: Fragment) -> None:
+                async with semaphore:
+                    await self._process_single_fragment(
+                        job_id=job_id,
+                        document_id=document_id,
+                        fragment=fragment,
+                        user=user,
+                        allowed_entity_types=allowed_entity_types,
+                        allowed_relation_types=allowed_relation_types,
+                    )
+
+            await asyncio.gather(
+                *(_runner(fragment) for fragment in fragments),
+                return_exceptions=False,
+            )
 
         logger.info(
             "Knowledge graph extraction finished for the document.",
@@ -277,7 +292,8 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             user: AuthenticatedUser,
             allowed_entity_types: list[str],
             allowed_relation_types: Optional[list[str]],
-    ) -> None:
+            prev_context_tail: str = "",
+    ) -> str:
         fragment_id = int(fragment.id)
         await self._job_progress_store.mark_progress(
             job_id=job_id,
@@ -285,9 +301,11 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             current_fragment_id=fragment_id,
         )
 
+        content = self._build_fragment_content(fragment.content, prev_context_tail)
+
         try:
             response = await self._llm_provider.extract_entities_relations(
-                content=fragment.content,
+                content=content,
                 document_id=document_id,
                 fragment_id=fragment_id,
                 allowed_entity_types=allowed_entity_types,
@@ -302,7 +320,7 @@ class GraphExtractionService(GraphExtractionServiceInterface):
                 error=e,
                 stage="llm",
             )
-            return
+            return self._content_tail(fragment.content)
 
         entities_count = 0
         try:
@@ -321,7 +339,7 @@ class GraphExtractionService(GraphExtractionServiceInterface):
                 error=e,
                 stage="upsert_entity",
             )
-            return
+            return self._content_tail(fragment.content)
 
         relations_count = 0
         try:
@@ -340,7 +358,7 @@ class GraphExtractionService(GraphExtractionServiceInterface):
                 error=e,
                 stage="upsert_relation",
             )
-            return
+            return self._content_tail(fragment.content)
 
         await self._job_progress_store.mark_progress(
             job_id=job_id,
@@ -358,6 +376,18 @@ class GraphExtractionService(GraphExtractionServiceInterface):
                 "relations_count": relations_count,
             },
         )
+        return self._content_tail(fragment.content)
+
+    def _build_fragment_content(self, content: str, prev_tail: str) -> str:
+        if not prev_tail:
+            return content
+        return f"[CONTEXTO PREVIO]\n{prev_tail}\n[FIN CONTEXTO PREVIO]\n\n{content}"
+
+    def _content_tail(self, content: str) -> str:
+        window = self._settings.extraction_sliding_window_chars
+        if window <= 0:
+            return ""
+        return content[-window:] if len(content) > window else content
 
     async def _upsert_entity(
             self,

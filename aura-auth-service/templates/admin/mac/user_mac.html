@@ -1,0 +1,129 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  .mac-card { background: #fafafa; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 20px; }
+  .mac-card-header { padding: 12px 18px; border-bottom: 1px solid #e0e0e0; font-size: 14px; font-weight: 700; color: #205067; text-transform: uppercase; letter-spacing: 0.4px; }
+  .mac-card-body { padding: 16px 18px; }
+  .mac-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .mac-label { font-size: 13px; font-weight: 600; color: #555; min-width: 130px; }
+  .mac-value { font-size: 13px; color: #222; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+  .badge-level { background: #dbeafe; color: #1d4ed8; }
+  .badge-comp { background: #dcfce7; color: #166534; margin: 2px; }
+  .badge-none { background: #f3f4f6; color: #6b7280; }
+  select, input[type="number"] { padding: 7px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; background: #fff; }
+  select:focus, input:focus { outline: none; border-color: #417690; box-shadow: 0 0 0 2px rgba(65,118,144,.12); }
+  .btn { display: inline-block; padding: 7px 14px; border-radius: 4px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; text-decoration: none; }
+  .btn-primary { background: #205067; color: #fff; }
+  .btn-primary:hover { background: #174055; color: #fff; }
+  .btn-danger { background: #dc2626; color: #fff; }
+  .btn-danger:hover { background: #b91c1c; color: #fff; }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+  .comp-list { list-style: none; padding: 0; margin: 0; }
+  .comp-list li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #f0f0f0; }
+  .comp-list li:last-child { border-bottom: none; }
+  .back-link { display: inline-block; margin-bottom: 16px; font-size: 13px; color: #417690; text-decoration: none; }
+  .back-link:hover { text-decoration: underline; }
+  .divider { margin: 10px 0; border: none; border-top: 1px solid #eee; }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Inicio</a>
+  &rsaquo; <a href="{% url 'admin:accounts_user_changelist' %}">Usuarios</a>
+  &rsaquo; {{ target_user.username }}
+  &rsaquo; Perfil MAC
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <h1>{{ title }}</h1>
+  <p style="color:#697688;font-size:13px;margin-bottom:20px">{{ subtitle }}</p>
+
+  <a href="{% url 'admin:accounts_user_changelist' %}" class="back-link">&#8592; Volver a Usuarios</a>
+
+  <!-- Clearance section -->
+  <div class="mac-card">
+    <div class="mac-card-header">Habilitación de Seguridad</div>
+    <div class="mac-card-body">
+      <div class="mac-row">
+        <span class="mac-label">Nivel actual:</span>
+        <span class="mac-value">
+          {% if clearance and clearance.classification_level %}
+            <span class="badge badge-level">{{ clearance.classification_level.name }}</span>
+            <span style="font-size:12px;color:#888">(rango {{ clearance.classification_level.rank }})</span>
+          {% else %}
+            <span class="badge badge-none">Sin habilitación</span>
+          {% endif %}
+        </span>
+      </div>
+      <hr class="divider">
+      <form method="post" style="display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="set_clearance">
+        <select name="classification_level_id" required>
+          <option value="">-- Seleccionar nivel --</option>
+          {% for level in levels %}
+          <option value="{{ level.id }}"
+            {% if clearance and clearance.classification_level and clearance.classification_level.id == level.id %}selected{% endif %}>
+            {{ level.name }} (rango {{ level.rank }})
+          </option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-primary">{% if clearance %}Actualizar habilitación{% else %}Asignar habilitación{% endif %}</button>
+      </form>
+      {% if clearance %}
+      <form method="post" style="display:inline;margin-left:8px">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="delete_clearance">
+        <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('¿Eliminar la habilitación de este usuario?')">Quitar habilitación</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Compartments section -->
+  <div class="mac-card">
+    <div class="mac-card-header">Agrupaciones Asignados</div>
+    <div class="mac-card-body">
+      {% if user_compartments %}
+      <ul class="comp-list">
+        {% for uc in user_compartments %}
+        <li>
+          <span class="badge badge-comp">{{ uc.compartment.name }}</span>
+          <form method="post" style="display:inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="remove_compartment">
+            <input type="hidden" name="compartment_id" value="{{ uc.compartment.id }}">
+            <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('¿Quitar agrupación?')">Quitar</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p style="color:#888;font-size:13px;margin:0">No tiene agrupaciones asignados.</p>
+      {% endif %}
+
+      {% if available_compartments %}
+      <hr class="divider">
+      <form method="post" style="display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add_compartment">
+        <select name="compartment_id" required>
+          <option value="">-- Agregar agrupación --</option>
+          {% for comp in available_compartments %}
+          <option value="{{ comp.id }}">{{ comp.name }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-primary">Agregar</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

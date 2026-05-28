@@ -1,5 +1,5 @@
 @dpsBase = http://localhost:8000/api/v1
-@authToken = user_token_123
+@authToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjo3LCJpc19zdXBlcl9hZG1pbiI6dHJ1ZSwiZXhwIjoxNzc5ODIyOTE3fQ.xx98dBPfY7QV9z98sSodFkwcElczYIFXwKVL1ek6O8Q
 
 ### Subir PDF (multipart: chat_id + file)
 POST {{dpsBase}}/create-document
@@ -14,7 +14,7 @@ Content-Disposition: form-data; name="chat_id"
 Content-Disposition: form-data; name="file"; filename="A_Avión_de_Caza_Multirrol_F-X_Halcón_Boreal_digital.pdf"
 Content-Type: application/pdf
 
-< ../../test_documents/general/A_Avión_de_Caza_Multirrol_F-X_Halcón_Boreal_digital.pdf
+< ../../test_documents/general/A_Arte_y_Cultura_digital.pdf
 ------WebKitFormBoundary7MA4YWxkTrZu0gW--
 
 

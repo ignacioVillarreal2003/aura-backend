@@ -62,11 +62,19 @@
     font-size: 12px;
     font-weight: 600;
   }
-  .badge-public {
+  .badge-ready {
     color: #fff;
     background: #17803d;
   }
-  .badge-restricted {
+  .badge-processing {
+    color: #fff;
+    background: #8a6300;
+  }
+  .badge-error {
+    color: #fff;
+    background: #9b1c1c;
+  }
+  .badge-default {
     color: #fff;
     background: #365f90;
   }
@@ -90,16 +98,22 @@
     </section>
     <section class="dashboard-card">
       <h3>Documentos activos</h3>
-      <div class="dashboard-value">{{ kpis.documents_total }}</div>
-      <div class="muted">Nuevos (30d): {{ kpis.documents_new_30 }}</div>
-    </section>
-    <section class="dashboard-card">
-      <h3>Documentos publicos</h3>
-      <div class="dashboard-value">{{ kpis.documents_public }}</div>
+      {% if kpis.documents_available %}
+        <div class="dashboard-value">{{ kpis.documents_total }}</div>
+        <div class="muted">Nuevos (30d): {{ kpis.documents_new_30 }}</div>
+      {% else %}
+        <div class="dashboard-value">-</div>
+        <div class="muted">Metrica no disponible</div>
+      {% endif %}
     </section>
     <section class="dashboard-card">
       <h3>Almacenamiento total</h3>
-      <div class="dashboard-value">{{ kpis.total_storage_bytes|filesizeformat }}</div>
+      {% if kpis.documents_available %}
+        <div class="dashboard-value">{{ kpis.total_storage_bytes|filesizeformat }}</div>
+      {% else %}
+        <div class="dashboard-value">-</div>
+        <div class="muted">Metrica no disponible</div>
+      {% endif %}
     </section>
     <section class="dashboard-card">
       <h3>Notificaciones (7d)</h3>
@@ -136,19 +150,19 @@
     </section>
 
     <section class="dashboard-card">
-      <h3>Grupos con mas usuarios</h3>
+      <h3>Colecciones con mas documentos</h3>
       <table class="dashboard-table">
         <thead>
           <tr>
-            <th>Grupo</th>
-            <th>Usuarios</th>
+            <th>Coleccion</th>
+            <th>Documentos</th>
           </tr>
         </thead>
         <tbody>
-          {% for item in groups_by_user_count %}
+          {% for item in collections_by_doc_count %}
             <tr>
               <td>{{ item.name }}</td>
-              <td>{{ item.total_users }}</td>
+              <td>{{ item.doc_count }}</td>
             </tr>
           {% empty %}
             <tr><td colspan="2">Sin datos</td></tr>
@@ -171,7 +185,7 @@
           {% for item in largest_documents %}
             <tr>
               <td>{{ item.name }}</td>
-              <td>{{ item.size_bytes|filesizeformat }}</td>
+              <td>{{ item.file_size_bytes|filesizeformat }}</td>
               <td>{{ item.created_by|default:"-" }}</td>
             </tr>
           {% empty %}
@@ -188,7 +202,7 @@
           <tr>
             <th>Documento</th>
             <th>Fecha</th>
-            <th>Acceso</th>
+            <th>Estado</th>
           </tr>
         </thead>
         <tbody>
@@ -197,10 +211,14 @@
               <td>{{ item.name }}</td>
               <td>{{ item.created_at|date:"d/m/Y H:i" }}</td>
               <td>
-                {% if item.visible_to_all %}
-                  <span class="badge badge-public">Todos</span>
+                {% if item.status == 'ready' %}
+                  <span class="badge badge-ready">Listo</span>
+                {% elif item.status == 'processing' %}
+                  <span class="badge badge-processing">Procesando</span>
+                {% elif item.status == 'error' %}
+                  <span class="badge badge-error">Error</span>
                 {% else %}
-                  <span class="badge badge-restricted">Restringido</span>
+                  <span class="badge badge-default">{{ item.status|default:"-" }}</span>
                 {% endif %}
               </td>
             </tr>

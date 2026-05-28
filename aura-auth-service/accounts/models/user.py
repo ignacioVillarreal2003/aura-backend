@@ -203,16 +203,6 @@ class User(AbstractBaseUser):
         verbose_name='Eliminado por',
     )
     deleted_at = models.DateTimeField(null=True, blank=True, verbose_name='Fecha eliminado')
-    fau_role = models.ForeignKey(
-        'FauRole',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='users',
-        db_column='fau_role_id',
-        verbose_name='Rol FAU',
-    )
-
     objects = CustomUserManager()
 
     USERNAME_FIELD = 'username'

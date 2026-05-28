@@ -17,22 +17,21 @@ admin.site.unregister(Group)
 
 def _custom_get_app_list(self, request, app_label=None):
     app_list = admin.AdminSite.get_app_list(self, request, app_label)
-    desired_order = ['User']
-    if _is_super_admin_user(request.user) or _is_admin_user(request.user):
-        desired_order = [
-            'User',
-            'CustomGroup',
-            'Role',
-            'FauRole',
-            'Permission',
-        ]
-    order_map = {name: index for index, name in enumerate(desired_order)}
 
-    documents_order = ['Document']
-    documents_order_map = {name: index for index, name in enumerate(documents_order)}
+    is_admin = _is_admin_user(request.user)
+    is_superadmin = _is_super_admin_user(request.user)
+    is_any_admin = is_superadmin or is_admin
+
+    # Models shown in Gestión de usuarios (accounts app), in order.
+    # CustomGroup is excluded — groups are managed via MAC collections.
+    _accounts_allowed = {'User', 'Role', 'Permission'}
+    desired_order = ['User']
+    if is_any_admin:
+        desired_order = ['User', 'Role', 'Permission']
+    order_map = {name: i for i, name in enumerate(desired_order)}
 
     notifications_order = ['IndividualNotification', 'GroupNotification', 'SystemNotification']
-    notifications_order_map = {name: index for index, name in enumerate(notifications_order)}
+    notifications_order_map = {name: i for i, name in enumerate(notifications_order)}
 
     placeholder_apps = [
         {
@@ -49,24 +48,61 @@ def _custom_get_app_list(self, request, app_label=None):
                 }
             ],
         },
-        # 'chat' is now a real registered app — no placeholder needed.
-        # 'notifications' placeholder removed — real models registered via notifications app.
     ]
 
-    if _is_super_admin_user(request.user):
+    # Grupos section: classification levels and compartments.
+    if is_any_admin:
+        grupos_models = [
+            {
+                'name': 'Niveles',
+                'object_name': 'ClassificationLevel',
+                'admin_url': reverse('admin:mac_classification_levels_list'),
+                'view_only': True,
+            },
+            {
+                'name': 'Agrupaciones',
+                'object_name': 'Compartment',
+                'admin_url': reverse('admin:mac_compartments_list'),
+                'view_only': True,
+            },
+        ]
         placeholder_apps.append(
             {
-                'app_label': 'auditoria',
-                'name': 'Auditoría',
-                'app_url': reverse('admin:auditoria_list'),
+                'app_label': 'grupos',
+                'name': 'Grupos',
+                'app_url': reverse('admin:mac_classification_levels_list'),
+                'has_module_perms': True,
+                'models': grupos_models,
+            }
+        )
+
+    # Gestión section: documents, chats and audit log — visible to all admins.
+    if is_any_admin:
+        placeholder_apps.append(
+            {
+                'app_label': 'gestion',
+                'name': 'Gestión',
+                'app_url': reverse('admin:documents_document_changelist'),
                 'has_module_perms': True,
                 'models': [
+                    {
+                        'name': 'Documentos',
+                        'object_name': 'Document',
+                        'admin_url': reverse('admin:documents_document_changelist'),
+                        'view_only': True,
+                    },
+                    {
+                        'name': 'Chats',
+                        'object_name': 'Chat',
+                        'admin_url': reverse('admin:chat_chat_changelist'),
+                        'view_only': True,
+                    },
                     {
                         'name': 'Registro de acciones',
                         'object_name': 'AuditoriaList',
                         'admin_url': reverse('admin:auditoria_list'),
                         'view_only': True,
-                    }
+                    },
                 ],
             }
         )
@@ -74,43 +110,32 @@ def _custom_get_app_list(self, request, app_label=None):
     app_order = {
         'dashboard': 0,
         'accounts': 1,
-        'documents': 2,
-        'chat': 3,
+        'grupos': 2,
+        'gestion': 3,
         'notifications': 4,
-        'auditoria': 5,
     }
+
+    # Labels to suppress from the auto-generated app list (merged into Gestión).
+    _hidden_apps = {'documents', 'chat', 'auditoria'}
 
     for app in app_list:
         if app.get('app_label') == 'accounts':
-            if not (_is_super_admin_user(request.user) or _is_admin_user(request.user)):
-                app['models'] = [
-                    model for model in app['models']
-                    if model.get('object_name') in {'User'}
-                ]
+            # Show only allowed models; CustomGroup is intentionally excluded.
+            allowed = _accounts_allowed if is_any_admin else {'User'}
+            app['models'] = [
+                m for m in app['models'] if m.get('object_name') in allowed
+            ]
             app['models'].sort(
-                key=lambda model: order_map.get(model.get('object_name'), len(order_map))
-            )
-        if app.get('app_label') == 'documents':
-            app['models'].sort(
-                key=lambda model: documents_order_map.get(
-                    model.get('object_name'),
-                    len(documents_order_map)
-                )
+                key=lambda m: order_map.get(m.get('object_name'), len(order_map))
             )
         if app.get('app_label') == 'notifications':
             app['models'].sort(
-                key=lambda model: notifications_order_map.get(
-                    model.get('object_name'),
-                    len(notifications_order_map)
-                )
+                key=lambda m: notifications_order_map.get(m.get('object_name'), len(notifications_order_map))
             )
-    # placeholder_apps[0] = Dashboard (always first).
-    # placeholder_apps[1:] = Auditoría (super-admin only, appended above).
-    # Real apps (accounts, documents, chat, notifications) come from app_list.
+
+    app_list = [a for a in app_list if a.get('app_label') not in _hidden_apps]
     app_list = placeholder_apps[:1] + app_list + placeholder_apps[1:]
-    app_list.sort(
-        key=lambda app: app_order.get(app.get('app_label'), len(app_order))
-    )
+    app_list.sort(key=lambda a: app_order.get(a.get('app_label'), len(app_order)))
     return app_list
 
 

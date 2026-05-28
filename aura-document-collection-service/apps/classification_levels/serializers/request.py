@@ -14,6 +14,12 @@ class CreateClassificationLevelRequest(serializers.Serializer):
         trim_whitespace=True,
         help_text="Operational label surfaced in tooling; trims surrounding whitespace.",
     )
+    description = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default='',
+        help_text="Optional description of the classification level.",
+    )
     rank = serializers.IntegerField(
         min_value=1,
         max_value=32767,
@@ -38,6 +44,7 @@ class CreateClassificationLevelRequest(serializers.Serializer):
 )
 class PatchClassificationLevelRequest(serializers.Serializer):
     name = serializers.CharField(max_length=100, trim_whitespace=True, required=False, help_text="Optional rename.")
+    description = serializers.CharField(required=False, allow_blank=True, help_text="Optional description update.")
     rank = serializers.IntegerField(
         min_value=1,
         max_value=32767,
