@@ -114,8 +114,9 @@
     text-transform: uppercase;
     letter-spacing: .04em;
   }
-  .source-admin { background: #dbeafe; color: #1e40af; }
-  .source-api   { background: #dcfce7; color: #14532d; }
+  .source-admin      { background: #dbeafe; color: #1e40af; }
+  .source-superadmin { background: #fef3c7; color: #92400e; }
+  .source-api        { background: #dcfce7; color: #14532d; }
   .details-btn {
     background: none;
     border: 1px solid #d1d8e4;
@@ -193,12 +194,13 @@
 </style>
 {% endblock %}
 
+{% block content_title %}{% endblock %}
+
 {% block content %}
 <div id="content-main">
   <div class="audit-header">
     <div>
-      <h1>{{ title }}</h1>
-      <p class="muted">{{ subtitle }} &mdash; Generado: {{ generated_at|date:"d/m/Y H:i:s" }}</p>
+      <h1>Registro de acciones</h1>
     </div>
     <form class="audit-filters" method="get" action="">
       <input type="text" name="q" value="{{ search }}" placeholder="Buscar usuario, entidad&hellip;">
@@ -260,9 +262,9 @@
         </td>
         <td><span class="entity-tag">{{ entry.entity_type_label }}</span></td>
         <td class="muted">{{ entry.entity_id|default:"—" }}</td>
-        <td>{{ entry.entity_label|default:"—" }}</td>
+        <td>{{ entry.entity_label_html|safe }}</td>
         <td>
-          <span class="source-tag source-{{ entry.source }}">{{ entry.source }}</span>
+          <span class="source-tag source-{{ entry.source }}">{{ entry.source_label }}</span>
         </td>
         <td>
           {% if entry.details %}

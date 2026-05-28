@@ -118,19 +118,11 @@ def introspect_token(token: str) -> dict | None:
 	if not user or user.is_deleted or user.status != 'active':
 		return None
 
-	if user.is_superuser:
-		return {
-			'user_id': user.id,
-			'roles': get_user_roles(user),
-			'permissions': ['*'],
-			'is_super_admin': True,
-		}
-
 	return {
 		'user_id': user.id,
 		'roles': get_user_roles(user),
 		'permissions': get_user_permissions(user),
-		'is_super_admin': False,
+		'is_super_admin': user.is_superuser,
 	}
 
 
@@ -151,12 +143,10 @@ def get_user_info(token: str) -> dict | None:
 	if not user or user.is_deleted or user.status != 'active':
 		return None
 
-	permissions = ['*'] if user.is_superuser else get_user_permissions(user)
-
 	return {
 		'id': user.id,
 		'email': user.email,
 		'username': user.username,
 		'roles': get_user_roles(user),
-		'permissions': permissions,
+		'permissions': get_user_permissions(user),
 	}

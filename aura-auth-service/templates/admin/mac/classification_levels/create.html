@@ -4,6 +4,22 @@
 {% block extrastyle %}
 {{ block.super }}
 <link rel="stylesheet" href="{% static 'admin/css/forms.css' %}">
+<style>
+  .search-container { margin-bottom: 12px; }
+  .search-input { width:100%;padding:9px 12px;border:1px solid #ccc;border-radius:4px;font-size:13px;box-sizing:border-box;background:#fff; }
+  .search-input:focus { outline:none;border-color:#417690;box-shadow:0 0 0 2px rgba(65,118,144,.12); }
+  .dual-panel-container { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
+  .panel { display:flex;flex-direction:column;border:1px solid #ccc;border-radius:4px;background:#fff;min-height:200px; }
+  .panel-header { background:#f5f5f5;padding:10px 12px;border-bottom:1px solid #ddd;font-weight:600;font-size:12px;color:#333;text-transform:uppercase;letter-spacing:.2px; }
+  .panel-content { flex:1;overflow-y:auto;max-height:280px; }
+  .panel-item { padding:9px 12px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:8px;cursor:pointer; }
+  .panel-item:last-child { border-bottom:none; }
+  .panel-item:hover { background:#f8fbff; }
+  .panel-item input[type="checkbox"] { margin:0;cursor:pointer; }
+  .panel-item label { margin:0;cursor:pointer;flex:1;font-size:13px; }
+  .empty-panel { padding:12px;color:#888;font-size:12px; }
+  @media (max-width:900px) { .dual-panel-container { grid-template-columns:1fr; } }
+</style>
 {% endblock %}
 
 {% block breadcrumbs %}
@@ -18,7 +34,11 @@
 <div id="content-main">
   <form method="post">
     {% csrf_token %}
+    <select name="user_ids" id="id_user_ids" multiple style="display:none"></select>
+    <select name="doc_ids" id="id_doc_ids" multiple style="display:none"></select>
+
     <fieldset class="module aligned">
+      <h2>Información del Nivel</h2>
       <div class="form-row field-name">
         <div style="display:flex;align-items:center;gap:12px">
           <label class="required" for="id_name" style="font-weight:bold;min-width:110px;flex-shrink:0">Nombre:</label>
@@ -32,6 +52,49 @@
         </div>
       </div>
     </fieldset>
+
+    <fieldset class="module aligned">
+      <h2>Usuarios asignados</h2>
+      <div class="form-row">
+        <div style="width:100%">
+          <div class="search-container">
+            <input type="text" class="search-input" id="search-users" placeholder="Buscar usuario...">
+          </div>
+          <div class="dual-panel-container">
+            <div class="panel">
+              <div class="panel-header">Sin este nivel</div>
+              <div class="panel-content" id="available-users"></div>
+            </div>
+            <div class="panel">
+              <div class="panel-header">Con este nivel</div>
+              <div class="panel-content" id="selected-users"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset class="module aligned">
+      <h2>Documentos asignados</h2>
+      <div class="form-row">
+        <div style="width:100%">
+          <div class="search-container">
+            <input type="text" class="search-input" id="search-docs" placeholder="Buscar documento...">
+          </div>
+          <div class="dual-panel-container">
+            <div class="panel">
+              <div class="panel-header">Sin este nivel</div>
+              <div class="panel-content" id="available-docs"></div>
+            </div>
+            <div class="panel">
+              <div class="panel-header">Con este nivel</div>
+              <div class="panel-content" id="selected-docs"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </fieldset>
+
     <div class="submit-row">
       <input type="submit" name="_addanother" value="Guardar y añadir otro">
       <input type="submit" name="_continue" value="Guardar y continuar editando">
@@ -39,4 +102,106 @@
     </div>
   </form>
 </div>
+
+<script>
+(function() {
+  var usersData = {{ users_json|safe }};
+  var assignedIds = new Set({{ assigned_ids_json|safe }}.map(String));
+  var hiddenSelect = document.getElementById('id_user_ids');
+  var availPanel = document.getElementById('available-users');
+  var selPanel = document.getElementById('selected-users');
+  var searchInput = document.getElementById('search-users');
+
+  usersData.forEach(function(item) {
+    var opt = document.createElement('option');
+    opt.value = item.id; opt.textContent = item.label;
+    if (assignedIds.has(String(item.id))) opt.selected = true;
+    hiddenSelect.appendChild(opt);
+  });
+
+  function getSelectedIds() {
+    return new Set(Array.from(hiddenSelect.options).filter(o => o.selected).map(o => o.value));
+  }
+
+  function renderUsers(filter) {
+    filter = (filter || '').toLowerCase();
+    availPanel.innerHTML = ''; selPanel.innerHTML = '';
+    var selectedIds = getSelectedIds();
+    usersData.forEach(function(item) {
+      var id = String(item.id);
+      var isSelected = selectedIds.has(id);
+      if (!isSelected && filter && !item.label.toLowerCase().includes(filter)) return;
+      var row = document.createElement('div'); row.className = 'panel-item';
+      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = isSelected; cb.id = 'u-' + id;
+      var lbl = document.createElement('label'); lbl.setAttribute('for', cb.id); lbl.textContent = item.label;
+      if (item.blocked) {
+        cb.disabled = true;
+        row.title = 'Este usuario ya tiene otro nivel asignado';
+        row.style.opacity = '0.45';
+      }
+      row.appendChild(cb); row.appendChild(lbl);
+      cb.addEventListener('change', function(e) {
+        var opt = Array.from(hiddenSelect.options).find(o => o.value === id);
+        if (opt) opt.selected = e.target.checked;
+        renderUsers(searchInput.value);
+      });
+      (isSelected ? selPanel : availPanel).appendChild(row);
+    });
+    if (!availPanel.children.length) availPanel.innerHTML = '<div class="empty-panel">Sin usuarios disponibles</div>';
+    if (!selPanel.children.length) selPanel.innerHTML = '<div class="empty-panel">Sin usuarios asignados</div>';
+  }
+  searchInput.addEventListener('input', function() { renderUsers(this.value); });
+  renderUsers('');
+})();
+
+(function() {
+  var docsData = {{ docs_json|safe }};
+  var assignedDocIds = new Set({{ assigned_doc_ids_json|safe }}.map(String));
+  var hiddenSelect = document.getElementById('id_doc_ids');
+  var availPanel = document.getElementById('available-docs');
+  var selPanel = document.getElementById('selected-docs');
+  var searchInput = document.getElementById('search-docs');
+
+  docsData.forEach(function(item) {
+    var opt = document.createElement('option');
+    opt.value = item.id; opt.textContent = item.label;
+    if (assignedDocIds.has(String(item.id))) opt.selected = true;
+    hiddenSelect.appendChild(opt);
+  });
+
+  function getSelectedIds() {
+    return new Set(Array.from(hiddenSelect.options).filter(o => o.selected).map(o => o.value));
+  }
+
+  function renderDocs(filter) {
+    filter = (filter || '').toLowerCase();
+    availPanel.innerHTML = ''; selPanel.innerHTML = '';
+    var selectedIds = getSelectedIds();
+    docsData.forEach(function(item) {
+      var id = String(item.id);
+      var isSelected = selectedIds.has(id);
+      if (!isSelected && filter && !item.label.toLowerCase().includes(filter)) return;
+      var row = document.createElement('div'); row.className = 'panel-item';
+      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = isSelected; cb.id = 'd-' + id;
+      var lbl = document.createElement('label'); lbl.setAttribute('for', cb.id); lbl.textContent = item.label;
+      if (item.blocked) {
+        cb.disabled = true;
+        row.title = 'Este documento ya está asignado a otro nivel';
+        row.style.opacity = '0.45';
+      }
+      row.appendChild(cb); row.appendChild(lbl);
+      cb.addEventListener('change', function(e) {
+        var opt = Array.from(hiddenSelect.options).find(o => o.value === id);
+        if (opt) opt.selected = e.target.checked;
+        renderDocs(searchInput.value);
+      });
+      (isSelected ? selPanel : availPanel).appendChild(row);
+    });
+    if (!availPanel.children.length) availPanel.innerHTML = '<div class="empty-panel">Sin documentos disponibles</div>';
+    if (!selPanel.children.length) selPanel.innerHTML = '<div class="empty-panel">Sin documentos asignados</div>';
+  }
+  searchInput.addEventListener('input', function() { renderDocs(this.value); });
+  renderDocs('');
+})();
+</script>
 {% endblock %}

@@ -3,7 +3,7 @@
 from django.contrib import admin
 from django.contrib.auth.models import Group
 from django.urls import reverse
-from accounts.admin_parts.common import _is_super_admin_user, _is_admin_user
+from accounts.admin_parts.common import _is_super_admin_user, _is_admin_user, _is_effective_superadmin
 
 
 # Customize admin site
@@ -19,7 +19,7 @@ def _custom_get_app_list(self, request, app_label=None):
     app_list = admin.AdminSite.get_app_list(self, request, app_label)
 
     is_admin = _is_admin_user(request.user)
-    is_superadmin = _is_super_admin_user(request.user)
+    is_superadmin = _is_effective_superadmin(request)
     is_any_admin = is_superadmin or is_admin
 
     # Models shown in Gestión de usuarios (accounts app), in order.
@@ -91,12 +91,12 @@ def _custom_get_app_list(self, request, app_label=None):
                         'admin_url': reverse('admin:documents_document_changelist'),
                         'view_only': True,
                     },
-                    {
+                    *([{
                         'name': 'Chats',
                         'object_name': 'Chat',
                         'admin_url': reverse('admin:chat_chat_changelist'),
                         'view_only': True,
-                    },
+                    }] if is_superadmin else []),
                     {
                         'name': 'Registro de acciones',
                         'object_name': 'AuditoriaList',

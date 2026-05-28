@@ -5,7 +5,7 @@ from django.contrib import admin
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
-from django.urls import reverse
+from django.urls import path, reverse
 
 from accounts.admin_parts.common import _is_admin_or_super_user, log_audit
 from accounts.services.elevation_service import (
@@ -75,3 +75,18 @@ def _drop_elevation_view(request):
         source='admin',
     )
     return redirect(reverse('admin:index'))
+
+
+_prev_get_urls = admin.site.get_urls
+
+
+def _elevation_get_urls(self):
+    urls = _prev_get_urls()
+    custom_urls = [
+        path('elevate/', self.admin_view(_elevate_view), name='elevate'),
+        path('drop-elevation/', self.admin_view(_drop_elevation_view), name='drop_elevation'),
+    ]
+    return custom_urls + urls
+
+
+admin.site.get_urls = _elevation_get_urls.__get__(admin.site, admin.AdminSite)

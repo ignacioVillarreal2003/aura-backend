@@ -113,8 +113,7 @@ def _dashboard_overview_view(request):
 
     context = {
         **admin.site.each_context(request),
-        'title': 'Dashboard',
-        'subtitle': 'Vista general administrativa',
+        'title': 'Dashboard Administrativo',
         'kpis': {
             'users_total': users_total,
             'users_enabled': users_enabled,

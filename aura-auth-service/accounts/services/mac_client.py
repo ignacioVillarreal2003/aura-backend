@@ -31,10 +31,15 @@ class MacServiceClient:
             'Content-Type': 'application/json',
         }
 
-    def _handle(self, resp):
+    def _handle(self, resp, method=''):
         if resp.status_code == 404:
             raise MacServiceError('Recurso no encontrado.')
         if resp.status_code == 409:
+            if method == 'DELETE':
+                raise MacServiceError(
+                    'No se puede eliminar: el recurso tiene usuarios o documentos asignados. '
+                    'Quítalos primero antes de eliminar.'
+                )
             raise MacServiceError('Conflicto: el recurso ya existe.')
         if resp.status_code == 400:
             try:
@@ -135,7 +140,7 @@ class MacServiceClient:
                 headers=self._headers(user),
                 timeout=_TIMEOUT,
             )
-            return self._handle(resp)
+            return self._handle(resp, method='DELETE')
         except MacServiceError:
             raise
         except Exception as exc:
@@ -190,12 +195,12 @@ class MacServiceClient:
             return data.get('results', data.get('data', []))
         return data or []
 
-    def create_document_collection(self, user, name, classification_level_id, compartment_ids=None):
-        payload = {
-            'name': name,
-            'classification_level_id': classification_level_id,
-            'compartment_ids': compartment_ids or [],
-        }
+    def create_document_collection(self, user, name, classification_level_id=None, compartment_ids=None):
+        payload = {'name': name}
+        if classification_level_id is not None:
+            payload['classification_level_id'] = classification_level_id
+        if compartment_ids:
+            payload['compartment_ids'] = compartment_ids
         return self._post(user, '/api/v1/document-collections/', payload)
 
     def get_document_collection(self, user, collection_id):

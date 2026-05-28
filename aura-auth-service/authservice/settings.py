@@ -60,6 +60,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'accounts.middleware.elevation_middleware.ElevationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django_prometheus.middleware.PrometheusAfterMiddleware',
@@ -282,6 +283,10 @@ LOGS_DIR.mkdir(exist_ok=True)
 
 # Environment
 ENVIRONMENT = config('ENVIRONMENT', default='development')
+
+# Session — 1 hour for admin/superadmin panel
+SESSION_COOKIE_AGE = 3600
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 
 # Security Settings (for production)
 if not DEBUG:
