@@ -1,4 +1,4 @@
-from core.exceptions.base import ForbiddenException, NotFoundException, ServiceUnavailableException
+from core.exceptions.base import ForbiddenException, NotFoundException, ServiceException, ServiceUnavailableException
 
 
 class ChecklistNotFoundException(NotFoundException):
@@ -15,3 +15,9 @@ class LLMServiceException(ServiceUnavailableException):
     status_code = 502
     error_code = "llm_service_error"
     detail = "El servicio de generación no está disponible. Intentá de nuevo más tarde."
+
+
+class ChecklistExportException(ServiceException):
+    status_code = 500
+    error_code = "checklist_export_failed"
+    detail = "No se pudo generar la exportación de la checklist."

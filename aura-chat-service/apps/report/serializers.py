@@ -16,7 +16,8 @@ class _FragmentSerializer(serializers.Serializer):
 class GenerateReportRequest(serializers.Serializer):
     type = serializers.ChoiceField(choices=Report.Type.choices)
     mode = serializers.ChoiceField(choices=Report.Mode.choices)
-    message = serializers.CharField(allow_blank=False)
+    message = serializers.CharField(allow_blank=False, max_length=4000)
+    chat_id = serializers.IntegerField(required=False, allow_null=True)
 
 
 class ReportGenerateResponse(serializers.Serializer):
@@ -25,7 +26,6 @@ class ReportGenerateResponse(serializers.Serializer):
     fragments = _FragmentSerializer(many=True)
 
     def get_report(self, obj):
-        from apps.report.serializers import ReportResponse
         return ReportResponse(obj["report"]).data
 
 
@@ -49,6 +49,7 @@ class ReportResponse(serializers.ModelSerializer):
             "content",
             "mode",
             "metadata",
+            "source_chat_id",
             "created_by",
             "created_at",
             "updated_by",
@@ -65,6 +66,7 @@ class ReportListResponse(serializers.ModelSerializer):
             "type",
             "title",
             "mode",
+            "source_chat_id",
             "created_by",
             "created_at",
         ]

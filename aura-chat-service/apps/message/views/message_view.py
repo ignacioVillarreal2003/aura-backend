@@ -155,3 +155,24 @@ class MessageListView(APIView):
             "assistant_error": assistant_error,
         }
         return Response(body, status=status.HTTP_201_CREATED)
+
+
+class AdminMessageListView(APIView):
+
+    @extend_schema(
+        tags=["Messages"],
+        summary="List messages (admin)",
+        description=(
+            "Returns the full message history for any chat without requiring active membership. "
+            "Requires `MANAGE_CHATS` permission."
+        ),
+        parameters=[
+            OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
+        ],
+        responses={200: MessageResponse(many=True), **standard_error_responses(401, 403, 404)},
+    )
+    def get(self, request: Request, chat_id: int) -> Response:
+        messages = message_service.get_messages_admin(user=request.user, chat_id=chat_id)
+        paginator = MessageCursorPagination()
+        page = paginator.paginate_queryset(messages, request)
+        return paginator.get_paginated_response(MessageResponse(page, many=True).data)

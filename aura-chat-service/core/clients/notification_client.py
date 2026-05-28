@@ -12,10 +12,6 @@ _BACKOFF_SECONDS = [0, 2, 4]
 
 
 class NotificationClient:
-    def __init__(self):
-        self.base = getattr(settings, "NOTIFICATION_SERVICE_URL", "").rstrip("/")
-        self.token = getattr(settings, "NOTIFICATION_INTERNAL_API_TOKEN", "")
-
     def emit_event(
         self,
         event_type: str,
@@ -27,7 +23,9 @@ class NotificationClient:
         channels_override: list[str] | None = None,
     ) -> None:
         """Fire-and-forget: dispatches the event in a background daemon thread."""
-        if not self.base or not self.token:
+        base = getattr(settings, "NOTIFICATION_SERVICE_URL", "").strip().rstrip("/")
+        token = getattr(settings, "NOTIFICATION_INTERNAL_API_TOKEN", "")
+        if not base or not token:
             logger.warning(
                 "Notification service not fully configured "
                 "(NOTIFICATION_SERVICE_URL or NOTIFICATION_INTERNAL_API_TOKEN missing), skipping.",
@@ -49,12 +47,12 @@ class NotificationClient:
         if channels_override:
             payload["channels_override"] = channels_override
 
-        threading.Thread(target=self._dispatch, args=(payload,), daemon=True).start()
+        threading.Thread(target=self._dispatch, args=(payload, base, token), daemon=True).start()
 
-    def _dispatch(self, payload: dict[str, Any]) -> None:
+    def _dispatch(self, payload: dict[str, Any], base: str, token: str) -> None:
         headers = {
             "Content-Type": "application/json",
-            "X-Internal-Token": self.token,
+            "X-Internal-Token": token,
         }
         event_type = payload.get("event_type", "unknown")
 
@@ -63,7 +61,7 @@ class NotificationClient:
                 time.sleep(_BACKOFF_SECONDS[attempt - 1])
             try:
                 response = httpx.post(
-                    f"{self.base}/api/v1/internal/events/",
+                    f"{base}/api/v1/internal/events/",
                     json=payload,
                     headers=headers,
                     timeout=5,

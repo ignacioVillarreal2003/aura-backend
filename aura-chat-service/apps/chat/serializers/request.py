@@ -1,6 +1,9 @@
 from django.utils import timezone
 from rest_framework import serializers
 
+_SYSTEM_PROMPT_MAX = 8000
+_RESPONSE_STYLE_MAX = 2000
+
 
 def _normalize_tags(value: list[str]) -> list[str]:
     seen = set()
@@ -30,12 +33,14 @@ class CreateChatRequest(serializers.Serializer):
         required=False,
         allow_blank=True,
         allow_null=True,
+        max_length=_SYSTEM_PROMPT_MAX,
         help_text="Optional system prompt for the assistant.",
     )
     response_style = serializers.CharField(
         required=False,
         allow_blank=True,
         allow_null=True,
+        max_length=_RESPONSE_STYLE_MAX,
         help_text="Optional style instructions for assistant replies.",
     )
     tags = serializers.ListField(
@@ -68,13 +73,29 @@ class MuteChatRequest(serializers.Serializer):
 
 class UpdateChatRequest(serializers.Serializer):
     name = serializers.CharField(max_length=255, required=False)
-    system_prompt = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    response_style = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    system_prompt = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        max_length=_SYSTEM_PROMPT_MAX,
+    )
+    response_style = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        max_length=_RESPONSE_STYLE_MAX,
+    )
     tags = serializers.ListField(
         child=serializers.CharField(max_length=50),
         required=False,
         allow_empty=True,
         help_text="Replaces tag set when provided (normalized server-side).",
     )
+
     def validate_tags(self, value: list[str]) -> list[str]:
         return _normalize_tags(value)
+
+    def validate(self, data):
+        if not data:
+            raise serializers.ValidationError("At least one field is required.")
+        return data

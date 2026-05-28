@@ -1,8 +1,10 @@
 import concurrent.futures
+import datetime
 import html
 import io
 import json
 import logging
+import re
 
 import markdown as md_lib
 from django.utils import timezone
@@ -99,15 +101,22 @@ blockquote {
 """
 
 
+_DANGEROUS_TAGS_RE = re.compile(
+    r"<\s*/?\s*(script|style|iframe|object|embed|form|input|button|textarea)\b[^>]*>",
+    re.IGNORECASE,
+)
+
+
 def _render_markdown(text: str) -> str:
-    return md_lib.markdown(text, extensions=["fenced_code", "tables", "nl2br"])
+    raw_html = md_lib.markdown(text, extensions=["fenced_code", "tables", "nl2br"])
+    return _DANGEROUS_TAGS_RE.sub("", raw_html)
 
 
 def _fmt_dt(dt) -> str:
     if dt is None:
         return ""
-    local = timezone.localtime(dt) if timezone.is_aware(dt) else dt
-    return local.strftime("%Y-%m-%d %H:%M")
+    utc = dt.astimezone(datetime.timezone.utc) if dt.tzinfo else dt
+    return utc.strftime("%Y-%m-%d %H:%M UTC")
 
 
 _PDF_TIMEOUT_SECONDS = 30
@@ -217,8 +226,6 @@ def generate_chat_json(chat: Chat, messages: list[ChatMessage]) -> str:
             "id": chat.id,
             "name": chat.name,
             "tags": chat.tags,
-            "system_prompt": chat.system_prompt,
-            "response_style": chat.response_style,
             "created_by": chat.created_by,
             "created_at": chat.created_at.isoformat() if chat.created_at else None,
         },

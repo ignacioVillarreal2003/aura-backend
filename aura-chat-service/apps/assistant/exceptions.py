@@ -1,4 +1,4 @@
-from core.exceptions.base import ForbiddenException, NotFoundException
+from core.exceptions.base import ConflictException, ForbiddenException, NotFoundException, ValidationException
 
 
 class AssistantNotFoundException(NotFoundException):
@@ -11,6 +11,11 @@ class AssistantAccessDeniedException(ForbiddenException):
     detail = "No tenés acceso a este asistente."
 
 
-class AssistantInactiveException(NotFoundException):
+class AssistantInactiveException(ValidationException):
     error_code = "assistant_inactive"
     detail = "El asistente no está disponible actualmente."
+
+
+class AssistantAlreadyExistsException(ConflictException):
+    error_code = "assistant_already_exists"
+    detail = "Ya existe un asistente con ese nombre."

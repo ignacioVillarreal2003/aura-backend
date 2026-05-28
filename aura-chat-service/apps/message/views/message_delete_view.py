@@ -12,7 +12,7 @@ class MessageDeleteView(APIView):
     @extend_schema(
         tags=["Messages"],
         summary="Delete a message",
-        description="Soft-deletes a message. Only the message author or the chat owner can delete.",
+        description="Soft-deletes a message. **Only the chat owner** can delete messages.",
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
             OpenApiParameter(name="message_id", type=int, location=OpenApiParameter.PATH, required=True),

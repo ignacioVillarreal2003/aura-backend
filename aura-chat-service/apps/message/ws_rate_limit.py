@@ -15,17 +15,22 @@ _WS_CONNECTION_TTL = 3600
 
 
 @lru_cache(maxsize=1)
+def _redis_pool() -> redis.ConnectionPool:
+    return redis.ConnectionPool.from_url(settings.REDIS_URL, decode_responses=True)
+
+
 def _redis() -> redis.Redis:
-    return redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
+    return redis.Redis(connection_pool=_redis_pool())
 
 
 def check_message_rate_limit(user_id: int, chat_id: int) -> bool:
     key = f"aura:ws_msg_rate:{user_id}:{chat_id}"
     try:
         r = _redis()
-        count = r.incr(key)
-        if count == 1:
-            r.expire(key, _MESSAGE_RATE_LIMIT_WINDOW)
+        pipe = r.pipeline()
+        pipe.incr(key)
+        pipe.expire(key, _MESSAGE_RATE_LIMIT_WINDOW)
+        count, _ = pipe.execute()
         return count <= _MESSAGE_RATE_LIMIT_MAX
     except redis.RedisError:
         logger.warning(
@@ -39,9 +44,10 @@ def check_typing_rate_limit(user_id: int) -> bool:
     key = f"aura:ws_typing_rate:{user_id}"
     try:
         r = _redis()
-        count = r.incr(key)
-        if count == 1:
-            r.expire(key, _TYPING_RATE_LIMIT_WINDOW)
+        pipe = r.pipeline()
+        pipe.incr(key)
+        pipe.expire(key, _TYPING_RATE_LIMIT_WINDOW)
+        count, _ = pipe.execute()
         return count <= _TYPING_RATE_LIMIT_MAX
     except redis.RedisError:
         logger.warning(

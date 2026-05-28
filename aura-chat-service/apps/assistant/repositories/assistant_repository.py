@@ -1,5 +1,6 @@
 import logging
 from typing import Optional
+from django.db.models import QuerySet
 from django.utils import timezone
 
 from apps.assistant.models import Assistant
@@ -30,13 +31,22 @@ class AssistantRepository:
         )
 
     def get_by_id(self, assistant_id: int) -> Optional[Assistant]:
-        return Assistant.objects.filter(id=assistant_id, deleted_at__isnull=True).first()
+        return Assistant.objects.filter(id=assistant_id).first()
 
-    def list_active(self):
-        return Assistant.objects.filter(is_active=True, deleted_at__isnull=True)
+    def exists_with_name(self, name: str) -> bool:
+        return Assistant.objects.filter(name=name).exists()
 
-    def list_all(self):
-        return Assistant.objects.filter(deleted_at__isnull=True)
+    def list_active(self, search: Optional[str] = None) -> QuerySet[Assistant]:
+        qs = Assistant.objects.filter(is_active=True)
+        if search:
+            qs = qs.filter(name__icontains=search)
+        return qs
+
+    def list_all(self, search: Optional[str] = None) -> QuerySet[Assistant]:
+        qs = Assistant.objects.all()
+        if search:
+            qs = qs.filter(name__icontains=search)
+        return qs
 
     def update(
             self,

@@ -3,6 +3,7 @@ from django.urls import path
 from apps.message.views.bookmark_view import BookmarkedMessageListView, BookmarkView
 from apps.message.views.clear_view import ClearHistoryView
 from apps.message.views.export_view import (
+    AdminChatExportPDFView,
     AIResponsesExportView,
     ChatExportJSONView,
     ChatExportMarkdownView,
@@ -12,19 +13,21 @@ from apps.message.views.export_view import (
 from apps.message.views.feedback_view import FeedbackView
 from apps.message.views.mark_read_view import MarkAsReadView
 from apps.message.views.message_delete_view import MessageDeleteView
-from apps.message.views.message_view import MessageListView
+from apps.message.views.message_view import AdminMessageListView, MessageListView
 from apps.message.views.pin_view import PinMessageView, PinnedMessageListView
 from apps.message.views.regenerate_view import RegenerateResponseView
 from apps.message.views.thread_view import ThreadView
 
 urlpatterns = [
     path("", MessageListView.as_view(), name="message-list"),
+    path("manage/", AdminMessageListView.as_view(), name="message-list-admin"),
     path("clear/", ClearHistoryView.as_view(), name="message-clear"),
     path("read/", MarkAsReadView.as_view(), name="message-mark-read"),
     path("pinned/", PinnedMessageListView.as_view(), name="message-pinned-list"),
     path("regenerate/", RegenerateResponseView.as_view(), name="message-regenerate"),
     path("bookmarked/", BookmarkedMessageListView.as_view(), name="message-bookmarked"),
     path("export/pdf/", ChatExportPDFView.as_view(), name="chat-export-pdf"),
+    path("export/pdf/manage/", AdminChatExportPDFView.as_view(), name="chat-export-pdf-admin"),
     path("export/markdown/", ChatExportMarkdownView.as_view(), name="chat-export-markdown"),
     path("export/json/", ChatExportJSONView.as_view(), name="chat-export-json"),
     path("export/ai/", AIResponsesExportView.as_view(), name="chat-export-ai"),

@@ -1,4 +1,5 @@
 import logging
+import re
 from asgiref.sync import async_to_sync
 from django.http import HttpResponse
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
@@ -7,6 +8,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.report.exceptions import ReportExportException
 from apps.report.models import Report
 from apps.report.serializers import (
     GenerateReportRequest,
@@ -30,6 +32,13 @@ _TYPE_PARAM = OpenApiParameter(
     enum=[Report.Type.SITREP, Report.Type.INTSUM, Report.Type.OPORD],
     description="Filtrar por tipo de informe.",
 )
+_CHAT_FILTER_PARAM = OpenApiParameter(
+    name="chat_id",
+    type=int,
+    location=OpenApiParameter.QUERY,
+    required=False,
+    description="Filtrar por chat de origen. El usuario debe ser miembro activo del chat.",
+)
 _ID_PARAM = OpenApiParameter(
     name="report_id",
     type=int,
@@ -39,21 +48,27 @@ _ID_PARAM = OpenApiParameter(
 )
 
 
+def _safe_filename(title: str) -> str:
+    return re.sub(r"[^\w\-]", "_", title[:60])
+
+
 class ReportListView(APIView):
 
     @extend_schema(
         tags=["Reports"],
         summary="Listar informes",
-        description="Devuelve los informes del usuario autenticado, paginados. Filtrable por tipo.",
-        parameters=[_TYPE_PARAM],
+        description="Devuelve los informes del usuario autenticado, paginados. Filtrable por tipo y por chat de origen.",
+        parameters=[_TYPE_PARAM, _CHAT_FILTER_PARAM],
         responses={
             200: ReportListResponse(many=True),
-            **standard_error_responses(401),
+            **standard_error_responses(401, 403, 404),
         },
     )
     def get(self, request: Request) -> Response:
         report_type = request.query_params.get("type") or None
-        queryset = report_service.list_reports(user=request.user, report_type=report_type)
+        chat_id_raw = request.query_params.get("chat_id")
+        chat_id = int(chat_id_raw) if chat_id_raw and chat_id_raw.isdigit() else None
+        queryset = report_service.list_reports(user=request.user, report_type=report_type, chat_id=chat_id)
         paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request)
         return paginator.get_paginated_response(ReportListResponse(page, many=True).data)
@@ -77,7 +92,7 @@ class ReportDetailView(APIView):
     @extend_schema(
         tags=["Reports"],
         summary="Actualizar informe",
-        description="Actualiza el título y/o contenido del informe. Solo el creador puede modificarlo.",
+        description="Actualiza el título y/o contenido del informe. Solo el creador o miembros del chat de origen pueden modificarlo.",
         parameters=[_ID_PARAM],
         request=UpdateReportRequest,
         responses={
@@ -100,7 +115,7 @@ class ReportDetailView(APIView):
     @extend_schema(
         tags=["Reports"],
         summary="Eliminar informe",
-        description="Elimina suavemente el informe. Solo el creador puede eliminarlo.",
+        description="Elimina suavemente el informe. Solo el creador o el owner del chat de origen puede eliminarlo.",
         parameters=[_ID_PARAM],
         responses={
             204: OpenApiResponse(description="Sin contenido"),
@@ -138,10 +153,11 @@ class ReportGenerateView(APIView):
         tags=["Reports"],
         summary="Generar informe con IA",
         description=(
-                "Genera un informe estandarizado (SITREP, INTSUM u OPORD) a partir de la conversación "
-                "del usuario usando el LLM service, lo persiste automáticamente y devuelve el objeto guardado "
-                "junto con el historial de mensajes actualizado y los fragmentos documentales utilizados (modo RAG). "
-                "Requiere permisos `LLM_REPORT_GENERATE` y `CREATE_REPORT`."
+                "Genera un informe estandarizado (SITREP, INTSUM u OPORD) a partir del mensaje del usuario. "
+                "Si se pasa `chat_id`, el historial reciente del chat se incluye como contexto para el LLM "
+                "(el usuario debe ser miembro activo). En modo RAG también se usan los documentos del chat. "
+                "El informe generado queda vinculado al chat via `source_chat_id`. "
+                "Requiere permiso `LLM_REPORT_GENERATE`."
         ),
         request=GenerateReportRequest,
         responses={
@@ -161,6 +177,7 @@ class ReportGenerateView(APIView):
             report_type=d["type"],
             message=d["message"],
             mode=d["mode"],
+            chat_id=d.get("chat_id"),
         )
         return Response(
             ReportGenerateResponse({"report": report, "messages": messages, "fragments": fragments}).data,
@@ -177,13 +194,16 @@ class ReportExportPDFView(APIView):
         parameters=[_ID_PARAM],
         responses={
             200: OpenApiResponse(description="PDF — Content-Type: application/pdf"),
-            **standard_error_responses(401, 403, 404),
+            **standard_error_responses(401, 403, 404, 500),
         },
     )
     def get(self, request: Request, report_id: int) -> HttpResponse:
         report = report_service.get_own_report(user=request.user, report_id=report_id)
-        pdf = generate_report_pdf(report)
-        safe_title = report.title[:60].replace(" ", "_")
+        try:
+            pdf = generate_report_pdf(report)
+        except ReportExportException:
+            raise
+        safe_title = _safe_filename(report.title)
         response = HttpResponse(pdf, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="{report.type}_{safe_title}.pdf"'
         return response
@@ -204,7 +224,7 @@ class ReportExportMarkdownView(APIView):
     def get(self, request: Request, report_id: int) -> HttpResponse:
         report = report_service.get_own_report(user=request.user, report_id=report_id)
         content = generate_report_markdown(report)
-        safe_title = report.title[:60].replace(" ", "_")
+        safe_title = _safe_filename(report.title)
         response = HttpResponse(content, content_type="text/markdown; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="{report.type}_{safe_title}.md"'
         return response
@@ -219,13 +239,16 @@ class ReportManageExportPDFView(APIView):
         parameters=[_ID_PARAM],
         responses={
             200: OpenApiResponse(description="PDF — Content-Type: application/pdf"),
-            **standard_error_responses(401, 403, 404),
+            **standard_error_responses(401, 403, 404, 500),
         },
     )
     def get(self, request: Request, report_id: int) -> HttpResponse:
         report = report_service.get_report_admin_export(user=request.user, report_id=report_id)
-        pdf = generate_report_pdf(report)
-        safe_title = report.title[:60].replace(" ", "_")
+        try:
+            pdf = generate_report_pdf(report)
+        except ReportExportException:
+            raise
+        safe_title = _safe_filename(report.title)
         response = HttpResponse(pdf, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="{report.type}_{safe_title}.pdf"'
         return response
@@ -246,7 +269,7 @@ class ReportManageExportMarkdownView(APIView):
     def get(self, request: Request, report_id: int) -> HttpResponse:
         report = report_service.get_report_admin_export(user=request.user, report_id=report_id)
         content = generate_report_markdown(report)
-        safe_title = report.title[:60].replace(" ", "_")
+        safe_title = _safe_filename(report.title)
         response = HttpResponse(content, content_type="text/markdown; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="{report.type}_{safe_title}.md"'
         return response

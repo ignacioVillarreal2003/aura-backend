@@ -10,6 +10,7 @@ class Chat(AuditModel, SoftDeleteModel):
     system_prompt = models.TextField(null=True, blank=True)
     response_style = models.TextField(null=True, blank=True)
     last_message_at = models.DateTimeField(null=True, blank=True)
+    source_assistant_id = models.BigIntegerField(null=True, blank=True)
     tags = ArrayField(
         models.TextField(validators=[MaxLengthValidator(50)]),
         default=list,

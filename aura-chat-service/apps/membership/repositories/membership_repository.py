@@ -44,6 +44,13 @@ class MembershipRepository:
             return None
 
     @staticmethod
+    def list_by_member(member_id: int, status: str | None = None) -> QuerySet[ChatMembership]:
+        qs = ChatMembership.objects.filter(member_id=member_id).order_by("-created_at")
+        if status is not None:
+            qs = qs.filter(status=status)
+        return qs
+
+    @staticmethod
     def list_by_chat(chat_id: int, status: str | None = None) -> QuerySet[ChatMembership]:
         qs = ChatMembership.objects.filter(chat_id=chat_id).order_by("created_at")
         if status is not None:
@@ -118,6 +125,23 @@ class MembershipRepository:
         )
 
     @staticmethod
+    def get_existing_member_ids_in(chat_id: int, member_ids: list[int]) -> set[int]:
+        """Returns all non-deleted member IDs regardless of status (active, pending, inactive)."""
+        return set(
+            ChatMembership.objects
+            .filter(chat_id=chat_id, member_id__in=member_ids)
+            .values_list("member_id", flat=True)
+        )
+
+    @staticmethod
+    def get_active_chat_ids_for_member(member_id: int, chat_ids: list[int]) -> set[int]:
+        return set(
+            ChatMembership.objects
+            .filter(member_id=member_id, chat_id__in=chat_ids, status="active")
+            .values_list("chat_id", flat=True)
+        )
+
+    @staticmethod
     def update_role(chat_id: int, member_id: int, role: str, updated_by: int) -> ChatMembership | None:
         membership = ChatMembership.objects.select_for_update().filter(
             chat_id=chat_id,
@@ -140,6 +164,15 @@ class MembershipRepository:
             status="active",
         ).values_list("role", flat=True).first()
         return result
+
+    @staticmethod
+    def is_chat_owner(chat_id: int, member_id: int) -> bool:
+        return ChatMembership.objects.filter(
+            chat_id=chat_id,
+            member_id=member_id,
+            status="active",
+            role="owner",
+        ).exists()
 
     @staticmethod
     def pin(chat_id: int, member_id: int) -> None:

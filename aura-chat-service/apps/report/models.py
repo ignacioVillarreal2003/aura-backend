@@ -20,6 +20,7 @@ class Report(AuditModel, SoftDeleteModel):
     content = models.TextField()
     mode = models.CharField(max_length=16, choices=Mode.choices)
     metadata = models.JSONField(default=dict)
+    source_chat_id = models.BigIntegerField(null=True, blank=True)
 
     class Meta:
         managed = False

@@ -161,7 +161,7 @@ AUTHENTICATION_EXCLUDED_PATHS = [
     "/api/schema*",
     "/api/docs*",
     "/api/redoc*",
-    "/api/v1/share*",
+    "/api/v1/share/*",
 ]
 
 SPECTACULAR_SETTINGS = {

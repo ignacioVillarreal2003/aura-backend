@@ -1,10 +1,11 @@
 import concurrent.futures
+import datetime
 import html
 import io
 import logging
-from django.utils import timezone
 from xhtml2pdf import pisa
 
+from apps.checklist.exceptions import ChecklistExportException
 from apps.checklist.models import Checklist
 
 logger = logging.getLogger(__name__)
@@ -78,8 +79,8 @@ h2 { font-size: 11pt; margin: 12px 0 4px 0; font-family: Courier, monospace; bor
 def _fmt_dt(dt) -> str:
     if dt is None:
         return ""
-    local = timezone.localtime(dt) if timezone.is_aware(dt) else dt
-    return local.strftime("%Y-%m-%d %H:%M UTC")
+    utc = dt.astimezone(datetime.timezone.utc) if dt.tzinfo else dt
+    return utc.strftime("%Y-%m-%d %H:%M UTC")
 
 
 def _group_items_by_section(items: list) -> dict[str, list]:
@@ -99,7 +100,7 @@ def _build_pdf_sync(html_content: str) -> bytes:
     result = pisa.CreatePDF(io.StringIO(html_content), dest=buf, encoding="utf-8")
     if result.err:
         logger.error("xhtml2pdf reported %d error(s) during checklist PDF generation", result.err)
-        raise RuntimeError("PDF generation failed")
+        raise ChecklistExportException()
     return buf.getvalue()
 
 
@@ -110,7 +111,7 @@ def _build_pdf(html_content: str) -> bytes:
             return future.result(timeout=_PDF_TIMEOUT_SECONDS)
         except concurrent.futures.TimeoutError:
             logger.error("Checklist PDF generation timed out after %ds", _PDF_TIMEOUT_SECONDS)
-            raise RuntimeError("PDF generation timed out")
+            raise ChecklistExportException()
 
 
 def generate_checklist_pdf(checklist: Checklist) -> bytes:
