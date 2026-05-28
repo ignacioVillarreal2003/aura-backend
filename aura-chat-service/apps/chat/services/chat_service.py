@@ -20,6 +20,7 @@ from core.authorization.permissions import (
     LIST_CHATS,
     LIST_MY_CHATS,
     LOCK_CHAT,
+    MANAGE_CHATS,
     MUTE_CHAT,
     PIN_CHAT,
     UNARCHIVE_CHAT,
@@ -92,6 +93,20 @@ class ChatService:
         AccessControl.require_permissions(user, frozenset({LIST_MY_CHATS}))
         return chat_repository.get_chats_created_by(
             user_id=user.id,
+            search=search,
+            ordering=ordering or "-created_at",
+            tags=tags,
+        )
+
+    def list_all_chats(
+        self,
+        user: AuthenticatedUser,
+        search: str | None = None,
+        ordering: str | None = None,
+        tags: list[str] | None = None,
+    ) -> QuerySet[Chat]:
+        AccessControl.require_permissions(user, frozenset({MANAGE_CHATS}))
+        return chat_repository.list_all(
             search=search,
             ordering=ordering or "-created_at",
             tags=tags,

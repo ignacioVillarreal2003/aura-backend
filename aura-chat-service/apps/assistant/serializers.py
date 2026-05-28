@@ -4,18 +4,20 @@ from apps.assistant.models import Assistant
 
 
 class CreateAssistantRequest(serializers.Serializer):
-    name = serializers.CharField(max_length=200, allow_blank=False)
-    description = serializers.CharField(default="", allow_blank=True)
+    name = serializers.CharField(max_length=256, allow_blank=False)
+    description = serializers.CharField(default="", allow_blank=True, required=False)
     system_prompt = serializers.CharField(allow_blank=False)
-    avatar_emoji = serializers.CharField(max_length=10, default="", allow_blank=True)
-    is_active = serializers.BooleanField(default=True)
+    response_style = serializers.CharField(default="", allow_blank=True, required=False)
+    avatar_emoji = serializers.CharField(max_length=16, default="", allow_blank=True, required=False)
+    is_active = serializers.BooleanField(default=True, required=False)
 
 
 class UpdateAssistantRequest(serializers.Serializer):
-    name = serializers.CharField(max_length=200, allow_blank=False, required=False)
+    name = serializers.CharField(max_length=256, allow_blank=False, required=False)
     description = serializers.CharField(allow_blank=True, required=False)
     system_prompt = serializers.CharField(allow_blank=False, required=False)
-    avatar_emoji = serializers.CharField(max_length=10, allow_blank=True, required=False)
+    response_style = serializers.CharField(default="", allow_blank=True, required=False)
+    avatar_emoji = serializers.CharField(max_length=16, allow_blank=True, required=False)
     is_active = serializers.BooleanField(required=False)
 
     def validate(self, data):
@@ -25,8 +27,6 @@ class UpdateAssistantRequest(serializers.Serializer):
 
 
 class AssistantUserResponse(serializers.ModelSerializer):
-    """Response for regular users — system_prompt is not exposed."""
-
     class Meta:
         model = Assistant
         fields = [
@@ -41,8 +41,6 @@ class AssistantUserResponse(serializers.ModelSerializer):
 
 
 class AssistantAdminResponse(serializers.ModelSerializer):
-    """Response for admins — includes system_prompt."""
-
     class Meta:
         model = Assistant
         fields = [
@@ -50,6 +48,7 @@ class AssistantAdminResponse(serializers.ModelSerializer):
             "name",
             "description",
             "system_prompt",
+            "response_style",
             "avatar_emoji",
             "is_active",
             "created_by",

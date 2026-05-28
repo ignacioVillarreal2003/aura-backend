@@ -5,10 +5,11 @@ from core.models.soft_delete import SoftDeleteModel
 
 
 class Assistant(AuditModel, SoftDeleteModel):
-    name = models.CharField(max_length=200)
+    name = models.CharField(max_length=256)
     description = models.TextField(default="")
     system_prompt = models.TextField()
-    avatar_emoji = models.CharField(max_length=10, default="")
+    response_style = models.TextField(default="", blank=True)
+    avatar_emoji = models.CharField(max_length=16, default="")
     is_active = models.BooleanField(default=True)
 
     class Meta:

@@ -35,6 +35,12 @@ class ReportRepository:
             qs = qs.filter(type=report_type)
         return qs
 
+    def list_all(self, report_type: Optional[str] = None):
+        qs = Report.objects.all()
+        if report_type:
+            qs = qs.filter(type=report_type)
+        return qs
+
     def update(self, report: Report, *, title: Optional[str] = None, content: Optional[str] = None) -> Report:
         update_fields = []
         if title is not None:

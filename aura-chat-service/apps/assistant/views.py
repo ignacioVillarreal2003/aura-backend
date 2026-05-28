@@ -1,5 +1,4 @@
 import logging
-
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.request import Request
@@ -14,15 +13,13 @@ from apps.assistant.serializers import (
     UpdateAssistantRequest,
 )
 from apps.assistant.services.assistant_service import assistant_service
-from core.authorization import permissions as perms
-from core.authorization.access import AccessControl
 from core.openapi.common import standard_error_responses
 from core.pagination.pagination import StandardPagination
 
 logger = logging.getLogger(__name__)
 
 _ID_PARAM = OpenApiParameter(
-    name="id",
+    name="assistant_id",
     type=int,
     location=OpenApiParameter.PATH,
     required=True,
@@ -31,18 +28,16 @@ _ID_PARAM = OpenApiParameter(
 
 
 class AssistantListCreateView(APIView):
-
     @extend_schema(
         tags=["Assistants"],
         summary="Listar asistentes activos",
         description="Devuelve los asistentes disponibles para los usuarios. No expone el system prompt.",
         responses={
             200: AssistantUserResponse(many=True),
-            **standard_error_responses(401),
+            **standard_error_responses(401, 403),
         },
     )
     def get(self, request: Request) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({perms.LIST_ASSISTANTS}))
         queryset = assistant_service.list_active_assistants(user=request.user)
         paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request)
@@ -52,8 +47,8 @@ class AssistantListCreateView(APIView):
         tags=["Assistants"],
         summary="Crear asistente",
         description=(
-            "Crea un nuevo asistente especializado. Requiere permiso `CREATE_ASSISTANT`. "
-            "El `system_prompt` es la instrucción fija que el LLM usará en cada sesión."
+                "Crea un nuevo asistente especializado. Requiere permiso `CREATE_ASSISTANT`. "
+                "El `system_prompt` es la instrucción fija que el LLM usará en cada sesión."
         ),
         request=CreateAssistantRequest,
         responses={
@@ -70,6 +65,7 @@ class AssistantListCreateView(APIView):
             name=d["name"],
             description=d.get("description", ""),
             system_prompt=d["system_prompt"],
+            response_style=d.get("response_style", ""),
             avatar_emoji=d.get("avatar_emoji", ""),
             is_active=d.get("is_active", True),
         )
@@ -82,8 +78,8 @@ class AssistantManageView(APIView):
         tags=["Assistants"],
         summary="Listar todos los asistentes (admin)",
         description=(
-            "Lista todos los asistentes incluyendo los inactivos. "
-            "Incluye el system_prompt. Requiere permiso `MANAGE_ASSISTANTS`."
+                "Lista todos los asistentes incluyendo los inactivos. "
+                "Incluye el system_prompt. Requiere permiso `MANAGE_ASSISTANTS`."
         ),
         responses={
             200: AssistantAdminResponse(many=True),
@@ -91,7 +87,6 @@ class AssistantManageView(APIView):
         },
     )
     def get(self, request: Request) -> Response:
-        AccessControl.require_permissions(request.user, frozenset({perms.MANAGE_ASSISTANTS}))
         queryset = assistant_service.list_all_assistants(user=request.user)
         paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request)
@@ -107,7 +102,7 @@ class AssistantDetailView(APIView):
         parameters=[_ID_PARAM],
         responses={
             200: AssistantUserResponse,
-            **standard_error_responses(401, 404),
+            **standard_error_responses(401, 403, 404),
         },
     )
     def get(self, request: Request, assistant_id: int) -> Response:
@@ -135,6 +130,7 @@ class AssistantDetailView(APIView):
             name=d.get("name"),
             description=d.get("description"),
             system_prompt=d.get("system_prompt"),
+            response_style=d.get("response_style"),
             avatar_emoji=d.get("avatar_emoji"),
             is_active=d.get("is_active"),
         )
@@ -161,9 +157,9 @@ class AssistantStartChatView(APIView):
         tags=["Assistants"],
         summary="Iniciar sesión con asistente",
         description=(
-            "Crea un nuevo chat pre-configurado con el system prompt del asistente. "
-            "El usuario es añadido automáticamente como propietario del chat. "
-            "Devuelve el `chat_id` para navegar a la sesión."
+                "Crea un nuevo chat pre-configurado con el system prompt del asistente. "
+                "El usuario es añadido automáticamente como propietario del chat. "
+                "Devuelve el `chat_id` para navegar a la sesión."
         ),
         parameters=[_ID_PARAM],
         responses={
@@ -174,6 +170,6 @@ class AssistantStartChatView(APIView):
     def post(self, request: Request, assistant_id: int) -> Response:
         chat = assistant_service.start_chat(user=request.user, assistant_id=assistant_id)
         return Response(
-            {"chat_id": chat.id, "chat_name": chat.name},
+            StartChatResponse({"chat_id": chat.id, "chat_name": chat.name}).data,
             status=status.HTTP_201_CREATED,
         )

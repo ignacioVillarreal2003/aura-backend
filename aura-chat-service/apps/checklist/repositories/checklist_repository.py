@@ -30,6 +30,9 @@ class ChecklistRepository:
     def list_by_user(self, user_id: int):
         return Checklist.objects.filter(created_by=user_id, deleted_at__isnull=True)
 
+    def list_all(self):
+        return Checklist.objects.filter(deleted_at__isnull=True)
+
     def update(
             self,
             checklist: Checklist,

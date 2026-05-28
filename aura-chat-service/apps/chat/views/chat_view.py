@@ -8,7 +8,7 @@ from rest_framework.viewsets import ViewSet
 from apps.chat.models.chat import Chat
 from apps.chat.repositories.chat_repository import ALLOWED_ORDERINGS
 from apps.chat.serializers.request import BulkChatIdsRequest, CreateChatRequest, MuteChatRequest, UpdateChatRequest
-from apps.chat.serializers.response import ChatListResponse, ChatResponse
+from apps.chat.serializers.response import ChatListResponse, ChatManageListResponse, ChatResponse
 from apps.chat.services.chat_service import chat_service
 from core.openapi.common import standard_error_responses
 from core.pagination.pagination import StandardPagination
@@ -36,13 +36,6 @@ _TAGS_PARAM = OpenApiParameter(
     location=OpenApiParameter.QUERY,
     required=False,
     description="Comma-separated tag list. Returns chats that contain ALL specified tags (e.g. tags=work,urgent).",
-)
-_PATH_PK = OpenApiParameter(
-    name="pk",
-    type=int,
-    location=OpenApiParameter.PATH,
-    required=True,
-    description="Chat ID",
 )
 
 
@@ -78,14 +71,12 @@ def _parse_tags(raw: str | None) -> list[str] | None:
         tags=["Chats"],
         summary="Get chat",
         description="Returns full **ChatResponse** for one chat id (membership and permissions enforced server-side).",
-        parameters=[_PATH_PK],
         responses={200: ChatResponse, **standard_error_responses(401, 403, 404)},
     ),
     partial_update=extend_schema(
         tags=["Chats"],
         summary="Update chat",
-        description="Partial update of name, prompts, style, tags, and ephemeral flag.",
-        parameters=[_PATH_PK],
+        description="Partial update of name, prompts, style, and tags.",
         request=UpdateChatRequest,
         responses={200: ChatResponse, **standard_error_responses(400, 401, 403, 404)},
     ),
@@ -93,7 +84,6 @@ def _parse_tags(raw: str | None) -> list[str] | None:
         tags=["Chats"],
         summary="Delete chat",
         description="Deletes the chat for allowed roles (service rules apply).",
-        parameters=[_PATH_PK],
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     ),
     my_chats=extend_schema(
@@ -102,6 +92,13 @@ def _parse_tags(raw: str | None) -> list[str] | None:
         description="Same filters as list but only chats **created by** the authenticated user.",
         parameters=[_SEARCH_PARAM, _ORDERING_PARAM, _TAGS_PARAM],
         responses={200: ChatListResponse(many=True), **standard_error_responses(401)},
+    ),
+    manage=extend_schema(
+        tags=["Chats"],
+        summary="List all chats (admin)",
+        description="Paginated list of **all** chats from every user. Requires `MANAGE_CHATS` permission.",
+        parameters=[_SEARCH_PARAM, _ORDERING_PARAM, _TAGS_PARAM],
+        responses={200: ChatManageListResponse(many=True), **standard_error_responses(401, 403)},
     ),
 )
 class ChatViewSet(ViewSet):
@@ -149,6 +146,19 @@ class ChatViewSet(ViewSet):
         chat_service.delete_chat(user=request.user, chat_id=int(pk))
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+    @action(detail=False, methods=["get"], url_path="manage")
+    def manage(self, request: Request) -> Response:
+        search = request.query_params.get("search") or None
+        ordering = request.query_params.get("ordering") or None
+        if ordering not in ALLOWED_ORDERINGS:
+            ordering = None
+        tags = _parse_tags(request.query_params.get("tags"))
+
+        chats = chat_service.list_all_chats(user=request.user, search=search, ordering=ordering, tags=tags)
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(chats, request)
+        return paginator.get_paginated_response(ChatManageListResponse(page, many=True).data)
+
     @action(detail=False, methods=["get"], url_path="me")
     def my_chats(self, request: Request) -> Response:
         search = request.query_params.get("search") or None
@@ -167,7 +177,6 @@ class ChatViewSet(ViewSet):
         tags=["Chats"],
         summary="Pin chat",
         description="Pins this chat for the current user so it sorts to the top of list views.",
-        parameters=[_PATH_PK],
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     @extend_schema(
@@ -175,7 +184,6 @@ class ChatViewSet(ViewSet):
         tags=["Chats"],
         summary="Unpin chat",
         description="Removes the user-level pin for this chat.",
-        parameters=[_PATH_PK],
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     @action(detail=True, methods=["post", "delete"], url_path="pin")
@@ -261,7 +269,6 @@ class ChatViewSet(ViewSet):
         tags=["Chats"],
         summary="Lock chat",
         description="Prevents all members from sending new messages. Owner only.",
-        parameters=[_PATH_PK],
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     @extend_schema(
@@ -269,7 +276,6 @@ class ChatViewSet(ViewSet):
         tags=["Chats"],
         summary="Unlock chat",
         description="Re-opens the chat so members can send messages again.",
-        parameters=[_PATH_PK],
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     @action(detail=True, methods=["post", "delete"], url_path="lock")
@@ -285,7 +291,6 @@ class ChatViewSet(ViewSet):
         tags=["Chats"],
         summary="Mute chat",
         description="Silences this chat for the current user until the given datetime.",
-        parameters=[_PATH_PK],
         request=MuteChatRequest,
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(400, 401, 403, 404)},
     )
@@ -294,7 +299,6 @@ class ChatViewSet(ViewSet):
         tags=["Chats"],
         summary="Unmute chat",
         description="Clears mute for the current user (notifications / unread behaviour per product).",
-        parameters=[_PATH_PK],
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     @action(detail=True, methods=["post", "delete"], url_path="mute")

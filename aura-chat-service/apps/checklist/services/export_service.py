@@ -2,7 +2,6 @@ import concurrent.futures
 import html
 import io
 import logging
-
 from django.utils import timezone
 from xhtml2pdf import pisa
 

@@ -1,5 +1,6 @@
 import logging
 from typing import Optional
+from django.utils import timezone
 
 from apps.assistant.models import Assistant
 
@@ -16,12 +17,14 @@ class AssistantRepository:
             system_prompt: str,
             avatar_emoji: str,
             is_active: bool,
+            response_style: str = "",
     ) -> Assistant:
         return Assistant.objects.create(
             created_by=user_id,
             name=name,
             description=description,
             system_prompt=system_prompt,
+            response_style=response_style,
             avatar_emoji=avatar_emoji,
             is_active=is_active,
         )
@@ -42,6 +45,7 @@ class AssistantRepository:
             name: Optional[str] = None,
             description: Optional[str] = None,
             system_prompt: Optional[str] = None,
+            response_style: Optional[str] = None,
             avatar_emoji: Optional[str] = None,
             is_active: Optional[bool] = None,
             updated_by: int,
@@ -58,6 +62,9 @@ class AssistantRepository:
         if system_prompt is not None:
             assistant.system_prompt = system_prompt
             update_fields.append("system_prompt")
+        if response_style is not None:
+            assistant.response_style = response_style
+            update_fields.append("response_style")
         if avatar_emoji is not None:
             assistant.avatar_emoji = avatar_emoji
             update_fields.append("avatar_emoji")
@@ -65,7 +72,6 @@ class AssistantRepository:
             assistant.is_active = is_active
             update_fields.append("is_active")
 
-        from django.utils import timezone
         assistant.updated_at = timezone.now()
         assistant.save(update_fields=update_fields)
         return assistant

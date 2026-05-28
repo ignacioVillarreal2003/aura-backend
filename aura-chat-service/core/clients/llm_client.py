@@ -25,6 +25,22 @@ class DocumentQuestionResult:
     fragments: list[dict[str, Any]] = field(default_factory=list)
 
 
+@dataclass
+class ChecklistGenerateResult:
+    title: str
+    items: list[dict[str, Any]]
+    messages: list[dict[str, str]]
+    fragments: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
+class ReportGenerateResult:
+    report_type: str
+    content: str
+    messages: list[dict[str, str]]
+    fragments: list[dict[str, Any]] = field(default_factory=list)
+
+
 class LLMClient:
     def __init__(self):
         self._http_client = AsyncHttpClient(timeout=getattr(settings, "LLM_SERVICE_TIMEOUT", 30))
@@ -66,6 +82,86 @@ class LLMClient:
             question=str(data.get("question", "")),
             answer=str(data.get("answer", "")),
             fragments=fragments,
+        )
+
+    async def generate_checklist(
+        self,
+        messages: list[dict[str, str]],
+        mode: str,
+        user: AuthenticatedUser,
+    ) -> ChecklistGenerateResult:
+        payload = {"messages": messages, "mode": mode}
+
+        logger.debug(
+            "Calling LLM checklist-generate.",
+            extra={
+                "user_id": user.id,
+                "message_count": len(messages),
+                "url": settings.LLM_CHECKLIST_GENERATE_URL,
+            },
+        )
+
+        response = await self._http_client.post(
+            url=settings.LLM_CHECKLIST_GENERATE_URL,
+            json=payload,
+            headers=self._build_service_headers(user),
+        )
+
+        try:
+            data = response.json()
+        except ValueError as e:
+            logger.error("LLM checklist-generate returned non-JSON body.")
+            raise HttpClientException(
+                "Invalid LLM response format",
+                status_code=response.status_code,
+            ) from e
+
+        return ChecklistGenerateResult(
+            title=str(data.get("title", "")),
+            items=data.get("items") or [],
+            messages=data.get("messages") or [],
+            fragments=self.normalize_fragments(data.get("fragments")),
+        )
+
+    async def generate_report(
+        self,
+        messages: list[dict[str, str]],
+        mode: str,
+        report_type: str,
+        user: AuthenticatedUser,
+    ) -> ReportGenerateResult:
+        payload = {"messages": messages, "mode": mode, "report_type": report_type}
+
+        logger.debug(
+            "Calling LLM report-generate.",
+            extra={
+                "user_id": user.id,
+                "message_count": len(messages),
+                "report_type": report_type,
+                "url": settings.LLM_REPORT_GENERATE_URL,
+            },
+        )
+
+        response = await self._http_client.post(
+            url=settings.LLM_REPORT_GENERATE_URL,
+            json=payload,
+            headers=self._build_service_headers(user),
+        )
+
+        try:
+            data = response.json()
+        except ValueError as e:
+            logger.error("LLM report-generate returned non-JSON body.")
+            raise HttpClientException(
+                "Invalid LLM response format",
+                status_code=response.status_code,
+            ) from e
+
+        return ReportGenerateResult(
+            report_type=str(data.get("report_type", report_type)),
+            content=str(data.get("content", "")),
+            messages=data.get("messages") or [],
+            fragments=self.normalize_fragments(data.get("fragments")),
         )
 
     async def document_question_stream_events(

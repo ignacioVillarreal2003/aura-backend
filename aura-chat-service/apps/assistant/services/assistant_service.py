@@ -1,14 +1,11 @@
 import logging
 from typing import Optional
-
 from django.utils import timezone
 
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization.access import AccessControl
 from core.authorization import permissions as perms
-
 from apps.assistant.exceptions import (
-    AssistantAccessDeniedException,
     AssistantInactiveException,
     AssistantNotFoundException,
 )
@@ -19,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 
 class AssistantService:
-
     def create_assistant(
             self,
             user: AuthenticatedUser,
@@ -28,6 +24,7 @@ class AssistantService:
             system_prompt: str,
             avatar_emoji: str,
             is_active: bool,
+            response_style: str = "",
     ) -> Assistant:
         AccessControl.require_permissions(user, frozenset({perms.CREATE_ASSISTANT}))
         assistant = assistant_repository.create(
@@ -35,6 +32,7 @@ class AssistantService:
             name=name,
             description=description,
             system_prompt=system_prompt,
+            response_style=response_style,
             avatar_emoji=avatar_emoji,
             is_active=is_active,
         )
@@ -54,6 +52,8 @@ class AssistantService:
         assistant = assistant_repository.get_by_id(assistant_id)
         if assistant is None:
             raise AssistantNotFoundException()
+        if not assistant.is_active:
+            raise AssistantNotFoundException()
         return assistant
 
     def update_assistant(
@@ -63,6 +63,7 @@ class AssistantService:
             name: Optional[str] = None,
             description: Optional[str] = None,
             system_prompt: Optional[str] = None,
+            response_style: Optional[str] = None,
             avatar_emoji: Optional[str] = None,
             is_active: Optional[bool] = None,
     ) -> Assistant:
@@ -75,6 +76,7 @@ class AssistantService:
             name=name,
             description=description,
             system_prompt=system_prompt,
+            response_style=response_style,
             avatar_emoji=avatar_emoji,
             is_active=is_active,
             updated_by=user.id,
@@ -89,7 +91,6 @@ class AssistantService:
         logger.info("Assistant deleted", extra={"user_id": user.id, "assistant_id": assistant_id})
 
     def start_chat(self, user: AuthenticatedUser, assistant_id: int):
-        """Create a new chat session pre-configured with the assistant's system prompt."""
         AccessControl.require_permissions(user, frozenset({perms.USE_ASSISTANT}))
 
         assistant = assistant_repository.get_by_id(assistant_id)
@@ -107,6 +108,7 @@ class AssistantService:
             user=user,
             name=chat_name,
             system_prompt=assistant.system_prompt,
+            response_style=assistant.response_style,
         )
 
         logger.info(

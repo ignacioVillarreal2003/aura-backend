@@ -3,12 +3,30 @@ from rest_framework import serializers
 from apps.report.models import Report
 
 
-class CreateReportRequest(serializers.Serializer):
+class _MessageSerializer(serializers.Serializer):
+    role = serializers.ChoiceField(choices=["human", "assistant"])
+    content = serializers.CharField()
+
+
+class _FragmentSerializer(serializers.Serializer):
+    document = serializers.DictField(required=False)
+    content = serializers.CharField(required=False, default="")
+
+
+class GenerateReportRequest(serializers.Serializer):
     type = serializers.ChoiceField(choices=Report.Type.choices)
-    title = serializers.CharField(max_length=500, allow_blank=False)
-    content = serializers.CharField(allow_blank=False)
     mode = serializers.ChoiceField(choices=Report.Mode.choices)
-    metadata = serializers.DictField(default=dict)
+    message = serializers.CharField(allow_blank=False)
+
+
+class ReportGenerateResponse(serializers.Serializer):
+    report = serializers.SerializerMethodField()
+    messages = _MessageSerializer(many=True)
+    fragments = _FragmentSerializer(many=True)
+
+    def get_report(self, obj):
+        from apps.report.serializers import ReportResponse
+        return ReportResponse(obj["report"]).data
 
 
 class UpdateReportRequest(serializers.Serializer):

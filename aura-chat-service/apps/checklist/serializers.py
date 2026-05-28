@@ -3,6 +3,30 @@ from rest_framework import serializers
 from apps.checklist.models import Checklist
 
 
+class _MessageSerializer(serializers.Serializer):
+    role = serializers.ChoiceField(choices=["human", "assistant"])
+    content = serializers.CharField()
+
+
+class _FragmentSerializer(serializers.Serializer):
+    document = serializers.DictField(required=False)
+    content = serializers.CharField(required=False, default="")
+
+
+class GenerateChecklistRequest(serializers.Serializer):
+    mode = serializers.ChoiceField(choices=Checklist.Mode.choices)
+    message = serializers.CharField(allow_blank=False)
+
+
+class ChecklistGenerateResponse(serializers.Serializer):
+    checklist = serializers.SerializerMethodField()
+    messages = _MessageSerializer(many=True)
+    fragments = _FragmentSerializer(many=True)
+
+    def get_checklist(self, obj):
+        return ChecklistResponse(obj["checklist"]).data
+
+
 class ChecklistItemSerializer(serializers.Serializer):
     id = serializers.CharField()
     section = serializers.CharField(max_length=200)
@@ -10,20 +34,6 @@ class ChecklistItemSerializer(serializers.Serializer):
     text = serializers.CharField(max_length=500)
     is_checked = serializers.BooleanField(default=False)
     notes = serializers.CharField(default="", allow_blank=True)
-
-
-class CreateChecklistRequest(serializers.Serializer):
-    title = serializers.CharField(max_length=500, allow_blank=False)
-    items = ChecklistItemSerializer(many=True)
-    mode = serializers.ChoiceField(choices=Checklist.Mode.choices)
-    metadata = serializers.DictField(default=dict)
-
-    def validate_items(self, value):
-        if not value:
-            raise serializers.ValidationError("La checklist debe contener al menos un ítem.")
-        if len(value) > 200:
-            raise serializers.ValidationError("La checklist no puede superar los 200 ítems.")
-        return value
 
 
 class UpdateChecklistRequest(serializers.Serializer):

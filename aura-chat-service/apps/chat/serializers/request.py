@@ -76,7 +76,5 @@ class UpdateChatRequest(serializers.Serializer):
         allow_empty=True,
         help_text="Replaces tag set when provided (normalized server-side).",
     )
-    is_ephemeral = serializers.BooleanField(required=False)
-
     def validate_tags(self, value: list[str]) -> list[str]:
         return _normalize_tags(value)
