@@ -7,7 +7,6 @@ from django.contrib import admin
 from django.core.exceptions import PermissionDenied
 from django.template.response import TemplateResponse
 from django.urls import path
-from django.utils import timezone
 
 from accounts.admin_parts.common import _is_super_admin_user, _is_admin_or_super_user, _is_effective_superadmin
 from accounts.models import AuditLog, UserRole
@@ -121,8 +120,7 @@ def _audit_list_view(request):
 
     context = {
         **admin.site.each_context(request),
-        'title': 'Auditoría',
-        'subtitle': 'Registro completo de acciones del sistema',
+        'title': 'Registro de acciones',
         'entries': entries,
         'total': total,
         'page': page,
@@ -137,7 +135,6 @@ def _audit_list_view(request):
         'available_entities': available_entities,
         'action_labels': _ACTION_LABELS,
         'entity_labels': _ENTITY_LABELS,
-        'generated_at': timezone.now(),
     }
     return TemplateResponse(request, 'admin/auditoria/index.html', context)
 
