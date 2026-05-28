@@ -178,7 +178,7 @@ class MessageService:
 
         try:
             llm_out: DocumentQuestionResult = await llm_client.document_question(
-                messages, user
+                messages, user, chat_id=chat_id
             )
         except HttpClientException as e:
             logger.error(
@@ -260,7 +260,7 @@ class MessageService:
 
         try:
             async for sse in llm_client.document_question_stream_events(
-                messages, user
+                messages, user, chat_id=chat_id
             ):
                 et = sse.get("type")
                 if et == "meta":

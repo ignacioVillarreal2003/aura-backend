@@ -50,8 +50,11 @@ class LLMClient:
         self,
         messages: list[dict[str, str]],
         user: AuthenticatedUser,
+        chat_id: int | None = None,
     ) -> DocumentQuestionResult:
-        payload = {"messages": messages}
+        payload: dict = {"messages": messages}
+        if chat_id is not None:
+            payload["chat_id"] = chat_id
 
         logger.debug(
             "Calling LLM document-question.",
@@ -90,8 +93,11 @@ class LLMClient:
         messages: list[dict[str, str]],
         mode: str,
         user: AuthenticatedUser,
+        chat_id: int | None = None,
     ) -> ChecklistGenerateResult:
-        payload = {"messages": messages, "mode": mode}
+        payload: dict = {"messages": messages, "mode": mode}
+        if chat_id is not None:
+            payload["chat_id"] = chat_id
 
         logger.debug(
             "Calling LLM checklist-generate.",
@@ -130,8 +136,11 @@ class LLMClient:
         mode: str,
         report_type: str,
         user: AuthenticatedUser,
+        chat_id: int | None = None,
     ) -> ReportGenerateResult:
-        payload = {"messages": messages, "mode": mode, "report_type": report_type}
+        payload: dict = {"messages": messages, "mode": mode, "report_type": report_type}
+        if chat_id is not None:
+            payload["chat_id"] = chat_id
 
         logger.debug(
             "Calling LLM report-generate.",
@@ -169,8 +178,11 @@ class LLMClient:
         self,
         messages: list[dict[str, str]],
         user: AuthenticatedUser,
+        chat_id: int | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload = {"messages": messages}
+        payload: dict = {"messages": messages}
+        if chat_id is not None:
+            payload["chat_id"] = chat_id
         headers = self._build_stream_headers(user)
         url = settings.LLM_DOCUMENT_QUESTION_STREAM_URL
 

@@ -145,6 +145,7 @@ class ReportService:
                 mode=mode,
                 report_type=report_type,
                 user=user,
+                chat_id=chat_id,
             )
         except HttpClientException as e:
             logger.error(

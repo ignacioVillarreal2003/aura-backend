@@ -121,6 +121,7 @@ class ChecklistService:
                 messages=messages,
                 mode=mode,
                 user=user,
+                chat_id=chat_id,
             )
         except HttpClientException as e:
             logger.error(
