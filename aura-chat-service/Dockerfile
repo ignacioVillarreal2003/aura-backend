@@ -1,7 +1,8 @@
 FROM python:3.13-slim AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    HF_HOME=/app/.cache/huggingface
 
 WORKDIR /app
 
@@ -26,7 +27,7 @@ FROM dependencies AS runtime
 
 COPY . .
 
-RUN chown -R app:app /app
+RUN mkdir -p /app/.cache/huggingface && chown -R app:app /app
 
 USER app
 
