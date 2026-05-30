@@ -147,18 +147,6 @@ CREATE TABLE chat_share_link (
     CONSTRAINT uq_share_link_token UNIQUE (token)
 );
 
-CREATE TABLE chat_webhook (
-    id          BIGSERIAL PRIMARY KEY,
-    chat_id     BIGINT                  NOT NULL,
-    url         TEXT                    NOT NULL,
-    events      TEXT[]                  NOT NULL DEFAULT '{}',
-    secret      VARCHAR(64)             NOT NULL,
-    is_active   BOOLEAN                 NOT NULL DEFAULT TRUE,
-    created_by  BIGINT                  NOT NULL,
-    created_at  TIMESTAMPTZ             NOT NULL DEFAULT NOW(),
-    CONSTRAINT fk_chat_webhook_chat FOREIGN KEY (chat_id) REFERENCES chat(id) ON DELETE CASCADE
-);
-
 CREATE TABLE notification (
     id              BIGSERIAL PRIMARY KEY,
     receiver_id     BIGINT        NOT NULL,
@@ -337,7 +325,6 @@ CREATE INDEX idx_thread_reply_parent ON message_thread_reply(parent_message_id);
 CREATE INDEX idx_message_feedback_message ON message_feedback(message_id);
 CREATE INDEX idx_share_link_chat ON chat_share_link(chat_id);
 CREATE INDEX idx_share_link_token ON chat_share_link(token);
-CREATE INDEX idx_chat_webhook_chat ON chat_webhook(chat_id);
 
 CREATE INDEX idx_notification_deleted_at ON notification (deleted_at);
 
