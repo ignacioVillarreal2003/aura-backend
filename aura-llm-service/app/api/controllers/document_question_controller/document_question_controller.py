@@ -33,6 +33,10 @@ class DocumentQuestionController(DocumentQuestionControllerInterface):
             _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(default_rate_limit),
     ) -> DocumentQuestionResponse:
+        Authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LLM_DOCUMENT_QUESTION}),
+        )
         return await document_question_service.execute_document_question(
             document_question_request=document_question_request,
             authenticated_user=authenticated_user

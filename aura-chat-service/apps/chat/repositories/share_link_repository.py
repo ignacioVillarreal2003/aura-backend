@@ -29,8 +29,11 @@ class ShareLinkRepository:
             return None
 
     @staticmethod
-    def list_by_chat(chat_id: int) -> QuerySet[ChatShareLink]:
-        return ChatShareLink.objects.filter(chat_id=chat_id).order_by("-created_at")
+    def list_by_chat(chat_id: int, active_only: bool = True) -> QuerySet[ChatShareLink]:
+        qs = ChatShareLink.objects.filter(chat_id=chat_id)
+        if active_only:
+            qs = qs.filter(is_active=True)
+        return qs.order_by("-created_at")
 
     @staticmethod
     def deactivate(link: ChatShareLink) -> ChatShareLink:

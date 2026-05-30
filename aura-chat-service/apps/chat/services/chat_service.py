@@ -70,8 +70,13 @@ class ChatService:
         if chat is None:
             raise ChatNotFoundException()
 
-        if not membership_repository.is_active_member(chat_id=chat_id, member_id=user.id):
+        membership = membership_repository.get_by_chat_and_member(chat_id=chat_id, member_id=user.id)
+        if membership is None or membership.status != "active":
             raise ChatAccessDeniedException()
+
+        setattr(chat, "pinned_at", membership.pinned_at)
+        setattr(chat, "archived_at", membership.archived_at)
+        setattr(chat, "muted_until", membership.muted_until)
 
         return chat
 

@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends
 
 from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
+from app.application.authorization.authorizer import Authorizer
+from app.application.authorization.permissions import Permissions
 from app.application.services.report_service.report_service import get_report_service
 from app.application.services.report_service.interfaces.report_service_interface import ReportServiceInterface
 from app.domain.authentication.authenticated_user import AuthenticatedUser
@@ -18,6 +20,10 @@ class ReportController:
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
             _rl: None = Depends(default_rate_limit),
     ) -> ReportGenerateResponse:
+        Authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LLM_REPORT_GENERATE}),
+        )
         return await report_service.generate(
             request=report_request,
             authenticated_user=authenticated_user,

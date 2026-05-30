@@ -6,6 +6,10 @@ from apps.chat.models.chat import Chat
 
 
 class ChatResponse(serializers.ModelSerializer):
+    is_pinned = serializers.SerializerMethodField()
+    archived_at = serializers.SerializerMethodField()
+    is_muted = serializers.SerializerMethodField()
+
     class Meta:
         model = Chat
         fields = [
@@ -16,12 +20,30 @@ class ChatResponse(serializers.ModelSerializer):
             "tags",
             "is_ephemeral",
             "is_locked",
+            "is_pinned",
+            "archived_at",
+            "is_muted",
             "last_message_at",
             "created_by",
             "created_at",
             "updated_by",
             "updated_at",
         ]
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_is_pinned(self, obj) -> bool:
+        return getattr(obj, "pinned_at", None) is not None
+
+    @extend_schema_field(serializers.DateTimeField(allow_null=True))
+    def get_archived_at(self, obj) -> datetime | None:
+        return getattr(obj, "archived_at", None)
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_is_muted(self, obj) -> bool:
+        muted_until = getattr(obj, "muted_until", None)
+        if muted_until is None:
+            return False
+        return muted_until > timezone.now()
 
 
 class ChatListResponse(serializers.ModelSerializer):
