@@ -44,6 +44,16 @@ class ReportRepository:
             qs = qs.filter(source_chat_id=source_chat_id)
         return qs
 
+    def list_by_chat(
+            self,
+            source_chat_id: int,
+            report_type: Optional[str] = None,
+    ):
+        qs = Report.objects.filter(source_chat_id=source_chat_id)
+        if report_type:
+            qs = qs.filter(type=report_type)
+        return qs
+
     def list_all(self, report_type: Optional[str] = None):
         qs = Report.objects.all()
         if report_type:

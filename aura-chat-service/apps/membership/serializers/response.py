@@ -4,12 +4,15 @@ from apps.membership.models.chat_membership import ChatMembership
 
 
 class MembershipResponse(serializers.ModelSerializer):
+    chat_name = serializers.CharField(source='chat.name', read_only=True)
+
     class Meta:
         model = ChatMembership
         fields = [
             "id",
             "member_id",
             "chat_id",
+            "chat_name",
             "status",
             "role",
             "joined_at",

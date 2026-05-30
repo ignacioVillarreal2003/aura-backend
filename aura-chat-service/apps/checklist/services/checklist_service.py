@@ -40,7 +40,9 @@ class ChecklistService:
                 raise ChatNotFoundException()
             if not membership_repository.is_active_member(chat_id, user.id):
                 raise ChatAccessDeniedException()
-        return checklist_repository.list_by_user(user_id=user.id, source_chat_id=chat_id)
+            # Any active member of the chat sees every checklist in it, not only their own.
+            return checklist_repository.list_by_chat(source_chat_id=chat_id)
+        return checklist_repository.list_by_user(user_id=user.id)
 
     def list_all_checklists(self, user: AuthenticatedUser):
         AccessControl.require_permissions(user, frozenset({perms.MANAGE_CHECKLISTS}))

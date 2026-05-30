@@ -45,7 +45,7 @@ class MembershipRepository:
 
     @staticmethod
     def list_by_member(member_id: int, status: str | None = None) -> QuerySet[ChatMembership]:
-        qs = ChatMembership.objects.filter(member_id=member_id).order_by("-created_at")
+        qs = ChatMembership.objects.select_related('chat').filter(member_id=member_id).order_by("-created_at")
         if status is not None:
             qs = qs.filter(status=status)
         return qs

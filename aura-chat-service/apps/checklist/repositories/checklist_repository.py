@@ -35,6 +35,9 @@ class ChecklistRepository:
             qs = qs.filter(source_chat_id=source_chat_id)
         return qs
 
+    def list_by_chat(self, source_chat_id: int):
+        return Checklist.objects.filter(source_chat_id=source_chat_id)
+
     def list_all(self):
         return Checklist.objects.all()
 

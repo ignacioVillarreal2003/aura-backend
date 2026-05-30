@@ -58,7 +58,9 @@ class ReportService:
                 raise ChatNotFoundException()
             if not membership_repository.is_active_member(chat_id, user.id):
                 raise ChatAccessDeniedException()
-        return report_repository.list_by_user(user_id=user.id, report_type=report_type, source_chat_id=chat_id)
+            # Any active member of the chat sees every report in it, not only their own.
+            return report_repository.list_by_chat(source_chat_id=chat_id, report_type=report_type)
+        return report_repository.list_by_user(user_id=user.id, report_type=report_type)
 
     def list_all_reports(
             self,
