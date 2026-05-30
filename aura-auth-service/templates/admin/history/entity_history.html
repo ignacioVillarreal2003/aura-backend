@@ -1,0 +1,173 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  .history-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .history-back-btn {
+    display: inline-block;
+    padding: 6px 14px;
+    background: #205067;
+    color: #fff;
+    border-radius: 4px;
+    font-size: 13px;
+    text-decoration: none;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .history-back-btn:hover { background: #174053; color: #fff; }
+  .history-empty {
+    color: #697688;
+    font-size: 14px;
+    padding: 32px 0;
+    text-align: center;
+  }
+  .history-entry {
+    background: #fff;
+    border: 1px solid #e6e9ef;
+    border-radius: 8px;
+    margin-bottom: 14px;
+    overflow: hidden;
+  }
+  .entry-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: #f8fafc;
+    border-bottom: 1px solid #e6e9ef;
+    flex-wrap: wrap;
+  }
+  .action-badge {
+    display: inline-block;
+    border-radius: 999px;
+    padding: 3px 11px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+    white-space: nowrap;
+  }
+  .entry-date {
+    font-size: 12px;
+    color: #697688;
+    white-space: nowrap;
+  }
+  .entry-actor {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1e293b;
+  }
+  .detail-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .detail-table td {
+    padding: 7px 16px;
+    border-bottom: 1px solid #f0f2f7;
+    vertical-align: top;
+  }
+  .detail-table tr:last-child td {
+    border-bottom: none;
+  }
+  .detail-key {
+    font-weight: 600;
+    color: #4d5b6c;
+    width: 160px;
+    white-space: nowrap;
+  }
+  .detail-before {
+    color: #b91c1c;
+    background: #fef2f2;
+    border-radius: 3px;
+    padding: 2px 8px !important;
+    font-size: 12px;
+  }
+  .detail-after {
+    color: #15803d;
+    background: #f0fdf4;
+    border-radius: 3px;
+    padding: 2px 8px !important;
+    font-size: 12px;
+  }
+  .detail-arrow {
+    color: #9ca3af;
+    text-align: center;
+    width: 24px;
+    font-size: 14px;
+  }
+  .detail-value {
+    color: #374151;
+  }
+  .no-details {
+    color: #9ca3af;
+    font-style: italic;
+    font-size: 12px;
+    padding: 8px 16px !important;
+  }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Inicio</a>
+  {% if breadcrumb_list_url and breadcrumb_list_label %}
+    &rsaquo; <a href="{{ breadcrumb_list_url }}">{{ breadcrumb_list_label }}</a>
+  {% endif %}
+  {% if back_url %}
+    &rsaquo; <a href="{{ back_url }}">{{ entity_name|default:object_id }}</a>
+  {% endif %}
+  &rsaquo; Historial
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <div class="history-header">
+    <h1>{{ title }}</h1>
+    {% if back_url %}
+      <a href="{{ back_url }}" class="history-back-btn">&#8592; Volver</a>
+    {% endif %}
+  </div>
+
+  {% if entries %}
+    {% for entry in entries %}
+    <div class="history-entry">
+      <div class="entry-header">
+        <span class="action-badge" style="background:{{ entry.action_color }};">{{ entry.action_label }}</span>
+        <span class="entry-date">{{ entry.timestamp|date:"d/m/Y H:i:s" }}</span>
+        <span class="entry-actor">{{ entry.actor_username|default:"Sistema" }}</span>
+      </div>
+      {% if entry.detail_rows %}
+      <table class="detail-table">
+        {% for row in entry.detail_rows %}
+        <tr>
+          <td class="detail-key">{{ row.key }}</td>
+          {% if row.is_change %}
+            <td class="detail-before">{{ row.before }}</td>
+            <td class="detail-arrow">&rarr;</td>
+            <td class="detail-after">{{ row.after }}</td>
+          {% else %}
+            <td class="detail-value" colspan="3">{{ row.value }}</td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+        <p class="no-details">Sin detalles registrados.</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="history-empty">No hay historial registrado para este elemento.</p>
+  {% endif %}
+</div>
+{% endblock %}

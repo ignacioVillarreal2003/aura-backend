@@ -40,6 +40,27 @@ class DocumentDownloadController(DocumentDownloadControllerInterface):
             },
         )
 
+    async def download_document_admin(
+            self,
+            document_id: int,
+            document_download_service: DocumentDownloadServiceInterface = Depends(get_document_download_service),
+            database_session: AsyncSession = Depends(get_database_session),
+            authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
+            _rl: None = Depends(default_rate_limit),
+    ) -> StreamingResponse:
+        content_stream, filename, mime_type = await document_download_service.download_document_admin(
+            document_id=document_id,
+            database_session=database_session,
+            authenticated_user=authenticated_user,
+        )
+        return StreamingResponse(
+            content=content_stream,
+            media_type=mime_type,
+            headers={
+                "Content-Disposition": f"attachment; filename=\"{filename}\"",
+            },
+        )
+
 
 router = APIRouter()
 document_download_controller = DocumentDownloadController()
@@ -63,6 +84,16 @@ router.add_api_route(
     response_class=StreamingResponse,
     operation_id="downloadDocument",
     summary="Descargar documento",
-    description="Devuelve el archivo del documento con su tipo MIME.",
+    description="Devuelve el archivo del documento al usuario autenticado, verificando que sea parte del chat.",
+    responses=_response,
+)
+router.add_api_route(
+    "/admin/document/{document_id}/download",
+    document_download_controller.download_document_admin,
+    methods=["GET"],
+    response_class=StreamingResponse,
+    operation_id="downloadDocumentAdmin",
+    summary="Descargar documento (admin)",
+    description="Devuelve el archivo de cualquier documento sin restricción de pertenencia al chat. Requiere permiso de administrador.",
     responses=_response,
 )

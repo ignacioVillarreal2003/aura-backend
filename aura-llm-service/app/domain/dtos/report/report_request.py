@@ -1,10 +1,11 @@
 from enum import StrEnum
+from typing import Optional
 
 from pydantic import BaseModel, Field, model_validator
 
 from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.message import Message
-from app.domain.field_limits import MAX_MESSAGES_IN_REQUEST
+from app.domain.field_limits import MAX_ID, MAX_MESSAGES_IN_REQUEST
 
 
 class ReportType(StrEnum):
@@ -35,6 +36,12 @@ class ReportGenerateRequest(BaseModel):
             "Historial de conversación. El último mensaje debe ser de rol 'human' "
             "con el contenido operacional o instrucción de retoque."
         ),
+    )
+    chat_id: Optional[int] = Field(
+        default=None,
+        gt=0,
+        le=MAX_ID,
+        description="ID del chat fuente. En modo rag filtra los fragmentos a los documentos del chat.",
     )
 
     @model_validator(mode="after")

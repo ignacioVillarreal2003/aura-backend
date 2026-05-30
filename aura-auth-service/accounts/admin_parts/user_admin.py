@@ -19,9 +19,22 @@ from accounts.admin_parts.common import (
     _apply_audit_fields,
     _is_super_admin_user,
     _is_admin_or_super_user,
+    _is_effective_superadmin,
     log_audit,
 )
 from accounts.admin_parts.forms.user_form import UserAdminForm
+
+
+def _can_see_full_user_edit(request, obj):
+    """True cuando el editor puede ver Grupos + Auditoría en el formulario de un user."""
+    if _is_effective_superadmin(request):
+        return True
+    if not obj:
+        return False
+    return (
+        _is_admin_or_super_user(request.user) and
+        obj.user_roles.filter(role__name='user', deleted_at__isnull=True).exists()
+    )
 
 
 @admin.register(User)
@@ -154,7 +167,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
 
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
-        extra_context['is_superadmin'] = _is_super_admin_user(request.user)
+        extra_context['is_superadmin'] = _is_effective_superadmin(request)
         return super().changelist_view(request, extra_context=extra_context)
 
     def get_fieldsets(self, request, obj=None):
@@ -174,12 +187,25 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
                     'fields': ('username', 'email', 'password', 'active'),
                 }),
             )
-        if _is_super_admin_user(request.user):
+        is_superadmin_obj = obj and obj.user_roles.filter(
+            role__name='superadmin', deleted_at__isnull=True
+        ).exists()
+        if is_superadmin_obj:
+            return (
+                ('Identidad', {
+                    'fields': ('roles_display', 'username', 'email'),
+                }),
+            )
+        if _can_see_full_user_edit(request, obj):
+            is_admin_obj = obj and obj.user_roles.filter(
+                role__name='admin', deleted_at__isnull=True
+            ).exists()
+            grupos_label = 'Grupos - Modo usuario' if is_admin_obj else 'Grupos'
             return (
                 ('Identidad', {
                     'fields': ('roles_display', 'username', 'email', 'active'),
                 }),
-                ('Grupos', {
+                (grupos_label, {
                     'fields': ('classification_level_id',),
                 }),
                 ('Auditoría', {
@@ -229,7 +255,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             for field_name, label in audit_labels.items():
                 if field_name in form.base_fields:
                     form.base_fields[field_name].label = label
-            if _is_super_admin_user(request.user):
+            if _can_see_full_user_edit(request, obj):
                 choices = getattr(request, '_mac_level_choices', [('', '-- Sin nivel --')])
                 initial = getattr(request, '_mac_current_level_id', '')
                 form.base_fields['classification_level_id'] = dj_forms.ChoiceField(
@@ -278,12 +304,18 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
         from datetime import timedelta
         one_week_ago = timezone.now() - timedelta(days=7)
         queryset = super().get_queryset(request)
-        return (
+        queryset = (
             queryset
             .filter(Q(deleted_at__isnull=True) | Q(deleted_at__gte=one_week_ago))
             .prefetch_related('user_roles__role')
             .order_by(F('deleted_at').asc(nulls_first=True), 'username')
         )
+        if not _is_effective_superadmin(request):
+            queryset = queryset.filter(
+                user_roles__role__name='user',
+                user_roles__deleted_at__isnull=True,
+            )
+        return queryset
 
     def has_add_permission(self, request):
         if _is_admin_or_super_user(request.user):
@@ -305,6 +337,11 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
     def has_change_permission(self, request, obj=None):
         if obj is not None and obj.is_deleted:
             return False
+        if obj is not None and obj.user_roles.filter(role__name='superadmin', deleted_at__isnull=True).exists():
+            return False
+        if obj is not None and not _is_effective_superadmin(request):
+            if obj.user_roles.filter(role__name='admin', deleted_at__isnull=True).exists():
+                return False
         if _is_admin_or_super_user(request.user):
             return True
         if obj is None:
@@ -314,6 +351,11 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         if obj is not None and obj.is_deleted:
             return False
+        if obj is not None and obj.user_roles.filter(role__name='superadmin', deleted_at__isnull=True).exists():
+            return False
+        if obj is not None and not _is_effective_superadmin(request):
+            if obj.user_roles.filter(role__name='admin', deleted_at__isnull=True).exists():
+                return False
         if _is_admin_or_super_user(request.user):
             return True
         if obj is None:
@@ -328,8 +370,11 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
         }
 
     def add_view(self, request, form_url='', extra_context=None):
+        from django.core.exceptions import PermissionDenied
         extra_context = extra_context or {}
         if request.GET.get('role') == 'admin':
+            if not _is_effective_superadmin(request):
+                raise PermissionDenied
             extra_context['custom_verbose_name'] = 'Administrador'
         if request.GET.get('role', 'user') == 'user':
             from accounts.services.mac_client import mac_client
@@ -347,17 +392,31 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
 
     def change_view(self, request, object_id, form_url='', extra_context=None):
         extra_context = extra_context or {}
+        extra_context['subtitle'] = None
         try:
-            if UserRole.objects.filter(
-                user_id=int(object_id),
-                role__name='admin',
-                deleted_at__isnull=True,
-            ).exists():
+            uid = int(object_id)
+            roles = list(
+                UserRole.objects.filter(user_id=uid, deleted_at__isnull=True)
+                .values_list('role__name', flat=True)
+            )
+            if 'superadmin' in roles:
+                extra_context['custom_verbose_name'] = 'Superadmin'
+                extra_context['view_only_user'] = True
+            elif 'admin' in roles:
                 extra_context['custom_verbose_name'] = 'Administrador'
+            else:
+                extra_context['custom_verbose_name'] = 'Usuario'
         except (ValueError, Exception):
             pass
 
-        if object_id and _is_super_admin_user(request.user):
+        is_user_type = extra_context.get('custom_verbose_name') == 'Usuario'
+        can_load_mac = (
+            not extra_context.get('view_only_user') and (
+                _is_effective_superadmin(request) or
+                (_is_admin_or_super_user(request.user) and is_user_type)
+            )
+        )
+        if object_id and can_load_mac:
             from accounts.services.mac_client import mac_client, MacServiceError
             try:
                 levels = sorted(
@@ -408,26 +467,109 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             obj.status = 'active' if form.cleaned_data['active'] else 'inactive'
         _apply_audit_fields(obj, request.user, is_create=not change)
         super().save_model(request, obj, form, change)
-        action = 'UPDATE' if change else 'CREATE'
-        details = {'changed_fields': form.changed_data} if change and form.changed_data else None
-        log_audit(
-            actor=request.user,
-            action=action,
-            entity_type='auth_user',
-            entity_id=obj.pk,
-            entity_label=obj.username,
-            details=details,
-        )
-        if not change:
+
+        if change:
+            changes = {}
+
+            if 'active' in form.changed_data:
+                changes['activo'] = obj.status == 'active'
+
+            if _can_see_full_user_edit(request, obj):
+                from accounts.services.mac_client import mac_client, MacServiceError
+                cl_id = (form.cleaned_data.get('classification_level_id') or '').strip()
+                comp_ids = request.POST.getlist('compartment_ids')
+
+                # Capture before-state for change detection
+                try:
+                    auth_data = mac_client.get_user_authorization(request.user, obj.pk)
+                    current_comp_ids = {
+                        uc.get('compartment', {}).get('id')
+                        for uc in (auth_data.get('compartments', []) if auth_data else [])
+                        if uc.get('compartment', {}).get('id')
+                    }
+                    prev_clearance = auth_data.get('clearance') if auth_data else None
+                    prev_level_id = (
+                        str(prev_clearance['classification_level']['id'])
+                        if prev_clearance and prev_clearance.get('classification_level')
+                        else ''
+                    )
+                except Exception:
+                    current_comp_ids = set()
+                    prev_level_id = ''
+
+                # Apply clearance change
+                if cl_id:
+                    try:
+                        mac_client.set_user_clearance(request.user, obj.pk, int(cl_id))
+                    except Exception as exc:
+                        logger.warning('Could not set clearance for user %s: %s', obj.pk, exc)
+                else:
+                    try:
+                        mac_client.delete_user_clearance(request.user, obj.pk)
+                    except Exception:
+                        pass
+
+                # Apply compartment changes
+                new_comp_ids = set(int(c) for c in comp_ids if c)
+                for cid in new_comp_ids - current_comp_ids:
+                    try:
+                        mac_client.add_user_compartment(request.user, obj.pk, cid)
+                    except Exception as exc:
+                        logger.warning('Could not add compartment %s for user %s: %s', cid, obj.pk, exc)
+                for cid in current_comp_ids - new_comp_ids:
+                    try:
+                        mac_client.remove_user_compartment(request.user, obj.pk, cid)
+                    except Exception as exc:
+                        logger.warning('Could not remove compartment %s for user %s: %s', cid, obj.pk, exc)
+
+                # Audit: nivel (only if changed)
+                if cl_id != prev_level_id:
+                    if cl_id:
+                        nivel_nombre = cl_id
+                        level_field = form.fields.get('classification_level_id')
+                        if level_field:
+                            for choice_id, choice_name in level_field.choices:
+                                if str(choice_id) == str(cl_id):
+                                    nivel_nombre = choice_name
+                                    break
+                        changes['nivel'] = nivel_nombre
+                    else:
+                        changes['nivel'] = None
+
+                # Audit: agrupaciones (only if changed)
+                if new_comp_ids != current_comp_ids:
+                    try:
+                        all_compartments = mac_client.list_compartments(request.user)
+                        comp_map = {str(c['id']): c['name'] for c in all_compartments}
+                        changes['agrupaciones'] = [
+                            comp_map.get(str(cid), str(cid)) for cid in sorted(new_comp_ids)
+                        ]
+                    except Exception:
+                        changes['agrupaciones'] = [str(cid) for cid in sorted(new_comp_ids)]
+
+            log_audit(
+                actor=request.user,
+                action='UPDATE',
+                entity_type='auth_user',
+                entity_id=obj.pk,
+                entity_label=f'{request.user.username} modificó usuario {obj.username}',
+                details=changes if changes else None,
+                request=request,
+            )
+        else:
             from accounts.services.mac_client import mac_client
             role_type = request.GET.get('role', 'user')
-            if role_type == 'admin' and not _is_super_admin_user(request.user):
+            if role_type == 'admin' and not _is_effective_superadmin(request):
                 role_type = 'user'
             try:
                 role = Role.objects.get(name=role_type)
                 UserRole.objects.create(user=obj, role=role, created_by=request.user)
             except Role.DoesNotExist:
                 pass
+
+            nivel_nombre = None
+            agrupaciones = []
+
             if role_type == 'user':
                 cl_id = form.cleaned_data.get('classification_level_id', '')
                 comp_ids = request.POST.getlist('compartment_ids')
@@ -441,40 +583,38 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
                         mac_client.add_user_compartment(request.user, obj.pk, int(comp_id))
                     except Exception as exc:
                         logger.warning('Could not add compartment %s for user %s: %s', comp_id, obj.pk, exc)
-        elif change and _is_super_admin_user(request.user):
-            from accounts.services.mac_client import mac_client, MacServiceError
-            cl_id = (form.cleaned_data.get('classification_level_id') or '').strip()
-            comp_ids = request.POST.getlist('compartment_ids')
-            if cl_id:
-                try:
-                    mac_client.set_user_clearance(request.user, obj.pk, int(cl_id))
-                except Exception as exc:
-                    logger.warning('Could not set clearance for user %s: %s', obj.pk, exc)
-            else:
-                try:
-                    mac_client.delete_user_clearance(request.user, obj.pk)
-                except Exception:
-                    pass
-            try:
-                auth_data = mac_client.get_user_authorization(request.user, obj.pk)
-                current_comp_ids = {
-                    uc.get('compartment', {}).get('id')
-                    for uc in (auth_data.get('compartments', []) if auth_data else [])
-                    if uc.get('compartment', {}).get('id')
-                }
-            except Exception:
-                current_comp_ids = set()
-            new_comp_ids = set(int(c) for c in comp_ids if c)
-            for cid in new_comp_ids - current_comp_ids:
-                try:
-                    mac_client.add_user_compartment(request.user, obj.pk, cid)
-                except Exception as exc:
-                    logger.warning('Could not add compartment %s for user %s: %s', cid, obj.pk, exc)
-            for cid in current_comp_ids - new_comp_ids:
-                try:
-                    mac_client.remove_user_compartment(request.user, obj.pk, cid)
-                except Exception as exc:
-                    logger.warning('Could not remove compartment %s for user %s: %s', cid, obj.pk, exc)
+
+                level_field = form.fields.get('classification_level_id')
+                if cl_id and level_field:
+                    for choice_id, choice_name in level_field.choices:
+                        if str(choice_id) == str(cl_id):
+                            nivel_nombre = choice_name
+                            break
+
+                if comp_ids:
+                    try:
+                        all_compartments = mac_client.list_compartments(request.user)
+                        comp_map = {str(c['id']): c['name'] for c in all_compartments}
+                        agrupaciones = [comp_map.get(str(cid), str(cid)) for cid in comp_ids if cid]
+                    except Exception:
+                        agrupaciones = [str(cid) for cid in comp_ids if cid]
+
+            log_audit(
+                actor=request.user,
+                action='CREATE',
+                entity_type='auth_user',
+                entity_id=obj.pk,
+                entity_label=f'{request.user.username} creó usuario {obj.username}',
+                details={
+                    'usuario': obj.username,
+                    'correo': obj.email,
+                    'activo': obj.status == 'active',
+                    'rol': role_type,
+                    'nivel': nivel_nombre,
+                    'agrupaciones': agrupaciones,
+                },
+                request=request,
+            )
 
     def delete_model(self, request, obj):
         # Soft-delete active role assignments before soft-deleting the user.
@@ -489,6 +629,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             entity_type='auth_user',
             entity_id=obj.pk,
             entity_label=obj.username,
+            request=request,
         )
 
     def delete_queryset(self, request, queryset):
@@ -505,4 +646,38 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
                 entity_type='auth_user',
                 entity_id=obj.pk,
                 entity_label=obj.username,
+                request=request,
             )
+
+    def history_view(self, request, object_id, extra_context=None):
+        from django.core.exceptions import PermissionDenied
+        from django.template.response import TemplateResponse
+        from accounts.admin_parts.utils.history import build_entity_history
+
+        if not self.has_view_permission(request):
+            raise PermissionDenied
+
+        try:
+            obj = self.get_object(request, object_id)
+        except Exception:
+            obj = None
+
+        entity_name = obj.username if obj else object_id
+        entries = build_entity_history('auth_user', object_id)
+        back_url = reverse('admin:accounts_user_change', args=[object_id])
+
+        context = {
+            **self.admin_site.each_context(request),
+            'title': f'Historial — {entity_name}',
+            'entries': entries,
+            'back_url': back_url,
+            'entity_name': entity_name,
+            'object_id': object_id,
+            'opts': self.model._meta,
+            'original': obj,
+            'breadcrumb_list_url': reverse('admin:accounts_user_changelist'),
+            'breadcrumb_list_label': 'Usuarios',
+        }
+        if extra_context:
+            context.update(extra_context)
+        return TemplateResponse(request, 'admin/history/entity_history.html', context)

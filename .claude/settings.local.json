@@ -38,7 +38,15 @@
       "Bash(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\albin\\\\Desktop\\\\tesis\\\\aura-backend\\\\aura-auth-service\\\\templates\\\\admin\\\\accounts\\\\permission\")",
       "Bash(Out-Null)",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\albin\\\\Desktop\\\\tesis\\\\aura-backend\\\\aura-document-collection-service\" -Recurse -Include \"*authorization*\", \"*clearance*\")",
-      "Bash(Get-ChildItem *)"
+      "Bash(Get-ChildItem *)",
+      "Bash(python -c \"import django; import os; os.environ.setdefault\\('DJANGO_SETTINGS_MODULE', 'authservice.settings'\\); django.setup\\(\\); print\\('OK'\\)\")",
+      "Bash(python -m venv --version)",
+      "Bash(.venv/Scripts/python.exe -c \"import os; os.environ['DJANGO_SETTINGS_MODULE']='authservice.settings'; import django; django.setup\\(\\); print\\('OK'\\)\")",
+      "PowerShell($env:DJANGO_SETTINGS_MODULE = 'authservice.settings'; Set-Location \"C:\\\\Users\\\\albin\\\\Desktop\\\\tesis\\\\aura-backend\\\\aura-auth-service\"; & \"C:\\\\Users\\\\albin\\\\Desktop\\\\tesis\\\\aura-backend\\\\aura-auth-service\\\\.venv\\\\Scripts\\\\python.exe\" -c \"import django; django.setup\\(\\); print\\('OK'\\)\")",
+      "Bash(DJANGO_SETTINGS_MODULE=authservice.settings scripts/python.exe *)",
+      "Bash(xargs grep -l \"superadmin\\\\|SUPERADMIN\")",
+      "Bash(xargs grep -l \"class AuditModel\\\\|class SoftDeleteModel\")",
+      "Bash(python -c \"import channels_redis; import inspect; print\\(inspect.getfile\\(channels_redis\\)\\)\")"
     ]
   }
 }

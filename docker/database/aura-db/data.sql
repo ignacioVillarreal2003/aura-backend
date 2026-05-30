@@ -88,15 +88,6 @@ VALUES (2, 4, 1);
 INSERT INTO chat_share_link (chat_id, created_by, expires_at)
 VALUES (1, 4, NOW() + INTERVAL '30 days');
 
-INSERT INTO chat_webhook (chat_id, url, events, secret, created_by)
-VALUES (
-    1,
-    'https://example.invalid/hooks/chat-1-events',
-    ARRAY['message.created', 'member.joined', 'member.left'],
-    'whsec_demo_change_me_01',
-    4
-);
-
 INSERT INTO notification (receiver_id, message, type, target_scope, target_label, status, created_by)
 VALUES
     (4,

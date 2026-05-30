@@ -33,18 +33,26 @@
   .dashboard-layout {
     display: grid;
     gap: 14px;
-    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  }
+  .dashboard-layout > .dashboard-card {
+    min-width: 0;
+    overflow: hidden;
   }
   .dashboard-table {
     width: 100%;
     border-collapse: collapse;
     margin-top: 10px;
+    table-layout: fixed;
   }
   .dashboard-table th,
   .dashboard-table td {
     border-bottom: 1px solid #edf0f5;
     padding: 8px 6px;
     text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .dashboard-table th {
     font-size: 12px;
@@ -81,10 +89,11 @@
 </style>
 {% endblock %}
 
+{% block content_title %}{% endblock %}
+
 {% block content %}
 <div id="content-main">
   <h1>Dashboard Administrativo</h1>
-  <p class="muted">Generado: {{ generated_at|date:"d/m/Y H:i" }}</p>
 
   <div class="dashboard-grid">
     <section class="dashboard-card">
@@ -184,7 +193,7 @@
         <tbody>
           {% for item in largest_documents %}
             <tr>
-              <td>{{ item.name }}</td>
+              <td title="{{ item.name }}">{{ item.name|truncatechars:35 }}</td>
               <td>{{ item.file_size_bytes|filesizeformat }}</td>
               <td>{{ item.created_by|default:"-" }}</td>
             </tr>
@@ -208,7 +217,7 @@
         <tbody>
           {% for item in recent_documents %}
             <tr>
-              <td>{{ item.name }}</td>
+              <td title="{{ item.name }}">{{ item.name|truncatechars:35 }}</td>
               <td>{{ item.created_at|date:"d/m/Y H:i" }}</td>
               <td>
                 {% if item.status == 'ready' %}

@@ -1,7 +1,6 @@
 import logging
-import redis as redis_lib
-from django.conf import settings
 from django.contrib import admin
+from django.core.cache import cache as _cache
 from django.db import OperationalError as DBOperationalError
 from django.db import connection
 from django.urls import include, path
@@ -57,12 +56,7 @@ def health_check(request):
         checks["database"] = "error"
 
     try:
-        r = redis_lib.Redis.from_url(
-            settings.REDIS_URL,
-            socket_connect_timeout=2,
-            socket_timeout=2,
-        )
-        r.ping()
+        _cache.set("_healthcheck", "ok", timeout=5)
         checks["redis"] = "ok"
     except Exception:
         logger.warning("Health check: Redis unreachable.")
@@ -93,6 +87,7 @@ urlpatterns = [
     path("api/v1/chats/", include("apps.chat.urls")),
     path("api/v1/chats/<int:chat_id>/messages/", include("apps.message.urls")),
     path("api/v1/chats/<int:chat_id>/members/", include("apps.membership.urls")),
+    path("api/v1/memberships/me/", include("apps.membership.me_urls")),
     path("api/v1/share/<uuid:token>/messages/", include("apps.chat.share_urls")),
     path("api/v1/reports/", include("apps.report.urls")),
     path("api/v1/checklists/", include("apps.checklist.urls")),

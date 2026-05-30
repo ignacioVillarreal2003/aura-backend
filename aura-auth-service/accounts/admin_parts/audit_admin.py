@@ -1,15 +1,15 @@
 """Admin view for Auditoría — reads audit_log table from auth_db."""
 
+import html as _html
 import logging
 
 from django.contrib import admin
 from django.core.exceptions import PermissionDenied
 from django.template.response import TemplateResponse
 from django.urls import path
-from django.utils import timezone
 
-from accounts.admin_parts.common import _is_super_admin_user, _is_admin_or_super_user
-from accounts.models import AuditLog
+from accounts.admin_parts.common import _is_super_admin_user, _is_admin_or_super_user, _is_effective_superadmin
+from accounts.models import AuditLog, UserRole
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,12 @@ _ACTION_LABELS = {
     'ELEVATION_START': ('Elevación iniciada', '#b45309'),
     'ELEVATION_END': ('Elevación finalizada', '#6b7280'),
     'ELEVATION_FAILED': ('Elevación fallida', '#dc2626'),
+}
+
+_SOURCE_LABELS = {
+    'admin': 'Admin',
+    'superadmin': 'SUPERADMIN',
+    'api': 'API',
 }
 
 _ENTITY_LABELS = {
@@ -50,6 +56,15 @@ def _audit_list_view(request):
     filter_entity = request.GET.get('entity', '').strip()
 
     qs = AuditLog.objects.all()
+
+    if not _is_effective_superadmin(request):
+        admin_actor_ids = list(
+            UserRole.objects.filter(
+                role__name='admin',
+                deleted_at__isnull=True,
+            ).values_list('user_id', flat=True)
+        )
+        qs = qs.filter(actor_id__in=admin_actor_ids)
 
     if search:
         from django.db.models import Q
@@ -79,12 +94,25 @@ def _audit_list_view(request):
         entry['action_label'] = label
         entry['action_color'] = color
         entry['entity_type_label'] = _ENTITY_LABELS.get(entry['entity_type'], entry['entity_type'])
+        entry['source_label'] = _SOURCE_LABELS.get(entry['source'], entry['source'].upper() if entry['source'] else '—')
+
+        raw_label = entry.get('entity_label') or ''
+        words = raw_label.split(' ')
+        if len(words) >= 2:
+            escaped = [_html.escape(w) for w in words]
+            escaped[0] = f'<strong>{escaped[0]}</strong>'
+            escaped[-1] = f'<strong>{escaped[-1]}</strong>'
+            entry['entity_label_html'] = ' '.join(escaped)
+        elif words and words[0]:
+            entry['entity_label_html'] = f'<strong>{_html.escape(raw_label)}</strong>'
+        else:
+            entry['entity_label_html'] = '—'
 
     available_actions = list(
-        AuditLog.objects.values_list('action', flat=True).distinct().order_by('action')
+        qs.values_list('action', flat=True).distinct().order_by('action')
     )
     available_entities = list(
-        AuditLog.objects.values_list('entity_type', flat=True).distinct().order_by('entity_type')
+        qs.values_list('entity_type', flat=True).distinct().order_by('entity_type')
     )
 
     total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
@@ -92,8 +120,7 @@ def _audit_list_view(request):
 
     context = {
         **admin.site.each_context(request),
-        'title': 'Auditoría',
-        'subtitle': 'Registro completo de acciones del sistema',
+        'title': 'Registro de acciones',
         'entries': entries,
         'total': total,
         'page': page,
@@ -108,7 +135,6 @@ def _audit_list_view(request):
         'available_entities': available_entities,
         'action_labels': _ACTION_LABELS,
         'entity_labels': _ENTITY_LABELS,
-        'generated_at': timezone.now(),
     }
     return TemplateResponse(request, 'admin/auditoria/index.html', context)
 

@@ -8,8 +8,8 @@ from django.shortcuts import render
 from django.urls import path, reverse
 from django.utils.html import format_html
 
-from accounts.models import User
-from accounts.admin_parts.common import _is_admin_or_super_user, _is_super_admin_user
+from accounts.models import User, UserRole
+from accounts.admin_parts.common import _is_admin_or_super_user, _is_super_admin_user, _is_effective_superadmin
 from accounts.admin_parts.utils.audit import log_audit
 from notifications.models import (
     Notification,
@@ -136,6 +136,7 @@ class BaseNotificationAdmin(admin.ModelAdmin):
                 'deleted_at': str(obj.deleted_at),
             },
             source='admin',
+            request=request,
         )
 
     def delete_queryset(self, request, queryset):
@@ -153,6 +154,7 @@ class BaseNotificationAdmin(admin.ModelAdmin):
                     'deleted_at': str(obj.deleted_at),
                 },
                 source='admin',
+                request=request,
             )
 
     def get_urls(self):
@@ -179,15 +181,36 @@ class BaseNotificationAdmin(admin.ModelAdmin):
 class IndividualNotificationAdmin(BaseNotificationAdmin):
     """Admin section: Individuales."""
 
+    def _privileged_user_ids(self):
+        """Return a plain list of user IDs that hold admin or superadmin roles."""
+        return list(
+            UserRole.objects.filter(
+                role__name__in=['admin', 'superadmin'],
+                deleted_at__isnull=True,
+            ).values_list('user_id', flat=True)
+        )
+
+    def _recipients_queryset(self, request):
+        """Active users the current actor is allowed to target."""
+        base = User.objects.filter(deleted_at__isnull=True, status='active')
+        if _is_effective_superadmin(request):
+            return base.order_by('username')
+        return base.exclude(pk__in=self._privileged_user_ids()).order_by('username')
+
     def get_queryset(self, request):
-        return Notification.objects.filter(target_scope='individual').order_by('-created_at')
+        qs = Notification.objects.filter(target_scope='individual').order_by('-created_at')
+        if not _is_effective_superadmin(request):
+            qs = qs.exclude(receiver_id__in=self._privileged_user_ids())
+        return qs
 
     def send_notification_view(self, request):
         if not _is_admin_or_super_user(request.user):
             raise PermissionDenied
 
+        recipients_qs = self._recipients_queryset(request)
+
         if request.method == 'POST':
-            form = SendNotificationForm(request.POST)
+            form = SendNotificationForm(request.POST, recipients_queryset=recipients_qs)
             if form.is_valid():
                 recipients = form.cleaned_data['recipients']
                 message = form.cleaned_data['message']
@@ -210,7 +233,7 @@ class IndividualNotificationAdmin(BaseNotificationAdmin):
                         actor=request.user,
                         action='CREATE',
                         entity_type='Notification',
-                        entity_label=message[:80],
+                        entity_label=f'{request.user.username} envió una notificación individual',
                         details={
                             'receiver_ids': receiver_ids,
                             'message': message,
@@ -219,18 +242,17 @@ class IndividualNotificationAdmin(BaseNotificationAdmin):
                             'created': result.get('created', 0),
                         },
                         source='admin',
+                        request=request,
                     )
                     return HttpResponseRedirect(reverse('admin:notifications_individualnotification_changelist'))
                 except NotificationServiceError as exc:
                     self.message_user(request, f'Error al enviar notificaciones al servicio: {exc}', level=messages.ERROR)
         else:
-            form = SendNotificationForm()
+            form = SendNotificationForm(recipients_queryset=recipients_qs)
 
-        # Get all available users for the panel
-        available_users = User.objects.filter(deleted_at__isnull=True, status='active').order_by('username')
         users_json = json.dumps([
             {'id': str(user.pk), 'label': f"{user.username} ({user.email})"}
-            for user in available_users
+            for user in recipients_qs
         ])
 
         context = {
@@ -297,7 +319,7 @@ class GroupNotificationAdmin(BaseNotificationAdmin):
                         actor=request.user,
                         action='CREATE',
                         entity_type='Notification',
-                        entity_label=message[:80],
+                        entity_label=f'{request.user.username} envió una notificación grupal',
                         details={
                             'target_label': target_label,
                             'receiver_ids': target_user_ids,
@@ -307,6 +329,7 @@ class GroupNotificationAdmin(BaseNotificationAdmin):
                             'created': result.get('created', 0),
                         },
                         source='admin',
+                        request=request,
                     )
                     return HttpResponseRedirect(reverse('admin:notifications_groupnotification_changelist'))
                 except NotificationServiceError as exc:
@@ -324,7 +347,7 @@ class GroupNotificationAdmin(BaseNotificationAdmin):
             {'id': str(c['id']), 'label': c['name']} for c in raw_compartments
         ])
 
-        roles_data = Role.objects.order_by('name')
+        roles_data = Role.objects.filter(name='user')
         roles_json = json.dumps([
             {'id': str(role.pk), 'label': role.name}
             for role in roles_data

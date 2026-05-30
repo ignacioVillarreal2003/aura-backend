@@ -26,7 +26,7 @@ class OllamaLLMFacadeSettings(BaseSettings):
 
     num_ctx: Optional[int] = Field(default=None, ge=512, le=131_072)
     # -1 = generate until EOS (unlimited), -2 = fill context window, positive = max tokens
-    num_predict: Optional[int] = Field(default=None, ge=-2, le=32_768)
+    num_predict: Optional[int] = Field(default=None, le=32_768)
 
     request_timeout: Optional[float] = Field(default=600.0, gt=0, le=3600.0)
     keep_alive: Optional[str] = Field(default=None)
@@ -47,6 +47,16 @@ class OllamaLLMFacadeSettings(BaseSettings):
         if not v.startswith(("http://", "https://")):
             raise ValueError(f"base_url must start with http:// or https://, got: '{v}'.")
         return v
+
+    @field_validator("num_predict", mode="before")
+    @classmethod
+    def validate_num_predict(cls, v: Optional[str]) -> Optional[int]:
+        if v is None:
+            return v
+        v_int = int(v)
+        if v_int < -2:
+            raise ValueError("num_predict must be >= -2 (-1=unlimited, -2=fill context, positive=max tokens).")
+        return v_int
 
     @field_validator("keep_alive", mode="before")
     @classmethod

@@ -1,4 +1,5 @@
 import logging
+import re
 
 from asgiref.sync import async_to_sync
 from django.http import HttpResponse
@@ -8,6 +9,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.checklist.exceptions import ChecklistExportException
 from apps.checklist.serializers import (
     ChecklistGenerateResponse,
     ChecklistListResponse,
@@ -29,6 +31,17 @@ _ID_PARAM = OpenApiParameter(
     required=True,
     description="ID de la checklist.",
 )
+_CHAT_FILTER_PARAM = OpenApiParameter(
+    name="chat_id",
+    type=int,
+    location=OpenApiParameter.QUERY,
+    required=False,
+    description="Filtrar por chat de origen. El usuario debe ser miembro activo del chat.",
+)
+
+
+def _safe_filename(title: str) -> str:
+    return re.sub(r"[^\w\-]", "_", title[:60])
 
 
 class ChecklistListView(APIView):
@@ -36,14 +49,17 @@ class ChecklistListView(APIView):
     @extend_schema(
         tags=["Checklists"],
         summary="Listar checklists",
-        description="Devuelve las checklists del usuario autenticado, paginadas.",
+        description="Devuelve las checklists del usuario autenticado, paginadas. Filtrable por chat de origen.",
+        parameters=[_CHAT_FILTER_PARAM],
         responses={
             200: ChecklistListResponse(many=True),
-            **standard_error_responses(401),
+            **standard_error_responses(401, 403, 404),
         },
     )
     def get(self, request: Request) -> Response:
-        queryset = checklist_service.list_checklists(user=request.user)
+        chat_id_raw = request.query_params.get("chat_id")
+        chat_id = int(chat_id_raw) if chat_id_raw and chat_id_raw.isdigit() else None
+        queryset = checklist_service.list_checklists(user=request.user, chat_id=chat_id)
         paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request)
         return paginator.get_paginated_response(ChecklistListResponse(page, many=True).data)
@@ -69,7 +85,8 @@ class ChecklistDetailView(APIView):
         summary="Actualizar checklist",
         description=(
             "Actualiza el título y/o los ítems de la checklist. "
-            "Enviá el array completo de ítems con los estados actualizados."
+            "Enviá el array completo de ítems con los estados actualizados. "
+            "Solo el creador o miembros del chat de origen pueden modificarla."
         ),
         parameters=[_ID_PARAM],
         request=UpdateChecklistRequest,
@@ -93,7 +110,7 @@ class ChecklistDetailView(APIView):
     @extend_schema(
         tags=["Checklists"],
         summary="Eliminar checklist",
-        description="Elimina suavemente la checklist. Solo el creador puede eliminarla.",
+        description="Elimina suavemente la checklist. Solo el creador o el owner del chat de origen puede eliminarla.",
         parameters=[_ID_PARAM],
         responses={
             204: OpenApiResponse(description="Sin contenido"),
@@ -129,10 +146,11 @@ class ChecklistGenerateView(APIView):
         tags=["Checklists"],
         summary="Generar checklist con IA",
         description=(
-            "Genera una checklist estructurada a partir de la conversación del usuario usando el LLM service, "
-            "la persiste automáticamente y devuelve el objeto guardado junto con el historial de mensajes "
-            "actualizado y los fragmentos documentales utilizados (modo RAG). "
-            "Requiere permisos `LLM_CHECKLIST_GENERATE` y `CREATE_CHECKLIST`."
+            "Genera una checklist estructurada a partir del mensaje del usuario. "
+            "Si se pasa `chat_id`, el historial reciente del chat se incluye como contexto para el LLM "
+            "(el usuario debe ser miembro activo). En modo RAG también se usan los documentos del chat. "
+            "La checklist generada queda vinculada al chat via `source_chat_id`. "
+            "Requiere permiso `LLM_CHECKLIST_GENERATE`."
         ),
         request=GenerateChecklistRequest,
         responses={
@@ -151,6 +169,7 @@ class ChecklistGenerateView(APIView):
             user=request.user,
             message=d["message"],
             mode=d["mode"],
+            chat_id=d.get("chat_id"),
         )
         return Response(
             ChecklistGenerateResponse({"checklist": checklist, "messages": messages, "fragments": fragments}).data,
@@ -167,13 +186,16 @@ class ChecklistExportPDFView(APIView):
         parameters=[_ID_PARAM],
         responses={
             200: OpenApiResponse(description="PDF — Content-Type: application/pdf"),
-            **standard_error_responses(401, 403, 404),
+            **standard_error_responses(401, 403, 404, 500),
         },
     )
     def get(self, request: Request, checklist_id: int) -> HttpResponse:
         checklist = checklist_service.get_own_checklist(user=request.user, checklist_id=checklist_id)
-        pdf = generate_checklist_pdf(checklist)
-        safe_title = checklist.title[:60].replace(" ", "_")
+        try:
+            pdf = generate_checklist_pdf(checklist)
+        except ChecklistExportException:
+            raise
+        safe_title = _safe_filename(checklist.title)
         response = HttpResponse(pdf, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="checklist_{safe_title}.pdf"'
         return response
@@ -194,7 +216,7 @@ class ChecklistExportMarkdownView(APIView):
     def get(self, request: Request, checklist_id: int) -> HttpResponse:
         checklist = checklist_service.get_own_checklist(user=request.user, checklist_id=checklist_id)
         content = generate_checklist_markdown(checklist)
-        safe_title = checklist.title[:60].replace(" ", "_")
+        safe_title = _safe_filename(checklist.title)
         response = HttpResponse(content, content_type="text/markdown; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="checklist_{safe_title}.md"'
         return response
@@ -209,13 +231,16 @@ class ChecklistManageExportPDFView(APIView):
         parameters=[_ID_PARAM],
         responses={
             200: OpenApiResponse(description="PDF — Content-Type: application/pdf"),
-            **standard_error_responses(401, 403, 404),
+            **standard_error_responses(401, 403, 404, 500),
         },
     )
     def get(self, request: Request, checklist_id: int) -> HttpResponse:
         checklist = checklist_service.get_checklist_admin_export(user=request.user, checklist_id=checklist_id)
-        pdf = generate_checklist_pdf(checklist)
-        safe_title = checklist.title[:60].replace(" ", "_")
+        try:
+            pdf = generate_checklist_pdf(checklist)
+        except ChecklistExportException:
+            raise
+        safe_title = _safe_filename(checklist.title)
         response = HttpResponse(pdf, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="checklist_{safe_title}.pdf"'
         return response
@@ -236,7 +261,7 @@ class ChecklistManageExportMarkdownView(APIView):
     def get(self, request: Request, checklist_id: int) -> HttpResponse:
         checklist = checklist_service.get_checklist_admin_export(user=request.user, checklist_id=checklist_id)
         content = generate_checklist_markdown(checklist)
-        safe_title = checklist.title[:60].replace(" ", "_")
+        safe_title = _safe_filename(checklist.title)
         response = HttpResponse(content, content_type="text/markdown; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="checklist_{safe_title}.md"'
         return response

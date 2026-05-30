@@ -103,7 +103,11 @@
         <input type="submit" name="_continue" value="Guardar y continuar editando">
         <input type="submit" name="_save" value="Guardar" class="default">
       </div>
-      <div>
+      <div style="display:flex;align-items:center;gap:16px">
+        <a href="{% url 'admin:mac_compartments_history' compartment.id %}"
+           style="font-size:12px;color:#205067;text-decoration:none;font-weight:600;">
+          &#128336; Historial
+        </a>
         <a href="#" class="deletelink"
            onclick="if(confirm('¿Eliminar la agrupación &quot;{{ compartment.name }}&quot;? Esta acción no se puede deshacer.')){document.getElementById('delete-form').submit();}return false;">
           Eliminar

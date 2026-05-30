@@ -44,13 +44,17 @@ class ReportGenerateResult:
 class LLMClient:
     def __init__(self):
         self._http_client = AsyncHttpClient(timeout=getattr(settings, "LLM_SERVICE_TIMEOUT", 30))
+        self._stream_client = httpx.AsyncClient()
 
     async def document_question(
         self,
         messages: list[dict[str, str]],
         user: AuthenticatedUser,
+        chat_id: int | None = None,
     ) -> DocumentQuestionResult:
-        payload = {"messages": messages}
+        payload: dict = {"messages": messages}
+        if chat_id is not None:
+            payload["chat_id"] = chat_id
 
         logger.debug(
             "Calling LLM document-question.",
@@ -89,8 +93,11 @@ class LLMClient:
         messages: list[dict[str, str]],
         mode: str,
         user: AuthenticatedUser,
+        chat_id: int | None = None,
     ) -> ChecklistGenerateResult:
-        payload = {"messages": messages, "mode": mode}
+        payload: dict = {"messages": messages, "mode": mode}
+        if chat_id is not None:
+            payload["chat_id"] = chat_id
 
         logger.debug(
             "Calling LLM checklist-generate.",
@@ -129,8 +136,11 @@ class LLMClient:
         mode: str,
         report_type: str,
         user: AuthenticatedUser,
+        chat_id: int | None = None,
     ) -> ReportGenerateResult:
-        payload = {"messages": messages, "mode": mode, "report_type": report_type}
+        payload: dict = {"messages": messages, "mode": mode, "report_type": report_type}
+        if chat_id is not None:
+            payload["chat_id"] = chat_id
 
         logger.debug(
             "Calling LLM report-generate.",
@@ -168,8 +178,11 @@ class LLMClient:
         self,
         messages: list[dict[str, str]],
         user: AuthenticatedUser,
+        chat_id: int | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload = {"messages": messages}
+        payload: dict = {"messages": messages}
+        if chat_id is not None:
+            payload["chat_id"] = chat_id
         headers = self._build_stream_headers(user)
         url = settings.LLM_DOCUMENT_QUESTION_STREAM_URL
 
@@ -186,30 +199,30 @@ class LLMClient:
         )
 
         try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                async with client.stream(
-                    "POST",
-                    url,
-                    json=payload,
-                    headers=headers,
-                ) as response:
-                    if response.status_code >= 400:
-                        body = await response.aread()
-                        detail = body.decode("utf-8", errors="replace")[:500]
-                        logger.error(
-                            "LLM stream HTTP error.",
-                            extra={
-                                "status_code": response.status_code,
-                                "body_preview": detail,
-                            },
-                        )
-                        raise HttpClientException(
-                            f"HTTP {response.status_code}",
-                            status_code=response.status_code,
-                        )
+            async with self._stream_client.stream(
+                "POST",
+                url,
+                json=payload,
+                headers=headers,
+                timeout=timeout,
+            ) as response:
+                if response.status_code >= 400:
+                    body = await response.aread()
+                    detail = body.decode("utf-8", errors="replace")[:500]
+                    logger.error(
+                        "LLM stream HTTP error.",
+                        extra={
+                            "status_code": response.status_code,
+                            "body_preview": detail,
+                        },
+                    )
+                    raise HttpClientException(
+                        f"HTTP {response.status_code}",
+                        status_code=response.status_code,
+                    )
 
-                    async for event in self._iter_sse_json_events(response):
-                        yield event
+                async for event in self._iter_sse_json_events(response):
+                    yield event
 
         except httpx.TimeoutException as e:
             raise HttpClientTimeoutException() from e
@@ -229,7 +242,8 @@ class LLMClient:
             async for raw_line in response.aiter_lines():
                 line = raw_line.rstrip("\r")
                 if line.startswith("data:"):
-                    pending_data = line[5:].lstrip()
+                    chunk = line[5:].lstrip()
+                    pending_data = (pending_data + "\n" + chunk) if pending_data is not None else chunk
                 elif line == "":
                     if pending_data is None:
                         continue
@@ -247,7 +261,7 @@ class LLMClient:
                         yield obj
                     pending_data = None
         finally:
-            if pending_data:
+            if pending_data is not None:
                 try:
                     obj = json.loads(pending_data)
                 except json.JSONDecodeError as e:

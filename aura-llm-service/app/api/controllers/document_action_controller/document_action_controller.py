@@ -31,6 +31,10 @@ class DocumentActionController(DocumentActionControllerInterface):
             _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(strict_rate_limit),
     ) -> DocumentActionResponse:
+        Authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LLM_DOCUMENT_ACTION}),
+        )
         return await document_action_service.execute_document_action(
             document_action_request=document_action_request,
             authenticated_user=authenticated_user

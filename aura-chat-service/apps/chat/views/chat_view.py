@@ -5,7 +5,6 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 
-from apps.chat.models.chat import Chat
 from apps.chat.repositories.chat_repository import ALLOWED_ORDERINGS
 from apps.chat.serializers.request import BulkChatIdsRequest, CreateChatRequest, MuteChatRequest, UpdateChatRequest
 from apps.chat.serializers.response import ChatListResponse, ChatManageListResponse, ChatResponse
@@ -15,6 +14,13 @@ from core.pagination.pagination import StandardPagination
 
 _ORDERING_ENUM = sorted(ALLOWED_ORDERINGS)
 
+_CHAT_ID_PARAM = OpenApiParameter(
+    name="chat_id",
+    type=int,
+    location=OpenApiParameter.PATH,
+    required=True,
+    description="Chat ID",
+)
 _SEARCH_PARAM = OpenApiParameter(
     name="search",
     type=str,
@@ -71,12 +77,14 @@ def _parse_tags(raw: str | None) -> list[str] | None:
         tags=["Chats"],
         summary="Get chat",
         description="Returns full **ChatResponse** for one chat id (membership and permissions enforced server-side).",
+        parameters=[_CHAT_ID_PARAM],
         responses={200: ChatResponse, **standard_error_responses(401, 403, 404)},
     ),
     partial_update=extend_schema(
         tags=["Chats"],
         summary="Update chat",
         description="Partial update of name, prompts, style, and tags.",
+        parameters=[_CHAT_ID_PARAM],
         request=UpdateChatRequest,
         responses={200: ChatResponse, **standard_error_responses(400, 401, 403, 404)},
     ),
@@ -84,6 +92,7 @@ def _parse_tags(raw: str | None) -> list[str] | None:
         tags=["Chats"],
         summary="Delete chat",
         description="Deletes the chat for allowed roles (service rules apply).",
+        parameters=[_CHAT_ID_PARAM],
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     ),
     my_chats=extend_schema(
@@ -102,8 +111,6 @@ def _parse_tags(raw: str | None) -> list[str] | None:
     ),
 )
 class ChatViewSet(ViewSet):
-    queryset = Chat.objects.none()
-    serializer_class = ChatResponse
 
     def create(self, request: Request) -> Response:
         serializer = CreateChatRequest(data=request.data)
@@ -127,23 +134,23 @@ class ChatViewSet(ViewSet):
         page = paginator.paginate_queryset(chats, request)
         return paginator.get_paginated_response(ChatListResponse(page, many=True).data)
 
-    def retrieve(self, request: Request, pk=None) -> Response:
-        chat = chat_service.get_chat(user=request.user, chat_id=int(pk))
+    def retrieve(self, request: Request, chat_id=None) -> Response:
+        chat = chat_service.get_chat(user=request.user, chat_id=chat_id)
         return Response(ChatResponse(chat).data)
 
-    def partial_update(self, request: Request, pk=None) -> Response:
+    def partial_update(self, request: Request, chat_id=None) -> Response:
         serializer = UpdateChatRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         chat = chat_service.update_chat(
             user=request.user,
-            chat_id=int(pk),
+            chat_id=chat_id,
             **serializer.validated_data,
         )
         return Response(ChatResponse(chat).data)
 
-    def destroy(self, request: Request, pk=None) -> Response:
-        chat_service.delete_chat(user=request.user, chat_id=int(pk))
+    def destroy(self, request: Request, chat_id=None) -> Response:
+        chat_service.delete_chat(user=request.user, chat_id=chat_id)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=["get"], url_path="manage")
@@ -177,6 +184,7 @@ class ChatViewSet(ViewSet):
         tags=["Chats"],
         summary="Pin chat",
         description="Pins this chat for the current user so it sorts to the top of list views.",
+        parameters=[_CHAT_ID_PARAM],
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     @extend_schema(
@@ -184,14 +192,15 @@ class ChatViewSet(ViewSet):
         tags=["Chats"],
         summary="Unpin chat",
         description="Removes the user-level pin for this chat.",
+        parameters=[_CHAT_ID_PARAM],
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     @action(detail=True, methods=["post", "delete"], url_path="pin")
-    def pin(self, request: Request, pk=None) -> Response:
+    def pin(self, request: Request, chat_id=None) -> Response:
         if request.method == "POST":
-            chat_service.pin_chat(user=request.user, chat_id=int(pk))
+            chat_service.pin_chat(user=request.user, chat_id=chat_id)
         else:
-            chat_service.unpin_chat(user=request.user, chat_id=int(pk))
+            chat_service.unpin_chat(user=request.user, chat_id=chat_id)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(
@@ -269,6 +278,7 @@ class ChatViewSet(ViewSet):
         tags=["Chats"],
         summary="Lock chat",
         description="Prevents all members from sending new messages. Owner only.",
+        parameters=[_CHAT_ID_PARAM],
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     @extend_schema(
@@ -276,14 +286,15 @@ class ChatViewSet(ViewSet):
         tags=["Chats"],
         summary="Unlock chat",
         description="Re-opens the chat so members can send messages again.",
+        parameters=[_CHAT_ID_PARAM],
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     @action(detail=True, methods=["post", "delete"], url_path="lock")
-    def lock(self, request: Request, pk=None) -> Response:
+    def lock(self, request: Request, chat_id=None) -> Response:
         if request.method == "POST":
-            chat_service.lock_chat(user=request.user, chat_id=int(pk))
+            chat_service.lock_chat(user=request.user, chat_id=chat_id)
         else:
-            chat_service.unlock_chat(user=request.user, chat_id=int(pk))
+            chat_service.unlock_chat(user=request.user, chat_id=chat_id)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(
@@ -291,6 +302,7 @@ class ChatViewSet(ViewSet):
         tags=["Chats"],
         summary="Mute chat",
         description="Silences this chat for the current user until the given datetime.",
+        parameters=[_CHAT_ID_PARAM],
         request=MuteChatRequest,
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(400, 401, 403, 404)},
     )
@@ -299,18 +311,19 @@ class ChatViewSet(ViewSet):
         tags=["Chats"],
         summary="Unmute chat",
         description="Clears mute for the current user (notifications / unread behaviour per product).",
+        parameters=[_CHAT_ID_PARAM],
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     @action(detail=True, methods=["post", "delete"], url_path="mute")
-    def mute(self, request: Request, pk=None) -> Response:
+    def mute(self, request: Request, chat_id=None) -> Response:
         if request.method == "POST":
             serializer = MuteChatRequest(data=request.data)
             serializer.is_valid(raise_exception=True)
             chat_service.mute_chat(
                 user=request.user,
-                chat_id=int(pk),
+                chat_id=chat_id,
                 muted_until=serializer.validated_data["muted_until"],
             )
         else:
-            chat_service.unmute_chat(user=request.user, chat_id=int(pk))
+            chat_service.unmute_chat(user=request.user, chat_id=chat_id)
         return Response(status=status.HTTP_204_NO_CONTENT)

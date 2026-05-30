@@ -37,14 +37,14 @@ class ShareLinkService:
         logger.info("Share link created.", extra={"chat_id": chat_id, "link_id": link.id, "user_id": user.id})
         return link
 
-    def list_links(self, user: AuthenticatedUser, chat_id: int) -> QuerySet[ChatShareLink]:
+    def list_links(self, user: AuthenticatedUser, chat_id: int, active_only: bool = True) -> QuerySet[ChatShareLink]:
         AccessControl.require_permissions(user, frozenset({LIST_SHARE_LINKS}))
         chat = chat_repository.get_by_id(chat_id)
         if chat is None:
             raise ChatNotFoundException()
         if chat.created_by != user.id:
             raise ChatAccessDeniedException("Only the chat owner can list share links")
-        return share_link_repository.list_by_chat(chat_id)
+        return share_link_repository.list_by_chat(chat_id, active_only=active_only)
 
     def revoke_link(self, user: AuthenticatedUser, chat_id: int, link_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({DELETE_SHARE_LINK}))

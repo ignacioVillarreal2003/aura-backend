@@ -19,7 +19,7 @@ from apps.message.services.export_service import (
     generate_message_pdf,
 )
 from core.authorization import AccessControl
-from core.authorization.permissions import EXPORT_CHAT
+from core.authorization.permissions import EXPORT_CHAT, MANAGE_CHATS
 from core.openapi.common import standard_error_responses
 
 logger = logging.getLogger(__name__)
@@ -140,6 +140,36 @@ class AIResponsesExportView(APIView):
         content = generate_ai_responses_markdown(chat, messages)
         response = HttpResponse(content, content_type="text/markdown; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="chat_{chat_id}_ai.md"'
+        return response
+
+
+class AdminChatExportPDFView(APIView):
+
+    @extend_schema(
+        tags=["Messages"],
+        summary="Export full chat as PDF (admin)",
+        operation_id="v1_chats_messages_export_pdf_chat_admin",
+        description=(
+            "Downloads the **full** conversation as a PDF without requiring chat membership. "
+            "Requires `MANAGE_CHATS` permission."
+        ),
+        parameters=[
+            OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
+        ],
+        responses={
+            200: OpenApiResponse(description="PDF binary — Content-Type: application/pdf"),
+            **standard_error_responses(401, 403, 404, 413),
+        },
+    )
+    def get(self, request: Request, chat_id: int) -> HttpResponse:
+        AccessControl.require_permissions(request.user, frozenset({MANAGE_CHATS}))
+        chat = chat_repository.get_by_id(chat_id)
+        if chat is None:
+            raise ChatNotFoundException()
+        messages = _load_messages(chat_id)
+        pdf = generate_chat_pdf(chat, messages)
+        response = HttpResponse(pdf, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="chat_{chat_id}.pdf"'
         return response
 
 

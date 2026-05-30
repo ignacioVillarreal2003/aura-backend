@@ -2,12 +2,12 @@ import concurrent.futures
 import html
 import io
 import logging
+import re
 
 import markdown as md_lib
-from django.utils import timezone
 from xhtml2pdf import pisa
 
-from apps.report.exceptions import ReportNotFoundException
+from apps.report.exceptions import ReportExportException
 from apps.report.models import Report
 
 logger = logging.getLogger(__name__)
@@ -102,15 +102,23 @@ _TYPE_LABELS = {
 }
 
 
+_DANGEROUS_TAGS_RE = re.compile(
+    r"<\s*/?\s*(script|style|iframe|object|embed|form|input|button|textarea)\b[^>]*>",
+    re.IGNORECASE,
+)
+
+
 def _render_markdown(text: str) -> str:
-    return md_lib.markdown(text, extensions=["fenced_code", "tables", "nl2br"])
+    raw_html = md_lib.markdown(text, extensions=["fenced_code", "tables", "nl2br"])
+    return _DANGEROUS_TAGS_RE.sub("", raw_html)
 
 
 def _fmt_dt(dt) -> str:
     if dt is None:
         return ""
-    local = timezone.localtime(dt) if timezone.is_aware(dt) else dt
-    return local.strftime("%Y-%m-%d %H:%M UTC")
+    import datetime
+    utc = dt.astimezone(datetime.timezone.utc) if dt.tzinfo else dt
+    return utc.strftime("%Y-%m-%d %H:%M UTC")
 
 
 def _build_pdf_sync(html_content: str) -> bytes:
@@ -118,7 +126,7 @@ def _build_pdf_sync(html_content: str) -> bytes:
     result = pisa.CreatePDF(io.StringIO(html_content), dest=buf, encoding="utf-8")
     if result.err:
         logger.error("xhtml2pdf reported %d error(s) during report PDF generation", result.err)
-        raise RuntimeError("PDF generation failed")
+        raise ReportExportException()
     return buf.getvalue()
 
 
@@ -129,7 +137,7 @@ def _build_pdf(html_content: str) -> bytes:
             return future.result(timeout=_PDF_TIMEOUT_SECONDS)
         except concurrent.futures.TimeoutError:
             logger.error("Report PDF generation timed out after %ds", _PDF_TIMEOUT_SECONDS)
-            raise RuntimeError("PDF generation timed out")
+            raise ReportExportException()
 
 
 def generate_report_pdf(report: Report) -> bytes:

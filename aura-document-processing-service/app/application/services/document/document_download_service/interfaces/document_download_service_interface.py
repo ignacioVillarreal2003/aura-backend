@@ -14,3 +14,12 @@ class DocumentDownloadServiceInterface(ABC):
             authenticated_user: AuthenticatedUser,
     ) -> tuple[AsyncIterator[bytes], str, str]:
         pass
+
+    @abstractmethod
+    async def download_document_admin(
+            self,
+            document_id: int,
+            database_session: AsyncSession,
+            authenticated_user: AuthenticatedUser,
+    ) -> tuple[AsyncIterator[bytes], str, str]:
+        pass

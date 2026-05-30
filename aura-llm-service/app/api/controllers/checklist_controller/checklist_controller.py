@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends
 
 from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
+from app.application.authorization.authorizer import Authorizer
+from app.application.authorization.permissions import Permissions
 from app.application.services.checklist_service.checklist_service import get_checklist_service
 from app.application.services.checklist_service.interfaces.checklist_service_interface import ChecklistServiceInterface
 from app.domain.authentication.authenticated_user import AuthenticatedUser
@@ -18,6 +20,10 @@ class ChecklistController:
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
             _rl: None = Depends(default_rate_limit),
     ) -> ChecklistGenerateResponse:
+        Authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LLM_CHECKLIST_GENERATE}),
+        )
         return await checklist_service.generate(
             request=checklist_request,
             authenticated_user=authenticated_user,

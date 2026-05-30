@@ -98,7 +98,8 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [REDIS_URL],
+            "hosts": [{"address": REDIS_URL, "socket_timeout": None, "socket_connect_timeout": 5}],
+            "expiry": 300,
         },
     },
 }
@@ -161,7 +162,7 @@ AUTHENTICATION_EXCLUDED_PATHS = [
     "/api/schema*",
     "/api/docs*",
     "/api/redoc*",
-    "/api/v1/share*",
+    "/api/v1/share/*",
 ]
 
 SPECTACULAR_SETTINGS = {

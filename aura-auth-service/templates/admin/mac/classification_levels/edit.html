@@ -103,7 +103,11 @@
         <input type="submit" name="_continue" value="Guardar y continuar editando">
         <input type="submit" name="_save" value="Guardar" class="default">
       </div>
-      <div>
+      <div style="display:flex;align-items:center;gap:16px">
+        <a href="{% url 'admin:mac_classification_levels_history' level.id %}"
+           style="font-size:12px;color:#205067;text-decoration:none;font-weight:600;">
+          &#128336; Historial
+        </a>
         <a href="#" class="deletelink"
            onclick="if(confirm('¿Eliminar el nivel &quot;{{ level.name }}&quot;? Esta acción no se puede deshacer.')){document.getElementById('delete-form').submit();}return false;">
           Eliminar
@@ -200,6 +204,11 @@
       var row = document.createElement('div'); row.className = 'panel-item';
       var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = isSelected; cb.id = 'd-' + id;
       var lbl = document.createElement('label'); lbl.setAttribute('for', cb.id); lbl.textContent = item.label;
+      if (item.blocked) {
+        cb.disabled = true;
+        row.title = 'Este documento ya está asignado a otro nivel';
+        row.style.opacity = '0.45';
+      }
       row.appendChild(cb); row.appendChild(lbl);
       cb.addEventListener('change', function(e) {
         var opt = Array.from(hiddenSelect.options).find(o => o.value === id);

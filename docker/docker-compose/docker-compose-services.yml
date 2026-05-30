@@ -16,12 +16,6 @@ x-healthcheck-metrics: &healthcheck-metrics
     - CMD-SHELL
     - python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/metrics', timeout=5)"
 
-x-healthcheck-mock-auth: &healthcheck-mock-auth
-  <<: *healthcheck-defaults
-  test:
-    - CMD-SHELL
-    - python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/openapi.json', timeout=5)"
-
 x-healthcheck-celery-worker: &healthcheck-celery-worker
   interval: 30s
   timeout: 10s
@@ -103,8 +97,6 @@ services:
         condition: service_healthy
       aura-llm-service:
         condition: service_healthy
-      mock-auth:
-        condition: service_healthy
     healthcheck: *healthcheck-api-v1
     restart: on-failure
 
@@ -162,8 +154,6 @@ services:
     depends_on:
       aura_db:
         condition: service_healthy
-      mock-auth:
-        condition: service_healthy
     healthcheck: *healthcheck-api-v1
     restart: on-failure
 
@@ -190,14 +180,6 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
-    restart: on-failure
-
-  mock-auth:
-    build: ../../mock-auth
-    container_name: mock-auth
-    ports:
-      - "8080:8000"
-    healthcheck: *healthcheck-mock-auth
     restart: on-failure
 
   llm:

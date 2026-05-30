@@ -3,7 +3,7 @@
 from django.contrib import admin
 from accounts.models import User, Role, UserRole
 from accounts.admin_parts.utils.mixins import HelpTextStripMixin, HelpTextStripInlineMixin
-from accounts.admin_parts.utils.audit import _is_super_admin_user, _is_admin_or_super_user, log_audit
+from accounts.admin_parts.utils.audit import _is_super_admin_user, _is_admin_or_super_user, _is_effective_superadmin, log_audit
 
 
 class UserRoleInline(HelpTextStripInlineMixin, admin.TabularInline):
@@ -39,34 +39,34 @@ class UserRoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
     )
 
     def get_list_display(self, request):
-        if _is_super_admin_user(request.user):
+        if _is_effective_superadmin(request):
             return self.list_display
         return ('user', 'role')
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        if _is_super_admin_user(request.user):
+        if _is_effective_superadmin(request):
             return queryset
         return queryset
 
     def has_view_permission(self, request, obj=None):
-        if _is_super_admin_user(request.user):
+        if _is_effective_superadmin(request):
             return True
         if _is_admin_or_super_user(request.user):
             return True
         return False
 
     def has_add_permission(self, request):
-        return _is_super_admin_user(request.user)
+        return _is_effective_superadmin(request)
 
     def has_change_permission(self, request, obj=None):
-        return _is_super_admin_user(request.user)
+        return _is_effective_superadmin(request)
 
     def has_delete_permission(self, request, obj=None):
-        return _is_super_admin_user(request.user)
+        return _is_effective_superadmin(request)
 
     def get_fieldsets(self, request, obj=None):
-        if _is_super_admin_user(request.user):
+        if _is_effective_superadmin(request):
             return super().get_fieldsets(request, obj)
         return (
             ('Asignación', {
@@ -75,9 +75,9 @@ class UserRoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
         )
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        if db_field.name == 'user' and not _is_super_admin_user(request.user):
+        if db_field.name == 'user' and not _is_effective_superadmin(request):
             kwargs['queryset'] = User.objects.filter(status='active', deleted_at__isnull=True)
-        if db_field.name == 'role' and not _is_super_admin_user(request.user):
+        if db_field.name == 'role' and not _is_effective_superadmin(request):
             kwargs['queryset'] = Role.objects.exclude(name__in=['superadmin', 'admin'])
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 

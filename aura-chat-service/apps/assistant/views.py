@@ -9,6 +9,7 @@ from apps.assistant.serializers import (
     AssistantAdminResponse,
     AssistantUserResponse,
     CreateAssistantRequest,
+    StartChatRequest,
     StartChatResponse,
     UpdateAssistantRequest,
 )
@@ -25,6 +26,13 @@ _ID_PARAM = OpenApiParameter(
     required=True,
     description="ID del asistente.",
 )
+_SEARCH_PARAM = OpenApiParameter(
+    name="search",
+    type=str,
+    location=OpenApiParameter.QUERY,
+    required=False,
+    description="Filtrar por nombre (case-insensitive contains).",
+)
 
 
 class AssistantListCreateView(APIView):
@@ -32,13 +40,15 @@ class AssistantListCreateView(APIView):
         tags=["Assistants"],
         summary="Listar asistentes activos",
         description="Devuelve los asistentes disponibles para los usuarios. No expone el system prompt.",
+        parameters=[_SEARCH_PARAM],
         responses={
             200: AssistantUserResponse(many=True),
             **standard_error_responses(401, 403),
         },
     )
     def get(self, request: Request) -> Response:
-        queryset = assistant_service.list_active_assistants(user=request.user)
+        search = request.query_params.get("search") or None
+        queryset = assistant_service.list_active_assistants(user=request.user, search=search)
         paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request)
         return paginator.get_paginated_response(AssistantUserResponse(page, many=True).data)
@@ -47,13 +57,14 @@ class AssistantListCreateView(APIView):
         tags=["Assistants"],
         summary="Crear asistente",
         description=(
-                "Crea un nuevo asistente especializado. Requiere permiso `CREATE_ASSISTANT`. "
-                "El `system_prompt` es la instrucción fija que el LLM usará en cada sesión."
+            "Crea un nuevo asistente especializado. Requiere permiso `CREATE_ASSISTANT`. "
+            "El `system_prompt` es la instrucción fija que el LLM usará en cada sesión. "
+            "El nombre debe ser único entre asistentes activos."
         ),
         request=CreateAssistantRequest,
         responses={
             201: AssistantAdminResponse,
-            **standard_error_responses(400, 401, 403),
+            **standard_error_responses(400, 401, 403, 409),
         },
     )
     def post(self, request: Request) -> Response:
@@ -78,16 +89,18 @@ class AssistantManageView(APIView):
         tags=["Assistants"],
         summary="Listar todos los asistentes (admin)",
         description=(
-                "Lista todos los asistentes incluyendo los inactivos. "
-                "Incluye el system_prompt. Requiere permiso `MANAGE_ASSISTANTS`."
+            "Lista todos los asistentes incluyendo los inactivos. "
+            "Incluye el system_prompt. Requiere permiso `MANAGE_ASSISTANTS`."
         ),
+        parameters=[_SEARCH_PARAM],
         responses={
             200: AssistantAdminResponse(many=True),
             **standard_error_responses(401, 403),
         },
     )
     def get(self, request: Request) -> Response:
-        queryset = assistant_service.list_all_assistants(user=request.user)
+        search = request.query_params.get("search") or None
+        queryset = assistant_service.list_all_assistants(user=request.user, search=search)
         paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request)
         return paginator.get_paginated_response(AssistantAdminResponse(page, many=True).data)
@@ -112,12 +125,15 @@ class AssistantDetailView(APIView):
     @extend_schema(
         tags=["Assistants"],
         summary="Actualizar asistente",
-        description="Actualiza uno o más campos del asistente. Requiere permiso `UPDATE_ASSISTANT`.",
+        description=(
+            "Actualiza uno o más campos del asistente. Requiere permiso `UPDATE_ASSISTANT`. "
+            "Si se cambia el nombre, debe ser único entre asistentes activos."
+        ),
         parameters=[_ID_PARAM],
         request=UpdateAssistantRequest,
         responses={
             200: AssistantAdminResponse,
-            **standard_error_responses(400, 401, 403, 404),
+            **standard_error_responses(400, 401, 403, 404, 409),
         },
     )
     def patch(self, request: Request, assistant_id: int) -> Response:
@@ -155,21 +171,31 @@ class AssistantStartChatView(APIView):
 
     @extend_schema(
         tags=["Assistants"],
-        summary="Iniciar sesión con asistente",
+        summary="Iniciar o reanudar sesión con asistente",
         description=(
-                "Crea un nuevo chat pre-configurado con el system prompt del asistente. "
-                "El usuario es añadido automáticamente como propietario del chat. "
-                "Devuelve el `chat_id` para navegar a la sesión."
+            "Si `resume=false` (default): crea siempre un chat nuevo pre-configurado con el system prompt "
+            "del asistente y añade al usuario como propietario. "
+            "Si `resume=true`: devuelve el chat más reciente del usuario con este asistente si existe "
+            "(HTTP 200), o crea uno nuevo si no hay ninguno (HTTP 201). "
+            "La respuesta incluye `is_new` para distinguir ambos casos."
         ),
         parameters=[_ID_PARAM],
+        request=StartChatRequest,
         responses={
+            200: StartChatResponse,
             201: StartChatResponse,
-            **standard_error_responses(401, 403, 404),
+            **standard_error_responses(400, 401, 403, 404),
         },
     )
     def post(self, request: Request, assistant_id: int) -> Response:
-        chat = assistant_service.start_chat(user=request.user, assistant_id=assistant_id)
+        serializer = StartChatRequest(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        chat, is_new = assistant_service.start_chat(
+            user=request.user,
+            assistant_id=assistant_id,
+            resume=serializer.validated_data.get("resume", False),
+        )
         return Response(
-            StartChatResponse({"chat_id": chat.id, "chat_name": chat.name}).data,
-            status=status.HTTP_201_CREATED,
+            StartChatResponse({"chat_id": chat.id, "chat_name": chat.name, "is_new": is_new}).data,
+            status=status.HTTP_201_CREATED if is_new else status.HTTP_200_OK,
         )

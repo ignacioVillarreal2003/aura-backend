@@ -10,7 +10,7 @@ class SendNotificationForm(forms.Form):
     """Form for sending one notification per selected user from the Django admin."""
 
     recipients = forms.ModelMultipleChoiceField(
-        queryset=User.objects.filter(deleted_at__isnull=True, status='active').order_by('username'),
+        queryset=User.objects.none(),
         widget=FilteredSelectMultiple('Usuarios', is_stacked=False),
         label='Usuarios',
         help_text='',
@@ -20,6 +20,15 @@ class SendNotificationForm(forms.Form):
         widget=forms.Textarea(attrs={'rows': 4}),
         label='Mensaje',
     )
+
+    def __init__(self, *args, recipients_queryset=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if recipients_queryset is not None:
+            self.fields['recipients'].queryset = recipients_queryset
+        else:
+            self.fields['recipients'].queryset = (
+                User.objects.filter(deleted_at__isnull=True, status='active').order_by('username')
+            )
 
 
 class SendGroupNotificationForm(forms.Form):
@@ -38,7 +47,7 @@ class SendGroupNotificationForm(forms.Form):
         widget=forms.SelectMultiple(),
     )
     roles = forms.ModelMultipleChoiceField(
-        queryset=Role.objects.order_by('name'),
+        queryset=Role.objects.filter(name='user'),
         widget=FilteredSelectMultiple('Roles de sistema', is_stacked=False),
         required=False,
         label='Roles de sistema',

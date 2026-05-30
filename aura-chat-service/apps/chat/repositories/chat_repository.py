@@ -232,6 +232,15 @@ class ChatRepository:
         )
 
     @staticmethod
+    def get_latest_by_assistant(user_id: int, assistant_id: int) -> Chat | None:
+        return (
+            Chat.objects
+            .filter(created_by=user_id, source_assistant_id=assistant_id)
+            .order_by("-created_at")
+            .first()
+        )
+
+    @staticmethod
     def soft_delete(chat: Chat, deleted_by: int) -> None:
         chat.delete(deleted_by=deleted_by)
 

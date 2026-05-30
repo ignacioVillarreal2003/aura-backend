@@ -15,7 +15,8 @@ class _FragmentSerializer(serializers.Serializer):
 
 class GenerateChecklistRequest(serializers.Serializer):
     mode = serializers.ChoiceField(choices=Checklist.Mode.choices)
-    message = serializers.CharField(allow_blank=False)
+    message = serializers.CharField(allow_blank=False, max_length=4000)
+    chat_id = serializers.IntegerField(required=False, allow_null=True)
 
 
 class ChecklistGenerateResponse(serializers.Serializer):
@@ -60,6 +61,7 @@ class ChecklistResponse(serializers.ModelSerializer):
             "items",
             "mode",
             "metadata",
+            "source_chat_id",
             "created_by",
             "created_at",
             "updated_by",
@@ -78,6 +80,7 @@ class ChecklistListResponse(serializers.ModelSerializer):
             "id",
             "title",
             "mode",
+            "source_chat_id",
             "item_count",
             "checked_count",
             "created_by",

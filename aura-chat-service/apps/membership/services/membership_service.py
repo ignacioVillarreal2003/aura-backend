@@ -19,7 +19,7 @@ from apps.membership.models.chat_membership import ChatMembership
 from apps.membership.repositories.membership_repository import membership_repository
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization import AccessControl
-from core.authorization.permissions import ADD_MEMBER, LEAVE_CHAT, LIST_MEMBERS, REMOVE_MEMBER, UPDATE_MEMBER, UPDATE_MEMBER_ROLE
+from core.authorization.permissions import ADD_MEMBER, LEAVE_CHAT, LIST_MEMBERS, LIST_MY_MEMBERSHIPS, MANAGE_MEMBERS, REMOVE_MEMBER, UPDATE_MEMBER, UPDATE_MEMBER_ROLE
 from core.exceptions import ValidationException
 
 logger = logging.getLogger(__name__)
@@ -35,20 +35,36 @@ def _broadcast_member_joined(chat_id: int, member_id: int) -> None:
     channel_layer = get_channel_layer()
     if channel_layer is None:
         return
-    async_to_sync(channel_layer.group_send)(
-        f"chat_{chat_id}",
-        {"type": "member_joined", "member_id": member_id},
-    )
+    try:
+        async_to_sync(channel_layer.group_send)(
+            f"chat_{chat_id}",
+            {"type": "member_joined", "member_id": member_id},
+        )
+    except Exception:
+        logger.warning(
+            "Failed to broadcast member_joined for chat %d member %d",
+            chat_id,
+            member_id,
+            exc_info=True,
+        )
 
 
 def _broadcast_member_left(chat_id: int, member_id: int) -> None:
     channel_layer = get_channel_layer()
     if channel_layer is None:
         return
-    async_to_sync(channel_layer.group_send)(
-        f"chat_{chat_id}",
-        {"type": "member_left", "member_id": member_id},
-    )
+    try:
+        async_to_sync(channel_layer.group_send)(
+            f"chat_{chat_id}",
+            {"type": "member_left", "member_id": member_id},
+        )
+    except Exception:
+        logger.warning(
+            "Failed to broadcast member_left for chat %d member %d",
+            chat_id,
+            member_id,
+            exc_info=True,
+        )
 
 
 class MembershipService:
@@ -65,6 +81,26 @@ class MembershipService:
         self._require_active_member(chat_id, user.id)
         return membership_repository.list_by_chat(chat_id, status=status)
 
+    def list_members_admin(
+        self,
+        user: AuthenticatedUser,
+        chat_id: int,
+        status: str | None = None,
+    ) -> QuerySet[ChatMembership]:
+        AccessControl.require_permissions(user, frozenset({MANAGE_MEMBERS}))
+        chat = chat_repository.get_by_id(chat_id)
+        if chat is None:
+            raise ChatNotFoundException()
+        return membership_repository.list_by_chat(chat_id, status=status)
+
+    def list_my_memberships(
+        self,
+        user: AuthenticatedUser,
+        status: str | None = None,
+    ) -> QuerySet[ChatMembership]:
+        AccessControl.require_permissions(user, frozenset({LIST_MY_MEMBERSHIPS}))
+        return membership_repository.list_by_member(member_id=user.id, status=status)
+
     @transaction.atomic
     def add_members(
         self,
@@ -80,9 +116,9 @@ class MembershipService:
         if chat.created_by != user.id:
             raise MembershipForbiddenException("Only the chat owner can add members")
 
-        already_active = membership_repository.get_active_member_ids_in(chat_id, member_ids)
-        if already_active:
-            first = next(iter(already_active))
+        existing = membership_repository.get_existing_member_ids_in(chat_id, member_ids)
+        if existing:
+            first = next(iter(existing))
             raise MembershipAlreadyExistsException(
                 f"User {first} is already a member of chat {chat_id}"
             )
@@ -142,12 +178,9 @@ class MembershipService:
         if chat is None:
             raise ChatNotFoundException()
 
-        is_self = user.id == member_id
-        is_owner = chat.created_by == user.id
-
-        if not is_self and not is_owner:
+        if user.id != member_id:
             raise MembershipForbiddenException(
-                "Only the chat owner or the member themselves can update member status"
+                "Only the invited member can update their own status"
             )
 
         if member_id == chat.created_by:
@@ -170,6 +203,8 @@ class MembershipService:
 
         if new_status == ChatMembership.Status.ACTIVE:
             on_commit(lambda: _broadcast_member_joined(chat_id, member_id))
+        elif new_status == ChatMembership.Status.INACTIVE:
+            on_commit(lambda: _broadcast_member_left(chat_id, member_id))
 
         logger.info(
             "Membership updated.",

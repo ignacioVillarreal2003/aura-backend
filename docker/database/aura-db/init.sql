@@ -2,20 +2,21 @@ CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pg_search;
 
 CREATE TABLE chat (
-    id          BIGSERIAL PRIMARY KEY,
-    name        VARCHAR(255)             NOT NULL,
-    system_prompt TEXT,
-    response_style TEXT,
-    last_message_at TIMESTAMPTZ,
-    created_by  BIGINT                   NOT NULL,
-    created_at  TIMESTAMPTZ              NOT NULL DEFAULT NOW(),
-    updated_by  BIGINT,
-    updated_at  TIMESTAMPTZ,
-    deleted_by  BIGINT,
-    deleted_at  TIMESTAMPTZ,
-    tags        TEXT[]                   NOT NULL DEFAULT '{}',
-    is_ephemeral BOOLEAN                NOT NULL DEFAULT FALSE,
-    is_locked   BOOLEAN                 NOT NULL DEFAULT FALSE
+    id                  BIGSERIAL PRIMARY KEY,
+    name                VARCHAR(255)             NOT NULL,
+    system_prompt       TEXT,
+    response_style      TEXT,
+    last_message_at     TIMESTAMPTZ,
+    source_assistant_id BIGINT,
+    created_by          BIGINT                   NOT NULL,
+    created_at          TIMESTAMPTZ              NOT NULL DEFAULT NOW(),
+    updated_by          BIGINT,
+    updated_at          TIMESTAMPTZ,
+    deleted_by          BIGINT,
+    deleted_at          TIMESTAMPTZ,
+    tags                TEXT[]                   NOT NULL DEFAULT '{}',
+    is_ephemeral        BOOLEAN                  NOT NULL DEFAULT FALSE,
+    is_locked           BOOLEAN                  NOT NULL DEFAULT FALSE
 );
 
 CREATE TABLE document (
@@ -144,18 +145,6 @@ CREATE TABLE chat_share_link (
     expires_at  TIMESTAMPTZ,
     is_active   BOOLEAN                 NOT NULL DEFAULT TRUE,
     CONSTRAINT uq_share_link_token UNIQUE (token)
-);
-
-CREATE TABLE chat_webhook (
-    id          BIGSERIAL PRIMARY KEY,
-    chat_id     BIGINT                  NOT NULL,
-    url         TEXT                    NOT NULL,
-    events      TEXT[]                  NOT NULL DEFAULT '{}',
-    secret      VARCHAR(64)             NOT NULL,
-    is_active   BOOLEAN                 NOT NULL DEFAULT TRUE,
-    created_by  BIGINT                  NOT NULL,
-    created_at  TIMESTAMPTZ             NOT NULL DEFAULT NOW(),
-    CONSTRAINT fk_chat_webhook_chat FOREIGN KEY (chat_id) REFERENCES chat(id) ON DELETE CASCADE
 );
 
 CREATE TABLE notification (
@@ -336,7 +325,6 @@ CREATE INDEX idx_thread_reply_parent ON message_thread_reply(parent_message_id);
 CREATE INDEX idx_message_feedback_message ON message_feedback(message_id);
 CREATE INDEX idx_share_link_chat ON chat_share_link(chat_id);
 CREATE INDEX idx_share_link_token ON chat_share_link(token);
-CREATE INDEX idx_chat_webhook_chat ON chat_webhook(chat_id);
 
 CREATE INDEX idx_notification_deleted_at ON notification (deleted_at);
 
@@ -411,34 +399,16 @@ CREATE INDEX idx_user_compartment_compartment_id
     ON user_compartment (compartment_id);
 
 CREATE TABLE report (
-    id          BIGSERIAL PRIMARY KEY,
-    type        VARCHAR(16)     NOT NULL
-        CONSTRAINT chk_report_type CHECK (type IN ('SITREP', 'INTSUM', 'OPORD')),
-    title       VARCHAR(500)    NOT NULL,
-    content     TEXT            NOT NULL,
-    mode        VARCHAR(16)     NOT NULL
-        CONSTRAINT chk_report_mode CHECK (mode IN ('direct', 'rag')),
-    metadata    JSONB           NOT NULL DEFAULT '{}',
-    created_by  BIGINT          NOT NULL,
-    created_at  TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
-    updated_by  BIGINT,
-    updated_at  TIMESTAMPTZ,
-    deleted_by  BIGINT,
-    deleted_at  TIMESTAMPTZ
-);
-
-CREATE INDEX idx_report_created_by         ON report (created_by);
-CREATE INDEX idx_report_type               ON report (type);
-CREATE INDEX idx_report_created_at         ON report (created_at DESC);
-CREATE INDEX idx_report_active_user        ON report (created_by, created_at DESC) WHERE deleted_at IS NULL;
-
-CREATE TABLE checklist (
     id              BIGSERIAL PRIMARY KEY,
+    type            VARCHAR(16)     NOT NULL
+        CONSTRAINT chk_report_type CHECK (type IN ('SITREP', 'INTSUM', 'OPORD')),
     title           VARCHAR(500)    NOT NULL,
-    items           JSONB           NOT NULL DEFAULT '[]',
+    content         TEXT            NOT NULL,
     mode            VARCHAR(16)     NOT NULL
-        CONSTRAINT chk_checklist_mode CHECK (mode IN ('direct', 'rag')),
+        CONSTRAINT chk_report_mode CHECK (mode IN ('direct', 'rag')),
     metadata        JSONB           NOT NULL DEFAULT '{}',
+    source_chat_id  BIGINT
+        CONSTRAINT fk_report_source_chat REFERENCES chat(id) ON DELETE SET NULL,
     created_by      BIGINT          NOT NULL,
     created_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
     updated_by      BIGINT,
@@ -447,9 +417,33 @@ CREATE TABLE checklist (
     deleted_at      TIMESTAMPTZ
 );
 
-CREATE INDEX idx_checklist_created_by   ON checklist (created_by);
-CREATE INDEX idx_checklist_created_at   ON checklist (created_at DESC);
-CREATE INDEX idx_checklist_active_user  ON checklist (created_by, created_at DESC) WHERE deleted_at IS NULL;
+CREATE INDEX idx_report_created_by         ON report (created_by);
+CREATE INDEX idx_report_type               ON report (type);
+CREATE INDEX idx_report_created_at         ON report (created_at DESC);
+CREATE INDEX idx_report_active_user        ON report (created_by, created_at DESC) WHERE deleted_at IS NULL;
+CREATE INDEX idx_report_source_chat_id     ON report (source_chat_id) WHERE source_chat_id IS NOT NULL;
+
+CREATE TABLE checklist (
+    id              BIGSERIAL PRIMARY KEY,
+    title           VARCHAR(500)    NOT NULL,
+    items           JSONB           NOT NULL DEFAULT '[]',
+    mode            VARCHAR(16)     NOT NULL
+        CONSTRAINT chk_checklist_mode CHECK (mode IN ('direct', 'rag')),
+    metadata        JSONB           NOT NULL DEFAULT '{}',
+    source_chat_id  BIGINT
+        CONSTRAINT fk_checklist_source_chat REFERENCES chat(id) ON DELETE SET NULL,
+    created_by      BIGINT          NOT NULL,
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    updated_by      BIGINT,
+    updated_at      TIMESTAMPTZ,
+    deleted_by      BIGINT,
+    deleted_at      TIMESTAMPTZ
+);
+
+CREATE INDEX idx_checklist_created_by      ON checklist (created_by);
+CREATE INDEX idx_checklist_created_at      ON checklist (created_at DESC);
+CREATE INDEX idx_checklist_active_user     ON checklist (created_by, created_at DESC) WHERE deleted_at IS NULL;
+CREATE INDEX idx_checklist_source_chat_id  ON checklist (source_chat_id) WHERE source_chat_id IS NOT NULL;
 
 CREATE TABLE assistant (
     id              BIGSERIAL PRIMARY KEY,
@@ -467,5 +461,12 @@ CREATE TABLE assistant (
     deleted_at      TIMESTAMPTZ
 );
 
+CREATE UNIQUE INDEX idx_assistant_name_active ON assistant (name) WHERE deleted_at IS NULL;
 CREATE INDEX idx_assistant_active      ON assistant (is_active) WHERE deleted_at IS NULL;
 CREATE INDEX idx_assistant_created_by  ON assistant (created_by);
+
+ALTER TABLE chat
+    ADD CONSTRAINT fk_chat_source_assistant
+    FOREIGN KEY (source_assistant_id) REFERENCES assistant(id) ON DELETE SET NULL;
+
+CREATE INDEX idx_chat_source_assistant_id ON chat (source_assistant_id) WHERE source_assistant_id IS NOT NULL;

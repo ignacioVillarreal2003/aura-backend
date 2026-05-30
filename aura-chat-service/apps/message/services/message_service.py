@@ -20,6 +20,7 @@ from core.authorization.permissions import (
     CLEAR_CHAT_HISTORY,
     DELETE_MESSAGE,
     LIST_MESSAGES,
+    MANAGE_CHATS,
     REGENERATE_AI_RESPONSE,
     SEND_MESSAGE,
 )
@@ -35,20 +36,30 @@ def _broadcast_user_message_to_chat_group(chat_id: int, msg: ChatMessage) -> Non
     if channel_layer is None:
         return
     payload = MessageResponse(msg).data
-    async_to_sync(channel_layer.group_send)(
-        f"chat_{chat_id}",
-        {"type": "user_message", **payload},
-    )
+    try:
+        async_to_sync(channel_layer.group_send)(
+            f"chat_{chat_id}",
+            {"type": "user_message", **payload},
+        )
+    except Exception:
+        logger.warning(
+            "Failed to broadcast user_message for chat %d", chat_id, exc_info=True
+        )
 
 
 def broadcast_chat_ai_lock_change(chat_id: int, locked: bool) -> None:
     channel_layer = get_channel_layer()
     if channel_layer is None:
         return
-    async_to_sync(channel_layer.group_send)(
-        f"chat_{chat_id}",
-        {"type": "chat_ai_lock_changed", "locked": locked},
-    )
+    try:
+        async_to_sync(channel_layer.group_send)(
+            f"chat_{chat_id}",
+            {"type": "chat_ai_lock_changed", "locked": locked},
+        )
+    except Exception:
+        logger.warning(
+            "Failed to broadcast ai_lock_change for chat %d", chat_id, exc_info=True
+        )
 
 
 @dataclass
@@ -125,6 +136,13 @@ class MessageService:
         self._require_access(chat_id, user.id)
         return message_repository.get_messages_by_chat(chat_id, user_id=user.id)
 
+    def get_messages_admin(self, user: AuthenticatedUser, chat_id: int):
+        AccessControl.require_permissions(user, frozenset({MANAGE_CHATS}))
+        chat = chat_repository.get_by_id(chat_id)
+        if chat is None:
+            raise ChatNotFoundException()
+        return message_repository.get_messages_by_chat(chat_id, user_id=user.id)
+
     def clear_history(self, user: AuthenticatedUser, chat_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({CLEAR_CHAT_HISTORY}))
         chat = self._require_access(chat_id, user.id)
@@ -167,7 +185,7 @@ class MessageService:
 
         try:
             llm_out: DocumentQuestionResult = await llm_client.document_question(
-                messages, user
+                messages, user, chat_id=chat_id
             )
         except HttpClientException as e:
             logger.error(
@@ -249,7 +267,7 @@ class MessageService:
 
         try:
             async for sse in llm_client.document_question_stream_events(
-                messages, user
+                messages, user, chat_id=chat_id
             ):
                 et = sse.get("type")
                 if et == "meta":

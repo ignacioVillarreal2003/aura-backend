@@ -6,7 +6,7 @@ from django.contrib.admin.widgets import FilteredSelectMultiple
 from django.utils.html import format_html
 from accounts.models import Role, Permission, PermissionInRole
 from accounts.admin_parts.utils.mixins import HelpTextStripMixin
-from accounts.admin_parts.utils.audit import _is_super_admin_user, _is_admin_or_super_user, log_audit
+from accounts.admin_parts.utils.audit import _is_super_admin_user, _is_admin_or_super_user, _is_effective_superadmin, log_audit
 
 
 class RoleAdminForm(forms.ModelForm):
@@ -51,6 +51,15 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
         }),
     )
 
+    def get_fieldsets(self, request, obj=None):
+        if not _is_effective_superadmin(request):
+            return (
+                ('Información del Rol', {
+                    'fields': ('name', 'description'),
+                }),
+            )
+        return self.fieldsets
+
     def get_readonly_fields(self, request, obj=None):
         if obj:
             return ('name', 'description')
@@ -76,7 +85,7 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
         return False
 
     def has_change_permission(self, request, obj=None):
-        return _is_super_admin_user(request.user)
+        return _is_effective_superadmin(request)
 
     def has_delete_permission(self, request, obj=None):
         return False
@@ -121,7 +130,7 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
         super().delete_model(request, obj)
 
     def delete_queryset(self, request, queryset):
-        if not _is_super_admin_user(request.user):
+        if not _is_effective_superadmin(request):
             return
         protected = queryset.filter(
             name__in=['superadmin', 'admin']

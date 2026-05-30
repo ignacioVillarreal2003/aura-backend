@@ -270,9 +270,16 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 )
         finally:
             await database_sync_to_async(release)(self.chat_id)
-            await database_sync_to_async(broadcast_chat_ai_lock_change)(
-                self.chat_id, False
-            )
+            try:
+                await database_sync_to_async(broadcast_chat_ai_lock_change)(
+                    self.chat_id, False
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to broadcast ai_lock_change release for chat %d",
+                    self.chat_id,
+                    exc_info=True,
+                )
 
     async def _handle_typing(self, content: dict):
         is_typing = content.get("is_typing")

@@ -26,6 +26,10 @@ class RagAgentController:
             _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(strict_rate_limit),
     ) -> AgentResponse:
+        Authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LLM_AGENT}),
+        )
         return await rag_agent_service.execute(
             agent_request=agent_request,
             authenticated_user=authenticated_user,

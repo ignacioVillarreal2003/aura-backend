@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import secrets
+import threading
 from typing import Optional
 import httpx
 from django.conf import settings
@@ -20,6 +21,23 @@ from core.authentication.authentication_exceptions import (
 logger = logging.getLogger(__name__)
 
 _CACHE_PREFIX = "auth_token:"
+
+_auth_http_client: httpx.Client | None = None
+_auth_http_client_lock = threading.Lock()
+
+
+def _get_auth_http_client() -> httpx.Client:
+    global _auth_http_client
+    if _auth_http_client is not None:
+        return _auth_http_client
+    with _auth_http_client_lock:
+        if _auth_http_client is None:
+            timeout = float(getattr(settings, "AUTH_SERVICE_TIMEOUT", 10.0))
+            _auth_http_client = httpx.Client(
+                timeout=timeout,
+                limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+            )
+    return _auth_http_client
 
 
 def _token_cache_ttl() -> int:
@@ -167,13 +185,11 @@ class AuthenticationProvider:
         logger.debug("Validating bearer token with the authentication service.")
         auth_header = _format_bearer_token(token)
 
-        timeout = float(getattr(settings, "AUTH_SERVICE_TIMEOUT", 10.0))
         try:
-            with httpx.Client(timeout=timeout) as client:
-                response = client.get(
-                    settings.AUTHENTICATION_SERVICE_URL,
-                    headers={"Authorization": auth_header},
-                )
+            response = _get_auth_http_client().get(
+                settings.AUTHENTICATION_SERVICE_URL,
+                headers={"Authorization": auth_header},
+            )
         except httpx.TimeoutException as e:
             logger.error("Authentication service timed out.")
             raise AuthenticationProviderServiceUnavailableException(
