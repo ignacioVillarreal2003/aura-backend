@@ -115,7 +115,7 @@ class ReportDetailView(APIView):
     @extend_schema(
         tags=["Reports"],
         summary="Eliminar informe",
-        description="Elimina suavemente el informe. Solo el creador o el owner del chat de origen puede eliminarlo.",
+        description="Elimina suavemente el informe. Solo el creador o un miembro activo con rol owner o editor puede eliminarlo.",
         parameters=[_ID_PARAM],
         responses={
             204: OpenApiResponse(description="Sin contenido"),

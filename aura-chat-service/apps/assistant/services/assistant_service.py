@@ -13,7 +13,6 @@ from apps.assistant.exceptions import (
 from apps.assistant.models import Assistant
 from apps.assistant.repositories.assistant_repository import assistant_repository
 from apps.chat.repositories.chat_repository import chat_repository
-from apps.chat.services.chat_service import chat_service
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +95,8 @@ class AssistantService:
         logger.info("Assistant deleted", extra={"user_id": user.id, "assistant_id": assistant_id})
 
     def start_chat(self, user: AuthenticatedUser, assistant_id: int, resume: bool = False):
+        from apps.chat.services.chat_service import chat_service  # lazy: avoids channels init at import time
+
         AccessControl.require_permissions(user, frozenset({perms.USE_ASSISTANT}))
 
         assistant = assistant_repository.get_by_id(assistant_id)

@@ -113,8 +113,10 @@ class MembershipService:
         if chat is None:
             raise ChatNotFoundException()
 
-        if chat.created_by != user.id:
-            raise MembershipForbiddenException("Only the chat owner can add members")
+        is_creator = chat.created_by == user.id
+        is_owner_member = membership_repository.is_chat_owner(chat_id, user.id)
+        if not is_creator and not is_owner_member:
+            raise MembershipForbiddenException("Only an owner or the chat creator can add members")
 
         existing = membership_repository.get_existing_member_ids_in(chat_id, member_ids)
         if existing:
@@ -232,12 +234,9 @@ class MembershipService:
         if chat.created_by == member_id:
             raise CannotRemoveOwnerException()
 
-        is_self = user.id == member_id
-        is_owner = chat.created_by == user.id
-
-        if not is_self and not is_owner:
+        if not membership_repository.is_chat_owner(chat_id, user.id):
             raise MembershipForbiddenException(
-                "Only the chat owner or the member themselves can remove a member"
+                "Only an owner can remove members"
             )
 
         membership = membership_repository.get_by_chat_and_member_for_update(chat_id, member_id)
@@ -299,7 +298,9 @@ class MembershipService:
         chat = chat_repository.get_by_id(chat_id)
         if chat is None:
             raise ChatNotFoundException()
-        if chat.created_by != user.id:
+        is_creator = chat.created_by == user.id
+        is_owner_member = membership_repository.is_chat_owner(chat_id, user.id)
+        if not is_creator and not is_owner_member:
             raise RoleUpdateForbiddenException()
         if member_id == chat.created_by:
             raise RoleUpdateForbiddenException()

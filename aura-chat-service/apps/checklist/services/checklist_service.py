@@ -19,17 +19,47 @@ from apps.message.repositories.message_repository import message_repository
 logger = logging.getLogger(__name__)
 
 
-def _assert_checklist_access(user_id: int, checklist: Checklist, *, require_owner: bool = False) -> None:
+def _assert_checklist_access(user_id: int, checklist: Checklist, *, require_contributor: bool = False) -> None:
     if checklist.created_by == user_id:
         return
     if checklist.source_chat_id is not None:
-        if require_owner:
-            if membership_repository.is_chat_owner(checklist.source_chat_id, user_id):
-                return
-        else:
-            if membership_repository.is_active_member(checklist.source_chat_id, user_id):
-                return
+        checker = (
+            membership_repository.is_active_contributor
+            if require_contributor
+            else membership_repository.is_active_member
+        )
+        if checker(checklist.source_chat_id, user_id):
+            return
     raise ChecklistAccessDeniedException()
+
+
+def _items_to_sections(items: list) -> list:
+    seen: dict[str, list] = {}
+    order: list[str] = []
+    for item in items:
+        name = str(item.get("section", "General"))
+        if name not in seen:
+            seen[name] = []
+            order.append(name)
+        seen[name].append(item)
+
+    sections = []
+    for pos, name in enumerate(order):
+        sorted_items = sorted(seen[name], key=lambda x: int(x.get("order", 0)))
+        sections.append({
+            "title": name,
+            "position": pos,
+            "items": [
+                {
+                    "text": str(it.get("text", "")),
+                    "is_checked": bool(it.get("is_checked", False)),
+                    "notes": str(it.get("notes", "")),
+                    "position": idx,
+                }
+                for idx, it in enumerate(sorted_items)
+            ],
+        })
+    return sections
 
 
 class ChecklistService:
@@ -40,7 +70,6 @@ class ChecklistService:
                 raise ChatNotFoundException()
             if not membership_repository.is_active_member(chat_id, user.id):
                 raise ChatAccessDeniedException()
-            # Any active member of the chat sees every checklist in it, not only their own.
             return checklist_repository.list_by_chat(source_chat_id=chat_id)
         return checklist_repository.list_by_user(user_id=user.id)
 
@@ -76,21 +105,21 @@ class ChecklistService:
             user: AuthenticatedUser,
             checklist_id: int,
             title: Optional[str] = None,
-            items: Optional[list] = None,
+            sections: Optional[list] = None,
     ) -> Checklist:
         AccessControl.require_permissions(user, frozenset({perms.UPDATE_CHECKLIST}))
         checklist = checklist_repository.get_by_id(checklist_id)
         if checklist is None:
             raise ChecklistNotFoundException()
-        _assert_checklist_access(user.id, checklist)
-        return checklist_repository.update(checklist, updated_by=user.id, title=title, items=items)
+        _assert_checklist_access(user.id, checklist, require_contributor=True)
+        return checklist_repository.update(checklist, updated_by=user.id, title=title, sections=sections)
 
     def delete_checklist(self, user: AuthenticatedUser, checklist_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({perms.DELETE_CHECKLIST}))
         checklist = checklist_repository.get_by_id(checklist_id)
         if checklist is None:
             raise ChecklistNotFoundException()
-        _assert_checklist_access(user.id, checklist, require_owner=True)
+        _assert_checklist_access(user.id, checklist, require_contributor=True)
         checklist_repository.soft_delete(checklist, deleted_by=user.id)
         logger.info("Checklist deleted", extra={"user_id": user.id, "checklist_id": checklist_id})
 
@@ -108,8 +137,8 @@ class ChecklistService:
             chat = await sync_to_async(chat_repository.get_by_id)(chat_id)
             if chat is None:
                 raise ChatNotFoundException()
-            is_member = await sync_to_async(membership_repository.is_active_member)(chat_id, user.id)
-            if not is_member:
+            is_contributor = await sync_to_async(membership_repository.is_active_contributor)(chat_id, user.id)
+            if not is_contributor:
                 raise ChatAccessDeniedException()
             recent = await sync_to_async(message_repository.get_recent_messages)(chat_id, limit=20)
             recent.reverse()
@@ -141,12 +170,12 @@ class ChecklistService:
             logger.error("LLM returned empty items for checklist", extra={"user_id": user.id})
             raise LLMServiceException()
 
+        sections = _items_to_sections(result.items)
         checklist = await sync_to_async(checklist_repository.create)(
             user_id=user.id,
             title=result.title,
-            items=result.items,
+            sections=sections,
             mode=mode,
-            metadata={},
             source_chat_id=chat_id,
         )
         logger.info(

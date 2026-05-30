@@ -103,14 +103,14 @@ class ChecklistDetailView(APIView):
             user=request.user,
             checklist_id=checklist_id,
             title=d.get("title"),
-            items=d.get("items"),
+            sections=d.get("sections"),
         )
         return Response(ChecklistResponse(checklist).data)
 
     @extend_schema(
         tags=["Checklists"],
         summary="Eliminar checklist",
-        description="Elimina suavemente la checklist. Solo el creador o el owner del chat de origen puede eliminarla.",
+        description="Elimina suavemente la checklist. Solo el creador o un miembro activo del chat de origen puede eliminarla.",
         parameters=[_ID_PARAM],
         responses={
             204: OpenApiResponse(description="Sin contenido"),

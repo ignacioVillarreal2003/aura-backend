@@ -15,7 +15,6 @@ class ReportRepository:
             title: str,
             content: str,
             mode: str,
-            metadata: dict,
             source_chat_id: Optional[int] = None,
     ) -> Report:
         return Report.objects.create(
@@ -24,7 +23,6 @@ class ReportRepository:
             title=title,
             content=content,
             mode=mode,
-            metadata=metadata,
             source_chat_id=source_chat_id,
         )
 

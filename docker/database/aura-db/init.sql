@@ -398,6 +398,11 @@ CREATE INDEX idx_user_compartment_user_id
 CREATE INDEX idx_user_compartment_compartment_id
     ON user_compartment (compartment_id);
 
+
+
+
+
+
 CREATE TABLE report (
     id              BIGSERIAL PRIMARY KEY,
     type            VARCHAR(16)     NOT NULL
@@ -406,7 +411,6 @@ CREATE TABLE report (
     content         TEXT            NOT NULL,
     mode            VARCHAR(16)     NOT NULL
         CONSTRAINT chk_report_mode CHECK (mode IN ('direct', 'rag')),
-    metadata        JSONB           NOT NULL DEFAULT '{}',
     source_chat_id  BIGINT
         CONSTRAINT fk_report_source_chat REFERENCES chat(id) ON DELETE SET NULL,
     created_by      BIGINT          NOT NULL,
@@ -426,10 +430,8 @@ CREATE INDEX idx_report_source_chat_id     ON report (source_chat_id) WHERE sour
 CREATE TABLE checklist (
     id              BIGSERIAL PRIMARY KEY,
     title           VARCHAR(500)    NOT NULL,
-    items           JSONB           NOT NULL DEFAULT '[]',
     mode            VARCHAR(16)     NOT NULL
         CONSTRAINT chk_checklist_mode CHECK (mode IN ('direct', 'rag')),
-    metadata        JSONB           NOT NULL DEFAULT '{}',
     source_chat_id  BIGINT
         CONSTRAINT fk_checklist_source_chat REFERENCES chat(id) ON DELETE SET NULL,
     created_by      BIGINT          NOT NULL,
@@ -440,10 +442,33 @@ CREATE TABLE checklist (
     deleted_at      TIMESTAMPTZ
 );
 
+CREATE TABLE checklist_section (
+    id           BIGSERIAL PRIMARY KEY,
+    checklist_id BIGINT       NOT NULL
+        CONSTRAINT fk_checklist_section_checklist REFERENCES checklist(id) ON DELETE CASCADE,
+    title        VARCHAR(200) NOT NULL,
+    position     SMALLINT     NOT NULL DEFAULT 0,
+    created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE checklist_item (
+    id         BIGSERIAL PRIMARY KEY,
+    section_id BIGINT       NOT NULL
+        CONSTRAINT fk_checklist_item_section REFERENCES checklist_section(id) ON DELETE CASCADE,
+    text       VARCHAR(500) NOT NULL,
+    is_checked BOOLEAN      NOT NULL DEFAULT FALSE,
+    notes      TEXT         NOT NULL DEFAULT '',
+    position   SMALLINT     NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ
+);
+
 CREATE INDEX idx_checklist_created_by      ON checklist (created_by);
 CREATE INDEX idx_checklist_created_at      ON checklist (created_at DESC);
 CREATE INDEX idx_checklist_active_user     ON checklist (created_by, created_at DESC) WHERE deleted_at IS NULL;
 CREATE INDEX idx_checklist_source_chat_id  ON checklist (source_chat_id) WHERE source_chat_id IS NOT NULL;
+CREATE INDEX idx_checklist_section_checklist ON checklist_section (checklist_id);
+CREATE INDEX idx_checklist_item_section      ON checklist_item (section_id);
 
 CREATE TABLE assistant (
     id              BIGSERIAL PRIMARY KEY,

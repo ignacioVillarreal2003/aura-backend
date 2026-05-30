@@ -166,6 +166,16 @@ class MembershipRepository:
         return result
 
     @staticmethod
+    def is_active_contributor(chat_id: int, member_id: int) -> bool:
+        """Returns True for active members with owner or editor role (can make changes)."""
+        return ChatMembership.objects.filter(
+            chat_id=chat_id,
+            member_id=member_id,
+            status="active",
+            role__in=[ChatMembership.Role.OWNER, ChatMembership.Role.EDITOR],
+        ).exists()
+
+    @staticmethod
     def is_chat_owner(chat_id: int, member_id: int) -> bool:
         return ChatMembership.objects.filter(
             chat_id=chat_id,

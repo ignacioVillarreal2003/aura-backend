@@ -10,7 +10,7 @@ from django.db import transaction
 from apps.chat.exceptions import ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.membership.repositories.membership_repository import membership_repository
-from apps.message.exceptions import ChatLockedException, LLMServiceException, MessageAccessDeniedException, MessageDeleteForbiddenException, MessageNotFoundException, NoMessageToRegenerateException, NotChatCreatorException, ReaderCannotSendMessageException, TranscriptionException
+from apps.message.exceptions import ChatLockedException, LLMServiceException, MessageAccessDeniedException, MessageDeleteForbiddenException, MessageNotFoundException, NoMessageToRegenerateException, NotChatOwnerException, ReaderCannotSendMessageException, TranscriptionException
 from apps.message.models.chat_message import ChatMessage
 from apps.message.repositories.message_repository import message_repository
 from apps.message.serializers.response import MessageResponse
@@ -138,9 +138,9 @@ class MessageService:
 
     def clear_history(self, user: AuthenticatedUser, chat_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({CLEAR_CHAT_HISTORY}))
-        chat = self._require_access(chat_id, user.id)
-        if chat.created_by != user.id:
-            raise NotChatCreatorException()
+        self._require_access(chat_id, user.id)
+        if not membership_repository.is_chat_owner(chat_id, user.id):
+            raise NotChatOwnerException()
         message_repository.soft_delete_by_chat(chat_id, deleted_by=user.id)
         logger.info("Chat history cleared.", extra={"chat_id": chat_id, "user_id": user.id})
 
@@ -356,13 +356,11 @@ class MessageService:
 
     def delete_message(self, user: AuthenticatedUser, chat_id: int, message_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({DELETE_MESSAGE}))
-        chat = self._require_access(chat_id, user.id)
+        self._require_access(chat_id, user.id)
         msg = message_repository.get_by_id_and_chat(message_id, chat_id)
         if msg is None:
             raise MessageNotFoundException()
-        is_author = msg.created_by == user.id
-        is_owner = chat.created_by == user.id
-        if not is_author and not is_owner:
+        if not membership_repository.is_chat_owner(chat_id, user.id):
             raise MessageDeleteForbiddenException()
         msg.delete(deleted_by=user.id)
         logger.info("Message deleted.", extra={"chat_id": chat_id, "message_id": message_id, "user_id": user.id})

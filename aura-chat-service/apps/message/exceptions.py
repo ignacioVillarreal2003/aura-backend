@@ -67,4 +67,9 @@ class ChatLockedException(ForbiddenException):
 
 class MessageDeleteForbiddenException(ForbiddenException):
     error_code = "message_delete_forbidden"
-    detail = "Only the message author or chat owner can delete this message"
+    detail = "Only a chat owner can delete messages"
+
+
+class NotChatOwnerException(ForbiddenException):
+    error_code = "not_chat_owner"
+    detail = "Only a chat owner can perform this action"
