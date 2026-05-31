@@ -7,7 +7,7 @@
   .dashboard-grid {
     display: grid;
     gap: 14px;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     margin: 14px 0 20px;
   }
   .dashboard-card {
@@ -30,6 +30,8 @@
     font-weight: 700;
     color: #1e2430;
   }
+  .dashboard-value.warn { color: #b45309; }
+  .dashboard-value.danger { color: #b91c1c; }
   .dashboard-layout {
     display: grid;
     gap: 14px;
@@ -70,21 +72,29 @@
     font-size: 12px;
     font-weight: 600;
   }
-  .badge-ready {
+  .badge-ready, .badge-processed {
     color: #fff;
     background: #17803d;
   }
-  .badge-processing {
+  .badge-processing, .badge-uploaded {
     color: #fff;
     background: #8a6300;
   }
-  .badge-error {
+  .badge-error, .badge-failed {
     color: #fff;
     background: #9b1c1c;
   }
   .badge-default {
     color: #fff;
     background: #365f90;
+  }
+  .section-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #205067;
+    margin: 24px 0 8px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
   }
 </style>
 {% endblock %}
@@ -95,6 +105,8 @@
 <div id="content-main">
   <h1>Dashboard Administrativo</h1>
 
+  <!-- ── Usuarios ── -->
+  <p class="section-title">Usuarios</p>
   <div class="dashboard-grid">
     <section class="dashboard-card">
       <h3>Usuarios activos</h3>
@@ -106,13 +118,41 @@
       <div class="dashboard-value">{{ kpis.users_new_30 }}</div>
     </section>
     <section class="dashboard-card">
+      <h3>Cuentas bloqueadas</h3>
+      <div class="dashboard-value {% if kpis.users_locked > 0 %}warn{% endif %}">{{ kpis.users_locked }}</div>
+      <div class="muted">Bloqueo activo por intentos fallidos</div>
+    </section>
+    <section class="dashboard-card">
+      <h3>Sesiones activas</h3>
+      <div class="dashboard-value">{{ kpis.sessions_active }}</div>
+      <div class="muted">Tokens de refresco vigentes</div>
+    </section>
+  </div>
+
+  <!-- ── Autenticación ── -->
+  <p class="section-title">Autenticación (últimas 24 h)</p>
+  <div class="dashboard-grid">
+    <section class="dashboard-card">
+      <h3>Logins exitosos</h3>
+      <div class="dashboard-value">{{ kpis.logins_24h }}</div>
+    </section>
+    <section class="dashboard-card">
+      <h3>Logins fallidos</h3>
+      <div class="dashboard-value {% if kpis.logins_failed_24h > 0 %}warn{% endif %}">{{ kpis.logins_failed_24h }}</div>
+    </section>
+  </div>
+
+  <!-- ── Documentos ── -->
+  <p class="section-title">Documentos</p>
+  <div class="dashboard-grid">
+    <section class="dashboard-card">
       <h3>Documentos activos</h3>
       {% if kpis.documents_available %}
         <div class="dashboard-value">{{ kpis.documents_total }}</div>
         <div class="muted">Nuevos (30d): {{ kpis.documents_new_30 }}</div>
       {% else %}
         <div class="dashboard-value">-</div>
-        <div class="muted">Metrica no disponible</div>
+        <div class="muted">Métrica no disponible</div>
       {% endif %}
     </section>
     <section class="dashboard-card">
@@ -121,21 +161,36 @@
         <div class="dashboard-value">{{ kpis.total_storage_bytes|filesizeformat }}</div>
       {% else %}
         <div class="dashboard-value">-</div>
-        <div class="muted">Metrica no disponible</div>
-      {% endif %}
-    </section>
-    <section class="dashboard-card">
-      <h3>Notificaciones (7d)</h3>
-      <div class="dashboard-value">{{ kpis.notifications_7d }}</div>
-      {% if kpis.notifications_available %}
-        <div class="muted">Lectura: {{ kpis.notifications_read_rate_7d }}%</div>
-      {% else %}
-        <div class="muted">Metrica no disponible (aura_db sin conexion).</div>
+        <div class="muted">Métrica no disponible</div>
       {% endif %}
     </section>
   </div>
 
-  <div class="dashboard-layout">
+  <!-- ── Notificaciones ── -->
+  <p class="section-title">Notificaciones</p>
+  <div class="dashboard-grid">
+    <section class="dashboard-card">
+      <h3>Enviadas (7d)</h3>
+      <div class="dashboard-value">{{ kpis.notifications_7d }}</div>
+      {% if kpis.notifications_available %}
+        <div class="muted">Tasa lectura: {{ kpis.notifications_read_rate_7d }}%</div>
+      {% else %}
+        <div class="muted">Métrica no disponible (aura_db sin conexión)</div>
+      {% endif %}
+    </section>
+    <section class="dashboard-card">
+      <h3>No leídas (total)</h3>
+      {% if kpis.notifications_available %}
+        <div class="dashboard-value {% if kpis.notifications_unread > 50 %}warn{% endif %}">{{ kpis.notifications_unread }}</div>
+      {% else %}
+        <div class="dashboard-value">-</div>
+        <div class="muted">Métrica no disponible</div>
+      {% endif %}
+    </section>
+  </div>
+
+  <!-- ── Tablas ── -->
+  <div class="dashboard-layout" style="margin-top:20px">
     <section class="dashboard-card">
       <h3>Usuarios por rol</h3>
       <table class="dashboard-table">
@@ -159,11 +214,43 @@
     </section>
 
     <section class="dashboard-card">
-      <h3>Colecciones con mas documentos</h3>
+      <h3>Documentos por estado</h3>
       <table class="dashboard-table">
         <thead>
           <tr>
-            <th>Coleccion</th>
+            <th>Estado</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in documents_by_status %}
+            <tr>
+              <td>
+                {% if item.status == 'processed' %}
+                  <span class="badge badge-processed">Procesado</span>
+                {% elif item.status == 'failed' %}
+                  <span class="badge badge-failed">Fallido</span>
+                {% elif item.status == 'uploaded' %}
+                  <span class="badge badge-uploaded">Cargado</span>
+                {% else %}
+                  <span class="badge badge-default">{{ item.status|default:"-" }}</span>
+                {% endif %}
+              </td>
+              <td>{{ item.total }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="2">Sin datos</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="dashboard-card">
+      <h3>Colecciones con más documentos</h3>
+      <table class="dashboard-table">
+        <thead>
+          <tr>
+            <th>Colección</th>
             <th>Documentos</th>
           </tr>
         </thead>
@@ -181,21 +268,21 @@
     </section>
 
     <section class="dashboard-card">
-      <h3>Documentos mas pesados</h3>
+      <h3>Documentos más pesados</h3>
       <table class="dashboard-table">
         <thead>
           <tr>
             <th>Documento</th>
-            <th>Tamano</th>
+            <th>Tamaño</th>
             <th>Creador</th>
           </tr>
         </thead>
         <tbody>
           {% for item in largest_documents %}
             <tr>
-              <td title="{{ item.name }}">{{ item.name|truncatechars:35 }}</td>
+              <td title="{{ item.name }}">{{ item.name|truncatechars:30 }}</td>
               <td>{{ item.file_size_bytes|filesizeformat }}</td>
-              <td>{{ item.created_by|default:"-" }}</td>
+              <td>{{ item.created_by_name }}</td>
             </tr>
           {% empty %}
             <tr><td colspan="3">Sin datos</td></tr>
@@ -205,7 +292,7 @@
     </section>
 
     <section class="dashboard-card">
-      <h3>Ultimos documentos cargados</h3>
+      <h3>Últimos documentos cargados</h3>
       <table class="dashboard-table">
         <thead>
           <tr>
@@ -217,15 +304,15 @@
         <tbody>
           {% for item in recent_documents %}
             <tr>
-              <td title="{{ item.name }}">{{ item.name|truncatechars:35 }}</td>
+              <td title="{{ item.name }}">{{ item.name|truncatechars:30 }}</td>
               <td>{{ item.created_at|date:"d/m/Y H:i" }}</td>
               <td>
-                {% if item.status == 'ready' %}
-                  <span class="badge badge-ready">Listo</span>
-                {% elif item.status == 'processing' %}
-                  <span class="badge badge-processing">Procesando</span>
-                {% elif item.status == 'error' %}
-                  <span class="badge badge-error">Error</span>
+                {% if item.status == 'processed' %}
+                  <span class="badge badge-processed">Procesado</span>
+                {% elif item.status == 'failed' %}
+                  <span class="badge badge-failed">Fallido</span>
+                {% elif item.status == 'uploaded' %}
+                  <span class="badge badge-uploaded">Cargado</span>
                 {% else %}
                   <span class="badge badge-default">{{ item.status|default:"-" }}</span>
                 {% endif %}
@@ -238,5 +325,7 @@
       </table>
     </section>
   </div>
+
+  <p class="muted" style="margin-top:16px">Generado: {{ generated_at|date:"d/m/Y H:i" }}</p>
 </div>
 {% endblock %}

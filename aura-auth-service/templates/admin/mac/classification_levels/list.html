@@ -38,10 +38,6 @@
             <div class="text"><span>Posición</span></div>
             <div class="clear"></div>
           </th>
-          <th scope="col" class="column-id" style="width:60px">
-            <div class="text"><span>ID</span></div>
-            <div class="clear"></div>
-          </th>
           <th scope="col" class="column-name">
             <div class="text"><span>Nombre</span></div>
             <div class="clear"></div>
@@ -60,7 +56,6 @@
         {% for level in levels %}
         <tr class="{% cycle 'row1' 'row2' %}">
           <td style="text-align:center;font-weight:600;color:#555">{{ forloop.counter }}</td>
-          <td style="text-align:center;color:#777">{{ level.id }}</td>
           <td><a href="{% url 'admin:mac_classification_levels_edit' level.id %}">{{ level.name }}</a></td>
           <td style="color:#555">{{ level.description|default:"-" }}</td>
           <td style="text-align:center;white-space:nowrap">
@@ -79,7 +74,7 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="5" style="color:#888;font-style:italic;padding:10px 14px">No hay niveles registrados.</td></tr>
+        <tr><td colspan="4" style="color:#888;font-style:italic;padding:10px 14px">No hay niveles registrados.</td></tr>
         {% endfor %}
       </tbody>
     </table>

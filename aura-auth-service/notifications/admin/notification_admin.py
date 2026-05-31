@@ -66,17 +66,23 @@ class BaseNotificationAdmin(admin.ModelAdmin):
     actions_selection_counter = False
 
     def receiver_display(self, obj):
+        user_map = getattr(self, '_user_map', {})
+        username = user_map.get(obj.receiver_id)
+        if username:
+            return username
         user = User.objects.filter(pk=obj.receiver_id).first()
-        return user.username if user else f'user:{obj.receiver_id}'
+        return user.username if user else str(obj.receiver_id)
     receiver_display.short_description = 'Destinatario'
 
     def sender_display(self, obj):
+        if not obj.created_by:
+            return 'Sistema'
+        user_map = getattr(self, '_user_map', {})
+        username = user_map.get(obj.created_by)
+        if username:
+            return username
         user = User.objects.filter(pk=obj.created_by).first()
-        if user:
-            return user.username
-        if obj.created_by:
-            return f'user:{obj.created_by}'
-        return 'Sistema'
+        return user.username if user else str(obj.created_by)
     sender_display.short_description = 'Remitente'
 
     def message_short(self, obj):
@@ -174,6 +180,10 @@ class BaseNotificationAdmin(admin.ModelAdmin):
         extra_context = extra_context or {}
         if self.allow_send_notifications:
             extra_context['send_url'] = reverse(f'admin:notifications_{self.model._meta.model_name}_send')
+        try:
+            self._user_map = {u.pk: u.username for u in User.objects.only('id', 'username')}
+        except Exception:
+            self._user_map = {}
         return super().changelist_view(request, extra_context=extra_context)
 
 

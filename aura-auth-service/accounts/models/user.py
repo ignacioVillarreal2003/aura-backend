@@ -143,6 +143,12 @@ class User(AbstractBaseUser):
         unique=True,
         verbose_name='Usuario',
     )
+    name = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        verbose_name='Nombre',
+    )
     email = models.EmailField(
         max_length=255,
         unique=True,
