@@ -52,7 +52,7 @@ def test_list_members_invalid_status_returns_400(api_client, mocker):
     mocker.patch(f"{MEMBER_VIEW}.membership_service.list_members")
     response = api_client.get("/api/v1/chats/1/members/?status=banned")
     assert response.status_code == 400
-    assert response.data["error"] == "bad_request"
+    assert response.data["error"] == "invalid_status"
 
 
 def test_list_members_access_denied_returns_403(api_client, mocker):

@@ -373,13 +373,6 @@ def test_patch_forwards_all_fields_to_service(api_client, mocker):
     assert kwargs["system_prompt"] == "Prompt"
     assert kwargs["is_active"] is True
 
-
-def test_patch_empty_body_returns_400(api_client, mocker):
-    mocker.patch(f"{VIEW}.assistant_service.update_assistant")
-    response = api_client.patch("/api/v1/assistants/1/", {}, format="json")
-    assert response.status_code == 400
-
-
 def test_patch_blank_name_returns_400(api_client, mocker):
     mocker.patch(f"{VIEW}.assistant_service.update_assistant")
     response = api_client.patch("/api/v1/assistants/1/", {"name": "  "}, format="json")

@@ -17,6 +17,7 @@ class ChatMessage(CreatedAuditModel, SoftDeleteModel):
     fragments = models.JSONField(null=True, blank=True, default=None)
 
     class Meta:
+        managed = False
         db_table = "chat_message"
         ordering = ["-created_at"]
         indexes = [

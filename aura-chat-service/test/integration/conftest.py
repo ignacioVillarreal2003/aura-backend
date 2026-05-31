@@ -1,10 +1,46 @@
 import pytest
+from django.db import connection
 
 from apps.chat.services.chat_service import chat_service
 from apps.membership.services.membership_service import membership_service
 from apps.message.models.chat_message import ChatMessage
 from apps.message.repositories.message_repository import message_repository
 from core.authentication.authenticated_user import AuthenticatedUser
+
+def _get_unmanaged_models():
+    from apps.assistant.models import Assistant
+    from apps.chat.models.chat import Chat
+    from apps.chat.models.chat_share_link import ChatShareLink
+    from apps.checklist.models import Checklist, ChecklistItem, ChecklistSection
+    from apps.membership.models.chat_membership import ChatMembership
+    from apps.message.models.chat_message import ChatMessage
+    from apps.message.models.message_bookmark import MessageBookmark
+    from apps.message.models.message_feedback import MessageFeedback
+    from apps.message.models.message_thread_reply import MessageThreadReply
+    from apps.message.models.pinned_message import PinnedMessage
+    from apps.report.models import Report
+    # Order matters: parent tables before child tables (FK dependencies)
+    return [
+        Chat, Assistant, Report, Checklist,
+        ChatMessage, ChatMembership, ChatShareLink,
+        ChecklistSection,
+        PinnedMessage, MessageBookmark, MessageThreadReply, MessageFeedback,
+        ChecklistItem,
+    ]
+
+
+@pytest.fixture(scope="session")
+def django_db_setup(django_db_setup, django_db_blocker):
+    """Create tables for all unmanaged models so integration tests can hit real DB rows."""
+    models = _get_unmanaged_models()
+    with django_db_blocker.unblock():
+        for m in models:
+            m._meta.managed = True
+        with connection.schema_editor() as editor:
+            for m in models:
+                editor.create_model(m)
+        for m in models:
+            m._meta.managed = False
 
 
 def make_user(id: int, **kwargs) -> AuthenticatedUser:

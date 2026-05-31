@@ -13,7 +13,7 @@ from apps.message.views.export_view import (
 from apps.message.views.feedback_view import FeedbackView
 from apps.message.views.mark_read_view import MarkAsReadView
 from apps.message.views.message_delete_view import MessageDeleteView
-from apps.message.views.message_view import AdminMessageListView, MessageListView
+from apps.message.views.message_view import AdminMessageListView, MessageListView, MessageTranscribeView
 from apps.message.views.pin_view import PinMessageView, PinnedMessageListView
 from apps.message.views.regenerate_view import RegenerateResponseView
 from apps.message.views.thread_view import ThreadView
@@ -21,6 +21,7 @@ from apps.message.views.thread_view import ThreadView
 urlpatterns = [
     path("", MessageListView.as_view(), name="message-list"),
     path("manage/", AdminMessageListView.as_view(), name="message-list-admin"),
+    path("transcribe/", MessageTranscribeView.as_view(), name="message-transcribe"),
     path("clear/", ClearHistoryView.as_view(), name="message-clear"),
     path("read/", MarkAsReadView.as_view(), name="message-mark-read"),
     path("pinned/", PinnedMessageListView.as_view(), name="message-pinned-list"),

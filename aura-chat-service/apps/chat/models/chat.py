@@ -20,6 +20,7 @@ class Chat(AuditModel, SoftDeleteModel):
     is_locked = models.BooleanField(default=False)
 
     class Meta:
+        managed = False
         db_table = "chat"
         ordering = ["-created_at"]
 

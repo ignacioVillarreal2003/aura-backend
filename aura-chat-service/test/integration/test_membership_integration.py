@@ -61,7 +61,7 @@ def test_update_member_pending_to_active(owner, chat, member_user):
 def test_update_member_active_to_inactive(owner, chat, member_user):
     membership_service.add_members(owner, chat.id, member_ids=[member_user.id])
     membership_service.update_member(member_user, chat.id, member_user.id, new_status="active")
-    membership_service.update_member(owner, chat.id, member_user.id, new_status="inactive")
+    membership_service.update_member(member_user, chat.id, member_user.id, new_status="inactive")
     db = ChatMembership.objects.get(chat_id=chat.id, member_id=member_user.id)
     assert db.status == ChatMembership.Status.INACTIVE
 
@@ -70,7 +70,7 @@ def test_update_member_invalid_transition_raises(owner, chat, member_user):
     membership_service.add_members(owner, chat.id, member_ids=[member_user.id])
     membership_service.update_member(member_user, chat.id, member_user.id, new_status="active")
     with pytest.raises(ValidationException):
-        membership_service.update_member(owner, chat.id, member_user.id, new_status="pending")
+        membership_service.update_member(member_user, chat.id, member_user.id, new_status="pending")
 
 
 def test_update_member_owner_status_cannot_change(owner, chat):

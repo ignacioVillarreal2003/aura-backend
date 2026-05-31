@@ -17,6 +17,7 @@ class MessageFeedback(models.Model):
     updated_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
+        managed = False
         db_table = "message_feedback"
         constraints = [
             models.UniqueConstraint(fields=["message", "user_id"], name="uq_message_feedback"),

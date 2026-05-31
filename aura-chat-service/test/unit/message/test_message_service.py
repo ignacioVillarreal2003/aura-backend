@@ -194,7 +194,7 @@ class TestMessageServiceSendMessage:
 
     def test_send_message_not_member_raises(self, mocker):
         mocker.patch(f"{MSG_SVC}.chat_repository.get_by_id", return_value=_chat())
-        mocker.patch(f"{MSG_SVC}.membership_repository.is_active_member", return_value=False)
+        mocker.patch(f"{MSG_SVC}.membership_repository.get_role", return_value=None)
 
         svc = MessageService()
         with pytest.raises(MessageAccessDeniedException):

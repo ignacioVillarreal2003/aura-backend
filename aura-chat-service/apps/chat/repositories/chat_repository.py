@@ -34,6 +34,23 @@ def _membership_subquery(member_id: int, field: str) -> Subquery:
     )
 
 
+def _member_count_subquery() -> Coalesce:
+    from apps.membership.models.chat_membership import ChatMembership
+
+    return Coalesce(
+        Subquery(
+            ChatMembership.objects.filter(
+                chat_id=OuterRef("pk"),
+                status="active",
+                deleted_at__isnull=True,
+            ).values("chat_id").annotate(c=Count("id")).values("c")[:1],
+            output_field=IntegerField(),
+        ),
+        0,
+        output_field=IntegerField(),
+    )
+
+
 def _unread_count_subquery(member_id: int) -> Coalesce:
     from apps.membership.models.chat_membership import ChatMembership
     from apps.message.models.chat_message import ChatMessage
@@ -100,13 +117,7 @@ class ChatRepository:
                 chatmembership__archived_at__isnull=True,
             )
             .annotate(
-                member_count=Count(
-                    "chatmembership",
-                    filter=Q(
-                        chatmembership__status="active",
-                        chatmembership__deleted_at__isnull=True,
-                    ),
-                ),
+                member_count=_member_count_subquery(),
                 pinned_at=_membership_subquery(member_id, "pinned_at"),
                 muted_until=_membership_subquery(member_id, "muted_until"),
                 unread_count=_unread_count_subquery(member_id),
@@ -138,13 +149,7 @@ class ChatRepository:
                 chatmembership__archived_at__isnull=False,
             )
             .annotate(
-                member_count=Count(
-                    "chatmembership",
-                    filter=Q(
-                        chatmembership__status="active",
-                        chatmembership__deleted_at__isnull=True,
-                    ),
-                ),
+                member_count=_member_count_subquery(),
                 pinned_at=_membership_subquery(member_id, "pinned_at"),
                 archived_at=_membership_subquery(member_id, "archived_at"),
                 unread_count=_unread_count_subquery(member_id),

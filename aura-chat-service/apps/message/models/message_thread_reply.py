@@ -12,6 +12,7 @@ class MessageThreadReply(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        managed = False
         db_table = "message_thread_reply"
         ordering = ["created_at"]
         indexes = [

@@ -71,18 +71,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         )
 
     async def disconnect(self, close_code):
-        t = self._document_question_task
-        if t is not None and not t.done():
-            t.cancel()
-            try:
-                await t
-            except asyncio.CancelledError:
-                pass
-            except Exception:
-                logger.exception(
-                    "Error awaiting cancelled document-question task.",
-                    extra={"chat_id": self.chat_id},
-                )
+        # Do NOT cancel the LLM task on disconnect — let it run to completion so
+        # the response is saved to DB and the lock is properly released.
+        # group_send calls in the task are safe with no listeners (messages are
+        # discarded), and a reconnecting client will receive any remaining events.
         self._document_question_task = None
 
         if self.group_name:

@@ -16,6 +16,7 @@ class PinnedMessage(models.Model):
     pinned_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        managed = False
         db_table = "pinned_message"
         constraints = [
             models.UniqueConstraint(

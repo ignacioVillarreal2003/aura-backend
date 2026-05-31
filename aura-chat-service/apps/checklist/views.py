@@ -1,7 +1,7 @@
 import logging
 import re
 
-from asgiref.sync import async_to_sync
+from asgiref.sync import async_to_sync, sync_to_async
 from django.http import HttpResponse
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
@@ -18,6 +18,7 @@ from apps.checklist.serializers import (
     UpdateChecklistRequest,
 )
 from apps.checklist.services.checklist_service import checklist_service
+from apps.message.services.message_service import message_service as _message_service
 from apps.checklist.services.export_service import generate_checklist_markdown, generate_checklist_pdf
 from core.openapi.common import standard_error_responses
 from core.pagination.pagination import StandardPagination
@@ -161,9 +162,13 @@ class ChecklistGenerateView(APIView):
         serializer = GenerateChecklistRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
         d = serializer.validated_data
+        if "audio" in d:
+            message = await sync_to_async(_message_service.transcribe_audio)(d["audio"])
+        else:
+            message = d["message"]
         checklist, messages, fragments = await checklist_service.generate_checklist(
             user=request.user,
-            message=d["message"],
+            message=message,
             mode=d["mode"],
             chat_id=d.get("chat_id"),
         )

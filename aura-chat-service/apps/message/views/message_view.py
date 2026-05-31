@@ -28,6 +28,40 @@ from core.pagination.pagination import MessageCursorPagination
 logger = logging.getLogger(__name__)
 
 
+class MessageTranscribeView(APIView):
+    """Transcribe an audio clip and return the transcript — does NOT save a message or call the LLM."""
+
+    @extend_schema(
+        tags=["Messages"],
+        summary="Transcribe audio",
+        description=(
+            "Accepts a voice clip (`audio` multipart field) and returns its transcript. "
+            "No message is saved and the AI is not invoked. "
+            "Use this to convert audio to text before sending via WebSocket."
+        ),
+        parameters=[
+            OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
+        ],
+        responses={200: {"type": "object", "properties": {"transcript": {"type": "string"}}},
+                   **standard_error_responses(400, 401, 403)},
+    )
+    def post(self, request: Request, chat_id: int) -> Response:
+        from apps.message.serializers.request import _SUPPORTED_AUDIO_TYPES, _MAX_AUDIO_MB  # noqa: PLC0415
+        audio = request.FILES.get("audio")
+        if not audio:
+            return Response({"detail": "No audio file provided."}, status=status.HTTP_400_BAD_REQUEST)
+        content_type = getattr(audio, "content_type", "")
+        if content_type not in _SUPPORTED_AUDIO_TYPES:
+            return Response({"detail": f"Unsupported audio format: {content_type}."}, status=status.HTTP_400_BAD_REQUEST)
+        if audio.size > _MAX_AUDIO_MB * 1024 * 1024:
+            return Response({"detail": f"Audio exceeds {_MAX_AUDIO_MB} MB limit."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            transcript = message_service.transcribe_audio(audio)
+        except TranscriptionException:
+            return Response({"detail": "Transcription failed."}, status=status.HTTP_502_BAD_GATEWAY)
+        return Response({"transcript": transcript}, status=status.HTTP_200_OK)
+
+
 class MessageListView(APIView):
     @extend_schema(
         tags=["Messages"],

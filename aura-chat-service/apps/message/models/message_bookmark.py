@@ -11,6 +11,7 @@ class MessageBookmark(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        managed = False
         db_table = "message_bookmark"
         constraints = [
             models.UniqueConstraint(fields=["message", "user_id"], name="uq_message_bookmark"),

@@ -32,6 +32,7 @@ class ChatMembership(AuditModel, SoftDeleteModel):
     muted_until = models.DateTimeField(null=True, blank=True)
 
     class Meta:
+        managed = False
         db_table = "chat_membership"
         constraints = [
             models.UniqueConstraint(

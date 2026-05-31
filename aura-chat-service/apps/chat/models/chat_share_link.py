@@ -15,6 +15,7 @@ class ChatShareLink(models.Model):
     is_active = models.BooleanField(default=True)
 
     class Meta:
+        managed = False
         db_table = "chat_share_link"
         indexes = [
             models.Index(fields=["chat"], name="idx_share_link_chat"),

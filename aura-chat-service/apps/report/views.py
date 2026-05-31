@@ -1,6 +1,6 @@
 import logging
 import re
-from asgiref.sync import async_to_sync
+from asgiref.sync import async_to_sync, sync_to_async
 from django.http import HttpResponse
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
@@ -17,6 +17,7 @@ from apps.report.serializers import (
     ReportResponse,
     UpdateReportRequest,
 )
+from apps.message.services.message_service import message_service as _message_service
 from apps.report.services.export_service import generate_report_markdown, generate_report_pdf
 from apps.report.services.report_service import report_service
 from core.openapi.common import standard_error_responses
@@ -168,10 +169,14 @@ class ReportGenerateView(APIView):
         serializer = GenerateReportRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
         d = serializer.validated_data
+        if "audio" in d:
+            message = await sync_to_async(_message_service.transcribe_audio)(d["audio"])
+        else:
+            message = d["message"]
         report, messages, fragments = await report_service.generate_report(
             user=request.user,
             report_type=d["type"],
-            message=d["message"],
+            message=message,
             mode=d["mode"],
             chat_id=d.get("chat_id"),
         )
