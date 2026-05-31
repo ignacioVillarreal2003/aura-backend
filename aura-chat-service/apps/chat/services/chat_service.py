@@ -48,6 +48,14 @@ def _broadcast_chat_locked_changed(chat_id: int, is_locked: bool, by: int) -> No
 
 
 class ChatService:
+    @staticmethod
+    def _require_owner_or_creator(chat: Chat, user: AuthenticatedUser, action: str) -> None:
+        if chat.created_by == user.id:
+            return
+        if membership_repository.is_chat_owner(chat_id=chat.id, member_id=user.id):
+            return
+        raise ChatAccessDeniedException(f"Only the chat owner can {action} the chat")
+
     @transaction.atomic
     def create_chat(self, user: AuthenticatedUser, name: str, **kwargs) -> Chat:
         AccessControl.require_permissions(user, frozenset({CREATE_CHAT}))
@@ -70,17 +78,22 @@ class ChatService:
         if chat is None:
             raise ChatNotFoundException()
 
-        if not membership_repository.is_active_member(chat_id=chat_id, member_id=user.id):
+        membership = membership_repository.get_by_chat_and_member(chat_id=chat_id, member_id=user.id)
+        if membership is None or membership.status != "active":
             raise ChatAccessDeniedException()
+
+        setattr(chat, "pinned_at", membership.pinned_at)
+        setattr(chat, "archived_at", membership.archived_at)
+        setattr(chat, "muted_until", membership.muted_until)
 
         return chat
 
     def list_chats(
-        self,
-        user: AuthenticatedUser,
-        search: str | None = None,
-        ordering: str | None = None,
-        tags: list[str] | None = None,
+            self,
+            user: AuthenticatedUser,
+            search: str | None = None,
+            ordering: str | None = None,
+            tags: list[str] | None = None,
     ) -> QuerySet[Chat]:
         AccessControl.require_permissions(user, frozenset({LIST_CHATS}))
         return chat_repository.get_chats_for_member(
@@ -91,11 +104,11 @@ class ChatService:
         )
 
     def list_own_chats(
-        self,
-        user: AuthenticatedUser,
-        search: str | None = None,
-        ordering: str | None = None,
-        tags: list[str] | None = None,
+            self,
+            user: AuthenticatedUser,
+            search: str | None = None,
+            ordering: str | None = None,
+            tags: list[str] | None = None,
     ) -> QuerySet[Chat]:
         AccessControl.require_permissions(user, frozenset({LIST_MY_CHATS}))
         return chat_repository.get_chats_created_by(
@@ -106,11 +119,11 @@ class ChatService:
         )
 
     def list_all_chats(
-        self,
-        user: AuthenticatedUser,
-        search: str | None = None,
-        ordering: str | None = None,
-        tags: list[str] | None = None,
+            self,
+            user: AuthenticatedUser,
+            search: str | None = None,
+            ordering: str | None = None,
+            tags: list[str] | None = None,
     ) -> QuerySet[Chat]:
         AccessControl.require_permissions(user, frozenset({MANAGE_CHATS}))
         return chat_repository.list_all(
@@ -126,8 +139,7 @@ class ChatService:
         if chat is None:
             raise ChatNotFoundException()
 
-        if chat.created_by != user.id:
-            raise ChatAccessDeniedException("Only the chat owner can update the chat")
+        self._require_owner_or_creator(chat, user, "update")
 
         chat = chat_repository.update(chat, updated_by=user.id, **fields)
         logger.info("Chat updated.", extra={"chat_id": chat.id, "user_id": user.id})
@@ -140,8 +152,7 @@ class ChatService:
         if chat is None:
             raise ChatNotFoundException()
 
-        if chat.created_by != user.id:
-            raise ChatAccessDeniedException("Only the chat owner can delete the chat")
+        self._require_owner_or_creator(chat, user, "delete")
 
         membership_repository.soft_delete_by_chat(chat_id, deleted_by=user.id)
         message_repository.soft_delete_by_chat(chat_id, deleted_by=user.id)
@@ -149,11 +160,11 @@ class ChatService:
         logger.info("Chat deleted.", extra={"chat_id": chat_id, "user_id": user.id})
 
     def list_archived_chats(
-        self,
-        user: AuthenticatedUser,
-        search: str | None = None,
-        ordering: str | None = None,
-        tags: list[str] | None = None,
+            self,
+            user: AuthenticatedUser,
+            search: str | None = None,
+            ordering: str | None = None,
+            tags: list[str] | None = None,
     ) -> QuerySet[Chat]:
         AccessControl.require_permissions(user, frozenset({LIST_ARCHIVED_CHATS}))
         return chat_repository.get_archived_chats_for_member(
@@ -209,8 +220,7 @@ class ChatService:
             chat = chat_repository.get_by_id_for_update(chat_id)
             if chat is None:
                 raise ChatNotFoundException()
-            if chat.created_by != user.id:
-                raise ChatAccessDeniedException("Only the chat owner can lock the chat")
+            self._require_owner_or_creator(chat, user, "lock")
             chat_repository.update(chat, updated_by=user.id, is_locked=True)
         _broadcast_chat_locked_changed(chat_id, is_locked=True, by=user.id)
         logger.info("Chat locked.", extra={"chat_id": chat_id, "user_id": user.id})
@@ -221,8 +231,7 @@ class ChatService:
             chat = chat_repository.get_by_id_for_update(chat_id)
             if chat is None:
                 raise ChatNotFoundException()
-            if chat.created_by != user.id:
-                raise ChatAccessDeniedException("Only the chat owner can unlock the chat")
+            self._require_owner_or_creator(chat, user, "unlock")
             chat_repository.update(chat, updated_by=user.id, is_locked=False)
         _broadcast_chat_locked_changed(chat_id, is_locked=False, by=user.id)
         logger.info("Chat unlocked.", extra={"chat_id": chat_id, "user_id": user.id})

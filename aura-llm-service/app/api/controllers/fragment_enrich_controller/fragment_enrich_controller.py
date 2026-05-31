@@ -6,6 +6,8 @@ from app.api.controllers.fragment_enrich_controller.fragment_enrich_controller_i
     FragmentEnrichControllerInterface
 )
 from app.api.openapi.common import default_error_responses
+from app.application.authorization.authorizer import Authorizer
+from app.application.authorization.permissions import Permissions
 from app.application.services.fragment_enrich_service.fragment_enrich_service import get_fragment_enrich_service
 from app.application.services.fragment_enrich_service.interfaces.fragment_enrich_service_interface import (
     FragmentEnrichServiceInterface
@@ -25,6 +27,10 @@ class FragmentEnrichController(FragmentEnrichControllerInterface):
             _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(default_rate_limit),
     ) -> EnrichFragmentResponse:
+        Authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LLM_FRAGMENT_ENRICH}),
+        )
         return await fragment_enrich_service.enrich_fragment(
             enrich_fragment_request=enrich_fragment_request,
             authenticated_user=authenticated_user

@@ -1,14 +1,13 @@
 import logging
 from typing import Optional
-
 from django.utils import timezone
 from asgiref.sync import sync_to_async
+
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization.access import AccessControl
 from core.authorization import permissions as perms
 from core.clients.exceptions import HttpClientException
 from core.clients.llm_client import ReportGenerateResult, llm_client
-
 from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.membership.repositories.membership_repository import membership_repository
@@ -32,16 +31,17 @@ def _auto_title(report_type: str, content: str) -> str:
     return f"{report_type} — {ts}"
 
 
-def _assert_report_access(user_id: int, report: Report, *, require_owner: bool = False) -> None:
+def _assert_report_access(user_id: int, report: Report, *, require_contributor: bool = False) -> None:
     if report.created_by == user_id:
         return
     if report.source_chat_id is not None:
-        if require_owner:
-            if membership_repository.is_chat_owner(report.source_chat_id, user_id):
-                return
-        else:
-            if membership_repository.is_active_member(report.source_chat_id, user_id):
-                return
+        checker = (
+            membership_repository.is_active_contributor
+            if require_contributor
+            else membership_repository.is_active_member
+        )
+        if checker(report.source_chat_id, user_id):
+            return
     raise ReportAccessDeniedException()
 
 
@@ -58,7 +58,9 @@ class ReportService:
                 raise ChatNotFoundException()
             if not membership_repository.is_active_member(chat_id, user.id):
                 raise ChatAccessDeniedException()
-        return report_repository.list_by_user(user_id=user.id, report_type=report_type, source_chat_id=chat_id)
+            # Any active member of the chat sees every report in it, not only their own.
+            return report_repository.list_by_chat(source_chat_id=chat_id, report_type=report_type)
+        return report_repository.list_by_user(user_id=user.id, report_type=report_type)
 
     def list_all_reports(
             self,
@@ -102,7 +104,7 @@ class ReportService:
         report = report_repository.get_by_id(report_id)
         if report is None:
             raise ReportNotFoundException()
-        _assert_report_access(user.id, report)
+        _assert_report_access(user.id, report, require_contributor=True)
         return report_repository.update(report, updated_by=user.id, title=title, content=content)
 
     def delete_report(self, user: AuthenticatedUser, report_id: int) -> None:
@@ -110,7 +112,7 @@ class ReportService:
         report = report_repository.get_by_id(report_id)
         if report is None:
             raise ReportNotFoundException()
-        _assert_report_access(user.id, report, require_owner=True)
+        _assert_report_access(user.id, report, require_contributor=True)
         report_repository.soft_delete(report, deleted_by=user.id)
         logger.info("Report deleted", extra={"user_id": user.id, "report_id": report_id})
 
@@ -129,8 +131,8 @@ class ReportService:
             chat = await sync_to_async(chat_repository.get_by_id)(chat_id)
             if chat is None:
                 raise ChatNotFoundException()
-            is_member = await sync_to_async(membership_repository.is_active_member)(chat_id, user.id)
-            if not is_member:
+            is_contributor = await sync_to_async(membership_repository.is_active_contributor)(chat_id, user.id)
+            if not is_contributor:
                 raise ChatAccessDeniedException()
             recent = await sync_to_async(message_repository.get_recent_messages)(chat_id, limit=20)
             recent.reverse()
@@ -145,6 +147,7 @@ class ReportService:
                 mode=mode,
                 report_type=report_type,
                 user=user,
+                chat_id=chat_id,
             )
         except HttpClientException as e:
             logger.error(
@@ -156,7 +159,8 @@ class ReportService:
             raise LLMServiceException() from e
 
         if not result.content or not result.content.strip():
-            logger.error("LLM returned empty content for report", extra={"user_id": user.id, "report_type": report_type})
+            logger.error("LLM returned empty content for report",
+                         extra={"user_id": user.id, "report_type": report_type})
             raise LLMServiceException()
 
         report = await sync_to_async(report_repository.create)(
@@ -165,7 +169,6 @@ class ReportService:
             title=_auto_title(result.report_type, result.content),
             content=result.content,
             mode=mode,
-            metadata={},
             source_chat_id=chat_id,
         )
         logger.info(

@@ -45,7 +45,7 @@ class MembershipRepository:
 
     @staticmethod
     def list_by_member(member_id: int, status: str | None = None) -> QuerySet[ChatMembership]:
-        qs = ChatMembership.objects.filter(member_id=member_id).order_by("-created_at")
+        qs = ChatMembership.objects.select_related('chat').filter(member_id=member_id).order_by("-created_at")
         if status is not None:
             qs = qs.filter(status=status)
         return qs
@@ -74,9 +74,9 @@ class MembershipRepository:
 
     @staticmethod
     def update_status(
-        membership: ChatMembership,
-        new_status: str,
-        updated_by: int,
+            membership: ChatMembership,
+            new_status: str,
+            updated_by: int,
     ) -> ChatMembership:
         membership.status = new_status
         membership.updated_by = updated_by
@@ -164,6 +164,16 @@ class MembershipRepository:
             status="active",
         ).values_list("role", flat=True).first()
         return result
+
+    @staticmethod
+    def is_active_contributor(chat_id: int, member_id: int) -> bool:
+        """Returns True for active members with owner or editor role (can make changes)."""
+        return ChatMembership.objects.filter(
+            chat_id=chat_id,
+            member_id=member_id,
+            status="active",
+            role__in=[ChatMembership.Role.OWNER, ChatMembership.Role.EDITOR],
+        ).exists()
 
     @staticmethod
     def is_chat_owner(chat_id: int, member_id: int) -> bool:

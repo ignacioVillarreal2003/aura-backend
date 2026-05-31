@@ -48,7 +48,6 @@ class ReportResponse(serializers.ModelSerializer):
             "title",
             "content",
             "mode",
-            "metadata",
             "source_chat_id",
             "created_by",
             "created_at",

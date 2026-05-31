@@ -9,7 +9,7 @@ from apps.message.exceptions import (
     MessageDeleteForbiddenException,
     MessageNotFoundException,
     NoMessageToRegenerateException,
-    NotChatCreatorException,
+    NotChatOwnerException,
     ReaderCannotSendMessageException,
 )
 from test.conftest import make_chat, make_message, mock_cursor_pagination
@@ -206,14 +206,14 @@ def test_clear_history_returns_204(api_client, mocker):
     assert response.status_code == 204
 
 
-def test_clear_history_not_creator_returns_403(api_client, mocker):
+def test_clear_history_not_owner_returns_403(api_client, mocker):
     mocker.patch(
         "apps.message.views.clear_view.message_service.clear_history",
-        side_effect=NotChatCreatorException(),
+        side_effect=NotChatOwnerException(),
     )
     response = api_client.delete("/api/v1/chats/1/messages/clear/")
     assert response.status_code == 403
-    assert response.data["error"] == "not_chat_creator"
+    assert response.data["error"] == "not_chat_owner"
 
 
 def test_clear_history_chat_not_found_returns_404(api_client, mocker):

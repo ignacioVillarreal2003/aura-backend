@@ -12,7 +12,7 @@ from core.authorization.permissions import ADD_THREAD_REPLY, LIST_THREAD_REPLIES
 
 class ThreadService:
     def get_thread(
-        self, user: AuthenticatedUser, chat_id: int, message_id: int
+            self, user: AuthenticatedUser, chat_id: int, message_id: int
     ) -> QuerySet[MessageThreadReply]:
         AccessControl.require_permissions(user, frozenset({LIST_THREAD_REPLIES}))
         if not membership_repository.is_active_member(chat_id, user.id):
@@ -23,11 +23,11 @@ class ThreadService:
         return thread_repository.get_by_message(message_id)
 
     def add_reply(
-        self,
-        user: AuthenticatedUser,
-        chat_id: int,
-        message_id: int,
-        message_text: str,
+            self,
+            user: AuthenticatedUser,
+            chat_id: int,
+            message_id: int,
+            message_text: str,
     ) -> MessageThreadReply:
         AccessControl.require_permissions(user, frozenset({ADD_THREAD_REPLY}))
         if not membership_repository.is_active_member(chat_id, user.id):

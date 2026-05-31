@@ -10,7 +10,15 @@ APP_VERSION = "1.0.0"
 
 SECRET_KEY = config("SECRET_KEY")
 DEBUG = config("DEBUG", default=False, cast=bool)
-ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="127.0.0.1,localhost", cast=Csv())
+ALLOWED_HOSTS = config(
+    "ALLOWED_HOSTS",
+    default=(
+        "127.0.0.1,localhost,"
+        "127.0.0.1:8000,127.0.0.1:8001,127.0.0.1:8002,127.0.0.1:8003,127.0.0.1:8004,"
+        "localhost:8000,localhost:8001,localhost:8002,localhost:8003,localhost:8004"
+    ),
+    cast=Csv(),
+)
 _LOG_LEVEL = config("LOG_LEVEL", default="INFO")
 
 INSTALLED_APPS = [

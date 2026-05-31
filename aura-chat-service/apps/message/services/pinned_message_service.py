@@ -2,7 +2,7 @@ import logging
 from django.db.models import QuerySet
 
 from apps.membership.repositories.membership_repository import membership_repository
-from apps.message.exceptions import MessageAccessDeniedException, MessageNotFoundException
+from apps.message.exceptions import MessageAccessDeniedException, MessageNotFoundException, NotChatOwnerException
 from apps.message.models.pinned_message import PinnedMessage
 from apps.message.repositories.message_repository import message_repository
 from apps.message.repositories.pinned_message_repository import pinned_message_repository
@@ -24,6 +24,8 @@ class PinnedMessageService:
         AccessControl.require_permissions(user, frozenset({PIN_MESSAGE}))
         if not membership_repository.is_active_member(chat_id, user.id):
             raise MessageAccessDeniedException()
+        if not membership_repository.is_chat_owner(chat_id, user.id):
+            raise NotChatOwnerException()
         msg = message_repository.get_by_id_and_chat(message_id, chat_id)
         if msg is None:
             raise MessageNotFoundException()
@@ -35,6 +37,8 @@ class PinnedMessageService:
         AccessControl.require_permissions(user, frozenset({PIN_MESSAGE}))
         if not membership_repository.is_active_member(chat_id, user.id):
             raise MessageAccessDeniedException()
+        if not membership_repository.is_chat_owner(chat_id, user.id):
+            raise NotChatOwnerException()
         pinned_message_repository.unpin(message_id, chat_id)
         logger.info("Message unpinned.", extra={"chat_id": chat_id, "message_id": message_id, "user_id": user.id})
 

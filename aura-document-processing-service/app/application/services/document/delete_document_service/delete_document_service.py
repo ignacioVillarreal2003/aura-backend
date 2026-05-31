@@ -74,6 +74,8 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
 
             document = await self._get_document_or_raise(document_id, database_session)
 
+            await self._require_document_access(document, authenticated_user, database_session)
+
             await self._soft_delete_fragments(document.id, authenticated_user.id, database_session)
             await self._soft_delete_document(document.id, authenticated_user.id, database_session)
 
@@ -121,27 +123,26 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
         try:
             if chat_id <= 0:
                 raise DeleteDocumentInvalidRequestException("The chat identifier must be a positive number.")
-            try:
-                self._authorizer.require_permissions(
-                    authenticated_user=authenticated_user,
-                    required_permissions=frozenset({Permissions.SOFT_DELETE_DOCUMENTS_BY_CHAT}),
+            self._authorizer.require_permissions(
+                authenticated_user=authenticated_user,
+                required_permissions=frozenset({Permissions.SOFT_DELETE_DOCUMENTS_BY_CHAT}),
+            )
+
+            chat = await self._chat_repository.get_chat_by_id(
+                chat_id=chat_id,
+                database_session=database_session,
+            )
+            if chat is None or chat.created_by != authenticated_user.id:
+                logger.warning(
+                    "Unauthorized soft delete by chat attempt.",
+                    extra={
+                        "chat_id": chat_id,
+                        "user_id": authenticated_user.id,
+                    },
                 )
-            except UnauthorizedException:
-                chat = await self._chat_repository.get_chat_by_id(
-                    chat_id=chat_id,
-                    database_session=database_session,
+                raise UnauthorizedException(
+                    "You are not authorized to delete documents for this chat."
                 )
-                if chat is None or chat.created_by != authenticated_user.id:
-                    logger.warning(
-                        "Unauthorized soft delete by chat attempt.",
-                        extra={
-                            "chat_id": chat_id,
-                            "user_id": authenticated_user.id,
-                        },
-                    )
-                    raise UnauthorizedException(
-                        "You are not authorized to delete documents for this chat."
-                    )
 
             documents = await self._get_documents_by_chat(chat_id, database_session)
             if len(documents) > self._settings.max_ids_per_operation:
@@ -189,6 +190,32 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             raise DeleteDocumentServiceException(
                 "An unexpected error occurred while soft deleting documents for the chat."
             ) from e
+
+    async def _require_document_access(
+            self,
+            document,
+            authenticated_user: AuthenticatedUser,
+            database_session: AsyncSession,
+    ) -> None:
+        if document.created_by == authenticated_user.id:
+            return
+
+        if document.chat_id is not None:
+            chat = await self._chat_repository.get_chat_by_id(
+                chat_id=document.chat_id,
+                database_session=database_session,
+            )
+            if chat is not None and chat.created_by == authenticated_user.id:
+                return
+
+        logger.warning(
+            "Unauthorized soft delete document attempt.",
+            extra={
+                "document_id": document.id,
+                "user_id": authenticated_user.id,
+            },
+        )
+        raise UnauthorizedException("You are not authorized to delete this document.")
 
     async def _get_document_or_raise(
             self,

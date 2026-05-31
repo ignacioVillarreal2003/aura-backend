@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.checklist.models import Checklist
+from apps.checklist.models import Checklist, ChecklistItem, ChecklistSection
 
 
 class _MessageSerializer(serializers.Serializer):
@@ -19,6 +19,39 @@ class GenerateChecklistRequest(serializers.Serializer):
     chat_id = serializers.IntegerField(required=False, allow_null=True)
 
 
+class ChecklistItemResponse(serializers.ModelSerializer):
+    class Meta:
+        model = ChecklistItem
+        fields = ["id", "text", "is_checked", "notes", "position"]
+
+
+class ChecklistSectionResponse(serializers.ModelSerializer):
+    items = ChecklistItemResponse(many=True)
+
+    class Meta:
+        model = ChecklistSection
+        fields = ["id", "title", "position", "items"]
+
+
+class ChecklistResponse(serializers.ModelSerializer):
+    sections = ChecklistSectionResponse(many=True)
+
+    class Meta:
+        model = Checklist
+        fields = [
+            "id",
+            "title",
+            "mode",
+            "sections",
+            "source_chat_id",
+            "created_by",
+            "created_at",
+            "updated_by",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
 class ChecklistGenerateResponse(serializers.Serializer):
     checklist = serializers.SerializerMethodField()
     messages = _MessageSerializer(many=True)
@@ -28,46 +61,33 @@ class ChecklistGenerateResponse(serializers.Serializer):
         return ChecklistResponse(obj["checklist"]).data
 
 
-class ChecklistItemSerializer(serializers.Serializer):
-    id = serializers.CharField()
-    section = serializers.CharField(max_length=200)
-    order = serializers.IntegerField(min_value=1)
+class _UpdateItemRequest(serializers.Serializer):
     text = serializers.CharField(max_length=500)
     is_checked = serializers.BooleanField(default=False)
     notes = serializers.CharField(default="", allow_blank=True)
+    position = serializers.IntegerField(min_value=0)
+
+
+class _UpdateSectionRequest(serializers.Serializer):
+    title = serializers.CharField(max_length=200)
+    position = serializers.IntegerField(min_value=0)
+    items = _UpdateItemRequest(many=True)
 
 
 class UpdateChecklistRequest(serializers.Serializer):
     title = serializers.CharField(max_length=500, allow_blank=False, required=False)
-    items = ChecklistItemSerializer(many=True, required=False)
+    sections = _UpdateSectionRequest(many=True, required=False)
 
     def validate(self, data):
         if not data:
             raise serializers.ValidationError("Se requiere al menos un campo a actualizar.")
         return data
 
-    def validate_items(self, value):
-        if value is not None and len(value) > 200:
+    def validate_sections(self, value):
+        total = sum(len(sec.get("items", [])) for sec in value)
+        if total > 200:
             raise serializers.ValidationError("La checklist no puede superar los 200 ítems.")
         return value
-
-
-class ChecklistResponse(serializers.ModelSerializer):
-    class Meta:
-        model = Checklist
-        fields = [
-            "id",
-            "title",
-            "items",
-            "mode",
-            "metadata",
-            "source_chat_id",
-            "created_by",
-            "created_at",
-            "updated_by",
-            "updated_at",
-        ]
-        read_only_fields = fields
 
 
 class ChecklistListResponse(serializers.ModelSerializer):
@@ -89,9 +109,7 @@ class ChecklistListResponse(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_item_count(self, obj: Checklist) -> int:
-        return len(obj.items) if isinstance(obj.items, list) else 0
+        return getattr(obj, "item_count", 0)
 
     def get_checked_count(self, obj: Checklist) -> int:
-        if not isinstance(obj.items, list):
-            return 0
-        return sum(1 for item in obj.items if isinstance(item, dict) and item.get("is_checked"))
+        return getattr(obj, "checked_count", 0)

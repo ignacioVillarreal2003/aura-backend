@@ -268,6 +268,7 @@ async def startup_dependencies(app: FastAPI) -> None:
 
         document_query_service = DocumentQueryService(
             document_repository=document_repository,
+            chat_repository=chat_repository,
             authorizer=authorizer,
         )
         app.state.document_query_service = document_query_service
@@ -430,6 +431,7 @@ async def startup_dependencies(app: FastAPI) -> None:
         document_download_service = DocumentDownloadService(
             document_repository=document_repository,
             document_storage=document_storage,
+            chat_repository=chat_repository,
             authorizer=authorizer,
         )
         app.state.document_download_service = document_download_service

@@ -243,7 +243,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
             try:
                 async for payload in message_service.iter_document_question_stream_group_payloads(
-                    self.user, self.chat_id
+                        self.user, self.chat_id
                 ):
                     await self.channel_layer.group_send(self.group_name, payload)
             except LLMServiceException:

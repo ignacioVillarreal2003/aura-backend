@@ -25,6 +25,9 @@ from app.domain.dtos.document.document_query.document_list_response import Docum
 from app.domain.dtos.document.document_query.document_response import DocumentResponse
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.persistence.database.orm.document import Document
+from app.infrastructure.persistence.database.repositories.chat_repository.chat_repository_interface import (
+    ChatRepositoryInterface
+)
 from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
     DocumentRepositoryInterface
 )
@@ -36,10 +39,12 @@ class DocumentQueryService(DocumentQueryServiceInterface):
     def __init__(
             self,
             document_repository: DocumentRepositoryInterface,
+            chat_repository: ChatRepositoryInterface,
             authorizer: Authorizer,
             document_query_service_settings: Optional[DocumentQueryServiceSettings] = None
     ) -> None:
         self._document_repository = document_repository
+        self._chat_repository = chat_repository
         self._settings = document_query_service_settings or DocumentQueryServiceSettings()
 
         self._authorizer = authorizer
@@ -201,6 +206,22 @@ class DocumentQueryService(DocumentQueryServiceInterface):
                 authenticated_user=authenticated_user,
                 required_permissions=frozenset({Permissions.LIST_DOCUMENTS_BY_CHAT}),
             )
+
+            chat = await self._chat_repository.get_chat_by_id(
+                chat_id=chat_id,
+                database_session=database_session,
+            )
+            if chat is None or chat.created_by != authenticated_user.id:
+                logger.warning(
+                    "Unauthorized list documents by chat attempt.",
+                    extra={
+                        "chat_id": chat_id,
+                        "user_id": authenticated_user.id,
+                    },
+                )
+                raise UnauthorizedException(
+                    "You are not authorized to list documents for this chat."
+                )
 
             documents = await self._document_repository.get_documents_by_chat_id(
                 chat_id=chat_id,

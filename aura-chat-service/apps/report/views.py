@@ -53,7 +53,6 @@ def _safe_filename(title: str) -> str:
 
 
 class ReportListView(APIView):
-
     @extend_schema(
         tags=["Reports"],
         summary="Listar informes",
@@ -75,7 +74,6 @@ class ReportListView(APIView):
 
 
 class ReportDetailView(APIView):
-
     @extend_schema(
         tags=["Reports"],
         summary="Obtener informe",
@@ -115,7 +113,7 @@ class ReportDetailView(APIView):
     @extend_schema(
         tags=["Reports"],
         summary="Eliminar informe",
-        description="Elimina suavemente el informe. Solo el creador o el owner del chat de origen puede eliminarlo.",
+        description="Elimina suavemente el informe. Solo el creador o un miembro activo con rol owner o editor puede eliminarlo.",
         parameters=[_ID_PARAM],
         responses={
             204: OpenApiResponse(description="Sin contenido"),
@@ -128,7 +126,6 @@ class ReportDetailView(APIView):
 
 
 class ReportManageView(APIView):
-
     @extend_schema(
         tags=["Reports"],
         summary="Listar todos los informes (admin)",
@@ -148,7 +145,6 @@ class ReportManageView(APIView):
 
 
 class ReportGenerateView(APIView):
-
     @extend_schema(
         tags=["Reports"],
         summary="Generar informe con IA",
@@ -186,7 +182,6 @@ class ReportGenerateView(APIView):
 
 
 class ReportExportPDFView(APIView):
-
     @extend_schema(
         tags=["Reports"],
         summary="Exportar informe como PDF",
@@ -210,7 +205,6 @@ class ReportExportPDFView(APIView):
 
 
 class ReportExportMarkdownView(APIView):
-
     @extend_schema(
         tags=["Reports"],
         summary="Exportar informe como Markdown",
@@ -231,7 +225,6 @@ class ReportExportMarkdownView(APIView):
 
 
 class ReportManageExportPDFView(APIView):
-
     @extend_schema(
         tags=["Reports"],
         summary="Exportar cualquier informe como PDF (admin)",
@@ -255,7 +248,6 @@ class ReportManageExportPDFView(APIView):
 
 
 class ReportManageExportMarkdownView(APIView):
-
     @extend_schema(
         tags=["Reports"],
         summary="Exportar cualquier informe como Markdown (admin)",

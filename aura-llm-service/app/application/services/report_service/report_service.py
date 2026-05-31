@@ -190,6 +190,7 @@ class ReportService(ReportServiceInterface):
         rerank_max = min(_MAX_RAG_FRAGMENTS, total_pool)
 
         retrieval_request = QuestionContextFragmentsRequest(
+            chat_id=request.chat_id,
             semantic_queries=semantic_queries,
             bm25_queries=bm25_queries,
             rerank=RerankConfig(enabled=True, max_fragments=rerank_max),

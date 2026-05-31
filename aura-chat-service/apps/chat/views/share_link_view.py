@@ -14,14 +14,16 @@ class ShareLinkListView(APIView):
     @extend_schema(
         tags=["Share Links"],
         summary="List share links for a chat",
-        description="Paginated list of share-link records (token, expiry, active flag) for moderation.",
+        description="Paginated list of share-link records. By default only active links are returned. Pass `?active=false` to include revoked links.",
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
+            OpenApiParameter(name="active", type=bool, location=OpenApiParameter.QUERY, required=False, default=True),
         ],
         responses={200: ShareLinkResponse(many=True), **standard_error_responses(401, 403, 404)},
     )
     def get(self, request: Request, chat_id: int) -> Response:
-        links = share_link_service.list_links(user=request.user, chat_id=chat_id)
+        active_only = request.query_params.get("active", "true").lower() != "false"
+        links = share_link_service.list_links(user=request.user, chat_id=chat_id, active_only=active_only)
         paginator = StandardPagination()
         page = paginator.paginate_queryset(links, request)
         return paginator.get_paginated_response(ShareLinkResponse(page, many=True).data)
@@ -30,8 +32,8 @@ class ShareLinkListView(APIView):
         tags=["Share Links"],
         summary="Create a share link",
         description=(
-            "Creates a UUID **token** clients can pass to the public read-only endpoint "
-            "`GET /api/v1/share/{token}/messages/` (no Bearer). Optional future `expires_at`."
+                "Creates a UUID **token** clients can pass to the public read-only endpoint "
+                "`GET /api/v1/share/{token}/messages/` (no Bearer). Optional future `expires_at`."
         ),
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),

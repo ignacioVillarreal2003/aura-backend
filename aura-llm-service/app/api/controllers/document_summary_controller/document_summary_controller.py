@@ -31,6 +31,10 @@ class DocumentSummaryController(DocumentSummaryControllerInterface):
             _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(strict_rate_limit),
     ) -> DocumentSummaryResponse:
+        Authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LLM_DOCUMENT_SUMMARY}),
+        )
         return await document_summary_service.execute_document_summary(
             document_summary_request=document_summary_request,
             authenticated_user=authenticated_user,

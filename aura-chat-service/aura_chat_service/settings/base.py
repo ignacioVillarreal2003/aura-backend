@@ -13,11 +13,8 @@ ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv(
 
 INSTALLED_APPS = [
     "daphne",
-    "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
-    "django.contrib.sessions",
-    "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.postgres",
     "rest_framework",
@@ -38,13 +35,10 @@ MIDDLEWARE = [
     "django_prometheus.middleware.PrometheusBeforeMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "core.middleware.correlation_id.CorrelationIdMiddleware",
     "core.middleware.request_logging.RequestLoggingMiddleware",
     "core.authentication.authentication_middleware.AuthenticationMiddleware",
-    "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_prometheus.middleware.PrometheusAfterMiddleware",
 ]
@@ -59,8 +53,6 @@ TEMPLATES = [
         "OPTIONS": {
             "context_processors": [
                 "django.template.context_processors.request",
-                "django.contrib.auth.context_processors.auth",
-                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
@@ -88,9 +80,10 @@ DATABASES = {
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REDIS_URL = config("REDIS_URL")
+
 CHAT_AI_REPLY_LOCK_TTL_SECONDS = config(
     "CHAT_AI_REPLY_LOCK_TTL_SECONDS",
-    default=180,
+    default=300,
     cast=int,
 )
 
@@ -98,7 +91,8 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [REDIS_URL],
+            "hosts": [{"address": REDIS_URL, "socket_timeout": None, "socket_connect_timeout": 5}],
+            "expiry": 300,
         },
     },
 }
@@ -157,7 +151,6 @@ WS_MAX_CONNECTIONS_PER_USER = config("WS_MAX_CONNECTIONS_PER_USER", default=5, c
 AUTHENTICATION_EXCLUDED_PATHS = [
     "/api/v1/health",
     "/metrics",
-    "/admin/*",
     "/api/schema*",
     "/api/docs*",
     "/api/redoc*",
@@ -254,6 +247,8 @@ SPECTACULAR_SETTINGS = {
 WHISPER_MODEL_SIZE = config("WHISPER_MODEL_SIZE", default="small")
 WHISPER_DEVICE = config("WHISPER_DEVICE", default="cpu")
 WHISPER_COMPUTE_TYPE = config("WHISPER_COMPUTE_TYPE", default="int8")
+
+WHISPER_MAX_CONCURRENCY = config("WHISPER_MAX_CONCURRENCY", default=2, cast=int)
 
 NOTIFICATION_SERVICE_URL = config("NOTIFICATION_SERVICE_URL").strip()
 NOTIFICATION_INTERNAL_API_TOKEN = config("NOTIFICATION_INTERNAL_API_TOKEN")

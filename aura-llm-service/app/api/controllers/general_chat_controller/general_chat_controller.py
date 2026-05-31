@@ -31,6 +31,10 @@ class GeneralChatController(GeneralChatControllerInterface):
             _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(default_rate_limit),
     ) -> GeneralChatResponse:
+        Authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LLM_GENERAL_CHAT}),
+        )
         return await general_chat_service.execute_general_chat(
             general_chat_request=general_chat_request,
             authenticated_user=authenticated_user,

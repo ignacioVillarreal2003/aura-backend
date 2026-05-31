@@ -1,5 +1,5 @@
 from apps.chat.exceptions import ChatNotFoundException
-from apps.message.exceptions import MessageAccessDeniedException, MessageNotFoundException
+from apps.message.exceptions import MessageAccessDeniedException, MessageNotFoundException, NotChatOwnerException
 from test.conftest import make_pin
 
 
@@ -124,3 +124,23 @@ def test_unpin_message_access_denied_returns_403(api_client, mocker):
 def test_unpin_message_unauthenticated(anon_client):
     response = anon_client.delete("/api/v1/chats/1/messages/1/pin/")
     assert response.status_code == 401
+
+
+def test_pin_message_not_owner_returns_403(api_client, mocker):
+    mocker.patch(
+        f"{PIN_VIEW}.pinned_message_service.pin_message",
+        side_effect=NotChatOwnerException(),
+    )
+    response = api_client.post("/api/v1/chats/1/messages/1/pin/")
+    assert response.status_code == 403
+    assert response.data["error"] == "not_chat_owner"
+
+
+def test_unpin_message_not_owner_returns_403(api_client, mocker):
+    mocker.patch(
+        f"{PIN_VIEW}.pinned_message_service.unpin_message",
+        side_effect=NotChatOwnerException(),
+    )
+    response = api_client.delete("/api/v1/chats/1/messages/1/pin/")
+    assert response.status_code == 403
+    assert response.data["error"] == "not_chat_owner"

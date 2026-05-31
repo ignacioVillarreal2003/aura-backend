@@ -129,6 +129,84 @@ def make_pin(pin_id=1, chat_id=1, message_id=1, **overrides):
     return SimpleNamespace(**data)
 
 
+def make_checklist_item(item_id=1, text="Verificar equipo", position=0, is_checked=False, notes="", **overrides):
+    data = dict(id=item_id, text=text, is_checked=is_checked, notes=notes, position=position)
+    data.update(overrides)
+    return SimpleNamespace(**data)
+
+
+def make_checklist_section(sec_id=1, title="Preparación", position=0, items=None, **overrides):
+    data = dict(
+        id=sec_id,
+        title=title,
+        position=position,
+        items=items if items is not None else [make_checklist_item()],
+    )
+    data.update(overrides)
+    return SimpleNamespace(**data)
+
+
+def make_checklist(cl_id=1, title="Checklist de prueba", mode="direct",
+                   source_chat_id=None, sections=None, **overrides):
+    now = timezone.now()
+    data = dict(
+        id=cl_id,
+        title=title,
+        mode=mode,
+        source_chat_id=source_chat_id,
+        sections=sections if sections is not None else [make_checklist_section()],
+        item_count=1,
+        checked_count=0,
+        created_by=1,
+        created_at=now,
+        updated_by=None,
+        updated_at=None,
+    )
+    data.update(overrides)
+    return SimpleNamespace(**data)
+
+
+def make_assistant(assistant_id=1, name="Asistente Alfa", description="Descripción",
+                   system_prompt="Eres un asistente especializado.", response_style="",
+                   avatar_emoji="🤖", is_active=True, **overrides):
+    now = timezone.now()
+    data = dict(
+        id=assistant_id,
+        name=name,
+        description=description,
+        system_prompt=system_prompt,
+        response_style=response_style,
+        avatar_emoji=avatar_emoji,
+        is_active=is_active,
+        created_by=1,
+        created_at=now,
+        updated_by=None,
+        updated_at=None,
+    )
+    data.update(overrides)
+    return SimpleNamespace(**data)
+
+
+def make_report(report_id=1, title="Informe de prueba", report_type="SITREP",
+                content="Contenido del informe", mode="direct",
+                source_chat_id=None, **overrides):
+    now = timezone.now()
+    data = dict(
+        id=report_id,
+        type=report_type,
+        title=title,
+        content=content,
+        mode=mode,
+        source_chat_id=source_chat_id,
+        created_by=1,
+        created_at=now,
+        updated_by=None,
+        updated_at=None,
+    )
+    data.update(overrides)
+    return SimpleNamespace(**data)
+
+
 def make_feedback(fb_id=1, message_id=1, user_id=1, value=1, **overrides):
     now = timezone.now()
     data = dict(

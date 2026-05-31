@@ -52,6 +52,7 @@
       "Bash(timeout 15 bash -c \"until curl -s http://localhost:8002/auth/validate > /dev/null 2>&1; do sleep 1; done\")",
       "Bash(curl *)",
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('access_token obtenido:', bool\\(d.get\\('access_token'\\)\\)\\)\")"
+      "Bash(python -c \"import channels_redis; import inspect; print\\(inspect.getfile\\(channels_redis\\)\\)\")"
     ]
   }
 }

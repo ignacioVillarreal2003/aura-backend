@@ -10,7 +10,18 @@ from django.db import transaction
 from apps.chat.exceptions import ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.membership.repositories.membership_repository import membership_repository
-from apps.message.exceptions import ChatLockedException, LLMServiceException, MessageAccessDeniedException, MessageDeleteForbiddenException, MessageNotFoundException, NoMessageToRegenerateException, NotChatCreatorException, ReaderCannotSendMessageException, TranscriptionException
+from apps.message.exceptions import (
+    ChatLockedException,
+    LLMServiceException,
+    MessageAccessDeniedException,
+    MessageDeleteForbiddenException,
+    MessageNotFoundException,
+    NoMessageToRegenerateException,
+    NotChatOwnerException,
+    ReaderCannotSendMessageException,
+    TranscriptionBusyException,
+    TranscriptionException,
+)
 from apps.message.models.chat_message import ChatMessage
 from apps.message.repositories.message_repository import message_repository
 from apps.message.serializers.response import MessageResponse
@@ -26,7 +37,7 @@ from core.authorization.permissions import (
 )
 from core.clients.exceptions import HttpClientException
 from core.clients.llm_client import DocumentQuestionResult, llm_client
-from core.clients.transcription_client import transcription_client
+from core.clients.transcription_client import TranscriptionBusyError, transcription_client
 
 logger = logging.getLogger(__name__)
 
@@ -74,21 +85,19 @@ class MessageService:
     def transcribe_audio(self, audio_file) -> str:
         try:
             return transcription_client.transcribe(audio_file)
+        except TranscriptionBusyError as e:
+            raise TranscriptionBusyException() from e
         except Exception as e:
             raise TranscriptionException() from e
 
     def send_message(
-        self,
-        user: AuthenticatedUser,
-        chat_id: int,
-        text: str,
+            self,
+            user: AuthenticatedUser,
+            chat_id: int,
+            text: str,
     ) -> ChatMessage:
         AccessControl.require_permissions(user, frozenset({SEND_MESSAGE}))
-        chat = self._require_access(chat_id, user.id)
-        if membership_repository.get_role(chat_id, user.id) == "reader":
-            raise ReaderCannotSendMessageException()
-        if chat.is_locked:
-            raise ChatLockedException()
+        self._require_send_access(chat_id, user.id)
 
         with transaction.atomic():
             msg = message_repository.create(
@@ -107,11 +116,11 @@ class MessageService:
         return msg
 
     def _save_ai_message(
-        self,
-        chat_id: int,
-        user_id: int,
-        answer: str,
-        fragments: list | None = None,
+            self,
+            chat_id: int,
+            user_id: int,
+            answer: str,
+            fragments: list | None = None,
     ) -> ChatMessage:
         with transaction.atomic():
             msg = message_repository.create(
@@ -138,9 +147,9 @@ class MessageService:
 
     def clear_history(self, user: AuthenticatedUser, chat_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({CLEAR_CHAT_HISTORY}))
-        chat = self._require_access(chat_id, user.id)
-        if chat.created_by != user.id:
-            raise NotChatCreatorException()
+        self._require_access(chat_id, user.id)
+        if not membership_repository.is_chat_owner(chat_id, user.id):
+            raise NotChatOwnerException()
         message_repository.soft_delete_by_chat(chat_id, deleted_by=user.id)
         logger.info("Chat history cleared.", extra={"chat_id": chat_id, "user_id": user.id})
 
@@ -168,9 +177,9 @@ class MessageService:
         return messages
 
     async def run_document_question(
-        self,
-        user: AuthenticatedUser,
-        chat_id: int,
+            self,
+            user: AuthenticatedUser,
+            chat_id: int,
     ) -> DocumentQuestionRunResult:
         await sync_to_async(self._require_access)(chat_id, user.id)
 
@@ -178,7 +187,7 @@ class MessageService:
 
         try:
             llm_out: DocumentQuestionResult = await llm_client.document_question(
-                messages, user
+                messages, user, chat_id=chat_id
             )
         except HttpClientException as e:
             logger.error(
@@ -212,9 +221,9 @@ class MessageService:
         )
 
     async def iter_document_question_stream_group_payloads(
-        self,
-        user: AuthenticatedUser,
-        chat_id: int,
+            self,
+            user: AuthenticatedUser,
+            chat_id: int,
     ) -> AsyncIterator[dict[str, Any]]:
         await sync_to_async(self._require_access)(chat_id, user.id)
 
@@ -260,7 +269,7 @@ class MessageService:
 
         try:
             async for sse in llm_client.document_question_stream_events(
-                messages, user
+                    messages, user, chat_id=chat_id
             ):
                 et = sse.get("type")
                 if et == "meta":
@@ -356,29 +365,23 @@ class MessageService:
 
     def delete_message(self, user: AuthenticatedUser, chat_id: int, message_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({DELETE_MESSAGE}))
-        chat = self._require_access(chat_id, user.id)
+        self._require_access(chat_id, user.id)
         msg = message_repository.get_by_id_and_chat(message_id, chat_id)
         if msg is None:
             raise MessageNotFoundException()
-        is_author = msg.created_by == user.id
-        is_owner = chat.created_by == user.id
-        if not is_author and not is_owner:
+        if not membership_repository.is_chat_owner(chat_id, user.id):
             raise MessageDeleteForbiddenException()
         msg.delete(deleted_by=user.id)
         logger.info("Message deleted.", extra={"chat_id": chat_id, "message_id": message_id, "user_id": user.id})
 
     def send_ephemeral_message(
-        self,
-        user: AuthenticatedUser,
-        chat_id: int,
-        text: str,
+            self,
+            user: AuthenticatedUser,
+            chat_id: int,
+            text: str,
     ) -> ChatMessage:
         AccessControl.require_permissions(user, frozenset({SEND_MESSAGE}))
-        chat = self._require_access(chat_id, user.id)
-        if membership_repository.get_role(chat_id, user.id) == "reader":
-            raise ReaderCannotSendMessageException()
-        if chat.is_locked:
-            raise ChatLockedException()
+        self._require_send_access(chat_id, user.id)
         return ChatMessage(
             chat_id=chat_id,
             message=text,
@@ -387,10 +390,10 @@ class MessageService:
         )
 
     async def run_ephemeral_document_question(
-        self,
-        user: AuthenticatedUser,
-        chat_id: int,
-        user_message: str,
+            self,
+            user: AuthenticatedUser,
+            chat_id: int,
+            user_message: str,
     ) -> DocumentQuestionRunResult:
         await sync_to_async(self._require_access)(chat_id, user.id)
         messages = [{"role": "human", "content": user_message}]
@@ -417,6 +420,19 @@ class MessageService:
             raise ChatNotFoundException()
         if not membership_repository.is_active_member(chat_id, user_id):
             raise MessageAccessDeniedException()
+        return chat
+
+    def _require_send_access(self, chat_id: int, user_id: int):
+        chat = chat_repository.get_by_id(chat_id)
+        if chat is None:
+            raise ChatNotFoundException()
+        role = membership_repository.get_role(chat_id, user_id)
+        if role is None:
+            raise MessageAccessDeniedException()
+        if role == "reader":
+            raise ReaderCannotSendMessageException()
+        if chat.is_locked:
+            raise ChatLockedException()
         return chat
 
 

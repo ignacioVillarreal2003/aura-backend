@@ -44,14 +44,23 @@ class ReportGenerateResult:
 class LLMClient:
     def __init__(self):
         self._http_client = AsyncHttpClient(timeout=getattr(settings, "LLM_SERVICE_TIMEOUT", 30))
-        self._stream_client = httpx.AsyncClient()
+        self._stream_client = httpx.AsyncClient(
+            limits=httpx.Limits(max_connections=50, max_keepalive_connections=10),
+        )
+
+    async def aclose(self) -> None:
+        await self._stream_client.aclose()
+        await self._http_client.aclose()
 
     async def document_question(
-        self,
-        messages: list[dict[str, str]],
-        user: AuthenticatedUser,
+            self,
+            messages: list[dict[str, str]],
+            user: AuthenticatedUser,
+            chat_id: int | None = None,
     ) -> DocumentQuestionResult:
-        payload = {"messages": messages}
+        payload: dict = {"messages": messages}
+        if chat_id is not None:
+            payload["chat_id"] = chat_id
 
         logger.debug(
             "Calling LLM document-question.",
@@ -86,12 +95,15 @@ class LLMClient:
         )
 
     async def generate_checklist(
-        self,
-        messages: list[dict[str, str]],
-        mode: str,
-        user: AuthenticatedUser,
+            self,
+            messages: list[dict[str, str]],
+            mode: str,
+            user: AuthenticatedUser,
+            chat_id: int | None = None,
     ) -> ChecklistGenerateResult:
-        payload = {"messages": messages, "mode": mode}
+        payload: dict = {"messages": messages, "mode": mode}
+        if chat_id is not None:
+            payload["chat_id"] = chat_id
 
         logger.debug(
             "Calling LLM checklist-generate.",
@@ -125,13 +137,16 @@ class LLMClient:
         )
 
     async def generate_report(
-        self,
-        messages: list[dict[str, str]],
-        mode: str,
-        report_type: str,
-        user: AuthenticatedUser,
+            self,
+            messages: list[dict[str, str]],
+            mode: str,
+            report_type: str,
+            user: AuthenticatedUser,
+            chat_id: int | None = None,
     ) -> ReportGenerateResult:
-        payload = {"messages": messages, "mode": mode, "report_type": report_type}
+        payload: dict = {"messages": messages, "mode": mode, "report_type": report_type}
+        if chat_id is not None:
+            payload["chat_id"] = chat_id
 
         logger.debug(
             "Calling LLM report-generate.",
@@ -166,11 +181,14 @@ class LLMClient:
         )
 
     async def document_question_stream_events(
-        self,
-        messages: list[dict[str, str]],
-        user: AuthenticatedUser,
+            self,
+            messages: list[dict[str, str]],
+            user: AuthenticatedUser,
+            chat_id: int | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload = {"messages": messages}
+        payload: dict = {"messages": messages}
+        if chat_id is not None:
+            payload["chat_id"] = chat_id
         headers = self._build_stream_headers(user)
         url = settings.LLM_DOCUMENT_QUESTION_STREAM_URL
 
@@ -188,11 +206,11 @@ class LLMClient:
 
         try:
             async with self._stream_client.stream(
-                "POST",
-                url,
-                json=payload,
-                headers=headers,
-                timeout=timeout,
+                    "POST",
+                    url,
+                    json=payload,
+                    headers=headers,
+                    timeout=timeout,
             ) as response:
                 if response.status_code >= 400:
                     body = await response.aread()
@@ -222,8 +240,8 @@ class LLMClient:
             raise HttpClientException(str(e)) from e
 
     async def _iter_sse_json_events(
-        self,
-        response: httpx.Response,
+            self,
+            response: httpx.Response,
     ) -> AsyncIterator[dict[str, Any]]:
         pending_data: str | None = None
         try:

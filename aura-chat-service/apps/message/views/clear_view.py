@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 
 
 class ClearHistoryView(APIView):
-
     @extend_schema(
         tags=["Messages"],
         summary="Clear chat history",

@@ -45,7 +45,6 @@ def _safe_filename(title: str) -> str:
 
 
 class ChecklistListView(APIView):
-
     @extend_schema(
         tags=["Checklists"],
         summary="Listar checklists",
@@ -66,7 +65,6 @@ class ChecklistListView(APIView):
 
 
 class ChecklistDetailView(APIView):
-
     @extend_schema(
         tags=["Checklists"],
         summary="Obtener checklist",
@@ -84,9 +82,9 @@ class ChecklistDetailView(APIView):
         tags=["Checklists"],
         summary="Actualizar checklist",
         description=(
-            "Actualiza el título y/o los ítems de la checklist. "
-            "Enviá el array completo de ítems con los estados actualizados. "
-            "Solo el creador o miembros del chat de origen pueden modificarla."
+                "Actualiza el título y/o los ítems de la checklist. "
+                "Enviá el array completo de ítems con los estados actualizados. "
+                "Solo el creador o miembros del chat de origen pueden modificarla."
         ),
         parameters=[_ID_PARAM],
         request=UpdateChecklistRequest,
@@ -103,14 +101,14 @@ class ChecklistDetailView(APIView):
             user=request.user,
             checklist_id=checklist_id,
             title=d.get("title"),
-            items=d.get("items"),
+            sections=d.get("sections"),
         )
         return Response(ChecklistResponse(checklist).data)
 
     @extend_schema(
         tags=["Checklists"],
         summary="Eliminar checklist",
-        description="Elimina suavemente la checklist. Solo el creador o el owner del chat de origen puede eliminarla.",
+        description="Elimina suavemente la checklist. Solo el creador o un miembro activo del chat de origen puede eliminarla.",
         parameters=[_ID_PARAM],
         responses={
             204: OpenApiResponse(description="Sin contenido"),
@@ -123,7 +121,6 @@ class ChecklistDetailView(APIView):
 
 
 class ChecklistManageView(APIView):
-
     @extend_schema(
         tags=["Checklists"],
         summary="Listar todas las checklists (admin)",
@@ -141,16 +138,15 @@ class ChecklistManageView(APIView):
 
 
 class ChecklistGenerateView(APIView):
-
     @extend_schema(
         tags=["Checklists"],
         summary="Generar checklist con IA",
         description=(
-            "Genera una checklist estructurada a partir del mensaje del usuario. "
-            "Si se pasa `chat_id`, el historial reciente del chat se incluye como contexto para el LLM "
-            "(el usuario debe ser miembro activo). En modo RAG también se usan los documentos del chat. "
-            "La checklist generada queda vinculada al chat via `source_chat_id`. "
-            "Requiere permiso `LLM_CHECKLIST_GENERATE`."
+                "Genera una checklist estructurada a partir del mensaje del usuario. "
+                "Si se pasa `chat_id`, el historial reciente del chat se incluye como contexto para el LLM "
+                "(el usuario debe ser miembro activo). En modo RAG también se usan los documentos del chat. "
+                "La checklist generada queda vinculada al chat via `source_chat_id`. "
+                "Requiere permiso `LLM_CHECKLIST_GENERATE`."
         ),
         request=GenerateChecklistRequest,
         responses={
@@ -178,7 +174,6 @@ class ChecklistGenerateView(APIView):
 
 
 class ChecklistExportPDFView(APIView):
-
     @extend_schema(
         tags=["Checklists"],
         summary="Exportar checklist como PDF",
@@ -202,7 +197,6 @@ class ChecklistExportPDFView(APIView):
 
 
 class ChecklistExportMarkdownView(APIView):
-
     @extend_schema(
         tags=["Checklists"],
         summary="Exportar checklist como Markdown",
@@ -223,7 +217,6 @@ class ChecklistExportMarkdownView(APIView):
 
 
 class ChecklistManageExportPDFView(APIView):
-
     @extend_schema(
         tags=["Checklists"],
         summary="Exportar cualquier checklist como PDF (admin)",
@@ -247,7 +240,6 @@ class ChecklistManageExportPDFView(APIView):
 
 
 class ChecklistManageExportMarkdownView(APIView):
-
     @extend_schema(
         tags=["Checklists"],
         summary="Exportar cualquier checklist como Markdown (admin)",

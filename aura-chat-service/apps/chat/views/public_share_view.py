@@ -18,8 +18,8 @@ class PublicShareMessagesView(APIView):
         tags=["Share Links"],
         summary="Read-only chat history via share link",
         description=(
-            "**No Bearer auth.** Path `token` is the UUID returned when creating a share link. "
-            "Returns message rows with page-number pagination. Invalid or revoked links yield **404**."
+                "**No Bearer auth.** Path `token` is the UUID returned when creating a share link. "
+                "Returns message rows with page-number pagination. Invalid or revoked links yield **404**."
         ),
         auth=[],
         parameters=[

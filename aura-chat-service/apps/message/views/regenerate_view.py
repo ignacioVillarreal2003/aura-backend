@@ -20,14 +20,13 @@ logger = logging.getLogger(__name__)
 
 
 class RegenerateResponseView(APIView):
-
     @extend_schema(
         tags=["Messages"],
         summary="Regenerate last AI response",
         description=(
-            "Deletes the last assistant (**system**) message and runs the document-question flow again with the same "
-            "conversation context. Returns `assistant` and/or `assistant_error`. **409** if another AI reply is in "
-            "progress for this chat."
+                "Deletes the last assistant (**system**) message and runs the document-question flow again with the same "
+                "conversation context. Returns `assistant` and/or `assistant_error`. **409** if another AI reply is in "
+                "progress for this chat."
         ),
         request=None,
         parameters=[

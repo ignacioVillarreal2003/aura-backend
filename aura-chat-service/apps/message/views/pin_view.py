@@ -15,8 +15,8 @@ class PinnedMessageListView(APIView):
         tags=["Messages"],
         summary="List pinned messages",
         description=(
-            "Lists messages pinned **in this chat** (page-number pagination). Each row includes nested "
-            "`message` details for the pinned item."
+                "Lists messages pinned **in this chat** (page-number pagination). Each row includes nested "
+                "`message` details for the pinned item."
         ),
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),

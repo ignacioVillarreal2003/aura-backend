@@ -19,7 +19,8 @@ from apps.membership.models.chat_membership import ChatMembership
 from apps.membership.repositories.membership_repository import membership_repository
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization import AccessControl
-from core.authorization.permissions import ADD_MEMBER, LEAVE_CHAT, LIST_MEMBERS, LIST_MY_MEMBERSHIPS, MANAGE_MEMBERS, REMOVE_MEMBER, UPDATE_MEMBER, UPDATE_MEMBER_ROLE
+from core.authorization.permissions import ADD_MEMBER, LEAVE_CHAT, LIST_MEMBERS, LIST_MY_MEMBERSHIPS, MANAGE_MEMBERS, \
+    REMOVE_MEMBER, UPDATE_MEMBER, UPDATE_MEMBER_ROLE
 from core.exceptions import ValidationException
 
 logger = logging.getLogger(__name__)
@@ -69,10 +70,10 @@ def _broadcast_member_left(chat_id: int, member_id: int) -> None:
 
 class MembershipService:
     def list_members(
-        self,
-        user: AuthenticatedUser,
-        chat_id: int,
-        status: str | None = "active",
+            self,
+            user: AuthenticatedUser,
+            chat_id: int,
+            status: str | None = "active",
     ) -> QuerySet[ChatMembership]:
         AccessControl.require_permissions(user, frozenset({LIST_MEMBERS}))
         chat = chat_repository.get_by_id(chat_id)
@@ -82,10 +83,10 @@ class MembershipService:
         return membership_repository.list_by_chat(chat_id, status=status)
 
     def list_members_admin(
-        self,
-        user: AuthenticatedUser,
-        chat_id: int,
-        status: str | None = None,
+            self,
+            user: AuthenticatedUser,
+            chat_id: int,
+            status: str | None = None,
     ) -> QuerySet[ChatMembership]:
         AccessControl.require_permissions(user, frozenset({MANAGE_MEMBERS}))
         chat = chat_repository.get_by_id(chat_id)
@@ -94,27 +95,29 @@ class MembershipService:
         return membership_repository.list_by_chat(chat_id, status=status)
 
     def list_my_memberships(
-        self,
-        user: AuthenticatedUser,
-        status: str | None = None,
+            self,
+            user: AuthenticatedUser,
+            status: str | None = None,
     ) -> QuerySet[ChatMembership]:
         AccessControl.require_permissions(user, frozenset({LIST_MY_MEMBERSHIPS}))
         return membership_repository.list_by_member(member_id=user.id, status=status)
 
     @transaction.atomic
     def add_members(
-        self,
-        user: AuthenticatedUser,
-        chat_id: int,
-        member_ids: list[int],
+            self,
+            user: AuthenticatedUser,
+            chat_id: int,
+            member_ids: list[int],
     ) -> list[ChatMembership]:
         AccessControl.require_permissions(user, frozenset({ADD_MEMBER}))
         chat = chat_repository.get_by_id(chat_id)
         if chat is None:
             raise ChatNotFoundException()
 
-        if chat.created_by != user.id:
-            raise MembershipForbiddenException("Only the chat owner can add members")
+        is_creator = chat.created_by == user.id
+        is_owner_member = membership_repository.is_chat_owner(chat_id, user.id)
+        if not is_creator and not is_owner_member:
+            raise MembershipForbiddenException("Only an owner or the chat creator can add members")
 
         existing = membership_repository.get_existing_member_ids_in(chat_id, member_ids)
         if existing:
@@ -166,11 +169,11 @@ class MembershipService:
 
     @transaction.atomic
     def update_member(
-        self,
-        user: AuthenticatedUser,
-        chat_id: int,
-        member_id: int,
-        new_status: str,
+            self,
+            user: AuthenticatedUser,
+            chat_id: int,
+            member_id: int,
+            new_status: str,
     ) -> ChatMembership:
         AccessControl.require_permissions(user, frozenset({UPDATE_MEMBER}))
 
@@ -219,10 +222,10 @@ class MembershipService:
 
     @transaction.atomic
     def remove_member(
-        self,
-        user: AuthenticatedUser,
-        chat_id: int,
-        member_id: int,
+            self,
+            user: AuthenticatedUser,
+            chat_id: int,
+            member_id: int,
     ) -> None:
         AccessControl.require_permissions(user, frozenset({REMOVE_MEMBER}))
         chat = chat_repository.get_by_id(chat_id)
@@ -232,12 +235,9 @@ class MembershipService:
         if chat.created_by == member_id:
             raise CannotRemoveOwnerException()
 
-        is_self = user.id == member_id
-        is_owner = chat.created_by == user.id
-
-        if not is_self and not is_owner:
+        if not membership_repository.is_chat_owner(chat_id, user.id):
             raise MembershipForbiddenException(
-                "Only the chat owner or the member themselves can remove a member"
+                "Only an owner can remove members"
             )
 
         membership = membership_repository.get_by_chat_and_member_for_update(chat_id, member_id)
@@ -289,17 +289,19 @@ class MembershipService:
 
     @transaction.atomic
     def update_member_role(
-        self,
-        user: AuthenticatedUser,
-        chat_id: int,
-        member_id: int,
-        role: str,
+            self,
+            user: AuthenticatedUser,
+            chat_id: int,
+            member_id: int,
+            role: str,
     ) -> ChatMembership:
         AccessControl.require_permissions(user, frozenset({UPDATE_MEMBER_ROLE}))
         chat = chat_repository.get_by_id(chat_id)
         if chat is None:
             raise ChatNotFoundException()
-        if chat.created_by != user.id:
+        is_creator = chat.created_by == user.id
+        is_owner_member = membership_repository.is_chat_owner(chat_id, user.id)
+        if not is_creator and not is_owner_member:
             raise RoleUpdateForbiddenException()
         if member_id == chat.created_by:
             raise RoleUpdateForbiddenException()

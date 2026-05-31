@@ -83,18 +83,6 @@ def _fmt_dt(dt) -> str:
     return utc.strftime("%Y-%m-%d %H:%M UTC")
 
 
-def _group_items_by_section(items: list) -> dict[str, list]:
-    sections: dict[str, list] = {}
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        section = str(item.get("section", "General"))
-        sections.setdefault(section, []).append(item)
-    for sec in sections:
-        sections[sec].sort(key=lambda x: int(x.get("order", 0)))
-    return sections
-
-
 def _build_pdf_sync(html_content: str) -> bytes:
     buf = io.BytesIO()
     result = pisa.CreatePDF(io.StringIO(html_content), dest=buf, encoding="utf-8")
@@ -115,22 +103,20 @@ def _build_pdf(html_content: str) -> bytes:
 
 
 def generate_checklist_pdf(checklist: Checklist) -> bytes:
-    items = checklist.items if isinstance(checklist.items, list) else []
-    total = len(items)
-    checked = sum(1 for it in items if isinstance(it, dict) and it.get("is_checked"))
+    sections = list(checklist.sections.all())
+    all_items = [item for sec in sections for item in sec.items.all()]
+    total = len(all_items)
+    checked = sum(1 for it in all_items if it.is_checked)
     mode_label = "Con documentos de contexto" if checklist.mode == Checklist.Mode.RAG else "Directo"
     created = html.escape(_fmt_dt(checklist.created_at))
 
-    sections = _group_items_by_section(items)
-
     sections_html = ""
-    for section_name, section_items in sections.items():
-        sections_html += f"<h2>{html.escape(section_name)}</h2>\n"
-        for item in section_items:
-            is_checked = bool(item.get("is_checked"))
-            checkbox = "&#9746;" if is_checked else "&#9744;"
-            text = html.escape(str(item.get("text", "")))
-            cls = "cl-item checked" if is_checked else "cl-item"
+    for section in sections:
+        sections_html += f"<h2>{html.escape(section.title)}</h2>\n"
+        for item in section.items.all():
+            checkbox = "&#9746;" if item.is_checked else "&#9744;"
+            text = html.escape(item.text)
+            cls = "cl-item checked" if item.is_checked else "cl-item"
             sections_html += (
                 f'<span class="{cls}"><span class="cl-checkbox">{checkbox}</span>{text}</span>\n'
             )
@@ -161,11 +147,10 @@ def generate_checklist_pdf(checklist: Checklist) -> bytes:
 
 
 def generate_checklist_markdown(checklist: Checklist) -> str:
-    items = checklist.items if isinstance(checklist.items, list) else []
-    total = len(items)
-    checked = sum(1 for it in items if isinstance(it, dict) and it.get("is_checked"))
-
-    sections = _group_items_by_section(items)
+    sections = list(checklist.sections.all())
+    all_items = [item for sec in sections for item in sec.items.all()]
+    total = len(all_items)
+    checked = sum(1 for it in all_items if it.is_checked)
 
     lines = [
         "# CHECKLIST DE PROCEDIMIENTO",
@@ -180,17 +165,14 @@ def generate_checklist_markdown(checklist: Checklist) -> str:
         "",
     ]
 
-    for section_name, section_items in sections.items():
-        lines.append(f"## {section_name}")
+    for section in sections:
+        lines.append(f"## {section.title}")
         lines.append("")
-        for item in section_items:
-            is_checked = bool(item.get("is_checked"))
-            checkbox = "[x]" if is_checked else "[ ]"
-            text = str(item.get("text", ""))
-            notes = str(item.get("notes", "")).strip()
-            lines.append(f"- {checkbox} {text}")
-            if notes:
-                lines.append(f"  > {notes}")
+        for item in section.items.all():
+            checkbox = "[x]" if item.is_checked else "[ ]"
+            lines.append(f"- {checkbox} {item.text}")
+            if item.notes.strip():
+                lines.append(f"  > {item.notes}")
         lines.append("")
 
     lines += ["---", "*Checklist exportada desde AURA*"]

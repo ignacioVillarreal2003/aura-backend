@@ -5,7 +5,7 @@ from apps.message.exceptions import (
     MessageAccessDeniedException,
     MessageDeleteForbiddenException,
     MessageNotFoundException,
-    NotChatCreatorException,
+    NotChatOwnerException,
     ReaderCannotSendMessageException,
 )
 from apps.message.models.chat_message import ChatMessage
@@ -144,8 +144,8 @@ def test_clear_history_soft_deletes_all_messages(owner, chat):
     ).count() >= 2
 
 
-def test_clear_history_non_creator_raises(owner, chat, member_user):
+def test_clear_history_non_owner_raises(owner, chat, member_user):
     membership_service.add_members(owner, chat.id, member_ids=[member_user.id])
     membership_service.update_member(member_user, chat.id, member_user.id, new_status="active")
-    with pytest.raises(NotChatCreatorException):
+    with pytest.raises(NotChatOwnerException):
         message_service.clear_history(member_user, chat.id)

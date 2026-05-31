@@ -35,19 +35,19 @@ class AsyncHttpClient:
         return await self._request("GET", url, headers=headers)
 
     async def post(
-        self,
-        url: str,
-        json: dict | None = None,
-        headers: dict | None = None,
+            self,
+            url: str,
+            json: dict | None = None,
+            headers: dict | None = None,
     ) -> httpx.Response:
         return await self._request("POST", url, json=json, headers=headers)
 
     async def _request(
-        self,
-        method: str,
-        url: str,
-        json: dict | None = None,
-        headers: dict | None = None,
+            self,
+            method: str,
+            url: str,
+            json: dict | None = None,
+            headers: dict | None = None,
     ) -> httpx.Response:
         last_exc: BaseException | None = None
         retryable_codes = _RETRYABLE_CODES_SAFE if method.upper() in _SAFE_METHODS else _RETRYABLE_CODES_UNSAFE

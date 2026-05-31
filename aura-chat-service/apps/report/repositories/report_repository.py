@@ -15,7 +15,6 @@ class ReportRepository:
             title: str,
             content: str,
             mode: str,
-            metadata: dict,
             source_chat_id: Optional[int] = None,
     ) -> Report:
         return Report.objects.create(
@@ -24,7 +23,6 @@ class ReportRepository:
             title=title,
             content=content,
             mode=mode,
-            metadata=metadata,
             source_chat_id=source_chat_id,
         )
 
@@ -44,13 +42,24 @@ class ReportRepository:
             qs = qs.filter(source_chat_id=source_chat_id)
         return qs
 
+    def list_by_chat(
+            self,
+            source_chat_id: int,
+            report_type: Optional[str] = None,
+    ):
+        qs = Report.objects.filter(source_chat_id=source_chat_id)
+        if report_type:
+            qs = qs.filter(type=report_type)
+        return qs
+
     def list_all(self, report_type: Optional[str] = None):
         qs = Report.objects.all()
         if report_type:
             qs = qs.filter(type=report_type)
         return qs
 
-    def update(self, report: Report, *, updated_by: int, title: Optional[str] = None, content: Optional[str] = None) -> Report:
+    def update(self, report: Report, *, updated_by: int, title: Optional[str] = None,
+               content: Optional[str] = None) -> Report:
         update_fields = []
         if title is not None:
             report.title = title

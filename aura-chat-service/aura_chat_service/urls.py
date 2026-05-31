@@ -1,5 +1,4 @@
 import logging
-from django.contrib import admin
 from django.core.cache import cache as _cache
 from django.db import OperationalError as DBOperationalError
 from django.db import connection
@@ -22,8 +21,8 @@ logger = logging.getLogger(__name__)
     tags=["Health"],
     summary="Health check",
     description=(
-        "Returns `status: ok` or `degraded` and per-dependency checks (`database`, `redis`). "
-        "**200** when all checks pass; **503** when any dependency fails."
+            "Returns `status: ok` or `degraded` and per-dependency checks (`database`, `redis`). "
+            "**200** when all checks pass; **503** when any dependency fails."
     ),
     auth=[],
     responses={
@@ -51,9 +50,9 @@ def health_check(request):
     try:
         connection.ensure_connection()
         checks["database"] = "ok"
-    except DBOperationalError:
-        logger.warning("Health check: database unreachable.")
-        checks["database"] = "error"
+    except Exception:
+        logger.warning("Health check: database unreachable.", exc_info=True)
+    checks["database"] = "error"
 
     try:
         _cache.set("_healthcheck", "ok", timeout=5)
@@ -71,7 +70,6 @@ def health_check(request):
 
 
 urlpatterns = [
-    path("admin/", admin.site.urls),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path(
         "api/docs/",

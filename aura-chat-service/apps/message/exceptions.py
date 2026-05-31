@@ -1,4 +1,5 @@
-from core.exceptions import ConflictException, ForbiddenException, NotFoundException, ServiceException, ServiceUnavailableException, ValidationException
+from core.exceptions import ConflictException, ForbiddenException, NotFoundException, ServiceException, \
+    ServiceUnavailableException, ValidationException
 
 
 class ExportTooLargeException(ServiceException):
@@ -27,6 +28,12 @@ class TranscriptionException(ServiceUnavailableException):
     status_code = 502
     error_code = "transcription_error"
     detail = "Audio could not be transcribed"
+
+
+class TranscriptionBusyException(ServiceUnavailableException):
+    status_code = 503
+    error_code = "transcription_busy"
+    detail = "Transcription service is at capacity; please retry shortly"
 
 
 class MessageNotFoundException(NotFoundException):
@@ -67,4 +74,9 @@ class ChatLockedException(ForbiddenException):
 
 class MessageDeleteForbiddenException(ForbiddenException):
     error_code = "message_delete_forbidden"
-    detail = "Only the message author or chat owner can delete this message"
+    detail = "Only a chat owner can delete messages"
+
+
+class NotChatOwnerException(ForbiddenException):
+    error_code = "not_chat_owner"
+    detail = "Only a chat owner can perform this action"

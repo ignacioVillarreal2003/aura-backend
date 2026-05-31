@@ -5,7 +5,6 @@ from core.models.soft_delete import SoftDeleteModel
 
 
 class Report(AuditModel, SoftDeleteModel):
-
     class Type(models.TextChoices):
         SITREP = "SITREP", "SITREP"
         INTSUM = "INTSUM", "INTSUM"
@@ -19,7 +18,6 @@ class Report(AuditModel, SoftDeleteModel):
     title = models.CharField(max_length=500)
     content = models.TextField()
     mode = models.CharField(max_length=16, choices=Mode.choices)
-    metadata = models.JSONField(default=dict)
     source_chat_id = models.BigIntegerField(null=True, blank=True)
 
     class Meta:
