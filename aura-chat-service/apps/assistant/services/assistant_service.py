@@ -1,5 +1,7 @@
 import logging
+import time
 from typing import Optional
+from django.core.cache import cache
 from django.utils import timezone
 
 from core.authentication.authenticated_user import AuthenticatedUser
@@ -95,8 +97,6 @@ class AssistantService:
         logger.info("Assistant deleted", extra={"user_id": user.id, "assistant_id": assistant_id})
 
     def start_chat(self, user: AuthenticatedUser, assistant_id: int, resume: bool = False):
-        from apps.chat.services.chat_service import chat_service  # lazy: avoids channels init at import time
-
         AccessControl.require_permissions(user, frozenset({perms.USE_ASSISTANT}))
 
         assistant = assistant_repository.get_by_id(assistant_id)
@@ -113,6 +113,34 @@ class AssistantService:
                     extra={"user_id": user.id, "assistant_id": assistant_id, "chat_id": existing.id},
                 )
                 return existing, False
+            lock_key = f"assistant_start_chat:{user.id}:{assistant_id}"
+            if not cache.add(lock_key, "1", timeout=10):
+                existing = self._await_concurrent_resume(user.id, assistant_id)
+                if existing is not None:
+                    return existing, False
+            else:
+                try:
+                    existing = chat_repository.get_latest_by_assistant(user.id, assistant_id)
+                    if existing is not None:
+                        return existing, False
+                    return self._create_assistant_chat(user, assistant), True
+                finally:
+                    cache.delete(lock_key)
+
+        return self._create_assistant_chat(user, assistant), True
+
+    @staticmethod
+    def _await_concurrent_resume(user_id: int, assistant_id: int):
+        for _ in range(20):
+            time.sleep(0.1)
+            existing = chat_repository.get_latest_by_assistant(user_id, assistant_id)
+            if existing is not None:
+                return existing
+        return None
+
+    @staticmethod
+    def _create_assistant_chat(user: AuthenticatedUser, assistant: Assistant):
+        from apps.chat.services.chat_service import chat_service
 
         ts = timezone.now().strftime("%d/%m/%Y %H:%M")
         chat_name = f"{assistant.name} — {ts}"
@@ -122,14 +150,14 @@ class AssistantService:
             name=chat_name,
             system_prompt=assistant.system_prompt,
             response_style=assistant.response_style,
-            source_assistant_id=assistant_id,
+            source_assistant_id=assistant.id,
         )
 
         logger.info(
             "Assistant chat started",
             extra={"user_id": user.id, "assistant_id": assistant.id, "chat_id": chat.id},
         )
-        return chat, True
+        return chat
 
 
 assistant_service = AssistantService()

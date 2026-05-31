@@ -19,7 +19,6 @@ _PATH_PARAMS = [
 
 
 class BookmarkView(APIView):
-
     @extend_schema(
         tags=["Messages"],
         summary="Bookmark message",
@@ -46,13 +45,12 @@ class BookmarkView(APIView):
 
 
 class BookmarkedMessageListView(APIView):
-
     @extend_schema(
         tags=["Messages"],
         summary="List bookmarked messages",
         description=(
-            "Returns messages the user bookmarked **in this chat**, with **cursor pagination** (same style as "
-            "the main message list)."
+                "Returns messages the user bookmarked **in this chat**, with **cursor pagination** (same style as "
+                "the main message list)."
         ),
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),

@@ -58,6 +58,14 @@ def test_list_links_active_true_explicit(api_client, mocker):
     assert kwargs["active_only"] is True
 
 
+def test_list_links_active_uppercase_false_is_case_insensitive(api_client, mocker):
+    """The `active` flag is normalized with .lower(), so FALSE also disables the filter."""
+    svc = mocker.patch(f"{SHARE_VIEW}.share_link_service.list_links", return_value=[])
+    api_client.get("/api/v1/chats/5/share-links/?active=FALSE")
+    _, kwargs = svc.call_args
+    assert kwargs["active_only"] is False
+
+
 def test_list_links_response_includes_token_and_is_active(api_client, mocker):
     link = make_share_link(link_id=1, chat_id=5, is_active=True)
     mocker.patch(f"{SHARE_VIEW}.share_link_service.list_links", return_value=[link])
@@ -131,6 +139,17 @@ def test_create_link_with_future_expires_at_returns_201(api_client, mocker):
     )
     _, kwargs = svc.call_args
     assert kwargs["expires_at"] is not None
+
+
+def test_create_link_explicit_null_expires_at_returns_201(api_client, mocker):
+    """expires_at is allow_null — an explicit null is accepted and forwarded as None."""
+    svc = mocker.patch(f"{SHARE_VIEW}.share_link_service.create_link", return_value=make_share_link())
+    response = api_client.post(
+        "/api/v1/chats/5/share-links/", {"expires_at": None}, format="json"
+    )
+    assert response.status_code == 201
+    _, kwargs = svc.call_args
+    assert kwargs["expires_at"] is None
 
 
 def test_create_link_past_expires_at_returns_400(api_client, mocker):

@@ -3,7 +3,8 @@ import uuid
 from django.db.models import QuerySet
 from django.utils import timezone
 
-from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException, ShareLinkExpiredOrInactiveException, ShareLinkNotFoundException
+from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException, ShareLinkExpiredOrInactiveException, \
+    ShareLinkNotFoundException
 from apps.chat.models.chat_share_link import ChatShareLink
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.chat.repositories.share_link_repository import share_link_repository
@@ -18,10 +19,10 @@ logger = logging.getLogger(__name__)
 
 class ShareLinkService:
     def create_link(
-        self,
-        user: AuthenticatedUser,
-        chat_id: int,
-        expires_at=None,
+            self,
+            user: AuthenticatedUser,
+            chat_id: int,
+            expires_at=None,
     ) -> ChatShareLink:
         AccessControl.require_permissions(user, frozenset({CREATE_SHARE_LINK}))
         chat = chat_repository.get_by_id(chat_id)

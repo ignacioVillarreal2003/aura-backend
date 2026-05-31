@@ -45,13 +45,12 @@ def _load_messages(chat_id: int) -> list[ChatMessage]:
 
 
 class ChatExportPDFView(APIView):
-
     @extend_schema(
         tags=["Messages"],
         summary="Export full chat as PDF",
         operation_id="v1_chats_messages_export_pdf_chat",
         description=(
-            "Downloads the **full** conversation as a PDF attachment. Requires chat membership and `EXPORT_CHAT`."
+                "Downloads the **full** conversation as a PDF attachment. Requires chat membership and `EXPORT_CHAT`."
         ),
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
@@ -72,7 +71,6 @@ class ChatExportPDFView(APIView):
 
 
 class ChatExportMarkdownView(APIView):
-
     @extend_schema(
         tags=["Messages"],
         summary="Export full chat as Markdown",
@@ -96,7 +94,6 @@ class ChatExportMarkdownView(APIView):
 
 
 class ChatExportJSONView(APIView):
-
     @extend_schema(
         tags=["Messages"],
         summary="Export full chat as JSON",
@@ -120,7 +117,6 @@ class ChatExportJSONView(APIView):
 
 
 class AIResponsesExportView(APIView):
-
     @extend_schema(
         tags=["Messages"],
         summary="Export AI responses only as Markdown",
@@ -144,14 +140,13 @@ class AIResponsesExportView(APIView):
 
 
 class AdminChatExportPDFView(APIView):
-
     @extend_schema(
         tags=["Messages"],
         summary="Export full chat as PDF (admin)",
         operation_id="v1_chats_messages_export_pdf_chat_admin",
         description=(
-            "Downloads the **full** conversation as a PDF without requiring chat membership. "
-            "Requires `MANAGE_CHATS` permission."
+                "Downloads the **full** conversation as a PDF without requiring chat membership. "
+                "Requires `MANAGE_CHATS` permission."
         ),
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
@@ -174,7 +169,6 @@ class AdminChatExportPDFView(APIView):
 
 
 class MessageExportPDFView(APIView):
-
     @extend_schema(
         tags=["Messages"],
         summary="Export single message as PDF",

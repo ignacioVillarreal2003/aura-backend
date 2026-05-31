@@ -19,7 +19,8 @@ from apps.membership.models.chat_membership import ChatMembership
 from apps.membership.repositories.membership_repository import membership_repository
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization import AccessControl
-from core.authorization.permissions import ADD_MEMBER, LEAVE_CHAT, LIST_MEMBERS, LIST_MY_MEMBERSHIPS, MANAGE_MEMBERS, REMOVE_MEMBER, UPDATE_MEMBER, UPDATE_MEMBER_ROLE
+from core.authorization.permissions import ADD_MEMBER, LEAVE_CHAT, LIST_MEMBERS, LIST_MY_MEMBERSHIPS, MANAGE_MEMBERS, \
+    REMOVE_MEMBER, UPDATE_MEMBER, UPDATE_MEMBER_ROLE
 from core.exceptions import ValidationException
 
 logger = logging.getLogger(__name__)
@@ -69,10 +70,10 @@ def _broadcast_member_left(chat_id: int, member_id: int) -> None:
 
 class MembershipService:
     def list_members(
-        self,
-        user: AuthenticatedUser,
-        chat_id: int,
-        status: str | None = "active",
+            self,
+            user: AuthenticatedUser,
+            chat_id: int,
+            status: str | None = "active",
     ) -> QuerySet[ChatMembership]:
         AccessControl.require_permissions(user, frozenset({LIST_MEMBERS}))
         chat = chat_repository.get_by_id(chat_id)
@@ -82,10 +83,10 @@ class MembershipService:
         return membership_repository.list_by_chat(chat_id, status=status)
 
     def list_members_admin(
-        self,
-        user: AuthenticatedUser,
-        chat_id: int,
-        status: str | None = None,
+            self,
+            user: AuthenticatedUser,
+            chat_id: int,
+            status: str | None = None,
     ) -> QuerySet[ChatMembership]:
         AccessControl.require_permissions(user, frozenset({MANAGE_MEMBERS}))
         chat = chat_repository.get_by_id(chat_id)
@@ -94,19 +95,19 @@ class MembershipService:
         return membership_repository.list_by_chat(chat_id, status=status)
 
     def list_my_memberships(
-        self,
-        user: AuthenticatedUser,
-        status: str | None = None,
+            self,
+            user: AuthenticatedUser,
+            status: str | None = None,
     ) -> QuerySet[ChatMembership]:
         AccessControl.require_permissions(user, frozenset({LIST_MY_MEMBERSHIPS}))
         return membership_repository.list_by_member(member_id=user.id, status=status)
 
     @transaction.atomic
     def add_members(
-        self,
-        user: AuthenticatedUser,
-        chat_id: int,
-        member_ids: list[int],
+            self,
+            user: AuthenticatedUser,
+            chat_id: int,
+            member_ids: list[int],
     ) -> list[ChatMembership]:
         AccessControl.require_permissions(user, frozenset({ADD_MEMBER}))
         chat = chat_repository.get_by_id(chat_id)
@@ -168,11 +169,11 @@ class MembershipService:
 
     @transaction.atomic
     def update_member(
-        self,
-        user: AuthenticatedUser,
-        chat_id: int,
-        member_id: int,
-        new_status: str,
+            self,
+            user: AuthenticatedUser,
+            chat_id: int,
+            member_id: int,
+            new_status: str,
     ) -> ChatMembership:
         AccessControl.require_permissions(user, frozenset({UPDATE_MEMBER}))
 
@@ -221,10 +222,10 @@ class MembershipService:
 
     @transaction.atomic
     def remove_member(
-        self,
-        user: AuthenticatedUser,
-        chat_id: int,
-        member_id: int,
+            self,
+            user: AuthenticatedUser,
+            chat_id: int,
+            member_id: int,
     ) -> None:
         AccessControl.require_permissions(user, frozenset({REMOVE_MEMBER}))
         chat = chat_repository.get_by_id(chat_id)
@@ -288,11 +289,11 @@ class MembershipService:
 
     @transaction.atomic
     def update_member_role(
-        self,
-        user: AuthenticatedUser,
-        chat_id: int,
-        member_id: int,
-        role: str,
+            self,
+            user: AuthenticatedUser,
+            chat_id: int,
+            member_id: int,
+            role: str,
     ) -> ChatMembership:
         AccessControl.require_permissions(user, frozenset({UPDATE_MEMBER_ROLE}))
         chat = chat_repository.get_by_id(chat_id)

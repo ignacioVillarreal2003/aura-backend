@@ -57,9 +57,9 @@ class AssistantListCreateView(APIView):
         tags=["Assistants"],
         summary="Crear asistente",
         description=(
-            "Crea un nuevo asistente especializado. Requiere permiso `CREATE_ASSISTANT`. "
-            "El `system_prompt` es la instrucción fija que el LLM usará en cada sesión. "
-            "El nombre debe ser único entre asistentes activos."
+                "Crea un nuevo asistente especializado. Requiere permiso `CREATE_ASSISTANT`. "
+                "El `system_prompt` es la instrucción fija que el LLM usará en cada sesión. "
+                "El nombre debe ser único entre asistentes activos."
         ),
         request=CreateAssistantRequest,
         responses={
@@ -84,13 +84,12 @@ class AssistantListCreateView(APIView):
 
 
 class AssistantManageView(APIView):
-
     @extend_schema(
         tags=["Assistants"],
         summary="Listar todos los asistentes (admin)",
         description=(
-            "Lista todos los asistentes incluyendo los inactivos. "
-            "Incluye el system_prompt. Requiere permiso `MANAGE_ASSISTANTS`."
+                "Lista todos los asistentes incluyendo los inactivos. "
+                "Incluye el system_prompt. Requiere permiso `MANAGE_ASSISTANTS`."
         ),
         parameters=[_SEARCH_PARAM],
         responses={
@@ -107,7 +106,6 @@ class AssistantManageView(APIView):
 
 
 class AssistantDetailView(APIView):
-
     @extend_schema(
         tags=["Assistants"],
         summary="Obtener asistente",
@@ -126,8 +124,8 @@ class AssistantDetailView(APIView):
         tags=["Assistants"],
         summary="Actualizar asistente",
         description=(
-            "Actualiza uno o más campos del asistente. Requiere permiso `UPDATE_ASSISTANT`. "
-            "Si se cambia el nombre, debe ser único entre asistentes activos."
+                "Actualiza uno o más campos del asistente. Requiere permiso `UPDATE_ASSISTANT`. "
+                "Si se cambia el nombre, debe ser único entre asistentes activos."
         ),
         parameters=[_ID_PARAM],
         request=UpdateAssistantRequest,
@@ -168,16 +166,15 @@ class AssistantDetailView(APIView):
 
 
 class AssistantStartChatView(APIView):
-
     @extend_schema(
         tags=["Assistants"],
         summary="Iniciar o reanudar sesión con asistente",
         description=(
-            "Si `resume=false` (default): crea siempre un chat nuevo pre-configurado con el system prompt "
-            "del asistente y añade al usuario como propietario. "
-            "Si `resume=true`: devuelve el chat más reciente del usuario con este asistente si existe "
-            "(HTTP 200), o crea uno nuevo si no hay ninguno (HTTP 201). "
-            "La respuesta incluye `is_new` para distinguir ambos casos."
+                "Si `resume=false` (default): crea siempre un chat nuevo pre-configurado con el system prompt "
+                "del asistente y añade al usuario como propietario. "
+                "Si `resume=true`: devuelve el chat más reciente del usuario con este asistente si existe "
+                "(HTTP 200), o crea uno nuevo si no hay ninguno (HTTP 201). "
+                "La respuesta incluye `is_new` para distinguir ambos casos."
         ),
         parameters=[_ID_PARAM],
         request=StartChatRequest,

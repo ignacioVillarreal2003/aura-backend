@@ -14,6 +14,7 @@ class ServiceAuthenticationScheme(OpenApiAuthenticationExtension):
             "bearerFormat": "JWT",
         }
 
+
 ApiErrorBody = inline_serializer(
     name="ApiErrorBody",
     fields={

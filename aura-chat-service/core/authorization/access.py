@@ -9,8 +9,8 @@ logger = logging.getLogger(__name__)
 class AccessControl:
     @staticmethod
     def require_permissions(
-        authenticated_user: AuthenticatedUser,
-        required_permissions: frozenset[str],
+            authenticated_user: AuthenticatedUser,
+            required_permissions: frozenset[str],
     ) -> None:
         if authenticated_user.has_all_permissions(required_permissions):
             return

@@ -58,7 +58,8 @@ class ReportRepository:
             qs = qs.filter(type=report_type)
         return qs
 
-    def update(self, report: Report, *, updated_by: int, title: Optional[str] = None, content: Optional[str] = None) -> Report:
+    def update(self, report: Report, *, updated_by: int, title: Optional[str] = None,
+               content: Optional[str] = None) -> Report:
         update_fields = []
         if title is not None:
             report.title = title

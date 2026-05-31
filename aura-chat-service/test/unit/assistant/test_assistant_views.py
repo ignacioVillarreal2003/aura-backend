@@ -186,6 +186,24 @@ def test_create_assistant_response_style_over_2000_chars_returns_400(api_client,
     assert response.status_code == 400
 
 
+def test_create_assistant_avatar_emoji_over_16_chars_returns_400(api_client, mocker):
+    mocker.patch(f"{VIEW}.assistant_service.create_assistant")
+    response = api_client.post(
+        "/api/v1/assistants/",
+        {"name": "X", "system_prompt": "P", "avatar_emoji": "x" * 17},
+        format="json",
+    )
+    assert response.status_code == 400
+
+
+def test_create_assistant_is_active_defaults_true(api_client, mocker):
+    """When is_active is omitted, the serializer default (True) reaches the service."""
+    svc = mocker.patch(f"{VIEW}.assistant_service.create_assistant", return_value=make_assistant())
+    api_client.post("/api/v1/assistants/", {"name": "X", "system_prompt": "P"}, format="json")
+    _, kwargs = svc.call_args
+    assert kwargs["is_active"] is True
+
+
 def test_create_assistant_name_conflict_returns_409(api_client, mocker):
     mocker.patch(
         f"{VIEW}.assistant_service.create_assistant",
@@ -390,6 +408,22 @@ def test_patch_system_prompt_over_8000_chars_returns_400(api_client, mocker):
     assert response.status_code == 400
 
 
+def test_patch_response_style_over_2000_chars_returns_400(api_client, mocker):
+    mocker.patch(f"{VIEW}.assistant_service.update_assistant")
+    response = api_client.patch(
+        "/api/v1/assistants/1/", {"response_style": "x" * 2001}, format="json"
+    )
+    assert response.status_code == 400
+
+
+def test_patch_avatar_emoji_over_16_chars_returns_400(api_client, mocker):
+    mocker.patch(f"{VIEW}.assistant_service.update_assistant")
+    response = api_client.patch(
+        "/api/v1/assistants/1/", {"avatar_emoji": "x" * 17}, format="json"
+    )
+    assert response.status_code == 400
+
+
 def test_patch_name_conflict_returns_409(api_client, mocker):
     mocker.patch(
         f"{VIEW}.assistant_service.update_assistant",
@@ -521,6 +555,15 @@ def test_start_chat_passes_assistant_id_from_url(api_client, mocker):
     api_client.post("/api/v1/assistants/42/start-chat/", {}, format="json")
     _, kwargs = svc.call_args
     assert kwargs["assistant_id"] == 42
+
+
+def test_start_chat_invalid_resume_returns_400(api_client, mocker):
+    """A non-boolean `resume` value is rejected by the serializer."""
+    mocker.patch(f"{VIEW}.assistant_service.start_chat")
+    response = api_client.post(
+        "/api/v1/assistants/1/start-chat/", {"resume": "maybe"}, format="json"
+    )
+    assert response.status_code == 400
 
 
 def test_start_chat_assistant_not_found_returns_404(api_client, mocker):

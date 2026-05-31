@@ -52,13 +52,24 @@ def _parse_tags(raw: str | None) -> list[str] | None:
     return tags or None
 
 
+def _list_filters(request: Request) -> dict:
+    ordering = request.query_params.get("ordering") or None
+    if ordering not in ALLOWED_ORDERINGS:
+        ordering = None
+    return {
+        "search": request.query_params.get("search") or None,
+        "ordering": ordering,
+        "tags": _parse_tags(request.query_params.get("tags")),
+    }
+
+
 @extend_schema_view(
     list=extend_schema(
         tags=["Chats"],
         summary="List chats",
         description=(
-            "Paginated list of chats the user can access. Filter by `search`, `ordering`, and comma-separated `tags` "
-            "(ALL tags must match). Rows use **ChatListResponse** (unread counts, pin state, archive, mute)."
+                "Paginated list of chats the user can access. Filter by `search`, `ordering`, and comma-separated `tags` "
+                "(ALL tags must match). Rows use **ChatListResponse** (unread counts, pin state, archive, mute)."
         ),
         parameters=[_SEARCH_PARAM, _ORDERING_PARAM, _TAGS_PARAM],
         responses={200: ChatListResponse(many=True), **standard_error_responses(401)},
@@ -67,8 +78,8 @@ def _parse_tags(raw: str | None) -> list[str] | None:
         tags=["Chats"],
         summary="Create chat",
         description=(
-            "Creates a new chat with optional system prompt, response style, tags, and `is_ephemeral` (no persistent "
-            "history / ephemeral AI flow per product rules)."
+                "Creates a new chat with optional system prompt, response style, tags, and `is_ephemeral` (no persistent "
+                "history / ephemeral AI flow per product rules)."
         ),
         request=CreateChatRequest,
         responses={201: ChatResponse, **standard_error_responses(400, 401)},
@@ -111,7 +122,6 @@ def _parse_tags(raw: str | None) -> list[str] | None:
     ),
 )
 class ChatViewSet(ViewSet):
-
     def create(self, request: Request) -> Response:
         serializer = CreateChatRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -123,13 +133,7 @@ class ChatViewSet(ViewSet):
         return Response(ChatResponse(chat).data, status=status.HTTP_201_CREATED)
 
     def list(self, request: Request) -> Response:
-        search = request.query_params.get("search") or None
-        ordering = request.query_params.get("ordering") or None
-        if ordering not in ALLOWED_ORDERINGS:
-            ordering = None
-        tags = _parse_tags(request.query_params.get("tags"))
-
-        chats = chat_service.list_chats(user=request.user, search=search, ordering=ordering, tags=tags)
+        chats = chat_service.list_chats(user=request.user, **_list_filters(request))
         paginator = StandardPagination()
         page = paginator.paginate_queryset(chats, request)
         return paginator.get_paginated_response(ChatListResponse(page, many=True).data)
@@ -155,26 +159,14 @@ class ChatViewSet(ViewSet):
 
     @action(detail=False, methods=["get"], url_path="manage")
     def manage(self, request: Request) -> Response:
-        search = request.query_params.get("search") or None
-        ordering = request.query_params.get("ordering") or None
-        if ordering not in ALLOWED_ORDERINGS:
-            ordering = None
-        tags = _parse_tags(request.query_params.get("tags"))
-
-        chats = chat_service.list_all_chats(user=request.user, search=search, ordering=ordering, tags=tags)
+        chats = chat_service.list_all_chats(user=request.user, **_list_filters(request))
         paginator = StandardPagination()
         page = paginator.paginate_queryset(chats, request)
         return paginator.get_paginated_response(ChatManageListResponse(page, many=True).data)
 
     @action(detail=False, methods=["get"], url_path="me")
     def my_chats(self, request: Request) -> Response:
-        search = request.query_params.get("search") or None
-        ordering = request.query_params.get("ordering") or None
-        if ordering not in ALLOWED_ORDERINGS:
-            ordering = None
-        tags = _parse_tags(request.query_params.get("tags"))
-
-        chats = chat_service.list_own_chats(user=request.user, search=search, ordering=ordering, tags=tags)
+        chats = chat_service.list_own_chats(user=request.user, **_list_filters(request))
         paginator = StandardPagination()
         page = paginator.paginate_queryset(chats, request)
         return paginator.get_paginated_response(ChatListResponse(page, many=True).data)
@@ -207,23 +199,15 @@ class ChatViewSet(ViewSet):
         tags=["Chats"],
         summary="List archived chats",
         description=(
-            "Lists chats **archived by** the user (not in the main inbox). Same query params as list (`search`, "
-            "`ordering`, `tags`)."
+                "Lists chats **archived by** the user (not in the main inbox). Same query params as list (`search`, "
+                "`ordering`, `tags`)."
         ),
         parameters=[_SEARCH_PARAM, _ORDERING_PARAM, _TAGS_PARAM],
         responses={200: ChatListResponse(many=True), **standard_error_responses(401)},
     )
     @action(detail=False, methods=["get"], url_path="archived")
     def archived(self, request: Request) -> Response:
-        search = request.query_params.get("search") or None
-        ordering = request.query_params.get("ordering") or None
-        if ordering not in ALLOWED_ORDERINGS:
-            ordering = None
-        tags = _parse_tags(request.query_params.get("tags"))
-
-        chats = chat_service.list_archived_chats(
-            user=request.user, search=search, ordering=ordering, tags=tags
-        )
+        chats = chat_service.list_archived_chats(user=request.user, **_list_filters(request))
         paginator = StandardPagination()
         page = paginator.paginate_queryset(chats, request)
         return paginator.get_paginated_response(ChatListResponse(page, many=True).data)
@@ -232,8 +216,8 @@ class ChatViewSet(ViewSet):
         tags=["Chats"],
         summary="Archive chats",
         description=(
-            "Archives one or more chats for the authenticated user. Archived threads disappear from the default list "
-            "until unarchived."
+                "Archives one or more chats for the authenticated user. Archived threads disappear from the default list "
+                "until unarchived."
         ),
         request=BulkChatIdsRequest,
         responses={

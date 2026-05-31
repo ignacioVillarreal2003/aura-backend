@@ -13,14 +13,14 @@ _BACKOFF_SECONDS = [0, 2, 4]
 
 class NotificationClient:
     def emit_event(
-        self,
-        event_type: str,
-        recipient_ids: list[int],
-        actor_id: int | None = None,
-        actor_name: str = "",
-        context: dict[str, Any] | None = None,
-        idempotency_key: str | None = None,
-        channels_override: list[str] | None = None,
+            self,
+            event_type: str,
+            recipient_ids: list[int],
+            actor_id: int | None = None,
+            actor_name: str = "",
+            context: dict[str, Any] | None = None,
+            idempotency_key: str | None = None,
+            channels_override: list[str] | None = None,
     ) -> None:
         """Fire-and-forget: dispatches the event in a background daemon thread."""
         base = getattr(settings, "NOTIFICATION_SERVICE_URL", "").strip().rstrip("/")

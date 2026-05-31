@@ -85,10 +85,10 @@ class ChatRepository:
 
     @staticmethod
     def get_chats_for_member(
-        member_id: int,
-        search: str | None = None,
-        ordering: str = "-last_message_at",
-        tags: list[str] | None = None,
+            member_id: int,
+            search: str | None = None,
+            ordering: str = "-last_message_at",
+            tags: list[str] | None = None,
     ) -> QuerySet[Chat]:
         order_expr = _ORDERING_MAP.get(ordering, _ORDERING_MAP["-last_message_at"])
 
@@ -123,10 +123,10 @@ class ChatRepository:
 
     @staticmethod
     def get_archived_chats_for_member(
-        member_id: int,
-        search: str | None = None,
-        ordering: str = "-last_message_at",
-        tags: list[str] | None = None,
+            member_id: int,
+            search: str | None = None,
+            ordering: str = "-last_message_at",
+            tags: list[str] | None = None,
     ) -> QuerySet[Chat]:
         order_expr = _ORDERING_MAP.get(ordering, _ORDERING_MAP["-last_message_at"])
 
@@ -161,10 +161,10 @@ class ChatRepository:
 
     @staticmethod
     def get_chats_created_by(
-        user_id: int,
-        search: str | None = None,
-        ordering: str = "-created_at",
-        tags: list[str] | None = None,
+            user_id: int,
+            search: str | None = None,
+            ordering: str = "-created_at",
+            tags: list[str] | None = None,
     ) -> QuerySet[Chat]:
         order_expr = _ORDERING_MAP.get(ordering, _ORDERING_MAP["-created_at"])
 
@@ -191,9 +191,9 @@ class ChatRepository:
 
     @staticmethod
     def list_all(
-        search: str | None = None,
-        ordering: str = "-created_at",
-        tags: list[str] | None = None,
+            search: str | None = None,
+            ordering: str = "-created_at",
+            tags: list[str] | None = None,
     ) -> QuerySet[Chat]:
         order_expr = _ORDERING_MAP.get(ordering, _ORDERING_MAP["-created_at"])
         qs = Chat.objects.annotate(

@@ -1,0 +1,203 @@
+"""
+Unit tests for the message export service (chat PDF / Markdown / JSON rendering).
+
+Previously untested: the view-layer tests mock the generate_* functions entirely.
+These exercise the rendering helpers directly, including the dangerous-tag
+sanitization used before rendering user content to PDF.
+"""
+import datetime
+import json
+
+import pytest
+
+from apps.message.exceptions import PDFGenerationException
+from apps.message.services.export_service import (
+    _fmt_dt,
+    _render_markdown,
+    generate_ai_responses_markdown,
+    generate_chat_json,
+    generate_chat_markdown,
+    generate_chat_pdf,
+    generate_message_pdf,
+)
+from test.conftest import make_chat, make_message
+
+EXPORT = "apps.message.services.export_service"
+
+
+def _conversation():
+    """A small user/AI conversation."""
+    return [
+        make_message(msg_id=1, sender_type="user", message="¿Cuál es el plan?"),
+        make_message(msg_id=2, sender_type="system", message="El plan es avanzar."),
+        make_message(msg_id=3, sender_type="user", message="Entendido."),
+    ]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# _fmt_dt
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_fmt_dt_none_returns_empty_string():
+    assert _fmt_dt(None) == ""
+
+
+def test_fmt_dt_formats_aware_datetime_as_utc():
+    dt = datetime.datetime(2025, 3, 15, 9, 30, tzinfo=datetime.timezone.utc)
+    assert _fmt_dt(dt) == "2025-03-15 09:30 UTC"
+
+
+def test_fmt_dt_converts_other_timezone_to_utc():
+    tz = datetime.timezone(datetime.timedelta(hours=3))
+    dt = datetime.datetime(2025, 3, 15, 12, 30, tzinfo=tz)  # 09:30 UTC
+    assert _fmt_dt(dt) == "2025-03-15 09:30 UTC"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# _render_markdown — rendering + dangerous-tag sanitization
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_render_markdown_renders_headings_and_bold():
+    html = _render_markdown("# Título\n\ntexto **negrita**")
+    assert "<h1" in html
+    assert "<strong>negrita</strong>" in html
+
+
+def test_render_markdown_renders_tables():
+    html = _render_markdown("| A | B |\n| - | - |\n| 1 | 2 |")
+    assert "<table>" in html
+
+
+def test_render_markdown_strips_script_tags():
+    html = _render_markdown("Hola <script>alert('x')</script> mundo")
+    assert "<script" not in html.lower()
+
+
+def test_render_markdown_strips_iframe_and_form_tags():
+    html = _render_markdown("<iframe src='evil'></iframe><form><input></form>")
+    assert "<iframe" not in html.lower()
+    assert "<form" not in html.lower()
+    assert "<input" not in html.lower()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# generate_chat_markdown
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_chat_markdown_includes_chat_name_and_messages():
+    chat = make_chat(name="Operación Norte")
+    md = generate_chat_markdown(chat, _conversation())
+    assert "# Operación Norte" in md
+    assert "El plan es avanzar." in md
+
+
+def test_chat_markdown_labels_user_and_ai():
+    chat = make_chat()
+    md = generate_chat_markdown(chat, _conversation())
+    assert "**User**" in md
+    assert "**AI**" in md
+
+
+def test_chat_markdown_reports_message_count():
+    chat = make_chat()
+    md = generate_chat_markdown(chat, _conversation())
+    assert "3 message(s)" in md
+
+
+def test_chat_markdown_empty_conversation():
+    md = generate_chat_markdown(make_chat(name="Vacío"), [])
+    assert "# Vacío" in md
+    assert "0 message(s)" in md
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# generate_ai_responses_markdown — only SYSTEM messages
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_ai_responses_markdown_includes_only_ai_messages():
+    chat = make_chat()
+    md = generate_ai_responses_markdown(chat, _conversation())
+    assert "El plan es avanzar." in md      # AI message
+    assert "¿Cuál es el plan?" not in md     # user message excluded
+    assert "Entendido." not in md            # user message excluded
+
+
+def test_ai_responses_markdown_numbers_responses():
+    chat = make_chat()
+    messages = [
+        make_message(msg_id=1, sender_type="system", message="Respuesta uno"),
+        make_message(msg_id=2, sender_type="system", message="Respuesta dos"),
+    ]
+    md = generate_ai_responses_markdown(chat, messages)
+    assert "## Response 1" in md
+    assert "## Response 2" in md
+    assert "2 response(s)" in md
+
+
+def test_ai_responses_markdown_no_ai_messages():
+    chat = make_chat()
+    messages = [make_message(msg_id=1, sender_type="user", message="solo usuario")]
+    md = generate_ai_responses_markdown(chat, messages)
+    assert "0 response(s)" in md
+    assert "solo usuario" not in md
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# generate_chat_json
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_chat_json_is_valid_json():
+    payload = generate_chat_json(make_chat(), _conversation())
+    parsed = json.loads(payload)
+    assert isinstance(parsed, dict)
+
+
+def test_chat_json_includes_chat_metadata():
+    chat = make_chat(chat_id=42, name="Misión")
+    parsed = json.loads(generate_chat_json(chat, _conversation()))
+    assert parsed["chat"]["id"] == 42
+    assert parsed["chat"]["name"] == "Misión"
+
+
+def test_chat_json_includes_messages_and_count():
+    parsed = json.loads(generate_chat_json(make_chat(), _conversation()))
+    assert parsed["message_count"] == 3
+    assert len(parsed["messages"]) == 3
+    assert parsed["messages"][0]["message"] == "¿Cuál es el plan?"
+    assert parsed["messages"][1]["sender_type"] == "system"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# generate_chat_pdf
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_chat_pdf_returns_pdf_bytes():
+    pdf = generate_chat_pdf(make_chat(name="Informe"), _conversation())
+    assert isinstance(pdf, bytes)
+    assert pdf[:4] == b"%PDF"
+
+
+def test_chat_pdf_handles_empty_conversation():
+    assert generate_chat_pdf(make_chat(), [])[:4] == b"%PDF"
+
+
+def test_chat_pdf_raises_on_pisa_error(mocker):
+    mocker.patch(f"{EXPORT}.pisa.CreatePDF", return_value=mocker.Mock(err=1))
+    with pytest.raises(PDFGenerationException):
+        generate_chat_pdf(make_chat(), _conversation())
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# generate_message_pdf
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_message_pdf_returns_pdf_bytes():
+    msg = make_message(sender_type="system", message="# Respuesta\n\nDetalle.")
+    pdf = generate_message_pdf(make_chat(), msg)
+    assert pdf[:4] == b"%PDF"
+
+
+def test_message_pdf_raises_on_pisa_error(mocker):
+    mocker.patch(f"{EXPORT}.pisa.CreatePDF", return_value=mocker.Mock(err=1))
+    with pytest.raises(PDFGenerationException):
+        generate_message_pdf(make_chat(), make_message())

@@ -6,8 +6,16 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
+
+class TranscriptionBusyError(Exception):
+    pass
+
+
 _model = None
 _model_lock = threading.Lock()
+
+_MAX_CONCURRENCY = max(int(getattr(settings, "WHISPER_MAX_CONCURRENCY", 2)), 1)
+_slots = threading.BoundedSemaphore(_MAX_CONCURRENCY)
 
 
 def _get_model():
@@ -31,6 +39,18 @@ def _get_model():
 
 class TranscriptionClient:
     def transcribe(self, audio_file) -> str:
+        if not _slots.acquire(blocking=False):
+            logger.warning(
+                "Transcription rejected: all %d slots busy.", _MAX_CONCURRENCY
+            )
+            raise TranscriptionBusyError()
+        try:
+            return self._transcribe(audio_file)
+        finally:
+            _slots.release()
+
+    @staticmethod
+    def _transcribe(audio_file) -> str:
         suffix = os.path.splitext(getattr(audio_file, "name", ".wav"))[1] or ".wav"
 
         with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:

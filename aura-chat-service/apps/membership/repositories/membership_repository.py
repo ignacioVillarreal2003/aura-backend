@@ -74,9 +74,9 @@ class MembershipRepository:
 
     @staticmethod
     def update_status(
-        membership: ChatMembership,
-        new_status: str,
-        updated_by: int,
+            membership: ChatMembership,
+            new_status: str,
+            updated_by: int,
     ) -> ChatMembership:
         membership.status = new_status
         membership.updated_by = updated_by

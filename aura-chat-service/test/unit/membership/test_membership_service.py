@@ -1,4 +1,5 @@
 import pytest
+from django.db import IntegrityError
 
 from apps.chat.exceptions import ChatNotFoundException
 from apps.membership.exceptions import (
@@ -34,6 +35,14 @@ def _patch_atomic(mocker):
     mocker.patch("django.db.transaction.Atomic.__enter__", return_value=None)
     mocker.patch("django.db.transaction.Atomic.__exit__", return_value=False)
     mocker.patch(f"{SVC}.on_commit", side_effect=lambda fn: None)
+
+
+def _patch_atomic_run_oncommit(mocker):
+    """Like _patch_atomic but runs on_commit callbacks immediately so post-commit
+    side effects (notifications, WS broadcasts) can be asserted."""
+    mocker.patch("django.db.transaction.Atomic.__enter__", return_value=None)
+    mocker.patch("django.db.transaction.Atomic.__exit__", return_value=False)
+    mocker.patch(f"{SVC}.on_commit", side_effect=lambda fn: fn())
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -598,3 +607,130 @@ def test_update_member_role_calls_repo_with_correct_args(mocker):
     repo = mocker.patch(f"{SVC}.membership_repository.update_role", return_value=updated)
     service.update_member_role(user, chat_id=1, member_id=2, role="reader")
     repo.assert_called_once_with(1, 2, "reader", updated_by=1)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# add_members — IntegrityError fallback (TOCTOU race) + invite notification
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_add_members_create_integrity_error_raises_409(mocker):
+    """The precheck passes but a concurrent insert makes create() hit the unique
+    constraint — the IntegrityError is translated to a 409, not leaked."""
+    user = make_user(user_id=1)
+    chat = make_chat(chat_id=1, created_by=1)
+    _patch_perms(mocker)
+    _patch_chat(mocker, chat)
+    _patch_atomic(mocker)
+    mocker.patch(f"{SVC}.membership_repository.is_chat_owner", return_value=False)
+    mocker.patch(f"{SVC}.membership_repository.get_existing_member_ids_in", return_value=set())
+    mocker.patch(f"{SVC}.membership_repository.create", side_effect=IntegrityError())
+    with pytest.raises(MembershipAlreadyExistsException):
+        service.add_members(user, chat_id=1, member_ids=[2])
+
+
+def test_add_members_emits_invite_notification(mocker):
+    user = make_user(user_id=1)
+    chat = make_chat(chat_id=1, created_by=1, name="Equipo")
+    _patch_perms(mocker)
+    _patch_chat(mocker, chat)
+    _patch_atomic_run_oncommit(mocker)
+    mocker.patch(f"{SVC}.membership_repository.is_chat_owner", return_value=False)
+    mocker.patch(f"{SVC}.membership_repository.get_existing_member_ids_in", return_value=set())
+    mocker.patch(f"{SVC}.membership_repository.create", side_effect=[
+        make_membership(member_id=2),
+        make_membership(member_id=3),
+    ])
+    emit = mocker.patch(f"{SVC}.notification_client.emit_event")
+    service.add_members(user, chat_id=1, member_ids=[2, 3])
+    emit.assert_called_once()
+    _, kwargs = emit.call_args
+    assert kwargs["event_type"] == "chat.member.invited"
+    assert set(kwargs["recipient_ids"]) == {2, 3}
+    assert kwargs["actor_id"] == 1
+
+
+def test_add_members_no_one_created_skips_notification(mocker):
+    """An empty member_ids list creates nobody and emits no notification."""
+    user = make_user(user_id=1)
+    chat = make_chat(chat_id=1, created_by=1)
+    _patch_perms(mocker)
+    _patch_chat(mocker, chat)
+    _patch_atomic_run_oncommit(mocker)
+    mocker.patch(f"{SVC}.membership_repository.is_chat_owner", return_value=False)
+    mocker.patch(f"{SVC}.membership_repository.get_existing_member_ids_in", return_value=set())
+    emit = mocker.patch(f"{SVC}.notification_client.emit_event")
+    result = service.add_members(user, chat_id=1, member_ids=[])
+    assert result == []
+    emit.assert_not_called()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# update_member — reactivation + WS broadcasts
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_update_member_inactive_to_active_reactivates(mocker):
+    user = make_user(user_id=2)
+    chat = make_chat(chat_id=1, created_by=1)
+    membership = make_membership(member_id=2, chat_id=1, status="inactive")
+    updated = make_membership(member_id=2, chat_id=1, status="active")
+    _patch_perms(mocker)
+    _patch_chat(mocker, chat)
+    _patch_atomic(mocker)
+    mocker.patch(f"{SVC}.membership_repository.get_by_chat_and_member_for_update", return_value=membership)
+    mocker.patch(f"{SVC}.membership_repository.update_status", return_value=updated)
+    result = service.update_member(user, chat_id=1, member_id=2, new_status="active")
+    assert result.status == "active"
+
+
+def test_update_member_active_status_broadcasts_member_joined(mocker):
+    user = make_user(user_id=2)
+    chat = make_chat(chat_id=1, created_by=1)
+    membership = make_membership(member_id=2, chat_id=1, status="pending")
+    updated = make_membership(member_id=2, chat_id=1, status="active")
+    _patch_perms(mocker)
+    _patch_chat(mocker, chat)
+    _patch_atomic_run_oncommit(mocker)
+    mocker.patch(f"{SVC}.membership_repository.get_by_chat_and_member_for_update", return_value=membership)
+    mocker.patch(f"{SVC}.membership_repository.update_status", return_value=updated)
+    broadcast = mocker.patch(f"{SVC}._broadcast_member_joined")
+    service.update_member(user, chat_id=1, member_id=2, new_status="active")
+    broadcast.assert_called_once_with(1, 2)
+
+
+def test_update_member_inactive_status_broadcasts_member_left(mocker):
+    user = make_user(user_id=2)
+    chat = make_chat(chat_id=1, created_by=1)
+    membership = make_membership(member_id=2, chat_id=1, status="active")
+    updated = make_membership(member_id=2, chat_id=1, status="inactive")
+    _patch_perms(mocker)
+    _patch_chat(mocker, chat)
+    _patch_atomic_run_oncommit(mocker)
+    mocker.patch(f"{SVC}.membership_repository.get_by_chat_and_member_for_update", return_value=membership)
+    mocker.patch(f"{SVC}.membership_repository.update_status", return_value=updated)
+    broadcast = mocker.patch(f"{SVC}._broadcast_member_left")
+    service.update_member(user, chat_id=1, member_id=2, new_status="inactive")
+    broadcast.assert_called_once_with(1, 2)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# remove_member — removed notification + member_left broadcast
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_remove_member_emits_removed_notification_and_broadcast(mocker):
+    user = make_user(user_id=1)
+    chat = make_chat(chat_id=1, created_by=1)
+    membership = make_membership(member_id=2, chat_id=1)
+    _patch_perms(mocker)
+    _patch_chat(mocker, chat)
+    _patch_atomic_run_oncommit(mocker)
+    mocker.patch(f"{SVC}.membership_repository.is_chat_owner", return_value=True)
+    mocker.patch(f"{SVC}.membership_repository.get_by_chat_and_member_for_update", return_value=membership)
+    mocker.patch(f"{SVC}.membership_repository.soft_delete")
+    broadcast = mocker.patch(f"{SVC}._broadcast_member_left")
+    emit = mocker.patch(f"{SVC}.notification_client.emit_event")
+    service.remove_member(user, chat_id=1, member_id=2)
+    broadcast.assert_called_once_with(1, 2)
+    emit.assert_called_once()
+    _, kwargs = emit.call_args
+    assert kwargs["event_type"] == "chat.member.removed"
+    assert kwargs["recipient_ids"] == [2]

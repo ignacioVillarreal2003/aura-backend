@@ -29,7 +29,6 @@ logger = logging.getLogger(__name__)
 
 
 class MessageListView(APIView):
-
     @extend_schema(
         tags=["Messages"],
         summary="List messages",
@@ -158,13 +157,12 @@ class MessageListView(APIView):
 
 
 class AdminMessageListView(APIView):
-
     @extend_schema(
         tags=["Messages"],
         summary="List messages (admin)",
         description=(
-            "Returns the full message history for any chat without requiring active membership. "
-            "Requires `MANAGE_CHATS` permission."
+                "Returns the full message history for any chat without requiring active membership. "
+                "Requires `MANAGE_CHATS` permission."
         ),
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),

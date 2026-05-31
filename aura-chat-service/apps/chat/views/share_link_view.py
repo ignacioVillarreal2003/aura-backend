@@ -32,8 +32,8 @@ class ShareLinkListView(APIView):
         tags=["Share Links"],
         summary="Create a share link",
         description=(
-            "Creates a UUID **token** clients can pass to the public read-only endpoint "
-            "`GET /api/v1/share/{token}/messages/` (no Bearer). Optional future `expires_at`."
+                "Creates a UUID **token** clients can pass to the public read-only endpoint "
+                "`GET /api/v1/share/{token}/messages/` (no Bearer). Optional future `expires_at`."
         ),
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),

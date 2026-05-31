@@ -5,7 +5,6 @@ from core.models.soft_delete import SoftDeleteModel
 
 
 class Checklist(AuditModel, SoftDeleteModel):
-
     class Mode(models.TextChoices):
         DIRECT = "direct", "Directo"
         RAG = "rag", "Con documentos"

@@ -1,14 +1,13 @@
 import logging
 from typing import Optional
-
 from django.utils import timezone
 from asgiref.sync import sync_to_async
+
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization.access import AccessControl
 from core.authorization import permissions as perms
 from core.clients.exceptions import HttpClientException
 from core.clients.llm_client import ReportGenerateResult, llm_client
-
 from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.membership.repositories.membership_repository import membership_repository
@@ -160,7 +159,8 @@ class ReportService:
             raise LLMServiceException() from e
 
         if not result.content or not result.content.strip():
-            logger.error("LLM returned empty content for report", extra={"user_id": user.id, "report_type": report_type})
+            logger.error("LLM returned empty content for report",
+                         extra={"user_id": user.id, "report_type": report_type})
             raise LLMServiceException()
 
         report = await sync_to_async(report_repository.create)(

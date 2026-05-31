@@ -18,8 +18,14 @@ from apps.message.exceptions import (
     NoMessageToRegenerateException,
     NotAIMessageException,
     NotChatOwnerException,
+    LLMServiceException,
     ReaderCannotSendMessageException,
+    TranscriptionBusyException,
+    TranscriptionException,
 )
+from core.clients.exceptions import HttpClientException
+from core.clients.llm_client import DocumentQuestionResult
+from core.clients.transcription_client import TranscriptionBusyError
 from apps.message.services.bookmark_service import BookmarkService
 from apps.message.services.feedback_service import FeedbackService
 from apps.message.services.message_service import MessageService
@@ -65,6 +71,99 @@ def _msg(msg_id=1, chat_id=1, created_by=1, sender_type="user"):
 # ===========================================================================
 # MessageService
 # ===========================================================================
+
+class TestMessageServiceTranscribeAudio:
+
+    def test_transcribe_audio_returns_text(self, mocker):
+        mocker.patch(f"{MSG_SVC}.transcription_client.transcribe", return_value="hola mundo")
+        assert MessageService().transcribe_audio(object()) == "hola mundo"
+
+    def test_transcribe_audio_busy_raises_busy_exception(self, mocker):
+        mocker.patch(
+            f"{MSG_SVC}.transcription_client.transcribe",
+            side_effect=TranscriptionBusyError(),
+        )
+        with pytest.raises(TranscriptionBusyException):
+            MessageService().transcribe_audio(object())
+
+    def test_transcribe_audio_other_error_raises_transcription_exception(self, mocker):
+        mocker.patch(
+            f"{MSG_SVC}.transcription_client.transcribe",
+            side_effect=RuntimeError("boom"),
+        )
+        with pytest.raises(TranscriptionException):
+            MessageService().transcribe_audio(object())
+
+
+class TestMessageServiceRunDocumentQuestion:
+
+    def _patch_access_ok(self, mocker):
+        mocker.patch(f"{MSG_SVC}.chat_repository.get_by_id", return_value=_chat())
+        mocker.patch(f"{MSG_SVC}.membership_repository.is_active_member", return_value=True)
+
+    @pytest.mark.asyncio
+    async def test_saves_ai_message_when_answer_present(self, mocker):
+        self._patch_access_ok(mocker)
+        mocker.patch(f"{MSG_SVC}.message_repository.get_recent_messages", return_value=[])
+        result = DocumentQuestionResult(question="q", answer="respuesta", fragments=[{"x": 1}])
+        mocker.patch(f"{MSG_SVC}.llm_client.document_question", new_callable=AsyncMock, return_value=result)
+        ai_msg = _msg(msg_id=7, sender_type="system")
+        save = mocker.patch.object(MessageService, "_save_ai_message", return_value=ai_msg)
+        out = await MessageService().run_document_question(_user(), chat_id=1)
+        assert out.answer == "respuesta"
+        assert out.assistant_message is ai_msg
+        save.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_empty_answer_skips_save(self, mocker):
+        self._patch_access_ok(mocker)
+        mocker.patch(f"{MSG_SVC}.message_repository.get_recent_messages", return_value=[])
+        result = DocumentQuestionResult(question="q", answer="   ", fragments=[])
+        mocker.patch(f"{MSG_SVC}.llm_client.document_question", new_callable=AsyncMock, return_value=result)
+        save = mocker.patch.object(MessageService, "_save_ai_message")
+        out = await MessageService().run_document_question(_user(), chat_id=1)
+        assert out.assistant_message is None
+        save.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_llm_http_error_raises_502(self, mocker):
+        self._patch_access_ok(mocker)
+        mocker.patch(f"{MSG_SVC}.message_repository.get_recent_messages", return_value=[])
+        mocker.patch(
+            f"{MSG_SVC}.llm_client.document_question",
+            new_callable=AsyncMock,
+            side_effect=HttpClientException("boom", status_code=500),
+        )
+        with pytest.raises(LLMServiceException):
+            await MessageService().run_document_question(_user(), chat_id=1)
+
+    @pytest.mark.asyncio
+    async def test_non_member_raises_access_denied(self, mocker):
+        mocker.patch(f"{MSG_SVC}.chat_repository.get_by_id", return_value=_chat())
+        mocker.patch(f"{MSG_SVC}.membership_repository.is_active_member", return_value=False)
+        with pytest.raises(MessageAccessDeniedException):
+            await MessageService().run_document_question(_user(), chat_id=1)
+
+    @pytest.mark.asyncio
+    async def test_builds_history_with_role_mapping(self, mocker):
+        self._patch_access_ok(mocker)
+        m_user = _msg(msg_id=1, sender_type="user")
+        m_user.message = "pregunta"
+        m_ai = _msg(msg_id=2, sender_type="system")
+        m_ai.message = "respuesta"
+        mocker.patch(f"{MSG_SVC}.message_repository.get_recent_messages", return_value=[m_user, m_ai])
+        llm = mocker.patch(
+            f"{MSG_SVC}.llm_client.document_question",
+            new_callable=AsyncMock,
+            return_value=DocumentQuestionResult(question="q", answer="", fragments=[]),
+        )
+        await MessageService().run_document_question(_user(), chat_id=1)
+        args, _ = llm.call_args
+        history = args[0]
+        roles = {h["content"]: h["role"] for h in history}
+        assert roles["pregunta"] == "human"       # USER → human
+        assert roles["respuesta"] == "assistant"  # SYSTEM → assistant
+
 
 class TestMessageServiceSendMessage:
 

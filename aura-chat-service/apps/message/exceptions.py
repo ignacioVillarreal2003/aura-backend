@@ -1,4 +1,5 @@
-from core.exceptions import ConflictException, ForbiddenException, NotFoundException, ServiceException, ServiceUnavailableException, ValidationException
+from core.exceptions import ConflictException, ForbiddenException, NotFoundException, ServiceException, \
+    ServiceUnavailableException, ValidationException
 
 
 class ExportTooLargeException(ServiceException):
@@ -27,6 +28,12 @@ class TranscriptionException(ServiceUnavailableException):
     status_code = 502
     error_code = "transcription_error"
     detail = "Audio could not be transcribed"
+
+
+class TranscriptionBusyException(ServiceUnavailableException):
+    status_code = 503
+    error_code = "transcription_busy"
+    detail = "Transcription service is at capacity; please retry shortly"
 
 
 class MessageNotFoundException(NotFoundException):

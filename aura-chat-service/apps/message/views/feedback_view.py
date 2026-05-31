@@ -24,8 +24,8 @@ class FeedbackView(APIView):
         tags=["Messages"],
         summary="Submit feedback for AI message",
         description=(
-            "Creates or updates **thumbs up (1) / thumbs down (-1)** feedback for an **assistant (system)** message only. "
-            "Validating the target message returns **400** if it is not an AI message."
+                "Creates or updates **thumbs up (1) / thumbs down (-1)** feedback for an **assistant (system)** message only. "
+                "Validating the target message returns **400** if it is not an AI message."
         ),
         parameters=_PATH_PARAMS,
         request=SetFeedbackRequest,

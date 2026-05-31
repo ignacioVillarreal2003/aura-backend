@@ -18,8 +18,8 @@ class MarkAsReadView(APIView):
         tags=["Messages"],
         summary="Mark chat as read",
         description=(
-            "Updates the caller's **last read** position for this chat (membership). "
-            "Requires **active membership**; use when the user opens or scrolls to the latest messages."
+                "Updates the caller's **last read** position for this chat (membership). "
+                "Requires **active membership**; use when the user opens or scrolls to the latest messages."
         ),
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),

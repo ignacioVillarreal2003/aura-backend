@@ -81,7 +81,8 @@ class AuthenticationMiddleware:
                 extra={"path": request.path, "error": str(e)},
             )
             return JsonResponse(
-                {"detail": "Invalid or expired token", "error": "invalid_token", "correlation_id": get_correlation_id()},
+                {"detail": "Invalid or expired token", "error": "invalid_token",
+                 "correlation_id": get_correlation_id()},
                 status=401,
                 headers=_WWW_AUTH,
             )
@@ -122,7 +123,8 @@ class AuthenticationMiddleware:
                 extra={"path": request.path, "error": str(e)},
             )
             return JsonResponse(
-                {"detail": "Authentication error", "error": "authentication_error", "correlation_id": get_correlation_id()},
+                {"detail": "Authentication error", "error": "authentication_error",
+                 "correlation_id": get_correlation_id()},
                 status=500,
             )
         except Exception:

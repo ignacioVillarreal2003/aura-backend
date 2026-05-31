@@ -101,7 +101,6 @@ _TYPE_LABELS = {
     Report.Type.OPORD: "ORDEN DE OPERACIONES",
 }
 
-
 _DANGEROUS_TAGS_RE = re.compile(
     r"<\s*/?\s*(script|style|iframe|object|embed|form|input|button|textarea)\b[^>]*>",
     re.IGNORECASE,

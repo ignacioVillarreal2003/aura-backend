@@ -4,9 +4,16 @@ Integration tests for bookmarks, pinned messages, feedback, threads, and share l
 import pytest
 from django.utils import timezone
 
-from apps.chat.exceptions import ChatAccessDeniedException, ShareLinkExpiredOrInactiveException
+from apps.chat.exceptions import (
+    ChatAccessDeniedException,
+    ShareLinkExpiredOrInactiveException,
+    ShareLinkNotFoundException,
+)
 from apps.chat.models.chat_share_link import ChatShareLink
+from apps.chat.services.chat_service import chat_service
 from apps.chat.services.share_link_service import share_link_service
+from apps.message.models.chat_message import ChatMessage
+from apps.message.repositories.message_repository import message_repository
 from apps.message.exceptions import MessageAccessDeniedException, MessageNotFoundException, NotAIMessageException
 from apps.message.models.message_bookmark import MessageBookmark
 from apps.message.models.message_feedback import MessageFeedback
@@ -210,3 +217,99 @@ def test_get_public_messages_via_expired_link_raises(owner, chat):
     link = share_link_service.create_link(owner, chat.id, expires_at=past)
     with pytest.raises(ShareLinkExpiredOrInactiveException):
         share_link_service.get_public_messages(link.token)
+
+
+def test_create_share_link_persists_expires_at(owner, chat):
+    future = timezone.now() + timezone.timedelta(days=7)
+    link = share_link_service.create_link(owner, chat.id, expires_at=future)
+    link.refresh_from_db()
+    assert link.expires_at is not None
+
+
+def test_get_public_messages_via_future_expiry_link_works(owner, chat, user_message):
+    future = timezone.now() + timezone.timedelta(hours=1)
+    link = share_link_service.create_link(owner, chat.id, expires_at=future)
+    messages = list(share_link_service.get_public_messages(link.token))
+    assert user_message.id in [m.id for m in messages]
+
+
+def test_get_public_messages_only_returns_that_chats_messages(owner, chat, user_message):
+    """A share link must only expose messages from its own chat, never another chat's."""
+    other_chat = chat_service.create_chat(owner, name="Otro chat")
+    other_msg = message_repository.create(
+        chat_id=other_chat.id,
+        message="Mensaje de otro chat",
+        sender_type=ChatMessage.SenderType.USER,
+        created_by=owner.id,
+    )
+    link = share_link_service.create_link(owner, chat.id)
+    ids = [m.id for m in share_link_service.get_public_messages(link.token)]
+    assert user_message.id in ids
+    assert other_msg.id not in ids
+
+
+# ── list_links: active filter + ordering ─────────────────────────────────────
+
+def test_list_share_links_returns_active_links(owner, chat):
+    link1 = share_link_service.create_link(owner, chat.id)
+    link2 = share_link_service.create_link(owner, chat.id)
+    ids = [link.id for link in share_link_service.list_links(owner, chat.id)]
+    assert link1.id in ids
+    assert link2.id in ids
+
+
+def test_list_share_links_active_only_excludes_revoked(owner, chat):
+    active = share_link_service.create_link(owner, chat.id)
+    revoked = share_link_service.create_link(owner, chat.id)
+    share_link_service.revoke_link(owner, chat.id, revoked.id)
+    ids = [link.id for link in share_link_service.list_links(owner, chat.id)]
+    assert active.id in ids
+    assert revoked.id not in ids
+
+
+def test_list_share_links_active_false_includes_revoked(owner, chat):
+    active = share_link_service.create_link(owner, chat.id)
+    revoked = share_link_service.create_link(owner, chat.id)
+    share_link_service.revoke_link(owner, chat.id, revoked.id)
+    ids = [link.id for link in share_link_service.list_links(owner, chat.id, active_only=False)]
+    assert active.id in ids
+    assert revoked.id in ids
+
+
+def test_list_share_links_ordered_by_created_at_desc(owner, chat):
+    first = share_link_service.create_link(owner, chat.id)
+    second = share_link_service.create_link(owner, chat.id)
+    ids = [link.id for link in share_link_service.list_links(owner, chat.id)]
+    # newest first
+    assert ids.index(second.id) < ids.index(first.id)
+
+
+def test_list_share_links_non_owner_raises(chat, other_user):
+    with pytest.raises(ChatAccessDeniedException):
+        share_link_service.list_links(other_user, chat.id)
+
+
+# ── revoke: cross-chat isolation ─────────────────────────────────────────────
+
+def test_revoke_share_link_wrong_chat_raises_not_found(owner, chat):
+    """A link belongs to one chat; revoking it via a different chat_id must 404,
+    not silently deactivate it (prevents cross-chat tampering)."""
+    other_chat = chat_service.create_chat(owner, name="Otro chat")
+    link = share_link_service.create_link(owner, chat.id)
+    with pytest.raises(ShareLinkNotFoundException):
+        share_link_service.revoke_link(owner, other_chat.id, link.id)
+    link.refresh_from_db()
+    assert link.is_active is True  # untouched
+
+
+def test_revoke_share_link_unknown_link_raises_not_found(owner, chat):
+    with pytest.raises(ShareLinkNotFoundException):
+        share_link_service.revoke_link(owner, chat.id, 999999)
+
+
+def test_revoke_share_link_non_owner_raises(owner, chat, other_user):
+    link = share_link_service.create_link(owner, chat.id)
+    with pytest.raises(ChatAccessDeniedException):
+        share_link_service.revoke_link(other_user, chat.id, link.id)
+    link.refresh_from_db()
+    assert link.is_active is True

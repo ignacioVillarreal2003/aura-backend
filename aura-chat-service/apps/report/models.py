@@ -5,7 +5,6 @@ from core.models.soft_delete import SoftDeleteModel
 
 
 class Report(AuditModel, SoftDeleteModel):
-
     class Type(models.TextChoices):
         SITREP = "SITREP", "SITREP"
         INTSUM = "INTSUM", "INTSUM"

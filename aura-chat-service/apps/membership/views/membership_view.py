@@ -21,8 +21,8 @@ class MemberListView(APIView):
         tags=["Memberships"],
         summary="List members",
         description=(
-            "Paginated membership rows for the chat. Optional `status` query: membership status or `all`. "
-            "Invalid values return **400** with a structured error (not the standard DRF validation shape)."
+                "Paginated membership rows for the chat. Optional `status` query: membership status or `all`. "
+                "Invalid values return **400** with a structured error (not the standard DRF validation shape)."
         ),
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
@@ -60,10 +60,10 @@ class MemberListView(APIView):
         tags=["Memberships"],
         summary="Invite members",
         description=(
-            "Adds users by id list (deduplicated). **Owner only** — only the chat owner can invite members. "
-            "Invited members are created with `status: pending` and must accept the invitation themselves. "
-            "The service may notify downstream systems using the same Bearer token from the `Authorization` header. "
-            "**409** if a member already exists or state conflicts."
+                "Adds users by id list (deduplicated). **Owner only** — only the chat owner can invite members. "
+                "Invited members are created with `status: pending` and must accept the invitation themselves. "
+                "The service may notify downstream systems using the same Bearer token from the `Authorization` header. "
+                "**409** if a member already exists or state conflicts."
         ),
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
@@ -91,8 +91,8 @@ class AdminMemberListView(APIView):
         tags=["Memberships"],
         summary="List members (admin)",
         description=(
-            "Admin view: lists membership rows for any chat without requiring chat membership. "
-            "Requires `MANAGE_MEMBERS`. Defaults to returning all statuses; use `status` to filter."
+                "Admin view: lists membership rows for any chat without requiring chat membership. "
+                "Requires `MANAGE_MEMBERS`. Defaults to returning all statuses; use `status` to filter."
         ),
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
@@ -132,9 +132,9 @@ class MemberDetailView(APIView):
         tags=["Memberships"],
         summary="Update member status",
         description=(
-            "Transitions the authenticated user's own membership status (e.g. `pending → active` to accept, "
-            "`pending → inactive` to decline). **Only the invited member can change their own status** — "
-            "the chat owner cannot override this on behalf of another user."
+                "Transitions the authenticated user's own membership status (e.g. `pending → active` to accept, "
+                "`pending → inactive` to decline). **Only the invited member can change their own status** — "
+                "the chat owner cannot override this on behalf of another user."
         ),
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),
@@ -179,8 +179,8 @@ class MyMembershipsView(APIView):
         tags=["Memberships"],
         summary="List my memberships",
         description=(
-            "Returns all memberships for the authenticated user across every chat. "
-            "Use `status=pending` to see pending invitations that have not been accepted or declined yet."
+                "Returns all memberships for the authenticated user across every chat. "
+                "Use `status=pending` to see pending invitations that have not been accepted or declined yet."
         ),
         parameters=[
             OpenApiParameter(

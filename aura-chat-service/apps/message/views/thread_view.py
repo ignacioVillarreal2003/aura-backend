@@ -19,13 +19,12 @@ _PATH_PARAMS = [
 
 
 class ThreadView(APIView):
-
     @extend_schema(
         tags=["Messages"],
         summary="List thread replies",
         description=(
-            "Returns all thread replies for the given **parent** message id in chronological order. "
-            "The parent must belong to `chat_id` and the caller must have access to the chat."
+                "Returns all thread replies for the given **parent** message id in chronological order. "
+                "The parent must belong to `chat_id` and the caller must have access to the chat."
         ),
         parameters=_PATH_PARAMS,
         responses={200: ThreadReplyResponse(many=True), **standard_error_responses(401, 403, 404)},
@@ -40,8 +39,8 @@ class ThreadView(APIView):
         tags=["Messages"],
         summary="Add thread reply",
         description=(
-            "Creates a **MessageThreadReply** under the parent message. Used for side discussions without "
-            "cluttering the main timeline."
+                "Creates a **MessageThreadReply** under the parent message. Used for side discussions without "
+                "cluttering the main timeline."
         ),
         parameters=_PATH_PARAMS,
         request=SendThreadReplyRequest,

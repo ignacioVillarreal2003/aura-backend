@@ -26,18 +26,18 @@ def _require_ai_message(user_id: int, chat_id: int, message_id: int) -> ChatMess
 
 class FeedbackService:
     def set_feedback(
-        self,
-        user: AuthenticatedUser,
-        chat_id: int,
-        message_id: int,
-        value: int,
+            self,
+            user: AuthenticatedUser,
+            chat_id: int,
+            message_id: int,
+            value: int,
     ) -> MessageFeedback:
         AccessControl.require_permissions(user, frozenset({SET_MESSAGE_FEEDBACK}))
         _require_ai_message(user.id, chat_id, message_id)
         return feedback_repository.set(message_id=message_id, user_id=user.id, value=value)
 
     def delete_feedback(
-        self, user: AuthenticatedUser, chat_id: int, message_id: int
+            self, user: AuthenticatedUser, chat_id: int, message_id: int
     ) -> None:
         AccessControl.require_permissions(user, frozenset({SET_MESSAGE_FEEDBACK}))
         _require_ai_message(user.id, chat_id, message_id)
