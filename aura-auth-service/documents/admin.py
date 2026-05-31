@@ -292,7 +292,6 @@ class DocumentAdmin(admin.ModelAdmin):
         'status_badge',
         'nivel_display',
         'agrupaciones_count',
-        'created_by_display',
     )
     list_display_links = ('name_display',)
     list_filter = ()

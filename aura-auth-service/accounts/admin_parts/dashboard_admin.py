@@ -13,7 +13,7 @@ from django.urls import path
 from django.utils import timezone
 
 from accounts.admin_parts.common import _is_admin_or_super_user
-from accounts.models import User, UserRole
+from accounts.models import User, UserRole, AuditLog, RefreshToken
 from documents.models import Document
 from notifications.models import Notification
 
@@ -28,6 +28,7 @@ def _dashboard_overview_view(request):
         raise PermissionDenied
 
     now = timezone.now()
+    last_24h = now - timedelta(hours=24)
     last_7_days = now - timedelta(days=7)
     last_30_days = now - timedelta(days=30)
 
@@ -35,6 +36,21 @@ def _dashboard_overview_view(request):
     users_total = active_users_qs.count()
     users_enabled = active_users_qs.filter(enabled=True).count()
     users_new_30 = active_users_qs.filter(created_at__gte=last_30_days).count()
+    users_locked = active_users_qs.filter(lockout_until__gt=now).count()
+
+    sessions_active = 0
+    try:
+        sessions_active = RefreshToken.objects.filter(is_revoked=False, expires_at__gt=now).count()
+    except Exception:
+        logger.warning('Dashboard: sessions_active unavailable.')
+
+    logins_24h = 0
+    logins_failed_24h = 0
+    try:
+        logins_24h = AuditLog.objects.filter(action='LOGIN', timestamp__gte=last_24h).count()
+        logins_failed_24h = AuditLog.objects.filter(action='LOGIN_FAILED', timestamp__gte=last_24h).count()
+    except Exception:
+        logger.warning('Dashboard: login audit metrics unavailable.')
 
     documents_total = 0
     documents_new_30 = 0
@@ -54,6 +70,7 @@ def _dashboard_overview_view(request):
     notification_qs = Notification.objects.filter(deleted_at__isnull=True)
     notifications_7d = 0
     notifications_read_rate_7d = 0
+    notifications_unread = 0
     notifications_available = True
     try:
         notifications_7d = notification_qs.filter(created_at__gte=last_7_days).count()
@@ -61,6 +78,7 @@ def _dashboard_overview_view(request):
             created_at__gte=last_7_days,
             status='read',
         ).count()
+        notifications_unread = notification_qs.filter(status='unread').count()
         if notifications_7d:
             notifications_read_rate_7d = round((notifications_read_7d / notifications_7d) * 100, 1)
     except OperationalError:
@@ -94,20 +112,34 @@ def _dashboard_overview_view(request):
     except Exception:
         logger.warning('Dashboard: collections_by_doc_count unavailable.')
 
+    documents_by_status = []
     largest_documents = []
     recent_documents = []
     if documents_available:
         try:
-            largest_documents = list(
+            documents_by_status = list(
+                Document.objects.filter(deleted_at__isnull=True)
+                .values('status')
+                .annotate(total=Count('id'))
+                .order_by('-total')
+            )
+            user_map = {u.pk: u.username for u in User.objects.only('id', 'username')}
+            largest_docs_raw = list(
                 Document.objects.filter(deleted_at__isnull=True)
                 .values('name', 'file_size_bytes', 'created_by')
                 .order_by('-file_size_bytes', 'name')[:8]
             )
-            recent_documents = list(
+            for d in largest_docs_raw:
+                d['created_by_name'] = user_map.get(d['created_by'], '-')
+            largest_documents = largest_docs_raw
+            recent_docs_raw = list(
                 Document.objects.filter(deleted_at__isnull=True)
                 .values('name', 'created_at', 'created_by', 'status')
                 .order_by('-created_at')[:8]
             )
+            for d in recent_docs_raw:
+                d['created_by_name'] = user_map.get(d['created_by'], '-')
+            recent_documents = recent_docs_raw
         except Exception:
             pass
 
@@ -118,16 +150,22 @@ def _dashboard_overview_view(request):
             'users_total': users_total,
             'users_enabled': users_enabled,
             'users_new_30': users_new_30,
+            'users_locked': users_locked,
+            'sessions_active': sessions_active,
+            'logins_24h': logins_24h,
+            'logins_failed_24h': logins_failed_24h,
             'documents_total': documents_total,
             'documents_new_30': documents_new_30,
             'notifications_7d': notifications_7d,
             'notifications_read_rate_7d': notifications_read_rate_7d,
+            'notifications_unread': notifications_unread,
             'total_storage_bytes': total_storage_bytes,
             'notifications_available': notifications_available,
             'documents_available': documents_available,
         },
         'users_by_role': users_by_role,
         'collections_by_doc_count': collections_by_doc_count,
+        'documents_by_status': documents_by_status,
         'largest_documents': largest_documents,
         'recent_documents': recent_documents,
         'generated_at': now,

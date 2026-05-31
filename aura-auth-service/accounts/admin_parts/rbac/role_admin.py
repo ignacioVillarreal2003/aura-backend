@@ -1,7 +1,7 @@
 """Role admin configuration."""
 
 from django import forms
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.contrib.admin.widgets import FilteredSelectMultiple
 from django.utils.html import format_html
 from accounts.models import Role, Permission, PermissionInRole
@@ -35,7 +35,7 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
     """Admin for Role model."""
 
     form = RoleAdminForm
-    list_display = ('name', 'description_short', 'permission_count')
+    list_display = ('name', 'description_short', 'permission_count', 'permissions_names')
     list_filter = ()
     search_fields = ('name', 'description')
     readonly_fields = ()
@@ -71,6 +71,23 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
             role = Role.objects.get(pk=object_id)
             extra_context['title'] = f'Rol - {role.name.capitalize()}'
             extra_context['subtitle'] = None
+            if role.name in ('admin', 'superadmin'):
+                other_name = 'superadmin' if role.name == 'admin' else 'admin'
+                try:
+                    other_role = Role.objects.get(name=other_name)
+                    my_count = PermissionInRole.objects.filter(role=role).count()
+                    other_count = PermissionInRole.objects.filter(role=other_role).count()
+                    if my_count == other_count and request.method == 'GET':
+                        messages.warning(
+                            request,
+                            f'Advertencia: "{role.name}" y "{other_name}" tienen los mismos '
+                            f'{my_count} permisos. Ejecutá '
+                            f'"python manage.py fix_admin_permissions --execute" '
+                            f'para agregar los permisos exclusivos que le faltan a superadmin '
+                            f'(chat, gestión de admins, edición de roles/notificaciones, etc.).',
+                        )
+                except Role.DoesNotExist:
+                    pass
         except Role.DoesNotExist:
             pass
         return super().change_view(request, object_id, form_url, extra_context)
@@ -91,9 +108,10 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
         return False
 
     def save_related(self, request, form, formsets, change):
-        super().save_related(request, form, formsets, change)
         if 'permissions' not in form.cleaned_data:
+            super().save_related(request, form, formsets, change)
             return
+
         selected = {p.pk for p in form.cleaned_data['permissions']}
         existing = set(
             PermissionInRole.objects.filter(role=form.instance)
@@ -101,10 +119,34 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
         )
         to_remove = existing - selected
         to_add = selected - existing
+
+        super().save_related(request, form, formsets, change)
+
         if to_remove:
             PermissionInRole.objects.filter(role=form.instance, permission_id__in=to_remove).delete()
         for perm_id in to_add:
             PermissionInRole.objects.create(role=form.instance, permission_id=perm_id)
+
+        if to_add or to_remove:
+            added_names = list(
+                Permission.objects.filter(pk__in=to_add).order_by('name').values_list('name', flat=True)
+            )
+            removed_names = list(
+                Permission.objects.filter(pk__in=to_remove).order_by('name').values_list('name', flat=True)
+            )
+            log_audit(
+                actor=request.user,
+                action='UPDATE',
+                entity_type='role_permissions',
+                entity_id=form.instance.pk,
+                entity_label=f'{request.user.username} actualizó permisos del rol {form.instance.name}',
+                details={
+                    'rol': form.instance.name,
+                    'permisos_agregados': added_names,
+                    'permisos_eliminados': removed_names,
+                },
+                request=request,
+            )
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
@@ -162,3 +204,30 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
             count
         )
     permission_count.short_description = 'Permisos'
+
+    def permissions_names(self, obj):
+        names = list(
+            PermissionInRole.objects.filter(role=obj)
+            .select_related('permission')
+            .order_by('permission__name')
+            .values_list('permission__name', flat=True)
+        )
+        if not names:
+            return format_html('<span style="color:#bbb">—</span>')
+        # Show first 4 inline; rest as tooltip
+        visible = names[:4]
+        rest = names[4:]
+        chips = ''.join(
+            f'<span style="display:inline-block;background:#eef2f7;color:#1e3a5f;'
+            f'border-radius:3px;padding:1px 6px;margin:1px;font-size:11px;">{n}</span>'
+            for n in visible
+        )
+        if rest:
+            chips += (
+                f'<span title="{chr(10).join(rest)}" style="display:inline-block;background:#dde4ee;color:#444;'
+                f'border-radius:3px;padding:1px 6px;margin:1px;font-size:11px;cursor:help;">'
+                f'+{len(rest)} más</span>'
+            )
+        return format_html(chips)
+    permissions_names.short_description = 'Lista de permisos'
+    permissions_names.allow_tags = True

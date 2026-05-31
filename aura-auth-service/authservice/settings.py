@@ -9,6 +9,7 @@ Django: 5.x
 
 from pathlib import Path
 from decouple import config, Csv
+from django.core.exceptions import ImproperlyConfigured
 import os
 
 # Build paths inside the project
@@ -183,6 +184,10 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_THROTTLE_CLASSES': [],
+    'DEFAULT_THROTTLE_RATES': {
+        'login': config('LOGIN_RATE_LIMIT', default='5/minute'),
+    },
 }
 
 SPECTACULAR_SETTINGS = {
@@ -195,7 +200,26 @@ SPECTACULAR_SETTINGS = {
 # JWT Configuration
 JWT_ACCESS_LIFETIME_MINUTES = config('JWT_ACCESS_LIFETIME_MINUTES', default=15, cast=int)
 JWT_ALGORITHM = config('JWT_ALGORITHM', default='HS256')
-JWT_SIGNING_KEY = config('JWT_SIGNING_KEY', default=SECRET_KEY)
+# JWT_SIGNING_KEY must be set independently — never share with SECRET_KEY
+JWT_SIGNING_KEY = config('JWT_SIGNING_KEY', default=None)
+if not JWT_SIGNING_KEY:
+    if DEBUG:
+        import warnings
+        warnings.warn(
+            'JWT_SIGNING_KEY is not set. Falling back to SECRET_KEY for development only. '
+            'Set JWT_SIGNING_KEY in production.',
+            stacklevel=2,
+        )
+        JWT_SIGNING_KEY = SECRET_KEY
+    else:
+        raise ImproperlyConfigured('JWT_SIGNING_KEY must be set in production (DEBUG=False).')
+
+# Login lockout policy
+LOGIN_MAX_ATTEMPTS = config('LOGIN_MAX_ATTEMPTS', default=5, cast=int)
+LOGIN_LOCKOUT_MINUTES = config('LOGIN_LOCKOUT_MINUTES', default=15, cast=int)
+
+# Refresh token lifetime
+REFRESH_TOKEN_LIFETIME_DAYS = config('REFRESH_TOKEN_LIFETIME_DAYS', default=7, cast=int)
 
 # ID of the shared admin chat in aura_db used for admin-initiated document uploads.
 # Must match the seed row in docker/aura-db/init.sql.

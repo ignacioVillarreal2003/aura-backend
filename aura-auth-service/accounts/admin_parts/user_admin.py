@@ -62,10 +62,9 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
 
     list_display = (
         'username',
-        'email',
+        'name',
         'roles_display',
         'status_badge',
-        'created_date',
         'last_login_display',
     )
     list_filter = (
@@ -93,7 +92,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
 
     fieldsets = (
         ('Identidad', {
-            'fields': ('roles', 'username', 'email', 'password', 'active'),
+            'fields': ('roles', 'username', 'name', 'email', 'password', 'active'),
         }),
     )
 
@@ -176,7 +175,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             if role_type == 'user':
                 return (
                     ('Identidad', {
-                        'fields': ('username', 'email', 'password', 'active'),
+                        'fields': ('username', 'name', 'email', 'password', 'active'),
                     }),
                     ('Grupos', {
                         'fields': ('classification_level_id',),
@@ -184,7 +183,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
                 )
             return (
                 ('Identidad', {
-                    'fields': ('username', 'email', 'password', 'active'),
+                    'fields': ('username', 'name', 'email', 'password', 'active'),
                 }),
             )
         is_superadmin_obj = obj and obj.user_roles.filter(
@@ -203,7 +202,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             grupos_label = 'Grupos - Modo usuario' if is_admin_obj else 'Grupos'
             return (
                 ('Identidad', {
-                    'fields': ('roles_display', 'username', 'email', 'active'),
+                    'fields': ('roles_display', 'username', 'name', 'email', 'active'),
                 }),
                 (grupos_label, {
                     'fields': ('classification_level_id',),
@@ -223,7 +222,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             )
         return (
             ('Identidad', {
-                'fields': ('roles_display', 'username', 'email', 'active'),
+                'fields': ('roles_display', 'username', 'name', 'email', 'active'),
             }),
         )
 
@@ -547,12 +546,18 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
                     except Exception:
                         changes['agrupaciones'] = [str(cid) for cid in sorted(new_comp_ids)]
 
+            permission_keys = {'nivel', 'agrupaciones'}
+            has_permission_change = bool(changes.keys() & permission_keys)
+            if has_permission_change and _is_effective_superadmin(request):
+                label = f'Superadmin {request.user.username} actualizó permisos MAC de {obj.username}'
+            else:
+                label = f'{request.user.username} modificó usuario {obj.username}'
             log_audit(
                 actor=request.user,
                 action='UPDATE',
                 entity_type='auth_user',
                 entity_id=obj.pk,
-                entity_label=f'{request.user.username} modificó usuario {obj.username}',
+                entity_label=label,
                 details=changes if changes else None,
                 request=request,
             )
