@@ -31,10 +31,18 @@ class FeedbackService:
             chat_id: int,
             message_id: int,
             value: int,
+            reason: str | None = None,
+            comment: str | None = None,
     ) -> MessageFeedback:
         AccessControl.require_permissions(user, frozenset({SET_MESSAGE_FEEDBACK}))
         _require_ai_message(user.id, chat_id, message_id)
-        return feedback_repository.set(message_id=message_id, user_id=user.id, value=value)
+        return feedback_repository.set(
+            message_id=message_id,
+            user_id=user.id,
+            value=value,
+            reason=reason,
+            comment=comment,
+        )
 
     def delete_feedback(
             self, user: AuthenticatedUser, chat_id: int, message_id: int

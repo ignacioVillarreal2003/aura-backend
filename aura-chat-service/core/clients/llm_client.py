@@ -26,6 +26,19 @@ class DocumentQuestionResult:
 
 
 @dataclass
+class GeneralChatResult:
+    answer: str
+    messages: list[dict[str, str]] = field(default_factory=list)
+
+
+@dataclass
+class AgentRunResult:
+    answer: str
+    messages: list[dict[str, str]] = field(default_factory=list)
+    fragments: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
 class ChecklistGenerateResult:
     title: str
     items: list[dict[str, Any]]
@@ -52,6 +65,9 @@ class LLMClient:
         await self._stream_client.aclose()
         await self._http_client.aclose()
 
+    # ------------------------------------------------------------------
+    # Document question (RAG over the user's documents)
+    # ------------------------------------------------------------------
     async def document_question(
             self,
             messages: list[dict[str, str]],
@@ -71,29 +87,188 @@ class LLMClient:
             },
         )
 
-        response = await self._http_client.post(
+        data = await self._post_json(
             url=settings.LLM_DOCUMENT_QUESTION_URL,
-            json=payload,
-            headers=self._build_service_headers(user),
+            payload=payload,
+            user=user,
+            context="document-question",
         )
-
-        try:
-            data = response.json()
-        except ValueError as e:
-            logger.error("LLM returned non-JSON body.")
-            raise HttpClientException(
-                "Invalid LLM response format",
-                status_code=response.status_code,
-            ) from e
-
-        fragments = self.normalize_fragments(data.get("fragments"))
 
         return DocumentQuestionResult(
             question=str(data.get("question", "")),
             answer=str(data.get("answer", "")),
-            fragments=fragments,
+            fragments=self.normalize_fragments(data.get("fragments")),
         )
 
+    async def document_question_stream_events(
+            self,
+            messages: list[dict[str, str]],
+            user: AuthenticatedUser,
+            chat_id: int | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        payload: dict = {"messages": messages}
+        if chat_id is not None:
+            payload["chat_id"] = chat_id
+
+        logger.debug(
+            "Calling LLM document-question stream.",
+            extra={"user_id": user.id, "message_count": len(messages)},
+        )
+
+        async for event in self._stream_sse_events(
+                url=settings.LLM_DOCUMENT_QUESTION_STREAM_URL,
+                payload=payload,
+                user=user,
+        ):
+            yield event
+
+    # ------------------------------------------------------------------
+    # General-purpose chat (no RAG, conversation history only)
+    # ------------------------------------------------------------------
+    async def general_chat(
+            self,
+            messages: list[dict[str, str]],
+            user: AuthenticatedUser,
+            system_prompt: str | None = None,
+    ) -> GeneralChatResult:
+        payload = self._build_general_chat_payload(messages, system_prompt)
+
+        logger.debug(
+            "Calling LLM general-chat.",
+            extra={
+                "user_id": user.id,
+                "message_count": len(messages),
+                "url": settings.LLM_GENERAL_CHAT_URL,
+            },
+        )
+
+        data = await self._post_json(
+            url=settings.LLM_GENERAL_CHAT_URL,
+            payload=payload,
+            user=user,
+            context="general-chat",
+        )
+
+        return GeneralChatResult(
+            answer=str(data.get("answer", "")),
+            messages=data.get("messages") or [],
+        )
+
+    async def general_chat_stream_events(
+            self,
+            messages: list[dict[str, str]],
+            user: AuthenticatedUser,
+            system_prompt: str | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        payload = self._build_general_chat_payload(messages, system_prompt)
+
+        logger.debug(
+            "Calling LLM general-chat stream.",
+            extra={"user_id": user.id, "message_count": len(messages)},
+        )
+
+        async for event in self._stream_sse_events(
+                url=settings.LLM_GENERAL_CHAT_STREAM_URL,
+                payload=payload,
+                user=user,
+        ):
+            yield event
+
+    # ------------------------------------------------------------------
+    # RAG agent (full RAG pipeline: analyse, retrieve, reason, synthesise)
+    # ------------------------------------------------------------------
+    async def rag_agent(
+            self,
+            messages: list[dict[str, str]],
+            user: AuthenticatedUser,
+    ) -> AgentRunResult:
+        payload: dict = {"messages": messages}
+
+        logger.debug(
+            "Calling LLM rag-agent.",
+            extra={
+                "user_id": user.id,
+                "message_count": len(messages),
+                "url": settings.LLM_RAG_AGENT_URL,
+            },
+        )
+
+        data = await self._post_json(
+            url=settings.LLM_RAG_AGENT_URL,
+            payload=payload,
+            user=user,
+            context="rag-agent",
+        )
+        return self._build_agent_result(data)
+
+    async def rag_agent_stream_events(
+            self,
+            messages: list[dict[str, str]],
+            user: AuthenticatedUser,
+    ) -> AsyncIterator[dict[str, Any]]:
+        payload: dict = {"messages": messages}
+
+        logger.debug(
+            "Calling LLM rag-agent stream.",
+            extra={"user_id": user.id, "message_count": len(messages)},
+        )
+
+        async for event in self._stream_sse_events(
+                url=settings.LLM_RAG_AGENT_STREAM_URL,
+                payload=payload,
+                user=user,
+        ):
+            yield event
+
+    # ------------------------------------------------------------------
+    # Tool agent (agent with document question/summary tools)
+    # ------------------------------------------------------------------
+    async def agent(
+            self,
+            messages: list[dict[str, str]],
+            user: AuthenticatedUser,
+    ) -> AgentRunResult:
+        payload: dict = {"messages": messages}
+
+        logger.debug(
+            "Calling LLM agent.",
+            extra={
+                "user_id": user.id,
+                "message_count": len(messages),
+                "url": settings.LLM_AGENT_URL,
+            },
+        )
+
+        data = await self._post_json(
+            url=settings.LLM_AGENT_URL,
+            payload=payload,
+            user=user,
+            context="agent",
+        )
+        return self._build_agent_result(data)
+
+    async def agent_stream_events(
+            self,
+            messages: list[dict[str, str]],
+            user: AuthenticatedUser,
+    ) -> AsyncIterator[dict[str, Any]]:
+        payload: dict = {"messages": messages}
+
+        logger.debug(
+            "Calling LLM agent stream.",
+            extra={"user_id": user.id, "message_count": len(messages)},
+        )
+
+        async for event in self._stream_sse_events(
+                url=settings.LLM_AGENT_STREAM_URL,
+                payload=payload,
+                user=user,
+        ):
+            yield event
+
+    # ------------------------------------------------------------------
+    # Checklist & report generation
+    # ------------------------------------------------------------------
     async def generate_checklist(
             self,
             messages: list[dict[str, str]],
@@ -114,20 +289,12 @@ class LLMClient:
             },
         )
 
-        response = await self._http_client.post(
+        data = await self._post_json(
             url=settings.LLM_CHECKLIST_GENERATE_URL,
-            json=payload,
-            headers=self._build_service_headers(user),
+            payload=payload,
+            user=user,
+            context="checklist-generate",
         )
-
-        try:
-            data = response.json()
-        except ValueError as e:
-            logger.error("LLM checklist-generate returned non-JSON body.")
-            raise HttpClientException(
-                "Invalid LLM response format",
-                status_code=response.status_code,
-            ) from e
 
         return ChecklistGenerateResult(
             title=str(data.get("title", "")),
@@ -158,20 +325,12 @@ class LLMClient:
             },
         )
 
-        response = await self._http_client.post(
+        data = await self._post_json(
             url=settings.LLM_REPORT_GENERATE_URL,
-            json=payload,
-            headers=self._build_service_headers(user),
+            payload=payload,
+            user=user,
+            context="report-generate",
         )
-
-        try:
-            data = response.json()
-        except ValueError as e:
-            logger.error("LLM report-generate returned non-JSON body.")
-            raise HttpClientException(
-                "Invalid LLM response format",
-                status_code=response.status_code,
-            ) from e
 
         return ReportGenerateResult(
             report_type=str(data.get("report_type", report_type)),
@@ -180,23 +339,46 @@ class LLMClient:
             fragments=self.normalize_fragments(data.get("fragments")),
         )
 
-    async def document_question_stream_events(
+    # ------------------------------------------------------------------
+    # Shared transport helpers
+    # ------------------------------------------------------------------
+    async def _post_json(
             self,
-            messages: list[dict[str, str]],
+            url: str,
+            payload: dict,
             user: AuthenticatedUser,
-            chat_id: int | None = None,
-    ) -> AsyncIterator[dict[str, Any]]:
-        payload: dict = {"messages": messages}
-        if chat_id is not None:
-            payload["chat_id"] = chat_id
-        headers = self._build_stream_headers(user)
-        url = settings.LLM_DOCUMENT_QUESTION_STREAM_URL
-
-        logger.debug(
-            "Calling LLM document-question stream.",
-            extra={"user_id": user.id, "message_count": len(messages)},
+            context: str,
+    ) -> dict[str, Any]:
+        response = await self._http_client.post(
+            url=url,
+            json=payload,
+            headers=self._build_service_headers(user),
         )
 
+        try:
+            data = response.json()
+        except ValueError as e:
+            logger.error("LLM %s returned non-JSON body.", context)
+            raise HttpClientException(
+                "Invalid LLM response format",
+                status_code=response.status_code,
+            ) from e
+
+        if not isinstance(data, dict):
+            logger.error("LLM %s returned a non-object JSON body.", context)
+            raise HttpClientException(
+                "Invalid LLM response format",
+                status_code=response.status_code,
+            )
+        return data
+
+    async def _stream_sse_events(
+            self,
+            url: str,
+            payload: dict,
+            user: AuthenticatedUser,
+    ) -> AsyncIterator[dict[str, Any]]:
+        headers = self._build_stream_headers(user)
         timeout = httpx.Timeout(
             connect=settings.LLM_STREAM_CONNECT_TIMEOUT,
             read=settings.LLM_STREAM_READ_TIMEOUT,
@@ -219,6 +401,7 @@ class LLMClient:
                         "LLM stream HTTP error.",
                         extra={
                             "status_code": response.status_code,
+                            "url": url,
                             "body_preview": detail,
                         },
                     )
@@ -276,6 +459,38 @@ class LLMClient:
                     ) from e
                 if isinstance(obj, dict):
                     yield obj
+
+    # ------------------------------------------------------------------
+    # Payload / response builders
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _build_general_chat_payload(
+            messages: list[dict[str, str]],
+            system_prompt: str | None,
+    ) -> dict:
+        payload: dict = {"messages": messages}
+        if system_prompt is not None:
+            stripped = system_prompt.strip()
+            if stripped:
+                payload["system_prompt"] = stripped
+        return payload
+
+    def _build_agent_result(self, data: dict[str, Any]) -> AgentRunResult:
+        out_messages = data.get("messages") or []
+        return AgentRunResult(
+            answer=self._last_assistant_content(out_messages),
+            messages=out_messages,
+            fragments=self.normalize_fragments(data.get("fragments")),
+        )
+
+    @staticmethod
+    def _last_assistant_content(messages: Any) -> str:
+        if not isinstance(messages, list):
+            return ""
+        for message in reversed(messages):
+            if isinstance(message, dict) and message.get("role") == "assistant":
+                return str(message.get("content", ""))
+        return ""
 
     @staticmethod
     def normalize_fragments(raw_fragments: Any) -> list[dict[str, Any]]:

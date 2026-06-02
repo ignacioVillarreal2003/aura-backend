@@ -207,13 +207,15 @@ def make_report(report_id=1, title="Informe de prueba", report_type="SITREP",
     return SimpleNamespace(**data)
 
 
-def make_feedback(fb_id=1, message_id=1, user_id=1, value=1, **overrides):
+def make_feedback(fb_id=1, message_id=1, user_id=1, value=1, reason=None, comment=None, **overrides):
     now = timezone.now()
     data = dict(
         id=fb_id,
         message_id=message_id,
         user_id=user_id,
         value=value,
+        reason=reason,
+        comment=comment,
         created_at=now,
         updated_at=now,
     )

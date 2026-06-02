@@ -90,7 +90,8 @@ class MessageListView(APIView):
         description=(
                 "Send **either** plain text (`message`) **or** a voice clip (`audio` multipart field)—not both. "
                 "Audio is transcribed server-side; the transcript may appear in `transcript` in the response. "
-                "After storing the user message, the service runs the document-question flow: the response body "
+                "After storing the user message, the service runs the AI reply flow selected by `mode` "
+                "(`document_question` (default), `general_chat`, `rag_agent`, `agent`): the response body "
                 "includes `message` (persisted user row), optional `assistant` / `assistant_error`, and applies "
                 "to **non-ephemeral** chats the same pipeline; **ephemeral** chats use an ephemeral AI path. "
                 "Returns **409** if another AI reply is already in progress for this chat (`ChatAiReplyInProgressException`)."
@@ -110,6 +111,8 @@ class MessageListView(APIView):
     async def _post_async(self, request: Request, chat_id: int) -> Response:
         serializer = SendMessageRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
+
+        mode = serializer.validated_data.get("mode", "document_question")
 
         transcript = None
         if "audio" in serializer.validated_data:
@@ -138,8 +141,8 @@ class MessageListView(APIView):
                     text=text,
                 )
                 try:
-                    turn = await message_service.run_ephemeral_document_question(
-                        request.user, chat_id, text
+                    turn = await message_service.run_ephemeral_ai_reply(
+                        mode, request.user, chat_id, text
                     )
                     assistant = {
                         "question": turn.question,
@@ -150,8 +153,8 @@ class MessageListView(APIView):
                     assistant_error = {"detail": e.detail}
                 except Exception:
                     logger.exception(
-                        "Unexpected error running ephemeral document question.",
-                        extra={"chat_id": chat_id, "user_id": request.user.id},
+                        "Unexpected error running ephemeral AI reply.",
+                        extra={"chat_id": chat_id, "user_id": request.user.id, "mode": mode},
                     )
                     assistant_error = {"detail": "AI service encountered an unexpected error."}
             else:
@@ -161,8 +164,8 @@ class MessageListView(APIView):
                     text=text,
                 )
                 try:
-                    turn = await message_service.run_document_question(
-                        request.user, chat_id
+                    turn = await message_service.run_ai_reply(
+                        mode, request.user, chat_id
                     )
                     assistant = {
                         "question": turn.question,
@@ -173,8 +176,8 @@ class MessageListView(APIView):
                     assistant_error = {"detail": e.detail}
                 except Exception:
                     logger.exception(
-                        "Unexpected error running document question.",
-                        extra={"chat_id": chat_id, "user_id": request.user.id},
+                        "Unexpected error running AI reply.",
+                        extra={"chat_id": chat_id, "user_id": request.user.id, "mode": mode},
                     )
                     assistant_error = {"detail": "AI service encountered an unexpected error."}
         finally:

@@ -41,6 +41,60 @@ def test_submit_feedback_thumbs_down_returns_200(api_client, mocker):
     assert response.data["value"] == -1
 
 
+def test_submit_feedback_thumbs_down_forwards_reason_and_comment(api_client, mocker):
+    set_feedback = mocker.patch(
+        f"{FEEDBACK_VIEW}.feedback_service.set_feedback",
+        return_value=make_feedback(value=-1, reason="incomplete", comment="Faltó detalle"),
+    )
+    response = api_client.post(
+        "/api/v1/chats/1/messages/1/feedback/",
+        {"value": -1, "reason": "incomplete", "comment": "Faltó detalle"},
+        format="json",
+    )
+    assert response.status_code == 200
+    assert response.data["reason"] == "incomplete"
+    assert response.data["comment"] == "Faltó detalle"
+    _, kwargs = set_feedback.call_args
+    assert kwargs["reason"] == "incomplete"
+    assert kwargs["comment"] == "Faltó detalle"
+
+
+def test_submit_feedback_thumbs_up_drops_reason_and_comment(api_client, mocker):
+    set_feedback = mocker.patch(
+        f"{FEEDBACK_VIEW}.feedback_service.set_feedback",
+        return_value=make_feedback(value=1),
+    )
+    response = api_client.post(
+        "/api/v1/chats/1/messages/1/feedback/",
+        {"value": 1, "reason": "incomplete", "comment": "ignored"},
+        format="json",
+    )
+    assert response.status_code == 200
+    _, kwargs = set_feedback.call_args
+    assert kwargs["reason"] is None
+    assert kwargs["comment"] is None
+
+
+def test_submit_feedback_invalid_reason_returns_400(api_client, mocker):
+    mocker.patch(f"{FEEDBACK_VIEW}.feedback_service.set_feedback")
+    response = api_client.post(
+        "/api/v1/chats/1/messages/1/feedback/",
+        {"value": -1, "reason": "not_a_reason"},
+        format="json",
+    )
+    assert response.status_code == 400
+
+
+def test_submit_feedback_comment_too_long_returns_400(api_client, mocker):
+    mocker.patch(f"{FEEDBACK_VIEW}.feedback_service.set_feedback")
+    response = api_client.post(
+        "/api/v1/chats/1/messages/1/feedback/",
+        {"value": -1, "comment": "x" * 501},
+        format="json",
+    )
+    assert response.status_code == 400
+
+
 def test_submit_feedback_invalid_value_returns_400(api_client, mocker):
     mocker.patch(f"{FEEDBACK_VIEW}.feedback_service.set_feedback")
     response = api_client.post(

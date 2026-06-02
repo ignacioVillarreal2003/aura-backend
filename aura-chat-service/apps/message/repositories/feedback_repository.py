@@ -5,17 +5,27 @@ from apps.message.models.message_feedback import MessageFeedback
 
 class FeedbackRepository:
     @staticmethod
-    def set(message_id: int, user_id: int, value: int) -> MessageFeedback:
+    def set(
+        message_id: int,
+        user_id: int,
+        value: int,
+        reason: str | None = None,
+        comment: str | None = None,
+    ) -> MessageFeedback:
         obj = MessageFeedback.objects.filter(message_id=message_id, user_id=user_id).first()
         if obj is None:
             return MessageFeedback.objects.create(
                 message_id=message_id,
                 user_id=user_id,
                 value=value,
+                reason=reason,
+                comment=comment,
             )
         obj.value = value
+        obj.reason = reason
+        obj.comment = comment
         obj.updated_at = timezone.now()
-        obj.save(update_fields=["value", "updated_at"])
+        obj.save(update_fields=["value", "reason", "comment", "updated_at"])
         return obj
 
     @staticmethod

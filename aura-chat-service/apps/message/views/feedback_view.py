@@ -34,11 +34,14 @@ class FeedbackView(APIView):
     def post(self, request: Request, chat_id: int, message_id: int) -> Response:
         serializer = SetFeedbackRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
         fb = feedback_service.set_feedback(
             user=request.user,
             chat_id=chat_id,
             message_id=message_id,
-            value=serializer.validated_data["value"],
+            value=data["value"],
+            reason=data.get("reason"),
+            comment=data.get("comment"),
         )
         return Response(FeedbackResponse(fb).data)
 

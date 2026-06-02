@@ -115,8 +115,12 @@ services:
         condition: service_healthy
       aura-llm-service:
         condition: service_healthy
-    healthcheck: *healthcheck-api-v1
+    healthcheck:
+      <<: *healthcheck-api-v1
+      start_period: 180s
     restart: on-failure
+    volumes:
+      - chat_hf_cache:/app/.cache/huggingface
 
   aura-notification-service:
     build: ../../aura-notification-service
@@ -234,3 +238,4 @@ volumes:
   neo4j_data:
   neo4j_logs:
   huggingface_cache:
+  chat_hf_cache:

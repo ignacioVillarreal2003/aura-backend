@@ -10,6 +10,8 @@ from apps.message.models.pinned_message import PinnedMessage
 class MessageResponse(serializers.ModelSerializer):
     is_bookmarked = serializers.SerializerMethodField()
     user_feedback = serializers.SerializerMethodField()
+    user_feedback_reason = serializers.SerializerMethodField()
+    user_feedback_comment = serializers.SerializerMethodField()
     thread_reply_count = serializers.SerializerMethodField()
 
     class Meta:
@@ -23,6 +25,8 @@ class MessageResponse(serializers.ModelSerializer):
             "created_at",
             "is_bookmarked",
             "user_feedback",
+            "user_feedback_reason",
+            "user_feedback_comment",
             "thread_reply_count",
             "fragments",
         ]
@@ -45,6 +49,24 @@ class MessageResponse(serializers.ModelSerializer):
         return getattr(obj, "user_feedback", None)
 
     @extend_schema_field(
+        serializers.CharField(
+            allow_null=True,
+            help_text="Current user's thumbs-down reason code, or null (when annotated).",
+        )
+    )
+    def get_user_feedback_reason(self, obj) -> str | None:
+        return getattr(obj, "user_feedback_reason", None)
+
+    @extend_schema_field(
+        serializers.CharField(
+            allow_null=True,
+            help_text="Current user's free-text feedback comment, or null (when annotated).",
+        )
+    )
+    def get_user_feedback_comment(self, obj) -> str | None:
+        return getattr(obj, "user_feedback_comment", None)
+
+    @extend_schema_field(
         serializers.IntegerField(
             help_text="Count of thread replies for this message (when annotated).",
         )
@@ -62,7 +84,7 @@ class ThreadReplyResponse(serializers.ModelSerializer):
 class FeedbackResponse(serializers.ModelSerializer):
     class Meta:
         model = MessageFeedback
-        fields = ["id", "message_id", "user_id", "value", "created_at", "updated_at"]
+        fields = ["id", "message_id", "user_id", "value", "reason", "comment", "created_at", "updated_at"]
 
 
 class PinnedMessageResponse(serializers.ModelSerializer):

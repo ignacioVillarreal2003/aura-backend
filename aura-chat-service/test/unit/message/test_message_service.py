@@ -24,11 +24,11 @@ from apps.message.exceptions import (
     TranscriptionException,
 )
 from core.clients.exceptions import HttpClientException
-from core.clients.llm_client import DocumentQuestionResult
+from core.clients.llm_client import AgentRunResult, DocumentQuestionResult, GeneralChatResult
 from core.clients.transcription_client import TranscriptionBusyError
 from apps.message.services.bookmark_service import BookmarkService
 from apps.message.services.feedback_service import FeedbackService
-from apps.message.services.message_service import MessageService
+from apps.message.services.message_service import ChatAIMode, MessageService
 from apps.message.services.pinned_message_service import PinnedMessageService
 from apps.message.services.thread_service import ThreadService
 from test.conftest import make_chat, make_message, make_pin, make_user, make_feedback, make_thread_reply
@@ -163,6 +163,39 @@ class TestMessageServiceRunDocumentQuestion:
         roles = {h["content"]: h["role"] for h in history}
         assert roles["pregunta"] == "human"       # USER → human
         assert roles["respuesta"] == "assistant"  # SYSTEM → assistant
+
+    @pytest.mark.asyncio
+    async def test_regen_feedback_appended_as_last_human_turn(self, mocker):
+        self._patch_access_ok(mocker)
+        m_user = _msg(msg_id=1, sender_type="user")
+        m_user.message = "pregunta"
+        mocker.patch(f"{MSG_SVC}.message_repository.get_recent_messages", return_value=[m_user])
+        llm = mocker.patch(
+            f"{MSG_SVC}.llm_client.document_question",
+            new_callable=AsyncMock,
+            return_value=DocumentQuestionResult(question="q", answer="", fragments=[]),
+        )
+        await MessageService().run_document_question(
+            _user(), chat_id=1, regen_feedback="Corregí: estaba incompleta."
+        )
+        history = llm.call_args[0][0]
+        assert history[-1] == {"role": "human", "content": "Corregí: estaba incompleta."}
+
+    @pytest.mark.asyncio
+    async def test_no_regen_feedback_leaves_history_unchanged(self, mocker):
+        self._patch_access_ok(mocker)
+        m_user = _msg(msg_id=1, sender_type="user")
+        m_user.message = "pregunta"
+        mocker.patch(f"{MSG_SVC}.message_repository.get_recent_messages", return_value=[m_user])
+        llm = mocker.patch(
+            f"{MSG_SVC}.llm_client.document_question",
+            new_callable=AsyncMock,
+            return_value=DocumentQuestionResult(question="q", answer="", fragments=[]),
+        )
+        await MessageService().run_document_question(_user(), chat_id=1)
+        history = llm.call_args[0][0]
+        assert len(history) == 1
+        assert history[0]["content"] == "pregunta"
 
 
 class TestMessageServiceSendMessage:
@@ -370,11 +403,49 @@ class TestMessageServiceDeleteLastAiMessage:
         mocker.patch(f"{MSG_SVC}.chat_repository.get_by_id", return_value=_chat())
         mocker.patch(f"{MSG_SVC}.membership_repository.is_active_member", return_value=True)
         mocker.patch(f"{MSG_SVC}.message_repository.get_last_ai_message", return_value=ai_msg)
+        mocker.patch(f"{MSG_SVC}.feedback_repository.get", return_value=None)
 
         svc = MessageService()
-        svc.delete_last_ai_message(_user(), chat_id=1)
+        hint = svc.delete_last_ai_message(_user(), chat_id=1)
 
         ai_msg.delete.assert_called_once_with(deleted_by=1)
+        assert hint is None
+
+    def test_delete_last_ai_message_builds_hint_from_negative_feedback(self, mocker):
+        from apps.message.models.message_feedback import MessageFeedback
+
+        ai_msg = _msg(sender_type="system")
+        fb = SimpleNamespace(
+            value=MessageFeedback.Value.THUMBS_DOWN,
+            reason=MessageFeedback.Reason.INCOMPLETE,
+            comment="Faltó el paso 3",
+        )
+        mocker.patch(f"{MSG_SVC}.chat_repository.get_by_id", return_value=_chat())
+        mocker.patch(f"{MSG_SVC}.membership_repository.is_active_member", return_value=True)
+        mocker.patch(f"{MSG_SVC}.message_repository.get_last_ai_message", return_value=ai_msg)
+        mocker.patch(f"{MSG_SVC}.feedback_repository.get", return_value=fb)
+
+        svc = MessageService()
+        hint = svc.delete_last_ai_message(_user(), chat_id=1)
+
+        assert hint is not None
+        assert "incompleta" in hint
+        assert "Faltó el paso 3" in hint
+
+    def test_delete_last_ai_message_no_hint_on_thumbs_up(self, mocker):
+        from apps.message.models.message_feedback import MessageFeedback
+
+        ai_msg = _msg(sender_type="system")
+        fb = SimpleNamespace(value=MessageFeedback.Value.THUMBS_UP, reason=None, comment=None)
+        mocker.patch(f"{MSG_SVC}.chat_repository.get_by_id", return_value=_chat())
+        mocker.patch(f"{MSG_SVC}.membership_repository.is_active_member", return_value=True)
+        mocker.patch(f"{MSG_SVC}.message_repository.get_last_ai_message", return_value=ai_msg)
+        mocker.patch(f"{MSG_SVC}.feedback_repository.get", return_value=fb)
+
+        svc = MessageService()
+        hint = svc.delete_last_ai_message(_user(), chat_id=1)
+
+        assert hint is None
 
     def test_delete_last_ai_message_none_raises(self, mocker):
         mocker.patch(f"{MSG_SVC}.chat_repository.get_by_id", return_value=_chat())
@@ -384,6 +455,207 @@ class TestMessageServiceDeleteLastAiMessage:
         svc = MessageService()
         with pytest.raises(NoMessageToRegenerateException):
             svc.delete_last_ai_message(_user(), chat_id=1)
+
+
+class TestChatAIMode:
+
+    def test_normalize_accepts_known_modes(self):
+        for mode in ("document_question", "general_chat", "rag_agent", "agent"):
+            assert ChatAIMode.normalize(mode) == mode
+
+    def test_normalize_defaults_on_unknown_or_missing(self):
+        assert ChatAIMode.normalize("bogus") == ChatAIMode.DOCUMENT_QUESTION
+        assert ChatAIMode.normalize(None) == ChatAIMode.DOCUMENT_QUESTION
+        assert ChatAIMode.normalize(123) == ChatAIMode.DOCUMENT_QUESTION
+
+
+class TestMessageServiceCompleteExtractors:
+
+    def test_document_question_extractor_prefers_result_then_fallbacks(self):
+        q, a, f = MessageService._extract_document_question_complete(
+            {"question": " q ", "answer": " a ", "fragments": [{"id": 1}]},
+            "acc", "lastq", [{"id": 9}],
+        )
+        assert (q, a, f) == ("q", "a", [{"id": 1}])
+
+    def test_document_question_extractor_uses_fallbacks_when_empty(self):
+        q, a, f = MessageService._extract_document_question_complete(
+            {}, "  accumulated ", "fallback-q", [{"id": 9}],
+        )
+        assert q == "fallback-q"
+        assert a == "accumulated"
+        assert f == [{"id": 9}]
+
+    def test_general_chat_extractor_never_returns_fragments(self):
+        q, a, f = MessageService._extract_general_chat_complete(
+            {"answer": " hola "}, "acc", "", [],
+        )
+        assert (q, a, f) == ("", "hola", [])
+
+    def test_general_chat_extractor_falls_back_to_accumulated(self):
+        q, a, f = MessageService._extract_general_chat_complete(
+            {"answer": "   "}, "  streamed ", "", [],
+        )
+        assert a == "streamed"
+
+    def test_agent_extractor_takes_last_assistant_message(self):
+        result = {
+            "messages": [
+                {"role": "human", "content": "hi"},
+                {"role": "assistant", "content": "first"},
+                {"role": "assistant", "content": "  final  "},
+            ],
+            "fragments": [{"id": 3}],
+        }
+        q, a, f = MessageService._extract_agent_complete(result, "acc", "", [])
+        assert (q, a, f) == ("", "final", [{"id": 3}])
+
+    def test_agent_extractor_falls_back_to_accumulated(self):
+        q, a, f = MessageService._extract_agent_complete(
+            {"messages": [{"role": "human", "content": "hi"}]}, "  acc ", "", [{"id": 1}],
+        )
+        assert a == "acc"
+        assert f == [{"id": 1}]
+
+
+class TestMessageServiceRunAIModes:
+
+    def _patch_access_ok(self, mocker):
+        mocker.patch(f"{MSG_SVC}.chat_repository.get_by_id", return_value=_chat())
+        mocker.patch(f"{MSG_SVC}.membership_repository.is_active_member", return_value=True)
+        mocker.patch(f"{MSG_SVC}.message_repository.get_recent_messages", return_value=[])
+
+    @pytest.mark.asyncio
+    async def test_run_general_chat_saves_answer(self, mocker):
+        self._patch_access_ok(mocker)
+        mocker.patch(
+            f"{MSG_SVC}.llm_client.general_chat",
+            new_callable=AsyncMock,
+            return_value=GeneralChatResult(answer="hola", messages=[]),
+        )
+        ai_msg = _msg(msg_id=11, sender_type="system")
+        save = mocker.patch.object(MessageService, "_save_ai_message", return_value=ai_msg)
+        out = await MessageService().run_general_chat(_user(), chat_id=1)
+        assert out.answer == "hola"
+        assert out.fragments == []
+        assert out.assistant_message is ai_msg
+        save.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_run_general_chat_forwards_system_prompt(self, mocker):
+        mocker.patch(
+            f"{MSG_SVC}.chat_repository.get_by_id",
+            return_value=make_chat(system_prompt="be terse"),
+        )
+        mocker.patch(f"{MSG_SVC}.membership_repository.is_active_member", return_value=True)
+        mocker.patch(f"{MSG_SVC}.message_repository.get_recent_messages", return_value=[])
+        llm = mocker.patch(
+            f"{MSG_SVC}.llm_client.general_chat",
+            new_callable=AsyncMock,
+            return_value=GeneralChatResult(answer="", messages=[]),
+        )
+        await MessageService().run_general_chat(_user(), chat_id=1)
+        assert llm.call_args.kwargs["system_prompt"] == "be terse"
+
+    @pytest.mark.asyncio
+    async def test_run_rag_agent_saves_with_fragments(self, mocker):
+        self._patch_access_ok(mocker)
+        mocker.patch(
+            f"{MSG_SVC}.llm_client.rag_agent",
+            new_callable=AsyncMock,
+            return_value=AgentRunResult(answer="resp", messages=[], fragments=[{"id": 5}]),
+        )
+        ai_msg = _msg(msg_id=12, sender_type="system")
+        save = mocker.patch.object(MessageService, "_save_ai_message", return_value=ai_msg)
+        out = await MessageService().run_rag_agent(_user(), chat_id=1)
+        assert out.answer == "resp"
+        assert out.fragments == [{"id": 5}]
+        save.assert_called_once_with(1, 1, "resp", [{"id": 5}])
+
+    @pytest.mark.asyncio
+    async def test_run_agent_saves_answer(self, mocker):
+        self._patch_access_ok(mocker)
+        mocker.patch(
+            f"{MSG_SVC}.llm_client.agent",
+            new_callable=AsyncMock,
+            return_value=AgentRunResult(answer="tool-answer", messages=[], fragments=[]),
+        )
+        save = mocker.patch.object(
+            MessageService, "_save_ai_message", return_value=_msg(sender_type="system")
+        )
+        out = await MessageService().run_agent(_user(), chat_id=1)
+        assert out.answer == "tool-answer"
+        save.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_run_agent_empty_answer_skips_save(self, mocker):
+        self._patch_access_ok(mocker)
+        mocker.patch(
+            f"{MSG_SVC}.llm_client.agent",
+            new_callable=AsyncMock,
+            return_value=AgentRunResult(answer="   ", messages=[], fragments=[]),
+        )
+        save = mocker.patch.object(MessageService, "_save_ai_message")
+        out = await MessageService().run_agent(_user(), chat_id=1)
+        assert out.assistant_message is None
+        save.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_run_general_chat_http_error_raises_llm_exception(self, mocker):
+        self._patch_access_ok(mocker)
+        mocker.patch(
+            f"{MSG_SVC}.llm_client.general_chat",
+            new_callable=AsyncMock,
+            side_effect=HttpClientException("boom", status_code=503),
+        )
+        with pytest.raises(LLMServiceException):
+            await MessageService().run_general_chat(_user(), chat_id=1)
+
+    @pytest.mark.asyncio
+    async def test_run_agent_http_error_raises_llm_exception(self, mocker):
+        self._patch_access_ok(mocker)
+        mocker.patch(
+            f"{MSG_SVC}.llm_client.agent",
+            new_callable=AsyncMock,
+            side_effect=HttpClientException("boom", status_code=500),
+        )
+        with pytest.raises(LLMServiceException):
+            await MessageService().run_agent(_user(), chat_id=1)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "mode,target",
+        [
+            (ChatAIMode.DOCUMENT_QUESTION, "run_document_question"),
+            (ChatAIMode.GENERAL_CHAT, "run_general_chat"),
+            (ChatAIMode.RAG_AGENT, "run_rag_agent"),
+            (ChatAIMode.AGENT, "run_agent"),
+        ],
+    )
+    async def test_run_ai_reply_dispatches_by_mode(self, mocker, mode, target):
+        expected = DocumentQuestionResult(question="", answer="x", fragments=[])
+        dispatched = mocker.patch.object(
+            MessageService, target, new_callable=AsyncMock, return_value=expected
+        )
+        out = await MessageService().run_ai_reply(mode, _user(), chat_id=1)
+        assert out is expected
+        dispatched.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_run_ephemeral_ai_reply_agent_does_not_persist(self, mocker):
+        self._patch_access_ok(mocker)
+        mocker.patch(
+            f"{MSG_SVC}.llm_client.agent",
+            new_callable=AsyncMock,
+            return_value=AgentRunResult(answer="resp", messages=[], fragments=[{"id": 1}]),
+        )
+        save = mocker.patch.object(MessageService, "_save_ai_message")
+        out = await MessageService().run_ephemeral_ai_reply(
+            ChatAIMode.AGENT, _user(), chat_id=1, user_message="hi"
+        )
+        assert out.answer == "resp"
+        assert out.assistant_message is None
+        save.assert_not_called()
 
 
 # ===========================================================================
@@ -629,7 +901,7 @@ class TestFeedbackService:
         svc = FeedbackService()
         svc.set_feedback(user, chat_id=1, message_id=1, value=1)
 
-        repo_set.assert_called_once_with(message_id=1, user_id=77, value=1)
+        repo_set.assert_called_once_with(message_id=1, user_id=77, value=1, reason=None, comment=None)
 
     def test_delete_feedback_happy_path(self, mocker):
         mocker.patch(f"{FBK_SVC}.membership_repository.is_active_member", return_value=True)

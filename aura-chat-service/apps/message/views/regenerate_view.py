@@ -13,7 +13,11 @@ from apps.message.serializers.response import (
     AssistantErrorSerializer,
     RegenerateResponseSerializer,
 )
-from apps.message.services.message_service import broadcast_chat_ai_lock_change, message_service
+from apps.message.services.message_service import (
+    ChatAIMode,
+    broadcast_chat_ai_lock_change,
+    message_service,
+)
 from core.openapi.common import standard_error_responses
 
 logger = logging.getLogger(__name__)
@@ -24,8 +28,10 @@ class RegenerateResponseView(APIView):
         tags=["Messages"],
         summary="Regenerate last AI response",
         description=(
-                "Deletes the last assistant (**system**) message and runs the document-question flow again with the same "
-                "conversation context. Returns `assistant` and/or `assistant_error`. **409** if another AI reply is in "
+                "Deletes the last assistant (**system**) message and runs the AI reply flow again with the same "
+                "conversation context. Accepts an optional `mode` body field "
+                "(`document_question` (default), `general_chat`, `rag_agent`, `agent`). "
+                "Returns `assistant` and/or `assistant_error`. **409** if another AI reply is in "
                 "progress for this chat."
         ),
         request=None,
@@ -41,6 +47,10 @@ class RegenerateResponseView(APIView):
         return async_to_sync(self._post_async)(request, chat_id)
 
     async def _post_async(self, request: Request, chat_id: int) -> Response:
+        mode = ChatAIMode.normalize(
+            request.data.get("mode") if isinstance(request.data, dict) else None
+        )
+
         if not await sync_to_async(try_acquire)(chat_id):
             raise ChatAiReplyInProgressException()
 
@@ -48,10 +58,14 @@ class RegenerateResponseView(APIView):
         assistant = None
         assistant_error = None
         try:
-            await sync_to_async(message_service.delete_last_ai_message)(request.user, chat_id)
+            regen_feedback = await sync_to_async(message_service.delete_last_ai_message)(
+                request.user, chat_id
+            )
 
             try:
-                turn = await message_service.run_document_question(request.user, chat_id)
+                turn = await message_service.run_ai_reply(
+                    mode, request.user, chat_id, regen_feedback=regen_feedback
+                )
                 assistant = {
                     "question": turn.question,
                     "answer": turn.answer,

@@ -130,10 +130,17 @@ CREATE TABLE message_feedback (
     message_id  BIGINT                  NOT NULL REFERENCES chat_message(id) ON DELETE CASCADE,
     user_id     BIGINT                  NOT NULL,
     value       SMALLINT                NOT NULL,
+    reason      VARCHAR(32),
+    comment     VARCHAR(500),
     created_at  TIMESTAMPTZ             NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMPTZ,
     CONSTRAINT uq_message_feedback UNIQUE (message_id, user_id),
-    CONSTRAINT chk_feedback_value CHECK (value IN (1, -1))
+    CONSTRAINT chk_feedback_value CHECK (value IN (1, -1)),
+    CONSTRAINT chk_feedback_reason CHECK (
+        reason IS NULL OR reason IN (
+            'incorrect', 'incomplete', 'off_topic', 'tone', 'too_long', 'hallucination', 'other'
+        )
+    )
 );
 
 CREATE TABLE chat_share_link (
@@ -323,6 +330,8 @@ CREATE INDEX idx_message_bookmark_message ON message_bookmark(message_id);
 CREATE INDEX idx_message_bookmark_user ON message_bookmark(user_id);
 CREATE INDEX idx_thread_reply_parent ON message_thread_reply(parent_message_id);
 CREATE INDEX idx_message_feedback_message ON message_feedback(message_id);
+CREATE INDEX idx_message_feedback_created_at ON message_feedback(created_at);
+CREATE INDEX idx_message_feedback_value ON message_feedback(value);
 CREATE INDEX idx_share_link_chat ON chat_share_link(chat_id);
 CREATE INDEX idx_share_link_token ON chat_share_link(token);
 

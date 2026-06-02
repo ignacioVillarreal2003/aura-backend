@@ -1,5 +1,5 @@
 import logging
-from django.db.models import Count, Exists, IntegerField, OuterRef, QuerySet, SmallIntegerField, Subquery
+from django.db.models import CharField, Count, Exists, IntegerField, OuterRef, QuerySet, SmallIntegerField, Subquery
 from django.db.models.functions import Coalesce
 
 from apps.message.models.chat_message import ChatMessage
@@ -46,6 +46,20 @@ class MessageRepository:
                         user_id=user_id,
                     ).values("value")[:1],
                     output_field=SmallIntegerField(),
+                ),
+                user_feedback_reason=Subquery(
+                    MessageFeedback.objects.filter(
+                        message_id=OuterRef("pk"),
+                        user_id=user_id,
+                    ).values("reason")[:1],
+                    output_field=CharField(),
+                ),
+                user_feedback_comment=Subquery(
+                    MessageFeedback.objects.filter(
+                        message_id=OuterRef("pk"),
+                        user_id=user_id,
+                    ).values("comment")[:1],
+                    output_field=CharField(),
                 ),
                 thread_reply_count=Coalesce(
                     Subquery(

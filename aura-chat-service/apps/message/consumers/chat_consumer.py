@@ -5,8 +5,9 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.message.chat_ai_reply_lock import is_locked, release, try_acquire
-from apps.message.exceptions import LLMServiceException
+from apps.message.exceptions import LLMServiceException, NoMessageToRegenerateException
 from apps.message.services.message_service import (
+    ChatAIMode,
     broadcast_chat_ai_lock_change,
     message_service,
 )
@@ -31,7 +32,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.chat_id: int | None = None
         self.group_name: str | None = None
         self.user: AuthenticatedUser | None = None
-        self._document_question_task: asyncio.Task | None = None
+        self._ai_reply_task: asyncio.Task | None = None
 
     async def connect(self):
         self.chat_id = int(self.scope["url_route"]["kwargs"]["chat_id"])
@@ -75,7 +76,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # the response is saved to DB and the lock is properly released.
         # group_send calls in the task are safe with no listeners (messages are
         # discarded), and a reconnecting client will receive any remaining events.
-        self._document_question_task = None
+        self._ai_reply_task = None
 
         if self.group_name:
             await self.channel_layer.group_discard(
@@ -98,6 +99,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
             if msg_type == "chat.message":
                 await self._handle_chat_message(content)
+            elif msg_type == "chat.regenerate":
+                await self._handle_regenerate(content)
             elif msg_type == "chat.typing":
                 await self._handle_typing(content)
             else:
@@ -141,6 +144,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             })
             return
 
+        mode = ChatAIMode.normalize(content.get("mode"))
+
         allowed = await database_sync_to_async(check_message_rate_limit)(
             self.user.id, self.chat_id
         )
@@ -152,7 +157,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             })
             return
 
-        prev = self._document_question_task
+        prev = self._ai_reply_task
         if prev is not None and not prev.done():
             prev.cancel()
             try:
@@ -201,32 +206,129 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             })
             return
 
-        task = asyncio.create_task(self._run_document_question())
+        task = asyncio.create_task(self._run_ai_reply(mode))
 
-        def _on_document_question_done(t: asyncio.Task) -> None:
-            if self._document_question_task is t:
-                self._document_question_task = None
+        def _on_ai_reply_done(t: asyncio.Task) -> None:
+            if self._ai_reply_task is t:
+                self._ai_reply_task = None
             if t.cancelled():
                 return
             try:
                 exc = t.exception()
             except Exception:
                 logger.exception(
-                    "Unexpected error reading document-question task result.",
+                    "Unexpected error reading AI-reply task result.",
                     extra={"chat_id": self.chat_id},
                 )
                 return
             if exc is not None:
                 logger.error(
-                    "Document-question task failed.",
+                    "AI-reply task failed.",
                     exc_info=exc,
-                    extra={"chat_id": self.chat_id, "user_id": self.user.id},
+                    extra={"chat_id": self.chat_id, "user_id": self.user.id, "mode": mode},
                 )
 
-        task.add_done_callback(_on_document_question_done)
-        self._document_question_task = task
+        task.add_done_callback(_on_ai_reply_done)
+        self._ai_reply_task = task
 
-    async def _run_document_question(self):
+    async def _handle_regenerate(self, content: dict):
+        """Re-run the last AI reply under the same conditions (prompt, mode, context).
+
+        Mirrors ``_handle_chat_message`` but, instead of saving a new user
+        message, it deletes the last assistant message and streams a fresh reply,
+        injecting any negative-feedback hint the user left on it.
+        """
+        chat_obj = await database_sync_to_async(chat_repository.get_by_id)(self.chat_id)
+        if chat_obj is not None and chat_obj.is_locked:
+            await self.send_json({
+                "type": "error",
+                "error_code": "chat_locked",
+                "detail": "This chat is locked and does not accept new messages.",
+            })
+            return
+
+        mode = ChatAIMode.normalize(content.get("mode"))
+
+        prev = self._ai_reply_task
+        if prev is not None and not prev.done():
+            prev.cancel()
+            try:
+                await prev
+            except asyncio.CancelledError:
+                pass
+
+        try:
+            acquired = await database_sync_to_async(try_acquire)(self.chat_id)
+        except ServiceUnavailableException as e:
+            await self.send_json({
+                "type": "error",
+                "error_code": e.error_code,
+                "detail": e.detail,
+            })
+            return
+
+        if not acquired:
+            await self.send_json({
+                "type": "error",
+                "error_code": "chat_ai_reply_in_progress",
+                "detail": "Wait until the assistant finishes the current reply.",
+            })
+            return
+
+        await database_sync_to_async(broadcast_chat_ai_lock_change)(self.chat_id, True)
+
+        try:
+            regen_feedback = await database_sync_to_async(
+                message_service.delete_last_ai_message
+            )(self.user, self.chat_id)
+        except NoMessageToRegenerateException as e:
+            await database_sync_to_async(release)(self.chat_id)
+            await database_sync_to_async(broadcast_chat_ai_lock_change)(self.chat_id, False)
+            await self.send_json({
+                "type": "error",
+                "error_code": e.error_code,
+                "detail": e.detail,
+            })
+            return
+        except Exception:
+            logger.exception(
+                "Failed to delete last AI message for regeneration.",
+                extra={"chat_id": self.chat_id, "user_id": self.user.id},
+            )
+            await database_sync_to_async(release)(self.chat_id)
+            await database_sync_to_async(broadcast_chat_ai_lock_change)(self.chat_id, False)
+            await self.send_json({
+                "type": "error",
+                "detail": "Failed to regenerate response. Please try again.",
+            })
+            return
+
+        task = asyncio.create_task(self._run_ai_reply(mode, regen_feedback=regen_feedback))
+
+        def _on_ai_reply_done(t: asyncio.Task) -> None:
+            if self._ai_reply_task is t:
+                self._ai_reply_task = None
+            if t.cancelled():
+                return
+            try:
+                exc = t.exception()
+            except Exception:
+                logger.exception(
+                    "Unexpected error reading AI-reply task result.",
+                    extra={"chat_id": self.chat_id},
+                )
+                return
+            if exc is not None:
+                logger.error(
+                    "AI-reply (regenerate) task failed.",
+                    exc_info=exc,
+                    extra={"chat_id": self.chat_id, "user_id": self.user.id, "mode": mode},
+                )
+
+        task.add_done_callback(_on_ai_reply_done)
+        self._ai_reply_task = task
+
+    async def _run_ai_reply(self, mode: str, regen_feedback: str | None = None):
         try:
             await self.channel_layer.group_send(
                 self.group_name,
@@ -234,8 +336,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             )
 
             try:
-                async for payload in message_service.iter_document_question_stream_group_payloads(
-                        self.user, self.chat_id
+                async for payload in message_service.iter_ai_reply_stream_group_payloads(
+                        mode, self.user, self.chat_id, regen_feedback=regen_feedback
                 ):
                     await self.channel_layer.group_send(self.group_name, payload)
             except LLMServiceException:
@@ -250,8 +352,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 raise
             except Exception:
                 logger.exception(
-                    "Error running document-question stream.",
-                    extra={"chat_id": self.chat_id},
+                    "Error running AI-reply stream.",
+                    extra={"chat_id": self.chat_id, "mode": mode},
                 )
                 await self.channel_layer.group_send(
                     self.group_name,
