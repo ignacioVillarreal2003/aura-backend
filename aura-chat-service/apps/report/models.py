@@ -4,23 +4,26 @@ from core.models.base import AuditModel
 from core.models.soft_delete import SoftDeleteModel
 
 
-class Report(AuditModel, SoftDeleteModel):
+class ArtifactReport(AuditModel, SoftDeleteModel):
     class Type(models.TextChoices):
         SITREP = "SITREP", "SITREP"
         INTSUM = "INTSUM", "INTSUM"
         OPORD = "OPORD", "OPORD"
 
-    class Mode(models.TextChoices):
-        DIRECT = "direct", "Directo"
-        RAG = "rag", "Con documentos"
-
+    artifact = models.OneToOneField(
+        "artifact.Artifact",
+        on_delete=models.CASCADE,
+        related_name="report_content",
+        db_column="artifact_id",
+    )
     type = models.CharField(max_length=16, choices=Type.choices)
-    title = models.CharField(max_length=500)
     content = models.TextField()
-    mode = models.CharField(max_length=16, choices=Mode.choices)
-    source_chat_id = models.BigIntegerField(null=True, blank=True)
 
     class Meta:
         managed = False
-        db_table = "report"
+        db_table = "artifact_report"
         ordering = ["-created_at"]
+
+
+# Backward-compatible alias
+Report = ArtifactReport

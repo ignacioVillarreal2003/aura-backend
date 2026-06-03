@@ -92,7 +92,8 @@ SPECTACULAR_SETTINGS = {
 }
 
 SERVICE_API_KEY = "test-service-key"
-AUTHENTICATION_SERVICE_URL = "http://auth-service.test"
+AUTHENTICATION_SERVICE_URL = "http://auth-service.test/auth/validate"
+AUTH_USER_LOOKUP_URL = "http://auth-service.test/auth/users/lookup"
 NOTIFICATION_INTERNAL_API_TOKEN = "test-internal-token"
 AUTH_TOKEN_CACHE_TTL_SECONDS = 60
 

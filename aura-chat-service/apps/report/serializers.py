@@ -1,7 +1,8 @@
 from django.conf import settings
 from rest_framework import serializers
 
-from apps.report.models import Report
+from apps.artifact.models.artifact import Artifact
+from apps.report.models import ArtifactReport
 
 _SUPPORTED_AUDIO_TYPES = {
     "audio/mpeg", "audio/mp4", "audio/wav", "audio/webm",
@@ -21,11 +22,11 @@ class _FragmentSerializer(serializers.Serializer):
 
 
 class GenerateReportRequest(serializers.Serializer):
-    type = serializers.ChoiceField(choices=Report.Type.choices)
-    mode = serializers.ChoiceField(choices=Report.Mode.choices)
+    type = serializers.ChoiceField(choices=ArtifactReport.Type.choices)
+    mode = serializers.ChoiceField(choices=Artifact.Mode.choices)
     message = serializers.CharField(allow_blank=False, max_length=4000, required=False)
     audio = serializers.FileField(required=False)
-    chat_id = serializers.IntegerField(required=False, allow_null=True)
+    chat_id = serializers.IntegerField()
 
     def validate_audio(self, file):
         content_type = getattr(file, "content_type", "")
@@ -57,7 +58,6 @@ class ReportGenerateResponse(serializers.Serializer):
 
 
 class UpdateReportRequest(serializers.Serializer):
-    title = serializers.CharField(max_length=500, allow_blank=False, required=False)
     content = serializers.CharField(allow_blank=False, required=False)
 
     def validate(self, data):
@@ -67,10 +67,15 @@ class UpdateReportRequest(serializers.Serializer):
 
 
 class ReportResponse(serializers.ModelSerializer):
+    title = serializers.SerializerMethodField()
+    mode = serializers.SerializerMethodField()
+    source_chat_id = serializers.SerializerMethodField()
+
     class Meta:
-        model = Report
+        model = ArtifactReport
         fields = [
             "id",
+            "artifact_id",
             "type",
             "title",
             "content",
@@ -83,12 +88,26 @@ class ReportResponse(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+    def get_title(self, obj) -> str:
+        return obj.artifact.title if obj.artifact_id else ""
+
+    def get_mode(self, obj) -> str:
+        return obj.artifact.mode if obj.artifact_id else ""
+
+    def get_source_chat_id(self, obj) -> int | None:
+        return obj.artifact.source_chat_id if obj.artifact_id else None
+
 
 class ReportListResponse(serializers.ModelSerializer):
+    title = serializers.SerializerMethodField()
+    mode = serializers.SerializerMethodField()
+    source_chat_id = serializers.SerializerMethodField()
+
     class Meta:
-        model = Report
+        model = ArtifactReport
         fields = [
             "id",
+            "artifact_id",
             "type",
             "title",
             "mode",
@@ -97,3 +116,12 @@ class ReportListResponse(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
+
+    def get_title(self, obj) -> str:
+        return obj.artifact.title if obj.artifact_id else ""
+
+    def get_mode(self, obj) -> str:
+        return obj.artifact.mode if obj.artifact_id else ""
+
+    def get_source_chat_id(self, obj) -> int | None:
+        return obj.artifact.source_chat_id if obj.artifact_id else None

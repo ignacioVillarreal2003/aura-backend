@@ -19,6 +19,7 @@ from app.domain.constants.graph.relation_type import (
 )
 from app.domain.dtos.graph.graph_entity.graph_entity_response import GraphEntityResponse
 from app.domain.dtos.graph.graph_entity.graph_relation_response import GraphRelationResponse
+from app.domain.dtos.graph.graph_query.graph_query_interpreted_as import GraphQueryInterpretedAs
 from app.domain.dtos.graph.graph_query.graph_query_request import GraphQueryRequest
 from app.domain.dtos.graph.graph_query.graph_query_response import GraphQueryResponse
 from app.infrastructure.http.llm_provider.dtos.translate_graph_query_request import GraphOntology
@@ -31,6 +32,9 @@ from app.infrastructure.persistence.database.repositories.document_collection_re
 )
 from app.infrastructure.persistence.graph.repositories.graph_entity_repository.graph_entity_repository_interface import (
     GraphEntityRepositoryInterface,
+)
+from app.infrastructure.persistence.graph.repositories.graph_path_repository.graph_path_repository_interface import (
+    GraphPathRepositoryInterface,
 )
 from app.infrastructure.persistence.graph.repositories.graph_relation_repository.graph_relation_repository_interface import (
     GraphRelationRepositoryInterface,
@@ -56,6 +60,7 @@ class GraphQueryService(GraphQueryServiceInterface):
             llm_provider: LlmProviderInterface,
             entity_repository: GraphEntityRepositoryInterface,
             relation_repository: GraphRelationRepositoryInterface,
+            path_repository: Optional[GraphPathRepositoryInterface] = None,
             document_collection_repository: DocumentCollectionRepositoryInterface,
             document_collection_catalog_client: DocumentCollectionCatalogClientInterface,
             authorizer: Authorizer,
@@ -64,6 +69,7 @@ class GraphQueryService(GraphQueryServiceInterface):
         self._llm_provider = llm_provider
         self._entity_repository = entity_repository
         self._relation_repository = relation_repository
+        self._path_repository = path_repository
         self._document_collection_repository = document_collection_repository
         self._document_collection_catalog_client = document_collection_catalog_client
         self._authorizer = authorizer
@@ -140,15 +146,23 @@ class GraphQueryService(GraphQueryServiceInterface):
                 confidence=translation.confidence,
                 entities=[],
                 relations=[],
+                nodes=[],
                 explanation="The query could not be answered with the structured intent.",
             )
+
+        nodes = self._build_nodes(entities, relations)
+        has_more = (len(entities) + len(relations)) >= max_results
+        interpreted_as = self._build_interpreted_as(intent, params)
 
         return GraphQueryResponse(
             intent=intent,
             confidence=translation.confidence,
             entities=entities,
             relations=relations,
+            nodes=nodes,
             explanation=translation.reasoning,
+            interpreted_as=interpreted_as,
+            has_more=has_more,
         )
 
     @staticmethod
@@ -259,22 +273,62 @@ class GraphQueryService(GraphQueryServiceInterface):
             accessible_ids: list[int],
             max_results: int,
     ) -> tuple[list[GraphEntityResponse], list[GraphRelationResponse]]:
-        # ``find_path`` belongs more to GraphPathService; here we translate
-        # neighbors of the source as a best-effort response. The dedicated
-        # endpoint /graph/path delegates to GraphPathService directly.
-        canonical = self._read_canonical_name(params, "source_name")
-        entity_type = self._read_optional_entity_type(params, "source_type")
-        depth = self._read_int(
+        source_canonical = self._read_canonical_name(params, "source_name")
+        source_type = self._read_optional_entity_type(params, "source_type")
+        target_raw = params.get("target_name")
+        target_canonical = (
+            " ".join(str(target_raw).strip().lower().split())
+            if target_raw and str(target_raw).strip()
+            else None
+        )
+        target_type = self._read_optional_entity_type(params, "target_type")
+        max_hops = self._read_int(
             params,
             "max_hops",
             default=self._settings.query_default_neighbor_depth,
             min_value=1,
             max_value=self._settings.query_max_neighbor_depth,
         )
+
+        if target_canonical and self._path_repository is not None:
+            try:
+                paths = await self._path_repository.find_paths(
+                    source_canonical_name=source_canonical,
+                    source_type=source_type,
+                    target_canonical_name=target_canonical,
+                    target_type=target_type,
+                    max_hops=max_hops,
+                    max_paths=min(max_results, 10),
+                    only_shortest=True,
+                    accessible_document_ids=accessible_ids,
+                )
+                if paths:
+                    path_nodes: list[GraphEntityResponse] = []
+                    path_rels: list[GraphRelationResponse] = []
+                    seen_nodes: set[tuple[str, str]] = set()
+                    seen_rels: set[tuple[str, str, str]] = set()
+                    for path in paths:
+                        for node in path.nodes:
+                            key = (node.canonical_name, node.type.value)
+                            if key not in seen_nodes:
+                                seen_nodes.add(key)
+                                path_nodes.append(node)
+                        for rel in path.relations:
+                            key = (rel.source.canonical_name, rel.target.canonical_name, rel.type)
+                            if key not in seen_rels:
+                                seen_rels.add(key)
+                                path_rels.append(rel)
+                    return path_nodes, path_rels
+            except Exception:
+                logger.warning(
+                    "Real path finding failed for find_path NL intent; falling back to source neighbors.",
+                    extra={"source": source_canonical, "target": target_canonical},
+                )
+
         relations = await self._relation_repository.list_neighbors_of(
-            canonical_name=canonical,
-            entity_type=entity_type,
-            depth=depth,
+            canonical_name=source_canonical,
+            entity_type=source_type,
+            depth=max_hops,
             relation_types=None,
             accessible_document_ids=accessible_ids,
             limit=max_results,
@@ -323,6 +377,74 @@ class GraphQueryService(GraphQueryServiceInterface):
             limit=max_results,
         )
         return entities, relations
+
+    @staticmethod
+    def _build_nodes(
+            entities: list[GraphEntityResponse],
+            relations: list[GraphRelationResponse],
+    ) -> list[GraphEntityResponse]:
+        """Build a deduplicated list of graph nodes from entities and relation endpoints.
+
+        Combines explicit entity results with relation source/target endpoints so that
+        graph visualization libraries receive a unified nodes array without needing to
+        derive it from edges on the client side.
+        """
+        seen: dict[tuple[str, str], GraphEntityResponse] = {}
+
+        for entity in entities:
+            key = (entity.canonical_name, entity.type.value)
+            if key not in seen:
+                seen[key] = entity
+
+        for rel in relations:
+            for endpoint in (rel.source, rel.target):
+                key = (endpoint.canonical_name, endpoint.type.value)
+                if key not in seen:
+                    seen[key] = GraphEntityResponse(
+                        canonical_name=endpoint.canonical_name,
+                        display_name=endpoint.display_name,
+                        type=endpoint.type,
+                    )
+
+        return list(seen.values())
+
+    @staticmethod
+    def _build_interpreted_as(
+            intent: QueryIntent,
+            params: dict[str, Any],
+    ) -> Optional[GraphQueryInterpretedAs]:
+        """Build a structured summary of the LLM-resolved query parameters."""
+        if intent == QueryIntent.UNKNOWN:
+            return None
+
+        def _str_or_none(key: str) -> Optional[str]:
+            v = params.get(key)
+            return str(v).strip() or None if v is not None else None
+
+        def _int_or_none(key: str) -> Optional[int]:
+            v = params.get(key)
+            try:
+                return int(v) if v is not None else None
+            except (TypeError, ValueError):
+                return None
+
+        def _list_or_none(key: str) -> Optional[list[str]]:
+            v = params.get(key)
+            if not isinstance(v, list):
+                return None
+            cleaned = [str(i).strip() for i in v if i and str(i).strip()]
+            return cleaned or None
+
+        return GraphQueryInterpretedAs(
+            intent=intent,
+            entity_name=_str_or_none("entity_name"),
+            entity_type=_str_or_none("entity_type"),
+            source_name=_str_or_none("source_name"),
+            target_name=_str_or_none("target_name"),
+            depth=_int_or_none("depth"),
+            relation_types=_list_or_none("relation_types"),
+            document_id=_int_or_none("document_id"),
+        )
 
     async def _resolve_accessible_ids(
             self,

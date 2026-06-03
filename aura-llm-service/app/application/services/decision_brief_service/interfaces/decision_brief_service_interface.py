@@ -1,0 +1,15 @@
+from abc import ABC, abstractmethod
+
+from app.domain.authentication.authenticated_user import AuthenticatedUser
+from app.domain.dtos.decision_brief.decision_brief_request import DecisionBriefGenerateRequest
+from app.domain.dtos.decision_brief.decision_brief_response import DecisionBriefGenerateResponse
+
+
+class DecisionBriefServiceInterface(ABC):
+    @abstractmethod
+    async def generate(
+            self,
+            request: DecisionBriefGenerateRequest,
+            authenticated_user: AuthenticatedUser,
+    ) -> DecisionBriefGenerateResponse:
+        ...

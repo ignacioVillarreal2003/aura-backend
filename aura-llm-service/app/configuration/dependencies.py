@@ -18,6 +18,10 @@ from app.application.services.general_chat_service.general_chat_service import G
 from app.application.services.rag_agent_service.rag_agent_service import RagAgentService
 from app.application.services.report_service.report_service import ReportService
 from app.application.services.checklist_service.checklist_service import ChecklistService
+from app.application.services.timeline_service.timeline_service import TimelineService
+from app.application.services.quiz_service.quiz_service import QuizService
+from app.application.services.lessons_learned_service.lessons_learned_service import LessonsLearnedService
+from app.application.services.decision_brief_service.decision_brief_service import DecisionBriefService
 from app.infrastructure.http.authentication_provider.authentication_provider import AuthenticationProvider
 from app.infrastructure.http.document_context_provider.document_context_provider import DocumentContextProvider
 from app.infrastructure.http.http_client.http_client import HttpClient
@@ -50,6 +54,10 @@ async def _rollback_partial_startup(
             )
 
     to_clear = [
+        "decision_brief_service",
+        "lessons_learned_service",
+        "quiz_service",
+        "timeline_service",
         "checklist_service",
         "report_service",
         "general_chat_service",
@@ -203,6 +211,38 @@ async def startup_dependencies(app: FastAPI) -> None:
             authorizer=authorizer,
         )
         app.state.checklist_service = checklist_service
+
+        timeline_service = TimelineService(
+            ollama_llm_facade=ollama_facade,
+            ollama_llm_invoker=ollama_llm_invoker,
+            document_context_provider=document_context_provider,
+            authorizer=authorizer,
+        )
+        app.state.timeline_service = timeline_service
+
+        quiz_service = QuizService(
+            ollama_llm_facade=ollama_facade,
+            ollama_llm_invoker=ollama_llm_invoker,
+            document_context_provider=document_context_provider,
+            authorizer=authorizer,
+        )
+        app.state.quiz_service = quiz_service
+
+        lessons_learned_service = LessonsLearnedService(
+            ollama_llm_facade=ollama_facade,
+            ollama_llm_invoker=ollama_llm_invoker,
+            document_context_provider=document_context_provider,
+            authorizer=authorizer,
+        )
+        app.state.lessons_learned_service = lessons_learned_service
+
+        decision_brief_service = DecisionBriefService(
+            ollama_llm_facade=ollama_facade,
+            ollama_llm_invoker=ollama_llm_invoker,
+            document_context_provider=document_context_provider,
+            authorizer=authorizer,
+        )
+        app.state.decision_brief_service = decision_brief_service
 
         logger.info("All dependencies started successfully")
         cleanup_stack.clear()

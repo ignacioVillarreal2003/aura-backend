@@ -1,9 +1,9 @@
 from django.db import models
 
 
-class MessageBookmark(models.Model):
-    message = models.ForeignKey(
-        "ChatMessage",
+class ArtifactBookmark(models.Model):
+    artifact = models.ForeignKey(
+        "artifact.Artifact",
         on_delete=models.CASCADE,
         related_name="bookmarks",
     )
@@ -12,11 +12,15 @@ class MessageBookmark(models.Model):
 
     class Meta:
         managed = False
-        db_table = "message_bookmark"
+        db_table = "artifact_bookmark"
         constraints = [
-            models.UniqueConstraint(fields=["message", "user_id"], name="uq_message_bookmark"),
+            models.UniqueConstraint(fields=["artifact", "user_id"], name="uq_artifact_bookmark"),
         ]
         indexes = [
-            models.Index(fields=["message"], name="idx_message_bookmark_message"),
-            models.Index(fields=["user_id"], name="idx_message_bookmark_user"),
+            models.Index(fields=["artifact"], name="idx_artifact_bookmark_artifact"),
+            models.Index(fields=["user_id"], name="idx_artifact_bookmark_user"),
         ]
+
+
+# Backward-compatible alias
+MessageBookmark = ArtifactBookmark

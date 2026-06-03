@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional
 from pydantic import BaseModel, Field, field_validator
 
 from app.domain.constants.graph.entity_type import EntityType
@@ -18,6 +18,13 @@ class ExtractedEntity(BaseModel):
         default=None,
         max_length=MAX_ENTITY_DESCRIPTION_CHARS,
     )
+
+    @field_validator("type", mode="before")
+    @classmethod
+    def normalize_entity_type(cls, v: Any) -> str:
+        if isinstance(v, EntityType):
+            return v.value
+        return EntityType.parse(str(v)).value
 
     @field_validator("name", mode="after")
     @classmethod

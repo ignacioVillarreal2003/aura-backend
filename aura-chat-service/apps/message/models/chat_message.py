@@ -1,29 +1,5 @@
-from django.db import models
-from core.models import CreatedAuditModel, SoftDeleteModel
+from apps.artifact.models.artifact_message import ArtifactMessage
 
-
-class ChatMessage(CreatedAuditModel, SoftDeleteModel):
-    class SenderType(models.TextChoices):
-        SYSTEM = "system", "System"
-        USER = "user", "User"
-
-    chat = models.ForeignKey(
-        "chat.Chat",
-        on_delete=models.CASCADE,
-        related_name="messages",
-    )
-    message = models.TextField(max_length=10000)
-    sender_type = models.CharField(max_length=64, choices=SenderType.choices)
-    fragments = models.JSONField(null=True, blank=True, default=None)
-
-    class Meta:
-        managed = False
-        db_table = "chat_message"
-        ordering = ["-created_at"]
-        indexes = [
-            models.Index(fields=["chat"], name="idx_chat_message_chat_id"),
-            models.Index(fields=["chat", "-created_at"], name="idx_chat_message_chat_created"),
-        ]
-
-    def __str__(self):
-        return f"[{self.sender_type}] {self.message[:50]}"
+# Backward-compatible alias so existing imports keep working while the codebase
+# is migrated. Prefer importing ArtifactMessage directly.
+ChatMessage = ArtifactMessage

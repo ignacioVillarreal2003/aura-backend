@@ -11,7 +11,9 @@ from core.clients.llm_client import ReportGenerateResult, llm_client
 from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.membership.repositories.membership_repository import membership_repository
-from apps.message.models.chat_message import ChatMessage
+from apps.artifact.models import Artifact
+from apps.artifact.models.artifact_message import ArtifactMessage
+from apps.artifact.repositories.artifact_repository import artifact_repository
 from apps.message.repositories.message_repository import message_repository
 from apps.report.exceptions import LLMServiceException, ReportAccessDeniedException, ReportNotFoundException
 from apps.report.models import Report
@@ -34,14 +36,14 @@ def _auto_title(report_type: str, content: str) -> str:
 def _assert_report_access(user_id: int, report: Report, *, require_contributor: bool = False) -> None:
     if report.created_by == user_id:
         return
-    if report.source_chat_id is not None:
-        checker = (
-            membership_repository.is_active_contributor
-            if require_contributor
-            else membership_repository.is_active_member
-        )
-        if checker(report.source_chat_id, user_id):
-            return
+    source_chat_id = report.artifact.source_chat_id
+    checker = (
+        membership_repository.is_active_contributor
+        if require_contributor
+        else membership_repository.is_active_member
+    )
+    if checker(source_chat_id, user_id):
+        return
     raise ReportAccessDeniedException()
 
 
@@ -105,7 +107,14 @@ class ReportService:
         if report is None:
             raise ReportNotFoundException()
         _assert_report_access(user.id, report, require_contributor=True)
-        return report_repository.update(report, updated_by=user.id, title=title, content=content)
+        if title is not None:
+            from apps.artifact.repositories.artifact_repository import artifact_repository
+            artifact_repository.update(
+                report.artifact,
+                updated_by=user.id,
+                title=title,
+            )
+        return report_repository.update(report, updated_by=user.id, content=content)
 
     def delete_report(self, user: AuthenticatedUser, report_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({perms.DELETE_REPORT}))
@@ -122,23 +131,22 @@ class ReportService:
             report_type: str,
             message: str,
             mode: str,
-            chat_id: Optional[int] = None,
+            chat_id: int,
     ) -> tuple[Report, list[dict], list[dict]]:
         AccessControl.require_permissions(user, frozenset({perms.LLM_REPORT_GENERATE}))
 
+        chat = await sync_to_async(chat_repository.get_by_id)(chat_id)
+        if chat is None:
+            raise ChatNotFoundException()
+        is_contributor = await sync_to_async(membership_repository.is_active_contributor)(chat_id, user.id)
+        if not is_contributor:
+            raise ChatAccessDeniedException()
         history: list[dict] = []
-        if chat_id is not None:
-            chat = await sync_to_async(chat_repository.get_by_id)(chat_id)
-            if chat is None:
-                raise ChatNotFoundException()
-            is_contributor = await sync_to_async(membership_repository.is_active_contributor)(chat_id, user.id)
-            if not is_contributor:
-                raise ChatAccessDeniedException()
-            recent = await sync_to_async(message_repository.get_recent_messages)(chat_id, limit=20)
-            recent.reverse()
-            for msg in recent:
-                role = "human" if msg.sender_type == ChatMessage.SenderType.USER else "assistant"
-                history.append({"role": role, "content": msg.message})
+        recent = await sync_to_async(message_repository.get_recent_messages)(chat_id, limit=20)
+        recent.reverse()
+        for msg in recent:
+            role = "human" if msg.sender_type == ArtifactMessage.SenderType.USER else "assistant"
+            history.append({"role": role, "content": msg.message})
 
         messages = history + [{"role": "human", "content": message}]
         try:
@@ -163,19 +171,56 @@ class ReportService:
                          extra={"user_id": user.id, "report_type": report_type})
             raise LLMServiceException()
 
-        report = await sync_to_async(report_repository.create)(
+        title = _auto_title(result.report_type, result.content)
+        artifact_id = await sync_to_async(self._create_artifact_header)(
             user_id=user.id,
-            type=result.report_type,
-            title=_auto_title(result.report_type, result.content),
-            content=result.content,
+            title=title,
             mode=mode,
             source_chat_id=chat_id,
         )
+        report = await sync_to_async(report_repository.create)(
+            user_id=user.id,
+            type=result.report_type,
+            content=result.content,
+            artifact_id=artifact_id,
+        )
         logger.info(
             "Report generated and saved",
-            extra={"user_id": user.id, "report_id": report.id, "type": result.report_type, "source_chat_id": chat_id},
+            extra={
+                "user_id": user.id,
+                "report_id": report.id,
+                "type": result.report_type,
+                "source_chat_id": chat_id,
+                "artifact_id": artifact_id,
+            },
         )
         return report, result.messages, result.fragments
+
+    @staticmethod
+    def _create_artifact_header(
+            *,
+            user_id: int,
+            title: str,
+            mode: str,
+            source_chat_id: int,
+    ) -> Optional[int]:
+        try:
+            artifact = artifact_repository.create(
+                user_id=user_id,
+                type=Artifact.Type.REPORT,
+                title=title,
+                status=Artifact.Status.FINAL,
+                mode=mode,
+                source_chat_id=source_chat_id,
+            )
+            return artifact.id
+        except Exception:
+            logger.warning(
+                "Failed to create artifact header for report",
+                extra={"user_id": user_id, "source_chat_id": source_chat_id},
+                exc_info=True,
+            )
+            return None
 
 
 report_service = ReportService()

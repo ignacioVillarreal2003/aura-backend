@@ -15,6 +15,7 @@ from app.application.services.graph_extraction_service.exceptions.graph_extracti
 )
 from app.application.services.graph_extraction_service.graph_extraction_prompt import (
     HUMAN_PROMPT,
+    REPAIR_PROMPT,
     SYSTEM_PROMPT,
 )
 from app.application.services.graph_extraction_service.graph_extraction_settings import (
@@ -128,7 +129,36 @@ class GraphExtractionService(GraphExtractionServiceInterface):
 
     async def _run(self, state: GraphExtractionState) -> ExtractEntitiesRelationsResponse:
         raw = await self._invoke_llm(state)
-        return self._parse_response(raw, state.authenticated_user.id)
+        last_error: Exception | None = None
+
+        for attempt in range(self._settings.max_repair_attempts + 1):
+            try:
+                result = self._parse_response(raw, state.authenticated_user.id)
+                if attempt > 0:
+                    logger.info(
+                        "Graph extraction JSON repair succeeded",
+                        extra={"user_id": state.authenticated_user.id, "attempt": attempt},
+                    )
+                return self._apply_filters(result, state)
+            except GraphExtractionServiceException as exc:
+                last_error = exc
+                if attempt >= self._settings.max_repair_attempts:
+                    break
+                logger.warning(
+                    "Graph extraction JSON malformed; attempting repair",
+                    extra={
+                        "user_id": state.authenticated_user.id,
+                        "attempt": attempt + 1,
+                        "max_repair_attempts": self._settings.max_repair_attempts,
+                    },
+                )
+                raw = await self._invoke_repair(
+                    state=state,
+                    malformed_output=raw,
+                    parse_error=str(exc),
+                )
+
+        raise last_error  # type: ignore[misc]
 
     def _truncate_content(self, content: str, user_id: int) -> str:
         if len(content) <= self._settings.max_content_chars:
@@ -164,8 +194,27 @@ class GraphExtractionService(GraphExtractionServiceInterface):
                 )
             ),
         ]
+        return await self._call_llm_json(llm_input, user_id)
+
+    async def _invoke_repair(
+        self,
+        state: GraphExtractionState,
+        malformed_output: str,
+        parse_error: str,
+    ) -> str:
+        user_id = state.authenticated_user.id
+        repair_message = HumanMessage(
+            content=REPAIR_PROMPT.format(
+                parse_error=parse_error[:500],
+                malformed_output=malformed_output[:2_000],
+            )
+        )
+        llm_input = [SystemMessage(content=SYSTEM_PROMPT), repair_message]
+        return await self._call_llm_json(llm_input, user_id)
+
+    async def _call_llm_json(self, llm_input: list, user_id: int) -> str:
         try:
-            llm = await self._ollama_llm_facade.get_llm_base()
+            llm = await self._ollama_llm_facade.get_llm_json()
             return await self._ollama_llm_invoker.call_llm_content(llm=llm, llm_input=llm_input)
         except LLMInvocationError as e:
             logger.warning(
@@ -199,6 +248,46 @@ class GraphExtractionService(GraphExtractionServiceInterface):
                 "La respuesta del modelo no tiene el formato JSON esperado.",
                 status_code=502,
             ) from e
+
+    def _apply_filters(
+        self,
+        result: ExtractEntitiesRelationsResponse,
+        state: GraphExtractionState,
+    ) -> ExtractEntitiesRelationsResponse:
+        allowed_entity_set = {t.lower() for t in state.allowed_entity_types}
+        allowed_relation_set = (
+            {t.lower() for t in state.allowed_relation_types}
+            if state.allowed_relation_types
+            else None
+        )
+        min_conf = self._settings.min_relation_confidence
+
+        filtered_entities = [
+            e for e in result.entities
+            if e.type.value in allowed_entity_set
+        ]
+        filtered_relations = [
+            r for r in result.relations
+            if (allowed_relation_set is None or r.type.lower() in allowed_relation_set)
+            and r.confidence >= min_conf
+        ]
+
+        discarded_entities = len(result.entities) - len(filtered_entities)
+        discarded_relations = len(result.relations) - len(filtered_relations)
+        if discarded_entities or discarded_relations:
+            logger.debug(
+                "Post-parse filters removed out-of-whitelist or low-confidence items",
+                extra={
+                    "discarded_entities": discarded_entities,
+                    "discarded_relations": discarded_relations,
+                    "min_confidence": min_conf,
+                },
+            )
+
+        return ExtractEntitiesRelationsResponse(
+            entities=filtered_entities,
+            relations=filtered_relations,
+        )
 
 
 async def get_graph_extraction_service(request: Request) -> GraphExtractionServiceInterface:

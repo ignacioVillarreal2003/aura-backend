@@ -234,6 +234,10 @@ DOCUMENT_PROCESSING_SERVICE_API_KEY = config(
     'DOCUMENT_PROCESSING_SERVICE_API_KEY',
     default='service_api_key',
 )
+
+# Shared key for generic service-to-service calls (e.g. notification service
+# enriching email recipients via the user lookup endpoint).
+SERVICE_API_KEY = config('SERVICE_API_KEY', default='service_api_key')
 DOCUMENT_PROCESSING_TIMEOUT_SECONDS = config(
     'DOCUMENT_PROCESSING_TIMEOUT_SECONDS',
     default=300,

@@ -10,6 +10,13 @@ class ExtractedRelationEndpoint(BaseModel):
     name: str = Field(..., min_length=1, max_length=MAX_ENTITY_NAME_CHARS)
     type: EntityType = Field(...)
 
+    @field_validator("type", mode="before")
+    @classmethod
+    def normalize_entity_type(cls, v: Any) -> str:
+        if isinstance(v, EntityType):
+            return v.value
+        return EntityType.parse(str(v)).value
+
     @field_validator("name", mode="after")
     @classmethod
     def trim_name(cls, v: str) -> str:

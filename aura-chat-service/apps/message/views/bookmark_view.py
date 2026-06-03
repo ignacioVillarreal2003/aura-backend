@@ -28,7 +28,7 @@ class BookmarkView(APIView):
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     def post(self, request: Request, chat_id: int, message_id: int) -> Response:
-        bookmark_service.bookmark(user=request.user, chat_id=chat_id, message_id=message_id)
+        bookmark_service.bookmark(user=request.user, chat_id=chat_id, artifact_id=message_id)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(
@@ -40,7 +40,7 @@ class BookmarkView(APIView):
         responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
     )
     def delete(self, request: Request, chat_id: int, message_id: int) -> Response:
-        bookmark_service.unbookmark(user=request.user, chat_id=chat_id, message_id=message_id)
+        bookmark_service.unbookmark(user=request.user, chat_id=chat_id, artifact_id=message_id)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

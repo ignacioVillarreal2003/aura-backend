@@ -12,7 +12,8 @@ from xhtml2pdf import pisa
 
 from apps.chat.models.chat import Chat
 from apps.message.exceptions import PDFGenerationException
-from apps.message.models.chat_message import ChatMessage
+from apps.artifact.models.artifact_message import ArtifactMessage
+from apps.artifact.models.artifact_message import ArtifactMessage as ChatMessage  # backward compat
 
 logger = logging.getLogger(__name__)
 
@@ -140,13 +141,13 @@ def _build_pdf(html_content: str) -> bytes:
             raise PDFGenerationException()
 
 
-def generate_chat_pdf(chat: Chat, messages: list[ChatMessage]) -> bytes:
+def generate_chat_pdf(chat: Chat, messages: list[ArtifactMessage]) -> bytes:
     chat_name = html.escape(chat.name)
     export_date = html.escape(_fmt_dt(timezone.now()))
 
     rows: list[str] = []
     for msg in messages:
-        is_system = msg.sender_type == ChatMessage.SenderType.SYSTEM
+        is_system = msg.sender_type in (ArtifactMessage.SenderType.SYSTEM, ArtifactMessage.SenderType.ASSISTANT)
         css_class = "bubble-system" if is_system else "bubble-user"
         sender_label = "AI" if is_system else "User"
         content_html = _render_markdown(msg.message)
@@ -178,7 +179,7 @@ def generate_chat_pdf(chat: Chat, messages: list[ChatMessage]) -> bytes:
     return _build_pdf(html_doc)
 
 
-def generate_chat_markdown(chat: Chat, messages: list[ChatMessage]) -> str:
+def generate_chat_markdown(chat: Chat, messages: list[ArtifactMessage]) -> str:
     lines = [
         f"# {chat.name}",
         "",
@@ -199,8 +200,8 @@ def generate_chat_markdown(chat: Chat, messages: list[ChatMessage]) -> str:
     return "\n".join(lines)
 
 
-def generate_ai_responses_markdown(chat: Chat, messages: list[ChatMessage]) -> str:
-    ai_msgs = [m for m in messages if m.sender_type == ChatMessage.SenderType.SYSTEM]
+def generate_ai_responses_markdown(chat: Chat, messages: list[ArtifactMessage]) -> str:
+    ai_msgs = [m for m in messages if m.sender_type in (ArtifactMessage.SenderType.SYSTEM, ArtifactMessage.SenderType.ASSISTANT)]
     lines = [
         f"# {chat.name} — AI Responses",
         "",
@@ -219,7 +220,7 @@ def generate_ai_responses_markdown(chat: Chat, messages: list[ChatMessage]) -> s
     return "\n".join(lines)
 
 
-def generate_chat_json(chat: Chat, messages: list[ChatMessage]) -> str:
+def generate_chat_json(chat: Chat, messages: list[ArtifactMessage]) -> str:
     payload = {
         "chat": {
             "id": chat.id,
@@ -244,10 +245,10 @@ def generate_chat_json(chat: Chat, messages: list[ChatMessage]) -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
-def generate_message_pdf(chat: Chat, message: ChatMessage) -> bytes:
+def generate_message_pdf(chat: Chat, message: ArtifactMessage) -> bytes:
     chat_name = html.escape(chat.name)
     export_date = html.escape(_fmt_dt(timezone.now()))
-    is_system = message.sender_type == ChatMessage.SenderType.SYSTEM
+    is_system = message.sender_type in (ArtifactMessage.SenderType.SYSTEM, ArtifactMessage.SenderType.ASSISTANT)
     css_class = "bubble-system" if is_system else "bubble-user"
     sender_label = "AI" if is_system else "User"
     content_html = _render_markdown(message.message)

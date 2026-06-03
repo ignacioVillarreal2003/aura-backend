@@ -1,7 +1,7 @@
 from django.db import models
 
 
-class MessageFeedback(models.Model):
+class ArtifactFeedback(models.Model):
     class Value(models.IntegerChoices):
         THUMBS_UP = 1, "Thumbs Up"
         THUMBS_DOWN = -1, "Thumbs Down"
@@ -15,8 +15,8 @@ class MessageFeedback(models.Model):
         HALLUCINATION = "hallucination", "Inventó datos"
         OTHER = "other", "Otro"
 
-    message = models.ForeignKey(
-        "ChatMessage",
+    artifact = models.ForeignKey(
+        "artifact.Artifact",
         on_delete=models.CASCADE,
         related_name="feedback",
     )
@@ -29,14 +29,18 @@ class MessageFeedback(models.Model):
 
     class Meta:
         managed = False
-        db_table = "message_feedback"
+        db_table = "artifact_feedback"
         constraints = [
-            models.UniqueConstraint(fields=["message", "user_id"], name="uq_message_feedback"),
+            models.UniqueConstraint(fields=["artifact", "user_id"], name="uq_artifact_feedback"),
             models.CheckConstraint(
                 condition=models.Q(value__in=[1, -1]),
-                name="chk_feedback_value",
+                name="chk_artifact_feedback_value",
             ),
         ]
         indexes = [
-            models.Index(fields=["message"], name="idx_message_feedback_message"),
+            models.Index(fields=["artifact"], name="idx_artifact_feedback_artifact"),
         ]
+
+
+# Backward-compatible alias
+MessageFeedback = ArtifactFeedback

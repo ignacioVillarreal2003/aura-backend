@@ -9,6 +9,8 @@ from core.clients.exceptions import HttpClientException
 from core.clients.llm_client import ChecklistGenerateResult, llm_client
 from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
+from apps.artifact.models import Artifact
+from apps.artifact.repositories.artifact_repository import artifact_repository
 from apps.checklist.exceptions import ChecklistAccessDeniedException, ChecklistNotFoundException, LLMServiceException
 from apps.checklist.models import Checklist
 from apps.checklist.repositories.checklist_repository import checklist_repository
@@ -171,18 +173,53 @@ class ChecklistService:
             raise LLMServiceException()
 
         sections = _items_to_sections(result.items)
+        artifact_id = await sync_to_async(self._create_artifact_header)(
+            user_id=user.id,
+            title=result.title,
+            source_chat_id=chat_id,
+        )
         checklist = await sync_to_async(checklist_repository.create)(
             user_id=user.id,
             title=result.title,
             sections=sections,
             mode=mode,
             source_chat_id=chat_id,
+            artifact_id=artifact_id,
         )
         logger.info(
             "Checklist generated and saved",
-            extra={"user_id": user.id, "checklist_id": checklist.id, "source_chat_id": chat_id},
+            extra={
+                "user_id": user.id,
+                "checklist_id": checklist.id,
+                "source_chat_id": chat_id,
+                "artifact_id": artifact_id,
+            },
         )
         return checklist, result.messages, result.fragments
+
+    @staticmethod
+    def _create_artifact_header(
+            *,
+            user_id: int,
+            title: str,
+            source_chat_id: Optional[int],
+    ) -> Optional[int]:
+        try:
+            artifact = artifact_repository.create(
+                user_id=user_id,
+                type=Artifact.Type.CHECKLIST,
+                title=title,
+                status=Artifact.Status.FINAL,
+                source_chat_id=source_chat_id,
+            )
+            return artifact.id
+        except Exception:
+            logger.warning(
+                "Failed to create artifact header for checklist",
+                extra={"user_id": user_id, "source_chat_id": source_chat_id},
+                exc_info=True,
+            )
+            return None
 
 
 checklist_service = ChecklistService()

@@ -50,17 +50,21 @@ def make_chat(chat_id=1, created_by=1, **overrides):
     return SimpleNamespace(**data)
 
 
-def make_message(msg_id=1, chat_id=1, created_by=1, sender_type="user", **overrides):
+def make_message(msg_id=1, artifact_id=1, chat_id=1, created_by=1, sender_type="user", **overrides):
     now = timezone.now()
+    artifact = make_artifact(artifact_id=artifact_id, source_chat_id=chat_id)
     data = dict(
         id=msg_id,
-        chat_id=chat_id,
+        artifact_id=artifact_id,
+        artifact=artifact,
         message="Hello world",
         sender_type=sender_type,
         created_by=created_by,
         created_at=now,
         is_bookmarked=False,
         user_feedback=None,
+        user_feedback_reason=None,
+        user_feedback_comment=None,
         thread_reply_count=0,
     )
     data.update(overrides)
@@ -115,15 +119,15 @@ def make_share_link(link_id=1, chat_id=1, created_by=1, **overrides):
     return SimpleNamespace(**data)
 
 
-def make_pin(pin_id=1, chat_id=1, message_id=1, **overrides):
+def make_pin(pin_id=1, chat_id=1, artifact_id=1, **overrides):
     now = timezone.now()
     data = dict(
         id=pin_id,
         chat_id=chat_id,
-        message_id=message_id,
+        artifact_id=artifact_id,
         pinned_by=1,
         pinned_at=now,
-        message=make_message(msg_id=message_id, chat_id=chat_id),
+        artifact=make_artifact(artifact_id=artifact_id, source_chat_id=chat_id),
     )
     data.update(overrides)
     return SimpleNamespace(**data)
@@ -207,11 +211,63 @@ def make_report(report_id=1, title="Informe de prueba", report_type="SITREP",
     return SimpleNamespace(**data)
 
 
-def make_feedback(fb_id=1, message_id=1, user_id=1, value=1, reason=None, comment=None, **overrides):
+def make_artifact(artifact_id=1, type="REPORT", title="Artefacto de prueba",
+                  description="", status="draft", version=1, mode="direct",
+                  source_chat_id=1, created_by=1, **overrides):
+    now = timezone.now()
+    data = dict(
+        id=artifact_id,
+        type=type,
+        title=title,
+        description=description,
+        status=status,
+        version=version,
+        mode=mode,
+        source_chat_id=source_chat_id,
+        created_by=created_by,
+        created_at=now,
+        updated_by=None,
+        updated_at=None,
+    )
+    data.update(overrides)
+    return SimpleNamespace(**data)
+
+
+def make_artifact_version(version_id=1, artifact_id=1, version_number=1,
+                          title="Artefacto de prueba", description="", status="draft",
+                          mode="direct", change_summary="Versión inicial", created_by=1, **overrides):
+    now = timezone.now()
+    data = dict(
+        id=version_id,
+        artifact_id=artifact_id,
+        version_number=version_number,
+        title=title,
+        description=description,
+        status=status,
+        mode=mode,
+        change_summary=change_summary,
+        created_by=created_by,
+        created_at=now,
+    )
+    data.update(overrides)
+    return SimpleNamespace(**data)
+
+
+def make_message_artifact(link_id=1, position=0, artifact=None, **overrides):
+    data = dict(
+        id=link_id,
+        position=position,
+        artifact=artifact if artifact is not None else make_artifact(),
+    )
+    data.update(overrides)
+    return SimpleNamespace(**data)
+
+
+def make_feedback(fb_id=1, artifact_id=1, user_id=1, value=1, reason=None, comment=None, **overrides):
     now = timezone.now()
     data = dict(
         id=fb_id,
-        message_id=message_id,
+        artifact_id=artifact_id,
         user_id=user_id,
         value=value,
         reason=reason,
@@ -223,11 +279,11 @@ def make_feedback(fb_id=1, message_id=1, user_id=1, value=1, reason=None, commen
     return SimpleNamespace(**data)
 
 
-def make_thread_reply(reply_id=1, parent_message_id=1, **overrides):
+def make_thread_reply(reply_id=1, parent_artifact_id=1, **overrides):
     now = timezone.now()
     data = dict(
         id=reply_id,
-        parent_message_id=parent_message_id,
+        parent_artifact_id=parent_artifact_id,
         message="A reply message",
         created_by=1,
         created_at=now,

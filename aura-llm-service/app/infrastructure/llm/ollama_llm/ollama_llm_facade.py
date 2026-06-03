@@ -60,6 +60,7 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
         self._init_lock: Lock = Lock()
 
         self._llm_base: Optional[Runnable] = None
+        self._llm_json: Optional[Runnable] = None
         self._llm_with_tools: Optional[Runnable] = None
 
         logger.info("OllamaLLMFacade created")
@@ -124,6 +125,12 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
             raise LLMNotConfiguredError("Base LLM is not configured.")
         return self._llm_base
 
+    async def get_llm_json(self) -> Runnable:
+        await self._ensure_initialized()
+        if self._llm_json is None:
+            raise LLMNotConfiguredError("JSON-mode LLM is not configured.")
+        return self._llm_json
+
     async def get_llm_with_tools(self) -> Runnable:
         await self._ensure_initialized()
         if self._llm_with_tools is None:
@@ -168,7 +175,9 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
     def _build_base_llm(self) -> None:
         try:
             logger.debug("Building base LLM")
-            self._llm_base = ChatOllama(**self._settings.get_chat_ollama_kwargs())
+            kwargs = self._settings.get_chat_ollama_kwargs()
+            self._llm_base = ChatOllama(**kwargs)
+            self._llm_json = ChatOllama(**kwargs, format="json")
             logger.info("Base LLM built successfully")
         except Exception as e:
             raise LLMInitializationError(f"Failed to build ChatOllama: {e}") from e
@@ -254,6 +263,7 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
             )
         self._tools_bound = False
         self._llm_base = None
+        self._llm_json = None
         self._llm_with_tools = None
 
     async def _ensure_initialized(self) -> None:

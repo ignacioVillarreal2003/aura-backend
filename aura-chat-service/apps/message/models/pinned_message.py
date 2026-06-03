@@ -1,32 +1,37 @@
 from django.db import models
 
 
-class PinnedMessage(models.Model):
-    message = models.ForeignKey(
-        "ChatMessage",
+class ArtifactPin(models.Model):
+    artifact = models.ForeignKey(
+        "artifact.Artifact",
         on_delete=models.CASCADE,
         related_name="pins",
     )
     chat = models.ForeignKey(
         "chat.Chat",
         on_delete=models.CASCADE,
-        related_name="pinned_messages",
+        related_name="pinned_artifacts",
     )
     pinned_by = models.BigIntegerField()
     pinned_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False
-        db_table = "pinned_message"
+        db_table = "artifact_pin"
         constraints = [
             models.UniqueConstraint(
-                fields=["message", "chat"],
-                name="pinned_message_unique",
+                fields=["artifact", "chat"],
+                name="artifact_pin_unique",
             )
         ]
         indexes = [
-            models.Index(fields=["chat"], name="idx_pinned_message_chat"),
+            models.Index(fields=["chat"], name="idx_artifact_pin_chat"),
+            models.Index(fields=["artifact"], name="idx_artifact_pin_artifact"),
         ]
 
     def __str__(self):
-        return f"Pinned message {self.message_id} in chat {self.chat_id}"
+        return f"Pinned artifact {self.artifact_id} in chat {self.chat_id}"
+
+
+# Backward-compatible alias
+PinnedMessage = ArtifactPin

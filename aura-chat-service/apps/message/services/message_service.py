@@ -22,7 +22,8 @@ from apps.message.exceptions import (
     TranscriptionBusyException,
     TranscriptionException,
 )
-from apps.message.models.chat_message import ChatMessage
+from apps.artifact.models.artifact_message import ArtifactMessage
+from apps.artifact.models.artifact_message import ArtifactMessage as ChatMessage  # backward compat
 from apps.message.repositories.feedback_repository import feedback_repository
 from apps.message.repositories.message_repository import message_repository
 from apps.message.serializers.response import MessageResponse
@@ -74,7 +75,7 @@ class ChatAIMode:
         return cls.DEFAULT
 
 
-def _broadcast_user_message_to_chat_group(chat_id: int, msg: ChatMessage) -> None:
+def _broadcast_user_message_to_chat_group(chat_id: int, msg: ArtifactMessage) -> None:
     channel_layer = get_channel_layer()
     if channel_layer is None:
         return
@@ -110,7 +111,7 @@ class DocumentQuestionRunResult:
     question: str
     answer: str
     fragments: list[dict[str, Any]]
-    assistant_message: ChatMessage | None = None
+    assistant_message: ArtifactMessage | None = None
 
 
 class MessageService:
@@ -127,7 +128,7 @@ class MessageService:
             user: AuthenticatedUser,
             chat_id: int,
             text: str,
-    ) -> ChatMessage:
+    ) -> ArtifactMessage:
         AccessControl.require_permissions(user, frozenset({SEND_MESSAGE}))
         self._require_send_access(chat_id, user.id)
 
@@ -135,7 +136,7 @@ class MessageService:
             msg = message_repository.create(
                 chat_id=chat_id,
                 message=text,
-                sender_type=ChatMessage.SenderType.USER,
+                sender_type=ArtifactMessage.SenderType.USER,
                 created_by=user.id,
             )
             chat_repository.touch_last_message_at(chat_id, updated_by=user.id)
@@ -153,12 +154,12 @@ class MessageService:
             user_id: int,
             answer: str,
             fragments: list | None = None,
-    ) -> ChatMessage:
+    ) -> ArtifactMessage:
         with transaction.atomic():
             msg = message_repository.create(
                 chat_id=chat_id,
                 message=answer,
-                sender_type=ChatMessage.SenderType.SYSTEM,
+                sender_type=ArtifactMessage.SenderType.SYSTEM,
                 created_by=user_id,
                 fragments=fragments or None,
             )
@@ -198,7 +199,7 @@ class MessageService:
         last_ai = message_repository.get_last_ai_message(chat_id)
         if last_ai is None:
             raise NoMessageToRegenerateException()
-        hint = self._regen_hint_from_feedback(last_ai.id, user.id)
+        hint = self._regen_hint_from_feedback(last_ai.artifact_id, user.id)
         last_ai.delete(deleted_by=user.id)
         logger.info(
             "Last AI message deleted for regeneration.",
@@ -207,20 +208,20 @@ class MessageService:
         return hint
 
     @staticmethod
-    def _regen_hint_from_feedback(message_id: int, user_id: int) -> str | None:
-        from apps.message.models.message_feedback import MessageFeedback
+    def _regen_hint_from_feedback(artifact_id: int, user_id: int) -> str | None:
+        from apps.message.models.message_feedback import ArtifactFeedback
 
-        fb = feedback_repository.get(message_id=message_id, user_id=user_id)
-        if fb is None or fb.value != MessageFeedback.Value.THUMBS_DOWN:
+        fb = feedback_repository.get(artifact_id=artifact_id, user_id=user_id)
+        if fb is None or fb.value != ArtifactFeedback.Value.THUMBS_DOWN:
             return None
 
         reason_text = {
-            MessageFeedback.Reason.INCORRECT: "la información era incorrecta",
-            MessageFeedback.Reason.INCOMPLETE: "la respuesta estaba incompleta",
-            MessageFeedback.Reason.OFF_TOPIC: "no respondía lo que se preguntó",
-            MessageFeedback.Reason.TONE: "el tono o estilo no era adecuado",
-            MessageFeedback.Reason.TOO_LONG: "era demasiado larga o verbosa",
-            MessageFeedback.Reason.HALLUCINATION: "incluía datos inventados o no verificables",
+            ArtifactFeedback.Reason.INCORRECT: "la información era incorrecta",
+            ArtifactFeedback.Reason.INCOMPLETE: "la respuesta estaba incompleta",
+            ArtifactFeedback.Reason.OFF_TOPIC: "no respondía lo que se preguntó",
+            ArtifactFeedback.Reason.TONE: "el tono o estilo no era adecuado",
+            ArtifactFeedback.Reason.TOO_LONG: "era demasiado larga o verbosa",
+            ArtifactFeedback.Reason.HALLUCINATION: "incluía datos inventados o no verificables",
         }.get(fb.reason)
 
         parts = [
@@ -248,9 +249,9 @@ class MessageService:
         )
         messages: list[dict[str, str]] = []
         for m in reversed(recent):
-            if m.sender_type == ChatMessage.SenderType.USER:
+            if m.sender_type == ArtifactMessage.SenderType.USER:
                 messages.append({"role": "human", "content": m.message})
-            elif m.sender_type == ChatMessage.SenderType.SYSTEM:
+            elif m.sender_type in (ArtifactMessage.SenderType.SYSTEM, ArtifactMessage.SenderType.ASSISTANT):
                 messages.append({"role": "assistant", "content": m.message})
         if extra_instruction:
             # Appended as a final human turn so every mode (general/rag/agent/document)
@@ -286,7 +287,7 @@ class MessageService:
             )
             raise LLMServiceException() from e
 
-        assistant_msg: ChatMessage | None = None
+        assistant_msg: ArtifactMessage | None = None
         if llm_out.answer.strip():
             assistant_msg = await sync_to_async(self._save_ai_message)(
                 chat_id, user.id, llm_out.answer, llm_out.fragments or None
@@ -436,7 +437,7 @@ class MessageService:
             user_id: int,
             answer: str,
             fragments: list | None,
-    ) -> ChatMessage | None:
+    ) -> ArtifactMessage | None:
         if not answer or not answer.strip():
             return None
         assistant_msg = await sync_to_async(self._save_ai_message)(
@@ -637,7 +638,7 @@ class MessageService:
                         result, accumulated_answer, last_question, last_fragments
                     )
 
-                    assistant_msg: ChatMessage | None = None
+                    assistant_msg: ArtifactMessage | None = None
                     if answer:
                         assistant_msg = await sync_to_async(self._save_ai_message)(
                             chat_id, user.id, answer, fragments or None
@@ -758,13 +759,12 @@ class MessageService:
             user: AuthenticatedUser,
             chat_id: int,
             text: str,
-    ) -> ChatMessage:
+    ) -> ArtifactMessage:
         AccessControl.require_permissions(user, frozenset({SEND_MESSAGE}))
         self._require_send_access(chat_id, user.id)
-        return ChatMessage(
-            chat_id=chat_id,
+        return ArtifactMessage(
             message=text,
-            sender_type=ChatMessage.SenderType.USER,
+            sender_type=ArtifactMessage.SenderType.USER,
             created_by=user.id,
         )
 

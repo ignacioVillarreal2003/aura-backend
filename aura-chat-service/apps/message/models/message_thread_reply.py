@@ -1,9 +1,9 @@
 from django.db import models
 
 
-class MessageThreadReply(models.Model):
-    parent_message = models.ForeignKey(
-        "ChatMessage",
+class ArtifactThreadReply(models.Model):
+    parent_artifact = models.ForeignKey(
+        "artifact.Artifact",
         on_delete=models.CASCADE,
         related_name="thread_replies",
     )
@@ -13,8 +13,12 @@ class MessageThreadReply(models.Model):
 
     class Meta:
         managed = False
-        db_table = "message_thread_reply"
+        db_table = "artifact_thread_reply"
         ordering = ["created_at"]
         indexes = [
-            models.Index(fields=["parent_message"], name="idx_thread_reply_parent"),
+            models.Index(fields=["parent_artifact"], name="idx_artifact_thread_reply_parent"),
         ]
+
+
+# Backward-compatible alias
+MessageThreadReply = ArtifactThreadReply

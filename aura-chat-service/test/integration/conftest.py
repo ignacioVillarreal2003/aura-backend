@@ -3,29 +3,42 @@ from django.db import connection
 
 from apps.chat.services.chat_service import chat_service
 from apps.membership.services.membership_service import membership_service
-from apps.message.models.chat_message import ChatMessage
+from apps.artifact.models.artifact_message import ArtifactMessage
 from apps.message.repositories.message_repository import message_repository
 from core.authentication.authenticated_user import AuthenticatedUser
 
 def _get_unmanaged_models():
+    from apps.artifact.models import (
+        Artifact,
+        ArtifactMessage,
+        ArtifactVersion,
+    )
     from apps.assistant.models import Assistant
     from apps.chat.models.chat import Chat
     from apps.chat.models.chat_share_link import ChatShareLink
-    from apps.checklist.models import Checklist, ChecklistItem, ChecklistSection
+    from apps.checklist.models import ArtifactChecklist, ArtifactChecklistItem, ArtifactChecklistSection
+    from apps.decision_brief.models import DecisionBrief, DecisionBriefOption
+    from apps.lessons_learned.models import ArtifactLessonsLearned, ArtifactLessonsLearnedItem
     from apps.membership.models.chat_membership import ChatMembership
-    from apps.message.models.chat_message import ChatMessage
-    from apps.message.models.message_bookmark import MessageBookmark
-    from apps.message.models.message_feedback import MessageFeedback
-    from apps.message.models.message_thread_reply import MessageThreadReply
-    from apps.message.models.pinned_message import PinnedMessage
-    from apps.report.models import Report
+    from apps.message.models.message_bookmark import ArtifactBookmark
+    from apps.message.models.message_feedback import ArtifactFeedback
+    from apps.message.models.message_thread_reply import ArtifactThreadReply
+    from apps.message.models.pinned_message import ArtifactPin
+    from apps.quiz.models import ArtifactQuiz, ArtifactQuizOption, ArtifactQuizQuestion
+    from apps.report.models import ArtifactReport
+    from apps.timeline.models import ArtifactTimeline, ArtifactTimelineEvent
     # Order matters: parent tables before child tables (FK dependencies)
     return [
-        Chat, Assistant, Report, Checklist,
-        ChatMessage, ChatMembership, ChatShareLink,
-        ChecklistSection,
-        PinnedMessage, MessageBookmark, MessageThreadReply, MessageFeedback,
-        ChecklistItem,
+        Chat, Assistant,
+        Artifact, ArtifactVersion,
+        ArtifactMessage, ChatMembership, ChatShareLink,
+        ArtifactPin, ArtifactBookmark, ArtifactThreadReply, ArtifactFeedback,
+        ArtifactReport,
+        ArtifactChecklist, ArtifactChecklistSection, ArtifactChecklistItem,
+        ArtifactQuiz, ArtifactQuizQuestion, ArtifactQuizOption,
+        ArtifactTimeline, ArtifactTimelineEvent,
+        ArtifactLessonsLearned, ArtifactLessonsLearnedItem,
+        DecisionBrief, DecisionBriefOption,
     ]
 
 
@@ -93,7 +106,7 @@ def user_message(chat, owner):
     return message_repository.create(
         chat_id=chat.id,
         message="Hello from integration test",
-        sender_type=ChatMessage.SenderType.USER,
+        sender_type=ArtifactMessage.SenderType.USER,
         created_by=owner.id,
     )
 
@@ -103,6 +116,6 @@ def ai_message(chat, owner):
     return message_repository.create(
         chat_id=chat.id,
         message="AI response",
-        sender_type=ChatMessage.SenderType.SYSTEM,
+        sender_type=ArtifactMessage.SenderType.SYSTEM,
         created_by=owner.id,
     )

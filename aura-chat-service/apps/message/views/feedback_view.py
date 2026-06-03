@@ -38,7 +38,7 @@ class FeedbackView(APIView):
         fb = feedback_service.set_feedback(
             user=request.user,
             chat_id=chat_id,
-            message_id=message_id,
+            artifact_id=message_id,
             value=data["value"],
             reason=data.get("reason"),
             comment=data.get("comment"),
@@ -54,6 +54,6 @@ class FeedbackView(APIView):
     )
     def delete(self, request: Request, chat_id: int, message_id: int) -> Response:
         feedback_service.delete_feedback(
-            user=request.user, chat_id=chat_id, message_id=message_id
+            user=request.user, chat_id=chat_id, artifact_id=message_id
         )
         return Response(status=status.HTTP_204_NO_CONTENT)

@@ -16,3 +16,5 @@ class GraphExtractionServiceSettings(BaseSettings):
     )
 
     max_content_chars: int = Field(default=20_000, ge=1_000, le=200_000)
+    max_repair_attempts: int = Field(default=1, ge=0, le=3)
+    min_relation_confidence: float = Field(default=0.3, ge=0.0, le=1.0)

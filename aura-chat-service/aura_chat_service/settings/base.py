@@ -29,6 +29,11 @@ INSTALLED_APPS = [
     "apps.report",
     "apps.checklist",
     "apps.assistant",
+    "apps.artifact",
+    "apps.timeline",
+    "apps.quiz",
+    "apps.lessons_learned",
+    "apps.decision_brief",
 ]
 
 MIDDLEWARE = [
@@ -225,6 +230,14 @@ SPECTACULAR_SETTINGS = {
                 "los usuarios inician sesiones de chat pre-configuradas."
             ),
         },
+        {
+            "name": "Artifacts",
+            "description": (
+                "Capa documental unificada: cabecera `artifact` (type/title/status/version) con "
+                "versionado y referencias desde mensajes. Cada tipo (report, checklist, course, "
+                "quiz, timeline, lessons learned) tiene su tabla especializada relacional."
+            ),
+        },
     ],
     "SECURITY": [{"BearerAuth": []}],
     "APPEND_COMPONENTS": {
@@ -263,6 +276,12 @@ LLM_AGENT_URL = config("LLM_AGENT_URL").strip()
 LLM_AGENT_STREAM_URL = config("LLM_AGENT_STREAM_URL").strip()
 LLM_CHECKLIST_GENERATE_URL = config("LLM_CHECKLIST_GENERATE_URL").strip()
 LLM_REPORT_GENERATE_URL = config("LLM_REPORT_GENERATE_URL").strip()
+# New artifact generators. Defaulted to "" so the service still boots when the
+# corresponding LLM endpoints are not yet wired in the environment.
+LLM_TIMELINE_GENERATE_URL = config("LLM_TIMELINE_GENERATE_URL", default="").strip()
+LLM_QUIZ_GENERATE_URL = config("LLM_QUIZ_GENERATE_URL", default="").strip()
+LLM_LESSONS_LEARNED_GENERATE_URL = config("LLM_LESSONS_LEARNED_GENERATE_URL", default="").strip()
+LLM_DECISION_BRIEF_GENERATE_URL = config("LLM_DECISION_BRIEF_GENERATE_URL", default="").strip()
 LLM_SERVICE_TIMEOUT = config("LLM_SERVICE_TIMEOUT", default=120, cast=int)
 LLM_STREAM_CONNECT_TIMEOUT = config(
     "LLM_STREAM_CONNECT_TIMEOUT", default=10.0, cast=float

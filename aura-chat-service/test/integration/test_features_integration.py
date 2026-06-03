@@ -12,13 +12,13 @@ from apps.chat.exceptions import (
 from apps.chat.models.chat_share_link import ChatShareLink
 from apps.chat.services.chat_service import chat_service
 from apps.chat.services.share_link_service import share_link_service
-from apps.message.models.chat_message import ChatMessage
+from apps.message.models.chat_message import ChatMessage  # backward-compat alias → ArtifactMessage
 from apps.message.repositories.message_repository import message_repository
 from apps.message.exceptions import MessageAccessDeniedException, MessageNotFoundException, NotAIMessageException
-from apps.message.models.message_bookmark import MessageBookmark
-from apps.message.models.message_feedback import MessageFeedback
-from apps.message.models.message_thread_reply import MessageThreadReply
-from apps.message.models.pinned_message import PinnedMessage
+from apps.message.models.message_bookmark import ArtifactBookmark
+from apps.message.models.message_feedback import ArtifactFeedback
+from apps.message.models.message_thread_reply import ArtifactThreadReply
+from apps.message.models.pinned_message import ArtifactPin
 from apps.message.services.bookmark_service import bookmark_service
 from apps.message.services.feedback_service import feedback_service
 from apps.message.services.pinned_message_service import pinned_message_service
@@ -33,33 +33,33 @@ pytestmark = pytest.mark.django_db
 # ---------------------------------------------------------------------------
 
 def test_bookmark_creates_record(owner, chat, user_message):
-    bookmark_service.bookmark(owner, chat.id, user_message.id)
-    assert MessageBookmark.objects.filter(message_id=user_message.id, user_id=owner.id).exists()
+    bookmark_service.bookmark(owner, chat.id, user_message.artifact_id)
+    assert ArtifactBookmark.objects.filter(artifact_id=user_message.artifact_id, user_id=owner.id).exists()
 
 
 def test_bookmark_same_message_twice_is_idempotent(owner, chat, user_message):
-    bookmark_service.bookmark(owner, chat.id, user_message.id)
-    bookmark_service.bookmark(owner, chat.id, user_message.id)
-    assert MessageBookmark.objects.filter(message_id=user_message.id, user_id=owner.id).count() == 1
+    bookmark_service.bookmark(owner, chat.id, user_message.artifact_id)
+    bookmark_service.bookmark(owner, chat.id, user_message.artifact_id)
+    assert ArtifactBookmark.objects.filter(artifact_id=user_message.artifact_id, user_id=owner.id).count() == 1
 
 
 def test_unbookmark_removes_record(owner, chat, user_message):
-    bookmark_service.bookmark(owner, chat.id, user_message.id)
-    bookmark_service.unbookmark(owner, chat.id, user_message.id)
-    assert not MessageBookmark.objects.filter(message_id=user_message.id, user_id=owner.id).exists()
+    bookmark_service.bookmark(owner, chat.id, user_message.artifact_id)
+    bookmark_service.unbookmark(owner, chat.id, user_message.artifact_id)
+    assert not ArtifactBookmark.objects.filter(artifact_id=user_message.artifact_id, user_id=owner.id).exists()
 
 
 def test_list_bookmarked_returns_bookmarked_messages(owner, chat, user_message, ai_message):
-    bookmark_service.bookmark(owner, chat.id, user_message.id)
+    bookmark_service.bookmark(owner, chat.id, user_message.artifact_id)
     results = list(bookmark_service.list_bookmarked(owner, chat.id))
-    ids = [m.id for m in results]
-    assert user_message.id in ids
-    assert ai_message.id not in ids
+    artifact_ids = [m.artifact_id for m in results]
+    assert user_message.artifact_id in artifact_ids
+    assert ai_message.artifact_id not in artifact_ids
 
 
 def test_bookmark_non_member_raises(chat, other_user, user_message):
     with pytest.raises(MessageAccessDeniedException):
-        bookmark_service.bookmark(other_user, chat.id, user_message.id)
+        bookmark_service.bookmark(other_user, chat.id, user_message.artifact_id)
 
 
 def test_bookmark_unknown_message_raises(owner, chat):
@@ -72,34 +72,34 @@ def test_bookmark_unknown_message_raises(owner, chat):
 # ---------------------------------------------------------------------------
 
 def test_pin_message_creates_record(owner, chat, user_message):
-    pin = pinned_message_service.pin_message(owner, chat.id, user_message.id)
-    assert PinnedMessage.objects.filter(message_id=user_message.id, chat_id=chat.id).exists()
+    pin = pinned_message_service.pin_message(owner, chat.id, user_message.artifact_id)
+    assert ArtifactPin.objects.filter(artifact_id=user_message.artifact_id, chat_id=chat.id).exists()
     assert pin.pinned_by == owner.id
 
 
 def test_pin_same_message_twice_is_idempotent(owner, chat, user_message):
-    pinned_message_service.pin_message(owner, chat.id, user_message.id)
-    pinned_message_service.pin_message(owner, chat.id, user_message.id)
-    assert PinnedMessage.objects.filter(message_id=user_message.id, chat_id=chat.id).count() == 1
+    pinned_message_service.pin_message(owner, chat.id, user_message.artifact_id)
+    pinned_message_service.pin_message(owner, chat.id, user_message.artifact_id)
+    assert ArtifactPin.objects.filter(artifact_id=user_message.artifact_id, chat_id=chat.id).count() == 1
 
 
 def test_unpin_message_removes_record(owner, chat, user_message):
-    pinned_message_service.pin_message(owner, chat.id, user_message.id)
-    pinned_message_service.unpin_message(owner, chat.id, user_message.id)
-    assert not PinnedMessage.objects.filter(message_id=user_message.id, chat_id=chat.id).exists()
+    pinned_message_service.pin_message(owner, chat.id, user_message.artifact_id)
+    pinned_message_service.unpin_message(owner, chat.id, user_message.artifact_id)
+    assert not ArtifactPin.objects.filter(artifact_id=user_message.artifact_id, chat_id=chat.id).exists()
 
 
 def test_list_pinned_returns_pinned_messages(owner, chat, user_message, ai_message):
-    pinned_message_service.pin_message(owner, chat.id, user_message.id)
+    pinned_message_service.pin_message(owner, chat.id, user_message.artifact_id)
     results = list(pinned_message_service.list_pinned(owner, chat.id))
-    message_ids = [p.message_id for p in results]
-    assert user_message.id in message_ids
-    assert ai_message.id not in message_ids
+    artifact_ids = [p.artifact_id for p in results]
+    assert user_message.artifact_id in artifact_ids
+    assert ai_message.artifact_id not in artifact_ids
 
 
 def test_pin_non_member_raises(chat, other_user, user_message):
     with pytest.raises(MessageAccessDeniedException):
-        pinned_message_service.pin_message(other_user, chat.id, user_message.id)
+        pinned_message_service.pin_message(other_user, chat.id, user_message.artifact_id)
 
 
 def test_pin_unknown_message_raises(owner, chat):
@@ -112,39 +112,39 @@ def test_pin_unknown_message_raises(owner, chat):
 # ---------------------------------------------------------------------------
 
 def test_set_feedback_thumbs_up_persists(owner, chat, ai_message):
-    feedback_service.set_feedback(owner, chat.id, ai_message.id, value=1)
-    fb = MessageFeedback.objects.get(message_id=ai_message.id, user_id=owner.id)
-    assert fb.value == MessageFeedback.Value.THUMBS_UP
+    feedback_service.set_feedback(owner, chat.id, ai_message.artifact_id, value=1)
+    fb = ArtifactFeedback.objects.get(artifact_id=ai_message.artifact_id, user_id=owner.id)
+    assert fb.value == ArtifactFeedback.Value.THUMBS_UP
 
 
 def test_set_feedback_thumbs_down_persists(owner, chat, ai_message):
-    feedback_service.set_feedback(owner, chat.id, ai_message.id, value=-1)
-    fb = MessageFeedback.objects.get(message_id=ai_message.id, user_id=owner.id)
-    assert fb.value == MessageFeedback.Value.THUMBS_DOWN
+    feedback_service.set_feedback(owner, chat.id, ai_message.artifact_id, value=-1)
+    fb = ArtifactFeedback.objects.get(artifact_id=ai_message.artifact_id, user_id=owner.id)
+    assert fb.value == ArtifactFeedback.Value.THUMBS_DOWN
 
 
 def test_set_feedback_updates_existing(owner, chat, ai_message):
-    feedback_service.set_feedback(owner, chat.id, ai_message.id, value=1)
-    feedback_service.set_feedback(owner, chat.id, ai_message.id, value=-1)
-    assert MessageFeedback.objects.filter(message_id=ai_message.id, user_id=owner.id).count() == 1
-    fb = MessageFeedback.objects.get(message_id=ai_message.id, user_id=owner.id)
+    feedback_service.set_feedback(owner, chat.id, ai_message.artifact_id, value=1)
+    feedback_service.set_feedback(owner, chat.id, ai_message.artifact_id, value=-1)
+    assert ArtifactFeedback.objects.filter(artifact_id=ai_message.artifact_id, user_id=owner.id).count() == 1
+    fb = ArtifactFeedback.objects.get(artifact_id=ai_message.artifact_id, user_id=owner.id)
     assert fb.value == -1
 
 
 def test_delete_feedback_removes_record(owner, chat, ai_message):
-    feedback_service.set_feedback(owner, chat.id, ai_message.id, value=1)
-    feedback_service.delete_feedback(owner, chat.id, ai_message.id)
-    assert not MessageFeedback.objects.filter(message_id=ai_message.id, user_id=owner.id).exists()
+    feedback_service.set_feedback(owner, chat.id, ai_message.artifact_id, value=1)
+    feedback_service.delete_feedback(owner, chat.id, ai_message.artifact_id)
+    assert not ArtifactFeedback.objects.filter(artifact_id=ai_message.artifact_id, user_id=owner.id).exists()
 
 
 def test_feedback_on_user_message_raises(owner, chat, user_message):
     with pytest.raises(NotAIMessageException):
-        feedback_service.set_feedback(owner, chat.id, user_message.id, value=1)
+        feedback_service.set_feedback(owner, chat.id, user_message.artifact_id, value=1)
 
 
 def test_feedback_non_member_raises(chat, other_user, ai_message):
     with pytest.raises(MessageAccessDeniedException):
-        feedback_service.set_feedback(other_user, chat.id, ai_message.id, value=1)
+        feedback_service.set_feedback(other_user, chat.id, ai_message.artifact_id, value=1)
 
 
 # ---------------------------------------------------------------------------
@@ -152,17 +152,17 @@ def test_feedback_non_member_raises(chat, other_user, ai_message):
 # ---------------------------------------------------------------------------
 
 def test_add_reply_persists_to_db(owner, chat, user_message):
-    reply = thread_service.add_reply(owner, chat.id, user_message.id, message_text="My reply")
-    assert MessageThreadReply.objects.filter(
-        parent_message_id=user_message.id, created_by=owner.id
+    reply = thread_service.add_reply(owner, chat.id, user_message.artifact_id, message_text="My reply")
+    assert ArtifactThreadReply.objects.filter(
+        parent_artifact_id=user_message.artifact_id, created_by=owner.id
     ).exists()
     assert reply.message == "My reply"
 
 
 def test_get_thread_returns_replies_in_order(owner, chat, user_message):
-    thread_service.add_reply(owner, chat.id, user_message.id, message_text="First")
-    thread_service.add_reply(owner, chat.id, user_message.id, message_text="Second")
-    replies = list(thread_service.get_thread(owner, chat.id, user_message.id))
+    thread_service.add_reply(owner, chat.id, user_message.artifact_id, message_text="First")
+    thread_service.add_reply(owner, chat.id, user_message.artifact_id, message_text="Second")
+    replies = list(thread_service.get_thread(owner, chat.id, user_message.artifact_id))
     assert len(replies) == 2
     assert replies[0].message == "First"
     assert replies[1].message == "Second"
@@ -170,7 +170,7 @@ def test_get_thread_returns_replies_in_order(owner, chat, user_message):
 
 def test_add_reply_non_member_raises(chat, other_user, user_message):
     with pytest.raises(MessageAccessDeniedException):
-        thread_service.add_reply(other_user, chat.id, user_message.id, message_text="Hack")
+        thread_service.add_reply(other_user, chat.id, user_message.artifact_id, message_text="Hack")
 
 
 def test_add_reply_unknown_message_raises(owner, chat):

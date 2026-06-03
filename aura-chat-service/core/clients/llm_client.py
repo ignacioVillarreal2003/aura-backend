@@ -54,6 +54,49 @@ class ReportGenerateResult:
     fragments: list[dict[str, Any]] = field(default_factory=list)
 
 
+@dataclass
+class TimelineGenerateResult:
+    title: str
+    events: list[dict[str, Any]]
+    messages: list[dict[str, str]]
+    summary: str = ""
+    fragments: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
+class QuizGenerateResult:
+    title: str
+    questions: list[dict[str, Any]]
+    messages: list[dict[str, str]]
+    instructions: str = ""
+    passing_score: int | None = None
+    fragments: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
+class LessonsLearnedGenerateResult:
+    title: str
+    items: list[dict[str, Any]]
+    messages: list[dict[str, str]]
+    context: str = ""
+    what_went_well: str = ""
+    what_failed: str = ""
+    recommendations: str = ""
+    fragments: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
+class DecisionBriefGenerateResult:
+    title: str
+    options: list[dict[str, Any]]
+    messages: list[dict[str, str]]
+    problem: str = ""
+    context: str = ""
+    risks: str = ""
+    recommendation: str = ""
+    fragments: list[dict[str, Any]] = field(default_factory=list)
+
+
 class LLMClient:
     def __init__(self):
         self._http_client = AsyncHttpClient(timeout=getattr(settings, "LLM_SERVICE_TIMEOUT", 30))
@@ -340,6 +383,156 @@ class LLMClient:
         )
 
     # ------------------------------------------------------------------
+    # Timeline / quiz / lessons-learned / decision-brief generation
+    # ------------------------------------------------------------------
+    async def generate_timeline(
+            self,
+            messages: list[dict[str, str]],
+            mode: str,
+            user: AuthenticatedUser,
+            chat_id: int | None = None,
+    ) -> TimelineGenerateResult:
+        payload: dict = {"messages": messages, "mode": mode}
+        if chat_id is not None:
+            payload["chat_id"] = chat_id
+
+        logger.debug(
+            "Calling LLM timeline-generate.",
+            extra={
+                "user_id": user.id,
+                "message_count": len(messages),
+                "url": settings.LLM_TIMELINE_GENERATE_URL,
+            },
+        )
+
+        data = await self._post_json(
+            url=settings.LLM_TIMELINE_GENERATE_URL,
+            payload=payload,
+            user=user,
+            context="timeline-generate",
+        )
+
+        return TimelineGenerateResult(
+            title=str(data.get("title", "")),
+            summary=str(data.get("summary", "")),
+            events=data.get("events") or [],
+            messages=data.get("messages") or [],
+            fragments=self.normalize_fragments(data.get("fragments")),
+        )
+
+    async def generate_quiz(
+            self,
+            messages: list[dict[str, str]],
+            mode: str,
+            user: AuthenticatedUser,
+            chat_id: int | None = None,
+    ) -> QuizGenerateResult:
+        payload: dict = {"messages": messages, "mode": mode}
+        if chat_id is not None:
+            payload["chat_id"] = chat_id
+
+        logger.debug(
+            "Calling LLM quiz-generate.",
+            extra={
+                "user_id": user.id,
+                "message_count": len(messages),
+                "url": settings.LLM_QUIZ_GENERATE_URL,
+            },
+        )
+
+        data = await self._post_json(
+            url=settings.LLM_QUIZ_GENERATE_URL,
+            payload=payload,
+            user=user,
+            context="quiz-generate",
+        )
+
+        return QuizGenerateResult(
+            title=str(data.get("title", "")),
+            instructions=str(data.get("instructions", "")),
+            passing_score=self._coerce_int(data.get("passing_score")),
+            questions=data.get("questions") or [],
+            messages=data.get("messages") or [],
+            fragments=self.normalize_fragments(data.get("fragments")),
+        )
+
+    async def generate_lessons_learned(
+            self,
+            messages: list[dict[str, str]],
+            mode: str,
+            user: AuthenticatedUser,
+            chat_id: int | None = None,
+    ) -> LessonsLearnedGenerateResult:
+        payload: dict = {"messages": messages, "mode": mode}
+        if chat_id is not None:
+            payload["chat_id"] = chat_id
+
+        logger.debug(
+            "Calling LLM lessons-learned-generate.",
+            extra={
+                "user_id": user.id,
+                "message_count": len(messages),
+                "url": settings.LLM_LESSONS_LEARNED_GENERATE_URL,
+            },
+        )
+
+        data = await self._post_json(
+            url=settings.LLM_LESSONS_LEARNED_GENERATE_URL,
+            payload=payload,
+            user=user,
+            context="lessons-learned-generate",
+        )
+
+        return LessonsLearnedGenerateResult(
+            title=str(data.get("title", "")),
+            context=str(data.get("context", "")),
+            what_went_well=str(data.get("what_went_well", "")),
+            what_failed=str(data.get("what_failed", "")),
+            recommendations=str(data.get("recommendations", "")),
+            items=data.get("items") or [],
+            messages=data.get("messages") or [],
+            fragments=self.normalize_fragments(data.get("fragments")),
+        )
+
+    async def generate_decision_brief(
+            self,
+            messages: list[dict[str, str]],
+            mode: str,
+            user: AuthenticatedUser,
+            chat_id: int | None = None,
+    ) -> DecisionBriefGenerateResult:
+        payload: dict = {"messages": messages, "mode": mode}
+        if chat_id is not None:
+            payload["chat_id"] = chat_id
+
+        logger.debug(
+            "Calling LLM decision-brief-generate.",
+            extra={
+                "user_id": user.id,
+                "message_count": len(messages),
+                "url": settings.LLM_DECISION_BRIEF_GENERATE_URL,
+            },
+        )
+
+        data = await self._post_json(
+            url=settings.LLM_DECISION_BRIEF_GENERATE_URL,
+            payload=payload,
+            user=user,
+            context="decision-brief-generate",
+        )
+
+        return DecisionBriefGenerateResult(
+            title=str(data.get("title", "")),
+            problem=str(data.get("problem", "")),
+            context=str(data.get("context", "")),
+            risks=str(data.get("risks", "")),
+            recommendation=str(data.get("recommendation", "")),
+            options=data.get("options") or [],
+            messages=data.get("messages") or [],
+            fragments=self.normalize_fragments(data.get("fragments")),
+        )
+
+    # ------------------------------------------------------------------
     # Shared transport helpers
     # ------------------------------------------------------------------
     async def _post_json(
@@ -491,6 +684,15 @@ class LLMClient:
             if isinstance(message, dict) and message.get("role") == "assistant":
                 return str(message.get("content", ""))
         return ""
+
+    @staticmethod
+    def _coerce_int(value: Any) -> int | None:
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
 
     @staticmethod
     def normalize_fragments(raw_fragments: Any) -> list[dict[str, Any]]:

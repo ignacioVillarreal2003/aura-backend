@@ -46,7 +46,7 @@ class PinMessageView(APIView):
         pin = pinned_message_service.pin_message(
             user=request.user,
             chat_id=chat_id,
-            message_id=message_id,
+            artifact_id=message_id,
         )
         return Response(PinnedMessageResponse(pin).data, status=status.HTTP_201_CREATED)
 
@@ -64,6 +64,6 @@ class PinMessageView(APIView):
         pinned_message_service.unpin_message(
             user=request.user,
             chat_id=chat_id,
-            message_id=message_id,
+            artifact_id=message_id,
         )
         return Response(status=status.HTTP_204_NO_CONTENT)

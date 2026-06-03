@@ -3,17 +3,17 @@ from datetime import datetime
 
 from django.db.models import Count, Q
 
-from apps.message.models.message_feedback import MessageFeedback
+from apps.message.models.message_feedback import ArtifactFeedback
 
 logger = logging.getLogger(__name__)
 
-_ASSISTANT_FK = "message__chat__source_assistant_id"
+_ASSISTANT_FK = "artifact__source_chat__source_assistant_id"
 
 
 class FeedbackAnalyticsRepository:
-    """Aggregations over message feedback for the admin analytics dashboard.
+    """Aggregations over artifact feedback for the admin analytics dashboard.
 
-    All queries traverse message_feedback -> chat_message -> chat to attribute
+    All queries traverse artifact_feedback -> artifact -> chat to attribute
     feedback to the assistant that seeded the chat (``chat.source_assistant_id``).
     Feedback on chats not started from an assistant is grouped under ``None``.
     """
@@ -23,7 +23,7 @@ class FeedbackAnalyticsRepository:
         return Q(created_at__gte=start, created_at__lte=end)
 
     def summary(self, start: datetime, end: datetime) -> dict:
-        agg = MessageFeedback.objects.filter(self._range_filter(start, end)).aggregate(
+        agg = ArtifactFeedback.objects.filter(self._range_filter(start, end)).aggregate(
             total=Count("id"),
             thumbs_up=Count("id", filter=Q(value=1)),
             thumbs_down=Count("id", filter=Q(value=-1)),
@@ -36,7 +36,7 @@ class FeedbackAnalyticsRepository:
 
     def per_assistant(self, start: datetime, end: datetime) -> list[dict]:
         rows = (
-            MessageFeedback.objects.filter(self._range_filter(start, end))
+            ArtifactFeedback.objects.filter(self._range_filter(start, end))
             .values(_ASSISTANT_FK)
             .annotate(
                 total=Count("id"),
@@ -57,7 +57,7 @@ class FeedbackAnalyticsRepository:
 
     def reason_breakdown(self, start: datetime, end: datetime) -> list[dict]:
         rows = (
-            MessageFeedback.objects.filter(self._range_filter(start, end), value=-1)
+            ArtifactFeedback.objects.filter(self._range_filter(start, end), value=-1)
             .values("reason")
             .annotate(count=Count("id"))
             .order_by("-count")
@@ -66,12 +66,12 @@ class FeedbackAnalyticsRepository:
 
     def recent_negative(self, start: datetime, end: datetime, limit: int = 50) -> list[dict]:
         rows = (
-            MessageFeedback.objects.filter(self._range_filter(start, end), value=-1)
+            ArtifactFeedback.objects.filter(self._range_filter(start, end), value=-1)
             .order_by("-created_at")
             .values(
                 "id",
-                "message_id",
-                "message__message",
+                "artifact_id",
+                "artifact__message_content__message",
                 _ASSISTANT_FK,
                 "reason",
                 "comment",
@@ -82,13 +82,13 @@ class FeedbackAnalyticsRepository:
         return [
             {
                 "id": r["id"],
-                "message_id": r["message_id"],
+                "artifact_id": r["artifact_id"],
                 "assistant_id": r[_ASSISTANT_FK],
                 "reason": r["reason"],
                 "comment": r["comment"],
                 "user_id": r["user_id"],
                 "created_at": r["created_at"],
-                "message_excerpt": (r["message__message"] or "")[:280],
+                "message_excerpt": (r["artifact__message_content__message"] or "")[:280],
             }
             for r in rows
         ]

@@ -31,7 +31,7 @@ class ThreadView(APIView):
     )
     def get(self, request: Request, chat_id: int, message_id: int) -> Response:
         replies = thread_service.get_thread(
-            user=request.user, chat_id=chat_id, message_id=message_id
+            user=request.user, chat_id=chat_id, artifact_id=message_id
         )
         return Response(ThreadReplyResponse(replies, many=True).data)
 
@@ -39,7 +39,7 @@ class ThreadView(APIView):
         tags=["Messages"],
         summary="Add thread reply",
         description=(
-                "Creates a **MessageThreadReply** under the parent message. Used for side discussions without "
+                "Creates a **ArtifactThreadReply** under the parent message. Used for side discussions without "
                 "cluttering the main timeline."
         ),
         parameters=_PATH_PARAMS,
@@ -52,7 +52,7 @@ class ThreadView(APIView):
         reply = thread_service.add_reply(
             user=request.user,
             chat_id=chat_id,
-            message_id=message_id,
+            artifact_id=message_id,
             message_text=serializer.validated_data["message"],
         )
         return Response(ThreadReplyResponse(reply).data, status=status.HTTP_201_CREATED)

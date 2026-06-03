@@ -1,6 +1,5 @@
 import logging
 from typing import Optional
-
 from django.db.models import Count, Q
 from django.db.models.query import Prefetch
 
@@ -58,12 +57,14 @@ class ChecklistRepository:
             sections: list,
             mode: str,
             source_chat_id: Optional[int] = None,
+            artifact_id: Optional[int] = None,
     ) -> Checklist:
         checklist = Checklist.objects.create(
             created_by=user_id,
             title=title,
             mode=mode,
             source_chat_id=source_chat_id,
+            artifact_id=artifact_id,
         )
         _bulk_create_sections(checklist.id, sections)
         return _with_prefetch(Checklist.objects.filter(id=checklist.id)).first()

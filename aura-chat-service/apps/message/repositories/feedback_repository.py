@@ -1,21 +1,21 @@
 from django.utils import timezone
 
-from apps.message.models.message_feedback import MessageFeedback
+from apps.message.models.message_feedback import ArtifactFeedback
 
 
 class FeedbackRepository:
     @staticmethod
     def set(
-        message_id: int,
+        artifact_id: int,
         user_id: int,
         value: int,
         reason: str | None = None,
         comment: str | None = None,
-    ) -> MessageFeedback:
-        obj = MessageFeedback.objects.filter(message_id=message_id, user_id=user_id).first()
+    ) -> ArtifactFeedback:
+        obj = ArtifactFeedback.objects.filter(artifact_id=artifact_id, user_id=user_id).first()
         if obj is None:
-            return MessageFeedback.objects.create(
-                message_id=message_id,
+            return ArtifactFeedback.objects.create(
+                artifact_id=artifact_id,
                 user_id=user_id,
                 value=value,
                 reason=reason,
@@ -29,15 +29,15 @@ class FeedbackRepository:
         return obj
 
     @staticmethod
-    def delete(message_id: int, user_id: int) -> bool:
-        deleted, _ = MessageFeedback.objects.filter(
-            message_id=message_id, user_id=user_id
+    def delete(artifact_id: int, user_id: int) -> bool:
+        deleted, _ = ArtifactFeedback.objects.filter(
+            artifact_id=artifact_id, user_id=user_id
         ).delete()
         return deleted > 0
 
     @staticmethod
-    def get(message_id: int, user_id: int) -> MessageFeedback | None:
-        return MessageFeedback.objects.filter(message_id=message_id, user_id=user_id).first()
+    def get(artifact_id: int, user_id: int) -> ArtifactFeedback | None:
+        return ArtifactFeedback.objects.filter(artifact_id=artifact_id, user_id=user_id).first()
 
 
 feedback_repository = FeedbackRepository()

@@ -1,7 +1,8 @@
 from django.conf import settings
 from rest_framework import serializers
 
-from apps.checklist.models import Checklist, ChecklistItem, ChecklistSection
+from apps.artifact.models.artifact import Artifact
+from apps.checklist.models import ArtifactChecklist, ArtifactChecklistItem, ArtifactChecklistSection
 
 _SUPPORTED_AUDIO_TYPES = {
     "audio/mpeg", "audio/mp4", "audio/wav", "audio/webm",
@@ -21,10 +22,10 @@ class _FragmentSerializer(serializers.Serializer):
 
 
 class GenerateChecklistRequest(serializers.Serializer):
-    mode = serializers.ChoiceField(choices=Checklist.Mode.choices)
+    mode = serializers.ChoiceField(choices=Artifact.Mode.choices)
     message = serializers.CharField(allow_blank=False, max_length=4000, required=False)
     audio = serializers.FileField(required=False)
-    chat_id = serializers.IntegerField(required=False, allow_null=True)
+    chat_id = serializers.IntegerField()
 
     def validate_audio(self, file):
         content_type = getattr(file, "content_type", "")
@@ -48,7 +49,7 @@ class GenerateChecklistRequest(serializers.Serializer):
 
 class ChecklistItemResponse(serializers.ModelSerializer):
     class Meta:
-        model = ChecklistItem
+        model = ArtifactChecklistItem
         fields = ["id", "text", "is_checked", "notes", "position"]
 
 
@@ -56,17 +57,21 @@ class ChecklistSectionResponse(serializers.ModelSerializer):
     items = ChecklistItemResponse(many=True)
 
     class Meta:
-        model = ChecklistSection
+        model = ArtifactChecklistSection
         fields = ["id", "title", "position", "items"]
 
 
 class ChecklistResponse(serializers.ModelSerializer):
     sections = ChecklistSectionResponse(many=True)
+    title = serializers.SerializerMethodField()
+    mode = serializers.SerializerMethodField()
+    source_chat_id = serializers.SerializerMethodField()
 
     class Meta:
-        model = Checklist
+        model = ArtifactChecklist
         fields = [
             "id",
+            "artifact_id",
             "title",
             "mode",
             "sections",
@@ -77,6 +82,15 @@ class ChecklistResponse(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = fields
+
+    def get_title(self, obj) -> str:
+        return obj.artifact.title if obj.artifact_id else ""
+
+    def get_mode(self, obj) -> str:
+        return obj.artifact.mode if obj.artifact_id else ""
+
+    def get_source_chat_id(self, obj) -> int | None:
+        return obj.artifact.source_chat_id if obj.artifact_id else None
 
 
 class ChecklistGenerateResponse(serializers.Serializer):
@@ -120,11 +134,15 @@ class UpdateChecklistRequest(serializers.Serializer):
 class ChecklistListResponse(serializers.ModelSerializer):
     item_count = serializers.SerializerMethodField()
     checked_count = serializers.SerializerMethodField()
+    title = serializers.SerializerMethodField()
+    mode = serializers.SerializerMethodField()
+    source_chat_id = serializers.SerializerMethodField()
 
     class Meta:
-        model = Checklist
+        model = ArtifactChecklist
         fields = [
             "id",
+            "artifact_id",
             "title",
             "mode",
             "source_chat_id",
@@ -135,8 +153,17 @@ class ChecklistListResponse(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    def get_item_count(self, obj: Checklist) -> int:
+    def get_title(self, obj) -> str:
+        return obj.artifact.title if obj.artifact_id else ""
+
+    def get_mode(self, obj) -> str:
+        return obj.artifact.mode if obj.artifact_id else ""
+
+    def get_source_chat_id(self, obj) -> int | None:
+        return obj.artifact.source_chat_id if obj.artifact_id else None
+
+    def get_item_count(self, obj: ArtifactChecklist) -> int:
         return getattr(obj, "item_count", 0)
 
-    def get_checked_count(self, obj: Checklist) -> int:
+    def get_checked_count(self, obj: ArtifactChecklist) -> int:
         return getattr(obj, "checked_count", 0)

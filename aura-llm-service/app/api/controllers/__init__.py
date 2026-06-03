@@ -13,6 +13,10 @@ from app.api.controllers import (
     general_chat_controller,
     report_controller,
     checklist_controller,
+    timeline_controller,
+    quiz_controller,
+    lessons_learned_controller,
+    decision_brief_controller,
 )
 from app.api.controllers.health_controller import health_controller
 
@@ -93,4 +97,28 @@ router.include_router(
     checklist_controller.router,
     prefix="/checklist-generate",
     tags=["checklist"],
+)
+
+router.include_router(
+    timeline_controller.router,
+    prefix="/timeline-generate",
+    tags=["timeline"],
+)
+
+router.include_router(
+    quiz_controller.router,
+    prefix="/quiz-generate",
+    tags=["quiz"],
+)
+
+router.include_router(
+    lessons_learned_controller.router,
+    prefix="/lessons-learned-generate",
+    tags=["lessons-learned"],
+)
+
+router.include_router(
+    decision_brief_controller.router,
+    prefix="/decision-brief-generate",
+    tags=["decision-brief"],
 )

@@ -90,6 +90,11 @@ urlpatterns = [
     path("api/v1/share/<uuid:token>/messages/", include("apps.chat.share_urls")),
     path("api/v1/reports/", include("apps.report.urls")),
     path("api/v1/checklists/", include("apps.checklist.urls")),
+    path("api/v1/timelines/", include("apps.timeline.urls")),
+    path("api/v1/quizzes/", include("apps.quiz.urls")),
+    path("api/v1/lessons-learned/", include("apps.lessons_learned.urls")),
+    path("api/v1/decision-briefs/", include("apps.decision_brief.urls")),
     path("api/v1/assistants/", include("apps.assistant.urls")),
+    path("api/v1/artifacts/", include("apps.artifact.urls")),
     path("", include("django_prometheus.urls")),
 ]

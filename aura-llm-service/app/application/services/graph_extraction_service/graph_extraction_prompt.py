@@ -79,3 +79,17 @@ Fragmento de texto (puede estar truncado):
 
 Devuelve únicamente el JSON solicitado.
 """.strip()
+
+
+REPAIR_PROMPT = """
+Tu respuesta anterior no pudo ser interpretada como JSON válido.
+
+Error al parsear: {parse_error}
+
+Tu respuesta anterior (inválida):
+{malformed_output}
+
+Corrige la respuesta y devuelve ÚNICAMENTE el objeto JSON válido con la estructura exacta indicada.
+No incluyas texto adicional, explicaciones, bloques markdown ni comentarios.
+Si no puedes extraer entidades ni relaciones del fragmento, devuelve: {{"entities": [], "relations": []}}
+""".strip()

@@ -14,6 +14,12 @@ class OllamaLLMFacadeInterface(ABC):
         pass
 
     @abstractmethod
+    async def get_llm_json(self) -> Runnable:
+        """Return an LLM instance with JSON output mode enforced (format='json').
+        Use for structured extraction tasks where the full response must be a JSON object."""
+        pass
+
+    @abstractmethod
     async def get_llm_with_tools(self) -> Runnable:
         pass
 

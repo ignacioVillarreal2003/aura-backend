@@ -3,7 +3,6 @@ import html
 import io
 import logging
 import re
-
 import markdown as md_lib
 from xhtml2pdf import pisa
 
