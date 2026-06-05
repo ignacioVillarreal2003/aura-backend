@@ -20,9 +20,11 @@ from apps.artifact.audio import transcribe as _transcribe_audio
 from apps.artifact_checklist.services.export_service import generate_checklist_markdown, generate_checklist_pdf
 from apps.artifact.utils import safe_filename as _safe_filename
 from apps.chat.ai_reply_lock import release, try_acquire
-from apps.chat.exceptions import ChatAiReplyInProgressException
+from apps.chat.exceptions import ChatAccessDeniedException, ChatAiReplyInProgressException, ChatNotFoundException
+from apps.chat.repositories.chat_repository import chat_repository
 from apps.chat.ws_rate_limit import check_artifact_rate_limit, check_transcribe_rate_limit
 from apps.artifact_message.services.message_service import broadcast_chat_ai_lock_change
+from apps.membership.repositories.membership_repository import membership_repository
 from core.openapi.common import standard_error_responses
 from core.pagination.pagination import StandardPagination
 
@@ -163,6 +165,12 @@ class ChecklistGenerateView(APIView):
         d = serializer.validated_data
         chat_id = d["chat_id"]
 
+        chat = await sync_to_async(chat_repository.get_by_id)(chat_id)
+        if chat is None:
+            raise ChatNotFoundException()
+        if not await sync_to_async(membership_repository.is_active_contributor)(chat_id, request.user.id):
+            raise ChatAccessDeniedException()
+
         if not await sync_to_async(check_artifact_rate_limit)(request.user.id, chat_id):
             return Response(
                 {"detail": "Too many generation requests. Please wait.", "error": "rate_limit_exceeded"},
@@ -182,8 +190,8 @@ class ChecklistGenerateView(APIView):
         if not await sync_to_async(try_acquire)(chat_id):
             raise ChatAiReplyInProgressException()
 
-        await sync_to_async(broadcast_chat_ai_lock_change)(chat_id, True)
         try:
+            await sync_to_async(broadcast_chat_ai_lock_change)(chat_id, True)
             checklist, messages, fragments = await checklist_service.generate_checklist(
                 user=request.user,
                 message=message,
