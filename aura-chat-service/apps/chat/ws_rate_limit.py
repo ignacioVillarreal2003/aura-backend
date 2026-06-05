@@ -12,6 +12,10 @@ _MESSAGE_RATE_LIMIT_WINDOW = 60
 _TYPING_RATE_LIMIT_MAX = 20
 _TYPING_RATE_LIMIT_WINDOW = 10
 _WS_CONNECTION_TTL = 3600
+_TRANSCRIBE_RATE_LIMIT_MAX = 5
+_TRANSCRIBE_RATE_LIMIT_WINDOW = 60
+_ARTIFACT_RATE_LIMIT_MAX = 5
+_ARTIFACT_RATE_LIMIT_WINDOW = 60
 
 
 @lru_cache(maxsize=1)
@@ -75,6 +79,34 @@ def acquire_ws_connection(user_id: int) -> bool:
     except redis.RedisError:
         logger.warning(
             "Redis error acquiring WS connection slot, failing open.",
+            extra={"user_id": user_id},
+        )
+        return True
+
+
+def check_artifact_rate_limit(user_id: int, chat_id: int) -> bool:
+    key = f"aura:artifact_rate:{user_id}:{chat_id}"
+    try:
+        return _fixed_window_allows(
+            key, _ARTIFACT_RATE_LIMIT_WINDOW, _ARTIFACT_RATE_LIMIT_MAX
+        )
+    except redis.RedisError:
+        logger.warning(
+            "Redis error checking artifact rate limit, failing open.",
+            extra={"user_id": user_id, "chat_id": chat_id},
+        )
+        return True
+
+
+def check_transcribe_rate_limit(user_id: int) -> bool:
+    key = f"aura:transcribe_rate:{user_id}"
+    try:
+        return _fixed_window_allows(
+            key, _TRANSCRIBE_RATE_LIMIT_WINDOW, _TRANSCRIBE_RATE_LIMIT_MAX
+        )
+    except redis.RedisError:
+        logger.warning(
+            "Redis error checking transcription rate limit, failing open.",
             extra={"user_id": user_id},
         )
         return True

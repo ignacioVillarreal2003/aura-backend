@@ -6,7 +6,7 @@ from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization.access import AccessControl
 from core.authorization import permissions as perms
 from core.clients.exceptions import HttpClientException
-from core.clients.llm_client import ChecklistGenerateResult, llm_client
+from core.clients.llm_client import llm_client
 from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.artifact.models import Artifact
@@ -17,7 +17,7 @@ from apps.artifact_checklist.repositories.checklist_repository import checklist_
 from apps.membership.repositories.membership_repository import membership_repository
 from apps.artifact.services.artifact_access import assert_detail_access
 from django.db import transaction
-from apps.artifact.broadcasting import broadcast_artifact_created
+from apps.artifact.broadcasting import broadcast_artifact_created, broadcast_artifact_progress
 from apps.artifact.services.artifact_service import create_artifact_for_content, _cleanup_artifact_interactions
 from apps.artifact.llm_context import build_chat_history
 
@@ -159,33 +159,54 @@ class ChecklistService:
         history = await sync_to_async(build_chat_history)(chat_id)
 
         messages = history + [{"role": "human", "content": message}]
+        result_data: dict | None = None
         try:
-            result: ChecklistGenerateResult = await llm_client.generate_checklist(
+            async for event in llm_client.generate_checklist_stream_events(
                 messages=messages,
                 mode=mode,
                 user=user,
                 chat_id=chat_id,
-            )
+            ):
+                et = event.get("type")
+                if et == "progress":
+                    await broadcast_artifact_progress(chat_id, str(event.get("step", "")), str(event.get("message", "")))
+                elif et == "complete":
+                    result_data = event.get("result") or {}
+                elif et == "error":
+                    logger.error(
+                        "LLM checklist stream error: %s", event.get("message", ""),
+                        extra={"user_id": user.id, "code": event.get("code")},
+                    )
+                    raise LLMServiceException()
         except HttpClientException as e:
             logger.error(
-                "LLM checklist-generate failed: %s",
+                "LLM checklist-generate stream failed: %s",
                 str(e),
                 extra={"user_id": user.id, "status_code": e.status_code},
                 exc_info=True,
             )
             raise LLMServiceException() from e
 
-        if not result.title or not result.title.strip():
+        if result_data is None:
+            logger.error("LLM checklist stream ended without complete event", extra={"user_id": user.id})
+            raise LLMServiceException()
+
+        title = str(result_data.get("title", "")).strip()
+        items = result_data.get("items") or []
+        out_messages = result_data.get("messages") or []
+        fragments = llm_client.normalize_fragments(result_data.get("fragments"))
+
+        if not title:
             logger.error("LLM returned empty title for checklist", extra={"user_id": user.id})
             raise LLMServiceException()
-        if not result.items:
+        if not items:
             logger.error("LLM returned empty items for checklist", extra={"user_id": user.id})
             raise LLMServiceException()
 
-        sections = _items_to_sections(result.items)
+        sections = _items_to_sections(items)
         artifact, checklist = await sync_to_async(_persist_generated_checklist)(
             user_id=user.id,
-            title=result.title,
+            title=title,
             mode=mode,
             source_chat_id=chat_id,
             sections=sections,
@@ -200,7 +221,7 @@ class ChecklistService:
             },
         )
         await broadcast_artifact_created(chat_id, artifact)
-        return checklist, result.messages, result.fragments
+        return checklist, out_messages, fragments
 
 
 checklist_service = ChecklistService()

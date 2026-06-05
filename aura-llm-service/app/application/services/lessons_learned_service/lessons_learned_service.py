@@ -1,6 +1,5 @@
-import json
 import logging
-import re
+from collections.abc import AsyncIterator
 
 from fastapi import HTTPException, Request, status
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
@@ -9,6 +8,7 @@ from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
 from app.application.authorization.permissions import Permissions
 from app.application.exceptions.app_exception import RequestValidationException
+from app.application.utils.llm_json_parser import parse_json_object
 from app.application.services.lessons_learned_service.lessons_learned_prompt import RAG_QUERIES, SYSTEM_PROMPT
 from app.application.services.lessons_learned_service.exceptions.lessons_learned_service_exceptions import (
     LessonsLearnedServiceException,
@@ -23,6 +23,12 @@ from app.domain.dtos.lessons_learned.lessons_learned_response import (
     LessonCategory,
     LessonsLearnedGenerateResponse,
     LessonsLearnedItem,
+)
+from app.domain.dtos.lessons_learned.lessons_learned_stream_events import (
+    LessonsLearnedStreamComplete,
+    LessonsLearnedStreamError,
+    LessonsLearnedStreamEvent,
+    LessonsLearnedStreamProgress,
 )
 from app.domain.dtos.fragment.fragment_response import FragmentResponse
 from app.domain.dtos.message import Message
@@ -95,18 +101,6 @@ def _build_llm_messages(
     return messages
 
 
-def _extract_json(raw: str) -> str:
-    text = raw.strip()
-    match = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
-    if match:
-        return match.group(1).strip()
-    start = text.find("{")
-    end = text.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        return text[start : end + 1]
-    return text
-
-
 def _clean(value: object, limit: int) -> str:
     return str(value or "").strip()[:limit]
 
@@ -133,28 +127,25 @@ def _parse_items(raw_items: list) -> list[LessonsLearnedItem]:
     return items
 
 
-def _fallback_items(raw: str) -> tuple[str, str, str, str, str, list[LessonsLearnedItem]]:
+def _fallback_items(raw: str) -> tuple[str, str, list[LessonsLearnedItem]]:
     lines = [ln.strip().lstrip("•-*0123456789.) ") for ln in raw.splitlines() if ln.strip()]
     items = [
         LessonsLearnedItem(category=LessonCategory.IMPROVE, observation=ln[:_MAX_OBSERVATION_CHARS])
         for ln in lines[:_MAX_ITEMS]
         if ln
     ]
-    return "Lecciones aprendidas", "", "", "", "", items
+    return "Lecciones aprendidas", "", items
 
 
-def _parse_llm_output(raw: str):
+def _parse_llm_output(raw: str) -> tuple[str, str, list[LessonsLearnedItem]]:
     try:
-        data = json.loads(_extract_json(raw))
+        data = parse_json_object(raw)
         title = _clean(data.get("title"), _MAX_TITLE_CHARS) or "Lecciones aprendidas"
         context = _clean(data.get("context"), _MAX_NARRATIVE_CHARS)
-        what_went_well = _clean(data.get("what_went_well"), _MAX_NARRATIVE_CHARS)
-        what_failed = _clean(data.get("what_failed"), _MAX_NARRATIVE_CHARS)
-        recommendations = _clean(data.get("recommendations"), _MAX_NARRATIVE_CHARS)
         items = _parse_items(data.get("items", []))
         if not items:
             raise ValueError("No se encontraron lecciones válidas en la respuesta.")
-        return title, context, what_went_well, what_failed, recommendations, items
+        return title, context, items
     except (json.JSONDecodeError, ValueError, TypeError) as e:
         logger.warning("LLM did not return valid JSON; falling back to line-by-line parsing: %s", e)
         return _fallback_items(raw)
@@ -198,7 +189,7 @@ class LessonsLearnedService(LessonsLearnedServiceInterface):
             context_block = _build_context_block(fragments)
             llm_messages = _build_llm_messages(request, context_block)
 
-            llm = await self._ollama_llm_facade.get_llm_base()
+            llm = await self._ollama_llm_facade.get_llm_json()
             raw = await self._ollama_llm_invoker.call_llm_content(llm=llm, llm_input=llm_messages)
             raw = raw.strip()
 
@@ -208,7 +199,7 @@ class LessonsLearnedService(LessonsLearnedServiceInterface):
                     status_code=502,
                 )
 
-            title, context, what_went_well, what_failed, recommendations, items = _parse_llm_output(raw)
+            title, context, items = _parse_llm_output(raw)
 
             if not items:
                 raise LessonsLearnedServiceException(
@@ -231,9 +222,6 @@ class LessonsLearnedService(LessonsLearnedServiceInterface):
             return LessonsLearnedGenerateResponse(
                 title=title,
                 context=context,
-                what_went_well=what_went_well,
-                what_failed=what_failed,
-                recommendations=recommendations,
                 items=items,
                 messages=updated_messages,
                 fragments=fragments,
@@ -289,6 +277,72 @@ class LessonsLearnedService(LessonsLearnedServiceInterface):
                 extra={"user_id": authenticated_user.id},
             )
             return []
+
+
+    async def generate_stream(
+            self,
+            request: LessonsLearnedGenerateRequest,
+            authenticated_user: AuthenticatedUser,
+    ) -> AsyncIterator[LessonsLearnedStreamEvent]:
+        self._authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LLM_LESSONS_LEARNED_GENERATE}),
+        )
+        try:
+            fragments: list[FragmentResponse] = []
+            if request.mode == LessonsLearnedMode.RAG:
+                yield LessonsLearnedStreamProgress(
+                    step="context_retrieval",
+                    message="Recuperando contexto documental...",
+                )
+                fragments = await self._retrieve_fragments(request, authenticated_user)
+
+            yield LessonsLearnedStreamProgress(
+                step="generation", message="Generando lecciones aprendidas..."
+            )
+
+            context_block = _build_context_block(fragments)
+            llm_messages = _build_llm_messages(request, context_block)
+            llm = await self._ollama_llm_facade.get_llm_json()
+            raw = await self._ollama_llm_invoker.call_llm_content(llm=llm, llm_input=llm_messages)
+            raw = raw.strip()
+
+            if not raw:
+                raise LessonsLearnedServiceException(
+                    "El modelo de lenguaje devolvió una respuesta vacía.", status_code=502
+                )
+
+            title, context_str, items = _parse_llm_output(raw)
+            if not items:
+                raise LessonsLearnedServiceException(
+                    "No se pudieron extraer lecciones de la respuesta del modelo.", status_code=502
+                )
+
+            assistant_msg = Message(role=MessageRole.assistant, content=raw)
+            updated_messages = [*request.messages, assistant_msg]
+            result = LessonsLearnedGenerateResponse(
+                title=title,
+                context=context_str,
+                items=items,
+                messages=updated_messages,
+                fragments=fragments,
+            )
+            yield LessonsLearnedStreamComplete(result=result)
+        except _KNOWN_EXCEPTIONS as e:
+            logger.warning(
+                "Known error during lessons-learned stream generation",
+                extra={"user_id": authenticated_user.id, "error_type": type(e).__name__},
+            )
+            yield LessonsLearnedStreamError(message=str(e), code=type(e).__name__)
+        except Exception as e:
+            logger.exception(
+                "Unexpected error during lessons-learned stream generation",
+                extra={"user_id": authenticated_user.id, "error_type": type(e).__name__},
+            )
+            yield LessonsLearnedStreamError(
+                message="Error inesperado durante la generación de las lecciones aprendidas.",
+                code="internal_error",
+            )
 
 
 async def get_lessons_learned_service(request: Request) -> LessonsLearnedServiceInterface:

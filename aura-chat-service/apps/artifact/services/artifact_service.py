@@ -3,6 +3,7 @@ from typing import Optional
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 
+from apps.artifact.broadcasting import broadcast_artifact_deleted, broadcast_artifact_updated
 from apps.artifact.exceptions import (
     ArtifactAccessDeniedException,
     ArtifactCreationFailedException,
@@ -111,7 +112,7 @@ class ArtifactService:
         if artifact is None:
             raise ArtifactNotFoundException()
         _assert_artifact_access(user.id, artifact, require_contributor=True)
-        return artifact_repository.update(
+        artifact = artifact_repository.update(
             artifact,
             updated_by=user.id,
             title=title,
@@ -119,6 +120,9 @@ class ArtifactService:
             status=status,
             change_summary=change_summary,
         )
+        if artifact.source_chat_id:
+            broadcast_artifact_updated(artifact.source_chat_id, artifact)
+        return artifact
 
     @transaction.atomic
     def delete_artifact(self, user: AuthenticatedUser, artifact_id: int) -> None:
@@ -127,10 +131,13 @@ class ArtifactService:
         if artifact is None:
             raise ArtifactNotFoundException()
         _assert_artifact_access(user.id, artifact, require_contributor=True)
+        chat_id = artifact.source_chat_id
         _soft_delete_detail(artifact, deleted_by=user.id)
         _cleanup_artifact_interactions(artifact.id)
         artifact_repository.soft_delete(artifact, deleted_by=user.id)
         logger.info("Artifact deleted", extra={"user_id": user.id, "artifact_id": artifact_id})
+        if chat_id:
+            broadcast_artifact_deleted(chat_id, artifact_id, deleted_by=user.id)
 
     def list_versions(self, user: AuthenticatedUser, artifact_id: int):
         AccessControl.require_permissions(user, frozenset({perms.LIST_ARTIFACT_VERSIONS}))

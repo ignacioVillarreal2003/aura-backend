@@ -4,6 +4,7 @@ from django.db.models import QuerySet
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
+from apps.chat.ai_reply_lock import release as _release_ai_lock
 from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
 from apps.chat.models.chat import Chat
 from apps.chat.repositories.chat_repository import chat_repository
@@ -161,6 +162,9 @@ class ChatService:
         membership_repository.soft_delete_by_chat(chat_id, deleted_by=user.id)
         message_repository.soft_delete_by_chat(chat_id, deleted_by=user.id)
         chat_repository.soft_delete(chat, deleted_by=user.id)
+        # Release the Redis AI reply lock. Redis is outside the DB transaction so
+        # this is safe to call here; it's a best-effort cleanup (errors are swallowed).
+        _release_ai_lock(chat_id)
         logger.info("Chat deleted.", extra={"chat_id": chat_id, "user_id": user.id})
 
     def list_archived_chats(
@@ -183,7 +187,8 @@ class ChatService:
         accessible = membership_repository.get_active_chat_ids_for_member(user.id, chat_ids)
         invalid = set(chat_ids) - accessible
         if invalid:
-            raise ChatNotFoundException()
+            # Return 403 regardless of whether the chats exist, to avoid IDOR enumeration.
+            raise ChatAccessDeniedException()
         count = membership_repository.archive_chats(chat_ids=chat_ids, member_id=user.id)
         logger.info("Chats archived.", extra={"chat_ids": chat_ids, "user_id": user.id, "count": count})
         return count
@@ -193,7 +198,7 @@ class ChatService:
         accessible = membership_repository.get_active_chat_ids_for_member(user.id, chat_ids)
         invalid = set(chat_ids) - accessible
         if invalid:
-            raise ChatNotFoundException()
+            raise ChatAccessDeniedException()
         count = membership_repository.unarchive_chats(chat_ids=chat_ids, member_id=user.id)
         logger.info("Chats unarchived.", extra={"chat_ids": chat_ids, "user_id": user.id, "count": count})
         return count

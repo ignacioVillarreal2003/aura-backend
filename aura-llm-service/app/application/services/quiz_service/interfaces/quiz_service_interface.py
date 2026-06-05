@@ -1,8 +1,10 @@
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.quiz.quiz_request import QuizGenerateRequest
 from app.domain.dtos.quiz.quiz_response import QuizGenerateResponse
+from app.domain.dtos.quiz.quiz_stream_events import QuizStreamEvent
 
 
 class QuizServiceInterface(ABC):
@@ -12,4 +14,12 @@ class QuizServiceInterface(ABC):
             request: QuizGenerateRequest,
             authenticated_user: AuthenticatedUser,
     ) -> QuizGenerateResponse:
+        ...
+
+    @abstractmethod
+    async def generate_stream(
+            self,
+            request: QuizGenerateRequest,
+            authenticated_user: AuthenticatedUser,
+    ) -> AsyncIterator[QuizStreamEvent]:
         ...

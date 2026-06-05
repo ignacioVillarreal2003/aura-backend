@@ -542,6 +542,39 @@ CREATE TABLE artifact_lessons_learned_item (
 );
 
 -- ============================================================================
+-- artifact_decision_brief  (type = DECISION_BRIEF)
+-- ============================================================================
+CREATE TABLE artifact_decision_brief (
+    id             BIGSERIAL PRIMARY KEY,
+    artifact_id    BIGINT          NOT NULL
+        CONSTRAINT fk_artifact_decision_brief_artifact REFERENCES artifact(id) ON DELETE CASCADE,
+    problem        TEXT            NOT NULL DEFAULT '',
+    context        TEXT            NOT NULL DEFAULT '',
+    risks          TEXT            NOT NULL DEFAULT '',
+    recommendation TEXT            NOT NULL DEFAULT '',
+    created_by     BIGINT          NOT NULL,
+    created_at     TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    updated_by     BIGINT,
+    updated_at     TIMESTAMPTZ,
+    deleted_by     BIGINT,
+    deleted_at     TIMESTAMPTZ,
+    CONSTRAINT uq_artifact_decision_brief_artifact UNIQUE (artifact_id)
+);
+
+CREATE TABLE artifact_decision_brief_option (
+    id                 BIGSERIAL PRIMARY KEY,
+    decision_brief_id  BIGINT          NOT NULL
+        CONSTRAINT fk_artifact_db_option_decision_brief REFERENCES artifact_decision_brief(id) ON DELETE CASCADE,
+    title              VARCHAR(300)    NOT NULL,
+    description        TEXT            NOT NULL DEFAULT '',
+    pros               TEXT            NOT NULL DEFAULT '',
+    cons               TEXT            NOT NULL DEFAULT '',
+    is_recommended     BOOLEAN         NOT NULL DEFAULT FALSE,
+    position           SMALLINT        NOT NULL DEFAULT 0,
+    created_at         TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+);
+
+-- ============================================================================
 -- Indexes — infrastructure tables
 -- ============================================================================
 CREATE INDEX idx_document_status          ON document(status);
@@ -631,9 +664,6 @@ CREATE UNIQUE INDEX idx_assistant_name_active ON assistant (name) WHERE deleted_
 CREATE INDEX idx_assistant_active     ON assistant (is_active) WHERE deleted_at IS NULL;
 CREATE INDEX idx_assistant_created_by ON assistant (created_by);
 
--- ============================================================================
--- Indexes — artifact tables
--- ============================================================================
 CREATE INDEX idx_artifact_source_chat_created ON artifact (source_chat_id, created_at DESC) WHERE deleted_at IS NULL;
 CREATE INDEX idx_artifact_source_chat_type    ON artifact (source_chat_id, type, created_at DESC) WHERE deleted_at IS NULL;
 CREATE INDEX idx_artifact_owner_active        ON artifact (created_by, created_at DESC) WHERE deleted_at IS NULL;
@@ -679,3 +709,7 @@ CREATE INDEX idx_artifact_timeline_event    ON artifact_timeline_event (timeline
 CREATE INDEX idx_artifact_lessons_learned_artifact ON artifact_lessons_learned (artifact_id);
 CREATE INDEX idx_artifact_lessons_learned_owner    ON artifact_lessons_learned (created_by, created_at DESC) WHERE deleted_at IS NULL;
 CREATE INDEX idx_artifact_ll_item_ll               ON artifact_lessons_learned_item (lessons_learned_id, position);
+
+CREATE INDEX idx_artifact_decision_brief_artifact ON artifact_decision_brief (artifact_id);
+CREATE INDEX idx_artifact_decision_brief_owner    ON artifact_decision_brief (created_by, created_at DESC) WHERE deleted_at IS NULL;
+CREATE INDEX idx_artifact_db_option_brief         ON artifact_decision_brief_option (decision_brief_id, position);

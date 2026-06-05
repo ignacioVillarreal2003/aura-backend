@@ -103,7 +103,7 @@ class MessageRepository:
             .filter(
                 artifact__source_chat_id=chat_id,
                 artifact__type=Artifact.Type.MESSAGE,
-                sender_type=ArtifactMessage.SenderType.SYSTEM,
+                sender_type=ArtifactMessage.SenderType.ASSISTANT,
             )
             .select_related("artifact")
             .order_by("-created_at")

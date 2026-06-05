@@ -36,6 +36,7 @@ from apps.artifact_message.services.message_service import (
 from apps.chat.ai_reply_lock import release, try_acquire
 from apps.chat.exceptions import ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
+from apps.chat.ws_rate_limit import check_message_rate_limit
 from apps.membership.repositories.membership_repository import membership_repository
 from core.authorization import AccessControl
 from core.authorization.permissions import EXPORT_CHAT, MANAGE_CHATS
@@ -112,6 +113,18 @@ class MessageGenerateView(APIView):
 
         mode = serializer.validated_data.get("mode", "document_question")
 
+        # Verify membership before acquiring any lock so we never block the chat
+        # for users who aren't members or when the chat doesn't exist.
+        chat_obj = await sync_to_async(_get_chat_or_raise)(chat_id, request.user.id)
+        is_ephemeral = chat_obj.is_ephemeral
+
+        # Shared rate limit (same key as WebSocket) so both channels count together.
+        if not await sync_to_async(check_message_rate_limit)(request.user.id, chat_id):
+            return Response(
+                {"detail": "Too many messages. Please wait before sending more.", "error": "rate_limit_exceeded"},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
         transcript = None
         if "audio" in serializer.validated_data:
             transcript = await sync_to_async(_transcribe)(serializer.validated_data["audio"])
@@ -119,23 +132,32 @@ class MessageGenerateView(APIView):
         else:
             text = serializer.validated_data["message"]
 
-        chat_obj = await sync_to_async(chat_repository.get_by_id)(chat_id)
-        is_ephemeral = chat_obj is not None and chat_obj.is_ephemeral
-
         if not await sync_to_async(try_acquire)(chat_id):
             raise ChatAiReplyInProgressException()
 
         await sync_to_async(broadcast_chat_ai_lock_change)(chat_id, True)
         assistant = None
         assistant_error = None
-        msg = None
+        msg_data = None
         try:
             if is_ephemeral:
-                msg = await sync_to_async(message_service.send_ephemeral_message)(
-                    user=request.user,
-                    chat_id=chat_id,
-                    text=text,
-                )
+                # Ephemeral chats: validate access but do not persist messages.
+                await sync_to_async(message_service.assert_send_access)(request.user, chat_id)
+                msg_data = {
+                    "id": None,
+                    "artifact_id": None,
+                    "chat_id": chat_id,
+                    "message": text,
+                    "sender_type": ArtifactMessage.SenderType.USER,
+                    "created_by": request.user.id,
+                    "created_at": None,
+                    "is_bookmarked": False,
+                    "user_feedback": None,
+                    "user_feedback_reason": None,
+                    "user_feedback_comment": None,
+                    "thread_reply_count": 0,
+                    "fragments": None,
+                }
                 try:
                     turn = await message_service.run_ephemeral_ai_reply(
                         mode, request.user, chat_id, text
@@ -155,6 +177,7 @@ class MessageGenerateView(APIView):
                     chat_id=chat_id,
                     text=text,
                 )
+                msg_data = MessageResponse(msg).data
                 try:
                     turn = await message_service.run_ai_reply(mode, request.user, chat_id)
                     assistant = {"question": turn.question, "answer": turn.answer, "fragments": turn.fragments}
@@ -172,7 +195,7 @@ class MessageGenerateView(APIView):
 
         return Response(
             {
-                "message": MessageResponse(msg).data,
+                "message": msg_data,
                 "transcript": transcript,
                 "assistant": assistant,
                 "assistant_error": assistant_error,

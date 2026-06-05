@@ -1,6 +1,5 @@
-import json
 import logging
-import re
+from collections.abc import AsyncIterator
 
 from fastapi import HTTPException, Request, status
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
@@ -9,6 +8,7 @@ from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
 from app.application.authorization.permissions import Permissions
 from app.application.exceptions.app_exception import RequestValidationException
+from app.application.utils.llm_json_parser import parse_json_object
 from app.application.services.decision_brief_service.decision_brief_prompt import RAG_QUERIES, SYSTEM_PROMPT
 from app.application.services.decision_brief_service.exceptions.decision_brief_service_exceptions import (
     DecisionBriefServiceException,
@@ -22,6 +22,12 @@ from app.domain.dtos.decision_brief.decision_brief_request import DecisionBriefG
 from app.domain.dtos.decision_brief.decision_brief_response import (
     DecisionBriefGenerateResponse,
     DecisionBriefOption,
+)
+from app.domain.dtos.decision_brief.decision_brief_stream_events import (
+    DecisionBriefStreamComplete,
+    DecisionBriefStreamError,
+    DecisionBriefStreamEvent,
+    DecisionBriefStreamProgress,
 )
 from app.domain.dtos.fragment.fragment_response import FragmentResponse
 from app.domain.dtos.message import Message
@@ -93,18 +99,6 @@ def _build_llm_messages(
     return messages
 
 
-def _extract_json(raw: str) -> str:
-    text = raw.strip()
-    match = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
-    if match:
-        return match.group(1).strip()
-    start = text.find("{")
-    end = text.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        return text[start : end + 1]
-    return text
-
-
 def _clean(value: object, limit: int) -> str:
     return str(value or "").strip()[:limit]
 
@@ -141,7 +135,7 @@ def _fallback_options(raw: str) -> tuple[str, str, str, str, str, list[DecisionB
 
 def _parse_llm_output(raw: str):
     try:
-        data = json.loads(_extract_json(raw))
+        data = parse_json_object(raw)
         title = _clean(data.get("title"), _MAX_TITLE_CHARS) or "Brief de decisión"
         problem = _clean(data.get("problem"), _MAX_NARRATIVE_CHARS)
         context = _clean(data.get("context"), _MAX_NARRATIVE_CHARS)
@@ -194,7 +188,7 @@ class DecisionBriefService(DecisionBriefServiceInterface):
             context_block = _build_context_block(fragments)
             llm_messages = _build_llm_messages(request, context_block)
 
-            llm = await self._ollama_llm_facade.get_llm_base()
+            llm = await self._ollama_llm_facade.get_llm_json()
             raw = await self._ollama_llm_invoker.call_llm_content(llm=llm, llm_input=llm_messages)
             raw = raw.strip()
 
@@ -285,6 +279,75 @@ class DecisionBriefService(DecisionBriefServiceInterface):
                 extra={"user_id": authenticated_user.id},
             )
             return []
+
+
+    async def generate_stream(
+            self,
+            request: DecisionBriefGenerateRequest,
+            authenticated_user: AuthenticatedUser,
+    ) -> AsyncIterator[DecisionBriefStreamEvent]:
+        self._authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LLM_DECISION_BRIEF_GENERATE}),
+        )
+        try:
+            fragments: list[FragmentResponse] = []
+            if request.mode == DecisionBriefMode.RAG:
+                yield DecisionBriefStreamProgress(
+                    step="context_retrieval",
+                    message="Recuperando contexto documental...",
+                )
+                fragments = await self._retrieve_fragments(request, authenticated_user)
+
+            yield DecisionBriefStreamProgress(
+                step="generation", message="Generando brief de decisión..."
+            )
+
+            context_block = _build_context_block(fragments)
+            llm_messages = _build_llm_messages(request, context_block)
+            llm = await self._ollama_llm_facade.get_llm_json()
+            raw = await self._ollama_llm_invoker.call_llm_content(llm=llm, llm_input=llm_messages)
+            raw = raw.strip()
+
+            if not raw:
+                raise DecisionBriefServiceException(
+                    "El modelo de lenguaje devolvió una respuesta vacía.", status_code=502
+                )
+
+            title, problem, context_str, risks, recommendation, options = _parse_llm_output(raw)
+            if not options:
+                raise DecisionBriefServiceException(
+                    "No se pudieron extraer opciones de la respuesta del modelo.", status_code=502
+                )
+
+            assistant_msg = Message(role=MessageRole.assistant, content=raw)
+            updated_messages = [*request.messages, assistant_msg]
+            result = DecisionBriefGenerateResponse(
+                title=title,
+                problem=problem,
+                context=context_str,
+                risks=risks,
+                recommendation=recommendation,
+                options=options,
+                messages=updated_messages,
+                fragments=fragments,
+            )
+            yield DecisionBriefStreamComplete(result=result)
+        except _KNOWN_EXCEPTIONS as e:
+            logger.warning(
+                "Known error during decision-brief stream generation",
+                extra={"user_id": authenticated_user.id, "error_type": type(e).__name__},
+            )
+            yield DecisionBriefStreamError(message=str(e), code=type(e).__name__)
+        except Exception as e:
+            logger.exception(
+                "Unexpected error during decision-brief stream generation",
+                extra={"user_id": authenticated_user.id, "error_type": type(e).__name__},
+            )
+            yield DecisionBriefStreamError(
+                message="Error inesperado durante la generación del brief de decisión.",
+                code="internal_error",
+            )
 
 
 async def get_decision_brief_service(request: Request) -> DecisionBriefServiceInterface:

@@ -14,7 +14,6 @@ REGLAS OBLIGATORIAS:
       "question": "Enunciado claro de la pregunta",
       "type": "single | multiple | boolean | open",
       "explanation": "Explicación de la respuesta correcta",
-      "points": 1,
       "options": [
         { "text": "Texto de la opción", "is_correct": true }
       ]

@@ -7,7 +7,7 @@ from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization.access import AccessControl
 from core.authorization import permissions as perms
 from core.clients.exceptions import HttpClientException
-from core.clients.llm_client import ReportGenerateResult, llm_client
+from core.clients.llm_client import llm_client
 from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.membership.repositories.membership_repository import membership_repository
@@ -15,7 +15,7 @@ from apps.artifact.models import Artifact
 from apps.artifact.repositories.artifact_repository import artifact_repository
 from apps.artifact.services.artifact_access import assert_detail_access
 from django.db import transaction
-from apps.artifact.broadcasting import broadcast_artifact_created
+from apps.artifact.broadcasting import broadcast_artifact_created, broadcast_artifact_progress
 from apps.artifact.services.artifact_service import create_artifact_for_content, _cleanup_artifact_interactions
 from apps.artifact.llm_context import build_chat_history
 from apps.artifact_report.exceptions import LLMServiceException, ReportAccessDeniedException, ReportNotFoundException
@@ -165,52 +165,72 @@ class ReportService:
         history = await sync_to_async(build_chat_history)(chat_id)
 
         messages = history + [{"role": "human", "content": message}]
+        result_data: dict | None = None
         try:
-            result: ReportGenerateResult = await llm_client.generate_report(
+            async for event in llm_client.generate_report_stream_events(
                 messages=messages,
                 mode=mode,
                 report_type=report_type,
                 user=user,
                 chat_id=chat_id,
-            )
+            ):
+                et = event.get("type")
+                if et == "progress":
+                    await broadcast_artifact_progress(chat_id, str(event.get("step", "")), str(event.get("message", "")))
+                elif et == "complete":
+                    result_data = event.get("result") or {}
+                elif et == "error":
+                    logger.error(
+                        "LLM report stream error: %s", event.get("message", ""),
+                        extra={"user_id": user.id, "code": event.get("code")},
+                    )
+                    raise LLMServiceException()
         except HttpClientException as e:
             logger.error(
-                "LLM report-generate failed: %s",
+                "LLM report-generate stream failed: %s",
                 str(e),
                 extra={"user_id": user.id, "report_type": report_type, "status_code": e.status_code},
                 exc_info=True,
             )
             raise LLMServiceException() from e
 
-        if not result.content or not result.content.strip():
-            logger.error("LLM returned empty content for report",
-                         extra={"user_id": user.id, "report_type": report_type})
-            raise LLMServiceException()
-        if result.report_type not in ArtifactReport.Type.values:
-            logger.error("LLM returned unknown report type: %s", result.report_type, extra={"user_id": user.id})
+        if result_data is None:
+            logger.error("LLM report stream ended without complete event", extra={"user_id": user.id})
             raise LLMServiceException()
 
-        title = _auto_title(result.report_type, result.content)
+        content = str(result_data.get("content", "")).strip()
+        rtype = str(result_data.get("report_type", report_type))
+        out_messages = result_data.get("messages") or []
+        fragments = llm_client.normalize_fragments(result_data.get("fragments"))
+
+        if not content:
+            logger.error("LLM returned empty content for report", extra={"user_id": user.id, "report_type": rtype})
+            raise LLMServiceException()
+        if rtype not in ArtifactReport.Type.values:
+            logger.error("LLM returned unknown report type: %s", rtype, extra={"user_id": user.id})
+            raise LLMServiceException()
+
+        title = _auto_title(rtype, content)
         artifact, report = await sync_to_async(_persist_generated_report)(
             user_id=user.id,
-            report_type=result.report_type,
+            report_type=rtype,
             title=title,
             mode=mode,
             source_chat_id=chat_id,
-            content=result.content,
+            content=content,
         )
         logger.info(
             "ArtifactReport generated and saved",
             extra={
                 "user_id": user.id,
                 "report_id": report.id,
-                "type": result.report_type,
+                "type": rtype,
                 "source_chat_id": chat_id,
                 "artifact_id": artifact.id,
             },
         )
         await broadcast_artifact_created(chat_id, artifact)
-        return report, result.messages, result.fragments
+        return report, out_messages, fragments
 
 
 report_service = ReportService()

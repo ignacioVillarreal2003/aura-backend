@@ -1,3 +1,6 @@
+import atexit
+import asyncio
+
 from django.apps import AppConfig
 
 
@@ -12,3 +15,12 @@ class MessageConfig(AppConfig):
             _get_model()
         except ImportError:
             pass  # faster_whisper not installed in this environment
+
+        def _close_llm_client():
+            from core.clients.llm_client import llm_client
+            try:
+                asyncio.run(llm_client.aclose())
+            except Exception:
+                pass
+
+        atexit.register(_close_llm_client)

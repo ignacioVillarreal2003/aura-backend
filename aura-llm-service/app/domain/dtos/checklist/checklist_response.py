@@ -5,7 +5,6 @@ from app.domain.dtos.message import Message
 
 
 class ChecklistItem(BaseModel):
-    id: str = Field(..., description="UUID del ítem.")
     section: str = Field(..., description="Sección o fase a la que pertenece el ítem.")
     order: int = Field(..., ge=1, description="Posición dentro de la sección (empieza en 1).")
     text: str = Field(..., description="Descripción del paso a verificar.")

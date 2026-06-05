@@ -6,7 +6,7 @@ from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization.access import AccessControl
 from core.authorization import permissions as perms
 from core.clients.exceptions import HttpClientException
-from core.clients.llm_client import LessonsLearnedGenerateResult, llm_client
+from core.clients.llm_client import llm_client
 from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.artifact.models import Artifact
@@ -21,7 +21,7 @@ from apps.artifact_lessons_learned.repositories.lessons_learned_repository impor
 from apps.membership.repositories.membership_repository import membership_repository
 from apps.artifact.services.artifact_access import assert_detail_access
 from django.db import transaction
-from apps.artifact.broadcasting import broadcast_artifact_created
+from apps.artifact.broadcasting import broadcast_artifact_created, broadcast_artifact_progress
 from apps.artifact.services.artifact_service import create_artifact_for_content, _cleanup_artifact_interactions
 from apps.artifact.llm_context import build_chat_history
 
@@ -167,36 +167,58 @@ class LessonsLearnedService:
         history = await sync_to_async(build_chat_history)(chat_id)
 
         messages = history + [{"role": "human", "content": message}]
+        result_data: dict | None = None
         try:
-            result: LessonsLearnedGenerateResult = await llm_client.generate_lessons_learned(
+            async for event in llm_client.generate_lessons_learned_stream_events(
                 messages=messages,
                 mode=mode,
                 user=user,
                 chat_id=chat_id,
-            )
+            ):
+                et = event.get("type")
+                if et == "progress":
+                    await broadcast_artifact_progress(chat_id, str(event.get("step", "")), str(event.get("message", "")))
+                elif et == "complete":
+                    result_data = event.get("result") or {}
+                elif et == "error":
+                    logger.error(
+                        "LLM lessons-learned stream error: %s", event.get("message", ""),
+                        extra={"user_id": user.id, "code": event.get("code")},
+                    )
+                    raise LLMServiceException()
         except HttpClientException as e:
             logger.error(
-                "LLM lessons-learned-generate failed: %s",
+                "LLM lessons-learned-generate stream failed: %s",
                 str(e),
                 extra={"user_id": user.id, "status_code": e.status_code},
                 exc_info=True,
             )
             raise LLMServiceException() from e
 
-        if not result.title or not result.title.strip():
+        if result_data is None:
+            logger.error("LLM lessons-learned stream ended without complete event", extra={"user_id": user.id})
+            raise LLMServiceException()
+
+        title = str(result_data.get("title", "")).strip()
+        raw_items = result_data.get("items") or []
+        out_messages = result_data.get("messages") or []
+        fragments = llm_client.normalize_fragments(result_data.get("fragments"))
+        context = str(result_data.get("context", ""))
+
+        if not title:
             logger.error("LLM returned empty title for lessons-learned", extra={"user_id": user.id})
             raise LLMServiceException()
-        if not result.items:
+        if not raw_items:
             logger.error("LLM returned empty items for lessons-learned", extra={"user_id": user.id})
             raise LLMServiceException()
 
-        items = _normalize_items(result.items)
+        items = _normalize_items(raw_items)
         artifact, ll = await sync_to_async(_persist_generated_lessons_learned)(
             user_id=user.id,
-            title=result.title,
+            title=title,
             mode=mode,
             source_chat_id=chat_id,
-            context=result.context or "",
+            context=context,
             items=items,
         )
         logger.info(
@@ -209,7 +231,7 @@ class LessonsLearnedService:
             },
         )
         await broadcast_artifact_created(chat_id, artifact)
-        return ll, result.messages, result.fragments
+        return ll, out_messages, fragments
 
 
 lessons_learned_service = LessonsLearnedService()

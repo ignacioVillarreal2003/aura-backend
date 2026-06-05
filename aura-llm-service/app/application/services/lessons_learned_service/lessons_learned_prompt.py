@@ -8,9 +8,6 @@ REGLAS OBLIGATORIAS:
 {
   "title": "Título descriptivo (máx. 100 caracteres)",
   "context": "Contexto de la operación o ejercicio analizado",
-  "what_went_well": "Resumen narrativo de lo que funcionó bien",
-  "what_failed": "Resumen narrativo de lo que falló",
-  "recommendations": "Resumen narrativo de las recomendaciones generales",
   "items": [
     {
       "category": "sustain | improve | recommendation",
@@ -25,9 +22,8 @@ REGLAS OBLIGATORIAS:
    - "improve": fallas o deficiencias a corregir.
    - "recommendation": recomendaciones accionables a futuro.
 4. Cada ítem debe ser concreto, específico y verificable — sin generalidades vacías.
-5. Los campos narrativos (what_went_well, what_failed, recommendations) resumen; los "items" detallan.
-6. Si el usuario pide modificaciones, devolvé el análisis completo actualizado.
-7. Máximo 300 ítems.
+5. Si el usuario pide modificaciones, devolvé el análisis completo actualizado.
+6. Máximo 300 ítems.
 
 Respondé SOLO con el JSON. Nada más."""
 

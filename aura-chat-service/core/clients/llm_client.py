@@ -347,6 +347,30 @@ class LLMClient:
             fragments=self.normalize_fragments(data.get("fragments")),
         )
 
+    async def generate_checklist_stream_events(
+            self,
+            messages: list[dict[str, str]],
+            mode: str,
+            user: AuthenticatedUser,
+            chat_id: int | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        payload: dict = {"messages": messages, "mode": mode}
+        if chat_id is not None:
+            payload["chat_id"] = chat_id
+
+        logger.debug(
+            "Calling LLM checklist-generate stream.",
+            extra={"user_id": user.id, "message_count": len(messages)},
+        )
+
+        async for event in self._stream_sse_events(
+                url=settings.LLM_CHECKLIST_GENERATE_STREAM_URL,
+                payload=payload,
+                user=user,
+                context="checklist-generate-stream",
+        ):
+            yield event
+
     async def generate_report(
             self,
             messages: list[dict[str, str]],
@@ -382,6 +406,31 @@ class LLMClient:
             messages=data.get("messages") or [],
             fragments=self.normalize_fragments(data.get("fragments")),
         )
+
+    async def generate_report_stream_events(
+            self,
+            messages: list[dict[str, str]],
+            mode: str,
+            report_type: str,
+            user: AuthenticatedUser,
+            chat_id: int | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        payload: dict = {"messages": messages, "mode": mode, "report_type": report_type}
+        if chat_id is not None:
+            payload["chat_id"] = chat_id
+
+        logger.debug(
+            "Calling LLM report-generate stream.",
+            extra={"user_id": user.id, "message_count": len(messages), "report_type": report_type},
+        )
+
+        async for event in self._stream_sse_events(
+                url=settings.LLM_REPORT_GENERATE_STREAM_URL,
+                payload=payload,
+                user=user,
+                context="report-generate-stream",
+        ):
+            yield event
 
     # ------------------------------------------------------------------
     # Timeline / quiz / lessons-learned / decision-brief generation
@@ -421,6 +470,30 @@ class LLMClient:
             fragments=self.normalize_fragments(data.get("fragments")),
         )
 
+    async def generate_timeline_stream_events(
+            self,
+            messages: list[dict[str, str]],
+            mode: str,
+            user: AuthenticatedUser,
+            chat_id: int | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        payload: dict = {"messages": messages, "mode": mode}
+        if chat_id is not None:
+            payload["chat_id"] = chat_id
+
+        logger.debug(
+            "Calling LLM timeline-generate stream.",
+            extra={"user_id": user.id, "message_count": len(messages)},
+        )
+
+        async for event in self._stream_sse_events(
+                url=settings.LLM_TIMELINE_GENERATE_STREAM_URL,
+                payload=payload,
+                user=user,
+                context="timeline-generate-stream",
+        ):
+            yield event
+
     async def generate_quiz(
             self,
             messages: list[dict[str, str]],
@@ -457,6 +530,30 @@ class LLMClient:
             fragments=self.normalize_fragments(data.get("fragments")),
         )
 
+    async def generate_quiz_stream_events(
+            self,
+            messages: list[dict[str, str]],
+            mode: str,
+            user: AuthenticatedUser,
+            chat_id: int | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        payload: dict = {"messages": messages, "mode": mode}
+        if chat_id is not None:
+            payload["chat_id"] = chat_id
+
+        logger.debug(
+            "Calling LLM quiz-generate stream.",
+            extra={"user_id": user.id, "message_count": len(messages)},
+        )
+
+        async for event in self._stream_sse_events(
+                url=settings.LLM_QUIZ_GENERATE_STREAM_URL,
+                payload=payload,
+                user=user,
+                context="quiz-generate-stream",
+        ):
+            yield event
+
     async def generate_lessons_learned(
             self,
             messages: list[dict[str, str]],
@@ -491,6 +588,30 @@ class LLMClient:
             messages=data.get("messages") or [],
             fragments=self.normalize_fragments(data.get("fragments")),
         )
+
+    async def generate_lessons_learned_stream_events(
+            self,
+            messages: list[dict[str, str]],
+            mode: str,
+            user: AuthenticatedUser,
+            chat_id: int | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        payload: dict = {"messages": messages, "mode": mode}
+        if chat_id is not None:
+            payload["chat_id"] = chat_id
+
+        logger.debug(
+            "Calling LLM lessons-learned-generate stream.",
+            extra={"user_id": user.id, "message_count": len(messages)},
+        )
+
+        async for event in self._stream_sse_events(
+                url=settings.LLM_LESSONS_LEARNED_GENERATE_STREAM_URL,
+                payload=payload,
+                user=user,
+                context="lessons-learned-generate-stream",
+        ):
+            yield event
 
     async def generate_decision_brief(
             self,
@@ -529,6 +650,30 @@ class LLMClient:
             messages=data.get("messages") or [],
             fragments=self.normalize_fragments(data.get("fragments")),
         )
+
+    async def generate_decision_brief_stream_events(
+            self,
+            messages: list[dict[str, str]],
+            mode: str,
+            user: AuthenticatedUser,
+            chat_id: int | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        payload: dict = {"messages": messages, "mode": mode}
+        if chat_id is not None:
+            payload["chat_id"] = chat_id
+
+        logger.debug(
+            "Calling LLM decision-brief-generate stream.",
+            extra={"user_id": user.id, "message_count": len(messages)},
+        )
+
+        async for event in self._stream_sse_events(
+                url=settings.LLM_DECISION_BRIEF_GENERATE_STREAM_URL,
+                payload=payload,
+                user=user,
+                context="decision-brief-generate-stream",
+        ):
+            yield event
 
     # ------------------------------------------------------------------
     # Shared transport helpers

@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
@@ -35,7 +36,11 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self._ai_reply_task: asyncio.Task | None = None
 
     async def connect(self):
-        self.chat_id = int(self.scope["url_route"]["kwargs"]["chat_id"])
+        try:
+            self.chat_id = int(self.scope["url_route"]["kwargs"]["chat_id"])
+        except (KeyError, ValueError, TypeError):
+            await self.close(code=4003)
+            return
         self.group_name = f"chat_{self.chat_id}"
         self.user = self.scope.get("user")
 
@@ -78,6 +83,18 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # discarded), and a reconnecting client will receive any remaining events.
         self._ai_reply_task = None
 
+        if self.group_name and self.user is not None:
+            try:
+                await self.channel_layer.group_send(
+                    self.group_name,
+                    {"type": "member_left", "member_id": self.user.id},
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to broadcast member_left on disconnect.",
+                    extra={"chat_id": self.chat_id, "user_id": self.user.id},
+                )
+
         try:
             if self.group_name:
                 await self.channel_layer.group_discard(
@@ -94,6 +111,22 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 "close_code": close_code,
             },
         )
+
+    async def receive(self, text_data=None, bytes_data=None, **kwargs):
+        if bytes_data is not None:
+            await self.send_json({"type": "error", "detail": "Binary frames are not supported."})
+            return
+        if not text_data:
+            return
+        try:
+            content = json.loads(text_data)
+        except (json.JSONDecodeError, ValueError):
+            await self.send_json({"type": "error", "detail": "Invalid JSON payload."})
+            return
+        if not isinstance(content, dict):
+            await self.send_json({"type": "error", "detail": "Payload must be a JSON object."})
+            return
+        await self.receive_json(content)
 
     async def receive_json(self, content, **kwargs):
         try:
@@ -249,6 +282,14 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             })
             return
 
+        if chat_obj is not None and chat_obj.is_ephemeral:
+            await self.send_json({
+                "type": "error",
+                "error_code": "ephemeral_chat",
+                "detail": "Regeneration is not available for ephemeral chats.",
+            })
+            return
+
         mode = ChatAIMode.normalize(content.get("mode"))
 
         prev = self._ai_reply_task
@@ -331,6 +372,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self._ai_reply_task = task
 
     async def _run_ai_reply(self, mode: str, regen_feedback: str | None = None):
+        if self.group_name is None or self.chat_id is None:
+            return
         try:
             await self.channel_layer.group_send(
                 self.group_name,
@@ -466,6 +509,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         })
 
     async def typing(self, event):
+        if self.user is None:
+            return
         if event["user_id"] != self.user.id:
             await self.send_json({
                 "type": "typing",
@@ -494,6 +539,23 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             "title": event["title"],
             "created_by": event["created_by"],
             "created_at": event["created_at"],
+        })
+
+    async def artifact_updated(self, event):
+        await self.send_json({
+            "type": "artifact_updated",
+            "artifact_id": event["artifact_id"],
+            "artifact_type": event["artifact_type"],
+            "title": event["title"],
+            "updated_by": event.get("updated_by"),
+            "updated_at": event.get("updated_at"),
+        })
+
+    async def artifact_deleted(self, event):
+        await self.send_json({
+            "type": "artifact_deleted",
+            "artifact_id": event["artifact_id"],
+            "deleted_by": event.get("deleted_by"),
         })
 
     async def member_left(self, event):

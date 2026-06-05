@@ -19,6 +19,10 @@ from apps.artifact_quiz.services.quiz_service import quiz_service
 from apps.artifact.audio import transcribe as _transcribe_audio
 from apps.artifact_quiz.services.export_service import generate_quiz_markdown, generate_quiz_pdf
 from apps.artifact.utils import safe_filename as _safe_filename
+from apps.chat.ai_reply_lock import release, try_acquire
+from apps.chat.exceptions import ChatAiReplyInProgressException
+from apps.chat.ws_rate_limit import check_artifact_rate_limit, check_transcribe_rate_limit
+from apps.artifact_message.services.message_service import broadcast_chat_ai_lock_change
 from core.openapi.common import standard_error_responses
 from core.pagination.pagination import StandardPagination
 
@@ -160,16 +164,39 @@ class QuizGenerateView(APIView):
         serializer = GenerateQuizRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
         d = serializer.validated_data
+        chat_id = d["chat_id"]
+
+        if not await sync_to_async(check_artifact_rate_limit)(request.user.id, chat_id):
+            return Response(
+                {"detail": "Too many generation requests. Please wait.", "error": "rate_limit_exceeded"},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
         if "audio" in d:
+            if not await sync_to_async(check_transcribe_rate_limit)(request.user.id):
+                return Response(
+                    {"detail": "Too many transcription requests. Please wait.", "error": "transcription_rate_limit_exceeded"},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
             message = await sync_to_async(_transcribe_audio)(d["audio"])
         else:
             message = d["message"]
-        quiz, messages, fragments = await quiz_service.generate_quiz(
-            user=request.user,
-            message=message,
-            mode=d["mode"],
-            chat_id=d["chat_id"],
-        )
+
+        if not await sync_to_async(try_acquire)(chat_id):
+            raise ChatAiReplyInProgressException()
+
+        await sync_to_async(broadcast_chat_ai_lock_change)(chat_id, True)
+        try:
+            quiz, messages, fragments = await quiz_service.generate_quiz(
+                user=request.user,
+                message=message,
+                mode=d["mode"],
+                chat_id=chat_id,
+            )
+        finally:
+            await sync_to_async(release)(chat_id)
+            await sync_to_async(broadcast_chat_ai_lock_change)(chat_id, False)
+
         return Response(
             QuizGenerateResponse({"quiz": quiz, "messages": messages, "fragments": fragments}).data,
             status=status.HTTP_201_CREATED,

@@ -1,6 +1,5 @@
-import json
 import logging
-import re
+from collections.abc import AsyncIterator
 
 from fastapi import HTTPException, Request, status
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
@@ -9,6 +8,7 @@ from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
 from app.application.authorization.permissions import Permissions
 from app.application.exceptions.app_exception import RequestValidationException
+from app.application.utils.llm_json_parser import parse_json_object
 from app.application.services.timeline_service.timeline_prompt import RAG_QUERIES, SYSTEM_PROMPT
 from app.application.services.timeline_service.exceptions.timeline_service_exceptions import TimelineServiceException
 from app.application.services.timeline_service.interfaces.timeline_service_interface import TimelineServiceInterface
@@ -16,6 +16,12 @@ from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.timeline.timeline_request import TimelineGenerateRequest, TimelineMode
 from app.domain.dtos.timeline.timeline_response import TimelineEvent, TimelineGenerateResponse
+from app.domain.dtos.timeline.timeline_stream_events import (
+    TimelineStreamComplete,
+    TimelineStreamError,
+    TimelineStreamEvent,
+    TimelineStreamProgress,
+)
 from app.domain.dtos.fragment.fragment_response import FragmentResponse
 from app.domain.dtos.message import Message
 from app.infrastructure.http.document_context_provider.dtos.question_context_fragments_request import (
@@ -87,18 +93,6 @@ def _build_llm_messages(
     return messages
 
 
-def _extract_json(raw: str) -> str:
-    text = raw.strip()
-    match = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
-    if match:
-        return match.group(1).strip()
-    start = text.find("{")
-    end = text.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        return text[start : end + 1]
-    return text
-
-
 def _clean(value: object, limit: int) -> str:
     return str(value or "").strip()[:limit]
 
@@ -119,7 +113,6 @@ def _parse_events(raw_events: list) -> list[TimelineEvent]:
                 description=_clean(entry.get("description"), _MAX_DESCRIPTION_CHARS),
                 occurred_at=occurred_at or None,
                 occurred_label=_clean(entry.get("occurred_label"), _MAX_LABEL_CHARS),
-                source_document_id=None,
             )
         )
     return events
@@ -137,7 +130,7 @@ def _fallback_events(raw: str) -> tuple[str, str, list[TimelineEvent]]:
 
 def _parse_llm_output(raw: str) -> tuple[str, str, list[TimelineEvent]]:
     try:
-        data = json.loads(_extract_json(raw))
+        data = parse_json_object(raw)
         title = _clean(data.get("title"), _MAX_TITLE_CHARS) or "Línea de tiempo"
         summary = _clean(data.get("summary"), _MAX_SUMMARY_CHARS)
         events = _parse_events(data.get("events", []))
@@ -187,7 +180,7 @@ class TimelineService(TimelineServiceInterface):
             context_block = _build_context_block(fragments)
             llm_messages = _build_llm_messages(request, context_block)
 
-            llm = await self._ollama_llm_facade.get_llm_base()
+            llm = await self._ollama_llm_facade.get_llm_json()
             raw = await self._ollama_llm_invoker.call_llm_content(llm=llm, llm_input=llm_messages)
             raw = raw.strip()
 
@@ -275,6 +268,70 @@ class TimelineService(TimelineServiceInterface):
                 extra={"user_id": authenticated_user.id},
             )
             return []
+
+
+    async def generate_stream(
+            self,
+            request: TimelineGenerateRequest,
+            authenticated_user: AuthenticatedUser,
+    ) -> AsyncIterator[TimelineStreamEvent]:
+        self._authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LLM_TIMELINE_GENERATE}),
+        )
+        try:
+            fragments: list[FragmentResponse] = []
+            if request.mode == TimelineMode.RAG:
+                yield TimelineStreamProgress(
+                    step="context_retrieval",
+                    message="Recuperando contexto documental...",
+                )
+                fragments = await self._retrieve_fragments(request, authenticated_user)
+
+            yield TimelineStreamProgress(step="generation", message="Generando línea de tiempo...")
+
+            context_block = _build_context_block(fragments)
+            llm_messages = _build_llm_messages(request, context_block)
+            llm = await self._ollama_llm_facade.get_llm_json()
+            raw = await self._ollama_llm_invoker.call_llm_content(llm=llm, llm_input=llm_messages)
+            raw = raw.strip()
+
+            if not raw:
+                raise TimelineServiceException(
+                    "El modelo de lenguaje devolvió una respuesta vacía.", status_code=502
+                )
+
+            title, summary, events = _parse_llm_output(raw)
+            if not events:
+                raise TimelineServiceException(
+                    "No se pudieron extraer eventos de la respuesta del modelo.", status_code=502
+                )
+
+            assistant_msg = Message(role=MessageRole.assistant, content=raw)
+            updated_messages = [*request.messages, assistant_msg]
+            result = TimelineGenerateResponse(
+                title=title,
+                summary=summary,
+                events=events,
+                messages=updated_messages,
+                fragments=fragments,
+            )
+            yield TimelineStreamComplete(result=result)
+        except _KNOWN_EXCEPTIONS as e:
+            logger.warning(
+                "Known error during timeline stream generation",
+                extra={"user_id": authenticated_user.id, "error_type": type(e).__name__},
+            )
+            yield TimelineStreamError(message=str(e), code=type(e).__name__)
+        except Exception as e:
+            logger.exception(
+                "Unexpected error during timeline stream generation",
+                extra={"user_id": authenticated_user.id, "error_type": type(e).__name__},
+            )
+            yield TimelineStreamError(
+                message="Error inesperado durante la generación de la línea de tiempo.",
+                code="internal_error",
+            )
 
 
 async def get_timeline_service(request: Request) -> TimelineServiceInterface:

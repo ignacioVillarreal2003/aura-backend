@@ -6,7 +6,7 @@ from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization.access import AccessControl
 from core.authorization import permissions as perms
 from core.clients.exceptions import HttpClientException
-from core.clients.llm_client import DecisionBriefGenerateResult, llm_client
+from core.clients.llm_client import llm_client
 from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.artifact.models import Artifact
@@ -21,7 +21,7 @@ from apps.artifact_decision_brief.repositories.decision_brief_repository import 
 from apps.membership.repositories.membership_repository import membership_repository
 from apps.artifact.services.artifact_access import assert_detail_access
 from django.db import transaction
-from apps.artifact.broadcasting import broadcast_artifact_created
+from apps.artifact.broadcasting import broadcast_artifact_created, broadcast_artifact_progress
 from apps.artifact.services.artifact_service import create_artifact_for_content, _cleanup_artifact_interactions
 from apps.artifact.llm_context import build_chat_history
 
@@ -176,39 +176,60 @@ class DecisionBriefService:
         history = await sync_to_async(build_chat_history)(chat_id)
 
         messages = history + [{"role": "human", "content": message}]
+        result_data: dict | None = None
         try:
-            result: DecisionBriefGenerateResult = await llm_client.generate_decision_brief(
+            async for event in llm_client.generate_decision_brief_stream_events(
                 messages=messages,
                 mode=mode,
                 user=user,
                 chat_id=chat_id,
-            )
+            ):
+                et = event.get("type")
+                if et == "progress":
+                    await broadcast_artifact_progress(chat_id, str(event.get("step", "")), str(event.get("message", "")))
+                elif et == "complete":
+                    result_data = event.get("result") or {}
+                elif et == "error":
+                    logger.error(
+                        "LLM decision-brief stream error: %s", event.get("message", ""),
+                        extra={"user_id": user.id, "code": event.get("code")},
+                    )
+                    raise LLMServiceException()
         except HttpClientException as e:
             logger.error(
-                "LLM decision-brief-generate failed: %s",
+                "LLM decision-brief-generate stream failed: %s",
                 str(e),
                 extra={"user_id": user.id, "status_code": e.status_code},
                 exc_info=True,
             )
             raise LLMServiceException() from e
 
-        if not result.title or not result.title.strip():
+        if result_data is None:
+            logger.error("LLM decision-brief stream ended without complete event", extra={"user_id": user.id})
+            raise LLMServiceException()
+
+        title = str(result_data.get("title", "")).strip()
+        raw_options = result_data.get("options") or []
+        out_messages = result_data.get("messages") or []
+        fragments = llm_client.normalize_fragments(result_data.get("fragments"))
+
+        if not title:
             logger.error("LLM returned empty title for decision-brief", extra={"user_id": user.id})
             raise LLMServiceException()
-        if not result.options:
+        if not raw_options:
             logger.error("LLM returned empty options for decision-brief", extra={"user_id": user.id})
             raise LLMServiceException()
 
-        options = _normalize_options(result.options)
+        options = _normalize_options(raw_options)
         artifact, brief = await sync_to_async(_persist_generated_decision_brief)(
             user_id=user.id,
-            title=result.title,
+            title=title,
             mode=mode,
             source_chat_id=chat_id,
-            problem=result.problem or "",
-            context=result.context or "",
-            risks=result.risks or "",
-            recommendation=result.recommendation or "",
+            problem=str(result_data.get("problem", "")),
+            context=str(result_data.get("context", "")),
+            risks=str(result_data.get("risks", "")),
+            recommendation=str(result_data.get("recommendation", "")),
             options=options,
         )
         logger.info(
@@ -221,7 +242,7 @@ class DecisionBriefService:
             },
         )
         await broadcast_artifact_created(chat_id, artifact)
-        return brief, result.messages, result.fragments
+        return brief, out_messages, fragments
 
 
 decision_brief_service = DecisionBriefService()

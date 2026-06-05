@@ -51,8 +51,14 @@
       "Bash(curl -s -X POST http://localhost:8002/auth/change-password -H \"Content-Type: application/json\" -d \"{\\\\\"current_password\\\\\":\\\\\"test\\\\\",\\\\\"new_password\\\\\":\\\\\"test\\\\\"}\")",
       "Bash(timeout 15 bash -c \"until curl -s http://localhost:8002/auth/validate > /dev/null 2>&1; do sleep 1; done\")",
       "Bash(curl *)",
-      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('access_token obtenido:', bool\\(d.get\\('access_token'\\)\\)\\)\")"
-      "Bash(python -c \"import channels_redis; import inspect; print\\(inspect.getfile\\(channels_redis\\)\\)\")"
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('access_token obtenido:', bool\\(d.get\\('access_token'\\)\\)\\)\")",
+      "Bash(python -c \"import channels_redis; import inspect; print\\(inspect.getfile\\(channels_redis\\)\\)\")",
+      "Bash(xargs grep -l \"create_artifact_for_content\")",
+      "Skill(code-review)",
+      "Bash(dir /s /b \"C:\\\\Users\\\\ignac\\\\Desktop\\\\AURA\\\\aura-backend\\\\aura-chat-service\")",
+      "Bash(findstr /i \"timeline_repository\\\\|timeline_service\\\\|report_service\\\\|report_repository\")",
+      "Bash(echo \"---exit:$?---\")",
+      "Bash(python -m py_compile apps/assistant/services/assistant_service.py apps/membership/models/chat_membership.py apps/membership/services/membership_service.py apps/membership/repositories/membership_repository.py apps/membership/serializers/request.py apps/membership/views/membership_view.py)"
     ]
   }
 }

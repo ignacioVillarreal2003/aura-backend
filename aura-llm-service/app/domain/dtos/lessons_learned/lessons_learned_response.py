@@ -27,9 +27,6 @@ class LessonsLearnedItem(BaseModel):
 class LessonsLearnedGenerateResponse(BaseModel):
     title: str = Field(..., description="Título descriptivo de las lecciones aprendidas.")
     context: str = Field(default="", description="Contexto de la operación o ejercicio analizado.")
-    what_went_well: str = Field(default="", description="Resumen narrativo de lo que funcionó bien.")
-    what_failed: str = Field(default="", description="Resumen narrativo de lo que falló.")
-    recommendations: str = Field(default="", description="Resumen narrativo de las recomendaciones.")
     items: list[LessonsLearnedItem] = Field(..., description="Lecciones individuales clasificadas por categoría.")
     messages: list[Message] = Field(
         ...,

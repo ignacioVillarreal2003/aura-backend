@@ -125,6 +125,7 @@ class MessageService:
                 created_by=user.id,
             )
             chat_repository.touch_last_message_at(chat_id, updated_by=user.id)
+            membership_repository.mark_as_read(chat_id, user.id)
 
         logger.info(
             "User message saved.",
@@ -144,7 +145,7 @@ class MessageService:
             msg = message_repository.create(
                 chat_id=chat_id,
                 message=answer,
-                sender_type=ArtifactMessage.SenderType.SYSTEM,
+                sender_type=ArtifactMessage.SenderType.ASSISTANT,
                 created_by=user_id,
                 fragments=fragments or None,
             )
@@ -458,7 +459,6 @@ class MessageService:
             chat_id: int,
             regen_feedback: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        await sync_to_async(self._require_access)(chat_id, user.id)
         messages = await self._build_llm_messages(chat_id, extra_instruction=regen_feedback)
         async for payload in self._iter_ai_stream_group_payloads(
                 chat_id=chat_id,
@@ -477,7 +477,6 @@ class MessageService:
             chat_id: int,
             regen_feedback: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        await sync_to_async(self._require_access)(chat_id, user.id)
         messages = await self._build_llm_messages(chat_id, extra_instruction=regen_feedback)
         system_prompt = await self._get_chat_system_prompt(chat_id)
         async for payload in self._iter_ai_stream_group_payloads(
@@ -497,7 +496,6 @@ class MessageService:
             chat_id: int,
             regen_feedback: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        await sync_to_async(self._require_access)(chat_id, user.id)
         messages = await self._build_llm_messages(chat_id, extra_instruction=regen_feedback)
         async for payload in self._iter_ai_stream_group_payloads(
                 chat_id=chat_id,
@@ -514,7 +512,6 @@ class MessageService:
             chat_id: int,
             regen_feedback: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        await sync_to_async(self._require_access)(chat_id, user.id)
         messages = await self._build_llm_messages(chat_id, extra_instruction=regen_feedback)
         async for payload in self._iter_ai_stream_group_payloads(
                 chat_id=chat_id,

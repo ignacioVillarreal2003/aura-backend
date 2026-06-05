@@ -22,6 +22,10 @@ from apps.artifact_lessons_learned.services.export_service import (
     generate_lessons_learned_pdf,
 )
 from apps.artifact.utils import safe_filename as _safe_filename
+from apps.chat.ai_reply_lock import release, try_acquire
+from apps.chat.exceptions import ChatAiReplyInProgressException
+from apps.chat.ws_rate_limit import check_artifact_rate_limit, check_transcribe_rate_limit
+from apps.artifact_message.services.message_service import broadcast_chat_ai_lock_change
 from core.openapi.common import standard_error_responses
 from core.pagination.pagination import StandardPagination
 
@@ -161,16 +165,39 @@ class LessonsLearnedGenerateView(APIView):
         serializer = GenerateLessonsLearnedRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
         d = serializer.validated_data
+        chat_id = d["chat_id"]
+
+        if not await sync_to_async(check_artifact_rate_limit)(request.user.id, chat_id):
+            return Response(
+                {"detail": "Too many generation requests. Please wait.", "error": "rate_limit_exceeded"},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
         if "audio" in d:
+            if not await sync_to_async(check_transcribe_rate_limit)(request.user.id):
+                return Response(
+                    {"detail": "Too many transcription requests. Please wait.", "error": "transcription_rate_limit_exceeded"},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
             message = await sync_to_async(_transcribe_audio)(d["audio"])
         else:
             message = d["message"]
-        ll, messages, fragments = await lessons_learned_service.generate_lessons_learned(
-            user=request.user,
-            message=message,
-            mode=d["mode"],
-            chat_id=d["chat_id"],
-        )
+
+        if not await sync_to_async(try_acquire)(chat_id):
+            raise ChatAiReplyInProgressException()
+
+        await sync_to_async(broadcast_chat_ai_lock_change)(chat_id, True)
+        try:
+            ll, messages, fragments = await lessons_learned_service.generate_lessons_learned(
+                user=request.user,
+                message=message,
+                mode=d["mode"],
+                chat_id=chat_id,
+            )
+        finally:
+            await sync_to_async(release)(chat_id)
+            await sync_to_async(broadcast_chat_ai_lock_change)(chat_id, False)
+
         return Response(
             LessonsLearnedGenerateResponse(
                 {"lessons_learned": ll, "messages": messages, "fragments": fragments}

@@ -1,7 +1,5 @@
-import json
 import logging
-import re
-import uuid
+from collections.abc import AsyncIterator
 
 from fastapi import HTTPException, Request, status
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
@@ -10,6 +8,7 @@ from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
 from app.application.authorization.permissions import Permissions
 from app.application.exceptions.app_exception import RequestValidationException
+from app.application.utils.llm_json_parser import parse_json_object
 from app.application.services.checklist_service.checklist_prompt import RAG_QUERIES, SYSTEM_PROMPT
 from app.application.services.checklist_service.exceptions.checklist_service_exceptions import ChecklistServiceException
 from app.application.services.checklist_service.interfaces.checklist_service_interface import ChecklistServiceInterface
@@ -17,6 +16,12 @@ from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.checklist.checklist_request import ChecklistGenerateRequest, ChecklistMode
 from app.domain.dtos.checklist.checklist_response import ChecklistGenerateResponse, ChecklistItem
+from app.domain.dtos.checklist.checklist_stream_events import (
+    ChecklistStreamComplete,
+    ChecklistStreamError,
+    ChecklistStreamEvent,
+    ChecklistStreamProgress,
+)
 from app.domain.dtos.fragment.fragment_response import FragmentResponse
 from app.domain.dtos.message import Message
 from app.infrastructure.http.document_context_provider.dtos.question_context_fragments_request import (
@@ -86,20 +91,6 @@ def _build_llm_messages(
     return messages
 
 
-def _extract_json(raw: str) -> str:
-    """Strip markdown code block fences and return the inner JSON string."""
-    text = raw.strip()
-    match = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
-    if match:
-        return match.group(1).strip()
-    # Try to find first { ... } block
-    start = text.find("{")
-    end = text.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        return text[start : end + 1]
-    return text
-
-
 def _parse_items(raw_items: list) -> list[ChecklistItem]:
     items: list[ChecklistItem] = []
     for entry in raw_items[:_MAX_ITEMS]:
@@ -110,7 +101,6 @@ def _parse_items(raw_items: list) -> list[ChecklistItem]:
             continue
         items.append(
             ChecklistItem(
-                id=str(uuid.uuid4()),
                 section=str(entry.get("section", "General")).strip()[:_MAX_SECTION_CHARS] or "General",
                 order=max(1, int(entry.get("order", 1))),
                 text=text,
@@ -126,7 +116,6 @@ def _fallback_items(raw: str) -> tuple[str, list[ChecklistItem]]:
     lines = [ln.strip().lstrip("•-*0123456789.) ") for ln in raw.splitlines() if ln.strip()]
     items = [
         ChecklistItem(
-            id=str(uuid.uuid4()),
             section="Procedimiento",
             order=i + 1,
             text=ln[:_MAX_ITEM_TEXT_CHARS],
@@ -141,8 +130,7 @@ def _fallback_items(raw: str) -> tuple[str, list[ChecklistItem]]:
 
 def _parse_llm_output(raw: str) -> tuple[str, list[ChecklistItem]]:
     try:
-        json_str = _extract_json(raw)
-        data = json.loads(json_str)
+        data = parse_json_object(raw)
         title = str(data.get("title", "Checklist")).strip()[:_MAX_TITLE_CHARS] or "Checklist"
         items = _parse_items(data.get("items", []))
         if not items:
@@ -191,7 +179,7 @@ class ChecklistService(ChecklistServiceInterface):
             context_block = _build_context_block(fragments)
             llm_messages = _build_llm_messages(request, context_block)
 
-            llm = await self._ollama_llm_facade.get_llm_base()
+            llm = await self._ollama_llm_facade.get_llm_json()
             raw = await self._ollama_llm_invoker.call_llm_content(llm=llm, llm_input=llm_messages)
             raw = raw.strip()
 
@@ -278,6 +266,69 @@ class ChecklistService(ChecklistServiceInterface):
                 extra={"user_id": authenticated_user.id},
             )
             return []
+
+
+    async def generate_stream(
+            self,
+            request: ChecklistGenerateRequest,
+            authenticated_user: AuthenticatedUser,
+    ) -> AsyncIterator[ChecklistStreamEvent]:
+        self._authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LLM_CHECKLIST_GENERATE}),
+        )
+        try:
+            fragments: list = []
+            if request.mode == ChecklistMode.RAG:
+                yield ChecklistStreamProgress(
+                    step="context_retrieval",
+                    message="Recuperando contexto documental...",
+                )
+                fragments = await self._retrieve_fragments(request, authenticated_user)
+
+            yield ChecklistStreamProgress(step="generation", message="Generando checklist...")
+
+            context_block = _build_context_block(fragments)
+            llm_messages = _build_llm_messages(request, context_block)
+            llm = await self._ollama_llm_facade.get_llm_json()
+            raw = await self._ollama_llm_invoker.call_llm_content(llm=llm, llm_input=llm_messages)
+            raw = raw.strip()
+
+            if not raw:
+                raise ChecklistServiceException(
+                    "El modelo de lenguaje devolvió una respuesta vacía.", status_code=502
+                )
+
+            title, items = _parse_llm_output(raw)
+            if not items:
+                raise ChecklistServiceException(
+                    "No se pudieron extraer ítems de la respuesta del modelo.", status_code=502
+                )
+
+            assistant_msg = Message(role=MessageRole.assistant, content=raw)
+            updated_messages = [*request.messages, assistant_msg]
+            result = ChecklistGenerateResponse(
+                title=title,
+                items=items,
+                messages=updated_messages,
+                fragments=fragments,
+            )
+            yield ChecklistStreamComplete(result=result)
+        except _KNOWN_EXCEPTIONS as e:
+            logger.warning(
+                "Known error during checklist stream generation",
+                extra={"user_id": authenticated_user.id, "error_type": type(e).__name__},
+            )
+            yield ChecklistStreamError(message=str(e), code=type(e).__name__)
+        except Exception as e:
+            logger.exception(
+                "Unexpected error during checklist stream generation",
+                extra={"user_id": authenticated_user.id, "error_type": type(e).__name__},
+            )
+            yield ChecklistStreamError(
+                message="Error inesperado durante la generación de la checklist.",
+                code="internal_error",
+            )
 
 
 async def get_checklist_service(request: Request) -> ChecklistServiceInterface:

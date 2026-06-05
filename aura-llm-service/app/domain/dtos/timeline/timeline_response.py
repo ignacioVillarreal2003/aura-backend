@@ -17,10 +17,6 @@ class TimelineEvent(BaseModel):
         default="",
         description="Etiqueta temporal en lenguaje natural cuando no hay fecha exacta (p. ej. 'madrugada del 3').",
     )
-    source_document_id: Optional[int] = Field(
-        default=None,
-        description="ID del documento fuente del que se extrajo el evento, si aplica.",
-    )
 
     model_config = {"frozen": True}
 

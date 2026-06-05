@@ -8,6 +8,7 @@ from rest_framework.views import APIView
 from apps.artifact.audio import transcribe as _transcribe
 from apps.artifact.exceptions import TranscriptionBusyException, TranscriptionException
 from apps.artifact_message.services.message_service import message_service
+from apps.chat.ws_rate_limit import check_transcribe_rate_limit
 from core.openapi.common import standard_error_responses
 
 _SUPPORTED_AUDIO_TYPES = {
@@ -42,6 +43,12 @@ class TranscribeView(APIView):
     )
     def post(self, request: Request, chat_id: int) -> Response:
         message_service.assert_send_access(request.user, chat_id)
+
+        if not check_transcribe_rate_limit(request.user.id):
+            return Response(
+                {"detail": "Too many transcription requests. Please wait.", "error": "rate_limit_exceeded"},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
 
         audio = request.FILES.get("audio")
         if not audio:

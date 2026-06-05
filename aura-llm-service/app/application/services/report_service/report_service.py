@@ -1,4 +1,5 @@
 import logging
+from collections.abc import AsyncIterator
 from typing import Optional
 
 from fastapi import HTTPException, Request, status
@@ -17,6 +18,12 @@ from app.domain.dtos.fragment.fragment_response import FragmentResponse
 from app.domain.dtos.message import Message
 from app.domain.dtos.report.report_request import ReportGenerateRequest, ReportMode
 from app.domain.dtos.report.report_response import ReportGenerateResponse
+from app.domain.dtos.report.report_stream_events import (
+    ReportStreamComplete,
+    ReportStreamError,
+    ReportStreamEvent,
+    ReportStreamProgress,
+)
 from app.domain.field_limits import MAX_CONTENT_CHARS
 from app.infrastructure.http.document_context_provider.dtos.question_context_fragments_request import (
     BM25Query,
@@ -209,6 +216,66 @@ class ReportService(ReportServiceInterface):
                 extra={"user_id": authenticated_user.id},
             )
             return []
+
+
+    async def generate_stream(
+            self,
+            request: ReportGenerateRequest,
+            authenticated_user: AuthenticatedUser,
+    ) -> AsyncIterator[ReportStreamEvent]:
+        self._authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LLM_REPORT_GENERATE}),
+        )
+        try:
+            fragments: list[FragmentResponse] = []
+            if request.mode == ReportMode.RAG:
+                yield ReportStreamProgress(
+                    step="context_retrieval",
+                    message="Recuperando contexto documental...",
+                )
+                fragments = await self._retrieve_fragments(request, authenticated_user)
+
+            yield ReportStreamProgress(step="generation", message="Generando informe...")
+
+            system_prompt = get_system_prompt(request.report_type)
+            context_block = _build_context_block(fragments)
+            llm_messages = _build_llm_messages(system_prompt, request, context_block)
+            llm = await self._ollama_llm_facade.get_llm_base()
+            raw = await self._ollama_llm_invoker.call_llm_content(llm=llm, llm_input=llm_messages)
+            content = raw.strip()
+
+            if not content:
+                raise ReportServiceException(
+                    "El modelo de lenguaje devolvió una respuesta vacía.", status_code=502
+                )
+            if len(content) > MAX_CONTENT_CHARS:
+                content = content[:MAX_CONTENT_CHARS]
+
+            assistant_msg = Message(role=MessageRole.assistant, content=content)
+            updated_messages = [*request.messages, assistant_msg]
+            result = ReportGenerateResponse(
+                report_type=request.report_type,
+                content=content,
+                messages=updated_messages,
+                fragments=fragments,
+            )
+            yield ReportStreamComplete(result=result)
+        except _KNOWN_EXCEPTIONS as e:
+            logger.warning(
+                "Known error during report stream generation",
+                extra={"user_id": authenticated_user.id, "error_type": type(e).__name__},
+            )
+            yield ReportStreamError(message=str(e), code=type(e).__name__)
+        except Exception as e:
+            logger.exception(
+                "Unexpected error during report stream generation",
+                extra={"user_id": authenticated_user.id, "error_type": type(e).__name__},
+            )
+            yield ReportStreamError(
+                message="Error inesperado durante la generación del informe.",
+                code="internal_error",
+            )
 
 
 async def get_report_service(request: Request) -> ReportServiceInterface:

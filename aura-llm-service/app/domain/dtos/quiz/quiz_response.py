@@ -28,7 +28,6 @@ class QuizQuestion(BaseModel):
         description="Tipo de pregunta: single, multiple, boolean u open.",
     )
     explanation: str = Field(default="", description="Explicación de la respuesta correcta.")
-    points: int = Field(default=1, ge=0, description="Puntos que otorga la pregunta.")
     options: list[QuizOption] = Field(
         default_factory=list,
         description="Opciones de respuesta (vacío para preguntas de tipo 'open').",
