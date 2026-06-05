@@ -17,8 +17,11 @@ class AddMemberRequest(serializers.Serializer):
 
 class UpdateMemberRequest(serializers.Serializer):
     status = serializers.ChoiceField(
-        choices=ChatMembership.Status.choices,
-        help_text="Target membership state (transitions validated server-side).",
+        choices=[(ChatMembership.Status.ACTIVE, "Active")],
+        help_text=(
+            "Target membership state. The only valid transition is accepting an "
+            "invitation (pending -> active). To leave or decline, use Leave chat."
+        ),
     )
 
 

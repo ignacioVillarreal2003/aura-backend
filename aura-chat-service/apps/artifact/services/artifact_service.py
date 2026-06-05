@@ -1,12 +1,15 @@
 import logging
 from typing import Optional
+from django.core.exceptions import ObjectDoesNotExist
+from django.db import transaction
 
 from apps.artifact.exceptions import (
     ArtifactAccessDeniedException,
+    ArtifactCreationFailedException,
     ArtifactNotFoundException,
     UnknownArtifactTypeException,
 )
-from apps.artifact.models import Artifact
+from apps.artifact.models import Artifact, ArtifactBookmark, ArtifactFeedback, ArtifactPin, ArtifactThreadReply
 from apps.artifact.registry import is_known_type
 from apps.artifact.repositories.artifact_repository import artifact_repository
 from apps.artifact.repositories.artifact_version_repository import artifact_version_repository
@@ -18,6 +21,34 @@ from core.authorization import permissions as perms
 from core.authorization.access import AccessControl
 
 logger = logging.getLogger(__name__)
+
+_DETAIL_RELATIONS = {
+    Artifact.Type.MESSAGE: "message_content",
+    Artifact.Type.REPORT: "report_content",
+    Artifact.Type.CHECKLIST: "checklist_content",
+    Artifact.Type.QUIZ: "quiz_content",
+    Artifact.Type.TIMELINE: "timeline_content",
+    Artifact.Type.LESSONS_LEARNED: "lessons_learned_content",
+    Artifact.Type.DECISION_BRIEF: "decision_brief_content",
+}
+
+
+def _soft_delete_detail(artifact: Artifact, deleted_by: int) -> None:
+    attr = _DETAIL_RELATIONS.get(artifact.type)
+    if attr is None:
+        return
+    try:
+        detail = getattr(artifact, attr)
+    except ObjectDoesNotExist:
+        return
+    detail.delete(deleted_by=deleted_by)
+
+
+def _cleanup_artifact_interactions(artifact_id: int) -> None:
+    ArtifactPin.objects.filter(artifact_id=artifact_id).delete()
+    ArtifactBookmark.objects.filter(artifact_id=artifact_id).delete()
+    ArtifactFeedback.objects.filter(artifact_id=artifact_id).delete()
+    ArtifactThreadReply.objects.filter(parent_artifact_id=artifact_id).delete()
 
 
 def _assert_artifact_access(user_id: int, artifact: Artifact, *, require_contributor: bool = False) -> None:
@@ -35,10 +66,10 @@ def _assert_artifact_access(user_id: int, artifact: Artifact, *, require_contrib
 
 class ArtifactService:
     def list_artifacts(
-        self,
-        user: AuthenticatedUser,
-        artifact_type: Optional[str] = None,
-        chat_id: Optional[int] = None,
+            self,
+            user: AuthenticatedUser,
+            artifact_type: Optional[str] = None,
+            chat_id: Optional[int] = None,
     ):
         AccessControl.require_permissions(user, frozenset({perms.LIST_ARTIFACTS}))
         if artifact_type is not None and not is_known_type(artifact_type):
@@ -65,49 +96,15 @@ class ArtifactService:
         _assert_artifact_access(user.id, artifact)
         return artifact
 
-    def create_artifact(
-        self,
-        user: AuthenticatedUser,
-        *,
-        type: str,
-        source_chat_id: int,
-        title: str = "",
-        description: str = "",
-        status: str = Artifact.Status.DRAFT,
-        mode: str = Artifact.Mode.DIRECT,
-    ) -> Artifact:
-        AccessControl.require_permissions(user, frozenset({perms.CREATE_ARTIFACT}))
-        if not is_known_type(type):
-            raise UnknownArtifactTypeException()
-        if chat_repository.get_by_id(source_chat_id) is None:
-            raise ChatNotFoundException()
-        if not membership_repository.is_active_contributor(source_chat_id, user.id):
-            raise ChatAccessDeniedException()
-        artifact = artifact_repository.create(
-            user_id=user.id,
-            type=type,
-            title=title,
-            description=description,
-            status=status,
-            mode=mode,
-            source_chat_id=source_chat_id,
-        )
-        logger.info(
-            "Artifact created",
-            extra={"user_id": user.id, "artifact_id": artifact.id, "type": type},
-        )
-        return artifact
-
     def update_artifact(
-        self,
-        user: AuthenticatedUser,
-        artifact_id: int,
-        *,
-        title: Optional[str] = None,
-        description: Optional[str] = None,
-        status: Optional[str] = None,
-        mode: Optional[str] = None,
-        change_summary: str = "",
+            self,
+            user: AuthenticatedUser,
+            artifact_id: int,
+            *,
+            title: Optional[str] = None,
+            description: Optional[str] = None,
+            status: Optional[str] = None,
+            change_summary: str = "",
     ) -> Artifact:
         AccessControl.require_permissions(user, frozenset({perms.UPDATE_ARTIFACT}))
         artifact = artifact_repository.get_by_id(artifact_id)
@@ -120,16 +117,18 @@ class ArtifactService:
             title=title,
             description=description,
             status=status,
-            mode=mode,
             change_summary=change_summary,
         )
 
+    @transaction.atomic
     def delete_artifact(self, user: AuthenticatedUser, artifact_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({perms.DELETE_ARTIFACT}))
         artifact = artifact_repository.get_by_id(artifact_id)
         if artifact is None:
             raise ArtifactNotFoundException()
         _assert_artifact_access(user.id, artifact, require_contributor=True)
+        _soft_delete_detail(artifact, deleted_by=user.id)
+        _cleanup_artifact_interactions(artifact.id)
         artifact_repository.soft_delete(artifact, deleted_by=user.id)
         logger.info("Artifact deleted", extra={"user_id": user.id, "artifact_id": artifact_id})
 
@@ -143,3 +142,61 @@ class ArtifactService:
 
 
 artifact_service = ArtifactService()
+
+
+def create_artifact_for_content(
+        *,
+        user_id: int,
+        artifact_type: str,
+        title: str,
+        mode: str,
+        source_chat_id: int,
+) -> Artifact:
+    try:
+        artifact = artifact_repository.create(
+            user_id=user_id,
+            type=artifact_type,
+            title=title,
+            status=Artifact.Status.FINAL,
+            mode=mode,
+            source_chat_id=source_chat_id,
+        )
+        return artifact
+    except Exception:
+        logger.error(
+            "Failed to create artifact header for content generation",
+            extra={"user_id": user_id, "artifact_type": artifact_type, "source_chat_id": source_chat_id},
+            exc_info=True,
+        )
+        raise ArtifactCreationFailedException()
+
+
+@transaction.atomic
+def clear_chat_artifacts(chat_id: int, deleted_by: int) -> None:
+    from apps.artifact_message.models import ArtifactMessage
+    from apps.artifact_report.models import ArtifactReport
+    from apps.artifact_checklist.models import ArtifactChecklist
+    from apps.artifact_quiz.models import ArtifactQuiz
+    from apps.artifact_timeline.models import ArtifactTimeline
+    from apps.artifact_lessons_learned.models import ArtifactLessonsLearned
+    from apps.artifact_decision_brief.models import ArtifactDecisionBrief
+
+    for content_model in (
+        ArtifactMessage,
+        ArtifactReport,
+        ArtifactChecklist,
+        ArtifactQuiz,
+        ArtifactTimeline,
+        ArtifactLessonsLearned,
+        ArtifactDecisionBrief,
+    ):
+        content_model.objects.filter(artifact__source_chat_id=chat_id).delete(deleted_by=deleted_by)
+
+    artifact_ids = list(Artifact.objects.filter(source_chat_id=chat_id).values_list("id", flat=True))
+    if artifact_ids:
+        ArtifactPin.objects.filter(artifact_id__in=artifact_ids).delete()
+        ArtifactBookmark.objects.filter(artifact_id__in=artifact_ids).delete()
+        ArtifactFeedback.objects.filter(artifact_id__in=artifact_ids).delete()
+        ArtifactThreadReply.objects.filter(parent_artifact_id__in=artifact_ids).delete()
+
+    Artifact.objects.filter(source_chat_id=chat_id).delete(deleted_by=deleted_by)

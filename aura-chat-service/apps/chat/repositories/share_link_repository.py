@@ -41,5 +41,9 @@ class ShareLinkRepository:
         link.save(update_fields=["is_active"])
         return link
 
+    @staticmethod
+    def deactivate_by_chat(chat_id: int) -> None:
+        ChatShareLink.objects.filter(chat_id=chat_id, is_active=True).update(is_active=False)
+
 
 share_link_repository = ShareLinkRepository()

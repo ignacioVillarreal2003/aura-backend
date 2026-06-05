@@ -52,8 +52,9 @@ def _member_count_subquery() -> Coalesce:
 
 
 def _unread_count_subquery(member_id: int) -> Coalesce:
+    from apps.artifact.models.artifact import Artifact
+    from apps.artifact_message.models import ArtifactMessage
     from apps.membership.models.chat_membership import ChatMembership
-    from apps.message.models.chat_message import ChatMessage
 
     cutoff_sq = Subquery(
         ChatMembership.objects.filter(
@@ -67,13 +68,14 @@ def _unread_count_subquery(member_id: int) -> Coalesce:
         output_field=DateTimeField(),
     )
 
+    # An unread item is a MESSAGE artifact in the chat created after the member's cutoff.
     return Coalesce(
         Subquery(
-            ChatMessage.objects.filter(
-                chat_id=OuterRef("pk"),
-                deleted_at__isnull=True,
+            ArtifactMessage.objects.filter(
+                artifact__source_chat_id=OuterRef("pk"),
+                artifact__type=Artifact.Type.MESSAGE,
                 created_at__gt=cutoff_sq,
-            ).values("chat_id").annotate(c=Count("id")).values("c")[:1],
+            ).values("artifact__source_chat_id").annotate(c=Count("id")).values("c")[:1],
             output_field=IntegerField(),
         ),
         0,

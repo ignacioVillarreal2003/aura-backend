@@ -10,7 +10,6 @@ from apps.artifact.serializers import (
     ArtifactListResponse,
     ArtifactResponse,
     ArtifactVersionResponse,
-    CreateArtifactRequest,
     UpdateArtifactRequest,
 )
 from apps.artifact.services.artifact_service import artifact_service
@@ -62,27 +61,6 @@ class ArtifactListView(APIView):
         page = paginator.paginate_queryset(queryset, request)
         return paginator.get_paginated_response(ArtifactListResponse(page, many=True).data)
 
-    @extend_schema(
-        tags=["Artifacts"],
-        summary="Crear artefacto",
-        description="Crea un artefacto (cabecera unificada). Si se pasa `source_chat_id`, el usuario debe ser contribuidor del chat.",
-        request=CreateArtifactRequest,
-        responses={201: ArtifactResponse, **standard_error_responses(400, 401, 403, 404)},
-    )
-    def post(self, request: Request) -> Response:
-        serializer = CreateArtifactRequest(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        d = serializer.validated_data
-        artifact = artifact_service.create_artifact(
-            user=request.user,
-            type=d["type"],
-            title=d["title"],
-            description=d.get("description", ""),
-            status=d.get("status", "draft"),
-            source_chat_id=d.get("source_chat_id"),
-        )
-        return Response(ArtifactResponse(artifact).data, status=status.HTTP_201_CREATED)
-
 
 class ArtifactDetailView(APIView):
     @extend_schema(
@@ -114,7 +92,7 @@ class ArtifactDetailView(APIView):
             description=d.get("description"),
             status=d.get("status"),
             change_summary=d.get("change_summary", ""),
-        )
+        )  # mode is immutable after creation; not exposed for update
         return Response(ArtifactResponse(artifact).data)
 
     @extend_schema(

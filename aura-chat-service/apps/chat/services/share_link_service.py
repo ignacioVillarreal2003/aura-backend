@@ -9,7 +9,7 @@ from apps.chat.models.chat_share_link import ChatShareLink
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.chat.repositories.share_link_repository import share_link_repository
 from apps.membership.repositories.membership_repository import membership_repository
-from apps.message.repositories.message_repository import message_repository
+from apps.artifact_message.repositories.message_repository import message_repository
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization import AccessControl
 from core.authorization.permissions import CREATE_SHARE_LINK, DELETE_SHARE_LINK, LIST_SHARE_LINKS

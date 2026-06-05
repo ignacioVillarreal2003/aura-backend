@@ -2,6 +2,7 @@ import logging
 import time
 from typing import Optional
 from django.core.cache import cache
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from core.authentication.authenticated_user import AuthenticatedUser
@@ -33,15 +34,21 @@ class AssistantService:
         AccessControl.require_permissions(user, frozenset({perms.CREATE_ASSISTANT}))
         if assistant_repository.exists_with_name(name):
             raise AssistantAlreadyExistsException()
-        assistant = assistant_repository.create(
-            user_id=user.id,
-            name=name,
-            description=description,
-            system_prompt=system_prompt,
-            response_style=response_style,
-            avatar_emoji=avatar_emoji,
-            is_active=is_active,
-        )
+        try:
+            with transaction.atomic():
+                assistant = assistant_repository.create(
+                    user_id=user.id,
+                    name=name,
+                    description=description,
+                    system_prompt=system_prompt,
+                    response_style=response_style,
+                    avatar_emoji=avatar_emoji,
+                    is_active=is_active,
+                )
+        except IntegrityError:
+            # Loses the race to the partial unique index idx_assistant_name_active
+            # (name WHERE deleted_at IS NULL) — surface a clean 409, not a 500.
+            raise AssistantAlreadyExistsException()
         logger.info("Assistant created", extra={"user_id": user.id, "assistant_id": assistant.id})
         return assistant
 
@@ -77,16 +84,21 @@ class AssistantService:
             raise AssistantNotFoundException()
         if name is not None and name != assistant.name and assistant_repository.exists_with_name(name):
             raise AssistantAlreadyExistsException()
-        return assistant_repository.update(
-            assistant,
-            name=name,
-            description=description,
-            system_prompt=system_prompt,
-            response_style=response_style,
-            avatar_emoji=avatar_emoji,
-            is_active=is_active,
-            updated_by=user.id,
-        )
+        try:
+            with transaction.atomic():
+                return assistant_repository.update(
+                    assistant,
+                    name=name,
+                    description=description,
+                    system_prompt=system_prompt,
+                    response_style=response_style,
+                    avatar_emoji=avatar_emoji,
+                    is_active=is_active,
+                    updated_by=user.id,
+                )
+        except IntegrityError:
+            # Renaming onto a name already taken by a live assistant.
+            raise AssistantAlreadyExistsException()
 
     def delete_assistant(self, user: AuthenticatedUser, assistant_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({perms.DELETE_ASSISTANT}))

@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.chat.services.share_link_service import share_link_service
-from apps.message.serializers.response import MessageResponse
+from apps.artifact_message.serializers import MessageResponse
 from core.openapi.common import standard_error_responses
 from core.pagination.pagination import StandardPagination
 

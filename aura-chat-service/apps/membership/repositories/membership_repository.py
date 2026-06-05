@@ -52,7 +52,7 @@ class MembershipRepository:
 
     @staticmethod
     def list_by_chat(chat_id: int, status: str | None = None) -> QuerySet[ChatMembership]:
-        qs = ChatMembership.objects.filter(chat_id=chat_id).order_by("created_at")
+        qs = ChatMembership.objects.select_related('chat').filter(chat_id=chat_id).order_by("created_at")
         if status is not None:
             qs = qs.filter(status=status)
         return qs
@@ -84,11 +84,9 @@ class MembershipRepository:
 
         if new_status == "active" and membership.joined_at is None:
             membership.joined_at = timezone.now()
-        elif new_status == "inactive":
-            membership.left_at = timezone.now()
 
         membership.save(
-            update_fields=["status", "updated_by", "updated_at", "joined_at", "left_at"]
+            update_fields=["status", "updated_by", "updated_at", "joined_at"]
         )
         return membership
 
@@ -126,7 +124,7 @@ class MembershipRepository:
 
     @staticmethod
     def get_existing_member_ids_in(chat_id: int, member_ids: list[int]) -> set[int]:
-        """Returns all non-deleted member IDs regardless of status (active, pending, inactive)."""
+        """Returns all non-deleted member IDs regardless of status (active, pending)."""
         return set(
             ChatMembership.objects
             .filter(chat_id=chat_id, member_id__in=member_ids)

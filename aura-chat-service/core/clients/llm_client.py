@@ -79,9 +79,6 @@ class LessonsLearnedGenerateResult:
     items: list[dict[str, Any]]
     messages: list[dict[str, str]]
     context: str = ""
-    what_went_well: str = ""
-    what_failed: str = ""
-    recommendations: str = ""
     fragments: list[dict[str, Any]] = field(default_factory=list)
 
 
@@ -162,6 +159,7 @@ class LLMClient:
                 url=settings.LLM_DOCUMENT_QUESTION_STREAM_URL,
                 payload=payload,
                 user=user,
+                context="document-question-stream",
         ):
             yield event
 
@@ -214,6 +212,7 @@ class LLMClient:
                 url=settings.LLM_GENERAL_CHAT_STREAM_URL,
                 payload=payload,
                 user=user,
+                context="general-chat-stream",
         ):
             yield event
 
@@ -260,6 +259,7 @@ class LLMClient:
                 url=settings.LLM_RAG_AGENT_STREAM_URL,
                 payload=payload,
                 user=user,
+                context="rag-agent-stream",
         ):
             yield event
 
@@ -306,6 +306,7 @@ class LLMClient:
                 url=settings.LLM_AGENT_STREAM_URL,
                 payload=payload,
                 user=user,
+                context="agent-stream",
         ):
             yield event
 
@@ -486,9 +487,6 @@ class LLMClient:
         return LessonsLearnedGenerateResult(
             title=str(data.get("title", "")),
             context=str(data.get("context", "")),
-            what_went_well=str(data.get("what_went_well", "")),
-            what_failed=str(data.get("what_failed", "")),
-            recommendations=str(data.get("recommendations", "")),
             items=data.get("items") or [],
             messages=data.get("messages") or [],
             fragments=self.normalize_fragments(data.get("fragments")),
@@ -535,6 +533,16 @@ class LLMClient:
     # ------------------------------------------------------------------
     # Shared transport helpers
     # ------------------------------------------------------------------
+    @staticmethod
+    def _require_configured_url(url: str, context: str) -> None:
+        if url and url.strip():
+            return
+        logger.error("LLM endpoint URL is not configured.", extra={"context": context})
+        raise HttpClientException(
+            f"LLM service endpoint not configured ({context})",
+            status_code=503,
+        )
+
     async def _post_json(
             self,
             url: str,
@@ -542,6 +550,7 @@ class LLMClient:
             user: AuthenticatedUser,
             context: str,
     ) -> dict[str, Any]:
+        self._require_configured_url(url, context)
         response = await self._http_client.post(
             url=url,
             json=payload,
@@ -570,7 +579,9 @@ class LLMClient:
             url: str,
             payload: dict,
             user: AuthenticatedUser,
+            context: str = "stream",
     ) -> AsyncIterator[dict[str, Any]]:
+        self._require_configured_url(url, context)
         headers = self._build_stream_headers(user)
         timeout = httpx.Timeout(
             connect=settings.LLM_STREAM_CONNECT_TIMEOUT,

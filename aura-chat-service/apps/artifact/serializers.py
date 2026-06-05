@@ -1,7 +1,9 @@
+from django.core.exceptions import ObjectDoesNotExist
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.artifact.models import Artifact, ArtifactVersion
-from apps.artifact.registry import ARTIFACT_TYPES
+from apps.artifact.models.artifact_pin import ArtifactPin
 
 
 class ArtifactResponse(serializers.ModelSerializer):
@@ -60,23 +62,61 @@ class ArtifactVersionResponse(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class CreateArtifactRequest(serializers.Serializer):
-    type = serializers.ChoiceField(choices=sorted(ARTIFACT_TYPES))
-    source_chat_id = serializers.IntegerField()
-    title = serializers.CharField(max_length=500, allow_blank=True, default="")
-    description = serializers.CharField(required=False, allow_blank=True, default="")
-    status = serializers.ChoiceField(choices=Artifact.Status.choices, required=False)
-    mode = serializers.ChoiceField(choices=Artifact.Mode.choices, required=False, default=Artifact.Mode.DIRECT)
-
-
 class UpdateArtifactRequest(serializers.Serializer):
     title = serializers.CharField(max_length=500, allow_blank=False, required=False)
     description = serializers.CharField(allow_blank=True, required=False)
     status = serializers.ChoiceField(choices=Artifact.Status.choices, required=False)
-    mode = serializers.ChoiceField(choices=Artifact.Mode.choices, required=False)
     change_summary = serializers.CharField(allow_blank=True, required=False, default="")
 
     def validate(self, data):
-        if not any(k in data for k in ("title", "description", "status", "mode")):
+        if not any(k in data for k in ("title", "description", "status")):
             raise serializers.ValidationError("Se requiere al menos un campo a actualizar.")
         return data
+
+
+class ArtifactMessagePreview(serializers.Serializer):
+    id = serializers.IntegerField()
+    message = serializers.CharField()
+    sender_type = serializers.CharField()
+    created_at = serializers.DateTimeField()
+
+
+class ArtifactSummaryResponse(serializers.ModelSerializer):
+    message = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Artifact
+        fields = [
+            "id",
+            "type",
+            "title",
+            "description",
+            "status",
+            "version",
+            "mode",
+            "source_chat_id",
+            "created_by",
+            "created_at",
+            "updated_at",
+            "message",
+        ]
+        read_only_fields = fields
+
+    @extend_schema_field(ArtifactMessagePreview(allow_null=True))
+    def get_message(self, obj):
+        if obj.type != Artifact.Type.MESSAGE:
+            return None
+        try:
+            mc = obj.message_content
+        except ObjectDoesNotExist:
+            return None
+        return ArtifactMessagePreview(mc).data
+
+
+class PinnedArtifactResponse(serializers.ModelSerializer):
+    artifact = ArtifactSummaryResponse(read_only=True)
+
+    class Meta:
+        model = ArtifactPin
+        fields = ["id", "artifact_id", "chat_id", "pinned_by", "pinned_at", "artifact"]
+        read_only_fields = fields

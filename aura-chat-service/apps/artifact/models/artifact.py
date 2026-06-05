@@ -7,10 +7,10 @@ from core.models.soft_delete import SoftDeleteModel
 class Artifact(AuditModel, SoftDeleteModel):
     class Type(models.TextChoices):
         MESSAGE = "MESSAGE", "Message"
-        REPORT = "REPORT", "Report"
-        CHECKLIST = "CHECKLIST", "Checklist"
-        QUIZ = "QUIZ", "Quiz"
-        TIMELINE = "TIMELINE", "Timeline"
+        REPORT = "REPORT", "ArtifactReport"
+        CHECKLIST = "CHECKLIST", "ArtifactChecklist"
+        QUIZ = "QUIZ", "ArtifactQuiz"
+        TIMELINE = "TIMELINE", "ArtifactTimeline"
         LESSONS_LEARNED = "LESSONS_LEARNED", "Lessons Learned"
         DECISION_BRIEF = "DECISION_BRIEF", "Decision Brief"
 

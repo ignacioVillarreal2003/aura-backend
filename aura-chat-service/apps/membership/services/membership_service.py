@@ -25,10 +25,12 @@ from core.exceptions import ValidationException
 
 logger = logging.getLogger(__name__)
 
+# Membership has exactly two states: a member is either invited (pending) or has
+# accepted (active). The only valid self-service transition is accepting the
+# invite (pending -> active). Leaving / declining is a soft-delete via leave_chat,
+# not a status change, so there is no active -> pending reverse transition.
 _VALID_TRANSITIONS: dict[str, set[str]] = {
-    ChatMembership.Status.PENDING: {ChatMembership.Status.ACTIVE, ChatMembership.Status.INACTIVE},
-    ChatMembership.Status.ACTIVE: {ChatMembership.Status.INACTIVE},
-    ChatMembership.Status.INACTIVE: {ChatMembership.Status.ACTIVE},
+    ChatMembership.Status.PENDING: {ChatMembership.Status.ACTIVE},
 }
 
 
@@ -206,8 +208,6 @@ class MembershipService:
 
         if new_status == ChatMembership.Status.ACTIVE:
             on_commit(lambda: _broadcast_member_joined(chat_id, member_id))
-        elif new_status == ChatMembership.Status.INACTIVE:
-            on_commit(lambda: _broadcast_member_left(chat_id, member_id))
 
         logger.info(
             "Membership updated.",

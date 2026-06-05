@@ -3,7 +3,7 @@ from django.db import connection
 
 from apps.chat.services.chat_service import chat_service
 from apps.membership.services.membership_service import membership_service
-from apps.artifact.models.artifact_message import ArtifactMessage
+from apps.message.models.artifact_message import ArtifactMessage
 from apps.message.repositories.message_repository import message_repository
 from core.authentication.authenticated_user import AuthenticatedUser
 

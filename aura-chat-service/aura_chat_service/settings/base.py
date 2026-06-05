@@ -24,16 +24,16 @@ INSTALLED_APPS = [
     "channels",
     "django_prometheus",
     "apps.chat",
-    "apps.message",
+    "apps.artifact_message",
     "apps.membership",
-    "apps.report",
-    "apps.checklist",
+    "apps.artifact_report",
+    "apps.artifact_checklist",
     "apps.assistant",
     "apps.artifact",
-    "apps.timeline",
-    "apps.quiz",
-    "apps.lessons_learned",
-    "apps.decision_brief",
+    "apps.artifact_timeline",
+    "apps.artifact_quiz",
+    "apps.artifact_lessons_learned",
+    "apps.artifact_decision_brief",
 ]
 
 MIDDLEWARE = [
@@ -193,8 +193,10 @@ SPECTACULAR_SETTINGS = {
         {
             "name": "Messages",
             "description": (
-                "Message history (cursor pagination), send text/audio, bookmarks, pins, threads, feedback, "
-                "exports, regenerate AI response, clear history, mark read."
+                "Historial con paginación por cursor (`GET .../messages/`), envío con IA "
+                "(`POST .../messages/generate/`), regeneración (`POST .../messages/regenerate/`), "
+                "borrado y export por mensaje. `{message_id}` es el campo `id` de cada fila "
+                "(no `artifact_id`). Bookmark, pin, feedback e hilos viven bajo **Artifacts**."
             ),
         },
         {
@@ -234,8 +236,37 @@ SPECTACULAR_SETTINGS = {
             "name": "Artifacts",
             "description": (
                 "Capa documental unificada: cabecera `artifact` (type/title/status/version) con "
-                "versionado y referencias desde mensajes. Cada tipo (report, checklist, course, "
-                "quiz, timeline, lessons learned) tiene su tabla especializada relacional."
+                "versionado. Interacciones por `artifact_id`: feedback, bookmark, pin, thread; "
+                "listas de fijados/marcados por `chat_id`. Cada tipo (report, checklist, quiz, "
+                "timeline, lessons learned, decision brief) tiene endpoints dedicados bajo `/api/v1/`."
+            ),
+        },
+        {
+            "name": "Timelines",
+            "description": (
+                "Líneas de tiempo generadas con IA. Requiere `LLM_TIMELINE_GENERATE_URL`. "
+                "Prefijo `/api/v1/timelines/`."
+            ),
+        },
+        {
+            "name": "Quizzes",
+            "description": (
+                "Cuestionarios generados con IA. Requiere `LLM_QUIZ_GENERATE_URL`. "
+                "Prefijo `/api/v1/quizzes/`."
+            ),
+        },
+        {
+            "name": "Lessons Learned",
+            "description": (
+                "Lecciones aprendidas generadas con IA. Requiere `LLM_LESSONS_LEARNED_GENERATE_URL`. "
+                "Prefijo `/api/v1/lessons-learned/`."
+            ),
+        },
+        {
+            "name": "Decision Briefs",
+            "description": (
+                "Briefs de decisión generados con IA. Requiere `LLM_DECISION_BRIEF_GENERATE_URL`. "
+                "Prefijo `/api/v1/decision-briefs/`."
             ),
         },
     ],

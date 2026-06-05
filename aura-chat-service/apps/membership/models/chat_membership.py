@@ -5,7 +5,6 @@ from core.models import AuditModel, SoftDeleteModel
 class ChatMembership(AuditModel, SoftDeleteModel):
     class Status(models.TextChoices):
         ACTIVE = "active", "Active"
-        INACTIVE = "inactive", "Inactive"
         PENDING = "pending", "Pending"
 
     class Role(models.TextChoices):

@@ -59,7 +59,7 @@ class ArtifactRepository:
         qs = Artifact.objects.filter(source_chat_id=source_chat_id)
         if artifact_type:
             qs = qs.filter(type=artifact_type)
-        return qs
+        return qs.order_by("created_at")
 
     def list_all(self, artifact_type: Optional[str] = None):
         qs = Artifact.objects.all()
@@ -76,7 +76,6 @@ class ArtifactRepository:
         title: Optional[str] = None,
         description: Optional[str] = None,
         status: Optional[str] = None,
-        mode: Optional[str] = None,
         change_summary: str = "",
     ) -> Artifact:
         update_fields: list[str] = []
@@ -89,9 +88,6 @@ class ArtifactRepository:
         if status is not None:
             artifact.status = status
             update_fields.append("status")
-        if mode is not None:
-            artifact.mode = mode
-            update_fields.append("mode")
 
         if not update_fields:
             return artifact

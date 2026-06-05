@@ -52,7 +52,7 @@ def health_check(request):
         checks["database"] = "ok"
     except Exception:
         logger.warning("Health check: database unreachable.", exc_info=True)
-    checks["database"] = "error"
+        checks["database"] = "error"
 
     try:
         _cache.set("_healthcheck", "ok", timeout=5)
@@ -83,17 +83,16 @@ urlpatterns = [
     ),
     path("api/v1/health", health_check, name="health-check"),
     path("api/v1/chats/", include("apps.chat.urls")),
-    path("api/v1/chats/<int:chat_id>/messages/", include("apps.message.urls")),
-    path("api/v1/feedback/", include("apps.message.feedback_urls")),
+    path("api/v1/chats/<int:chat_id>/messages/", include("apps.artifact_message.urls")),
     path("api/v1/chats/<int:chat_id>/members/", include("apps.membership.urls")),
     path("api/v1/memberships/me/", include("apps.membership.me_urls")),
     path("api/v1/share/<uuid:token>/messages/", include("apps.chat.share_urls")),
-    path("api/v1/reports/", include("apps.report.urls")),
-    path("api/v1/checklists/", include("apps.checklist.urls")),
-    path("api/v1/timelines/", include("apps.timeline.urls")),
-    path("api/v1/quizzes/", include("apps.quiz.urls")),
-    path("api/v1/lessons-learned/", include("apps.lessons_learned.urls")),
-    path("api/v1/decision-briefs/", include("apps.decision_brief.urls")),
+    path("api/v1/reports/", include("apps.artifact_report.urls")),
+    path("api/v1/checklists/", include("apps.artifact_checklist.urls")),
+    path("api/v1/timelines/", include("apps.artifact_timeline.urls")),
+    path("api/v1/quizzes/", include("apps.artifact_quiz.urls")),
+    path("api/v1/lessons-learned/", include("apps.artifact_lessons_learned.urls")),
+    path("api/v1/decision-briefs/", include("apps.artifact_decision_brief.urls")),
     path("api/v1/assistants/", include("apps.assistant.urls")),
     path("api/v1/artifacts/", include("apps.artifact.urls")),
     path("", include("django_prometheus.urls")),
