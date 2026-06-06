@@ -1,7 +1,5 @@
 import logging
-import time
 from typing import Optional
-from django.core.cache import cache
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
@@ -46,8 +44,6 @@ class AssistantService:
                     is_active=is_active,
                 )
         except IntegrityError:
-            # Loses the race to the partial unique index idx_assistant_name_active
-            # (name WHERE deleted_at IS NULL) — surface a clean 409, not a 500.
             raise AssistantAlreadyExistsException()
         logger.info("Assistant created", extra={"user_id": user.id, "assistant_id": assistant.id})
         return assistant
@@ -67,6 +63,7 @@ class AssistantService:
             raise AssistantNotFoundException()
         return assistant
 
+    @transaction.atomic
     def update_assistant(
             self,
             user: AuthenticatedUser,
@@ -79,25 +76,23 @@ class AssistantService:
             is_active: Optional[bool] = None,
     ) -> Assistant:
         AccessControl.require_permissions(user, frozenset({perms.UPDATE_ASSISTANT}))
-        assistant = assistant_repository.get_by_id(assistant_id)
+        assistant = assistant_repository.get_by_id_for_update(assistant_id)
         if assistant is None:
             raise AssistantNotFoundException()
         if name is not None and name != assistant.name and assistant_repository.exists_with_name(name):
             raise AssistantAlreadyExistsException()
         try:
-            with transaction.atomic():
-                return assistant_repository.update(
-                    assistant,
-                    name=name,
-                    description=description,
-                    system_prompt=system_prompt,
-                    response_style=response_style,
-                    avatar_emoji=avatar_emoji,
-                    is_active=is_active,
-                    updated_by=user.id,
-                )
+            return assistant_repository.update(
+                assistant,
+                name=name,
+                description=description,
+                system_prompt=system_prompt,
+                response_style=response_style,
+                avatar_emoji=avatar_emoji,
+                is_active=is_active,
+                updated_by=user.id,
+            )
         except IntegrityError:
-            # Renaming onto a name already taken by a live assistant.
             raise AssistantAlreadyExistsException()
 
     def delete_assistant(self, user: AuthenticatedUser, assistant_id: int) -> None:
@@ -125,30 +120,8 @@ class AssistantService:
                     extra={"user_id": user.id, "assistant_id": assistant_id, "chat_id": existing.id},
                 )
                 return existing, False
-            lock_key = f"assistant_start_chat:{user.id}:{assistant_id}"
-            if not cache.add(lock_key, "1", timeout=10):
-                existing = self._await_concurrent_resume(user.id, assistant_id)
-                if existing is not None:
-                    return existing, False
-            else:
-                try:
-                    existing = chat_repository.get_latest_by_assistant(user.id, assistant_id)
-                    if existing is not None:
-                        return existing, False
-                    return self._create_assistant_chat(user, assistant), True
-                finally:
-                    cache.delete(lock_key)
 
         return self._create_assistant_chat(user, assistant), True
-
-    @staticmethod
-    def _await_concurrent_resume(user_id: int, assistant_id: int):
-        for _ in range(20):
-            time.sleep(0.1)
-            existing = chat_repository.get_latest_by_assistant(user_id, assistant_id)
-            if existing is not None:
-                return existing
-        return None
 
     @staticmethod
     def _create_assistant_chat(user: AuthenticatedUser, assistant: Assistant):

@@ -36,13 +36,20 @@ def _normalize_options(options: list) -> list:
     normalized = []
     for idx, opt in enumerate(options):
         normalized.append({
-            "title": str(opt.get("title", "")),
+            "title": str(opt.get("title", ""))[:300],
             "description": str(opt.get("description", "")),
             "pros": str(opt.get("pros", "")),
             "cons": str(opt.get("cons", "")),
             "is_recommended": bool(opt.get("is_recommended", False)),
             "position": idx,
         })
+    has_recommended = False
+    for opt in normalized:
+        if opt["is_recommended"]:
+            if has_recommended:
+                opt["is_recommended"] = False
+            else:
+                has_recommended = True
     return normalized
 
 
@@ -79,15 +86,13 @@ def _persist_generated_decision_brief(
 
 
 class DecisionBriefService:
-    def list_decision_briefs(self, user: AuthenticatedUser, chat_id: Optional[int] = None):
+    def list_decision_briefs(self, user: AuthenticatedUser, chat_id: int):
         AccessControl.require_permissions(user, frozenset({perms.LIST_DECISION_BRIEFS}))
-        if chat_id is not None:
-            if chat_repository.get_by_id(chat_id) is None:
-                raise ChatNotFoundException()
-            if not membership_repository.is_active_member(chat_id, user.id):
-                raise ChatAccessDeniedException()
-            return decision_brief_repository.list_by_chat(source_chat_id=chat_id)
-        return decision_brief_repository.list_by_user(user_id=user.id)
+        if chat_repository.get_by_id(chat_id) is None:
+            raise ChatNotFoundException()
+        if not membership_repository.is_active_member(chat_id, user.id):
+            raise ChatAccessDeniedException()
+        return decision_brief_repository.list_by_chat(source_chat_id=chat_id)
 
     def list_all_decision_briefs(self, user: AuthenticatedUser):
         AccessControl.require_permissions(user, frozenset({perms.MANAGE_DECISION_BRIEFS}))
@@ -129,7 +134,7 @@ class DecisionBriefService:
             options: Optional[list] = None,
     ) -> ArtifactDecisionBrief:
         AccessControl.require_permissions(user, frozenset({perms.UPDATE_DECISION_BRIEF}))
-        brief = decision_brief_repository.get_by_id(decision_brief_id)
+        brief = decision_brief_repository.get_by_id_for_update(decision_brief_id)
         if brief is None:
             raise DecisionBriefNotFoundException()
         _assert_access(user.id, brief, require_contributor=True)
@@ -149,7 +154,7 @@ class DecisionBriefService:
     @transaction.atomic
     def delete_decision_brief(self, user: AuthenticatedUser, decision_brief_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({perms.DELETE_DECISION_BRIEF}))
-        brief = decision_brief_repository.get_by_id(decision_brief_id)
+        brief = decision_brief_repository.get_by_id_for_update(decision_brief_id)
         if brief is None:
             raise DecisionBriefNotFoundException()
         _assert_access(user.id, brief, require_contributor=True)
@@ -170,23 +175,21 @@ class DecisionBriefService:
         chat = await sync_to_async(chat_repository.get_by_id)(chat_id)
         if chat is None:
             raise ChatNotFoundException()
-        is_contributor = await sync_to_async(membership_repository.is_active_contributor)(chat_id, user.id)
-        if not is_contributor:
-            raise ChatAccessDeniedException()
         history = await sync_to_async(build_chat_history)(chat_id)
 
         messages = history + [{"role": "human", "content": message}]
         result_data: dict | None = None
         try:
             async for event in llm_client.generate_decision_brief_stream_events(
-                messages=messages,
-                mode=mode,
-                user=user,
-                chat_id=chat_id,
+                    messages=messages,
+                    mode=mode,
+                    user=user,
+                    chat_id=chat_id,
             ):
                 et = event.get("type")
                 if et == "progress":
-                    await broadcast_artifact_progress(chat_id, str(event.get("step", "")), str(event.get("message", "")))
+                    await broadcast_artifact_progress(chat_id, str(event.get("step", "")),
+                                                      str(event.get("message", "")))
                 elif et == "complete":
                     result_data = event.get("result") or {}
                 elif et == "error":

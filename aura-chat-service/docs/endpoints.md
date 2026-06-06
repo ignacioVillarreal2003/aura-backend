@@ -70,7 +70,6 @@ Prefijo: **`/api/v1/chats/{chat_id}/messages/`**
 |---------------|---------|----------|
 | `GET .../messages/` | `LIST_MESSAGES` | Historial con paginación **cursor**; anotaciones bookmark/feedback/thread. |
 | `POST .../messages/generate/` | `SEND_MESSAGE` | Envía texto o audio, persiste mensaje usuario y ejecuta respuesta IA (modo opcional). |
-| `POST .../messages/regenerate/` | `REGENERATE_AI_RESPONSE` | Borra última respuesta IA y regenera. |
 | `GET .../messages/manage/` | `MANAGE_CHATS` | Historial admin sin exigir membresía. |
 | `DELETE .../messages/{message_id}/` | `DELETE_MESSAGE` | Borrado lógico (`message_id` = campo **`id`**). |
 | `GET .../messages/{message_id}/export/pdf/` | `EXPORT_CHAT` | PDF de un mensaje. |

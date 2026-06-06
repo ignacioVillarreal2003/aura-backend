@@ -68,7 +68,6 @@ def _unread_count_subquery(member_id: int) -> Coalesce:
         output_field=DateTimeField(),
     )
 
-    # An unread item is a MESSAGE artifact in the chat created after the member's cutoff.
     return Coalesce(
         Subquery(
             ArtifactMessage.objects.filter(

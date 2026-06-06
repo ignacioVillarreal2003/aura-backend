@@ -9,7 +9,6 @@ from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundExceptio
 from apps.chat.models.chat import Chat
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.membership.repositories.membership_repository import membership_repository
-from apps.artifact_message.repositories.message_repository import message_repository
 from apps.chat.repositories.share_link_repository import share_link_repository
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization import AccessControl
@@ -151,6 +150,8 @@ class ChatService:
 
     @transaction.atomic
     def delete_chat(self, user: AuthenticatedUser, chat_id: int) -> None:
+        from apps.artifact.services.artifact_service import clear_chat_artifacts
+
         AccessControl.require_permissions(user, frozenset({DELETE_CHAT}))
         chat = chat_repository.get_by_id_for_update(chat_id)
         if chat is None:
@@ -160,11 +161,9 @@ class ChatService:
 
         share_link_repository.deactivate_by_chat(chat_id)
         membership_repository.soft_delete_by_chat(chat_id, deleted_by=user.id)
-        message_repository.soft_delete_by_chat(chat_id, deleted_by=user.id)
+        clear_chat_artifacts(chat_id, deleted_by=user.id)
         chat_repository.soft_delete(chat, deleted_by=user.id)
-        # Release the Redis AI reply lock. Redis is outside the DB transaction so
-        # this is safe to call here; it's a best-effort cleanup (errors are swallowed).
-        _release_ai_lock(chat_id)
+        transaction.on_commit(lambda: _release_ai_lock(chat_id))
         logger.info("Chat deleted.", extra={"chat_id": chat_id, "user_id": user.id})
 
     def list_archived_chats(
@@ -187,7 +186,6 @@ class ChatService:
         accessible = membership_repository.get_active_chat_ids_for_member(user.id, chat_ids)
         invalid = set(chat_ids) - accessible
         if invalid:
-            # Return 403 regardless of whether the chats exist, to avoid IDOR enumeration.
             raise ChatAccessDeniedException()
         count = membership_repository.archive_chats(chat_ids=chat_ids, member_id=user.id)
         logger.info("Chats archived.", extra={"chat_ids": chat_ids, "user_id": user.id, "count": count})
@@ -265,6 +263,7 @@ class ChatService:
         membership_repository.unmute(chat_id=chat_id, member_id=user.id)
         logger.info("Chat unmuted.", extra={"chat_id": chat_id, "user_id": user.id})
 
+    @transaction.atomic
     def clear_content(self, user: AuthenticatedUser, chat_id: int) -> None:
         from apps.artifact.services.artifact_service import clear_chat_artifacts
 

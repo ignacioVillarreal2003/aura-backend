@@ -5,8 +5,8 @@ from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
 from apps.chat.repositories.chat_repository import chat_repository
-from apps.chat.ai_reply_lock import is_locked, release, try_acquire
-from apps.artifact_message.exceptions import LLMServiceException, NoMessageToRegenerateException
+from apps.chat.ai_reply_lock import is_locked, refresh, release, try_acquire
+from apps.artifact_message.exceptions import LLMServiceException
 from apps.artifact_message.services.message_service import (
     ChatAIMode,
     broadcast_chat_ai_lock_change,
@@ -16,6 +16,7 @@ from apps.chat.ws_rate_limit import (
     acquire_ws_connection,
     check_message_rate_limit,
     check_typing_rate_limit,
+    refresh_ws_connection,
     release_ws_connection,
 )
 from apps.membership.repositories.membership_repository import membership_repository
@@ -25,6 +26,8 @@ from core.exceptions import ServiceUnavailableException
 logger = logging.getLogger(__name__)
 
 _MAX_MESSAGE_LENGTH = 10_000
+
+_LOCK_REFRESH_INTERVAL_SECONDS = 30.0
 
 
 class ChatConsumer(AsyncJsonWebsocketConsumer):
@@ -56,7 +59,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             await self.close(code=4003)
             return
 
-        allowed = await database_sync_to_async(acquire_ws_connection)(self.user.id)
+        allowed = await database_sync_to_async(acquire_ws_connection)(
+            self.user.id, self.channel_name
+        )
         if not allowed:
             logger.warning(
                 "WebSocket connection rejected: too many concurrent connections.",
@@ -77,10 +82,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         )
 
     async def disconnect(self, close_code):
-        # Do NOT cancel the LLM task on disconnect — let it run to completion so
-        # the response is saved to DB and the lock is properly released.
-        # group_send calls in the task are safe with no listeners (messages are
-        # discarded), and a reconnecting client will receive any remaining events.
         self._ai_reply_task = None
 
         if self.group_name and self.user is not None:
@@ -102,7 +103,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 )
         finally:
             if self.user is not None:
-                await database_sync_to_async(release_ws_connection)(self.user.id)
+                await database_sync_to_async(release_ws_connection)(
+                    self.user.id, self.channel_name
+                )
         logger.info(
             "WebSocket disconnected.",
             extra={
@@ -130,12 +133,14 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
     async def receive_json(self, content, **kwargs):
         try:
+            if self.user is not None:
+                await database_sync_to_async(refresh_ws_connection)(
+                    self.user.id, self.channel_name
+                )
             msg_type = content.get("type")
 
             if msg_type == "chat.message":
                 await self._handle_chat_message(content)
-            elif msg_type == "chat.regenerate":
-                await self._handle_regenerate(content)
             elif msg_type == "chat.typing":
                 await self._handle_typing(content)
             else:
@@ -201,7 +206,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 pass
 
         try:
-            acquired = await database_sync_to_async(try_acquire)(self.chat_id)
+            lock_token = await database_sync_to_async(try_acquire)(self.chat_id)
         except ServiceUnavailableException as e:
             await self.send_json({
                 "type": "error",
@@ -210,7 +215,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             })
             return
 
-        if not acquired:
+        if not lock_token:
             await self.send_json({
                 "type": "error",
                 "error_code": "chat_ai_reply_in_progress",
@@ -231,7 +236,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 "Failed to save user message.",
                 extra={"chat_id": self.chat_id, "user_id": self.user.id},
             )
-            await database_sync_to_async(release)(self.chat_id)
+            await database_sync_to_async(release)(self.chat_id, lock_token)
             await database_sync_to_async(broadcast_chat_ai_lock_change)(
                 self.chat_id, False
             )
@@ -241,7 +246,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             })
             return
 
-        task = asyncio.create_task(self._run_ai_reply(mode))
+        task = asyncio.create_task(self._run_ai_reply(mode, lock_token))
 
         def _on_ai_reply_done(t: asyncio.Task) -> None:
             if self._ai_reply_task is t:
@@ -266,112 +271,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         task.add_done_callback(_on_ai_reply_done)
         self._ai_reply_task = task
 
-    async def _handle_regenerate(self, content: dict):
-        """Re-run the last AI reply under the same conditions (prompt, mode, context).
-
-        Mirrors ``_handle_chat_message`` but, instead of saving a new user
-        message, it deletes the last assistant message and streams a fresh reply,
-        injecting any negative-feedback hint the user left on it.
-        """
-        chat_obj = await database_sync_to_async(chat_repository.get_by_id)(self.chat_id)
-        if chat_obj is not None and chat_obj.is_locked:
-            await self.send_json({
-                "type": "error",
-                "error_code": "chat_locked",
-                "detail": "This chat is locked and does not accept new messages.",
-            })
-            return
-
-        if chat_obj is not None and chat_obj.is_ephemeral:
-            await self.send_json({
-                "type": "error",
-                "error_code": "ephemeral_chat",
-                "detail": "Regeneration is not available for ephemeral chats.",
-            })
-            return
-
-        mode = ChatAIMode.normalize(content.get("mode"))
-
-        prev = self._ai_reply_task
-        if prev is not None and not prev.done():
-            prev.cancel()
-            try:
-                await prev
-            except asyncio.CancelledError:
-                pass
-
-        try:
-            acquired = await database_sync_to_async(try_acquire)(self.chat_id)
-        except ServiceUnavailableException as e:
-            await self.send_json({
-                "type": "error",
-                "error_code": e.error_code,
-                "detail": e.detail,
-            })
-            return
-
-        if not acquired:
-            await self.send_json({
-                "type": "error",
-                "error_code": "chat_ai_reply_in_progress",
-                "detail": "Wait until the assistant finishes the current reply.",
-            })
-            return
-
-        await database_sync_to_async(broadcast_chat_ai_lock_change)(self.chat_id, True)
-
-        try:
-            regen_feedback = await database_sync_to_async(
-                message_service.delete_last_ai_message
-            )(self.user, self.chat_id)
-        except NoMessageToRegenerateException as e:
-            await database_sync_to_async(release)(self.chat_id)
-            await database_sync_to_async(broadcast_chat_ai_lock_change)(self.chat_id, False)
-            await self.send_json({
-                "type": "error",
-                "error_code": e.error_code,
-                "detail": e.detail,
-            })
-            return
-        except Exception:
-            logger.exception(
-                "Failed to delete last AI message for regeneration.",
-                extra={"chat_id": self.chat_id, "user_id": self.user.id},
-            )
-            await database_sync_to_async(release)(self.chat_id)
-            await database_sync_to_async(broadcast_chat_ai_lock_change)(self.chat_id, False)
-            await self.send_json({
-                "type": "error",
-                "detail": "Failed to regenerate response. Please try again.",
-            })
-            return
-
-        task = asyncio.create_task(self._run_ai_reply(mode, regen_feedback=regen_feedback))
-
-        def _on_ai_reply_done(t: asyncio.Task) -> None:
-            if self._ai_reply_task is t:
-                self._ai_reply_task = None
-            if t.cancelled():
-                return
-            try:
-                exc = t.exception()
-            except Exception:
-                logger.exception(
-                    "Unexpected error reading AI-reply task result.",
-                    extra={"chat_id": self.chat_id},
-                )
-                return
-            if exc is not None:
-                logger.error(
-                    "AI-reply (regenerate) task failed.",
-                    exc_info=exc,
-                    extra={"chat_id": self.chat_id, "user_id": self.user.id, "mode": mode},
-                )
-
-        task.add_done_callback(_on_ai_reply_done)
-        self._ai_reply_task = task
-
-    async def _run_ai_reply(self, mode: str, regen_feedback: str | None = None):
+    async def _run_ai_reply(self, mode: str, lock_token: str):
         if self.group_name is None or self.chat_id is None:
             return
         try:
@@ -380,10 +280,15 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 {"type": "ai_meta", "chat_id": self.chat_id},
             )
 
+            last_lock_refresh = 0.0
             try:
                 async for payload in message_service.iter_ai_reply_stream_group_payloads(
-                        mode, self.user, self.chat_id, regen_feedback=regen_feedback
+                        mode, self.user, self.chat_id
                 ):
+                    now = asyncio.get_running_loop().time()
+                    if now - last_lock_refresh >= _LOCK_REFRESH_INTERVAL_SECONDS:
+                        await database_sync_to_async(refresh)(self.chat_id, lock_token)
+                        last_lock_refresh = now
                     await self.channel_layer.group_send(self.group_name, payload)
             except LLMServiceException:
                 await self.channel_layer.group_send(
@@ -408,7 +313,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                     },
                 )
         finally:
-            await database_sync_to_async(release)(self.chat_id)
+            await database_sync_to_async(release)(self.chat_id, lock_token)
             try:
                 await database_sync_to_async(broadcast_chat_ai_lock_change)(
                     self.chat_id, False

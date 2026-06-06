@@ -4,11 +4,11 @@ from apps.membership.repositories.membership_repository import membership_reposi
 
 
 def assert_detail_access(
-    user_id: int,
-    obj,
-    access_denied_exc: Exception,
-    *,
-    require_contributor: bool = False,
+        user_id: int,
+        obj,
+        access_denied_exc: Exception,
+        *,
+        require_contributor: bool = False,
 ) -> None:
     if obj.created_by == user_id:
         return

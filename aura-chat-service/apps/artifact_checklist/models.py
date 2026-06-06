@@ -51,5 +51,3 @@ class ArtifactChecklistItem(models.Model):
         managed = False
         db_table = "artifact_checklist_item"
         ordering = ["position"]
-
-

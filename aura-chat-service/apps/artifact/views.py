@@ -1,6 +1,8 @@
 import logging
+from datetime import datetime
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -9,6 +11,7 @@ from apps.artifact.registry import ARTIFACT_TYPES
 from apps.artifact.serializers import (
     ArtifactListResponse,
     ArtifactResponse,
+    ArtifactSummaryResponse,
     ArtifactVersionResponse,
     UpdateArtifactRequest,
 )
@@ -26,12 +29,33 @@ _TYPE_PARAM = OpenApiParameter(
     enum=sorted(ARTIFACT_TYPES),
     description="Filtrar por tipo de artefacto.",
 )
-_CHAT_FILTER_PARAM = OpenApiParameter(
-    name="chat_id",
+_CREATED_BY_PARAM = OpenApiParameter(
+    name="created_by",
     type=int,
     location=OpenApiParameter.QUERY,
     required=False,
-    description="Filtrar por chat de origen. El usuario debe ser miembro activo del chat.",
+    description="Filtrar por ID del creador.",
+)
+_DATE_FROM_PARAM = OpenApiParameter(
+    name="date_from",
+    type=str,
+    location=OpenApiParameter.QUERY,
+    required=False,
+    description="Fecha de inicio (ISO 8601, ej: 2024-01-01T00:00:00Z).",
+)
+_DATE_TO_PARAM = OpenApiParameter(
+    name="date_to",
+    type=str,
+    location=OpenApiParameter.QUERY,
+    required=False,
+    description="Fecha de fin (ISO 8601, ej: 2024-12-31T23:59:59Z).",
+)
+_CHAT_PATH_PARAM = OpenApiParameter(
+    name="chat_id",
+    type=int,
+    location=OpenApiParameter.PATH,
+    required=True,
+    description="ID del chat.",
 )
 _ID_PARAM = OpenApiParameter(
     name="artifact_id",
@@ -41,25 +65,71 @@ _ID_PARAM = OpenApiParameter(
     description="ID del artefacto.",
 )
 
+_FEED_PARAMS = [_TYPE_PARAM, _CREATED_BY_PARAM, _DATE_FROM_PARAM, _DATE_TO_PARAM]
 
-class ArtifactListView(APIView):
+
+def _parse_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    from django.utils.dateparse import parse_datetime
+    from django.utils import timezone as tz
+    dt = parse_datetime(value)
+    if dt is None:
+        raise ValidationError({"detail": f"Fecha inválida: '{value}'. Usar formato ISO 8601."})
+    if dt.tzinfo is None:
+        dt = tz.make_aware(dt)
+    return dt
+
+
+def _parse_feed_filters(request: Request) -> dict:
+    artifact_type = request.query_params.get("type") or None
+    created_by_raw = request.query_params.get("created_by")
+    created_by = int(created_by_raw) if created_by_raw and created_by_raw.isdigit() else None
+    date_from = _parse_datetime(request.query_params.get("date_from"))
+    date_to = _parse_datetime(request.query_params.get("date_to"))
+    return {"artifact_type": artifact_type, "created_by": created_by, "date_from": date_from, "date_to": date_to}
+
+
+class ChatArtifactFeedView(APIView):
     @extend_schema(
         tags=["Artifacts"],
-        summary="Listar artefactos",
-        description="Devuelve los artefactos del usuario autenticado, paginados. Filtrable por tipo y por chat de origen.",
-        parameters=[_TYPE_PARAM, _CHAT_FILTER_PARAM],
-        responses={200: ArtifactListResponse(many=True), **standard_error_responses(400, 401, 403, 404)},
+        summary="Feed de artefactos del chat",
+        description=(
+                "Devuelve todos los artefactos del chat paginados, del más reciente al más antiguo. "
+                "El usuario debe ser miembro activo del chat. "
+                "Filtrable por tipo, creador y rango de fechas."
+        ),
+        parameters=[_CHAT_PATH_PARAM, *_FEED_PARAMS],
+        responses={200: ArtifactSummaryResponse(many=True), **standard_error_responses(400, 401, 403, 404)},
     )
-    def get(self, request: Request) -> Response:
-        artifact_type = request.query_params.get("type") or None
-        chat_id_raw = request.query_params.get("chat_id")
-        chat_id = int(chat_id_raw) if chat_id_raw and chat_id_raw.isdigit() else None
-        queryset = artifact_service.list_artifacts(
-            user=request.user, artifact_type=artifact_type, chat_id=chat_id
-        )
+    def get(self, request: Request, chat_id: int) -> Response:
+        filters = _parse_feed_filters(request)
+        queryset = artifact_service.list_chat_artifacts(user=request.user, chat_id=chat_id, **filters)
         paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request)
-        return paginator.get_paginated_response(ArtifactListResponse(page, many=True).data)
+        return paginator.get_paginated_response(ArtifactSummaryResponse(page, many=True).data)
+
+
+class ChatArtifactManageView(APIView):
+    @extend_schema(
+        tags=["Artifacts"],
+        summary="Feed de artefactos del chat (admin)",
+        description=(
+                "Lista todos los artefactos del chat sin requerir membresía activa. "
+                "No verifica ownership ni pertenencia al chat. "
+                "Requiere permiso `MANAGE_CHAT_ARTIFACTS`. "
+                "Resultados del más reciente al más antiguo. "
+                "Filtrable por tipo, creador y rango de fechas."
+        ),
+        parameters=[_CHAT_PATH_PARAM, *_FEED_PARAMS],
+        responses={200: ArtifactSummaryResponse(many=True), **standard_error_responses(400, 401, 403, 404)},
+    )
+    def get(self, request: Request, chat_id: int) -> Response:
+        filters = _parse_feed_filters(request)
+        queryset = artifact_service.list_chat_artifacts_admin(user=request.user, chat_id=chat_id, **filters)
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(queryset, request)
+        return paginator.get_paginated_response(ArtifactSummaryResponse(page, many=True).data)
 
 
 class ArtifactDetailView(APIView):
@@ -92,7 +162,7 @@ class ArtifactDetailView(APIView):
             description=d.get("description"),
             status=d.get("status"),
             change_summary=d.get("change_summary", ""),
-        )  # mode is immutable after creation; not exposed for update
+        )
         return Response(ArtifactResponse(artifact).data)
 
     @extend_schema(
@@ -119,19 +189,3 @@ class ArtifactVersionsView(APIView):
         paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request)
         return paginator.get_paginated_response(ArtifactVersionResponse(page, many=True).data)
-
-
-class ArtifactManageView(APIView):
-    @extend_schema(
-        tags=["Artifacts"],
-        summary="Listar todos los artefactos (admin)",
-        description="Lista los artefactos de todos los usuarios. Requiere permiso `MANAGE_ARTIFACTS`.",
-        parameters=[_TYPE_PARAM],
-        responses={200: ArtifactListResponse(many=True), **standard_error_responses(400, 401, 403)},
-    )
-    def get(self, request: Request) -> Response:
-        artifact_type = request.query_params.get("type") or None
-        queryset = artifact_service.list_all_artifacts(user=request.user, artifact_type=artifact_type)
-        paginator = StandardPagination()
-        page = paginator.paginate_queryset(queryset, request)
-        return paginator.get_paginated_response(ArtifactListResponse(page, many=True).data)

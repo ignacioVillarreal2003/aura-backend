@@ -1,7 +1,6 @@
 from django.urls import path
 
 from apps.chat.views.chat_content_views import ClearChatContentView, MarkChatAsReadView
-from apps.chat.views.chat_feed_view import ChatFeedView
 from apps.chat.views.chat_export_view import (
     ChatExportMarkdownView,
     ChatExportPDFView,
@@ -26,7 +25,6 @@ urlpatterns = [
     path("<int:chat_id>/pin/", _v.as_view({"post": "pin", "delete": "pin"}), name="chat-pin"),
     path("<int:chat_id>/lock/", _v.as_view({"post": "lock", "delete": "lock"}), name="chat-lock"),
     path("<int:chat_id>/mute/", _v.as_view({"post": "mute", "delete": "mute"}), name="chat-mute"),
-    path("<int:chat_id>/feed/", ChatFeedView.as_view(), name="chat-feed"),
     path("<int:chat_id>/clear/", ClearChatContentView.as_view(), name="chat-clear"),
     path("<int:chat_id>/read/", MarkChatAsReadView.as_view(), name="chat-mark-read"),
     path("<int:chat_id>/share-links/", ShareLinkListView.as_view(), name="share-link-list"),
@@ -35,5 +33,6 @@ urlpatterns = [
     path("<int:chat_id>/export/pdf/", ChatExportPDFView.as_view(), name="chat-export-pdf"),
     path("<int:chat_id>/export/markdown/", ChatExportMarkdownView.as_view(), name="chat-export-markdown"),
     path("<int:chat_id>/manage/export/pdf/", ChatManageExportPDFView.as_view(), name="chat-manage-export-pdf"),
-    path("<int:chat_id>/manage/export/markdown/", ChatManageExportMarkdownView.as_view(), name="chat-manage-export-markdown"),
+    path("<int:chat_id>/manage/export/markdown/", ChatManageExportMarkdownView.as_view(),
+         name="chat-manage-export-markdown"),
 ]

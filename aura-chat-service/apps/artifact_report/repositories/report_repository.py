@@ -1,5 +1,6 @@
 import logging
 from typing import Optional
+from django.db import transaction
 
 from apps.artifact_report.models import ArtifactReport
 
@@ -24,6 +25,9 @@ class ReportRepository:
 
     def get_by_id(self, report_id: int) -> Optional[ArtifactReport]:
         return ArtifactReport.objects.select_related("artifact").filter(id=report_id).first()
+
+    def get_by_id_for_update(self, report_id: int) -> Optional[ArtifactReport]:
+        return ArtifactReport.objects.select_for_update().select_related("artifact").filter(id=report_id).first()
 
     def list_by_user(
             self,
@@ -53,6 +57,7 @@ class ReportRepository:
             qs = qs.filter(type=report_type)
         return qs
 
+    @transaction.atomic
     def update(
             self,
             report: ArtifactReport,

@@ -62,6 +62,10 @@ class DecisionBriefRepository:
     def get_by_id(self, decision_brief_id: int) -> Optional[ArtifactDecisionBrief]:
         return _with_prefetch(ArtifactDecisionBrief.objects.filter(id=decision_brief_id)).first()
 
+    def get_by_id_for_update(self, decision_brief_id: int) -> Optional[ArtifactDecisionBrief]:
+        return ArtifactDecisionBrief.objects.select_for_update().select_related("artifact").filter(
+            id=decision_brief_id).first()
+
     def list_by_user(self, user_id: int):
         return _with_counts(ArtifactDecisionBrief.objects.filter(created_by=user_id))
 
@@ -85,10 +89,10 @@ class DecisionBriefRepository:
     ) -> ArtifactDecisionBrief:
         update_fields = []
         for field, value in (
-            ("problem", problem),
-            ("context", context),
-            ("risks", risks),
-            ("recommendation", recommendation),
+                ("problem", problem),
+                ("context", context),
+                ("risks", risks),
+                ("recommendation", recommendation),
         ):
             if value is not None:
                 setattr(brief, field, value)

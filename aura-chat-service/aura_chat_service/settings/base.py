@@ -1,5 +1,4 @@
 from pathlib import Path
-
 from decouple import config, Csv
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -7,7 +6,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 APP_NAME = "Aura Chat Service"
 APP_VERSION = "1.0.0"
 
-SECRET_KEY = config("SECRET_KEY", default="django-insecure-change-me")
+SECRET_KEY = config("SECRET_KEY")
 
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv())
 
@@ -96,7 +95,7 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [{"address": REDIS_URL, "socket_timeout": None, "socket_connect_timeout": 5}],
+            "hosts": [{"address": REDIS_URL, "socket_timeout": 5, "socket_connect_timeout": 5}],
             "expiry": 300,
         },
     },
@@ -142,6 +141,7 @@ CORS_ALLOWED_ORIGINS = config(
     default="http://localhost:3000,http://localhost:4200",
     cast=Csv(),
 )
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
 
 AUTHENTICATION_SERVICE_URL = config("AUTHENTICATION_SERVICE_URL").strip()
@@ -150,8 +150,17 @@ AUTH_TOKEN_CACHE_TTL_SECONDS = config("AUTH_TOKEN_CACHE_TTL_SECONDS", default=60
 AUTH_SERVICE_TIMEOUT = config("AUTH_SERVICE_TIMEOUT", default=10, cast=float)
 
 AUDIO_MAX_UPLOAD_MB = config("AUDIO_MAX_UPLOAD_MB", default=25, cast=int)
+DATA_UPLOAD_MAX_MEMORY_SIZE = config("DATA_UPLOAD_MAX_MEMORY_SIZE", default=30 * 1024 * 1024, cast=int)
 
 WS_MAX_CONNECTIONS_PER_USER = config("WS_MAX_CONNECTIONS_PER_USER", default=5, cast=int)
+WS_MESSAGE_RATE_LIMIT_MAX = config("WS_MESSAGE_RATE_LIMIT_MAX", default=10, cast=int)
+WS_MESSAGE_RATE_LIMIT_WINDOW = config("WS_MESSAGE_RATE_LIMIT_WINDOW", default=60, cast=int)
+WS_TYPING_RATE_LIMIT_MAX = config("WS_TYPING_RATE_LIMIT_MAX", default=20, cast=int)
+WS_TYPING_RATE_LIMIT_WINDOW = config("WS_TYPING_RATE_LIMIT_WINDOW", default=10, cast=int)
+WS_ARTIFACT_RATE_LIMIT_MAX = config("WS_ARTIFACT_RATE_LIMIT_MAX", default=5, cast=int)
+WS_ARTIFACT_RATE_LIMIT_WINDOW = config("WS_ARTIFACT_RATE_LIMIT_WINDOW", default=60, cast=int)
+WS_TRANSCRIBE_RATE_LIMIT_MAX = config("WS_TRANSCRIBE_RATE_LIMIT_MAX", default=5, cast=int)
+WS_TRANSCRIBE_RATE_LIMIT_WINDOW = config("WS_TRANSCRIBE_RATE_LIMIT_WINDOW", default=60, cast=int)
 
 AUTHENTICATION_EXCLUDED_PATHS = [
     "/api/v1/health",
@@ -194,7 +203,7 @@ SPECTACULAR_SETTINGS = {
             "name": "Messages",
             "description": (
                 "Historial con paginación por cursor (`GET .../messages/`), envío con IA "
-                "(`POST .../messages/generate/`), regeneración (`POST .../messages/regenerate/`), "
+                "(`POST .../messages/generate/`), "
                 "borrado y export por mensaje. `{message_id}` es el campo `id` de cada fila "
                 "(no `artifact_id`). Bookmark, pin, feedback e hilos viven bajo **Artifacts**."
             ),

@@ -8,7 +8,6 @@ class ArtifactMessage(SoftDeleteModel):
     class SenderType(models.TextChoices):
         USER = "user", "User"
         ASSISTANT = "assistant", "Assistant"
-        SYSTEM = "system", "System"
 
     artifact = models.OneToOneField(
         Artifact,

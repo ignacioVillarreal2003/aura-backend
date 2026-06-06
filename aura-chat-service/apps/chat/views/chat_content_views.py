@@ -1,5 +1,4 @@
 import logging
-
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.request import Request
@@ -24,9 +23,9 @@ class ClearChatContentView(APIView):
         tags=["Chats"],
         summary="Limpiar contenido del chat",
         description=(
-            "Elimina suavemente **todos los artefactos** del chat (mensajes, informes, checklists, "
-            "quizzes, líneas de tiempo, lecciones aprendidas y briefs de decisión). "
-            "Solo el propietario del chat puede ejecutar esta acción."
+                "Elimina suavemente **todos los artefactos** del chat (mensajes, informes, checklists, "
+                "quizzes, líneas de tiempo, lecciones aprendidas y briefs de decisión). "
+                "Solo el propietario del chat puede ejecutar esta acción."
         ),
         parameters=[_CHAT_PARAM],
         responses={
@@ -44,8 +43,8 @@ class MarkChatAsReadView(APIView):
         tags=["Chats"],
         summary="Marcar chat como leído",
         description=(
-            "Actualiza la posición de **último leído** del usuario en el chat (membresía). "
-            "Llamar cuando el usuario abre o desplaza hasta los mensajes más recientes."
+                "Actualiza la posición de **último leído** del usuario en el chat (membresía). "
+                "Llamar cuando el usuario abre o desplaza hasta los mensajes más recientes."
         ),
         parameters=[_CHAT_PARAM],
         request=None,

@@ -11,7 +11,8 @@ from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundExceptio
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.artifact.models import Artifact
 from apps.artifact.repositories.artifact_repository import artifact_repository
-from apps.artifact_checklist.exceptions import ChecklistAccessDeniedException, ChecklistNotFoundException, LLMServiceException
+from apps.artifact_checklist.exceptions import ChecklistAccessDeniedException, ChecklistNotFoundException, \
+    LLMServiceException
 from apps.artifact_checklist.models import ArtifactChecklist
 from apps.artifact_checklist.repositories.checklist_repository import checklist_repository
 from apps.membership.repositories.membership_repository import membership_repository
@@ -59,7 +60,7 @@ def _items_to_sections(items: list) -> list:
     for pos, name in enumerate(order):
         sorted_items = sorted(seen[name], key=lambda x: int(x.get("order", 0)))
         sections.append({
-            "title": name,
+            "title": name[:200],
             "position": pos,
             "items": [
                 {
@@ -75,15 +76,13 @@ def _items_to_sections(items: list) -> list:
 
 
 class ChecklistService:
-    def list_checklists(self, user: AuthenticatedUser, chat_id: Optional[int] = None):
+    def list_checklists(self, user: AuthenticatedUser, chat_id: int):
         AccessControl.require_permissions(user, frozenset({perms.LIST_CHECKLISTS}))
-        if chat_id is not None:
-            if chat_repository.get_by_id(chat_id) is None:
-                raise ChatNotFoundException()
-            if not membership_repository.is_active_member(chat_id, user.id):
-                raise ChatAccessDeniedException()
-            return checklist_repository.list_by_chat(source_chat_id=chat_id)
-        return checklist_repository.list_by_user(user_id=user.id)
+        if chat_repository.get_by_id(chat_id) is None:
+            raise ChatNotFoundException()
+        if not membership_repository.is_active_member(chat_id, user.id):
+            raise ChatAccessDeniedException()
+        return checklist_repository.list_by_chat(source_chat_id=chat_id)
 
     def list_all_checklists(self, user: AuthenticatedUser):
         AccessControl.require_permissions(user, frozenset({perms.MANAGE_CHECKLISTS}))
@@ -121,7 +120,7 @@ class ChecklistService:
             sections: Optional[list] = None,
     ) -> ArtifactChecklist:
         AccessControl.require_permissions(user, frozenset({perms.UPDATE_CHECKLIST}))
-        checklist = checklist_repository.get_by_id(checklist_id)
+        checklist = checklist_repository.get_by_id_for_update(checklist_id)
         if checklist is None:
             raise ChecklistNotFoundException()
         _assert_checklist_access(user.id, checklist, require_contributor=True)
@@ -132,7 +131,7 @@ class ChecklistService:
     @transaction.atomic
     def delete_checklist(self, user: AuthenticatedUser, checklist_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({perms.DELETE_CHECKLIST}))
-        checklist = checklist_repository.get_by_id(checklist_id)
+        checklist = checklist_repository.get_by_id_for_update(checklist_id)
         if checklist is None:
             raise ChecklistNotFoundException()
         _assert_checklist_access(user.id, checklist, require_contributor=True)
@@ -153,23 +152,21 @@ class ChecklistService:
         chat = await sync_to_async(chat_repository.get_by_id)(chat_id)
         if chat is None:
             raise ChatNotFoundException()
-        is_contributor = await sync_to_async(membership_repository.is_active_contributor)(chat_id, user.id)
-        if not is_contributor:
-            raise ChatAccessDeniedException()
         history = await sync_to_async(build_chat_history)(chat_id)
 
         messages = history + [{"role": "human", "content": message}]
         result_data: dict | None = None
         try:
             async for event in llm_client.generate_checklist_stream_events(
-                messages=messages,
-                mode=mode,
-                user=user,
-                chat_id=chat_id,
+                    messages=messages,
+                    mode=mode,
+                    user=user,
+                    chat_id=chat_id,
             ):
                 et = event.get("type")
                 if et == "progress":
-                    await broadcast_artifact_progress(chat_id, str(event.get("step", "")), str(event.get("message", "")))
+                    await broadcast_artifact_progress(chat_id, str(event.get("step", "")),
+                                                      str(event.get("message", "")))
                 elif et == "complete":
                     result_data = event.get("result") or {}
                 elif et == "error":

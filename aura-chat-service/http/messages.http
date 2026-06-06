@@ -47,12 +47,6 @@ POST {{chatBase}}/chats/1/messages/read/
 Authorization: Bearer {{authToken}}
 
 
-### Regenerar última respuesta de IA
-POST {{chatBase}}/chats/1/messages/regenerate/
-Accept: application/json
-Authorization: Bearer {{authToken}}
-
-
 ### Listar mensajes pineados en el chat
 GET {{chatBase}}/chats/1/messages/pinned/
 Accept: application/json

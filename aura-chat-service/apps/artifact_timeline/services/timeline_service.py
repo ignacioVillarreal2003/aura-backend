@@ -69,15 +69,13 @@ def _persist_generated_timeline(
 
 
 class TimelineService:
-    def list_timelines(self, user: AuthenticatedUser, chat_id: Optional[int] = None):
+    def list_timelines(self, user: AuthenticatedUser, chat_id: int):
         AccessControl.require_permissions(user, frozenset({perms.LIST_TIMELINES}))
-        if chat_id is not None:
-            if chat_repository.get_by_id(chat_id) is None:
-                raise ChatNotFoundException()
-            if not membership_repository.is_active_member(chat_id, user.id):
-                raise ChatAccessDeniedException()
-            return timeline_repository.list_by_chat(source_chat_id=chat_id)
-        return timeline_repository.list_by_user(user_id=user.id)
+        if chat_repository.get_by_id(chat_id) is None:
+            raise ChatNotFoundException()
+        if not membership_repository.is_active_member(chat_id, user.id):
+            raise ChatAccessDeniedException()
+        return timeline_repository.list_by_chat(source_chat_id=chat_id)
 
     def list_all_timelines(self, user: AuthenticatedUser):
         AccessControl.require_permissions(user, frozenset({perms.MANAGE_TIMELINES}))
@@ -116,7 +114,7 @@ class TimelineService:
             events: Optional[list] = None,
     ) -> ArtifactTimeline:
         AccessControl.require_permissions(user, frozenset({perms.UPDATE_TIMELINE}))
-        timeline = timeline_repository.get_by_id(timeline_id)
+        timeline = timeline_repository.get_by_id_for_update(timeline_id)
         if timeline is None:
             raise TimelineNotFoundException()
         _assert_timeline_access(user.id, timeline, require_contributor=True)
@@ -130,7 +128,7 @@ class TimelineService:
     @transaction.atomic
     def delete_timeline(self, user: AuthenticatedUser, timeline_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({perms.DELETE_TIMELINE}))
-        timeline = timeline_repository.get_by_id(timeline_id)
+        timeline = timeline_repository.get_by_id_for_update(timeline_id)
         if timeline is None:
             raise TimelineNotFoundException()
         _assert_timeline_access(user.id, timeline, require_contributor=True)
@@ -151,23 +149,21 @@ class TimelineService:
         chat = await sync_to_async(chat_repository.get_by_id)(chat_id)
         if chat is None:
             raise ChatNotFoundException()
-        is_contributor = await sync_to_async(membership_repository.is_active_contributor)(chat_id, user.id)
-        if not is_contributor:
-            raise ChatAccessDeniedException()
         history = await sync_to_async(build_chat_history)(chat_id)
 
         messages = history + [{"role": "human", "content": message}]
         result_data: dict | None = None
         try:
             async for event in llm_client.generate_timeline_stream_events(
-                messages=messages,
-                mode=mode,
-                user=user,
-                chat_id=chat_id,
+                    messages=messages,
+                    mode=mode,
+                    user=user,
+                    chat_id=chat_id,
             ):
                 et = event.get("type")
                 if et == "progress":
-                    await broadcast_artifact_progress(chat_id, str(event.get("step", "")), str(event.get("message", "")))
+                    await broadcast_artifact_progress(chat_id, str(event.get("step", "")),
+                                                      str(event.get("message", "")))
                 elif et == "complete":
                     result_data = event.get("result") or {}
                 elif et == "error":

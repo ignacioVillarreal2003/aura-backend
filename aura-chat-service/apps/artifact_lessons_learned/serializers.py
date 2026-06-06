@@ -1,15 +1,10 @@
-from django.conf import settings
 from rest_framework import serializers
 
 from apps.artifact.models.artifact import Artifact
-from apps.artifact.shared_serializers import FragmentSerializer as _FragmentSerializer, MessageSerializer as _MessageSerializer
+from apps.artifact.shared_serializers import FragmentSerializer as _FragmentSerializer, \
+    MessageSerializer as _MessageSerializer
 from apps.artifact_lessons_learned.models import ArtifactLessonsLearned, ArtifactLessonsLearnedItem
-
-_SUPPORTED_AUDIO_TYPES = {
-    "audio/mpeg", "audio/mp4", "audio/wav", "audio/webm",
-    "audio/ogg", "audio/flac", "audio/x-wav", "audio/x-m4a",
-}
-_MAX_AUDIO_MB = int(getattr(settings, "AUDIO_MAX_UPLOAD_MB", 25))
+from core.validators.audio import MAX_AUDIO_MB as _MAX_AUDIO_MB, SUPPORTED_AUDIO_TYPES as _SUPPORTED_AUDIO_TYPES
 
 
 class GenerateLessonsLearnedRequest(serializers.Serializer):
@@ -88,7 +83,7 @@ class LessonsLearnedGenerateResponse(serializers.Serializer):
 
 class _UpdateItemRequest(serializers.Serializer):
     category = serializers.ChoiceField(choices=ArtifactLessonsLearnedItem.Category.choices)
-    observation = serializers.CharField()
+    observation = serializers.CharField(allow_blank=False, max_length=2000)
     discussion = serializers.CharField(default="", allow_blank=True)
     recommendation = serializers.CharField(default="", allow_blank=True)
     position = serializers.IntegerField(min_value=0)

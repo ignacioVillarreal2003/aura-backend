@@ -40,5 +40,3 @@ class ArtifactDecisionBriefOption(models.Model):
         managed = False
         db_table = "artifact_decision_brief_option"
         ordering = ["position"]
-
-

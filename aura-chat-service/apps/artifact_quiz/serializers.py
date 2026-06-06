@@ -1,15 +1,10 @@
-from django.conf import settings
 from rest_framework import serializers
 
 from apps.artifact.models.artifact import Artifact
-from apps.artifact.shared_serializers import FragmentSerializer as _FragmentSerializer, MessageSerializer as _MessageSerializer
+from apps.artifact.shared_serializers import FragmentSerializer as _FragmentSerializer, \
+    MessageSerializer as _MessageSerializer
 from apps.artifact_quiz.models import ArtifactQuiz, ArtifactQuizOption, ArtifactQuizQuestion
-
-_SUPPORTED_AUDIO_TYPES = {
-    "audio/mpeg", "audio/mp4", "audio/wav", "audio/webm",
-    "audio/ogg", "audio/flac", "audio/x-wav", "audio/x-m4a",
-}
-_MAX_AUDIO_MB = int(getattr(settings, "AUDIO_MAX_UPLOAD_MB", 25))
+from core.validators.audio import MAX_AUDIO_MB as _MAX_AUDIO_MB, SUPPORTED_AUDIO_TYPES as _SUPPORTED_AUDIO_TYPES
 
 
 class GenerateQuizRequest(serializers.Serializer):
@@ -41,7 +36,7 @@ class GenerateQuizRequest(serializers.Serializer):
 class QuizOptionResponse(serializers.ModelSerializer):
     class Meta:
         model = ArtifactQuizOption
-        fields = ["id", "text", "is_correct", "position"]
+        fields = ["id", "text", "position"]
 
 
 class QuizQuestionResponse(serializers.ModelSerializer):
@@ -102,7 +97,7 @@ class _UpdateOptionRequest(serializers.Serializer):
 
 
 class _UpdateQuestionRequest(serializers.Serializer):
-    text = serializers.CharField()
+    text = serializers.CharField(max_length=2000)
     kind = serializers.ChoiceField(choices=ArtifactQuizQuestion.Kind.choices)
     explanation = serializers.CharField(default="", allow_blank=True)
     position = serializers.IntegerField(min_value=0)

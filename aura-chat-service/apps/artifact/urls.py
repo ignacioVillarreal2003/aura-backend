@@ -11,14 +11,14 @@ from apps.artifact.interaction_views import (
 )
 from apps.artifact.views import (
     ArtifactDetailView,
-    ArtifactListView,
-    ArtifactManageView,
     ArtifactVersionsView,
+    ChatArtifactFeedView,
+    ChatArtifactManageView,
 )
 
 urlpatterns = [
-    path("", ArtifactListView.as_view(), name="artifact-list"),
-    path("manage/", ArtifactManageView.as_view(), name="artifact-manage"),
+    path("chats/<int:chat_id>/", ChatArtifactFeedView.as_view(), name="artifact-chat-feed"),
+    path("chats/<int:chat_id>/manage/", ChatArtifactManageView.as_view(), name="artifact-chat-manage"),
     path("pinned/", PinnedArtifactListView.as_view(), name="artifact-pinned-list"),
     path("bookmarked/", BookmarkedArtifactListView.as_view(), name="artifact-bookmarked-list"),
     path("feedback/analytics/", FeedbackAnalyticsView.as_view(), name="artifact-feedback-analytics"),

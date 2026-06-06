@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator
@@ -105,9 +106,6 @@ class LLMClient:
         await self._stream_client.aclose()
         await self._http_client.aclose()
 
-    # ------------------------------------------------------------------
-    # Document question (RAG over the user's documents)
-    # ------------------------------------------------------------------
     async def document_question(
             self,
             messages: list[dict[str, str]],
@@ -163,9 +161,6 @@ class LLMClient:
         ):
             yield event
 
-    # ------------------------------------------------------------------
-    # General-purpose chat (no RAG, conversation history only)
-    # ------------------------------------------------------------------
     async def general_chat(
             self,
             messages: list[dict[str, str]],
@@ -216,9 +211,6 @@ class LLMClient:
         ):
             yield event
 
-    # ------------------------------------------------------------------
-    # RAG agent (full RAG pipeline: analyse, retrieve, reason, synthesise)
-    # ------------------------------------------------------------------
     async def rag_agent(
             self,
             messages: list[dict[str, str]],
@@ -263,9 +255,6 @@ class LLMClient:
         ):
             yield event
 
-    # ------------------------------------------------------------------
-    # Tool agent (agent with document question/summary tools)
-    # ------------------------------------------------------------------
     async def agent(
             self,
             messages: list[dict[str, str]],
@@ -310,9 +299,6 @@ class LLMClient:
         ):
             yield event
 
-    # ------------------------------------------------------------------
-    # Checklist & report generation
-    # ------------------------------------------------------------------
     async def generate_checklist(
             self,
             messages: list[dict[str, str]],
@@ -432,9 +418,6 @@ class LLMClient:
         ):
             yield event
 
-    # ------------------------------------------------------------------
-    # Timeline / quiz / lessons-learned / decision-brief generation
-    # ------------------------------------------------------------------
     async def generate_timeline(
             self,
             messages: list[dict[str, str]],
@@ -675,9 +658,6 @@ class LLMClient:
         ):
             yield event
 
-    # ------------------------------------------------------------------
-    # Shared transport helpers
-    # ------------------------------------------------------------------
     @staticmethod
     def _require_configured_url(url: str, context: str) -> None:
         if url and url.strip():
@@ -705,19 +685,21 @@ class LLMClient:
         try:
             data = response.json()
         except ValueError as e:
-            logger.error("LLM %s returned non-JSON body.", context)
+            logger.error("LLM %s returned non-JSON body.", context, exc_info=True)
             raise HttpClientException(
                 "Invalid LLM response format",
                 status_code=response.status_code,
             ) from e
 
         if not isinstance(data, dict):
-            logger.error("LLM %s returned a non-object JSON body.", context)
+            logger.error("LLM %s returned a non-object JSON body.", context, exc_info=True)
             raise HttpClientException(
                 "Invalid LLM response format",
                 status_code=response.status_code,
             )
         return data
+
+    _STREAM_RETRYABLE = frozenset({429, 502, 503, 504})
 
     async def _stream_sse_events(
             self,
@@ -729,89 +711,101 @@ class LLMClient:
         self._require_configured_url(url, context)
         headers = self._build_stream_headers(user)
         timeout = httpx.Timeout(
-            connect=settings.LLM_STREAM_CONNECT_TIMEOUT,
-            read=settings.LLM_STREAM_READ_TIMEOUT,
+            connect=getattr(settings, "LLM_STREAM_CONNECT_TIMEOUT", 10.0),
+            read=getattr(settings, "LLM_STREAM_READ_TIMEOUT", 120.0),
             write=30.0,
             pool=10.0,
         )
+        max_attempts = 2
 
-        try:
-            async with self._stream_client.stream(
-                    "POST",
-                    url,
-                    json=payload,
-                    headers=headers,
-                    timeout=timeout,
-            ) as response:
-                if response.status_code >= 400:
-                    body = await response.aread()
-                    detail = body.decode("utf-8", errors="replace")[:500]
-                    logger.error(
-                        "LLM stream HTTP error.",
-                        extra={
-                            "status_code": response.status_code,
-                            "url": url,
-                            "body_preview": detail,
-                        },
-                    )
-                    raise HttpClientException(
-                        f"HTTP {response.status_code}",
-                        status_code=response.status_code,
-                    )
+        for attempt in range(max_attempts):
+            try:
+                async with self._stream_client.stream(
+                        "POST",
+                        url,
+                        json=payload,
+                        headers=headers,
+                        timeout=timeout,
+                ) as response:
+                    if response.status_code in self._STREAM_RETRYABLE and attempt < max_attempts - 1:
+                        delay = 0.5 * (2 ** attempt)
+                        logger.warning(
+                            "Retryable LLM stream error, will retry.",
+                            extra={
+                                "status_code": response.status_code,
+                                "url": url,
+                                "attempt": attempt + 1,
+                                "delay_seconds": delay,
+                            },
+                        )
+                        await asyncio.sleep(delay)
+                        continue
 
-                async for event in self._iter_sse_json_events(response):
-                    yield event
+                    if response.status_code >= 400:
+                        body = await response.aread()
+                        detail = body.decode("utf-8", errors="replace")[:500]
+                        logger.error(
+                            "LLM stream HTTP error.",
+                            extra={
+                                "status_code": response.status_code,
+                                "url": url,
+                                "body_preview": detail,
+                            },
+                        )
+                        raise HttpClientException(
+                            f"HTTP {response.status_code}",
+                            status_code=response.status_code,
+                        )
 
-        except httpx.TimeoutException as e:
-            raise HttpClientTimeoutException() from e
-        except httpx.ConnectError as e:
-            raise HttpClientConnectionException() from e
-        except HttpClientException:
-            raise
-        except Exception as e:
-            raise HttpClientException(str(e)) from e
+                    async for event in self._iter_sse_json_events(response):
+                        yield event
+                    return
+
+            except httpx.TimeoutException as e:
+                raise HttpClientTimeoutException() from e
+            except httpx.ConnectError as e:
+                raise HttpClientConnectionException() from e
+            except HttpClientException:
+                raise
+            except Exception as e:
+                raise HttpClientException(str(e)) from e
 
     async def _iter_sse_json_events(
             self,
             response: httpx.Response,
     ) -> AsyncIterator[dict[str, Any]]:
         pending_data: str | None = None
-        try:
-            async for raw_line in response.aiter_lines():
-                line = raw_line.rstrip("\r")
-                if line.startswith("data:"):
-                    chunk = line[5:].lstrip()
-                    pending_data = (pending_data + "\n" + chunk) if pending_data is not None else chunk
-                elif line == "":
-                    if pending_data is None:
-                        continue
-                    try:
-                        obj = json.loads(pending_data)
-                    except json.JSONDecodeError as e:
-                        logger.error(
-                            "Invalid SSE JSON from LLM.",
-                            extra={"preview": pending_data[:200]},
-                        )
-                        raise HttpClientException(
-                            "Invalid SSE payload from LLM",
-                        ) from e
-                    if isinstance(obj, dict):
-                        yield obj
-                    pending_data = None
-        finally:
-            if pending_data is not None:
+        async for raw_line in response.aiter_lines():
+            line = raw_line.rstrip("\r")
+            if line.startswith("data:"):
+                chunk = line[5:].lstrip()
+                pending_data = (pending_data + "\n" + chunk) if pending_data is not None else chunk
+            elif line == "":
+                if pending_data is None:
+                    continue
                 try:
                     obj = json.loads(pending_data)
                 except json.JSONDecodeError as e:
+                    logger.error(
+                        "Invalid SSE JSON from LLM.",
+                        extra={"preview": pending_data[:200]},
+                    )
                     raise HttpClientException(
-                        "Invalid SSE payload from LLM (trailing)",
+                        "Invalid SSE payload from LLM",
                     ) from e
                 if isinstance(obj, dict):
                     yield obj
+                pending_data = None
+        if pending_data is not None:
+            try:
+                obj = json.loads(pending_data)
+            except json.JSONDecodeError as e:
+                raise HttpClientException(
+                    "Invalid SSE payload from LLM (trailing)",
+                ) from e
+            if isinstance(obj, dict):
+                yield obj
 
-    # ------------------------------------------------------------------
-    # Payload / response builders
-    # ------------------------------------------------------------------
     @staticmethod
     def _build_general_chat_payload(
             messages: list[dict[str, str]],

@@ -155,7 +155,7 @@ def generate_timeline_markdown(timeline: ArtifactTimeline) -> str:
         f"*Generado: {_fmt_dt(timeline.created_at)}*",
         "",
     ]
-    if timeline.summary.strip():
+    if (timeline.summary or "").strip():
         lines += [timeline.summary.strip(), ""]
     lines += ["---", ""]
 

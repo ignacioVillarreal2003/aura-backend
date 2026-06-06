@@ -163,7 +163,7 @@ def generate_lessons_learned_markdown(ll: ArtifactLessonsLearned) -> str:
         f"*Generado: {_fmt_dt(ll.created_at)}*",
         "",
     ]
-    if ll.context.strip():
+    if (ll.context or "").strip():
         lines += ["## Contexto", "", ll.context.strip(), ""]
     lines += ["---", ""]
 

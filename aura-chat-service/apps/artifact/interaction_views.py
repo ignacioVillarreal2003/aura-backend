@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 
 from apps.artifact.interaction_serializers import (
     ArtifactPinResponse,
+    FeedbackAnalyticsResponse,
     FeedbackResponse,
     SendThreadReplyRequest,
     SetFeedbackRequest,
@@ -210,21 +211,63 @@ class FeedbackAnalyticsView(APIView):
                 type=int,
                 location=OpenApiParameter.QUERY,
                 required=False,
-                description="Ventana en días (default 30, máximo 365).",
-            )
+                description="Ventana en días (default 30, máximo 3650).",
+            ),
+            OpenApiParameter(
+                name="chat_id",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Filtrar por chat de origen.",
+            ),
+            OpenApiParameter(
+                name="artifact_type",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Filtrar por tipo de artefacto.",
+            ),
+            OpenApiParameter(
+                name="user_id",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Filtrar por ID del usuario que envió el feedback.",
+            ),
+            OpenApiParameter(
+                name="reason",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Filtrar por código de motivo de feedback negativo.",
+            ),
         ],
-        responses={**standard_error_responses(401, 403)},
+        responses={200: FeedbackAnalyticsResponse, **standard_error_responses(401, 403)},
     )
     def get(self, request: Request) -> Response:
-        from apps.artifact.interaction_serializers import FeedbackAnalyticsResponse
         from apps.artifact.services.artifact_feedback_analytics_service import feedback_analytics_service
 
-        days_raw = request.query_params.get("days")
-        days = None
-        if days_raw is not None:
-            try:
-                days = int(days_raw)
-            except (TypeError, ValueError):
-                pass
-        data = feedback_analytics_service.get_analytics(user=request.user, days=days)
+        def _int_param(name: str) -> int | None:
+            raw = request.query_params.get(name)
+            if raw is not None:
+                try:
+                    return int(raw)
+                except (TypeError, ValueError):
+                    pass
+            return None
+
+        days = _int_param("days")
+        chat_id = _int_param("chat_id")
+        user_id = _int_param("user_id")
+        artifact_type = request.query_params.get("artifact_type") or None
+        reason = request.query_params.get("reason") or None
+
+        data = feedback_analytics_service.get_analytics(
+            user=request.user,
+            days=days,
+            chat_id=chat_id,
+            artifact_type=artifact_type,
+            user_id=user_id,
+            reason=reason,
+        )
         return Response(FeedbackAnalyticsResponse(data).data)

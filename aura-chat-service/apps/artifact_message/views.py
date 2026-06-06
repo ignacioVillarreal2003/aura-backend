@@ -3,6 +3,7 @@ from asgiref.sync import async_to_sync, sync_to_async
 from django.http import HttpResponse
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -20,7 +21,6 @@ from apps.artifact_message.serializers import (
     AssistantBlockSerializer,
     AssistantErrorSerializer,
     MessageResponse,
-    RegenerateResponseSerializer,
     SendMessagePostResponseSerializer,
     SendMessageRequest,
 )
@@ -36,20 +36,26 @@ from apps.artifact_message.services.message_service import (
 from apps.chat.ai_reply_lock import release, try_acquire
 from apps.chat.exceptions import ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
-from apps.chat.ws_rate_limit import check_message_rate_limit
+from apps.chat.ws_rate_limit import check_message_rate_limit, check_transcribe_rate_limit
 from apps.membership.repositories.membership_repository import membership_repository
 from core.authorization import AccessControl
-from core.authorization.permissions import EXPORT_CHAT, MANAGE_CHATS
+from core.authorization.permissions import (
+    EXPORT_MESSAGE,
+    GET_MESSAGE,
+    LIST_MESSAGES,
+    MANAGE_EXPORT_MESSAGE,
+)
 from core.openapi.common import standard_error_responses
 from core.pagination.pagination import MessageCursorPagination
 
 logger = logging.getLogger(__name__)
 
-_CHAT_ID_PATH_PARAM = OpenApiParameter(
+_CHAT_ID_QUERY_PARAM = OpenApiParameter(
     name="chat_id",
     type=int,
-    location=OpenApiParameter.PATH,
+    location=OpenApiParameter.QUERY,
     required=True,
+    description="ID del chat.",
 )
 _MESSAGE_ID_PATH_PARAM = OpenApiParameter(
     name="message_id",
@@ -58,6 +64,13 @@ _MESSAGE_ID_PATH_PARAM = OpenApiParameter(
     required=True,
     description="ID del mensaje (`ArtifactMessage.id`, campo `id` en el listado).",
 )
+
+
+def _require_chat_id_param(request: Request) -> int:
+    raw = request.query_params.get("chat_id")
+    if not raw or not raw.isdigit():
+        raise ValidationError({"chat_id": "Se requiere chat_id válido."})
+    return int(raw)
 
 
 def _get_chat_or_raise(chat_id: int, user_id: int):
@@ -69,19 +82,27 @@ def _get_chat_or_raise(chat_id: int, user_id: int):
     return chat
 
 
+def _get_message_or_raise(message_id: int) -> ArtifactMessage:
+    msg = message_repository.get_by_id(message_id)
+    if msg is None:
+        raise MessageNotFoundException()
+    return msg
+
+
 class MessageListView(APIView):
     @extend_schema(
         tags=["Messages"],
         summary="Listar mensajes",
         description=(
-            "Devuelve el historial de mensajes del chat con **paginación por cursor** (más recientes primero). "
-            "Cada ítem puede incluir anotaciones del usuario: `is_bookmarked`, `user_feedback` (1/-1 o null) "
-            "y `thread_reply_count`."
+                "Devuelve el historial de mensajes del chat con **paginación por cursor** (más recientes primero). "
+                "Cada ítem puede incluir anotaciones del usuario: `is_bookmarked`, `user_feedback` (1/-1 o null) "
+                "y `thread_reply_count`."
         ),
-        parameters=[_CHAT_ID_PATH_PARAM],
-        responses={200: MessageResponse(many=True), **standard_error_responses(401, 403, 404)},
+        parameters=[_CHAT_ID_QUERY_PARAM],
+        responses={200: MessageResponse(many=True), **standard_error_responses(400, 401, 403, 404)},
     )
-    def get(self, request: Request, chat_id: int) -> Response:
+    def get(self, request: Request) -> Response:
+        chat_id = _require_chat_id_param(request)
         messages = message_service.get_messages(user=request.user, chat_id=chat_id)
         paginator = MessageCursorPagination()
         page = paginator.paginate_queryset(messages, request)
@@ -93,32 +114,29 @@ class MessageGenerateView(APIView):
         tags=["Messages"],
         summary="Enviar mensaje",
         description=(
-            "Envía **texto** (`message`) **o** un audio (`audio` multipart)—no ambos. "
-            "El audio se transcribe en el servidor; el transcript aparece en `transcript` en la respuesta. "
-            "Retorna **409** si ya hay una respuesta IA en curso para este chat."
+                "Envía **texto** (`message`) **o** un audio (`audio` multipart)—no ambos. "
+                "El audio se transcribe en el servidor; el transcript aparece en `transcript` en la respuesta. "
+                "Retorna **409** si ya hay una respuesta IA en curso para este chat."
         ),
-        parameters=[_CHAT_ID_PATH_PARAM],
         request={"multipart/form-data": SendMessageRequest, "application/json": SendMessageRequest},
         responses={
             201: SendMessagePostResponseSerializer,
             **standard_error_responses(400, 401, 403, 404, 409, 502, 503),
         },
     )
-    def post(self, request: Request, chat_id: int) -> Response:
-        return async_to_sync(self._post_async)(request, chat_id)
+    def post(self, request: Request) -> Response:
+        return async_to_sync(self._post_async)(request)
 
-    async def _post_async(self, request: Request, chat_id: int) -> Response:
+    async def _post_async(self, request: Request) -> Response:
         serializer = SendMessageRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        chat_id = serializer.validated_data["chat_id"]
         mode = serializer.validated_data.get("mode", "document_question")
 
-        # Verify membership before acquiring any lock so we never block the chat
-        # for users who aren't members or when the chat doesn't exist.
-        chat_obj = await sync_to_async(_get_chat_or_raise)(chat_id, request.user.id)
+        chat_obj = await sync_to_async(message_service.assert_send_access)(request.user, chat_id)
         is_ephemeral = chat_obj.is_ephemeral
 
-        # Shared rate limit (same key as WebSocket) so both channels count together.
         if not await sync_to_async(check_message_rate_limit)(request.user.id, chat_id):
             return Response(
                 {"detail": "Too many messages. Please wait before sending more.", "error": "rate_limit_exceeded"},
@@ -127,12 +145,21 @@ class MessageGenerateView(APIView):
 
         transcript = None
         if "audio" in serializer.validated_data:
+            if not await sync_to_async(check_transcribe_rate_limit)(request.user.id):
+                return Response(
+                    {
+                        "detail": "Too many transcription requests. Please wait.",
+                        "error": "transcription_rate_limit_exceeded",
+                    },
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
             transcript = await sync_to_async(_transcribe)(serializer.validated_data["audio"])
             text = transcript
         else:
             text = serializer.validated_data["message"]
 
-        if not await sync_to_async(try_acquire)(chat_id):
+        lock_token = await sync_to_async(try_acquire)(chat_id)
+        if not lock_token:
             raise ChatAiReplyInProgressException()
 
         await sync_to_async(broadcast_chat_ai_lock_change)(chat_id, True)
@@ -141,8 +168,6 @@ class MessageGenerateView(APIView):
         msg_data = None
         try:
             if is_ephemeral:
-                # Ephemeral chats: validate access but do not persist messages.
-                await sync_to_async(message_service.assert_send_access)(request.user, chat_id)
                 msg_data = {
                     "id": None,
                     "artifact_id": None,
@@ -190,7 +215,7 @@ class MessageGenerateView(APIView):
                     )
                     assistant_error = {"detail": "AI service encountered an unexpected error."}
         finally:
-            await sync_to_async(release)(chat_id)
+            await sync_to_async(release)(chat_id, lock_token)
             await sync_to_async(broadcast_chat_ai_lock_change)(chat_id, False)
 
         return Response(
@@ -208,140 +233,52 @@ class MessageManageView(APIView):
     @extend_schema(
         tags=["Messages"],
         summary="Listar mensajes (admin)",
-        description="Devuelve el historial completo del chat sin requerir membresía activa. Requiere `MANAGE_CHATS`.",
-        parameters=[_CHAT_ID_PATH_PARAM],
-        responses={200: MessageResponse(many=True), **standard_error_responses(401, 403, 404)},
+        description="Devuelve el historial completo del chat sin requerir membresía activa. Requiere `MANAGE_MESSAGES`.",
+        parameters=[_CHAT_ID_QUERY_PARAM],
+        responses={200: MessageResponse(many=True), **standard_error_responses(400, 401, 403, 404)},
     )
-    def get(self, request: Request, chat_id: int) -> Response:
+    def get(self, request: Request) -> Response:
+        chat_id = _require_chat_id_param(request)
         messages = message_service.get_messages_admin(user=request.user, chat_id=chat_id)
         paginator = MessageCursorPagination()
         page = paginator.paginate_queryset(messages, request)
         return paginator.get_paginated_response(MessageResponse(page, many=True).data)
 
 
-class MessageManageExportPDFView(APIView):
-    @extend_schema(
-        tags=["Messages"],
-        summary="Exportar mensaje como PDF (admin)",
-        description="Descarga cualquier mensaje como PDF sin requerir membresía. Requiere `MANAGE_CHATS`.",
-        parameters=[_CHAT_ID_PATH_PARAM, _MESSAGE_ID_PATH_PARAM],
-        responses={
-            200: OpenApiResponse(description="PDF — Content-Type: application/pdf"),
-            **standard_error_responses(401, 403, 404),
-        },
-    )
-    def get(self, request: Request, chat_id: int, message_id: int) -> HttpResponse:
-        AccessControl.require_permissions(request.user, frozenset({MANAGE_CHATS}))
-        chat = chat_repository.get_by_id(chat_id)
-        if chat is None:
-            raise ChatNotFoundException()
-        message = message_repository.get_by_id_and_chat(message_id, chat_id)
-        if message is None:
-            raise MessageNotFoundException()
-        pdf = generate_message_pdf(chat, message)
-        response = HttpResponse(pdf, content_type="application/pdf")
-        response["Content-Disposition"] = f'attachment; filename="message_{message_id}.pdf"'
-        return response
-
-
-class MessageManageExportMarkdownView(APIView):
-    @extend_schema(
-        tags=["Messages"],
-        summary="Exportar mensaje como Markdown (admin)",
-        description="Descarga cualquier mensaje como Markdown sin requerir membresía. Requiere `MANAGE_CHATS`.",
-        parameters=[_CHAT_ID_PATH_PARAM, _MESSAGE_ID_PATH_PARAM],
-        responses={
-            200: OpenApiResponse(description="Markdown — Content-Type: text/markdown"),
-            **standard_error_responses(401, 403, 404),
-        },
-    )
-    def get(self, request: Request, chat_id: int, message_id: int) -> HttpResponse:
-        AccessControl.require_permissions(request.user, frozenset({MANAGE_CHATS}))
-        chat = chat_repository.get_by_id(chat_id)
-        if chat is None:
-            raise ChatNotFoundException()
-        message = message_repository.get_by_id_and_chat(message_id, chat_id)
-        if message is None:
-            raise MessageNotFoundException()
-        content = generate_message_markdown(chat, message)
-        response = HttpResponse(content, content_type="text/markdown; charset=utf-8")
-        response["Content-Disposition"] = f'attachment; filename="message_{message_id}.md"'
-        return response
-
-
-class MessageRegenerateView(APIView):
-    @extend_schema(
-        tags=["Messages"],
-        summary="Regenerar última respuesta IA",
-        description=(
-            "Elimina el último mensaje del asistente y ejecuta el flujo IA nuevamente con el mismo contexto. "
-            "Acepta un campo `mode` opcional. Retorna **409** si ya hay una respuesta IA en curso."
-        ),
-        request=None,
-        parameters=[_CHAT_ID_PATH_PARAM],
-        responses={
-            200: RegenerateResponseSerializer,
-            **standard_error_responses(401, 403, 404, 409, 502, 503),
-        },
-    )
-    def post(self, request: Request, chat_id: int) -> Response:
-        return async_to_sync(self._post_async)(request, chat_id)
-
-    async def _post_async(self, request: Request, chat_id: int) -> Response:
-        mode = ChatAIMode.normalize(
-            request.data.get("mode") if isinstance(request.data, dict) else None
-        )
-
-        if not await sync_to_async(try_acquire)(chat_id):
-            raise ChatAiReplyInProgressException()
-
-        await sync_to_async(broadcast_chat_ai_lock_change)(chat_id, True)
-        assistant = None
-        assistant_error = None
-        try:
-            regen_feedback = await sync_to_async(message_service.delete_last_ai_message)(
-                request.user, chat_id
-            )
-            try:
-                turn = await message_service.run_ai_reply(
-                    mode, request.user, chat_id, regen_feedback=regen_feedback
-                )
-                assistant = {"question": turn.question, "answer": turn.answer, "fragments": turn.fragments}
-            except LLMServiceException as e:
-                assistant_error = {"detail": e.detail}
-            except Exception:
-                logger.exception(
-                    "Unexpected error regenerating AI response.",
-                    extra={"chat_id": chat_id, "user_id": request.user.id},
-                )
-                assistant_error = {"detail": "AI service encountered an unexpected error."}
-        finally:
-            await sync_to_async(release)(chat_id)
-            await sync_to_async(broadcast_chat_ai_lock_change)(chat_id, False)
-
-        return Response(
-            {"assistant": assistant, "assistant_error": assistant_error},
-            status=status.HTTP_200_OK,
-        )
-
-
 class MessageDetailView(APIView):
+    @extend_schema(
+        tags=["Messages"],
+        summary="Obtener mensaje",
+        parameters=[_MESSAGE_ID_PATH_PARAM],
+        responses={
+            200: MessageResponse,
+            **standard_error_responses(401, 403, 404),
+        },
+    )
+    def get(self, request: Request, message_id: int) -> Response:
+        AccessControl.require_permissions(request.user, frozenset({GET_MESSAGE}))
+        plain = _get_message_or_raise(message_id)
+        chat_id = plain.artifact.source_chat_id
+        _get_chat_or_raise(chat_id, request.user.id)
+        msg = message_repository.get_messages_by_chat(chat_id, user_id=request.user.id).filter(pk=message_id).first()
+        if msg is None:
+            raise MessageNotFoundException()
+        return Response(MessageResponse(msg).data)
+
     @extend_schema(
         tags=["Messages"],
         summary="Eliminar mensaje",
         description="Elimina suavemente un mensaje. Solo el dueño del chat puede eliminar mensajes.",
-        parameters=[_CHAT_ID_PATH_PARAM, _MESSAGE_ID_PATH_PARAM],
+        parameters=[_MESSAGE_ID_PATH_PARAM],
         responses={
             204: OpenApiResponse(description="Sin contenido"),
             **standard_error_responses(401, 403, 404),
         },
     )
-    def delete(self, request: Request, chat_id: int, message_id: int) -> Response:
-        message_service.delete_message(
-            user=request.user,
-            chat_id=chat_id,
-            message_id=message_id,
-        )
+    def delete(self, request: Request, message_id: int) -> Response:
+        msg = _get_message_or_raise(message_id)
+        chat_id = msg.artifact.source_chat_id
+        message_service.delete_message(user=request.user, chat_id=chat_id, message_id=message_id)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -349,21 +286,18 @@ class MessageExportPDFView(APIView):
     @extend_schema(
         tags=["Messages"],
         summary="Exportar mensaje como PDF",
-        operation_id="v1_chats_messages_export_pdf_message",
-        description="Descarga un mensaje como PDF. Requiere membresía activa y `EXPORT_CHAT`.",
-        parameters=[_CHAT_ID_PATH_PARAM, _MESSAGE_ID_PATH_PARAM],
+        description="Descarga un mensaje como PDF. Requiere membresía activa y `EXPORT_MESSAGE`.",
+        parameters=[_MESSAGE_ID_PATH_PARAM],
         responses={
             200: OpenApiResponse(description="PDF — Content-Type: application/pdf"),
             **standard_error_responses(401, 403, 404),
         },
     )
-    def get(self, request: Request, chat_id: int, message_id: int) -> HttpResponse:
-        AccessControl.require_permissions(request.user, frozenset({EXPORT_CHAT}))
-        chat = _get_chat_or_raise(chat_id, request.user.id)
-        message = message_repository.get_by_id_and_chat(message_id, chat_id)
-        if message is None:
-            raise MessageNotFoundException()
-        pdf = generate_message_pdf(chat, message)
+    def get(self, request: Request, message_id: int) -> HttpResponse:
+        AccessControl.require_permissions(request.user, frozenset({EXPORT_MESSAGE}))
+        msg = _get_message_or_raise(message_id)
+        chat = _get_chat_or_raise(msg.artifact.source_chat_id, request.user.id)
+        pdf = generate_message_pdf(chat, msg)
         response = HttpResponse(pdf, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="message_{message_id}.pdf"'
         return response
@@ -373,20 +307,64 @@ class MessageExportMarkdownView(APIView):
     @extend_schema(
         tags=["Messages"],
         summary="Exportar mensaje como Markdown",
-        description="Descarga un mensaje como Markdown. Requiere membresía activa y `EXPORT_CHAT`.",
-        parameters=[_CHAT_ID_PATH_PARAM, _MESSAGE_ID_PATH_PARAM],
+        description="Descarga un mensaje como Markdown. Requiere membresía activa y `EXPORT_MESSAGE`.",
+        parameters=[_MESSAGE_ID_PATH_PARAM],
         responses={
             200: OpenApiResponse(description="Markdown — Content-Type: text/markdown"),
             **standard_error_responses(401, 403, 404),
         },
     )
-    def get(self, request: Request, chat_id: int, message_id: int) -> HttpResponse:
-        AccessControl.require_permissions(request.user, frozenset({EXPORT_CHAT}))
-        chat = _get_chat_or_raise(chat_id, request.user.id)
-        message = message_repository.get_by_id_and_chat(message_id, chat_id)
-        if message is None:
-            raise MessageNotFoundException()
-        content = generate_message_markdown(chat, message)
+    def get(self, request: Request, message_id: int) -> HttpResponse:
+        AccessControl.require_permissions(request.user, frozenset({EXPORT_MESSAGE}))
+        msg = _get_message_or_raise(message_id)
+        chat = _get_chat_or_raise(msg.artifact.source_chat_id, request.user.id)
+        content = generate_message_markdown(chat, msg)
+        response = HttpResponse(content, content_type="text/markdown; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="message_{message_id}.md"'
+        return response
+
+
+class MessageManageExportPDFView(APIView):
+    @extend_schema(
+        tags=["Messages"],
+        summary="Exportar mensaje como PDF (admin)",
+        description="Descarga cualquier mensaje como PDF sin requerir membresía. Requiere `MANAGE_EXPORT_MESSAGE`.",
+        parameters=[_MESSAGE_ID_PATH_PARAM],
+        responses={
+            200: OpenApiResponse(description="PDF — Content-Type: application/pdf"),
+            **standard_error_responses(401, 403, 404),
+        },
+    )
+    def get(self, request: Request, message_id: int) -> HttpResponse:
+        AccessControl.require_permissions(request.user, frozenset({MANAGE_EXPORT_MESSAGE}))
+        msg = _get_message_or_raise(message_id)
+        chat = chat_repository.get_by_id(msg.artifact.source_chat_id)
+        if chat is None:
+            raise ChatNotFoundException()
+        pdf = generate_message_pdf(chat, msg)
+        response = HttpResponse(pdf, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="message_{message_id}.pdf"'
+        return response
+
+
+class MessageManageExportMarkdownView(APIView):
+    @extend_schema(
+        tags=["Messages"],
+        summary="Exportar mensaje como Markdown (admin)",
+        description="Descarga cualquier mensaje como Markdown sin requerir membresía. Requiere `MANAGE_EXPORT_MESSAGE`.",
+        parameters=[_MESSAGE_ID_PATH_PARAM],
+        responses={
+            200: OpenApiResponse(description="Markdown — Content-Type: text/markdown"),
+            **standard_error_responses(401, 403, 404),
+        },
+    )
+    def get(self, request: Request, message_id: int) -> HttpResponse:
+        AccessControl.require_permissions(request.user, frozenset({MANAGE_EXPORT_MESSAGE}))
+        msg = _get_message_or_raise(message_id)
+        chat = chat_repository.get_by_id(msg.artifact.source_chat_id)
+        if chat is None:
+            raise ChatNotFoundException()
+        content = generate_message_markdown(chat, msg)
         response = HttpResponse(content, content_type="text/markdown; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="message_{message_id}.md"'
         return response

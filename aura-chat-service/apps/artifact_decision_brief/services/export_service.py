@@ -3,7 +3,6 @@ import datetime
 import html
 import io
 import logging
-
 from xhtml2pdf import pisa
 
 from apps.artifact.models.artifact import Artifact

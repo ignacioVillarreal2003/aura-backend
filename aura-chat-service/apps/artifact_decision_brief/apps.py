@@ -1,7 +1,7 @@
 from django.apps import AppConfig
 
 
-class DecisionBriefConfig(AppConfig):
+class ArtifactDecisionBriefConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "apps.artifact_decision_brief"
-    label = "decision_brief"
+    verbose_name = "Artifact Decision Brief"

@@ -23,5 +23,3 @@ class ArtifactReport(AuditModel, SoftDeleteModel):
         managed = False
         db_table = "artifact_report"
         ordering = ["-created_at"]
-
-

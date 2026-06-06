@@ -14,7 +14,7 @@ class MessageConfig(AppConfig):
             from core.clients.transcription_client import _get_model
             _get_model()
         except ImportError:
-            pass  # faster_whisper not installed in this environment
+            pass
 
         def _close_llm_client():
             from core.clients.llm_client import llm_client

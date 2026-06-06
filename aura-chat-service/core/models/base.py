@@ -15,8 +15,6 @@ class AuditModel(models.Model):
         if self.pk is not None:
             update_fields = kwargs.get("update_fields")
             if update_fields is None:
-                # Full save of an existing row: bump updated_at so the change is
-                # always audited (the unrestricted save persists it naturally).
                 self.updated_at = timezone.now()
             elif "updated_at" not in update_fields:
                 self.updated_at = timezone.now()

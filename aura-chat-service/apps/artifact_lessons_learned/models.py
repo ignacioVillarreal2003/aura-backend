@@ -41,5 +41,3 @@ class ArtifactLessonsLearnedItem(models.Model):
         managed = False
         db_table = "artifact_lessons_learned_item"
         ordering = ["position"]
-
-

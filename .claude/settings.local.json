@@ -58,7 +58,20 @@
       "Bash(dir /s /b \"C:\\\\Users\\\\ignac\\\\Desktop\\\\AURA\\\\aura-backend\\\\aura-chat-service\")",
       "Bash(findstr /i \"timeline_repository\\\\|timeline_service\\\\|report_service\\\\|report_repository\")",
       "Bash(echo \"---exit:$?---\")",
-      "Bash(python -m py_compile apps/assistant/services/assistant_service.py apps/membership/models/chat_membership.py apps/membership/services/membership_service.py apps/membership/repositories/membership_repository.py apps/membership/serializers/request.py apps/membership/views/membership_view.py)"
+      "Bash(python -m py_compile apps/assistant/services/assistant_service.py apps/membership/models/chat_membership.py apps/membership/services/membership_service.py apps/membership/repositories/membership_repository.py apps/membership/serializers/request.py apps/membership/views/membership_view.py)",
+      "Bash(git *)",
+      "Bash(export GIT_PAGER=cat)",
+      "Bash(grep -E \"^message$|^report$|^checklist$\")",
+      "Bash(echo \"exit:$?\")",
+      "Bash(sed -n '1,30p' test/conftest.py)",
+      "Bash(python -m pytest --collect-only -q)",
+      "Bash(./.venv/Scripts/python.exe -m pytest --collect-only -q)",
+      "Bash(./.venv/Scripts/python.exe -c \"import httpx, httpcore, asgiref, anyio; print\\('httpx', httpx.__version__\\); print\\('httpcore', httpcore.__version__\\); print\\('asgiref', asgiref.__version__\\); print\\('anyio', anyio.__version__\\)\")",
+      "Bash(./.venv/Scripts/python.exe -c ' *)",
+      "Bash(./.venv/Scripts/python.exe -m py_compile apps/chat/ai_reply_lock.py apps/chat/ws_rate_limit.py apps/chat/consumers/chat_consumer.py apps/artifact_message/views.py apps/artifact_report/views.py apps/artifact_checklist/views.py apps/artifact_quiz/views.py apps/artifact_timeline/views.py apps/artifact_lessons_learned/views.py apps/artifact_decision_brief/views.py core/pagination/pagination.py aura_chat_service/settings/base.py)",
+      "Bash(./.venv/Scripts/python.exe -m py_compile apps/chat/consumers/chat_consumer.py apps/chat/ws_rate_limit.py apps/chat/ai_reply_lock.py)",
+      "Bash(./.venv/Scripts/python.exe -c \"import fakeredis; print\\('fakeredis', fakeredis.__version__\\)\")",
+      "Bash(./.venv/Scripts/python.exe -m py_compile apps/chat/consumers/chat_consumer.py)"
     ]
   }
 }

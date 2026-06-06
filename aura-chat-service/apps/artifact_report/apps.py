@@ -1,7 +1,7 @@
 from django.apps import AppConfig
 
 
-class ReportConfig(AppConfig):
+class ArtifactReportConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "apps.artifact_report"
-    label = "report"
+    verbose_name = "Artifact Report"

@@ -30,10 +30,10 @@ class TranscribeView(APIView):
         tags=["Chats"],
         summary="Transcribe audio",
         description=(
-            "Accepts a voice clip (`audio` multipart field) and returns its transcript. "
-            "No message is saved and the AI is not invoked. "
-            "Requires active chat membership, `SEND_MESSAGE`, and the chat must not be locked. "
-            "Use this to convert audio to text before sending a message or generating an artifact."
+                "Accepts a voice clip (`audio` multipart field) and returns its transcript. "
+                "No message is saved and the AI is not invoked. "
+                "Requires active chat membership, `SEND_MESSAGE`, and the chat must not be locked. "
+                "Use this to convert audio to text before sending a message or generating an artifact."
         ),
         parameters=[_CHAT_ID_PATH_PARAM],
         responses={

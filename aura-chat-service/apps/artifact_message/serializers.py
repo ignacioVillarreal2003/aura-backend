@@ -1,17 +1,12 @@
-from django.conf import settings
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.artifact_message.models import ArtifactMessage
-
-_SUPPORTED_AUDIO_TYPES = {
-    "audio/mpeg", "audio/mp4", "audio/wav", "audio/webm",
-    "audio/ogg", "audio/flac", "audio/x-wav", "audio/x-m4a",
-}
-_MAX_AUDIO_MB = int(getattr(settings, "AUDIO_MAX_UPLOAD_MB", 25))
+from core.validators.audio import MAX_AUDIO_MB as _MAX_AUDIO_MB, SUPPORTED_AUDIO_TYPES as _SUPPORTED_AUDIO_TYPES
 
 
 class SendMessageRequest(serializers.Serializer):
+    chat_id = serializers.IntegerField(help_text="ID del chat al que pertenece el mensaje.")
     message = serializers.CharField(
         max_length=10000,
         required=False,
@@ -172,17 +167,4 @@ class SendMessagePostResponseSerializer(serializers.Serializer):
         allow_null=True,
         required=False,
         help_text="Present when the LLM or pipeline failed after accepting the user message.",
-    )
-
-
-class RegenerateResponseSerializer(serializers.Serializer):
-    assistant = AssistantBlockSerializer(
-        allow_null=True,
-        required=False,
-        help_text="New assistant turn after regeneration; null if generation failed.",
-    )
-    assistant_error = AssistantErrorSerializer(
-        allow_null=True,
-        required=False,
-        help_text="Set when the LLM call failed.",
     )

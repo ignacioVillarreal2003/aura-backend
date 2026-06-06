@@ -16,11 +16,9 @@ from apps.artifact_message.exceptions import (
     MessageAccessDeniedException,
     MessageDeleteForbiddenException,
     MessageNotFoundException,
-    NoMessageToRegenerateException,
     ReaderCannotSendMessageException,
 )
 from apps.artifact_message.models import ArtifactMessage
-from apps.artifact.repositories.artifact_feedback_repository import feedback_repository
 from apps.artifact_message.repositories.message_repository import message_repository
 from apps.artifact_message.serializers import MessageResponse
 from core.authentication.authenticated_user import AuthenticatedUser
@@ -28,8 +26,7 @@ from core.authorization.access import AccessControl
 from core.authorization.permissions import (
     DELETE_MESSAGE,
     LIST_MESSAGES,
-    MANAGE_CHATS,
-    REGENERATE_AI_RESPONSE,
+    MANAGE_MESSAGES,
     SEND_MESSAGE,
 )
 from core.clients.exceptions import HttpClientException
@@ -39,19 +36,11 @@ from core.clients.llm_client import (
     GeneralChatResult,
     llm_client,
 )
+
 logger = logging.getLogger(__name__)
 
 
 class ChatAIMode:
-    """Selectable AI reply flows backed by the LLM service.
-
-    Each mode maps to a distinct LLM-service controller:
-      * ``document_question`` -> RAG question answering over the user's documents.
-      * ``general_chat``      -> general-purpose assistant (no RAG, history only).
-      * ``rag_agent``         -> full RAG agent pipeline (analyse/retrieve/reason).
-      * ``agent``             -> tool-using agent (document question/summary tools).
-    """
-
     DOCUMENT_QUESTION = "document_question"
     GENERAL_CHAT = "general_chat"
     RAG_AGENT = "rag_agent"
@@ -62,7 +51,6 @@ class ChatAIMode:
 
     @classmethod
     def normalize(cls, value: Any) -> str:
-        """Return a valid mode, defaulting to ``document_question``."""
         if isinstance(value, str) and value in cls.ALL:
             return value
         return cls.DEFAULT
@@ -158,69 +146,14 @@ class MessageService:
         return message_repository.get_messages_by_chat(chat_id, user_id=user.id)
 
     def get_messages_admin(self, user: AuthenticatedUser, chat_id: int):
-        AccessControl.require_permissions(user, frozenset({MANAGE_CHATS}))
+        AccessControl.require_permissions(user, frozenset({MANAGE_MESSAGES}))
         chat = chat_repository.get_by_id(chat_id)
         if chat is None:
             raise ChatNotFoundException()
         return message_repository.get_messages_by_chat(chat_id, user_id=user.id)
 
-    def delete_last_ai_message(self, user: AuthenticatedUser, chat_id: int) -> str | None:
-        """Delete the last AI message ahead of a regeneration.
-
-        Returns a natural-language hint built from the requesting user's negative
-        feedback on that message (if any), so the regenerated answer can correct
-        what the user disliked. Returns ``None`` when there is no actionable
-        feedback (no feedback, or a thumbs up).
-        """
-        AccessControl.require_permissions(user, frozenset({REGENERATE_AI_RESPONSE}))
-        self._require_access(chat_id, user.id)
-        last_ai = message_repository.get_last_ai_message(chat_id)
-        if last_ai is None:
-            raise NoMessageToRegenerateException()
-        hint = self._regen_hint_from_feedback(last_ai.artifact_id, user.id)
-        last_ai.delete(deleted_by=user.id)
-        logger.info(
-            "Last AI message deleted for regeneration.",
-            extra={"chat_id": chat_id, "message_id": last_ai.id, "has_feedback_hint": hint is not None},
-        )
-        return hint
-
     @staticmethod
-    def _regen_hint_from_feedback(artifact_id: int, user_id: int) -> str | None:
-        from apps.artifact.models.artifact_feedback import ArtifactFeedback
-
-        fb = feedback_repository.get(artifact_id=artifact_id, user_id=user_id)
-        if fb is None or fb.value != ArtifactFeedback.Value.THUMBS_DOWN:
-            return None
-
-        reason_text = {
-            ArtifactFeedback.Reason.INCORRECT: "la información era incorrecta",
-            ArtifactFeedback.Reason.INCOMPLETE: "la respuesta estaba incompleta",
-            ArtifactFeedback.Reason.OFF_TOPIC: "no respondía lo que se preguntó",
-            ArtifactFeedback.Reason.TONE: "el tono o estilo no era adecuado",
-            ArtifactFeedback.Reason.TOO_LONG: "era demasiado larga o verbosa",
-            ArtifactFeedback.Reason.HALLUCINATION: "incluía datos inventados o no verificables",
-        }.get(fb.reason)
-
-        parts = [
-            "El usuario marcó tu respuesta anterior como NO útil y pidió regenerarla.",
-        ]
-        if reason_text:
-            parts.append(f"Motivo indicado: {reason_text}.")
-        comment = (fb.comment or "").strip()
-        if comment:
-            parts.append(f'Comentario del usuario: "{comment}".')
-        parts.append(
-            "Generá una nueva respuesta que corrija específicamente ese problema, "
-            "manteniendo lo que sí era correcto."
-        )
-        return " ".join(parts)
-
-    @staticmethod
-    async def _build_llm_messages(
-            chat_id: int,
-            extra_instruction: str | None = None,
-    ) -> list[dict[str, str]]:
+    async def _build_llm_messages(chat_id: int) -> list[dict[str, str]]:
         limit = getattr(settings, "LLM_CONTEXT_MESSAGE_LIMIT", 10)
         recent = await sync_to_async(message_repository.get_recent_messages)(
             chat_id, limit=limit
@@ -229,23 +162,16 @@ class MessageService:
         for m in reversed(recent):
             if m.sender_type == ArtifactMessage.SenderType.USER:
                 messages.append({"role": "human", "content": m.message})
-            elif m.sender_type in (ArtifactMessage.SenderType.SYSTEM, ArtifactMessage.SenderType.ASSISTANT):
+            elif m.sender_type == ArtifactMessage.SenderType.ASSISTANT:
                 messages.append({"role": "assistant", "content": m.message})
-        if extra_instruction:
-            # Appended as a final human turn so every mode (general/rag/agent/document)
-            # picks it up uniformly, since only `general_chat` carries a system prompt.
-            messages.append({"role": "human", "content": extra_instruction})
         return messages
 
     async def run_document_question(
             self,
             user: AuthenticatedUser,
             chat_id: int,
-            regen_feedback: str | None = None,
     ) -> DocumentQuestionRunResult:
-        await sync_to_async(self._require_access)(chat_id, user.id)
-
-        messages = await self._build_llm_messages(chat_id, extra_instruction=regen_feedback)
+        messages = await self._build_llm_messages(chat_id)
 
         try:
             llm_out: DocumentQuestionResult = await llm_client.document_question(
@@ -282,37 +208,26 @@ class MessageService:
             assistant_message=assistant_msg,
         )
 
-    # ------------------------------------------------------------------
-    # Non-streaming AI replies (REST request/response)
-    # ------------------------------------------------------------------
     async def run_ai_reply(
             self,
             mode: str,
             user: AuthenticatedUser,
             chat_id: int,
-            regen_feedback: str | None = None,
     ) -> DocumentQuestionRunResult:
-        """Run a single AI reply turn for the requested mode and persist it.
-
-        ``regen_feedback`` is an optional instruction (built from the user's
-        negative feedback) injected into the LLM context to steer a regeneration.
-        """
         if mode == ChatAIMode.GENERAL_CHAT:
-            return await self.run_general_chat(user, chat_id, regen_feedback=regen_feedback)
+            return await self.run_general_chat(user, chat_id)
         if mode == ChatAIMode.RAG_AGENT:
-            return await self.run_rag_agent(user, chat_id, regen_feedback=regen_feedback)
+            return await self.run_rag_agent(user, chat_id)
         if mode == ChatAIMode.AGENT:
-            return await self.run_agent(user, chat_id, regen_feedback=regen_feedback)
-        return await self.run_document_question(user, chat_id, regen_feedback=regen_feedback)
+            return await self.run_agent(user, chat_id)
+        return await self.run_document_question(user, chat_id)
 
     async def run_general_chat(
             self,
             user: AuthenticatedUser,
             chat_id: int,
-            regen_feedback: str | None = None,
     ) -> DocumentQuestionRunResult:
-        await sync_to_async(self._require_access)(chat_id, user.id)
-        messages = await self._build_llm_messages(chat_id, extra_instruction=regen_feedback)
+        messages = await self._build_llm_messages(chat_id)
         system_prompt = await self._get_chat_system_prompt(chat_id)
         try:
             result: GeneralChatResult = await llm_client.general_chat(
@@ -344,7 +259,6 @@ class MessageService:
             self,
             user: AuthenticatedUser,
             chat_id: int,
-            regen_feedback: str | None = None,
     ) -> DocumentQuestionRunResult:
         return await self._run_agent_flow(
             user=user,
@@ -352,14 +266,12 @@ class MessageService:
             caller=llm_client.rag_agent,
             url_setting_name="LLM_RAG_AGENT_URL",
             label="rag-agent",
-            regen_feedback=regen_feedback,
         )
 
     async def run_agent(
             self,
             user: AuthenticatedUser,
             chat_id: int,
-            regen_feedback: str | None = None,
     ) -> DocumentQuestionRunResult:
         return await self._run_agent_flow(
             user=user,
@@ -367,7 +279,6 @@ class MessageService:
             caller=llm_client.agent,
             url_setting_name="LLM_AGENT_URL",
             label="agent",
-            regen_feedback=regen_feedback,
         )
 
     async def _run_agent_flow(
@@ -378,10 +289,8 @@ class MessageService:
             caller: Callable[..., Any],
             url_setting_name: str,
             label: str,
-            regen_feedback: str | None = None,
     ) -> DocumentQuestionRunResult:
-        await sync_to_async(self._require_access)(chat_id, user.id)
-        messages = await self._build_llm_messages(chat_id, extra_instruction=regen_feedback)
+        messages = await self._build_llm_messages(chat_id)
         try:
             result: AgentRunResult = await caller(messages, user)
         except HttpClientException as e:
@@ -427,39 +336,26 @@ class MessageService:
         )
         return assistant_msg
 
-    # ------------------------------------------------------------------
-    # Streaming AI replies (WebSocket group payloads)
-    # ------------------------------------------------------------------
     def iter_ai_reply_stream_group_payloads(
             self,
             mode: str,
             user: AuthenticatedUser,
             chat_id: int,
-            regen_feedback: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        """Return the streaming group-payload iterator for the requested mode.
-
-        Returns the async generator itself (it is not awaited) so the caller can
-        iterate it directly, mirroring the existing document-question flow.
-
-        ``regen_feedback`` is an optional instruction (built from the user's
-        negative feedback) injected into the LLM context to steer a regeneration.
-        """
         if mode == ChatAIMode.GENERAL_CHAT:
-            return self.iter_general_chat_stream_group_payloads(user, chat_id, regen_feedback)
+            return self.iter_general_chat_stream_group_payloads(user, chat_id)
         if mode == ChatAIMode.RAG_AGENT:
-            return self.iter_rag_agent_stream_group_payloads(user, chat_id, regen_feedback)
+            return self.iter_rag_agent_stream_group_payloads(user, chat_id)
         if mode == ChatAIMode.AGENT:
-            return self.iter_agent_stream_group_payloads(user, chat_id, regen_feedback)
-        return self.iter_document_question_stream_group_payloads(user, chat_id, regen_feedback)
+            return self.iter_agent_stream_group_payloads(user, chat_id)
+        return self.iter_document_question_stream_group_payloads(user, chat_id)
 
     async def iter_document_question_stream_group_payloads(
             self,
             user: AuthenticatedUser,
             chat_id: int,
-            regen_feedback: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        messages = await self._build_llm_messages(chat_id, extra_instruction=regen_feedback)
+        messages = await self._build_llm_messages(chat_id)
         async for payload in self._iter_ai_stream_group_payloads(
                 chat_id=chat_id,
                 user=user,
@@ -475,9 +371,8 @@ class MessageService:
             self,
             user: AuthenticatedUser,
             chat_id: int,
-            regen_feedback: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        messages = await self._build_llm_messages(chat_id, extra_instruction=regen_feedback)
+        messages = await self._build_llm_messages(chat_id)
         system_prompt = await self._get_chat_system_prompt(chat_id)
         async for payload in self._iter_ai_stream_group_payloads(
                 chat_id=chat_id,
@@ -494,9 +389,8 @@ class MessageService:
             self,
             user: AuthenticatedUser,
             chat_id: int,
-            regen_feedback: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        messages = await self._build_llm_messages(chat_id, extra_instruction=regen_feedback)
+        messages = await self._build_llm_messages(chat_id)
         async for payload in self._iter_ai_stream_group_payloads(
                 chat_id=chat_id,
                 user=user,
@@ -510,9 +404,8 @@ class MessageService:
             self,
             user: AuthenticatedUser,
             chat_id: int,
-            regen_feedback: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        messages = await self._build_llm_messages(chat_id, extra_instruction=regen_feedback)
+        messages = await self._build_llm_messages(chat_id)
         async for payload in self._iter_ai_stream_group_payloads(
                 chat_id=chat_id,
                 user=user,
@@ -533,17 +426,8 @@ class MessageService:
             ],
             stream_url_setting_name: str,
     ) -> AsyncIterator[dict[str, Any]]:
-        """Consume an LLM SSE event stream and yield WebSocket group payloads.
-
-        Handles the union of event types emitted by the LLM streaming
-        controllers (``meta``, ``progress``, ``delta``, ``complete``, ``error``);
-        modes that never emit a given event simply skip that branch. The
-        assistant message is persisted on ``complete`` (or via the accumulated
-        deltas as a fallback when the stream ends without a ``complete``).
-        """
         accumulated_answer = ""
         received_complete = False
-        had_error = False
         last_question = ""
         last_fragments: list[Any] = []
 
@@ -639,7 +523,6 @@ class MessageService:
                         event["created_at"] = assistant_msg.created_at.isoformat()
                     yield event
                 elif et == "error":
-                    had_error = True
                     yield {
                         "type": "ai_error",
                         "detail": str(sse.get("message", "AI error")),
@@ -664,7 +547,7 @@ class MessageService:
                 return
             raise LLMServiceException() from e
 
-        if not received_complete and not had_error:
+        if not received_complete:
             fallback = await _build_and_save_complete()
             if fallback:
                 yield fallback
@@ -774,11 +657,6 @@ class MessageService:
             chat_id: int,
             user_message: str,
     ) -> DocumentQuestionRunResult:
-        """Run a single non-persisted AI reply turn for the requested mode.
-
-        Used by ephemeral chats: nothing is written to the database, only the
-        LLM is invoked with the supplied message.
-        """
         if mode == ChatAIMode.DOCUMENT_QUESTION:
             return await self.run_ephemeral_document_question(user, chat_id, user_message)
 
@@ -836,10 +714,9 @@ class MessageService:
             raise ChatLockedException()
         return chat
 
-    def assert_send_access(self, user: AuthenticatedUser, chat_id: int) -> None:
-        """Membership and chat-state checks for send-like actions (messages, transcribe)."""
+    def assert_send_access(self, user: AuthenticatedUser, chat_id: int):
         AccessControl.require_permissions(user, frozenset({SEND_MESSAGE}))
-        self._require_send_access(chat_id, user.id)
+        return self._require_send_access(chat_id, user.id)
 
 
 message_service = MessageService()

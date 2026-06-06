@@ -4,7 +4,6 @@ import html
 import io
 import logging
 import re
-
 import markdown as md_lib
 from django.utils import timezone
 from xhtml2pdf import pisa
@@ -149,7 +148,7 @@ def generate_chat_pdf(chat: Chat, messages: list[ArtifactMessage]) -> bytes:
 
     rows: list[str] = []
     for msg in messages:
-        is_system = msg.sender_type in (ArtifactMessage.SenderType.SYSTEM, ArtifactMessage.SenderType.ASSISTANT)
+        is_system = msg.sender_type == ArtifactMessage.SenderType.ASSISTANT
         css_class = "bubble-system" if is_system else "bubble-user"
         sender_label = "AI" if is_system else "User"
         content_html = _render_markdown(msg.message)
@@ -191,7 +190,7 @@ def generate_chat_markdown(chat: Chat, messages: list[ArtifactMessage]) -> str:
         "",
     ]
     for msg in messages:
-        is_system = msg.sender_type == ArtifactMessage.SenderType.SYSTEM
+        is_system = msg.sender_type == ArtifactMessage.SenderType.ASSISTANT
         sender = "**AI**" if is_system else "**User**"
         lines.append(f"{sender} — {_fmt_dt(msg.created_at)}")
         lines.append("")
@@ -203,7 +202,7 @@ def generate_chat_markdown(chat: Chat, messages: list[ArtifactMessage]) -> str:
 
 
 def generate_message_markdown(chat: Chat, message: ArtifactMessage) -> str:
-    is_system = message.sender_type in (ArtifactMessage.SenderType.SYSTEM, ArtifactMessage.SenderType.ASSISTANT)
+    is_system = message.sender_type == ArtifactMessage.SenderType.ASSISTANT
     sender = "**AI**" if is_system else "**User**"
     lines = [
         f"# {chat.name}",
@@ -219,7 +218,7 @@ def generate_message_markdown(chat: Chat, message: ArtifactMessage) -> str:
 def generate_message_pdf(chat: Chat, message: ArtifactMessage) -> bytes:
     chat_name = html.escape(chat.name)
     export_date = html.escape(_fmt_dt(timezone.now()))
-    is_system = message.sender_type in (ArtifactMessage.SenderType.SYSTEM, ArtifactMessage.SenderType.ASSISTANT)
+    is_system = message.sender_type == ArtifactMessage.SenderType.ASSISTANT
     css_class = "bubble-system" if is_system else "bubble-user"
     sender_label = "AI" if is_system else "User"
     content_html = _render_markdown(message.message)

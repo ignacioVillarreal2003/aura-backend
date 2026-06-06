@@ -45,11 +45,6 @@ class NotAIMessageException(ValidationException):
     detail = "Feedback can only be submitted for AI messages"
 
 
-class NoMessageToRegenerateException(ConflictException):
-    error_code = "no_message_to_regenerate"
-    detail = "There is no AI message to regenerate in this chat"
-
-
 class ReaderCannotSendMessageException(ForbiddenException):
     error_code = "reader_cannot_send_message"
     detail = "Readers cannot send messages in this chat"

@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from typing import Optional
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
@@ -20,6 +21,7 @@ from apps.membership.repositories.membership_repository import membership_reposi
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization import permissions as perms
 from core.authorization.access import AccessControl
+from core.authorization.permissions import MANAGE_CHAT_ARTIFACTS
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +91,52 @@ class ArtifactService:
             raise UnknownArtifactTypeException()
         return artifact_repository.list_all(artifact_type=artifact_type)
 
+    def list_chat_artifacts(
+            self,
+            user: AuthenticatedUser,
+            chat_id: int,
+            artifact_type: Optional[str] = None,
+            created_by: Optional[int] = None,
+            date_from: Optional[datetime] = None,
+            date_to: Optional[datetime] = None,
+    ):
+        AccessControl.require_permissions(user, frozenset({perms.LIST_ARTIFACTS}))
+        if artifact_type is not None and not is_known_type(artifact_type):
+            raise UnknownArtifactTypeException()
+        if chat_repository.get_by_id(chat_id) is None:
+            raise ChatNotFoundException()
+        if not membership_repository.is_active_member(chat_id, user.id):
+            raise ChatAccessDeniedException()
+        return artifact_repository.list_by_chat_filtered(
+            source_chat_id=chat_id,
+            artifact_type=artifact_type,
+            created_by=created_by,
+            date_from=date_from,
+            date_to=date_to,
+        )
+
+    def list_chat_artifacts_admin(
+            self,
+            user: AuthenticatedUser,
+            chat_id: int,
+            artifact_type: Optional[str] = None,
+            created_by: Optional[int] = None,
+            date_from: Optional[datetime] = None,
+            date_to: Optional[datetime] = None,
+    ):
+        AccessControl.require_permissions(user, frozenset({MANAGE_CHAT_ARTIFACTS}))
+        if artifact_type is not None and not is_known_type(artifact_type):
+            raise UnknownArtifactTypeException()
+        if chat_repository.get_by_id(chat_id) is None:
+            raise ChatNotFoundException()
+        return artifact_repository.list_all_for_chat_filtered(
+            source_chat_id=chat_id,
+            artifact_type=artifact_type,
+            created_by=created_by,
+            date_from=date_from,
+            date_to=date_to,
+        )
+
     def get_artifact(self, user: AuthenticatedUser, artifact_id: int) -> Artifact:
         AccessControl.require_permissions(user, frozenset({perms.GET_ARTIFACT}))
         artifact = artifact_repository.get_by_id(artifact_id)
@@ -97,6 +145,7 @@ class ArtifactService:
         _assert_artifact_access(user.id, artifact)
         return artifact
 
+    @transaction.atomic
     def update_artifact(
             self,
             user: AuthenticatedUser,
@@ -108,7 +157,7 @@ class ArtifactService:
             change_summary: str = "",
     ) -> Artifact:
         AccessControl.require_permissions(user, frozenset({perms.UPDATE_ARTIFACT}))
-        artifact = artifact_repository.get_by_id(artifact_id)
+        artifact = artifact_repository.get_by_id_for_update(artifact_id)
         if artifact is None:
             raise ArtifactNotFoundException()
         _assert_artifact_access(user.id, artifact, require_contributor=True)
@@ -121,7 +170,9 @@ class ArtifactService:
             change_summary=change_summary,
         )
         if artifact.source_chat_id:
-            broadcast_artifact_updated(artifact.source_chat_id, artifact)
+            chat_id = artifact.source_chat_id
+            artifact_snapshot = artifact
+            transaction.on_commit(lambda: broadcast_artifact_updated(chat_id, artifact_snapshot))
         return artifact
 
     @transaction.atomic
@@ -189,13 +240,13 @@ def clear_chat_artifacts(chat_id: int, deleted_by: int) -> None:
     from apps.artifact_decision_brief.models import ArtifactDecisionBrief
 
     for content_model in (
-        ArtifactMessage,
-        ArtifactReport,
-        ArtifactChecklist,
-        ArtifactQuiz,
-        ArtifactTimeline,
-        ArtifactLessonsLearned,
-        ArtifactDecisionBrief,
+            ArtifactMessage,
+            ArtifactReport,
+            ArtifactChecklist,
+            ArtifactQuiz,
+            ArtifactTimeline,
+            ArtifactLessonsLearned,
+            ArtifactDecisionBrief,
     ):
         content_model.objects.filter(artifact__source_chat_id=chat_id).delete(deleted_by=deleted_by)
 

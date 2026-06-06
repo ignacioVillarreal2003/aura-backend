@@ -76,15 +76,13 @@ def _persist_generated_lessons_learned(
 
 
 class LessonsLearnedService:
-    def list_lessons_learned(self, user: AuthenticatedUser, chat_id: Optional[int] = None):
+    def list_lessons_learned(self, user: AuthenticatedUser, chat_id: int):
         AccessControl.require_permissions(user, frozenset({perms.LIST_LESSONS_LEARNED}))
-        if chat_id is not None:
-            if chat_repository.get_by_id(chat_id) is None:
-                raise ChatNotFoundException()
-            if not membership_repository.is_active_member(chat_id, user.id):
-                raise ChatAccessDeniedException()
-            return lessons_learned_repository.list_by_chat(source_chat_id=chat_id)
-        return lessons_learned_repository.list_by_user(user_id=user.id)
+        if chat_repository.get_by_id(chat_id) is None:
+            raise ChatNotFoundException()
+        if not membership_repository.is_active_member(chat_id, user.id):
+            raise ChatAccessDeniedException()
+        return lessons_learned_repository.list_by_chat(source_chat_id=chat_id)
 
     def list_all_lessons_learned(self, user: AuthenticatedUser):
         AccessControl.require_permissions(user, frozenset({perms.MANAGE_LESSONS_LEARNED}))
@@ -106,7 +104,8 @@ class LessonsLearnedService:
         _assert_access(user.id, ll)
         return ll
 
-    def get_lessons_learned_admin_export(self, user: AuthenticatedUser, lessons_learned_id: int) -> ArtifactLessonsLearned:
+    def get_lessons_learned_admin_export(self, user: AuthenticatedUser,
+                                         lessons_learned_id: int) -> ArtifactLessonsLearned:
         AccessControl.require_permissions(user, frozenset({perms.MANAGE_EXPORT_LESSONS_LEARNED}))
         ll = lessons_learned_repository.get_by_id(lessons_learned_id)
         if ll is None:
@@ -123,7 +122,7 @@ class LessonsLearnedService:
             items: Optional[list] = None,
     ) -> ArtifactLessonsLearned:
         AccessControl.require_permissions(user, frozenset({perms.UPDATE_LESSONS_LEARNED}))
-        ll = lessons_learned_repository.get_by_id(lessons_learned_id)
+        ll = lessons_learned_repository.get_by_id_for_update(lessons_learned_id)
         if ll is None:
             raise LessonsLearnedNotFoundException()
         _assert_access(user.id, ll, require_contributor=True)
@@ -140,14 +139,15 @@ class LessonsLearnedService:
     @transaction.atomic
     def delete_lessons_learned(self, user: AuthenticatedUser, lessons_learned_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({perms.DELETE_LESSONS_LEARNED}))
-        ll = lessons_learned_repository.get_by_id(lessons_learned_id)
+        ll = lessons_learned_repository.get_by_id_for_update(lessons_learned_id)
         if ll is None:
             raise LessonsLearnedNotFoundException()
         _assert_access(user.id, ll, require_contributor=True)
         lessons_learned_repository.soft_delete(ll, deleted_by=user.id)
         _cleanup_artifact_interactions(ll.artifact_id)
         artifact_repository.soft_delete(ll.artifact, deleted_by=user.id)
-        logger.info("ArtifactLessonsLearned deleted", extra={"user_id": user.id, "lessons_learned_id": lessons_learned_id})
+        logger.info("ArtifactLessonsLearned deleted",
+                    extra={"user_id": user.id, "lessons_learned_id": lessons_learned_id})
 
     async def generate_lessons_learned(
             self,
@@ -161,23 +161,21 @@ class LessonsLearnedService:
         chat = await sync_to_async(chat_repository.get_by_id)(chat_id)
         if chat is None:
             raise ChatNotFoundException()
-        is_contributor = await sync_to_async(membership_repository.is_active_contributor)(chat_id, user.id)
-        if not is_contributor:
-            raise ChatAccessDeniedException()
         history = await sync_to_async(build_chat_history)(chat_id)
 
         messages = history + [{"role": "human", "content": message}]
         result_data: dict | None = None
         try:
             async for event in llm_client.generate_lessons_learned_stream_events(
-                messages=messages,
-                mode=mode,
-                user=user,
-                chat_id=chat_id,
+                    messages=messages,
+                    mode=mode,
+                    user=user,
+                    chat_id=chat_id,
             ):
                 et = event.get("type")
                 if et == "progress":
-                    await broadcast_artifact_progress(chat_id, str(event.get("step", "")), str(event.get("message", "")))
+                    await broadcast_artifact_progress(chat_id, str(event.get("step", "")),
+                                                      str(event.get("message", "")))
                 elif et == "complete":
                     result_data = event.get("result") or {}
                 elif et == "error":

@@ -70,17 +70,15 @@ class ReportService:
     def list_reports(
             self,
             user: AuthenticatedUser,
+            chat_id: int,
             report_type: Optional[str] = None,
-            chat_id: Optional[int] = None,
     ):
         AccessControl.require_permissions(user, frozenset({perms.LIST_REPORTS}))
-        if chat_id is not None:
-            if chat_repository.get_by_id(chat_id) is None:
-                raise ChatNotFoundException()
-            if not membership_repository.is_active_member(chat_id, user.id):
-                raise ChatAccessDeniedException()
-            return report_repository.list_by_chat(source_chat_id=chat_id, report_type=report_type)
-        return report_repository.list_by_user(user_id=user.id, report_type=report_type)
+        if chat_repository.get_by_id(chat_id) is None:
+            raise ChatNotFoundException()
+        if not membership_repository.is_active_member(chat_id, user.id):
+            raise ChatAccessDeniedException()
+        return report_repository.list_by_chat(source_chat_id=chat_id, report_type=report_type)
 
     def list_all_reports(
             self,
@@ -122,7 +120,7 @@ class ReportService:
             content: Optional[str] = None,
     ) -> ArtifactReport:
         AccessControl.require_permissions(user, frozenset({perms.UPDATE_REPORT}))
-        report = report_repository.get_by_id(report_id)
+        report = report_repository.get_by_id_for_update(report_id)
         if report is None:
             raise ReportNotFoundException()
         _assert_report_access(user.id, report, require_contributor=True)
@@ -137,7 +135,7 @@ class ReportService:
     @transaction.atomic
     def delete_report(self, user: AuthenticatedUser, report_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({perms.DELETE_REPORT}))
-        report = report_repository.get_by_id(report_id)
+        report = report_repository.get_by_id_for_update(report_id)
         if report is None:
             raise ReportNotFoundException()
         _assert_report_access(user.id, report, require_contributor=True)
@@ -159,24 +157,22 @@ class ReportService:
         chat = await sync_to_async(chat_repository.get_by_id)(chat_id)
         if chat is None:
             raise ChatNotFoundException()
-        is_contributor = await sync_to_async(membership_repository.is_active_contributor)(chat_id, user.id)
-        if not is_contributor:
-            raise ChatAccessDeniedException()
         history = await sync_to_async(build_chat_history)(chat_id)
 
         messages = history + [{"role": "human", "content": message}]
         result_data: dict | None = None
         try:
             async for event in llm_client.generate_report_stream_events(
-                messages=messages,
-                mode=mode,
-                report_type=report_type,
-                user=user,
-                chat_id=chat_id,
+                    messages=messages,
+                    mode=mode,
+                    report_type=report_type,
+                    user=user,
+                    chat_id=chat_id,
             ):
                 et = event.get("type")
                 if et == "progress":
-                    await broadcast_artifact_progress(chat_id, str(event.get("step", "")), str(event.get("message", "")))
+                    await broadcast_artifact_progress(chat_id, str(event.get("step", "")),
+                                                      str(event.get("message", "")))
                 elif et == "complete":
                     result_data = event.get("result") or {}
                 elif et == "error":
@@ -219,8 +215,7 @@ class ReportService:
             source_chat_id=chat_id,
             content=content,
         )
-        # Pre-populate the artifact cache so the serializer doesn't trigger a
-        # synchronous DB lookup from an async context.
+
         report.artifact = artifact
         logger.info(
             "ArtifactReport generated and saved",

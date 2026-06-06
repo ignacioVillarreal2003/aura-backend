@@ -24,6 +24,13 @@ from apps.artifact.llm_context import build_chat_history
 logger = logging.getLogger(__name__)
 
 
+def _to_int_or_none(value) -> int | None:
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
 def _assert_quiz_access(user_id: int, quiz, *, require_contributor: bool = False) -> None:
     assert_detail_access(user_id, quiz, QuizAccessDeniedException(), require_contributor=require_contributor)
 
@@ -84,15 +91,13 @@ def _persist_generated_quiz(
 
 
 class QuizService:
-    def list_quizzes(self, user: AuthenticatedUser, chat_id: Optional[int] = None):
+    def list_quizzes(self, user: AuthenticatedUser, chat_id: int):
         AccessControl.require_permissions(user, frozenset({perms.LIST_QUIZZES}))
-        if chat_id is not None:
-            if chat_repository.get_by_id(chat_id) is None:
-                raise ChatNotFoundException()
-            if not membership_repository.is_active_member(chat_id, user.id):
-                raise ChatAccessDeniedException()
-            return quiz_repository.list_by_chat(source_chat_id=chat_id)
-        return quiz_repository.list_by_user(user_id=user.id)
+        if chat_repository.get_by_id(chat_id) is None:
+            raise ChatNotFoundException()
+        if not membership_repository.is_active_member(chat_id, user.id):
+            raise ChatAccessDeniedException()
+        return quiz_repository.list_by_chat(source_chat_id=chat_id)
 
     def list_all_quizzes(self, user: AuthenticatedUser):
         AccessControl.require_permissions(user, frozenset({perms.MANAGE_QUIZZES}))
@@ -133,7 +138,7 @@ class QuizService:
             questions: Optional[list] = None,
     ) -> ArtifactQuiz:
         AccessControl.require_permissions(user, frozenset({perms.UPDATE_QUIZ}))
-        quiz = quiz_repository.get_by_id(quiz_id)
+        quiz = quiz_repository.get_by_id_for_update(quiz_id)
         if quiz is None:
             raise QuizNotFoundException()
         _assert_quiz_access(user.id, quiz, require_contributor=True)
@@ -152,7 +157,7 @@ class QuizService:
     @transaction.atomic
     def delete_quiz(self, user: AuthenticatedUser, quiz_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({perms.DELETE_QUIZ}))
-        quiz = quiz_repository.get_by_id(quiz_id)
+        quiz = quiz_repository.get_by_id_for_update(quiz_id)
         if quiz is None:
             raise QuizNotFoundException()
         _assert_quiz_access(user.id, quiz, require_contributor=True)
@@ -173,22 +178,20 @@ class QuizService:
         chat = await sync_to_async(chat_repository.get_by_id)(chat_id)
         if chat is None:
             raise ChatNotFoundException()
-        is_contributor = await sync_to_async(membership_repository.is_active_contributor)(chat_id, user.id)
-        if not is_contributor:
-            raise ChatAccessDeniedException()
         history = await sync_to_async(build_chat_history)(chat_id)
         messages = history + [{"role": "human", "content": message}]
         result_data: dict | None = None
         try:
             async for event in llm_client.generate_quiz_stream_events(
-                messages=messages,
-                mode=mode,
-                user=user,
-                chat_id=chat_id,
+                    messages=messages,
+                    mode=mode,
+                    user=user,
+                    chat_id=chat_id,
             ):
                 et = event.get("type")
                 if et == "progress":
-                    await broadcast_artifact_progress(chat_id, str(event.get("step", "")), str(event.get("message", "")))
+                    await broadcast_artifact_progress(chat_id, str(event.get("step", "")),
+                                                      str(event.get("message", "")))
                 elif et == "complete":
                     result_data = event.get("result") or {}
                 elif et == "error":
@@ -215,7 +218,7 @@ class QuizService:
         out_messages = result_data.get("messages") or []
         fragments = llm_client.normalize_fragments(result_data.get("fragments"))
         instructions = str(result_data.get("instructions", ""))
-        passing_score = llm_client._coerce_int(result_data.get("passing_score"))
+        passing_score = _to_int_or_none(result_data.get("passing_score"))
 
         if not title:
             logger.error("LLM returned empty title for quiz", extra={"user_id": user.id})

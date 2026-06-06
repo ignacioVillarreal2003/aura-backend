@@ -83,7 +83,7 @@ urlpatterns = [
     ),
     path("api/v1/health", health_check, name="health-check"),
     path("api/v1/chats/", include("apps.chat.urls")),
-    path("api/v1/chats/<int:chat_id>/messages/", include("apps.artifact_message.urls")),
+    path("api/v1/messages/", include("apps.artifact_message.urls")),
     path("api/v1/chats/<int:chat_id>/members/", include("apps.membership.urls")),
     path("api/v1/memberships/me/", include("apps.membership.me_urls")),
     path("api/v1/share/<uuid:token>/messages/", include("apps.chat.share_urls")),

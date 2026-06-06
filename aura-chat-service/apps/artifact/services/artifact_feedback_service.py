@@ -15,22 +15,19 @@ def _require_ai_artifact(user_id: int, artifact_id: int) -> Artifact:
         msg_content = artifact.message_content
     except ArtifactMessage.DoesNotExist:
         raise NotAIMessageException()
-    if msg_content.sender_type not in (
-        ArtifactMessage.SenderType.SYSTEM,
-        ArtifactMessage.SenderType.ASSISTANT,
-    ):
+    if msg_content.sender_type != ArtifactMessage.SenderType.ASSISTANT:
         raise NotAIMessageException()
     return artifact
 
 
 class FeedbackService:
     def set_feedback(
-        self,
-        user: AuthenticatedUser,
-        artifact_id: int,
-        value: int,
-        reason: str | None = None,
-        comment: str | None = None,
+            self,
+            user: AuthenticatedUser,
+            artifact_id: int,
+            value: int,
+            reason: str | None = None,
+            comment: str | None = None,
     ) -> ArtifactFeedback:
         AccessControl.require_permissions(user, frozenset({SET_MESSAGE_FEEDBACK}))
         _require_ai_artifact(user.id, artifact_id)

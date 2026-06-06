@@ -51,5 +51,3 @@ class ArtifactQuizOption(models.Model):
         managed = False
         db_table = "artifact_quiz_option"
         ordering = ["position"]
-
-

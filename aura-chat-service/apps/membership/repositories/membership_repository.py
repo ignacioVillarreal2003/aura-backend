@@ -124,7 +124,7 @@ class MembershipRepository:
 
     @staticmethod
     def get_existing_member_ids_in(chat_id: int, member_ids: list[int]) -> set[int]:
-        """Returns all non-deleted member IDs regardless of status (active, pending)."""
+        """Returns active/pending (non-soft-deleted) member IDs in the given set."""
         return set(
             ChatMembership.objects
             .filter(chat_id=chat_id, member_id__in=member_ids)

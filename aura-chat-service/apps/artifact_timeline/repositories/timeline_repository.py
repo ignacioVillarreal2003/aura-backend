@@ -55,6 +55,9 @@ class TimelineRepository:
     def get_by_id(self, timeline_id: int) -> Optional[ArtifactTimeline]:
         return _with_prefetch(ArtifactTimeline.objects.filter(id=timeline_id)).first()
 
+    def get_by_id_for_update(self, timeline_id: int) -> Optional[ArtifactTimeline]:
+        return ArtifactTimeline.objects.select_for_update().select_related("artifact").filter(id=timeline_id).first()
+
     def list_by_user(self, user_id: int):
         return _with_counts(ArtifactTimeline.objects.filter(created_by=user_id))
 

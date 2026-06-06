@@ -67,6 +67,9 @@ class ChecklistRepository:
     def get_by_id(self, checklist_id: int) -> Optional[ArtifactChecklist]:
         return _with_prefetch(ArtifactChecklist.objects.filter(id=checklist_id)).first()
 
+    def get_by_id_for_update(self, checklist_id: int) -> Optional[ArtifactChecklist]:
+        return ArtifactChecklist.objects.select_for_update().select_related("artifact").filter(id=checklist_id).first()
+
     def list_by_user(self, user_id: int):
         return _with_counts(ArtifactChecklist.objects.filter(created_by=user_id))
 

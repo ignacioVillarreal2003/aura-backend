@@ -1,5 +1,5 @@
 import uuid
-from django.db.models import QuerySet
+from django.db.models import Q, QuerySet
 from django.utils import timezone
 
 from apps.chat.models.chat_share_link import ChatShareLink
@@ -32,7 +32,12 @@ class ShareLinkRepository:
     def list_by_chat(chat_id: int, active_only: bool = True) -> QuerySet[ChatShareLink]:
         qs = ChatShareLink.objects.filter(chat_id=chat_id)
         if active_only:
-            qs = qs.filter(is_active=True)
+            now = timezone.now()
+            qs = qs.filter(
+                is_active=True,
+            ).filter(
+                Q(expires_at__isnull=True) | Q(expires_at__gt=now)
+            )
         return qs.order_by("-created_at")
 
     @staticmethod

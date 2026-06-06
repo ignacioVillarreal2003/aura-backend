@@ -26,6 +26,7 @@ from apps.chat.repositories.chat_repository import chat_repository
 from apps.chat.ws_rate_limit import check_artifact_rate_limit, check_transcribe_rate_limit
 from apps.artifact_message.services.message_service import broadcast_chat_ai_lock_change
 from apps.membership.repositories.membership_repository import membership_repository
+from rest_framework.exceptions import ValidationError
 from core.openapi.common import standard_error_responses
 from core.pagination.pagination import StandardPagination
 
@@ -43,8 +44,8 @@ _CHAT_FILTER_PARAM = OpenApiParameter(
     name="chat_id",
     type=int,
     location=OpenApiParameter.QUERY,
-    required=False,
-    description="Filtrar por chat de origen. El usuario debe ser miembro activo del chat.",
+    required=True,
+    description="ID del chat. El usuario debe ser miembro activo del chat.",
 )
 _ID_PARAM = OpenApiParameter(
     name="report_id",
@@ -69,7 +70,9 @@ class ReportListView(APIView):
     def get(self, request: Request) -> Response:
         report_type = request.query_params.get("type") or None
         chat_id_raw = request.query_params.get("chat_id")
-        chat_id = int(chat_id_raw) if chat_id_raw and chat_id_raw.isdigit() else None
+        if not chat_id_raw or not chat_id_raw.isdigit():
+            raise ValidationError({"chat_id": "Se requiere chat_id válido."})
+        chat_id = int(chat_id_raw)
         queryset = report_service.list_reports(user=request.user, report_type=report_type, chat_id=chat_id)
         paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request)
@@ -188,14 +191,16 @@ class ReportGenerateView(APIView):
         if "audio" in d:
             if not await sync_to_async(check_transcribe_rate_limit)(request.user.id):
                 return Response(
-                    {"detail": "Too many transcription requests. Please wait.", "error": "transcription_rate_limit_exceeded"},
+                    {"detail": "Too many transcription requests. Please wait.",
+                     "error": "transcription_rate_limit_exceeded"},
                     status=status.HTTP_429_TOO_MANY_REQUESTS,
                 )
             message = await sync_to_async(_transcribe_audio)(d["audio"])
         else:
             message = d["message"]
 
-        if not await sync_to_async(try_acquire)(chat_id):
+        lock_token = await sync_to_async(try_acquire)(chat_id)
+        if not lock_token:
             raise ChatAiReplyInProgressException()
 
         try:
@@ -208,7 +213,7 @@ class ReportGenerateView(APIView):
                 chat_id=chat_id,
             )
         finally:
-            await sync_to_async(release)(chat_id)
+            await sync_to_async(release)(chat_id, lock_token)
             await sync_to_async(broadcast_chat_ai_lock_change)(chat_id, False)
 
         return Response(

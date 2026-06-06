@@ -69,6 +69,9 @@ class QuizRepository:
     def get_by_id(self, quiz_id: int) -> Optional[ArtifactQuiz]:
         return _with_prefetch(ArtifactQuiz.objects.filter(id=quiz_id)).first()
 
+    def get_by_id_for_update(self, quiz_id: int) -> Optional[ArtifactQuiz]:
+        return ArtifactQuiz.objects.select_for_update().select_related("artifact").filter(id=quiz_id).first()
+
     def list_by_user(self, user_id: int):
         return _with_counts(ArtifactQuiz.objects.filter(created_by=user_id))
 

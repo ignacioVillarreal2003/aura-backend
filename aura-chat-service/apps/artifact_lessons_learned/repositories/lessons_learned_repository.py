@@ -55,6 +55,10 @@ class LessonsLearnedRepository:
     def get_by_id(self, lessons_learned_id: int) -> Optional[ArtifactLessonsLearned]:
         return _with_prefetch(ArtifactLessonsLearned.objects.filter(id=lessons_learned_id)).first()
 
+    def get_by_id_for_update(self, lessons_learned_id: int) -> Optional[ArtifactLessonsLearned]:
+        return ArtifactLessonsLearned.objects.select_for_update().select_related("artifact").filter(
+            id=lessons_learned_id).first()
+
     def list_by_user(self, user_id: int):
         return _with_counts(ArtifactLessonsLearned.objects.filter(created_by=user_id))
 

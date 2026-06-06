@@ -11,7 +11,7 @@ from core.authorization.permissions import VIEW_FEEDBACK_ANALYTICS
 logger = logging.getLogger(__name__)
 
 _DEFAULT_DAYS = 30
-_MAX_DAYS = 365
+_MAX_DAYS = 3650
 _NO_ASSISTANT_LABEL = "Chats sin asistente"
 
 
@@ -23,17 +23,32 @@ def _satisfaction_rate(up: int, down: int) -> float | None:
 
 
 class FeedbackAnalyticsService:
-    def get_analytics(self, user: AuthenticatedUser, days: int | None = None) -> dict:
+    def get_analytics(
+            self,
+            user: AuthenticatedUser,
+            days: int | None = None,
+            chat_id: int | None = None,
+            artifact_type: str | None = None,
+            user_id: int | None = None,
+            reason: str | None = None,
+    ) -> dict:
         AccessControl.require_permissions(user, frozenset({VIEW_FEEDBACK_ANALYTICS}))
 
         window_days = self._normalize_days(days)
         end = timezone.now()
         start = end - timedelta(days=window_days)
 
-        summary = feedback_analytics_repository.summary(start, end)
-        per_assistant = feedback_analytics_repository.per_assistant(start, end)
-        reasons = feedback_analytics_repository.reason_breakdown(start, end)
-        recent = feedback_analytics_repository.recent_negative(start, end)
+        filters = {
+            "chat_id": chat_id,
+            "artifact_type": artifact_type,
+            "user_id": user_id,
+            "reason": reason,
+        }
+
+        summary = feedback_analytics_repository.summary(start, end, **filters)
+        per_assistant = feedback_analytics_repository.per_assistant(start, end, **filters)
+        reasons = feedback_analytics_repository.reason_breakdown(start, end, **filters)
+        recent = feedback_analytics_repository.recent_negative(start, end, **filters)
 
         names = self._resolve_assistant_names(
             [row["assistant_id"] for row in per_assistant]

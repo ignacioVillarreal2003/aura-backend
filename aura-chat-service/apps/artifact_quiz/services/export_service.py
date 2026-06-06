@@ -158,7 +158,7 @@ def generate_quiz_markdown(quiz: ArtifactQuiz, *, with_answers: bool = True) -> 
         f"*Puntaje mínimo: {pass_label}*",
         "",
     ]
-    if quiz.instructions.strip():
+    if (quiz.instructions or "").strip():
         lines += [quiz.instructions.strip(), ""]
     lines += ["---", ""]
 

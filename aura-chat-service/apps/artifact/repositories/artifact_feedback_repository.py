@@ -6,11 +6,11 @@ from apps.artifact.models.artifact_feedback import ArtifactFeedback
 class FeedbackRepository:
     @staticmethod
     def set(
-        artifact_id: int,
-        user_id: int,
-        value: int,
-        reason: str | None = None,
-        comment: str | None = None,
+            artifact_id: int,
+            user_id: int,
+            value: int,
+            reason: str | None = None,
+            comment: str | None = None,
     ) -> ArtifactFeedback:
         obj, created = ArtifactFeedback.objects.update_or_create(
             artifact_id=artifact_id,

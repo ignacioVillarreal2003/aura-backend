@@ -74,7 +74,7 @@ Orden mental: **chat** → **miembros** → **mensajes** y extensiones (**share*
 ### 5.3 Historial, lectura y conversación activa
 
 1. **`GET .../chats/{chat_id}/messages/`** pagina el historial (cursor) cuando basta REST.
-2. **Enviar con IA (REST):** **POST** `.../messages/generate/`; regenerar: **POST** `.../messages/regenerate/`. Para streaming en vivo, **WebSocket** ([websockets.md](websockets.md)).
+2. **Enviar con IA (REST):** **POST** `.../messages/generate/`. Para streaming en vivo, **WebSocket** ([websockets.md](websockets.md)).
 3. **Marcar leídos**: **POST** `.../chats/{chat_id}/read/`.
 4. **Borrar / exportar un mensaje:** **DELETE** o **GET** `.../messages/{message_id}/...` usando el campo **`id`** del listado (no `artifact_id`).
 5. **Bookmark, pin, feedback, thread:** `/api/v1/artifacts/{artifact_id}/...` y listas `pinned` / `bookmarked` con `?chat_id=`.
