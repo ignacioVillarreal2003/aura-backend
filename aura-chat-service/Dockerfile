@@ -31,7 +31,8 @@ RUN mkdir -p /app/.cache/huggingface
 # Pre-descarga del modelo Whisper en build-time para que el arranque del contenedor
 # no dependa de la red ni de la descarga desde HuggingFace.
 ARG WHISPER_MODEL_SIZE=small
-RUN python -c "from faster_whisper import WhisperModel; WhisperModel('${WHISPER_MODEL_SIZE}', device='cpu', compute_type='int8')"
+ARG HF_TOKEN=""
+RUN HF_HUB_TOKEN=${HF_TOKEN} python -c "from faster_whisper import WhisperModel; WhisperModel('${WHISPER_MODEL_SIZE}', device='cpu', compute_type='int8')"
 
 RUN chown -R app:app /app
 

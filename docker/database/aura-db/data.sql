@@ -53,36 +53,40 @@ VALUES
     (6, 2, 'pending', NULL, NULL, 5, 'reader', NULL),
     (12, 3, 'active', NOW() - INTERVAL '1 hour', NULL, 12, 'owner', NOW());
 
-INSERT INTO chat_message (chat_id, message, sender_type, created_by)
+INSERT INTO artifact (type, title, source_chat_id, created_by)
+VALUES
+    ('MESSAGE', '', 1, 4),
+    ('MESSAGE', '', 1, 4),
+    ('MESSAGE', '', 1, 5),
+    ('MESSAGE', '', 1, 4),
+    ('MESSAGE', '', 2, 4),
+    ('MESSAGE', '', 2, 5),
+    ('MESSAGE', '', 3, 12);
+
+INSERT INTO artifact_message (artifact_id, message, sender_type, created_by)
 VALUES
     (1, 'Resumí el alcance del capítulo 3 del reglamento.', 'user', 4),
-    (1,
-     'Capítulo 3 establece procedimientos operativos mínimos, roles de comando y comunicaciones internas ante incidentes clase B.',
-     'system',
-     NULL),
-    (1, '¿Hay check-list para cierre?', 'user', 5),
-    (1, 'Incluye lista de verificación en el anexo C (sección cerrar incidente): notificación, registro y relevo.', 'system', NULL),
-    (2, 'Necesito la doctrina de escalamiento para unidades sur.', 'user', 4),
-    (2,
-     'Doctrina unidad sur: escalamiento en tres escalones (táctico → operativo → estratégico), con punto único de contacto por escalón.',
-     'system',
-     NULL),
-    (3, 'Hola, esta conversación es solo de demostración.', 'user', 12);
+    (2, 'Capítulo 3 establece procedimientos operativos mínimos, roles de comando y comunicaciones internas ante incidentes clase B.', 'system', NULL),
+    (3, '¿Hay check-list para cierre?', 'user', 5),
+    (4, 'Incluye lista de verificación en el anexo C (sección cerrar incidente): notificación, registro y relevo.', 'system', NULL),
+    (5, 'Necesito la doctrina de escalamiento para unidades sur.', 'user', 4),
+    (6, 'Doctrina unidad sur: escalamiento en tres escalones (táctico → operativo → estratégico), con punto único de contacto por escalón.', 'system', NULL),
+    (7, 'Hola, esta conversación es solo de demostración.', 'user', 12);
 
-INSERT INTO pinned_message (message_id, chat_id, pinned_by, pinned_at)
+INSERT INTO artifact_pin (artifact_id, chat_id, pinned_by, pinned_at)
 VALUES (2, 1, 4, NOW() - INTERVAL '12 hours');
 
-INSERT INTO message_bookmark (message_id, user_id)
+INSERT INTO artifact_bookmark (artifact_id, user_id)
 VALUES (4, 5);
 
-INSERT INTO message_thread_reply (parent_message_id, message, created_by)
+INSERT INTO artifact_thread_reply (parent_artifact_id, message, created_by)
 VALUES (
     2,
     'Anexo confirmado por la jefatura; conviene pegar referencia literal en el briefing.',
     5
 );
 
-INSERT INTO message_feedback (message_id, user_id, value)
+INSERT INTO artifact_feedback (artifact_id, user_id, value)
 VALUES (2, 4, 1);
 
 INSERT INTO chat_share_link (chat_id, created_by, expires_at)

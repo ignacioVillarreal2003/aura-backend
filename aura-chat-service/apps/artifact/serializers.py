@@ -83,6 +83,7 @@ class ArtifactMessagePreview(serializers.Serializer):
 
 class ArtifactSummaryResponse(serializers.ModelSerializer):
     message = serializers.SerializerMethodField()
+    linked_id = serializers.SerializerMethodField()
 
     class Meta:
         model = Artifact
@@ -99,6 +100,7 @@ class ArtifactSummaryResponse(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "message",
+            "linked_id",
         ]
         read_only_fields = fields
 
@@ -111,6 +113,25 @@ class ArtifactSummaryResponse(serializers.ModelSerializer):
         except ObjectDoesNotExist:
             return None
         return ArtifactMessagePreview(mc).data
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_linked_id(self, obj):
+        try:
+            if obj.type == Artifact.Type.REPORT:
+                return obj.report_content.id
+            if obj.type == Artifact.Type.CHECKLIST:
+                return obj.checklist_content.id
+            if obj.type == Artifact.Type.QUIZ:
+                return obj.quiz_content.id
+            if obj.type == Artifact.Type.TIMELINE:
+                return obj.timeline_content.id
+            if obj.type == Artifact.Type.LESSONS_LEARNED:
+                return obj.lessons_learned_content.id
+            if obj.type == Artifact.Type.DECISION_BRIEF:
+                return obj.decision_brief_content.id
+        except ObjectDoesNotExist:
+            return None
+        return None
 
 
 class PinnedArtifactResponse(serializers.ModelSerializer):
