@@ -30,6 +30,8 @@ services:
     build:
       context: ../../aura-document-processing-service
       dockerfile: DockerfileGPU
+      args:
+        HF_TOKEN: ${HF_TOKEN:-}
     container_name: aura-document-processing-service
     ports:
       - "8000:8000"

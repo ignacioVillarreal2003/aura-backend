@@ -219,6 +219,9 @@ class ReportService:
             source_chat_id=chat_id,
             content=content,
         )
+        # Pre-populate the artifact cache so the serializer doesn't trigger a
+        # synchronous DB lookup from an async context.
+        report.artifact = artifact
         logger.info(
             "ArtifactReport generated and saved",
             extra={

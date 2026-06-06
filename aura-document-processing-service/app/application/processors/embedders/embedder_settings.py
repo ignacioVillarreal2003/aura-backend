@@ -63,6 +63,7 @@ class EmbedderSettings(BaseSettings):
                            "sentence-transformers/distiluse-base-multilingual-cased-v2",
                            "BAAI/bge-m3",
                        ] | str = Field(default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+    huggingface_token: Optional[str] = Field(default=None)
     huggingface_device: Literal["cpu", "cuda"] = "cpu"
     huggingface_normalize_embeddings: bool = Field(default=True)
 

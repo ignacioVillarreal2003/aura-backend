@@ -58,7 +58,7 @@ def _unread_count_subquery(member_id: int) -> Coalesce:
 
     cutoff_sq = Subquery(
         ChatMembership.objects.filter(
-            chat_id=OuterRef("chat_id"),
+            chat_id=OuterRef(OuterRef("pk")),
             member_id=member_id,
             status="active",
             deleted_at__isnull=True,
