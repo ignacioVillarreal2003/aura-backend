@@ -33,6 +33,8 @@ INSTALLED_APPS = [
     "apps.artifact_quiz",
     "apps.artifact_lessons_learned",
     "apps.artifact_decision_brief",
+    "apps.artifact_document_summary",
+    "apps.artifact_document_action",
 ]
 
 MIDDLEWARE = [
@@ -278,6 +280,20 @@ SPECTACULAR_SETTINGS = {
                 "Prefijo `/api/v1/decision-briefs/`."
             ),
         },
+        {
+            "name": "Document Summaries",
+            "description": (
+                "Resúmenes de documentos generados con IA. Requiere `LLM_DOCUMENT_SUMMARY_URL`. "
+                "Prefijo `/api/v1/document-summaries/`."
+            ),
+        },
+        {
+            "name": "Document Actions",
+            "description": (
+                "Acciones estructuradas sobre documentos ejecutadas con IA. Requiere `LLM_DOCUMENT_ACTION_URL`. "
+                "Prefijo `/api/v1/document-actions/`."
+            ),
+        },
     ],
     "SECURITY": [{"BearerAuth": []}],
     "APPEND_COMPONENTS": {
@@ -326,6 +342,10 @@ LLM_LESSONS_LEARNED_GENERATE_URL = config("LLM_LESSONS_LEARNED_GENERATE_URL", de
 LLM_LESSONS_LEARNED_GENERATE_STREAM_URL = config("LLM_LESSONS_LEARNED_GENERATE_STREAM_URL", default="").strip()
 LLM_DECISION_BRIEF_GENERATE_URL = config("LLM_DECISION_BRIEF_GENERATE_URL", default="").strip()
 LLM_DECISION_BRIEF_GENERATE_STREAM_URL = config("LLM_DECISION_BRIEF_GENERATE_STREAM_URL", default="").strip()
+LLM_DOCUMENT_SUMMARY_URL = config("LLM_DOCUMENT_SUMMARY_URL", default="").strip()
+LLM_DOCUMENT_SUMMARY_STREAM_URL = config("LLM_DOCUMENT_SUMMARY_STREAM_URL", default="").strip()
+LLM_DOCUMENT_ACTION_URL = config("LLM_DOCUMENT_ACTION_URL", default="").strip()
+LLM_DOCUMENT_ACTION_STREAM_URL = config("LLM_DOCUMENT_ACTION_STREAM_URL", default="").strip()
 LLM_SERVICE_TIMEOUT = config("LLM_SERVICE_TIMEOUT", default=120, cast=int)
 LLM_STREAM_CONNECT_TIMEOUT = config(
     "LLM_STREAM_CONNECT_TIMEOUT", default=10.0, cast=float

@@ -1,0 +1,50 @@
+from typing import Optional
+from pydantic import BaseModel, Field
+
+from app.domain.dtos.fragment.fragment_response import FragmentResponse
+from app.domain.dtos.message import Message
+from app.domain.field_limits import (
+    MAX_ITEM_TEXT_CHARS,
+    MAX_OCCURRED_AT_CHARS,
+    MAX_OCCURRED_LABEL_CHARS,
+    MAX_SUMMARY_CHARS,
+    MAX_TIMELINE_EVENT_CHARS,
+    MAX_TIMELINE_EVENTS,
+    MAX_TITLE_CHARS,
+)
+
+
+class TimelineEvent(BaseModel):
+    event: str = Field(..., min_length=1, max_length=MAX_TIMELINE_EVENT_CHARS, description="Título corto del evento.")
+    description: str = Field(default="", max_length=MAX_ITEM_TEXT_CHARS, description="Descripción ampliada del evento.")
+    occurred_at: Optional[str] = Field(
+        default=None,
+        max_length=MAX_OCCURRED_AT_CHARS,
+        description="Instante del evento en ISO 8601 (p. ej. '2024-05-03T14:30:00Z'). Null si se desconoce.",
+    )
+    occurred_label: str = Field(
+        default="",
+        max_length=MAX_OCCURRED_LABEL_CHARS,
+        description="Etiqueta temporal en lenguaje natural cuando no hay fecha exacta (p. ej. 'madrugada del 3').",
+    )
+
+    model_config = {"frozen": True}
+
+
+class TimelineGenerateResponse(BaseModel):
+    title: str = Field(..., min_length=1, max_length=MAX_TITLE_CHARS, description="Título descriptivo de la línea de tiempo.")
+    summary: str = Field(default="", max_length=MAX_SUMMARY_CHARS, description="Resumen general de la cronología.")
+    events: list[TimelineEvent] = Field(
+        ...,
+        min_length=1,
+        max_length=MAX_TIMELINE_EVENTS,
+        description="Eventos ordenados cronológicamente.",
+    )
+    messages: list[Message] = Field(
+        ...,
+        description="Historial actualizado incluyendo la respuesta del asistente.",
+    )
+    fragments: list[FragmentResponse] = Field(
+        default_factory=list,
+        description="Fragmentos documentales utilizados como contexto (solo en modo rag).",
+    )

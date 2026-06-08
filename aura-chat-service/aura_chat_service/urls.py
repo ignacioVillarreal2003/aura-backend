@@ -93,6 +93,8 @@ urlpatterns = [
     path("api/v1/quizzes/", include("apps.artifact_quiz.urls")),
     path("api/v1/lessons-learned/", include("apps.artifact_lessons_learned.urls")),
     path("api/v1/decision-briefs/", include("apps.artifact_decision_brief.urls")),
+    path("api/v1/document-summaries/", include("apps.artifact_document_summary.urls")),
+    path("api/v1/document-actions/", include("apps.artifact_document_action.urls")),
     path("api/v1/assistants/", include("apps.assistant.urls")),
     path("api/v1/artifacts/", include("apps.artifact.urls")),
     path("", include("django_prometheus.urls")),

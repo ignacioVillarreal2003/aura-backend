@@ -17,10 +17,8 @@ def build_legacy_question_retrieval_request(
         rerank_max_fragments: Optional[int],
         chat_id: Optional[int] = None,
 ) -> QuestionContextFragmentsRequest:
-    """Maps the pre-hybrid API shape to ``QuestionContextFragmentsRequest`` (semantic-only + optional rerank)."""
-    q = question.strip()
     semantic_queries = [
-        SemanticQuery(text=q, max_fragments=question_max_fragments),
+        SemanticQuery(text=question.strip(), max_fragments=question_max_fragments),
     ]
     if use_keywords and keywords and keywords.strip() and keywords_max_fragments:
         semantic_queries.append(

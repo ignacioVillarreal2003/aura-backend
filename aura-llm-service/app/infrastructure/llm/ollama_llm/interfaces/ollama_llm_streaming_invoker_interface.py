@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from typing import List
-
 from langchain_core.messages import BaseMessage
 from langchain_core.runnables import Runnable
 

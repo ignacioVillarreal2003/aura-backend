@@ -26,9 +26,9 @@ WWW_AUTH = {
 
 class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
     def __init__(
-        self,
-        app: ASGIApp,
-        excluded_paths: Optional[list[str]] = None,
+            self,
+            app: ASGIApp,
+            excluded_paths: Optional[list[str]] = None,
     ) -> None:
         super().__init__(app)
         self.excluded_paths: list[str] = excluded_paths or []
@@ -126,11 +126,11 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
         return await self._validate_jwt(request, call_next, token, provider)
 
     async def _validate_jwt(
-        self,
-        request: Request,
-        call_next: Callable,
-        token: str,
-        authentication_provider: AuthenticationProviderInterface
+            self,
+            request: Request,
+            call_next: Callable,
+            token: str,
+            authentication_provider: AuthenticationProviderInterface
     ) -> Response:
         try:
             authenticated_user = await authentication_provider.validate_token(token)

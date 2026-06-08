@@ -1,15 +1,11 @@
 from fastapi import APIRouter
 
-from app.api.controllers import (
+from app.api.controllers.user_interactions import (
     document_summary_controller,
     agent_controller,
     document_question_controller,
-    document_classify_controller,
-    fragment_enrich_controller,
     document_action_controller,
     rag_agent_controller,
-    graph_extraction_controller,
-    graph_query_translation_controller,
     general_chat_controller,
     report_controller,
     checklist_controller,
@@ -18,7 +14,13 @@ from app.api.controllers import (
     lessons_learned_controller,
     decision_brief_controller,
 )
-from app.api.controllers.health_controller import health_controller
+from app.api.controllers.processing import (
+    document_classify_controller,
+    fragment_enrich_controller,
+    graph_extraction_controller,
+    graph_query_translation_controller,
+    health_controller
+)
 
 router = APIRouter()
 

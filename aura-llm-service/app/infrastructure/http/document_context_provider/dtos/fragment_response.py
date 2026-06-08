@@ -1,5 +1,4 @@
 from typing import Optional
-
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 _MAX_ID = 2_147_483_647
@@ -17,8 +16,6 @@ _MAX_ENTITY_VALUE_CHARS = 1_000
 
 
 class FragmentEmbeddedDocument(BaseModel):
-    """Subset of document fields returned by DPS on each fragment (fragment-query)."""
-
     id: int = Field(..., gt=0, le=_MAX_ID)
     name: str = Field(..., min_length=1, max_length=_MAX_NAME_CHARS)
     description: Optional[str] = Field(default=None, min_length=1, max_length=_MAX_DESCRIPTION_CHARS)

@@ -25,7 +25,7 @@ class AuthenticatedUserResponse(BaseModel):
     model_config = {
         "from_attributes": True,
         "frozen": True,
-        "extra": "forbid",
+        "extra": "ignore",
     }
 
     @field_validator("email", mode="before")

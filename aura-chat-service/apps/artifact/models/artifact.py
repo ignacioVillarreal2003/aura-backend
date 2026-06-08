@@ -13,6 +13,8 @@ class Artifact(AuditModel, SoftDeleteModel):
         TIMELINE = "TIMELINE", "ArtifactTimeline"
         LESSONS_LEARNED = "LESSONS_LEARNED", "Lessons Learned"
         DECISION_BRIEF = "DECISION_BRIEF", "Decision Brief"
+        DOCUMENT_SUMMARY = "DOCUMENT_SUMMARY", "Document Summary"
+        DOCUMENT_ACTION = "DOCUMENT_ACTION", "Document Action"
 
     class Status(models.TextChoices):
         DRAFT = "draft", "Borrador"

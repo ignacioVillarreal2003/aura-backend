@@ -231,7 +231,7 @@ class MessageService:
         system_prompt = await self._get_chat_system_prompt(chat_id)
         try:
             result: GeneralChatResult = await llm_client.general_chat(
-                messages, user, system_prompt=system_prompt
+                messages, user, chat_id=chat_id, system_prompt=system_prompt
             )
         except HttpClientException as e:
             logger.error(
@@ -292,7 +292,7 @@ class MessageService:
     ) -> DocumentQuestionRunResult:
         messages = await self._build_llm_messages(chat_id)
         try:
-            result: AgentRunResult = await caller(messages, user)
+            result: AgentRunResult = await caller(messages, user, chat_id=chat_id)
         except HttpClientException as e:
             logger.error(
                 "LLM %s failed: %s",
@@ -378,7 +378,7 @@ class MessageService:
                 chat_id=chat_id,
                 user=user,
                 sse_events=llm_client.general_chat_stream_events(
-                    messages, user, system_prompt=system_prompt
+                    messages, user, chat_id=chat_id, system_prompt=system_prompt
                 ),
                 complete_extractor=self._extract_general_chat_complete,
                 stream_url_setting_name="LLM_GENERAL_CHAT_STREAM_URL",
@@ -394,7 +394,7 @@ class MessageService:
         async for payload in self._iter_ai_stream_group_payloads(
                 chat_id=chat_id,
                 user=user,
-                sse_events=llm_client.rag_agent_stream_events(messages, user),
+                sse_events=llm_client.rag_agent_stream_events(messages, user, chat_id=chat_id),
                 complete_extractor=self._extract_agent_complete,
                 stream_url_setting_name="LLM_RAG_AGENT_STREAM_URL",
         ):
@@ -409,7 +409,7 @@ class MessageService:
         async for payload in self._iter_ai_stream_group_payloads(
                 chat_id=chat_id,
                 user=user,
-                sse_events=llm_client.agent_stream_events(messages, user),
+                sse_events=llm_client.agent_stream_events(messages, user, chat_id=chat_id),
                 complete_extractor=self._extract_agent_complete,
                 stream_url_setting_name="LLM_AGENT_STREAM_URL",
         ):
@@ -634,7 +634,7 @@ class MessageService:
         await sync_to_async(self._require_access)(chat_id, user.id)
         messages = [{"role": "human", "content": user_message}]
         try:
-            llm_out: DocumentQuestionResult = await llm_client.document_question(messages, user)
+            llm_out: DocumentQuestionResult = await llm_client.document_question(messages, user, chat_id=chat_id)
         except HttpClientException as e:
             logger.error(
                 "LLM ephemeral document-question failed: %s",
@@ -666,18 +666,18 @@ class MessageService:
             if mode == ChatAIMode.GENERAL_CHAT:
                 system_prompt = await self._get_chat_system_prompt(chat_id)
                 general = await llm_client.general_chat(
-                    messages, user, system_prompt=system_prompt
+                    messages, user, chat_id=chat_id, system_prompt=system_prompt
                 )
                 return DocumentQuestionRunResult(
                     question="", answer=general.answer, fragments=[], assistant_message=None,
                 )
             if mode == ChatAIMode.RAG_AGENT:
-                rag = await llm_client.rag_agent(messages, user)
+                rag = await llm_client.rag_agent(messages, user, chat_id=chat_id)
                 return DocumentQuestionRunResult(
                     question="", answer=rag.answer, fragments=rag.fragments, assistant_message=None,
                 )
             if mode == ChatAIMode.AGENT:
-                agent = await llm_client.agent(messages, user)
+                agent = await llm_client.agent(messages, user, chat_id=chat_id)
                 return DocumentQuestionRunResult(
                     question="", answer=agent.answer, fragments=agent.fragments, assistant_message=None,
                 )

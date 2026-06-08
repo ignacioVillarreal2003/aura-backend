@@ -1,7 +1,6 @@
 import logging
 from collections.abc import AsyncIterator
 from typing import Any, List, Optional
-
 import httpx
 from langchain_core.messages import BaseMessage
 from langchain_core.runnables import Runnable
@@ -52,22 +51,19 @@ class OllamaLLMStreamingInvoker(OllamaLLMStreamingInvokerInterface):
     ) -> AsyncIterator[str]:
         logger.debug("Starting LLM stream", extra={"message_count": len(llm_input)})
 
-        # Phase 1 — establish the stream with tenacity retries.
-        # Cannot retry once chunks are flowing, so we get the first chunk here
-        # and then consume the rest outside the retry loop.
         gen: AsyncIterator[Any] | None = None
         first_chunk: Any = _STREAM_EMPTY
 
         try:
             async for attempt in AsyncRetrying(
-                stop=stop_after_attempt(self._settings.max_retry_attempts),
-                wait=wait_exponential(
-                    min=self._settings.retry_min_wait,
-                    max=self._settings.retry_max_wait,
-                ),
-                retry=retry_if_exception_type(_RETRYABLE_EXCEPTIONS),
-                before_sleep=before_sleep_log(logger, logging.WARNING),
-                reraise=True,
+                    stop=stop_after_attempt(self._settings.max_retry_attempts),
+                    wait=wait_exponential(
+                        min=self._settings.retry_min_wait,
+                        max=self._settings.retry_max_wait,
+                    ),
+                    retry=retry_if_exception_type(_RETRYABLE_EXCEPTIONS),
+                    before_sleep=before_sleep_log(logger, logging.WARNING),
+                    reraise=True,
             ):
                 with attempt:
                     gen = llm.astream(llm_input)
@@ -94,7 +90,6 @@ class OllamaLLMStreamingInvoker(OllamaLLMStreamingInvokerInterface):
             logger.debug("LLM returned an empty stream")
             return
 
-        # Phase 2 — yield chunks; no retry is possible once streaming has started.
         total_chars = 0
         try:
             text = self._chunk_to_text(first_chunk)

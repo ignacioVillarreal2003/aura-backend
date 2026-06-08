@@ -1,6 +1,5 @@
 import re
 from typing import Optional
-
 from pydantic import BaseModel, Field, field_validator
 
 from app.domain.field_limits import (
@@ -25,7 +24,7 @@ class AuthenticatedUserResponse(BaseModel):
     model_config = {
         "from_attributes": True,
         "frozen": True,
-        "extra": "forbid",
+        "extra": "ignore",
     }
 
     @field_validator("email", mode="before")

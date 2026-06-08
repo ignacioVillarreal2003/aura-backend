@@ -283,7 +283,8 @@ CREATE TABLE artifact (
     type            VARCHAR(32)     NOT NULL
         CONSTRAINT chk_artifact_type CHECK (type IN (
             'MESSAGE', 'REPORT', 'CHECKLIST', 'QUIZ',
-            'TIMELINE', 'LESSONS_LEARNED', 'DECISION_BRIEF'
+            'TIMELINE', 'LESSONS_LEARNED', 'DECISION_BRIEF',
+            'DOCUMENT_SUMMARY', 'DOCUMENT_ACTION'
         )),
     title           VARCHAR(500)    NOT NULL DEFAULT '',
     description     TEXT            NOT NULL DEFAULT '',
@@ -575,6 +576,44 @@ CREATE TABLE artifact_decision_brief_option (
 );
 
 -- ============================================================================
+-- artifact_document_summary  (type = DOCUMENT_SUMMARY)
+-- ============================================================================
+CREATE TABLE artifact_document_summary (
+    id           BIGSERIAL PRIMARY KEY,
+    artifact_id  BIGINT          NOT NULL
+        CONSTRAINT fk_artifact_document_summary_artifact REFERENCES artifact(id) ON DELETE CASCADE,
+    document_ids JSONB           NOT NULL DEFAULT '[]'::jsonb,
+    summary      TEXT            NOT NULL DEFAULT '',
+    created_by   BIGINT          NOT NULL,
+    created_at   TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    updated_by   BIGINT,
+    updated_at   TIMESTAMPTZ,
+    deleted_by   BIGINT,
+    deleted_at   TIMESTAMPTZ,
+    CONSTRAINT uq_artifact_document_summary_artifact UNIQUE (artifact_id)
+);
+
+-- ============================================================================
+-- artifact_document_action  (type = DOCUMENT_ACTION)
+-- ============================================================================
+CREATE TABLE artifact_document_action (
+    id           BIGSERIAL PRIMARY KEY,
+    artifact_id  BIGINT          NOT NULL
+        CONSTRAINT fk_artifact_document_action_artifact REFERENCES artifact(id) ON DELETE CASCADE,
+    document_ids JSONB           NOT NULL DEFAULT '[]'::jsonb,
+    instruction  TEXT            NOT NULL DEFAULT '',
+    action       VARCHAR(32),
+    result       TEXT            NOT NULL DEFAULT '',
+    created_by   BIGINT          NOT NULL,
+    created_at   TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    updated_by   BIGINT,
+    updated_at   TIMESTAMPTZ,
+    deleted_by   BIGINT,
+    deleted_at   TIMESTAMPTZ,
+    CONSTRAINT uq_artifact_document_action_artifact UNIQUE (artifact_id)
+);
+
+-- ============================================================================
 -- Indexes — infrastructure tables
 -- ============================================================================
 CREATE INDEX idx_document_status          ON document(status);
@@ -713,3 +752,9 @@ CREATE INDEX idx_artifact_ll_item_ll               ON artifact_lessons_learned_i
 CREATE INDEX idx_artifact_decision_brief_artifact ON artifact_decision_brief (artifact_id);
 CREATE INDEX idx_artifact_decision_brief_owner    ON artifact_decision_brief (created_by, created_at DESC) WHERE deleted_at IS NULL;
 CREATE INDEX idx_artifact_db_option_brief         ON artifact_decision_brief_option (decision_brief_id, position);
+
+CREATE INDEX idx_artifact_document_summary_artifact ON artifact_document_summary (artifact_id);
+CREATE INDEX idx_artifact_document_summary_owner    ON artifact_document_summary (created_by, created_at DESC) WHERE deleted_at IS NULL;
+
+CREATE INDEX idx_artifact_document_action_artifact ON artifact_document_action (artifact_id);
+CREATE INDEX idx_artifact_document_action_owner    ON artifact_document_action (created_by, created_at DESC) WHERE deleted_at IS NULL;

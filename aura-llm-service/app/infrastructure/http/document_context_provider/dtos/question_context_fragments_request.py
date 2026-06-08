@@ -1,8 +1,6 @@
 from typing import Optional
-
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-# Mirrors aura-document-processing-service/app/domain/field_limits.py (fragment / query)
 _MAX_ID = 2_147_483_647
 _MAX_CHARS_PER_QUERY = 16_000
 _MAX_FRAGMENTS_PER_QUERY_STRATEGY = 50
@@ -74,8 +72,8 @@ class QuestionContextFragmentsRequest(BaseModel):
 
         if self.rerank.enabled:
             pool = (
-                sum(q.max_fragments for q in self.semantic_queries)
-                + sum(q.max_fragments for q in self.bm25_queries)
+                    sum(q.max_fragments for q in self.semantic_queries)
+                    + sum(q.max_fragments for q in self.bm25_queries)
             )
 
             if self.rerank.max_fragments is not None and self.rerank.max_fragments > pool:

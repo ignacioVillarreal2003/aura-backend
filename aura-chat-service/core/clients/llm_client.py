@@ -84,6 +84,22 @@ class LessonsLearnedGenerateResult:
 
 
 @dataclass
+class DocumentSummaryResult:
+    document_ids: list[int]
+    summary: str
+    fragments: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
+class DocumentActionResult:
+    result: str
+    document_ids: list[int]
+    instruction: str
+    action: str | None = None
+    fragments: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
 class DecisionBriefGenerateResult:
     title: str
     options: list[dict[str, Any]]
@@ -110,11 +126,9 @@ class LLMClient:
             self,
             messages: list[dict[str, str]],
             user: AuthenticatedUser,
-            chat_id: int | None = None,
+            chat_id: int,
     ) -> DocumentQuestionResult:
-        payload: dict = {"messages": messages}
-        if chat_id is not None:
-            payload["chat_id"] = chat_id
+        payload: dict = {"messages": messages, "chat_id": chat_id}
 
         logger.debug(
             "Calling LLM document-question.",
@@ -142,11 +156,9 @@ class LLMClient:
             self,
             messages: list[dict[str, str]],
             user: AuthenticatedUser,
-            chat_id: int | None = None,
+            chat_id: int,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload: dict = {"messages": messages}
-        if chat_id is not None:
-            payload["chat_id"] = chat_id
+        payload: dict = {"messages": messages, "chat_id": chat_id}
 
         logger.debug(
             "Calling LLM document-question stream.",
@@ -165,9 +177,15 @@ class LLMClient:
             self,
             messages: list[dict[str, str]],
             user: AuthenticatedUser,
+            chat_id: int,
+            mode: str = "direct",
             system_prompt: str | None = None,
     ) -> GeneralChatResult:
-        payload = self._build_general_chat_payload(messages, system_prompt)
+        payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
+        if system_prompt is not None:
+            stripped = system_prompt.strip()
+            if stripped:
+                payload["system_prompt"] = stripped
 
         logger.debug(
             "Calling LLM general-chat.",
@@ -194,9 +212,15 @@ class LLMClient:
             self,
             messages: list[dict[str, str]],
             user: AuthenticatedUser,
+            chat_id: int,
+            mode: str = "direct",
             system_prompt: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload = self._build_general_chat_payload(messages, system_prompt)
+        payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
+        if system_prompt is not None:
+            stripped = system_prompt.strip()
+            if stripped:
+                payload["system_prompt"] = stripped
 
         logger.debug(
             "Calling LLM general-chat stream.",
@@ -215,8 +239,9 @@ class LLMClient:
             self,
             messages: list[dict[str, str]],
             user: AuthenticatedUser,
+            chat_id: int,
     ) -> AgentRunResult:
-        payload: dict = {"messages": messages}
+        payload: dict = {"messages": messages, "chat_id": chat_id}
 
         logger.debug(
             "Calling LLM rag-agent.",
@@ -239,8 +264,9 @@ class LLMClient:
             self,
             messages: list[dict[str, str]],
             user: AuthenticatedUser,
+            chat_id: int,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload: dict = {"messages": messages}
+        payload: dict = {"messages": messages, "chat_id": chat_id}
 
         logger.debug(
             "Calling LLM rag-agent stream.",
@@ -259,8 +285,9 @@ class LLMClient:
             self,
             messages: list[dict[str, str]],
             user: AuthenticatedUser,
+            chat_id: int,
     ) -> AgentRunResult:
-        payload: dict = {"messages": messages}
+        payload: dict = {"messages": messages, "chat_id": chat_id}
 
         logger.debug(
             "Calling LLM agent.",
@@ -283,8 +310,9 @@ class LLMClient:
             self,
             messages: list[dict[str, str]],
             user: AuthenticatedUser,
+            chat_id: int,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload: dict = {"messages": messages}
+        payload: dict = {"messages": messages, "chat_id": chat_id}
 
         logger.debug(
             "Calling LLM agent stream.",
@@ -304,11 +332,9 @@ class LLMClient:
             messages: list[dict[str, str]],
             mode: str,
             user: AuthenticatedUser,
-            chat_id: int | None = None,
+            chat_id: int,
     ) -> ChecklistGenerateResult:
-        payload: dict = {"messages": messages, "mode": mode}
-        if chat_id is not None:
-            payload["chat_id"] = chat_id
+        payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
 
         logger.debug(
             "Calling LLM checklist-generate.",
@@ -338,11 +364,9 @@ class LLMClient:
             messages: list[dict[str, str]],
             mode: str,
             user: AuthenticatedUser,
-            chat_id: int | None = None,
+            chat_id: int,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload: dict = {"messages": messages, "mode": mode}
-        if chat_id is not None:
-            payload["chat_id"] = chat_id
+        payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
 
         logger.debug(
             "Calling LLM checklist-generate stream.",
@@ -363,11 +387,9 @@ class LLMClient:
             mode: str,
             report_type: str,
             user: AuthenticatedUser,
-            chat_id: int | None = None,
+            chat_id: int,
     ) -> ReportGenerateResult:
-        payload: dict = {"messages": messages, "mode": mode, "report_type": report_type}
-        if chat_id is not None:
-            payload["chat_id"] = chat_id
+        payload: dict = {"messages": messages, "mode": mode, "report_type": report_type, "chat_id": chat_id}
 
         logger.debug(
             "Calling LLM report-generate.",
@@ -399,11 +421,9 @@ class LLMClient:
             mode: str,
             report_type: str,
             user: AuthenticatedUser,
-            chat_id: int | None = None,
+            chat_id: int,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload: dict = {"messages": messages, "mode": mode, "report_type": report_type}
-        if chat_id is not None:
-            payload["chat_id"] = chat_id
+        payload: dict = {"messages": messages, "mode": mode, "report_type": report_type, "chat_id": chat_id}
 
         logger.debug(
             "Calling LLM report-generate stream.",
@@ -423,11 +443,9 @@ class LLMClient:
             messages: list[dict[str, str]],
             mode: str,
             user: AuthenticatedUser,
-            chat_id: int | None = None,
+            chat_id: int,
     ) -> TimelineGenerateResult:
-        payload: dict = {"messages": messages, "mode": mode}
-        if chat_id is not None:
-            payload["chat_id"] = chat_id
+        payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
 
         logger.debug(
             "Calling LLM timeline-generate.",
@@ -458,11 +476,9 @@ class LLMClient:
             messages: list[dict[str, str]],
             mode: str,
             user: AuthenticatedUser,
-            chat_id: int | None = None,
+            chat_id: int,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload: dict = {"messages": messages, "mode": mode}
-        if chat_id is not None:
-            payload["chat_id"] = chat_id
+        payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
 
         logger.debug(
             "Calling LLM timeline-generate stream.",
@@ -482,11 +498,9 @@ class LLMClient:
             messages: list[dict[str, str]],
             mode: str,
             user: AuthenticatedUser,
-            chat_id: int | None = None,
+            chat_id: int,
     ) -> QuizGenerateResult:
-        payload: dict = {"messages": messages, "mode": mode}
-        if chat_id is not None:
-            payload["chat_id"] = chat_id
+        payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
 
         logger.debug(
             "Calling LLM quiz-generate.",
@@ -518,11 +532,9 @@ class LLMClient:
             messages: list[dict[str, str]],
             mode: str,
             user: AuthenticatedUser,
-            chat_id: int | None = None,
+            chat_id: int,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload: dict = {"messages": messages, "mode": mode}
-        if chat_id is not None:
-            payload["chat_id"] = chat_id
+        payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
 
         logger.debug(
             "Calling LLM quiz-generate stream.",
@@ -542,11 +554,9 @@ class LLMClient:
             messages: list[dict[str, str]],
             mode: str,
             user: AuthenticatedUser,
-            chat_id: int | None = None,
+            chat_id: int,
     ) -> LessonsLearnedGenerateResult:
-        payload: dict = {"messages": messages, "mode": mode}
-        if chat_id is not None:
-            payload["chat_id"] = chat_id
+        payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
 
         logger.debug(
             "Calling LLM lessons-learned-generate.",
@@ -577,11 +587,9 @@ class LLMClient:
             messages: list[dict[str, str]],
             mode: str,
             user: AuthenticatedUser,
-            chat_id: int | None = None,
+            chat_id: int,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload: dict = {"messages": messages, "mode": mode}
-        if chat_id is not None:
-            payload["chat_id"] = chat_id
+        payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
 
         logger.debug(
             "Calling LLM lessons-learned-generate stream.",
@@ -601,11 +609,9 @@ class LLMClient:
             messages: list[dict[str, str]],
             mode: str,
             user: AuthenticatedUser,
-            chat_id: int | None = None,
+            chat_id: int,
     ) -> DecisionBriefGenerateResult:
-        payload: dict = {"messages": messages, "mode": mode}
-        if chat_id is not None:
-            payload["chat_id"] = chat_id
+        payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
 
         logger.debug(
             "Calling LLM decision-brief-generate.",
@@ -634,16 +640,126 @@ class LLMClient:
             fragments=self.normalize_fragments(data.get("fragments")),
         )
 
+    async def execute_document_summary(
+            self,
+            document_ids: list[int],
+            user: AuthenticatedUser,
+            chat_id: int,
+    ) -> DocumentSummaryResult:
+        payload: dict = {"document_ids": document_ids}
+
+        logger.debug(
+            "Calling LLM document-summary.",
+            extra={
+                "user_id": user.id,
+                "document_count": len(document_ids),
+                "url": settings.LLM_DOCUMENT_SUMMARY_URL,
+            },
+        )
+
+        data = await self._post_json(
+            url=settings.LLM_DOCUMENT_SUMMARY_URL,
+            payload=payload,
+            user=user,
+            context="document-summary",
+        )
+
+        return DocumentSummaryResult(
+            document_ids=data.get("document_ids") or document_ids,
+            summary=str(data.get("summary", "")),
+            fragments=self.normalize_fragments(data.get("fragments")),
+        )
+
+    async def execute_document_summary_stream_events(
+            self,
+            document_ids: list[int],
+            user: AuthenticatedUser,
+            chat_id: int,
+    ) -> AsyncIterator[dict[str, Any]]:
+        payload: dict = {"document_ids": document_ids}
+
+        logger.debug(
+            "Calling LLM document-summary stream.",
+            extra={"user_id": user.id, "document_count": len(document_ids)},
+        )
+
+        async for event in self._stream_sse_events(
+                url=settings.LLM_DOCUMENT_SUMMARY_STREAM_URL,
+                payload=payload,
+                user=user,
+                context="document-summary-stream",
+        ):
+            yield event
+
+    async def execute_document_action(
+            self,
+            document_ids: list[int],
+            instruction: str,
+            action: str | None,
+            user: AuthenticatedUser,
+            chat_id: int,
+    ) -> DocumentActionResult:
+        payload: dict = {"document_ids": document_ids, "instruction": instruction}
+        if action is not None:
+            payload["action"] = action
+
+        logger.debug(
+            "Calling LLM document-action.",
+            extra={
+                "user_id": user.id,
+                "document_count": len(document_ids),
+                "url": settings.LLM_DOCUMENT_ACTION_URL,
+            },
+        )
+
+        data = await self._post_json(
+            url=settings.LLM_DOCUMENT_ACTION_URL,
+            payload=payload,
+            user=user,
+            context="document-action",
+        )
+
+        return DocumentActionResult(
+            result=str(data.get("result", "")),
+            document_ids=data.get("document_ids") or document_ids,
+            instruction=str(data.get("instruction", instruction)),
+            action=data.get("action"),
+            fragments=self.normalize_fragments(data.get("fragments")),
+        )
+
+    async def execute_document_action_stream_events(
+            self,
+            document_ids: list[int],
+            instruction: str,
+            action: str | None,
+            user: AuthenticatedUser,
+            chat_id: int,
+    ) -> AsyncIterator[dict[str, Any]]:
+        payload: dict = {"document_ids": document_ids, "instruction": instruction}
+        if action is not None:
+            payload["action"] = action
+
+        logger.debug(
+            "Calling LLM document-action stream.",
+            extra={"user_id": user.id, "document_count": len(document_ids)},
+        )
+
+        async for event in self._stream_sse_events(
+                url=settings.LLM_DOCUMENT_ACTION_STREAM_URL,
+                payload=payload,
+                user=user,
+                context="document-action-stream",
+        ):
+            yield event
+
     async def generate_decision_brief_stream_events(
             self,
             messages: list[dict[str, str]],
             mode: str,
             user: AuthenticatedUser,
-            chat_id: int | None = None,
+            chat_id: int,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload: dict = {"messages": messages, "mode": mode}
-        if chat_id is not None:
-            payload["chat_id"] = chat_id
+        payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
 
         logger.debug(
             "Calling LLM decision-brief-generate stream.",
@@ -805,18 +921,6 @@ class LLMClient:
                 ) from e
             if isinstance(obj, dict):
                 yield obj
-
-    @staticmethod
-    def _build_general_chat_payload(
-            messages: list[dict[str, str]],
-            system_prompt: str | None,
-    ) -> dict:
-        payload: dict = {"messages": messages}
-        if system_prompt is not None:
-            stripped = system_prompt.strip()
-            if stripped:
-                payload["system_prompt"] = stripped
-        return payload
 
     def _build_agent_result(self, data: dict[str, Any]) -> AgentRunResult:
         out_messages = data.get("messages") or []

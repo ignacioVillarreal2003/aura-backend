@@ -30,13 +30,13 @@ services:
     build:
       context: ../../aura-document-processing-service
       dockerfile: Dockerfile
-      args:
-        HF_TOKEN: ${HF_TOKEN:-}
     container_name: aura-document-processing-service
     ports:
       - "8000:8000"
     env_file:
       - ../../aura-document-processing-service/.env.docker
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
     depends_on:
       aura_db:
         condition: service_healthy
@@ -50,7 +50,7 @@ services:
         condition: service_healthy
     healthcheck:
       <<: *healthcheck-api-v1
-      start_period: 90s
+      start_period: 600s
     restart: on-failure
     volumes:
       - huggingface_cache:/root/.cache/huggingface
@@ -92,6 +92,8 @@ services:
       - "8003:8000"
     env_file:
       - ../../aura-chat-service/.env.docker
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
     depends_on:
       aura_db:
         condition: service_healthy
@@ -101,7 +103,7 @@ services:
         condition: service_healthy
     healthcheck:
       <<: *healthcheck-api-v1
-      start_period: 180s
+      start_period: 300s
     restart: on-failure
     volumes:
       - chat_hf_cache:/app/.cache/huggingface

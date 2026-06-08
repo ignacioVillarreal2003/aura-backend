@@ -129,6 +129,10 @@ class ArtifactSummaryResponse(serializers.ModelSerializer):
                 return obj.lessons_learned_content.id
             if obj.type == Artifact.Type.DECISION_BRIEF:
                 return obj.decision_brief_content.id
+            if obj.type == Artifact.Type.DOCUMENT_SUMMARY:
+                return obj.document_summary_content.id
+            if obj.type == Artifact.Type.DOCUMENT_ACTION:
+                return obj.document_action_content.id
         except ObjectDoesNotExist:
             return None
         return None

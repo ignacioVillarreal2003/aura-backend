@@ -1,6 +1,5 @@
 import logging
 from typing import List, Optional
-
 import httpx
 from langchain_core.messages import BaseMessage
 from langchain_core.runnables import Runnable
@@ -38,14 +37,14 @@ class OllamaLLMInvoker(OllamaLLMInvokerInterface):
         response: BaseMessage | None = None
         try:
             async for attempt in AsyncRetrying(
-                stop=stop_after_attempt(self._settings.max_retry_attempts),
-                wait=wait_exponential(
-                    min=self._settings.retry_min_wait,
-                    max=self._settings.retry_max_wait,
-                ),
-                retry=retry_if_exception_type(_RETRYABLE_EXCEPTIONS),
-                before_sleep=before_sleep_log(logger, logging.WARNING),
-                reraise=True,
+                    stop=stop_after_attempt(self._settings.max_retry_attempts),
+                    wait=wait_exponential(
+                        min=self._settings.retry_min_wait,
+                        max=self._settings.retry_max_wait,
+                    ),
+                    retry=retry_if_exception_type(_RETRYABLE_EXCEPTIONS),
+                    before_sleep=before_sleep_log(logger, logging.WARNING),
+                    reraise=True,
             ):
                 with attempt:
                     response = await llm.ainvoke(llm_input)

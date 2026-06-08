@@ -1,27 +1,25 @@
 import logging
 from collections.abc import Awaitable, Callable
-
 from fastapi import FastAPI
 
-from app.application.authorization.authorizer import Authorizer
-from app.application.services.document_action_service.document_action_service import DocumentActionService
-from app.application.services.document_summary_service.document_summary_service import DocumentSummaryService
-from app.application.services.agent_service.agent_service import AgentService
-from app.application.services.document_question_service.document_question_service import DocumentQuestionService
-from app.application.services.document_classify_service.document_classify_service import DocumentClassifyService
-from app.application.services.fragment_enrich_service.fragment_enrich_service import FragmentEnrichService
-from app.application.services.graph_extraction_service.graph_extraction_service import GraphExtractionService
-from app.application.services.graph_query_translation_service.graph_query_translation_service import (
+from app.application.services.user_interactions.document_action_service.document_action_service import DocumentActionService
+from app.application.services.user_interactions.document_summary_service.document_summary_service import DocumentSummaryService
+from app.application.services.user_interactions.agent_service.agent_service import AgentService
+from app.application.services.user_interactions.document_question_service.document_question_service import DocumentQuestionService
+from app.application.services.processing.document_classify_service.document_classify_service import DocumentClassifyService
+from app.application.services.processing.fragment_enrich_service.fragment_enrich_service import FragmentEnrichService
+from app.application.services.processing.graph_extraction_service.graph_extraction_service import GraphExtractionService
+from app.application.services.processing.graph_query_translation_service.graph_query_translation_service import (
     GraphQueryTranslationService,
 )
-from app.application.services.general_chat_service.general_chat_service import GeneralChatService
-from app.application.services.rag_agent_service.rag_agent_service import RagAgentService
-from app.application.services.report_service.report_service import ReportService
-from app.application.services.checklist_service.checklist_service import ChecklistService
-from app.application.services.timeline_service.timeline_service import TimelineService
-from app.application.services.quiz_service.quiz_service import QuizService
-from app.application.services.lessons_learned_service.lessons_learned_service import LessonsLearnedService
-from app.application.services.decision_brief_service.decision_brief_service import DecisionBriefService
+from app.application.services.user_interactions.general_chat_service.general_chat_service import GeneralChatService
+from app.application.services.user_interactions.rag_agent_service.rag_agent_service import RagAgentService
+from app.application.services.user_interactions.report_service.report_service import ReportService
+from app.application.services.user_interactions.checklist_service.checklist_service import ChecklistService
+from app.application.services.user_interactions.timeline_service.timeline_service import TimelineService
+from app.application.services.user_interactions.quiz_service.quiz_service import QuizService
+from app.application.services.user_interactions.lessons_learned_service.lessons_learned_service import LessonsLearnedService
+from app.application.services.user_interactions.decision_brief_service.decision_brief_service import DecisionBriefService
 from app.infrastructure.http.authentication_provider.authentication_provider import AuthenticationProvider
 from app.infrastructure.http.document_context_provider.document_context_provider import DocumentContextProvider
 from app.infrastructure.http.http_client.http_client import HttpClient
@@ -72,7 +70,6 @@ async def _rollback_partial_startup(
         "document_question_service",
         "ollama_llm_facade",
         "document_context_provider",
-        "authorizer",
         "authentication_provider",
         "http_client",
         "redis_client",
@@ -104,9 +101,6 @@ async def startup_dependencies(app: FastAPI) -> None:
         )
         app.state.authentication_provider = authentication_provider
 
-        authorizer = Authorizer()
-        app.state.authorizer = authorizer
-
         document_context_provider = DocumentContextProvider(http_client=http_client)
         app.state.document_context_provider = document_context_provider
 
@@ -124,7 +118,6 @@ async def startup_dependencies(app: FastAPI) -> None:
             ollama_llm_invoker=ollama_llm_invoker,
             ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
             document_context_provider=document_context_provider,
-            authorizer=authorizer,
         )
         app.state.document_question_service = document_question_service
 
@@ -133,7 +126,6 @@ async def startup_dependencies(app: FastAPI) -> None:
             ollama_llm_invoker=ollama_llm_invoker,
             ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
             document_context_provider=document_context_provider,
-            authorizer=authorizer,
         )
         app.state.document_summary_service = document_summary_service
 
@@ -142,49 +134,42 @@ async def startup_dependencies(app: FastAPI) -> None:
             ollama_llm_invoker=ollama_llm_invoker,
             ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
             document_context_provider=document_context_provider,
-            authorizer=authorizer,
         )
         app.state.document_action_service = document_action_service
 
         document_classify_service = DocumentClassifyService(
             ollama_llm_facade=ollama_facade,
             ollama_llm_invoker=ollama_llm_invoker,
-            authorizer=authorizer,
         )
         app.state.document_classify_service = document_classify_service
 
         fragment_enrich_service = FragmentEnrichService(
             ollama_llm_facade=ollama_facade,
             ollama_llm_invoker=ollama_llm_invoker,
-            authorizer=authorizer,
         )
         app.state.fragment_enrich_service = fragment_enrich_service
 
         graph_extraction_service = GraphExtractionService(
             ollama_llm_facade=ollama_facade,
             ollama_llm_invoker=ollama_llm_invoker,
-            authorizer=authorizer,
         )
         app.state.graph_extraction_service = graph_extraction_service
 
         graph_query_translation_service = GraphQueryTranslationService(
             ollama_llm_facade=ollama_facade,
             ollama_llm_invoker=ollama_llm_invoker,
-            authorizer=authorizer,
         )
         app.state.graph_query_translation_service = graph_query_translation_service
 
         agent_service = AgentService(
             ollama_llm_facade=ollama_facade,
             document_context_provider=document_context_provider,
-            authorizer=authorizer,
         )
         app.state.agent_service = agent_service
 
         rag_agent_service = RagAgentService(
             ollama_llm_facade=ollama_facade,
             document_context_provider=document_context_provider,
-            authorizer=authorizer,
         )
         app.state.rag_agent_service = rag_agent_service
 
@@ -192,7 +177,7 @@ async def startup_dependencies(app: FastAPI) -> None:
             ollama_llm_facade=ollama_facade,
             ollama_llm_invoker=ollama_llm_invoker,
             ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
-            authorizer=authorizer,
+            document_context_provider=document_context_provider,
         )
         app.state.general_chat_service = general_chat_service
 
@@ -200,7 +185,6 @@ async def startup_dependencies(app: FastAPI) -> None:
             ollama_llm_facade=ollama_facade,
             ollama_llm_invoker=ollama_llm_invoker,
             document_context_provider=document_context_provider,
-            authorizer=authorizer,
         )
         app.state.report_service = report_service
 
@@ -208,7 +192,6 @@ async def startup_dependencies(app: FastAPI) -> None:
             ollama_llm_facade=ollama_facade,
             ollama_llm_invoker=ollama_llm_invoker,
             document_context_provider=document_context_provider,
-            authorizer=authorizer,
         )
         app.state.checklist_service = checklist_service
 
@@ -216,7 +199,6 @@ async def startup_dependencies(app: FastAPI) -> None:
             ollama_llm_facade=ollama_facade,
             ollama_llm_invoker=ollama_llm_invoker,
             document_context_provider=document_context_provider,
-            authorizer=authorizer,
         )
         app.state.timeline_service = timeline_service
 
@@ -224,7 +206,6 @@ async def startup_dependencies(app: FastAPI) -> None:
             ollama_llm_facade=ollama_facade,
             ollama_llm_invoker=ollama_llm_invoker,
             document_context_provider=document_context_provider,
-            authorizer=authorizer,
         )
         app.state.quiz_service = quiz_service
 
@@ -232,7 +213,6 @@ async def startup_dependencies(app: FastAPI) -> None:
             ollama_llm_facade=ollama_facade,
             ollama_llm_invoker=ollama_llm_invoker,
             document_context_provider=document_context_provider,
-            authorizer=authorizer,
         )
         app.state.lessons_learned_service = lessons_learned_service
 
@@ -240,7 +220,6 @@ async def startup_dependencies(app: FastAPI) -> None:
             ollama_llm_facade=ollama_facade,
             ollama_llm_invoker=ollama_llm_invoker,
             document_context_provider=document_context_provider,
-            authorizer=authorizer,
         )
         app.state.decision_brief_service = decision_brief_service
 
