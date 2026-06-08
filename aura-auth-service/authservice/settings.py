@@ -260,6 +260,8 @@ DOC_COLLECTION_SERVICE_URL = config('DOC_COLLECTION_SERVICE_URL', default='http:
 DOC_COLLECTION_SERVICE_API_KEY = config('DOC_COLLECTION_SERVICE_API_KEY', default='dev-doc-collection-key')
 
 # Logging Configuration
+_LOG_LEVEL = config('LOG_LEVEL', default='INFO')
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -290,12 +292,12 @@ LOGGING = {
     },
     'root': {
         'handlers': ['console', 'file'],
-        'level': 'INFO',
+        'level': _LOG_LEVEL,
     },
     'loggers': {
         'django': {
             'handlers': ['console', 'file'],
-            'level': 'INFO',
+            'level': _LOG_LEVEL,
             'propagate': False,
         },
     },

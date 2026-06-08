@@ -49,3 +49,4 @@ class DocumentQueryControllerInterface(ABC):
             authenticated_user: AuthenticatedUser,
     ) -> DocumentListResponse:
         pass
+

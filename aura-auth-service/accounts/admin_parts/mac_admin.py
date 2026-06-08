@@ -121,6 +121,104 @@ def _get_comp_doc_ids(compartment_id):
         return set()
 
 
+def _db_ensure_mac_collection(level_id, comp_ids, actor_user_id):
+    """Find or create a combined MAC collection with both a classification level and compartments."""
+    from django.db import connections
+    sorted_ids = sorted(comp_ids)
+    key = '_'.join(str(i) for i in sorted_ids)
+    name = f'__mac_{level_id}_{key}__'
+    with connections['aura_db'].cursor() as cursor:
+        cursor.execute(
+            "SELECT id FROM document_collection WHERE name = %s AND deleted_at IS NULL LIMIT 1",
+            [name],
+        )
+        row = cursor.fetchone()
+        if row:
+            return row[0]
+        cursor.execute(
+            """INSERT INTO document_collection (name, classification_level_id, created_by, created_at)
+               VALUES (%s, %s, %s, NOW()) RETURNING id""",
+            [name, level_id, actor_user_id],
+        )
+        col_id = cursor.fetchone()[0]
+        for comp_id in sorted_ids:
+            cursor.execute(
+                """INSERT INTO document_collection_compartment
+                       (document_collection_id, compartment_id, created_by, created_at)
+                   VALUES (%s, %s, %s, NOW())
+                   ON CONFLICT ON CONSTRAINT doc_coll_comp_coll_compartment_unique DO NOTHING""",
+                [col_id, comp_id, actor_user_id],
+            )
+        return col_id
+
+
+def _db_link_doc_direct(collection_id, document_id, actor_user_id):
+    """Link a document to a collection (idempotent) via direct DB insert."""
+    from django.db import connections
+    with connections['aura_db'].cursor() as cursor:
+        cursor.execute(
+            """INSERT INTO document_in_document_collection
+                   (document_collection_id, document_id, created_by, created_at)
+               SELECT %s, %s, %s, NOW()
+               WHERE NOT EXISTS (
+                   SELECT 1 FROM document_in_document_collection
+                   WHERE document_collection_id = %s AND document_id = %s AND deleted_at IS NULL
+               )""",
+            [collection_id, document_id, actor_user_id, collection_id, document_id],
+        )
+
+
+def _db_sync_mac_collection_for_doc(doc_id, actor_user_id):
+    """Rebuild the combined MAC collection link based on current admin single-dimension assignments."""
+    from django.db import connections
+    try:
+        with connections['aura_db'].cursor() as cursor:
+            cursor.execute(
+                """UPDATE document_in_document_collection
+                   SET deleted_at = NOW(), deleted_by = %s
+                   WHERE document_id = %s
+                     AND deleted_at IS NULL
+                     AND document_collection_id IN (
+                         SELECT id FROM document_collection
+                         WHERE LEFT(name, 6) = '__mac_' AND deleted_at IS NULL
+                     )""",
+                [actor_user_id, doc_id],
+            )
+            cursor.execute(
+                """SELECT dc.classification_level_id
+                   FROM document_in_document_collection dic
+                   JOIN document_collection dc ON dic.document_collection_id = dc.id
+                   WHERE dic.document_id = %s
+                     AND dic.deleted_at IS NULL
+                     AND dc.deleted_at IS NULL
+                     AND LEFT(dc.name, 14) = '__admin_level_'
+                     AND dc.classification_level_id IS NOT NULL
+                   LIMIT 1""",
+                [doc_id],
+            )
+            level_row = cursor.fetchone()
+            if not level_row:
+                return
+            level_id = level_row[0]
+            cursor.execute(
+                """SELECT DISTINCT dcc.compartment_id
+                   FROM document_in_document_collection dic
+                   JOIN document_collection dc ON dic.document_collection_id = dc.id
+                   JOIN document_collection_compartment dcc ON dcc.document_collection_id = dc.id
+                   WHERE dic.document_id = %s
+                     AND dic.deleted_at IS NULL
+                     AND dc.deleted_at IS NULL
+                     AND LEFT(dc.name, 13) = '__admin_comp_'""",
+                [doc_id],
+            )
+            comp_ids = frozenset(row[0] for row in cursor.fetchall())
+        if comp_ids:
+            col_id = _db_ensure_mac_collection(level_id, comp_ids, actor_user_id)
+            _db_link_doc_direct(col_id, doc_id, actor_user_id)
+    except Exception:
+        logger.warning('Failed to sync MAC collection for doc %s', doc_id)
+
+
 def _get_or_create_admin_collection_for_level(user, level_id, level_name):
     """Find or create the dedicated admin collection for a classification level."""
     admin_name = f'__admin_level_{level_id}__'
@@ -354,6 +452,7 @@ def _cl_create_view(request):
                             mac_client.add_document_to_collection(
                                 request.user, admin_col['id'], doc_id
                             )
+                            _db_sync_mac_collection_for_doc(doc_id, request.user.pk)
                         except MacServiceError as exc:
                             logger.warning('Could not add doc %s to level %s: %s', doc_id, result['id'], exc)
                 except MacServiceError as exc:
@@ -492,12 +591,14 @@ def _cl_edit_view(request, level_id):
                     for doc_id in to_add:
                         try:
                             mac_client.add_document_to_collection(request.user, admin_col['id'], doc_id)
+                            _db_sync_mac_collection_for_doc(doc_id, request.user.pk)
                         except MacServiceError as exc:
                             errors.append(str(exc))
                 except MacServiceError as exc:
                     errors.append(str(exc))
             for doc_id in to_remove:
                 errors.extend(_remove_doc_from_level_collections(request.user, doc_id, level_id))
+                _db_sync_mac_collection_for_doc(doc_id, request.user.pk)
 
             if errors:
                 for e in errors:
@@ -654,6 +755,7 @@ def _comp_create_view(request):
                             mac_client.add_document_to_collection(
                                 request.user, admin_col['id'], doc_id
                             )
+                            _db_sync_mac_collection_for_doc(doc_id, request.user.pk)
                         except MacServiceError as exc:
                             logger.warning('Could not add doc %s to comp %s: %s', doc_id, result['id'], exc)
                 except MacServiceError as exc:
@@ -775,12 +877,14 @@ def _comp_edit_view(request, compartment_id):
                     for doc_id in to_add:
                         try:
                             mac_client.add_document_to_collection(request.user, admin_col['id'], doc_id)
+                            _db_sync_mac_collection_for_doc(doc_id, request.user.pk)
                         except MacServiceError as exc:
                             errors.append(str(exc))
                 except MacServiceError as exc:
                     errors.append(str(exc))
             for doc_id in to_remove:
                 errors.extend(_remove_doc_from_comp_collections(request.user, doc_id, compartment_id))
+                _db_sync_mac_collection_for_doc(doc_id, request.user.pk)
 
             if errors:
                 for e in errors:

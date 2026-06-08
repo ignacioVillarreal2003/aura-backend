@@ -43,3 +43,4 @@ class DocumentQueryServiceInterface(ABC):
             authenticated_user: AuthenticatedUser,
     ) -> DocumentListResponse:
         pass
+
