@@ -17,3 +17,5 @@ class DocumentCollectionCatalogSettings(BaseSettings):
     page_size: int = Field(default=100, ge=1, le=100)
     max_pages: int = Field(default=500, ge=1, le=10000)
     fallback_bearer_token: Optional[str] = Field(default=None)
+    service_api_key: Optional[str] = Field(default=None)
+    service_user_email: str = Field(default="service@aura.internal")

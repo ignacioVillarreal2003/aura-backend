@@ -221,10 +221,6 @@ LOGIN_LOCKOUT_MINUTES = config('LOGIN_LOCKOUT_MINUTES', default=15, cast=int)
 # Refresh token lifetime
 REFRESH_TOKEN_LIFETIME_DAYS = config('REFRESH_TOKEN_LIFETIME_DAYS', default=7, cast=int)
 
-# ID of the shared admin chat in aura_db used for admin-initiated document uploads.
-# Must match the seed row in docker/aura-db/init.sql.
-ADMIN_CHAT_ID = config('ADMIN_CHAT_ID', default=12345, cast=int)
-
 # Document Processing Service
 DOCUMENT_PROCESSING_URL = config(
     'DOCUMENT_PROCESSING_URL',

@@ -57,9 +57,12 @@ class DocumentCollectionRepository(DocumentCollectionRepositoryInterface):
                             DocumentInDocumentCollection.document_id.in_(chunk),
                             DocumentInDocumentCollection.deleted_at.is_(None),
                             DocumentInDocumentCollection.document_collection_id.in_(coll_tuple),
+                            Document.deleted_at.is_(None),
                         )
                         collection_result = await database_session.execute(
-                            select(DocumentInDocumentCollection.document_id).where(and_(*conditions))
+                            select(DocumentInDocumentCollection.document_id)
+                            .join(Document, Document.id == DocumentInDocumentCollection.document_id)
+                            .where(and_(*conditions))
                         )
                         accessible.update(row[0] for row in collection_result)
 
@@ -115,9 +118,14 @@ class DocumentCollectionRepository(DocumentCollectionRepositoryInterface):
                     owned_subq = select(Document.id).where(not_deleted, access_filter)
                     shared_result = await database_session.execute(
                         select(DocumentInDocumentCollection.document_id)
+                        .join(
+                            Document,
+                            Document.id == DocumentInDocumentCollection.document_id,
+                        )
                         .where(
                             DocumentInDocumentCollection.deleted_at.is_(None),
                             DocumentInDocumentCollection.document_collection_id.in_(coll_tuple),
+                            Document.deleted_at.is_(None),
                             ~DocumentInDocumentCollection.document_id.in_(owned_subq),
                         )
                         .distinct()

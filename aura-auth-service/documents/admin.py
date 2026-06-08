@@ -14,8 +14,6 @@ from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.utils.translation import gettext as _
 from django.utils.html import format_html
-from django.conf import settings
-
 from accounts.admin_parts.utils.audit import log_audit, _is_admin_or_super_user
 from accounts.services.mac_client import mac_client
 from documents.models import Document
@@ -92,20 +90,6 @@ def _batch_get_doc_meta_all():
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _ensure_admin_chat(actor_user_id: int) -> int:
-    admin_chat_id = settings.ADMIN_CHAT_ID
-    with connections['aura_db'].cursor() as cursor:
-        cursor.execute(
-            """
-            INSERT INTO chat (id, name, created_by)
-            VALUES (%s, %s, %s)
-            ON CONFLICT (id) DO NOTHING
-            """,
-            [admin_chat_id, 'Carga administrativa de documentos', actor_user_id],
-        )
-    return admin_chat_id
-
 
 def _get_doc_mac_assignments(doc_id):
     """Return (current_level_id, current_comp_ids_set) for a document."""
@@ -614,10 +598,8 @@ class DocumentAdmin(admin.ModelAdmin):
         description_from_form = form.cleaned_data.get('description', '') or ''
 
         try:
-            chat_id = _ensure_admin_chat(request.user.pk)
             response_payload = create_document_from_admin(
                 raw_document=raw_collection,
-                chat_id=chat_id,
                 actor_user=request.user,
                 name=name_from_form or None,
                 description=description_from_form or None,

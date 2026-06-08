@@ -29,10 +29,10 @@ class DocumentCollectionCatalogClient(DocumentCollectionCatalogClientInterface):
             user_id: int,
             authorization_header: str | None,
     ) -> frozenset[int]:
-        bearer = self._normalize_bearer(authorization_header or self._settings.fallback_bearer_token)
-        if bearer is None:
+        headers = self._build_request_headers(user_id=user_id, authorization_header=authorization_header)
+        if headers is None:
             logger.debug(
-                "Skipping accessible-collections fetch: no bearer token.",
+                "Skipping accessible-collections fetch: no credentials available.",
                 extra={"user_id": user_id},
             )
             return frozenset()
@@ -40,10 +40,6 @@ class DocumentCollectionCatalogClient(DocumentCollectionCatalogClientInterface):
         url = f"{self._settings.accessible_collections_url.rstrip('/')}/{user_id}/accessible-collections/"
         ids: set[int] = set()
         pages_read = 0
-        headers = {
-            "Authorization": bearer,
-            "Accept": "application/json",
-        }
         timeout = self._settings.request_timeout_seconds
 
         try:
@@ -124,10 +120,10 @@ class DocumentCollectionCatalogClient(DocumentCollectionCatalogClientInterface):
             user_id: int,
             authorization_header: str | None,
     ) -> frozenset[int]:
-        bearer = self._normalize_bearer(authorization_header or self._settings.fallback_bearer_token)
-        if bearer is None:
+        headers = self._build_request_headers(user_id=user_id, authorization_header=authorization_header)
+        if headers is None:
             logger.debug(
-                "Skipping accessible-documents fetch: no bearer token.",
+                "Skipping accessible-documents fetch: no credentials available.",
                 extra={"user_id": user_id},
             )
             return frozenset()
@@ -135,10 +131,6 @@ class DocumentCollectionCatalogClient(DocumentCollectionCatalogClientInterface):
         url = f"{self._settings.accessible_collections_url.rstrip('/')}/{user_id}/accessible-documents/"
         ids: set[int] = set()
         pages_read = 0
-        headers = {
-            "Authorization": bearer,
-            "Accept": "application/json",
-        }
         timeout = self._settings.request_timeout_seconds
 
         try:
@@ -212,6 +204,28 @@ class DocumentCollectionCatalogClient(DocumentCollectionCatalogClientInterface):
             return frozenset()
 
         return frozenset(ids)
+
+    def _build_request_headers(
+            self,
+            *,
+            user_id: int,
+            authorization_header: str | None,
+    ) -> dict[str, str] | None:
+        if self._settings.service_api_key:
+            return {
+                "X-Service-Api-Key": self._settings.service_api_key,
+                "X-User-Id": str(user_id),
+                "X-User-Email": self._settings.service_user_email,
+                "X-User-Permissions": "GET_USER_ACCESSIBLE_COLLECTIONS,GET_USER_ACCESSIBLE_DOCUMENTS",
+                "Accept": "application/json",
+            }
+        bearer = self._normalize_bearer(authorization_header or self._settings.fallback_bearer_token)
+        if bearer is None:
+            return None
+        return {
+            "Authorization": bearer,
+            "Accept": "application/json",
+        }
 
     @staticmethod
     def _normalize_bearer(raw: Optional[str]) -> Optional[str]:

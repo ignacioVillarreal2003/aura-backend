@@ -27,7 +27,7 @@ def _extract_error_message(response: requests.Response) -> str:
     )
 
 
-def create_document_from_admin(*, raw_document, chat_id, actor_user, name=None, description=None):
+def create_document_from_admin(*, raw_document, actor_user, chat_id=None, name=None, description=None):
     """Create a document in document-processing using service-to-service auth."""
 
     url = f"{settings.DOCUMENT_PROCESSING_URL.rstrip('/')}/api/v1/create-document"
