@@ -1,6 +1,7 @@
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
 class DocumentContextProviderSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="DOCUMENT_CONTEXT_PROVIDER_",
@@ -28,4 +29,3 @@ class DocumentContextProviderSettings(BaseSettings):
         if not v.startswith(("http://", "https://")):
             raise ValueError(f"{info.field_name} must start with http:// or https://, got: '{v}'.")
         return v
-

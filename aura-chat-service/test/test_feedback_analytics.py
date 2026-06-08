@@ -30,7 +30,7 @@ def _sample_analytics():
         "recent_negative": [
             {
                 "id": 9,
-                "message_id": 42,
+                "artifact_id": 42,
                 "assistant_id": 5,
                 "assistant_name": "Legal",
                 "reason": "incomplete",

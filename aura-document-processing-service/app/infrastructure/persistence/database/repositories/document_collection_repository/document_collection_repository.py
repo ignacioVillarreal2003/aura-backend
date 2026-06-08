@@ -31,15 +31,19 @@ class DocumentCollectionRepository(DocumentCollectionRepositoryInterface):
             accessible: set[int] = set()
 
             for chunk in chunked_ids(document_ids):
-                conditions = [Document.created_by == user_id]
                 if chat_id is not None:
-                    conditions.append(Document.chat_id == chat_id)
+                    owned_condition = and_(
+                        Document.created_by == user_id,
+                        or_(Document.chat_id == chat_id, Document.chat_id.is_(None)),
+                    )
+                else:
+                    owned_condition = Document.created_by == user_id
 
                 simple_result = await database_session.execute(
                     select(Document.id).where(
                         Document.id.in_(chunk),
                         Document.deleted_at.is_(None),
-                        or_(*conditions),
+                        owned_condition,
                     )
                 )
                 accessible.update(row[0] for row in simple_result)
@@ -53,9 +57,12 @@ class DocumentCollectionRepository(DocumentCollectionRepositoryInterface):
                             DocumentInDocumentCollection.document_id.in_(chunk),
                             DocumentInDocumentCollection.deleted_at.is_(None),
                             DocumentInDocumentCollection.document_collection_id.in_(coll_tuple),
+                            Document.deleted_at.is_(None),
                         )
                         collection_result = await database_session.execute(
-                            select(DocumentInDocumentCollection.document_id).where(and_(*conditions))
+                            select(DocumentInDocumentCollection.document_id)
+                            .join(Document, Document.id == DocumentInDocumentCollection.document_id)
+                            .where(and_(*conditions))
                         )
                         accessible.update(row[0] for row in collection_result)
 
@@ -85,12 +92,16 @@ class DocumentCollectionRepository(DocumentCollectionRepositoryInterface):
             limit: int = 10_000,
     ) -> list[int]:
         try:
-            access_clauses = [Document.created_by == user_id]
-            if chat_id is not None:
-                access_clauses.append(Document.chat_id == chat_id)
-
             not_deleted = Document.deleted_at.is_(None)
-            access_filter = or_(*access_clauses)
+            if chat_id is not None:
+                # Only docs belonging to this chat or standalone docs (no chat) owned by the user.
+                # Docs uploaded to other chats are excluded even if owned by the same user.
+                access_filter = and_(
+                    Document.created_by == user_id,
+                    or_(Document.chat_id == chat_id, Document.chat_id.is_(None)),
+                )
+            else:
+                access_filter = Document.created_by == user_id
 
             owned_result = await database_session.execute(
                 select(Document.id)
@@ -107,9 +118,14 @@ class DocumentCollectionRepository(DocumentCollectionRepositoryInterface):
                     owned_subq = select(Document.id).where(not_deleted, access_filter)
                     shared_result = await database_session.execute(
                         select(DocumentInDocumentCollection.document_id)
+                        .join(
+                            Document,
+                            Document.id == DocumentInDocumentCollection.document_id,
+                        )
                         .where(
                             DocumentInDocumentCollection.deleted_at.is_(None),
                             DocumentInDocumentCollection.document_collection_id.in_(coll_tuple),
+                            Document.deleted_at.is_(None),
                             ~DocumentInDocumentCollection.document_id.in_(owned_subq),
                         )
                         .distinct()

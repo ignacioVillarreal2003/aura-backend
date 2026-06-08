@@ -8,11 +8,11 @@ logger = logging.getLogger(__name__)
 
 
 def lookup_recipient(user_id: int) -> Optional[dict]:
-    base = settings.AUTHENTICATION_SERVICE_URL.rstrip("/")
-    url = f"{base}/auth/users/{user_id}"
+    url = settings.AUTH_USER_LOOKUP_URL.rstrip("/")
     try:
         response = requests.get(
             url,
+            params={"id": user_id},
             headers={"X-Service-Api-Key": str(settings.SERVICE_API_KEY)},
             timeout=5,
         )
@@ -39,7 +39,11 @@ def lookup_recipient(user_id: int) -> Optional[dict]:
         data = response.json()
     except ValueError:
         return None
+    results = data.get("results") or []
+    if not results:
+        return None
+    recipient = results[0]
     return {
-        "email": data.get("email"),
-        "username": data.get("username"),
+        "email": recipient.get("email"),
+        "username": recipient.get("username"),
     }

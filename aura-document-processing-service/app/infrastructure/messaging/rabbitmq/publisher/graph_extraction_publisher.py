@@ -1,6 +1,8 @@
 import logging
 from typing import Optional
 
+from fastapi import HTTPException, Request, status
+
 from app.configuration.graph.knowledge_graph_settings import KnowledgeGraphSettings
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.types import UserId
@@ -93,3 +95,16 @@ class GraphExtractionPublisher(GraphExtractionPublisherInterface):
             user=principal,
             force=force,
         )
+
+
+async def get_graph_extraction_publisher(
+        request: Request,
+) -> GraphExtractionPublisherInterface:
+    publisher = getattr(request.app.state, "graph_extraction_publisher", None)
+    if publisher is None:
+        logger.error("GraphExtractionPublisher is not registered on the application state.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Knowledge graph extraction publisher is not available.",
+        )
+    return publisher

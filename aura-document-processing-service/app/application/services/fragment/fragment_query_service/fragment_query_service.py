@@ -113,16 +113,24 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 required_permissions=frozenset({Permissions.LIST_CONTEXT_FRAGMENTS_BY_QUESTION}),
             )
 
-            collection_ids = await self._document_collection_catalog_client.fetch_all_accessible_collection_ids(
+            collection_doc_ids = await self._document_collection_catalog_client.fetch_all_accessible_document_ids(
                 user_id=int(authenticated_user.id),
                 authorization_header=authorization_header,
             )
-            accessible_doc_ids = await self._document_collection_repository.list_all_accessible_document_ids(
+            logger.debug(
+                "Accessible document IDs fetched from collection service.",
+                extra={
+                    "user_id": authenticated_user.id,
+                    "collection_doc_count": len(collection_doc_ids),
+                },
+            )
+            own_doc_ids = await self._document_collection_repository.list_all_accessible_document_ids(
                 user_id=int(authenticated_user.id),
                 database_session=database_session,
-                accessible_collection_ids=collection_ids,
+                accessible_collection_ids=frozenset(),
                 chat_id=question_context_fragments_request.chat_id,
             )
+            accessible_doc_ids = list(set(own_doc_ids) | collection_doc_ids)
             accessible_doc_set: set[int] = set(accessible_doc_ids)
 
             semantic_ranked_lists: list[list[Fragment]] = []
@@ -276,17 +284,25 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 document_ids=documents_context_fragments_request.document_ids,
                 database_session=database_session,
             )
-            collection_ids = await self._document_collection_catalog_client.fetch_all_accessible_collection_ids(
+            collection_doc_ids = await self._document_collection_catalog_client.fetch_all_accessible_document_ids(
                 user_id=int(authenticated_user.id),
                 authorization_header=authorization_header,
             )
-            allowed_ids = await self._document_collection_repository.get_accessible_document_ids(
+            logger.debug(
+                "Accessible document IDs fetched from collection service.",
+                extra={
+                    "user_id": authenticated_user.id,
+                    "collection_doc_count": len(collection_doc_ids),
+                },
+            )
+            owned_ids = await self._document_collection_repository.get_accessible_document_ids(
                 user_id=int(authenticated_user.id),
                 document_ids=documents_context_fragments_request.document_ids,
                 chat_id=None,
-                accessible_collection_ids=collection_ids,
+                accessible_collection_ids=frozenset(),
                 database_session=database_session,
             )
+            allowed_ids = owned_ids | (set(documents_context_fragments_request.document_ids) & collection_doc_ids)
             if len(allowed_ids) != len(set(documents_context_fragments_request.document_ids)):
                 logger.warning(
                     "Unauthorized or missing documents in fragments-by-documents request.",

@@ -52,12 +52,13 @@ def _member_count_subquery() -> Coalesce:
 
 
 def _unread_count_subquery(member_id: int) -> Coalesce:
+    from apps.artifact.models.artifact import Artifact
+    from apps.artifact_message.models import ArtifactMessage
     from apps.membership.models.chat_membership import ChatMembership
-    from apps.message.models.chat_message import ChatMessage
 
     cutoff_sq = Subquery(
         ChatMembership.objects.filter(
-            chat_id=OuterRef("chat_id"),
+            chat_id=OuterRef(OuterRef("pk")),
             member_id=member_id,
             status="active",
             deleted_at__isnull=True,
@@ -69,11 +70,11 @@ def _unread_count_subquery(member_id: int) -> Coalesce:
 
     return Coalesce(
         Subquery(
-            ChatMessage.objects.filter(
-                chat_id=OuterRef("pk"),
-                deleted_at__isnull=True,
+            ArtifactMessage.objects.filter(
+                artifact__source_chat_id=OuterRef("pk"),
+                artifact__type=Artifact.Type.MESSAGE,
                 created_at__gt=cutoff_sq,
-            ).values("chat_id").annotate(c=Count("id")).values("c")[:1],
+            ).values("artifact__source_chat_id").annotate(c=Count("id")).values("c")[:1],
             output_field=IntegerField(),
         ),
         0,
@@ -184,6 +185,8 @@ class ChatRepository:
                     ),
                 ),
                 pinned_at=_membership_subquery(user_id, "pinned_at"),
+                muted_until=_membership_subquery(user_id, "muted_until"),
+                unread_count=_unread_count_subquery(user_id),
             )
         )
 

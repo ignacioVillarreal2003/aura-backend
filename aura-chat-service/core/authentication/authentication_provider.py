@@ -32,9 +32,14 @@ def _get_auth_http_client() -> httpx.Client:
         return _auth_http_client
     with _auth_http_client_lock:
         if _auth_http_client is None:
-            timeout = float(getattr(settings, "AUTH_SERVICE_TIMEOUT", 10.0))
+            timeout = float(getattr(settings, "AUTH_SERVICE_TIMEOUT", 5.0))
             _auth_http_client = httpx.Client(
-                timeout=timeout,
+                timeout=httpx.Timeout(
+                    connect=min(timeout, 3.0),
+                    read=timeout,
+                    write=timeout,
+                    pool=timeout,
+                ),
                 limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
             )
     return _auth_http_client

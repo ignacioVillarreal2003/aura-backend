@@ -1,5 +1,5 @@
+import concurrent.futures
 import logging
-import threading
 import time
 from typing import Any
 import httpx
@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 _MAX_ATTEMPTS = 3
 _BACKOFF_SECONDS = [0, 2, 4]
+_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="notif")
 
 
 class NotificationClient:
@@ -22,7 +23,6 @@ class NotificationClient:
             idempotency_key: str | None = None,
             channels_override: list[str] | None = None,
     ) -> None:
-        """Fire-and-forget: dispatches the event in a background daemon thread."""
         base = getattr(settings, "NOTIFICATION_SERVICE_URL", "").strip().rstrip("/")
         token = getattr(settings, "NOTIFICATION_INTERNAL_API_TOKEN", "")
         if not base or not token:
@@ -47,7 +47,7 @@ class NotificationClient:
         if channels_override:
             payload["channels_override"] = channels_override
 
-        threading.Thread(target=self._dispatch, args=(payload, base, token), daemon=True).start()
+        _executor.submit(self._dispatch, payload, base, token)
 
     def _dispatch(self, payload: dict[str, Any], base: str, token: str) -> None:
         headers = {
@@ -81,11 +81,16 @@ class NotificationClient:
                         "Failed to emit event '%s' after %d attempts: %s",
                         event_type, _MAX_ATTEMPTS, exc,
                     )
-                else:
-                    logger.debug(
-                        "Notification attempt %d for '%s' failed, retrying: %s",
-                        attempt, event_type, exc,
-                    )
+                    return
+                logger.debug(
+                    "Notification attempt %d for '%s' failed, retrying: %s",
+                    attempt, event_type, exc,
+                )
+
+        logger.error(
+            "Failed to emit event '%s' after %d attempts (HTTP errors).",
+            event_type, _MAX_ATTEMPTS,
+        )
 
 
 notification_client = NotificationClient()

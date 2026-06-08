@@ -31,7 +31,7 @@ from apps.message.services.feedback_service import FeedbackService
 from apps.message.services.message_service import ChatAIMode, MessageService
 from apps.message.services.pinned_message_service import PinnedMessageService
 from apps.message.services.thread_service import ThreadService
-from test.conftest import make_chat, make_message, make_pin, make_user, make_feedback, make_thread_reply
+from test.conftest import make_artifact, make_chat, make_message, make_pin, make_user, make_feedback, make_thread_reply
 
 # ---------------------------------------------------------------------------
 # Module path constants used for patching
@@ -685,11 +685,11 @@ class TestPinnedMessageService:
         pin = make_pin()
         mocker.patch(f"{PIN_SVC}.membership_repository.is_active_member", return_value=True)
         mocker.patch(f"{PIN_SVC}.membership_repository.is_chat_owner", return_value=True)
-        mocker.patch(f"{PIN_SVC}.message_repository.get_by_id_and_chat", return_value=_msg())
+        mocker.patch(f"{PIN_SVC}.artifact_repository.get_by_id", return_value=make_artifact(source_chat_id=1))
         mocker.patch(f"{PIN_SVC}.pinned_message_repository.pin", return_value=(pin, True))
 
         svc = PinnedMessageService()
-        result = svc.pin_message(_user(), chat_id=1, message_id=1)
+        result = svc.pin_message(_user(), chat_id=1, artifact_id=1)
 
         assert result is pin
 
@@ -698,7 +698,7 @@ class TestPinnedMessageService:
 
         svc = PinnedMessageService()
         with pytest.raises(MessageAccessDeniedException):
-            svc.pin_message(_user(), chat_id=1, message_id=1)
+            svc.pin_message(_user(), chat_id=1, artifact_id=1)
 
     def test_pin_message_member_not_owner_raises(self, mocker):
         mocker.patch(f"{PIN_SVC}.membership_repository.is_active_member", return_value=True)
@@ -706,16 +706,16 @@ class TestPinnedMessageService:
 
         svc = PinnedMessageService()
         with pytest.raises(NotChatOwnerException):
-            svc.pin_message(_user(user_id=2), chat_id=1, message_id=1)
+            svc.pin_message(_user(user_id=2), chat_id=1, artifact_id=1)
 
     def test_pin_message_not_found_raises(self, mocker):
         mocker.patch(f"{PIN_SVC}.membership_repository.is_active_member", return_value=True)
         mocker.patch(f"{PIN_SVC}.membership_repository.is_chat_owner", return_value=True)
-        mocker.patch(f"{PIN_SVC}.message_repository.get_by_id_and_chat", return_value=None)
+        mocker.patch(f"{PIN_SVC}.artifact_repository.get_by_id", return_value=None)
 
         svc = PinnedMessageService()
         with pytest.raises(MessageNotFoundException):
-            svc.pin_message(_user(), chat_id=1, message_id=999)
+            svc.pin_message(_user(), chat_id=1, artifact_id=999)
 
     def test_unpin_message_owner_succeeds(self, mocker):
         mocker.patch(f"{PIN_SVC}.membership_repository.is_active_member", return_value=True)
@@ -723,7 +723,7 @@ class TestPinnedMessageService:
         unpin = mocker.patch(f"{PIN_SVC}.pinned_message_repository.unpin")
 
         svc = PinnedMessageService()
-        svc.unpin_message(_user(), chat_id=1, message_id=1)
+        svc.unpin_message(_user(), chat_id=1, artifact_id=1)
 
         unpin.assert_called_once_with(1, 1)
 
@@ -732,7 +732,7 @@ class TestPinnedMessageService:
 
         svc = PinnedMessageService()
         with pytest.raises(MessageAccessDeniedException):
-            svc.unpin_message(_user(), chat_id=1, message_id=1)
+            svc.unpin_message(_user(), chat_id=1, artifact_id=1)
 
     def test_unpin_message_member_not_owner_raises(self, mocker):
         mocker.patch(f"{PIN_SVC}.membership_repository.is_active_member", return_value=True)
@@ -740,7 +740,7 @@ class TestPinnedMessageService:
 
         svc = PinnedMessageService()
         with pytest.raises(NotChatOwnerException):
-            svc.unpin_message(_user(user_id=2), chat_id=1, message_id=1)
+            svc.unpin_message(_user(user_id=2), chat_id=1, artifact_id=1)
 
 
 # ===========================================================================
@@ -751,60 +751,60 @@ class TestBookmarkService:
 
     def test_bookmark_happy_path(self, mocker):
         mocker.patch(f"{BKM_SVC}.membership_repository.is_active_member", return_value=True)
-        mocker.patch(f"{BKM_SVC}.message_repository.get_by_id_and_chat", return_value=_msg())
+        mocker.patch(f"{BKM_SVC}.artifact_repository.get_by_id", return_value=make_artifact(source_chat_id=1))
         create = mocker.patch(f"{BKM_SVC}.bookmark_repository.create")
 
         svc = BookmarkService()
-        svc.bookmark(_user(), chat_id=1, message_id=1)
+        svc.bookmark(_user(), chat_id=1, artifact_id=1)
 
-        create.assert_called_once_with(message_id=1, user_id=1)
+        create.assert_called_once_with(artifact_id=1, user_id=1)
 
     def test_bookmark_not_member_raises(self, mocker):
         mocker.patch(f"{BKM_SVC}.membership_repository.is_active_member", return_value=False)
 
         svc = BookmarkService()
         with pytest.raises(MessageAccessDeniedException):
-            svc.bookmark(_user(), chat_id=1, message_id=1)
+            svc.bookmark(_user(), chat_id=1, artifact_id=1)
 
     def test_bookmark_message_not_found_raises(self, mocker):
         mocker.patch(f"{BKM_SVC}.membership_repository.is_active_member", return_value=True)
-        mocker.patch(f"{BKM_SVC}.message_repository.get_by_id_and_chat", return_value=None)
+        mocker.patch(f"{BKM_SVC}.artifact_repository.get_by_id", return_value=None)
 
         svc = BookmarkService()
         with pytest.raises(MessageNotFoundException):
-            svc.bookmark(_user(), chat_id=1, message_id=999)
+            svc.bookmark(_user(), chat_id=1, artifact_id=999)
 
     def test_unbookmark_happy_path(self, mocker):
         mocker.patch(f"{BKM_SVC}.membership_repository.is_active_member", return_value=True)
-        mocker.patch(f"{BKM_SVC}.message_repository.get_by_id_and_chat", return_value=_msg())
+        mocker.patch(f"{BKM_SVC}.artifact_repository.get_by_id", return_value=make_artifact(source_chat_id=1))
         delete = mocker.patch(f"{BKM_SVC}.bookmark_repository.delete")
 
         svc = BookmarkService()
-        svc.unbookmark(_user(), chat_id=1, message_id=1)
+        svc.unbookmark(_user(), chat_id=1, artifact_id=1)
 
-        delete.assert_called_once_with(message_id=1, user_id=1)
+        delete.assert_called_once_with(artifact_id=1, user_id=1)
 
     def test_unbookmark_not_member_raises(self, mocker):
         mocker.patch(f"{BKM_SVC}.membership_repository.is_active_member", return_value=False)
 
         svc = BookmarkService()
         with pytest.raises(MessageAccessDeniedException):
-            svc.unbookmark(_user(), chat_id=1, message_id=1)
+            svc.unbookmark(_user(), chat_id=1, artifact_id=1)
 
     def test_unbookmark_message_not_found_raises(self, mocker):
         mocker.patch(f"{BKM_SVC}.membership_repository.is_active_member", return_value=True)
-        mocker.patch(f"{BKM_SVC}.message_repository.get_by_id_and_chat", return_value=None)
+        mocker.patch(f"{BKM_SVC}.artifact_repository.get_by_id", return_value=None)
 
         svc = BookmarkService()
         with pytest.raises(MessageNotFoundException):
-            svc.unbookmark(_user(), chat_id=1, message_id=999)
+            svc.unbookmark(_user(), chat_id=1, artifact_id=999)
 
     def test_list_bookmarked_happy_path(self, mocker):
         qs = MagicMock()
         qs.filter.return_value = qs
         mocker.patch(f"{BKM_SVC}.chat_repository.get_by_id", return_value=_chat())
         mocker.patch(f"{BKM_SVC}.membership_repository.is_active_member", return_value=True)
-        mocker.patch(f"{BKM_SVC}.bookmark_repository.get_bookmarked_message_ids", return_value=[1, 2])
+        mocker.patch(f"{BKM_SVC}.bookmark_repository.get_bookmarked_artifact_ids", return_value=[1, 2])
         mocker.patch(f"{BKM_SVC}.message_repository.get_messages_by_chat", return_value=qs)
 
         svc = BookmarkService()
@@ -830,14 +830,14 @@ class TestBookmarkService:
     def test_bookmark_is_personal_uses_caller_user_id(self, mocker):
         """Bookmarks always stored under the authenticated user's id, never another user's."""
         mocker.patch(f"{BKM_SVC}.membership_repository.is_active_member", return_value=True)
-        mocker.patch(f"{BKM_SVC}.message_repository.get_by_id_and_chat", return_value=_msg())
+        mocker.patch(f"{BKM_SVC}.artifact_repository.get_by_id", return_value=make_artifact(source_chat_id=1))
         create = mocker.patch(f"{BKM_SVC}.bookmark_repository.create")
 
         user = _user(user_id=42)
         svc = BookmarkService()
-        svc.bookmark(user, chat_id=1, message_id=1)
+        svc.bookmark(user, chat_id=1, artifact_id=1)
 
-        create.assert_called_once_with(message_id=1, user_id=42)
+        create.assert_called_once_with(artifact_id=1, user_id=42)
 
 
 # ===========================================================================
@@ -846,14 +846,20 @@ class TestBookmarkService:
 
 class TestFeedbackService:
 
+    def _ai_artifact(self, sender_type="system"):
+        """Return an artifact SimpleNamespace whose message_content has the given sender_type."""
+        artifact = make_artifact(source_chat_id=1)
+        artifact.message_content = SimpleNamespace(sender_type=sender_type)
+        return artifact
+
     def test_set_feedback_happy_path(self, mocker):
         fb = make_feedback(value=1)
         mocker.patch(f"{FBK_SVC}.membership_repository.is_active_member", return_value=True)
-        mocker.patch(f"{FBK_SVC}.message_repository.get_by_id_and_chat", return_value=_msg(sender_type="system"))
+        mocker.patch(f"{FBK_SVC}.artifact_repository.get_by_id", return_value=self._ai_artifact("system"))
         mocker.patch(f"{FBK_SVC}.feedback_repository.set", return_value=fb)
 
         svc = FeedbackService()
-        result = svc.set_feedback(_user(), chat_id=1, message_id=1, value=1)
+        result = svc.set_feedback(_user(), chat_id=1, artifact_id=1, value=1)
 
         assert result.value == 1
 
@@ -862,79 +868,79 @@ class TestFeedbackService:
 
         svc = FeedbackService()
         with pytest.raises(MessageAccessDeniedException):
-            svc.set_feedback(_user(), chat_id=1, message_id=1, value=1)
+            svc.set_feedback(_user(), chat_id=1, artifact_id=1, value=1)
 
     def test_set_feedback_message_not_found_raises(self, mocker):
         mocker.patch(f"{FBK_SVC}.membership_repository.is_active_member", return_value=True)
-        mocker.patch(f"{FBK_SVC}.message_repository.get_by_id_and_chat", return_value=None)
+        mocker.patch(f"{FBK_SVC}.artifact_repository.get_by_id", return_value=None)
 
         svc = FeedbackService()
         with pytest.raises(MessageNotFoundException):
-            svc.set_feedback(_user(), chat_id=1, message_id=999, value=1)
+            svc.set_feedback(_user(), chat_id=1, artifact_id=999, value=1)
 
     def test_set_feedback_not_ai_message_raises(self, mocker):
         mocker.patch(f"{FBK_SVC}.membership_repository.is_active_member", return_value=True)
-        mocker.patch(f"{FBK_SVC}.message_repository.get_by_id_and_chat", return_value=_msg(sender_type="user"))
+        mocker.patch(f"{FBK_SVC}.artifact_repository.get_by_id", return_value=self._ai_artifact("user"))
 
         svc = FeedbackService()
         with pytest.raises(NotAIMessageException):
-            svc.set_feedback(_user(), chat_id=1, message_id=1, value=1)
+            svc.set_feedback(_user(), chat_id=1, artifact_id=1, value=1)
 
     def test_set_feedback_thumbs_down(self, mocker):
         fb = make_feedback(value=-1)
         mocker.patch(f"{FBK_SVC}.membership_repository.is_active_member", return_value=True)
-        mocker.patch(f"{FBK_SVC}.message_repository.get_by_id_and_chat", return_value=_msg(sender_type="system"))
+        mocker.patch(f"{FBK_SVC}.artifact_repository.get_by_id", return_value=self._ai_artifact("system"))
         mocker.patch(f"{FBK_SVC}.feedback_repository.set", return_value=fb)
 
         svc = FeedbackService()
-        result = svc.set_feedback(_user(), chat_id=1, message_id=1, value=-1)
+        result = svc.set_feedback(_user(), chat_id=1, artifact_id=1, value=-1)
 
         assert result.value == -1
 
     def test_set_feedback_is_personal_uses_caller_user_id(self, mocker):
         """Feedback is always stored under the authenticated user's id."""
         mocker.patch(f"{FBK_SVC}.membership_repository.is_active_member", return_value=True)
-        mocker.patch(f"{FBK_SVC}.message_repository.get_by_id_and_chat", return_value=_msg(sender_type="system"))
+        mocker.patch(f"{FBK_SVC}.artifact_repository.get_by_id", return_value=self._ai_artifact("system"))
         repo_set = mocker.patch(f"{FBK_SVC}.feedback_repository.set", return_value=make_feedback(value=1))
 
         user = _user(user_id=77)
         svc = FeedbackService()
-        svc.set_feedback(user, chat_id=1, message_id=1, value=1)
+        svc.set_feedback(user, chat_id=1, artifact_id=1, value=1)
 
-        repo_set.assert_called_once_with(message_id=1, user_id=77, value=1, reason=None, comment=None)
+        repo_set.assert_called_once_with(artifact_id=1, user_id=77, value=1, reason=None, comment=None)
 
     def test_delete_feedback_happy_path(self, mocker):
         mocker.patch(f"{FBK_SVC}.membership_repository.is_active_member", return_value=True)
-        mocker.patch(f"{FBK_SVC}.message_repository.get_by_id_and_chat", return_value=_msg(sender_type="system"))
+        mocker.patch(f"{FBK_SVC}.artifact_repository.get_by_id", return_value=self._ai_artifact("system"))
         repo_del = mocker.patch(f"{FBK_SVC}.feedback_repository.delete")
 
         svc = FeedbackService()
-        svc.delete_feedback(_user(), chat_id=1, message_id=1)
+        svc.delete_feedback(_user(), chat_id=1, artifact_id=1)
 
-        repo_del.assert_called_once_with(message_id=1, user_id=1)
+        repo_del.assert_called_once_with(artifact_id=1, user_id=1)
 
     def test_delete_feedback_not_member_raises(self, mocker):
         mocker.patch(f"{FBK_SVC}.membership_repository.is_active_member", return_value=False)
 
         svc = FeedbackService()
         with pytest.raises(MessageAccessDeniedException):
-            svc.delete_feedback(_user(), chat_id=1, message_id=1)
+            svc.delete_feedback(_user(), chat_id=1, artifact_id=1)
 
     def test_delete_feedback_message_not_found_raises(self, mocker):
         mocker.patch(f"{FBK_SVC}.membership_repository.is_active_member", return_value=True)
-        mocker.patch(f"{FBK_SVC}.message_repository.get_by_id_and_chat", return_value=None)
+        mocker.patch(f"{FBK_SVC}.artifact_repository.get_by_id", return_value=None)
 
         svc = FeedbackService()
         with pytest.raises(MessageNotFoundException):
-            svc.delete_feedback(_user(), chat_id=1, message_id=999)
+            svc.delete_feedback(_user(), chat_id=1, artifact_id=999)
 
     def test_delete_feedback_not_ai_message_raises(self, mocker):
         mocker.patch(f"{FBK_SVC}.membership_repository.is_active_member", return_value=True)
-        mocker.patch(f"{FBK_SVC}.message_repository.get_by_id_and_chat", return_value=_msg(sender_type="user"))
+        mocker.patch(f"{FBK_SVC}.artifact_repository.get_by_id", return_value=self._ai_artifact("user"))
 
         svc = FeedbackService()
         with pytest.raises(NotAIMessageException):
-            svc.delete_feedback(_user(), chat_id=1, message_id=1)
+            svc.delete_feedback(_user(), chat_id=1, artifact_id=1)
 
 
 # ===========================================================================
@@ -946,11 +952,11 @@ class TestThreadService:
     def test_get_thread_happy_path(self, mocker):
         replies = [make_thread_reply(), make_thread_reply(reply_id=2)]
         mocker.patch(f"{THR_SVC}.membership_repository.is_active_member", return_value=True)
-        mocker.patch(f"{THR_SVC}.message_repository.get_by_id_and_chat", return_value=_msg())
-        mocker.patch(f"{THR_SVC}.thread_repository.get_by_message", return_value=replies)
+        mocker.patch(f"{THR_SVC}.artifact_repository.get_by_id", return_value=make_artifact(source_chat_id=1))
+        mocker.patch(f"{THR_SVC}.thread_repository.get_by_artifact", return_value=replies)
 
         svc = ThreadService()
-        result = svc.get_thread(_user(), chat_id=1, message_id=1)
+        result = svc.get_thread(_user(), chat_id=1, artifact_id=1)
 
         assert result == replies
 
@@ -959,39 +965,39 @@ class TestThreadService:
 
         svc = ThreadService()
         with pytest.raises(MessageAccessDeniedException):
-            svc.get_thread(_user(), chat_id=1, message_id=1)
+            svc.get_thread(_user(), chat_id=1, artifact_id=1)
 
     def test_get_thread_message_not_found_raises(self, mocker):
         mocker.patch(f"{THR_SVC}.membership_repository.is_active_member", return_value=True)
-        mocker.patch(f"{THR_SVC}.message_repository.get_by_id_and_chat", return_value=None)
+        mocker.patch(f"{THR_SVC}.artifact_repository.get_by_id", return_value=None)
 
         svc = ThreadService()
         with pytest.raises(MessageNotFoundException):
-            svc.get_thread(_user(), chat_id=1, message_id=999)
+            svc.get_thread(_user(), chat_id=1, artifact_id=999)
 
     def test_add_reply_happy_path(self, mocker):
         reply = make_thread_reply()
         mocker.patch(f"{THR_SVC}.membership_repository.is_active_member", return_value=True)
-        mocker.patch(f"{THR_SVC}.message_repository.get_by_id_and_chat", return_value=_msg())
+        mocker.patch(f"{THR_SVC}.artifact_repository.get_by_id", return_value=make_artifact(source_chat_id=1))
         mocker.patch(f"{THR_SVC}.thread_repository.create", return_value=reply)
 
         svc = ThreadService()
-        result = svc.add_reply(_user(), chat_id=1, message_id=1, message_text="A reply")
+        result = svc.add_reply(_user(), chat_id=1, artifact_id=1, message_text="A reply")
 
         assert result is reply
 
     def test_add_reply_passes_correct_args(self, mocker):
         reply = make_thread_reply()
         mocker.patch(f"{THR_SVC}.membership_repository.is_active_member", return_value=True)
-        mocker.patch(f"{THR_SVC}.message_repository.get_by_id_and_chat", return_value=_msg())
+        mocker.patch(f"{THR_SVC}.artifact_repository.get_by_id", return_value=make_artifact(source_chat_id=1))
         create = mocker.patch(f"{THR_SVC}.thread_repository.create", return_value=reply)
 
         user = _user(user_id=5)
         svc = ThreadService()
-        svc.add_reply(user, chat_id=1, message_id=1, message_text="My reply")
+        svc.add_reply(user, chat_id=1, artifact_id=1, message_text="My reply")
 
         create.assert_called_once_with(
-            parent_message_id=1,
+            parent_artifact_id=1,
             message="My reply",
             created_by=5,
         )
@@ -1001,12 +1007,12 @@ class TestThreadService:
 
         svc = ThreadService()
         with pytest.raises(MessageAccessDeniedException):
-            svc.add_reply(_user(), chat_id=1, message_id=1, message_text="Reply")
+            svc.add_reply(_user(), chat_id=1, artifact_id=1, message_text="Reply")
 
     def test_add_reply_message_not_found_raises(self, mocker):
         mocker.patch(f"{THR_SVC}.membership_repository.is_active_member", return_value=True)
-        mocker.patch(f"{THR_SVC}.message_repository.get_by_id_and_chat", return_value=None)
+        mocker.patch(f"{THR_SVC}.artifact_repository.get_by_id", return_value=None)
 
         svc = ThreadService()
         with pytest.raises(MessageNotFoundException):
-            svc.add_reply(_user(), chat_id=1, message_id=999, message_text="Reply")
+            svc.add_reply(_user(), chat_id=1, artifact_id=999, message_text="Reply")

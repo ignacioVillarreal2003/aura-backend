@@ -51,6 +51,7 @@ class HuggingFaceEmbedder(BaseEmbedder):
                 model_name=self._settings.huggingface_model,
                 device=self._settings.huggingface_device,
                 normalize_embeddings=self._settings.huggingface_normalize_embeddings,
+                token=self._settings.huggingface_token,
             )
 
             self._embed_query_with_retry: Callable[[str], list[float]] = _retry(

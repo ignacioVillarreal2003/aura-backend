@@ -13,8 +13,12 @@ from app.api.controllers.document import (
 )
 from app.api.controllers.graph import (
     graph_entity_router,
+    graph_extraction_router,
+    graph_ontology_router,
     graph_path_router,
     graph_query_router,
+    graph_search_router,
+    graph_stats_router,
 )
 from app.api.controllers.health_controller import health_controller
 
@@ -83,4 +87,28 @@ router.include_router(
     graph_path_router,
     prefix="/graph/path",
     tags=["graph-path"],
+)
+
+router.include_router(
+    graph_extraction_router,
+    prefix="/graph/extraction",
+    tags=["graph-extraction"],
+)
+
+router.include_router(
+    graph_search_router,
+    prefix="/graph/search",
+    tags=["graph-search"],
+)
+
+router.include_router(
+    graph_ontology_router,
+    prefix="/graph/ontology",
+    tags=["graph-ontology"],
+)
+
+router.include_router(
+    graph_stats_router,
+    prefix="/graph/stats",
+    tags=["graph-stats"],
 )

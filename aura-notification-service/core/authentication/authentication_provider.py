@@ -70,8 +70,7 @@ def _cache_user(token: str, user: AuthenticatedUser) -> None:
 
 
 def _validate_url() -> str:
-    base = settings.AUTHENTICATION_SERVICE_URL.rstrip("/")
-    return f"{base}/auth/validate"
+    return settings.AUTHENTICATION_SERVICE_URL.rstrip("/")
 
 
 def _format_bearer_token(token: str) -> str:

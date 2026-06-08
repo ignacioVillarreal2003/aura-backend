@@ -221,10 +221,6 @@ LOGIN_LOCKOUT_MINUTES = config('LOGIN_LOCKOUT_MINUTES', default=15, cast=int)
 # Refresh token lifetime
 REFRESH_TOKEN_LIFETIME_DAYS = config('REFRESH_TOKEN_LIFETIME_DAYS', default=7, cast=int)
 
-# ID of the shared admin chat in aura_db used for admin-initiated document uploads.
-# Must match the seed row in docker/aura-db/init.sql.
-ADMIN_CHAT_ID = config('ADMIN_CHAT_ID', default=12345, cast=int)
-
 # Document Processing Service
 DOCUMENT_PROCESSING_URL = config(
     'DOCUMENT_PROCESSING_URL',
@@ -234,6 +230,10 @@ DOCUMENT_PROCESSING_SERVICE_API_KEY = config(
     'DOCUMENT_PROCESSING_SERVICE_API_KEY',
     default='service_api_key',
 )
+
+# Shared key for generic service-to-service calls (e.g. notification service
+# enriching email recipients via the user lookup endpoint).
+SERVICE_API_KEY = config('SERVICE_API_KEY', default='service_api_key')
 DOCUMENT_PROCESSING_TIMEOUT_SECONDS = config(
     'DOCUMENT_PROCESSING_TIMEOUT_SECONDS',
     default=300,
@@ -260,6 +260,8 @@ DOC_COLLECTION_SERVICE_URL = config('DOC_COLLECTION_SERVICE_URL', default='http:
 DOC_COLLECTION_SERVICE_API_KEY = config('DOC_COLLECTION_SERVICE_API_KEY', default='dev-doc-collection-key')
 
 # Logging Configuration
+_LOG_LEVEL = config('LOG_LEVEL', default='INFO')
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -290,12 +292,12 @@ LOGGING = {
     },
     'root': {
         'handlers': ['console', 'file'],
-        'level': 'INFO',
+        'level': _LOG_LEVEL,
     },
     'loggers': {
         'django': {
             'handlers': ['console', 'file'],
-            'level': 'INFO',
+            'level': _LOG_LEVEL,
             'propagate': False,
         },
     },

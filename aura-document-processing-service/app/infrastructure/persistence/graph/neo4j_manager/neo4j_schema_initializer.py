@@ -34,6 +34,14 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
     FOR (n:Entity)
     ON EACH [n.canonical_name, n.display_name, n.aliases]
     """,
+    """
+    CREATE INDEX rel_confidence IF NOT EXISTS
+    FOR ()-[r:REL]-() ON (r.confidence)
+    """,
+    """
+    CREATE INDEX rel_type_confidence IF NOT EXISTS
+    FOR ()-[r:REL]-() ON (r.type, r.confidence)
+    """,
 )
 
 

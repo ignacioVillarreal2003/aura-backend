@@ -14,6 +14,10 @@ class OllamaLLMFacadeInterface(ABC):
         pass
 
     @abstractmethod
+    async def get_llm_json(self) -> Runnable:
+        pass
+
+    @abstractmethod
     async def get_llm_with_tools(self) -> Runnable:
         pass
 

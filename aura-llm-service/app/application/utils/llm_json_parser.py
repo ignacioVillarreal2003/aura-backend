@@ -5,6 +5,35 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def _extract_balanced_object(s: str) -> str:
+    """Return the first balanced {...} substring, handling nested objects and strings."""
+    start = s.find("{")
+    if start < 0:
+        return ""
+    depth = 0
+    in_string = False
+    escape_next = False
+    for i, ch in enumerate(s[start:], start):
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == "\\" and in_string:
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return s[start:i + 1]
+    return ""
+
+
 def parse_json_object(text: str) -> dict[str, Any]:
     s = text.strip()
 
@@ -19,12 +48,11 @@ def parse_json_object(text: str) -> dict[str, Any]:
     try:
         parsed = json.loads(s)
     except json.JSONDecodeError:
-        start = s.find("{")
-        end = s.rfind("}")
-        if start < 0 or end <= start:
+        candidate = _extract_balanced_object(s)
+        if not candidate:
             logger.warning("Could not locate JSON object in LLM output")
             raise
-        parsed = json.loads(s[start:end + 1])
+        parsed = json.loads(candidate)
 
     if not isinstance(parsed, dict):
         raise TypeError(f"Expected JSON object, got {type(parsed).__name__}")

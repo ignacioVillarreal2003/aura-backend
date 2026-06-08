@@ -1,7 +1,6 @@
 import logging
-import time
 from typing import Optional
-from django.core.cache import cache
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from core.authentication.authenticated_user import AuthenticatedUser
@@ -33,15 +32,19 @@ class AssistantService:
         AccessControl.require_permissions(user, frozenset({perms.CREATE_ASSISTANT}))
         if assistant_repository.exists_with_name(name):
             raise AssistantAlreadyExistsException()
-        assistant = assistant_repository.create(
-            user_id=user.id,
-            name=name,
-            description=description,
-            system_prompt=system_prompt,
-            response_style=response_style,
-            avatar_emoji=avatar_emoji,
-            is_active=is_active,
-        )
+        try:
+            with transaction.atomic():
+                assistant = assistant_repository.create(
+                    user_id=user.id,
+                    name=name,
+                    description=description,
+                    system_prompt=system_prompt,
+                    response_style=response_style,
+                    avatar_emoji=avatar_emoji,
+                    is_active=is_active,
+                )
+        except IntegrityError:
+            raise AssistantAlreadyExistsException()
         logger.info("Assistant created", extra={"user_id": user.id, "assistant_id": assistant.id})
         return assistant
 
@@ -60,6 +63,7 @@ class AssistantService:
             raise AssistantNotFoundException()
         return assistant
 
+    @transaction.atomic
     def update_assistant(
             self,
             user: AuthenticatedUser,
@@ -72,21 +76,24 @@ class AssistantService:
             is_active: Optional[bool] = None,
     ) -> Assistant:
         AccessControl.require_permissions(user, frozenset({perms.UPDATE_ASSISTANT}))
-        assistant = assistant_repository.get_by_id(assistant_id)
+        assistant = assistant_repository.get_by_id_for_update(assistant_id)
         if assistant is None:
             raise AssistantNotFoundException()
         if name is not None and name != assistant.name and assistant_repository.exists_with_name(name):
             raise AssistantAlreadyExistsException()
-        return assistant_repository.update(
-            assistant,
-            name=name,
-            description=description,
-            system_prompt=system_prompt,
-            response_style=response_style,
-            avatar_emoji=avatar_emoji,
-            is_active=is_active,
-            updated_by=user.id,
-        )
+        try:
+            return assistant_repository.update(
+                assistant,
+                name=name,
+                description=description,
+                system_prompt=system_prompt,
+                response_style=response_style,
+                avatar_emoji=avatar_emoji,
+                is_active=is_active,
+                updated_by=user.id,
+            )
+        except IntegrityError:
+            raise AssistantAlreadyExistsException()
 
     def delete_assistant(self, user: AuthenticatedUser, assistant_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({perms.DELETE_ASSISTANT}))
@@ -113,30 +120,8 @@ class AssistantService:
                     extra={"user_id": user.id, "assistant_id": assistant_id, "chat_id": existing.id},
                 )
                 return existing, False
-            lock_key = f"assistant_start_chat:{user.id}:{assistant_id}"
-            if not cache.add(lock_key, "1", timeout=10):
-                existing = self._await_concurrent_resume(user.id, assistant_id)
-                if existing is not None:
-                    return existing, False
-            else:
-                try:
-                    existing = chat_repository.get_latest_by_assistant(user.id, assistant_id)
-                    if existing is not None:
-                        return existing, False
-                    return self._create_assistant_chat(user, assistant), True
-                finally:
-                    cache.delete(lock_key)
 
         return self._create_assistant_chat(user, assistant), True
-
-    @staticmethod
-    def _await_concurrent_resume(user_id: int, assistant_id: int):
-        for _ in range(20):
-            time.sleep(0.1)
-            existing = chat_repository.get_latest_by_assistant(user_id, assistant_id)
-            if existing is not None:
-                return existing
-        return None
 
     @staticmethod
     def _create_assistant_chat(user: AuthenticatedUser, assistant: Assistant):

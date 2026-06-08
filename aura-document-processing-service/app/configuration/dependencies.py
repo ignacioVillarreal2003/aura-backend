@@ -39,6 +39,7 @@ from app.application.services.graph.graph_extraction_service.graph_extraction_se
 )
 from app.application.services.graph.graph_path_service.graph_path_service import GraphPathService
 from app.application.services.graph.graph_query_service.graph_query_service import GraphQueryService
+from app.application.services.graph.graph_stats_service.graph_stats_service import GraphStatsService
 from app.configuration.graph.knowledge_graph_settings import KnowledgeGraphSettings
 from app.infrastructure.http.authentication_provider.authentication_provider import AuthenticationProvider
 from app.infrastructure.http.authentication_provider.authentication_provider_settings import (
@@ -91,6 +92,9 @@ from app.infrastructure.persistence.graph.repositories.graph_path_repository.gra
 from app.infrastructure.persistence.graph.repositories.graph_relation_repository.graph_relation_repository import (
     GraphRelationRepository,
 )
+from app.infrastructure.persistence.graph.repositories.graph_stats_repository.graph_stats_repository import (
+    GraphStatsRepository,
+)
 from app.infrastructure.persistence.memory_database.graph_extraction_job_progress_store.graph_extraction_job_progress_store import (
     GraphExtractionJobProgressStore,
 )
@@ -125,6 +129,8 @@ async def _rollback_partial_startup(
                 extra={"resource": name},
             )
     to_clear = [
+        "graph_stats_service",
+        "graph_stats_repository",
         "graph_path_service",
         "graph_entity_service",
         "graph_query_service",
@@ -561,6 +567,7 @@ async def _wire_knowledge_graph_module(
         llm_provider=llm_provider,
         entity_repository=graph_entity_repository,
         relation_repository=graph_relation_repository,
+        path_repository=graph_path_repository,
         document_collection_repository=document_collection_repository,
         document_collection_catalog_client=document_collection_catalog_client,
         authorizer=authorizer,
@@ -586,6 +593,15 @@ async def _wire_knowledge_graph_module(
         knowledge_graph_settings=knowledge_graph_settings,
     )
     app.state.graph_path_service = graph_path_service
+
+    graph_stats_repository = GraphStatsRepository(neo4j_manager=neo4j_manager)
+    app.state.graph_stats_repository = graph_stats_repository
+
+    graph_stats_service = GraphStatsService(
+        stats_repository=graph_stats_repository,
+        authorizer=authorizer,
+    )
+    app.state.graph_stats_service = graph_stats_service
 
     logger.info("The knowledge graph module was bootstrapped successfully.")
 

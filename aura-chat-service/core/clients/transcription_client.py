@@ -1,3 +1,4 @@
+import concurrent.futures as _cf
 import logging
 import os
 import tempfile
@@ -16,6 +17,7 @@ _model_lock = threading.Lock()
 
 _MAX_CONCURRENCY = max(int(getattr(settings, "WHISPER_MAX_CONCURRENCY", 2)), 1)
 _slots = threading.BoundedSemaphore(_MAX_CONCURRENCY)
+_transcribe_pool = _cf.ThreadPoolExecutor(max_workers=_MAX_CONCURRENCY, thread_name_prefix="whisper")
 
 
 def _get_model():
@@ -52,15 +54,21 @@ class TranscriptionClient:
     @staticmethod
     def _transcribe(audio_file) -> str:
         suffix = os.path.splitext(getattr(audio_file, "name", ".wav"))[1] or ".wav"
-
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-            for chunk in audio_file.chunks():
-                tmp.write(chunk)
-            tmp_path = tmp.name
-
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=suffix)
         try:
+            with os.fdopen(tmp_fd, "wb") as f:
+                for chunk in audio_file.chunks():
+                    f.write(chunk)
+
             model = _get_model()
-            segments, info = model.transcribe(tmp_path, beam_size=5)
+            timeout = getattr(settings, "WHISPER_TIMEOUT_SECONDS", 120)
+            future = _transcribe_pool.submit(model.transcribe, tmp_path, beam_size=5)
+            try:
+                segments, info = future.result(timeout=timeout)
+            except _cf.TimeoutError:
+                logger.error("Transcription timed out after %ss.", timeout)
+                raise
+
             transcript = " ".join(seg.text.strip() for seg in segments).strip()
             logger.debug(
                 "Transcription done.",
@@ -68,7 +76,8 @@ class TranscriptionClient:
             )
             return transcript
         except Exception as e:
-            logger.error("Transcription failed: %s", e, exc_info=True)
+            if not isinstance(e, _cf.TimeoutError):
+                logger.error("Transcription failed: %s", e, exc_info=True)
             raise
         finally:
             try:

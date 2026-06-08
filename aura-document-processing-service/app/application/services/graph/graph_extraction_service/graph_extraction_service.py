@@ -250,10 +250,17 @@ class GraphExtractionService(GraphExtractionServiceInterface):
                         allowed_relation_types=allowed_relation_types,
                     )
 
-            await asyncio.gather(
+            results = await asyncio.gather(
                 *(_runner(fragment) for fragment in fragments),
-                return_exceptions=False,
+                return_exceptions=True,
             )
+            for outcome in results:
+                if isinstance(outcome, BaseException):
+                    logger.exception(
+                        "Unexpected unhandled exception in a concurrent fragment runner.",
+                        extra={"document_id": document_id, "job_id": job_id},
+                        exc_info=outcome,
+                    )
 
         logger.info(
             "Knowledge graph extraction finished for the document.",

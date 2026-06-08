@@ -1,4 +1,4 @@
-from core.exceptions import ForbiddenException, NotFoundException, ValidationException
+from core.exceptions import ConflictException, ForbiddenException, NotFoundException, ValidationException
 
 
 class ChatNotFoundException(NotFoundException):
@@ -9,6 +9,11 @@ class ChatNotFoundException(NotFoundException):
 class ChatAccessDeniedException(ForbiddenException):
     error_code = "chat_access_denied"
     detail = "You do not have access to this chat"
+
+
+class ChatAiReplyInProgressException(ConflictException):
+    error_code = "chat_ai_reply_in_progress"
+    detail = "Wait until the assistant finishes the current reply."
 
 
 class ShareLinkNotFoundException(NotFoundException):

@@ -6,7 +6,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "aura_chat_service.settings.prod
 
 django_asgi_app = get_asgi_application()
 
-from apps.message.routing import websocket_urlpatterns
+from apps.chat.routing import websocket_urlpatterns
 from core.authentication.websocket_auth_middleware import WebSocketAuthMiddleware
 
 application = ProtocolTypeRouter(

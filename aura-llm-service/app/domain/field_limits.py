@@ -83,3 +83,32 @@ MAX_PERMISSIONS: Final[int] = 200
 MAX_POST_PROCESS_SNAPSHOT_ERRORS: Final[int] = 1_000
 MAX_POST_PROCESS_DOCUMENT_IDS: Final[int] = 10_000
 MAX_POST_PROCESS_FRAGMENTS_DOCUMENT_IDS: Final[int] = 500
+
+# ─── Generated content – shared text bounds ───────────────────────────────────
+
+MAX_TITLE_CHARS: Final[int] = 512
+MAX_SECTION_CHARS: Final[int] = 256
+MAX_ITEM_TEXT_CHARS: Final[int] = 4_000
+MAX_NOTES_CHARS: Final[int] = 2_000
+MAX_PROSE_CHARS: Final[int] = 8_000
+MAX_REPORT_CONTENT_CHARS: Final[int] = 100_000
+MAX_OCCURRED_AT_CHARS: Final[int] = 64
+MAX_OCCURRED_LABEL_CHARS: Final[int] = 256
+
+# ─── Generated content – list / count bounds ──────────────────────────────────
+
+MAX_CHECKLIST_ITEMS: Final[int] = 200
+MAX_CHECKLIST_ORDER: Final[int] = 10_000
+MAX_DECISION_BRIEF_OPTIONS: Final[int] = 10
+MAX_LESSONS_LEARNED_ITEMS: Final[int] = 100
+MAX_QUIZ_QUESTIONS: Final[int] = 100
+MAX_QUIZ_OPTIONS_PER_QUESTION: Final[int] = 10
+MAX_QUIZ_OPTION_TEXT_CHARS: Final[int] = 1_000
+MAX_QUIZ_INSTRUCTIONS_CHARS: Final[int] = 2_000
+MAX_TIMELINE_EVENTS: Final[int] = 200
+MAX_TIMELINE_EVENT_CHARS: Final[int] = 512
+
+# ─── Stream events ────────────────────────────────────────────────────────────
+
+MAX_STEP_CHARS: Final[int] = 256
+MAX_CODE_CHARS: Final[int] = 64

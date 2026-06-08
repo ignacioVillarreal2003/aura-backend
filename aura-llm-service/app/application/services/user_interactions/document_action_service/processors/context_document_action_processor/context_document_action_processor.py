@@ -1,0 +1,81 @@
+import asyncio
+import logging
+
+from app.application.services.user_interactions.document_action_service.constants.processing_strategy import ProcessingStrategy
+from app.application.services.user_interactions.document_action_service.document_action_settings import DocumentActionServiceSettings
+from app.application.services.user_interactions.document_action_service.document_action_state import DocumentActionState
+from app.application.services.user_interactions.document_action_service.exceptions.document_action_service_exceptions import (
+    DocumentActionServiceException,
+)
+from app.infrastructure.http.document_context_provider.dtos.fragment_response import FragmentResponse
+from app.infrastructure.http.document_context_provider.interfaces.document_context_provider_interface import (
+    DocumentContextProviderInterface,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class ContextDocumentActionProcessor:
+    def __init__(
+            self,
+            document_action_service_settings: DocumentActionServiceSettings,
+            document_context_provider: DocumentContextProviderInterface,
+    ) -> None:
+        self._settings = document_action_service_settings
+        self._document_context_provider = document_context_provider
+
+    async def run(self, state: DocumentActionState) -> None:
+        logger.debug("Retrieving fragments for documents", extra={"document_ids": state.document_ids})
+
+        try:
+            results = await asyncio.gather(
+                *[
+                    self._document_context_provider.retrieve_context_fragments_by_document(
+                        document_ids=[doc_id],
+                        authenticated_user=state.authenticated_user,
+                    )
+                    for doc_id in state.document_ids
+                ],
+                return_exceptions=True,
+            )
+        except Exception as e:
+            logger.exception("Failed to retrieve context fragments")
+            raise DocumentActionServiceException(
+                "Error retrieving context fragments from the document service"
+            ) from e
+
+        fragments_by_document: dict[int, list[FragmentResponse]] = {}
+        all_fragments: list[FragmentResponse] = []
+
+        for doc_id, result in zip(state.document_ids, results):
+            if isinstance(result, Exception):
+                logger.warning(
+                    "Failed to retrieve fragments for document",
+                    extra={"document_id": doc_id, "error_type": type(result).__name__},
+                )
+                fragments_by_document[doc_id] = []
+                continue
+            doc_fragments = result.fragments
+            fragments_by_document[doc_id] = doc_fragments
+            all_fragments.extend(doc_fragments)
+
+        if not all_fragments:
+            logger.warning("No fragments retrieved for any document", extra={"document_ids": state.document_ids})
+
+        state.fragments_by_document = fragments_by_document
+        state.all_fragments = all_fragments
+
+        total = len(all_fragments)
+        state.strategy = (
+            ProcessingStrategy.map_reduce
+            if total > self._settings.large_document_threshold
+            else ProcessingStrategy.direct
+        )
+        logger.debug(
+            "Fragments retrieved and strategy selected",
+            extra={
+                "total_fragments": total,
+                "documents_with_fragments": sum(1 for v in fragments_by_document.values() if v),
+                "strategy": state.strategy.value,
+            },
+        )

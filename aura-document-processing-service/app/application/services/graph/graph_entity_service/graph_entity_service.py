@@ -15,6 +15,7 @@ from app.application.services.graph.graph_entity_service.interfaces.graph_entity
 from app.configuration.graph.knowledge_graph_settings import KnowledgeGraphSettings
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.graph.entity_type import EntityType
+from app.domain.dtos.graph.graph_entity.graph_entity_response import GraphEntityResponse
 from app.domain.dtos.graph.graph_entity.graph_entity_with_relations_response import (
     GraphEntityWithRelationsResponse,
 )
@@ -109,6 +110,58 @@ class GraphEntityService(GraphEntityServiceInterface):
             entity=entity,
             relations=relations,
         )
+
+    async def search_entities(
+            self,
+            *,
+            query: str,
+            entity_type: Optional[EntityType],
+            limit: int,
+            authenticated_user: AuthenticatedUser,
+            database_session: AsyncSession,
+            authorization_header: Optional[str] = None,
+    ) -> list[GraphEntityResponse]:
+        self._authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.GRAPH_SEARCH}),
+        )
+
+        canonical_query = self._canonicalize(query)
+        if not canonical_query:
+            return []
+
+        clamped_limit = max(1, min(limit, self._settings.query_max_results))
+
+        collection_ids = await self._document_collection_catalog_client.fetch_all_accessible_collection_ids(
+            user_id=int(authenticated_user.id),
+            authorization_header=authorization_header,
+        )
+        accessible_ids = await self._document_collection_repository.list_all_accessible_document_ids(
+            user_id=int(authenticated_user.id),
+            database_session=database_session,
+            accessible_collection_ids=collection_ids,
+            chat_id=None,
+            limit=self._settings.accessible_documents_max,
+        )
+        if not accessible_ids:
+            return []
+
+        results = await self._entity_repository.search_by_name_prefix(
+            canonical_prefix=canonical_query,
+            entity_type=entity_type,
+            accessible_document_ids=accessible_ids,
+            limit=clamped_limit,
+        )
+
+        if not results:
+            results = await self._entity_repository.fulltext_search(
+                query_string=canonical_query,
+                entity_type=entity_type,
+                accessible_document_ids=accessible_ids,
+                limit=clamped_limit,
+            )
+
+        return results
 
     @staticmethod
     def _canonicalize(name: str) -> str:

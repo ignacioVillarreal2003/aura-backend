@@ -6,6 +6,9 @@ from rest_framework import status
 from rest_framework.throttling import AnonRateThrottle
 from drf_spectacular.utils import extend_schema
 
+import secrets
+from django.conf import settings
+
 
 class LoginRateThrottle(AnonRateThrottle):
     scope = 'login'
@@ -159,7 +162,8 @@ class UserLookupView(APIView):
         description=(
             'Search users by one of: id (exact), username, email or name (partial, case-insensitive). '
             'Exactly one query param must be provided. '
-            'Requires a valid Bearer token.'
+            'Requires either a valid Bearer token (end-user) or a valid X-Service-Api-Key header '
+            '(service-to-service).'
         ),
         parameters=[
             {'name': 'id',       'in': 'query', 'required': False, 'schema': {'type': 'integer'}},
@@ -175,12 +179,18 @@ class UserLookupView(APIView):
         tags=['Auth'],
     )
     def get(self, request):
-        auth_header = request.headers.get('Authorization', '')
-        if not auth_header.startswith('Bearer '):
-            return Response({'detail': 'Authorization header missing or invalid.'}, status=status.HTTP_401_UNAUTHORIZED)
-        token = auth_header.split(' ', 1)[1]
-        if not introspect_token(token):
-            return Response({'detail': 'Invalid or expired token.'}, status=status.HTTP_401_UNAUTHORIZED)
+        service_key = request.headers.get('X-Service-Api-Key')
+        if service_key:
+            expected = getattr(settings, 'SERVICE_API_KEY', '')
+            if not (expected and secrets.compare_digest(service_key.strip(), str(expected))):
+                return Response({'detail': 'Invalid service API key.'}, status=status.HTTP_401_UNAUTHORIZED)
+        else:
+            auth_header = request.headers.get('Authorization', '')
+            if not auth_header.startswith('Bearer '):
+                return Response({'detail': 'Authorization header missing or invalid.'}, status=status.HTTP_401_UNAUTHORIZED)
+            token = auth_header.split(' ', 1)[1]
+            if not introspect_token(token):
+                return Response({'detail': 'Invalid or expired token.'}, status=status.HTTP_401_UNAUTHORIZED)
 
         params = {
             'id':       request.query_params.get('id'),

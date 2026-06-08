@@ -132,9 +132,10 @@ class MemberDetailView(APIView):
         tags=["Memberships"],
         summary="Update member status",
         description=(
-                "Transitions the authenticated user's own membership status (e.g. `pending → active` to accept, "
-                "`pending → inactive` to decline). **Only the invited member can change their own status** — "
-                "the chat owner cannot override this on behalf of another user."
+                "Accepts a pending invitation by transitioning the authenticated user's own membership "
+                "`pending → active`. This is the only valid status transition. **Only the invited member can "
+                "change their own status** — the chat owner cannot override this on behalf of another user. "
+                "To leave or decline, use **Leave chat**."
         ),
         parameters=[
             OpenApiParameter(name="chat_id", type=int, location=OpenApiParameter.PATH, required=True),

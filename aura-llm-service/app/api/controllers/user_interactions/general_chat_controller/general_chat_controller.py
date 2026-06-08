@@ -1,0 +1,125 @@
+﻿from collections.abc import AsyncIterator
+from fastapi import APIRouter, Depends
+from starlette.responses import StreamingResponse
+
+from app.api.dependencies.idempotency import optional_idempotency_key
+from app.api.dependencies.rate_limiter import default_rate_limit, strict_rate_limit
+from app.api.controllers.user_interactions.general_chat_controller.general_chat_controller_interface import (
+    GeneralChatControllerInterface,
+)
+from app.api.openapi.common import default_error_responses
+from app.application.authorization.authorizer import Authorizer
+from app.application.authorization.permissions import Permissions
+from app.application.services.user_interactions.general_chat_service.general_chat_service import get_general_chat_service
+from app.application.services.user_interactions.general_chat_service.general_chat_service_interface import (
+    GeneralChatServiceInterface,
+)
+from app.domain.authentication.authenticated_user import AuthenticatedUser
+from app.domain.dtos.user_interactions.general_chat.general_chat_request import GeneralChatRequest
+from app.domain.dtos.user_interactions.general_chat.general_chat_response import GeneralChatResponse
+from app.domain.dtos.user_interactions.general_chat.general_chat_stream_events import GeneralChatStreamEvent
+from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
+
+
+class GeneralChatController(GeneralChatControllerInterface):
+    async def execute_general_chat(
+            self,
+            general_chat_request: GeneralChatRequest,
+            general_chat_service: GeneralChatServiceInterface = Depends(get_general_chat_service),
+            authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
+            _idemp: None = Depends(optional_idempotency_key),
+            _rl: None = Depends(default_rate_limit),
+    ) -> GeneralChatResponse:
+        Authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LLM_GENERAL_CHAT}),
+        )
+        return await general_chat_service.execute_general_chat(
+            general_chat_request=general_chat_request,
+            authenticated_user=authenticated_user,
+        )
+
+    async def execute_general_chat_stream(
+            self,
+            general_chat_request: GeneralChatRequest,
+            general_chat_service: GeneralChatServiceInterface = Depends(get_general_chat_service),
+            authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
+            _rl: None = Depends(strict_rate_limit),
+    ) -> StreamingResponse:
+        Authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LLM_GENERAL_CHAT}),
+        )
+
+        async def sse_bytes() -> AsyncIterator[bytes]:
+            async for event in general_chat_service.execute_general_chat_stream(
+                    general_chat_request=general_chat_request,
+                    authenticated_user=authenticated_user,
+            ):
+                yield _fmt(event)
+
+        return StreamingResponse(
+            sse_bytes(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+
+def _fmt(event: GeneralChatStreamEvent) -> bytes:
+    return f"data: {event.model_dump_json()}\n\n".encode("utf-8")
+
+
+router = APIRouter()
+general_chat_controller = GeneralChatController()
+
+_error = default_error_responses(
+    include_400=True,
+    include_502=True,
+    include_503=True,
+)
+_response = {
+    200: {
+        "description": "Respuesta del asistente",
+        "model": GeneralChatResponse,
+    },
+    **_error,
+}
+_response_stream = {
+    200: {
+        "description": "Stream SSE de la respuesta",
+        "content": {"text/event-stream": {}},
+    },
+    **_error,
+}
+
+router.add_api_route(
+    "",
+    general_chat_controller.execute_general_chat,
+    methods=["POST"],
+    response_model=GeneralChatResponse,
+    operation_id="executeGeneralChat",
+    summary="Chat de propÃ³sito general con el asistente",
+    description=(
+        "EnvÃ­a un historial de mensajes al LLM y devuelve la respuesta del asistente. "
+        "No utiliza RAG ni contexto documental â€” solo el historial de conversaciÃ³n."
+    ),
+    responses=_response,
+)
+
+router.add_api_route(
+    "/stream",
+    general_chat_controller.execute_general_chat_stream,
+    methods=["POST"],
+    response_class=StreamingResponse,
+    operation_id="executeGeneralChatStream",
+    summary="Chat de propÃ³sito general con el asistente (SSE)",
+    description=(
+        "Server-Sent Events: JSON lines con prefijo `data: `. "
+        "Tipos de evento: `delta`, `complete`, `error` (campo discriminador `type`)."
+    ),
+    responses=_response_stream,
+)

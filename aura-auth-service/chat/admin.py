@@ -12,8 +12,6 @@ from django.db import connections
 from django.db.models import Q
 from django.utils.html import escape, format_html, mark_safe
 
-from django.conf import settings
-
 from accounts.admin_parts.common import _is_admin_or_super_user, _is_super_admin_user
 from chat.models import Chat
 
@@ -149,9 +147,6 @@ class ChatAdmin(admin.ModelAdmin):
             .filter(deleted_at__isnull=True)
             .order_by('-created_at')
         )
-        admin_chat_id = getattr(settings, 'ADMIN_CHAT_ID', None)
-        if admin_chat_id:
-            qs = qs.exclude(pk=admin_chat_id)
         return qs
 
     # ------------------------------------------------------------------

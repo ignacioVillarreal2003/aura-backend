@@ -26,9 +26,7 @@ from core.exceptions import ValidationException
 logger = logging.getLogger(__name__)
 
 _VALID_TRANSITIONS: dict[str, set[str]] = {
-    ChatMembership.Status.PENDING: {ChatMembership.Status.ACTIVE, ChatMembership.Status.INACTIVE},
-    ChatMembership.Status.ACTIVE: {ChatMembership.Status.INACTIVE},
-    ChatMembership.Status.INACTIVE: {ChatMembership.Status.ACTIVE},
+    ChatMembership.Status.PENDING: {ChatMembership.Status.ACTIVE},
 }
 
 
@@ -129,17 +127,18 @@ class MembershipService:
         created = []
         for member_id in member_ids:
             try:
-                membership = membership_repository.create(
-                    member_id=member_id,
-                    chat_id=chat_id,
-                    status="pending",
-                    created_by=user.id,
-                )
-                created.append(membership)
+                with transaction.atomic():
+                    membership = membership_repository.create(
+                        member_id=member_id,
+                        chat_id=chat_id,
+                        status="pending",
+                        created_by=user.id,
+                    )
             except IntegrityError:
                 raise MembershipAlreadyExistsException(
                     f"User {member_id} is already a member of chat {chat_id}"
                 )
+            created.append(membership)
 
         logger.info(
             "Members added to chat.",
@@ -206,8 +205,6 @@ class MembershipService:
 
         if new_status == ChatMembership.Status.ACTIVE:
             on_commit(lambda: _broadcast_member_joined(chat_id, member_id))
-        elif new_status == ChatMembership.Status.INACTIVE:
-            on_commit(lambda: _broadcast_member_left(chat_id, member_id))
 
         logger.info(
             "Membership updated.",

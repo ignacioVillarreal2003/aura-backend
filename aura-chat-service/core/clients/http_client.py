@@ -49,7 +49,6 @@ class AsyncHttpClient:
             json: dict | None = None,
             headers: dict | None = None,
     ) -> httpx.Response:
-        last_exc: BaseException | None = None
         retryable_codes = _RETRYABLE_CODES_SAFE if method.upper() in _SAFE_METHODS else _RETRYABLE_CODES_UNSAFE
 
         for attempt in range(self._max_retries):
@@ -92,7 +91,6 @@ class AsyncHttpClient:
                 return response
 
             except httpx.TimeoutException as e:
-                last_exc = e
                 if attempt < self._max_retries - 1:
                     delay = min(2.0, 0.1 * (2 ** attempt) + random.uniform(0, 0.05))
                     logger.warning(
@@ -104,7 +102,6 @@ class AsyncHttpClient:
                 raise HttpClientTimeoutException() from e
 
             except httpx.ConnectError as e:
-                last_exc = e
                 if attempt < self._max_retries - 1:
                     delay = min(2.0, 0.1 * (2 ** attempt) + random.uniform(0, 0.05))
                     logger.warning(
@@ -121,4 +118,4 @@ class AsyncHttpClient:
             except Exception as e:
                 raise HttpClientException(str(e)) from e
 
-        raise HttpClientConnectionException() from last_exc
+        raise HttpClientConnectionException()

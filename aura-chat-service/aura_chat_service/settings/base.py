@@ -1,5 +1,4 @@
 from pathlib import Path
-
 from decouple import config, Csv
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -7,7 +6,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 APP_NAME = "Aura Chat Service"
 APP_VERSION = "1.0.0"
 
-SECRET_KEY = config("SECRET_KEY", default="django-insecure-change-me")
+SECRET_KEY = config("SECRET_KEY")
 
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv())
 
@@ -24,11 +23,18 @@ INSTALLED_APPS = [
     "channels",
     "django_prometheus",
     "apps.chat",
-    "apps.message",
+    "apps.artifact_message",
     "apps.membership",
-    "apps.report",
-    "apps.checklist",
+    "apps.artifact_report",
+    "apps.artifact_checklist",
     "apps.assistant",
+    "apps.artifact",
+    "apps.artifact_timeline",
+    "apps.artifact_quiz",
+    "apps.artifact_lessons_learned",
+    "apps.artifact_decision_brief",
+    "apps.artifact_document_summary",
+    "apps.artifact_document_action",
 ]
 
 MIDDLEWARE = [
@@ -91,7 +97,7 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [{"address": REDIS_URL, "socket_timeout": None, "socket_connect_timeout": 5}],
+            "hosts": [{"address": REDIS_URL, "socket_connect_timeout": 5}],
             "expiry": 300,
         },
     },
@@ -137,6 +143,7 @@ CORS_ALLOWED_ORIGINS = config(
     default="http://localhost:3000,http://localhost:4200",
     cast=Csv(),
 )
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
 
 AUTHENTICATION_SERVICE_URL = config("AUTHENTICATION_SERVICE_URL").strip()
@@ -145,8 +152,17 @@ AUTH_TOKEN_CACHE_TTL_SECONDS = config("AUTH_TOKEN_CACHE_TTL_SECONDS", default=60
 AUTH_SERVICE_TIMEOUT = config("AUTH_SERVICE_TIMEOUT", default=10, cast=float)
 
 AUDIO_MAX_UPLOAD_MB = config("AUDIO_MAX_UPLOAD_MB", default=25, cast=int)
+DATA_UPLOAD_MAX_MEMORY_SIZE = config("DATA_UPLOAD_MAX_MEMORY_SIZE", default=30 * 1024 * 1024, cast=int)
 
 WS_MAX_CONNECTIONS_PER_USER = config("WS_MAX_CONNECTIONS_PER_USER", default=5, cast=int)
+WS_MESSAGE_RATE_LIMIT_MAX = config("WS_MESSAGE_RATE_LIMIT_MAX", default=10, cast=int)
+WS_MESSAGE_RATE_LIMIT_WINDOW = config("WS_MESSAGE_RATE_LIMIT_WINDOW", default=60, cast=int)
+WS_TYPING_RATE_LIMIT_MAX = config("WS_TYPING_RATE_LIMIT_MAX", default=20, cast=int)
+WS_TYPING_RATE_LIMIT_WINDOW = config("WS_TYPING_RATE_LIMIT_WINDOW", default=10, cast=int)
+WS_ARTIFACT_RATE_LIMIT_MAX = config("WS_ARTIFACT_RATE_LIMIT_MAX", default=5, cast=int)
+WS_ARTIFACT_RATE_LIMIT_WINDOW = config("WS_ARTIFACT_RATE_LIMIT_WINDOW", default=60, cast=int)
+WS_TRANSCRIBE_RATE_LIMIT_MAX = config("WS_TRANSCRIBE_RATE_LIMIT_MAX", default=5, cast=int)
+WS_TRANSCRIBE_RATE_LIMIT_WINDOW = config("WS_TRANSCRIBE_RATE_LIMIT_WINDOW", default=60, cast=int)
 
 AUTHENTICATION_EXCLUDED_PATHS = [
     "/api/v1/health",
@@ -188,8 +204,10 @@ SPECTACULAR_SETTINGS = {
         {
             "name": "Messages",
             "description": (
-                "Message history (cursor pagination), send text/audio, bookmarks, pins, threads, feedback, "
-                "exports, regenerate AI response, clear history, mark read."
+                "Historial con paginación por cursor (`GET .../messages/`), envío con IA "
+                "(`POST .../messages/generate/`), "
+                "borrado y export por mensaje. `{message_id}` es el campo `id` de cada fila "
+                "(no `artifact_id`). Bookmark, pin, feedback e hilos viven bajo **Artifacts**."
             ),
         },
         {
@@ -223,6 +241,57 @@ SPECTACULAR_SETTINGS = {
                 "Asistentes especializados configurables (Custom GPTs equivalent). "
                 "Los admins crean asistentes con system prompts fijos; "
                 "los usuarios inician sesiones de chat pre-configuradas."
+            ),
+        },
+        {
+            "name": "Artifacts",
+            "description": (
+                "Capa documental unificada: cabecera `artifact` (type/title/status/version) con "
+                "versionado. Interacciones por `artifact_id`: feedback, bookmark, pin, thread; "
+                "listas de fijados/marcados por `chat_id`. Cada tipo (report, checklist, quiz, "
+                "timeline, lessons learned, decision brief) tiene endpoints dedicados bajo `/api/v1/`."
+            ),
+        },
+        {
+            "name": "Timelines",
+            "description": (
+                "Líneas de tiempo generadas con IA. Requiere `LLM_TIMELINE_GENERATE_URL`. "
+                "Prefijo `/api/v1/timelines/`."
+            ),
+        },
+        {
+            "name": "Quizzes",
+            "description": (
+                "Cuestionarios generados con IA. Requiere `LLM_QUIZ_GENERATE_URL`. "
+                "Prefijo `/api/v1/quizzes/`."
+            ),
+        },
+        {
+            "name": "Lessons Learned",
+            "description": (
+                "Lecciones aprendidas generadas con IA. Requiere `LLM_LESSONS_LEARNED_GENERATE_URL`. "
+                "Prefijo `/api/v1/lessons-learned/`."
+            ),
+        },
+        {
+            "name": "Decision Briefs",
+            "description": (
+                "Briefs de decisión generados con IA. Requiere `LLM_DECISION_BRIEF_GENERATE_URL`. "
+                "Prefijo `/api/v1/decision-briefs/`."
+            ),
+        },
+        {
+            "name": "Document Summaries",
+            "description": (
+                "Resúmenes de documentos generados con IA. Requiere `LLM_DOCUMENT_SUMMARY_URL`. "
+                "Prefijo `/api/v1/document-summaries/`."
+            ),
+        },
+        {
+            "name": "Document Actions",
+            "description": (
+                "Acciones estructuradas sobre documentos ejecutadas con IA. Requiere `LLM_DOCUMENT_ACTION_URL`. "
+                "Prefijo `/api/v1/document-actions/`."
             ),
         },
     ],
@@ -262,7 +331,21 @@ LLM_RAG_AGENT_STREAM_URL = config("LLM_RAG_AGENT_STREAM_URL").strip()
 LLM_AGENT_URL = config("LLM_AGENT_URL").strip()
 LLM_AGENT_STREAM_URL = config("LLM_AGENT_STREAM_URL").strip()
 LLM_CHECKLIST_GENERATE_URL = config("LLM_CHECKLIST_GENERATE_URL").strip()
+LLM_CHECKLIST_GENERATE_STREAM_URL = config("LLM_CHECKLIST_GENERATE_STREAM_URL", default="").strip()
 LLM_REPORT_GENERATE_URL = config("LLM_REPORT_GENERATE_URL").strip()
+LLM_REPORT_GENERATE_STREAM_URL = config("LLM_REPORT_GENERATE_STREAM_URL", default="").strip()
+LLM_TIMELINE_GENERATE_URL = config("LLM_TIMELINE_GENERATE_URL", default="").strip()
+LLM_TIMELINE_GENERATE_STREAM_URL = config("LLM_TIMELINE_GENERATE_STREAM_URL", default="").strip()
+LLM_QUIZ_GENERATE_URL = config("LLM_QUIZ_GENERATE_URL", default="").strip()
+LLM_QUIZ_GENERATE_STREAM_URL = config("LLM_QUIZ_GENERATE_STREAM_URL", default="").strip()
+LLM_LESSONS_LEARNED_GENERATE_URL = config("LLM_LESSONS_LEARNED_GENERATE_URL", default="").strip()
+LLM_LESSONS_LEARNED_GENERATE_STREAM_URL = config("LLM_LESSONS_LEARNED_GENERATE_STREAM_URL", default="").strip()
+LLM_DECISION_BRIEF_GENERATE_URL = config("LLM_DECISION_BRIEF_GENERATE_URL", default="").strip()
+LLM_DECISION_BRIEF_GENERATE_STREAM_URL = config("LLM_DECISION_BRIEF_GENERATE_STREAM_URL", default="").strip()
+LLM_DOCUMENT_SUMMARY_URL = config("LLM_DOCUMENT_SUMMARY_URL", default="").strip()
+LLM_DOCUMENT_SUMMARY_STREAM_URL = config("LLM_DOCUMENT_SUMMARY_STREAM_URL", default="").strip()
+LLM_DOCUMENT_ACTION_URL = config("LLM_DOCUMENT_ACTION_URL", default="").strip()
+LLM_DOCUMENT_ACTION_STREAM_URL = config("LLM_DOCUMENT_ACTION_STREAM_URL", default="").strip()
 LLM_SERVICE_TIMEOUT = config("LLM_SERVICE_TIMEOUT", default=120, cast=int)
 LLM_STREAM_CONNECT_TIMEOUT = config(
     "LLM_STREAM_CONNECT_TIMEOUT", default=10.0, cast=float
@@ -279,6 +362,8 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+_LOG_LEVEL = config("LOG_LEVEL", default="INFO")
 
 LOGGING = {
     "version": 1,
@@ -307,7 +392,7 @@ LOGGING = {
     },
     "root": {
         "handlers": ["console"],
-        "level": "INFO",
+        "level": _LOG_LEVEL,
     },
     "loggers": {
         "django": {
@@ -317,12 +402,12 @@ LOGGING = {
         },
         "apps": {
             "handlers": ["console"],
-            "level": "DEBUG",
+            "level": _LOG_LEVEL,
             "propagate": False,
         },
         "core": {
             "handlers": ["console"],
-            "level": "DEBUG",
+            "level": _LOG_LEVEL,
             "propagate": False,
         },
     },

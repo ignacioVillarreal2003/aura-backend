@@ -4,15 +4,17 @@ from django.db.models import QuerySet
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
+from apps.chat.ai_reply_lock import release as _release_ai_lock
 from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
 from apps.chat.models.chat import Chat
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.membership.repositories.membership_repository import membership_repository
-from apps.message.repositories.message_repository import message_repository
+from apps.chat.repositories.share_link_repository import share_link_repository
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization import AccessControl
 from core.authorization.permissions import (
     ARCHIVE_CHAT,
+    CLEAR_CHAT_HISTORY,
     CREATE_CHAT,
     DELETE_CHAT,
     GET_CHAT,
@@ -21,6 +23,7 @@ from core.authorization.permissions import (
     LIST_MY_CHATS,
     LOCK_CHAT,
     MANAGE_CHATS,
+    MARK_CHAT_AS_READ,
     MUTE_CHAT,
     PIN_CHAT,
     UNARCHIVE_CHAT,
@@ -147,6 +150,8 @@ class ChatService:
 
     @transaction.atomic
     def delete_chat(self, user: AuthenticatedUser, chat_id: int) -> None:
+        from apps.artifact.services.artifact_service import clear_chat_artifacts
+
         AccessControl.require_permissions(user, frozenset({DELETE_CHAT}))
         chat = chat_repository.get_by_id_for_update(chat_id)
         if chat is None:
@@ -154,9 +159,11 @@ class ChatService:
 
         self._require_owner_or_creator(chat, user, "delete")
 
+        share_link_repository.deactivate_by_chat(chat_id)
         membership_repository.soft_delete_by_chat(chat_id, deleted_by=user.id)
-        message_repository.soft_delete_by_chat(chat_id, deleted_by=user.id)
+        clear_chat_artifacts(chat_id, deleted_by=user.id)
         chat_repository.soft_delete(chat, deleted_by=user.id)
+        transaction.on_commit(lambda: _release_ai_lock(chat_id))
         logger.info("Chat deleted.", extra={"chat_id": chat_id, "user_id": user.id})
 
     def list_archived_chats(
@@ -179,7 +186,7 @@ class ChatService:
         accessible = membership_repository.get_active_chat_ids_for_member(user.id, chat_ids)
         invalid = set(chat_ids) - accessible
         if invalid:
-            raise ChatNotFoundException()
+            raise ChatAccessDeniedException()
         count = membership_repository.archive_chats(chat_ids=chat_ids, member_id=user.id)
         logger.info("Chats archived.", extra={"chat_ids": chat_ids, "user_id": user.id, "count": count})
         return count
@@ -189,7 +196,7 @@ class ChatService:
         accessible = membership_repository.get_active_chat_ids_for_member(user.id, chat_ids)
         invalid = set(chat_ids) - accessible
         if invalid:
-            raise ChatNotFoundException()
+            raise ChatAccessDeniedException()
         count = membership_repository.unarchive_chats(chat_ids=chat_ids, member_id=user.id)
         logger.info("Chats unarchived.", extra={"chat_ids": chat_ids, "user_id": user.id, "count": count})
         return count
@@ -255,6 +262,26 @@ class ChatService:
             raise ChatAccessDeniedException()
         membership_repository.unmute(chat_id=chat_id, member_id=user.id)
         logger.info("Chat unmuted.", extra={"chat_id": chat_id, "user_id": user.id})
+
+    @transaction.atomic
+    def clear_content(self, user: AuthenticatedUser, chat_id: int) -> None:
+        from apps.artifact.services.artifact_service import clear_chat_artifacts
+
+        AccessControl.require_permissions(user, frozenset({CLEAR_CHAT_HISTORY}))
+        chat = chat_repository.get_by_id(chat_id)
+        if chat is None:
+            raise ChatNotFoundException()
+        if not membership_repository.is_chat_owner(chat_id, user.id):
+            from apps.artifact_message.exceptions import NotChatOwnerException
+            raise NotChatOwnerException()
+        clear_chat_artifacts(chat_id, deleted_by=user.id)
+        logger.info("Chat content cleared.", extra={"chat_id": chat_id, "user_id": user.id})
+
+    def mark_as_read(self, user: AuthenticatedUser, chat_id: int) -> None:
+        AccessControl.require_permissions(user, frozenset({MARK_CHAT_AS_READ}))
+        if not membership_repository.is_active_member(chat_id, user.id):
+            raise ChatAccessDeniedException()
+        membership_repository.mark_as_read(chat_id, user.id)
 
 
 chat_service = ChatService()

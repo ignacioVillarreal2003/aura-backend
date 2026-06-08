@@ -1,0 +1,43 @@
+from enum import StrEnum
+from pydantic import BaseModel, Field
+
+from app.domain.dtos.fragment.fragment_response import FragmentResponse
+from app.domain.dtos.message import Message
+from app.domain.field_limits import (
+    MAX_ITEM_TEXT_CHARS,
+    MAX_LESSONS_LEARNED_ITEMS,
+    MAX_PROSE_CHARS,
+    MAX_TITLE_CHARS,
+)
+
+
+class LessonCategory(StrEnum):
+    SUSTAIN = "sustain"
+    IMPROVE = "improve"
+    RECOMMENDATION = "recommendation"
+
+
+class LessonsLearnedItem(BaseModel):
+    category: LessonCategory = Field(
+        ...,
+        description="Categoría: sustain (sostener), improve (mejorar) o recommendation (recomendación).",
+    )
+    observation: str = Field(..., min_length=1, max_length=MAX_ITEM_TEXT_CHARS, description="Observación o hallazgo concreto.")
+    discussion: str = Field(default="", max_length=MAX_ITEM_TEXT_CHARS, description="Discusión o análisis del hallazgo.")
+    recommendation: str = Field(default="", max_length=MAX_ITEM_TEXT_CHARS, description="Acción recomendada asociada.")
+
+    model_config = {"frozen": True}
+
+
+class LessonsLearnedGenerateResponse(BaseModel):
+    title: str = Field(..., min_length=1, max_length=MAX_TITLE_CHARS, description="Título descriptivo de las lecciones aprendidas.")
+    context: str = Field(default="", max_length=MAX_PROSE_CHARS, description="Contexto de la operación o ejercicio analizado.")
+    items: list[LessonsLearnedItem] = Field(..., max_length=MAX_LESSONS_LEARNED_ITEMS, description="Lecciones individuales clasificadas por categoría.")
+    messages: list[Message] = Field(
+        ...,
+        description="Historial actualizado incluyendo la respuesta del asistente.",
+    )
+    fragments: list[FragmentResponse] = Field(
+        default_factory=list,
+        description="Fragmentos documentales utilizados como contexto (solo en modo rag).",
+    )

@@ -33,6 +33,9 @@ class AssistantRepository:
     def get_by_id(self, assistant_id: int) -> Optional[Assistant]:
         return Assistant.objects.filter(id=assistant_id).first()
 
+    def get_by_id_for_update(self, assistant_id: int) -> Optional[Assistant]:
+        return Assistant.objects.select_for_update().filter(id=assistant_id).first()
+
     def exists_with_name(self, name: str) -> bool:
         return Assistant.objects.filter(name=name).exists()
 
