@@ -51,6 +51,7 @@ def _persist_generated_document_summary(
         source_chat_id: int,
         document_ids: list,
         summary: str,
+        fragments=None,
 ) -> tuple:
     artifact = create_artifact_for_content(
         user_id=user_id,
@@ -58,6 +59,7 @@ def _persist_generated_document_summary(
         title=title,
         mode=Artifact.Mode.DIRECT,
         source_chat_id=source_chat_id,
+        fragments=fragments,
     )
     obj = document_summary_repository.create(
         user_id=user_id,
@@ -196,6 +198,7 @@ class DocumentSummaryService:
             source_chat_id=chat_id,
             document_ids=document_ids,
             summary=summary,
+            fragments=fragments,
         )
         logger.info(
             "ArtifactDocumentSummary generated and saved",

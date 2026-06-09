@@ -12,16 +12,23 @@ class FeedbackRepository:
             reason: str | None = None,
             comment: str | None = None,
     ) -> ArtifactFeedback:
-        obj, created = ArtifactFeedback.objects.update_or_create(
-            artifact_id=artifact_id,
-            user_id=user_id,
-            defaults={
-                "value": value,
-                "reason": reason,
-                "comment": comment,
-                "updated_at": timezone.now(),
-            },
-        )
+        try:
+            obj = ArtifactFeedback.objects.get(artifact_id=artifact_id, user_id=user_id)
+            obj.value = value
+            obj.reason = reason
+            obj.comment = comment
+            obj.updated_by = user_id
+            obj.updated_at = timezone.now()
+            obj.save(update_fields=["value", "reason", "comment", "updated_by", "updated_at"])
+        except ArtifactFeedback.DoesNotExist:
+            obj = ArtifactFeedback.objects.create(
+                artifact_id=artifact_id,
+                user_id=user_id,
+                value=value,
+                reason=reason,
+                comment=comment,
+                created_by=user_id,
+            )
         return obj
 
     @staticmethod

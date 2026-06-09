@@ -44,6 +44,14 @@ class SendThreadReplyRequest(serializers.Serializer):
     )
 
 
+class UpdateThreadReplyRequest(serializers.Serializer):
+    message = serializers.CharField(
+        max_length=5000,
+        allow_blank=False,
+        help_text="Nuevo texto de la respuesta (máx 5000 caracteres).",
+    )
+
+
 class FeedbackResponse(serializers.ModelSerializer):
     class Meta:
         model = ArtifactFeedback
@@ -54,14 +62,18 @@ class FeedbackResponse(serializers.ModelSerializer):
 class ThreadReplyResponse(serializers.ModelSerializer):
     class Meta:
         model = ArtifactThreadReply
-        fields = ["id", "parent_artifact_id", "message", "created_by", "created_at"]
+        fields = [
+            "id", "parent_artifact_id", "message",
+            "created_by", "created_at",
+            "updated_by", "updated_at",
+        ]
         read_only_fields = fields
 
 
 class ArtifactPinResponse(serializers.ModelSerializer):
     class Meta:
         model = ArtifactPin
-        fields = ["id", "artifact_id", "chat_id", "pinned_by", "pinned_at"]
+        fields = ["id", "artifact_id", "chat_id", "created_by", "created_at"]
         read_only_fields = fields
 
 

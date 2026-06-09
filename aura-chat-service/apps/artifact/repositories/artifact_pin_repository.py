@@ -5,11 +5,11 @@ from apps.artifact.models.artifact_pin import ArtifactPin
 
 class PinRepository:
     @staticmethod
-    def pin(artifact_id: int, chat_id: int, pinned_by: int) -> tuple[ArtifactPin, bool]:
+    def pin(artifact_id: int, chat_id: int, created_by: int) -> tuple[ArtifactPin, bool]:
         return ArtifactPin.objects.get_or_create(
             artifact_id=artifact_id,
             chat_id=chat_id,
-            defaults={"pinned_by": pinned_by},
+            defaults={"created_by": created_by},
         )
 
     @staticmethod
@@ -25,7 +25,7 @@ class PinRepository:
         return (
             ArtifactPin.objects.filter(chat_id=chat_id, artifact__deleted_at__isnull=True)
             .select_related("artifact", "artifact__message_content")
-            .order_by("pinned_at")
+            .order_by("created_at")
         )
 
     @staticmethod

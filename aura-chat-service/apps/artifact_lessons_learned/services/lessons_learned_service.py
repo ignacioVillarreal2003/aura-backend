@@ -58,6 +58,7 @@ def _persist_generated_lessons_learned(
         source_chat_id: int,
         context: str,
         items: list,
+        fragments=None,
 ) -> tuple:
     artifact = create_artifact_for_content(
         user_id=user_id,
@@ -65,6 +66,7 @@ def _persist_generated_lessons_learned(
         title=title,
         mode=mode,
         source_chat_id=source_chat_id,
+        fragments=fragments,
     )
     ll = lessons_learned_repository.create(
         user_id=user_id,
@@ -218,6 +220,7 @@ class LessonsLearnedService:
             source_chat_id=chat_id,
             context=context,
             items=items,
+            fragments=fragments,
         )
         logger.info(
             "ArtifactLessonsLearned generated and saved",

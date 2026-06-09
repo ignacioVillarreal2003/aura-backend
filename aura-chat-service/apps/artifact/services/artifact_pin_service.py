@@ -23,7 +23,7 @@ class PinService:
     def pin(self, user: AuthenticatedUser, artifact_id: int) -> ArtifactPin:
         AccessControl.require_permissions(user, frozenset({PIN_MESSAGE}))
         chat_id = self._require_chat_owner(user, artifact_id)
-        pin, _ = pin_repository.pin(artifact_id, chat_id, pinned_by=user.id)
+        pin, _ = pin_repository.pin(artifact_id, chat_id, created_by=user.id)
         logger.info("Artifact pinned.", extra={"chat_id": chat_id, "artifact_id": artifact_id, "user_id": user.id})
         return pin
 

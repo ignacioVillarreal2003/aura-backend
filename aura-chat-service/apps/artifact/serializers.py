@@ -84,6 +84,9 @@ class ArtifactMessagePreview(serializers.Serializer):
 class ArtifactSummaryResponse(serializers.ModelSerializer):
     message = serializers.SerializerMethodField()
     linked_id = serializers.SerializerMethodField()
+    is_bookmarked = serializers.SerializerMethodField()
+    user_feedback = serializers.SerializerMethodField()
+    thread_reply_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Artifact
@@ -95,6 +98,10 @@ class ArtifactSummaryResponse(serializers.ModelSerializer):
             "status",
             "version",
             "mode",
+            "fragments",
+            "is_bookmarked",
+            "user_feedback",
+            "thread_reply_count",
             "source_chat_id",
             "created_by",
             "created_at",
@@ -113,6 +120,28 @@ class ArtifactSummaryResponse(serializers.ModelSerializer):
         except ObjectDoesNotExist:
             return None
         return ArtifactMessagePreview(mc).data
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_is_bookmarked(self, obj):
+        from apps.artifact.models.artifact_bookmark import ArtifactBookmark
+        request = self.context.get('request')
+        if not request:
+            return False
+        return ArtifactBookmark.objects.filter(artifact_id=obj.id, created_by=request.user.id).exists()
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_user_feedback(self, obj):
+        from apps.artifact.models.artifact_feedback import ArtifactFeedback
+        request = self.context.get('request')
+        if not request:
+            return None
+        fb = ArtifactFeedback.objects.filter(artifact_id=obj.id, user_id=request.user.id).first()
+        return fb.value if fb else None
+
+    @extend_schema_field(serializers.IntegerField())
+    def get_thread_reply_count(self, obj):
+        from apps.artifact.models.artifact_thread_reply import ArtifactThreadReply
+        return ArtifactThreadReply.objects.filter(parent_artifact_id=obj.id).count()
 
     @extend_schema_field(serializers.IntegerField(allow_null=True))
     def get_linked_id(self, obj):
@@ -143,5 +172,5 @@ class PinnedArtifactResponse(serializers.ModelSerializer):
 
     class Meta:
         model = ArtifactPin
-        fields = ["id", "artifact_id", "chat_id", "pinned_by", "pinned_at", "artifact"]
+        fields = ["id", "artifact_id", "chat_id", "created_by", "created_at", "artifact"]
         read_only_fields = fields

@@ -11,12 +11,13 @@ from core.authorization.permissions import SET_MESSAGE_FEEDBACK
 
 def _require_ai_artifact(user_id: int, artifact_id: int) -> Artifact:
     artifact = require_interaction_access(user_id, artifact_id)
-    try:
-        msg_content = artifact.message_content
-    except ArtifactMessage.DoesNotExist:
-        raise NotAIMessageException()
-    if msg_content.sender_type != ArtifactMessage.SenderType.ASSISTANT:
-        raise NotAIMessageException()
+    if artifact.type == Artifact.Type.MESSAGE:
+        try:
+            msg_content = artifact.message_content
+        except ArtifactMessage.DoesNotExist:
+            raise NotAIMessageException()
+        if msg_content.sender_type != ArtifactMessage.SenderType.ASSISTANT:
+            raise NotAIMessageException()
     return artifact
 
 

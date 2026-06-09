@@ -49,6 +49,7 @@ def _persist_generated_report(
         mode: str,
         source_chat_id: int,
         content: str,
+        fragments=None,
 ) -> tuple:
     artifact = create_artifact_for_content(
         user_id=user_id,
@@ -56,6 +57,7 @@ def _persist_generated_report(
         title=title,
         mode=mode,
         source_chat_id=source_chat_id,
+        fragments=fragments,
     )
     report = report_repository.create(
         user_id=user_id,
@@ -214,6 +216,7 @@ class ReportService:
             mode=mode,
             source_chat_id=chat_id,
             content=content,
+            fragments=fragments,
         )
 
         report.artifact = artifact

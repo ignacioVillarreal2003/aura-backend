@@ -107,7 +107,7 @@ class ChatArtifactFeedView(APIView):
         queryset = artifact_service.list_chat_artifacts(user=request.user, chat_id=chat_id, **filters)
         paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request)
-        return paginator.get_paginated_response(ArtifactSummaryResponse(page, many=True).data)
+        return paginator.get_paginated_response(ArtifactSummaryResponse(page, many=True, context={'request': request}).data)
 
 
 class ChatArtifactManageView(APIView):
@@ -129,7 +129,7 @@ class ChatArtifactManageView(APIView):
         queryset = artifact_service.list_chat_artifacts_admin(user=request.user, chat_id=chat_id, **filters)
         paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request)
-        return paginator.get_paginated_response(ArtifactSummaryResponse(page, many=True).data)
+        return paginator.get_paginated_response(ArtifactSummaryResponse(page, many=True, context={'request': request}).data)
 
 
 class ArtifactDetailView(APIView):
