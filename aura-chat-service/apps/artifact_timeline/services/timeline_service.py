@@ -51,6 +51,7 @@ def _persist_generated_timeline(
         source_chat_id: int,
         summary: str,
         events: list,
+        fragments=None,
 ) -> tuple:
     artifact = create_artifact_for_content(
         user_id=user_id,
@@ -58,6 +59,7 @@ def _persist_generated_timeline(
         title=title,
         mode=mode,
         source_chat_id=source_chat_id,
+        fragments=fragments,
     )
     timeline = timeline_repository.create(
         user_id=user_id,
@@ -206,6 +208,7 @@ class TimelineService:
             source_chat_id=chat_id,
             summary=summary,
             events=events,
+            fragments=fragments,
         )
         logger.info(
             "ArtifactTimeline generated and saved",

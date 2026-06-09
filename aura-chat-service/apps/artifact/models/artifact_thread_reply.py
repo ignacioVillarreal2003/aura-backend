@@ -1,15 +1,15 @@
 from django.db import models
 
+from core.models import AuditModel, SoftDeleteModel
 
-class ArtifactThreadReply(models.Model):
+
+class ArtifactThreadReply(AuditModel, SoftDeleteModel):
     parent_artifact = models.ForeignKey(
         "artifact.Artifact",
         on_delete=models.CASCADE,
         related_name="thread_replies",
     )
     message = models.TextField()
-    created_by = models.BigIntegerField()
-    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False
@@ -17,4 +17,5 @@ class ArtifactThreadReply(models.Model):
         ordering = ["created_at"]
         indexes = [
             models.Index(fields=["parent_artifact"], name="idx_artifact_thread_reply_parent"),
+            models.Index(fields=["deleted_at"], name="idx_artifact_thread_reply_deleted"),
         ]

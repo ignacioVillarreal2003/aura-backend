@@ -26,13 +26,14 @@ logger = logging.getLogger(__name__)
 
 
 @transaction.atomic
-def _persist_generated_checklist(*, user_id, title, mode, source_chat_id, sections) -> tuple:
+def _persist_generated_checklist(*, user_id, title, mode, source_chat_id, sections, fragments=None) -> tuple:
     artifact = create_artifact_for_content(
         user_id=user_id,
         artifact_type=Artifact.Type.CHECKLIST,
         title=title,
         mode=mode,
         source_chat_id=source_chat_id,
+        fragments=fragments,
     )
     checklist = checklist_repository.create(
         user_id=user_id,
@@ -207,6 +208,7 @@ class ChecklistService:
             mode=mode,
             source_chat_id=chat_id,
             sections=sections,
+            fragments=fragments,
         )
         logger.info(
             "ArtifactChecklist generated and saved",

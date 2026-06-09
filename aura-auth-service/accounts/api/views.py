@@ -160,16 +160,13 @@ class UserLookupView(APIView):
     @extend_schema(
         summary='Lookup users',
         description=(
-            'Search users by one of: id (exact), username, email or name (partial, case-insensitive). '
-            'Exactly one query param must be provided. '
+            'Search active users by a single free-text query (`q`). '
+            'Matches partially (case-insensitive) against name, username, and email. '
             'Requires either a valid Bearer token (end-user) or a valid X-Service-Api-Key header '
             '(service-to-service).'
         ),
         parameters=[
-            {'name': 'id',       'in': 'query', 'required': False, 'schema': {'type': 'integer'}},
-            {'name': 'username', 'in': 'query', 'required': False, 'schema': {'type': 'string'}},
-            {'name': 'email',    'in': 'query', 'required': False, 'schema': {'type': 'string'}},
-            {'name': 'name',     'in': 'query', 'required': False, 'schema': {'type': 'string'}},
+            {'name': 'q', 'in': 'query', 'required': True, 'schema': {'type': 'string'}},
         ],
         responses={
             200: UserListResponseSerializer,
@@ -192,36 +189,75 @@ class UserLookupView(APIView):
             if not introspect_token(token):
                 return Response({'detail': 'Invalid or expired token.'}, status=status.HTTP_401_UNAUTHORIZED)
 
-        params = {
-            'id':       request.query_params.get('id'),
-            'username': request.query_params.get('username'),
-            'email':    request.query_params.get('email'),
-            'name':     request.query_params.get('name'),
-        }
-        provided = {k: v for k, v in params.items() if v is not None}
-        if not provided:
-            return Response(
-                {'detail': 'Provide exactly one of: id, username, email, name.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if len(provided) > 1:
-            return Response(
-                {'detail': 'Provide only one lookup parameter at a time.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        q = request.query_params.get('q', '').strip()
+        if not q:
+            return Response({'detail': 'Query parameter "q" is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        field, value = next(iter(provided.items()))
+        from django.db.models import Q
+        users = User.objects.filter(deleted_at__isnull=True, status='active').filter(
+            Q(name__icontains=q) | Q(username__icontains=q) | Q(email__icontains=q)
+        )
 
-        base_qs = User.objects.filter(deleted_at__isnull=True, status='active')
+        results = [
+            {
+                'id':       u.id,
+                'username': u.username,
+                'name':     u.name,
+                'email':    u.email,
+            }
+            for u in users
+        ]
+        return Response({'count': len(results), 'results': results}, status=status.HTTP_200_OK)
 
-        if field == 'id':
-            try:
-                users = base_qs.filter(id=int(value))
-            except ValueError:
-                return Response({'detail': 'id must be an integer.'}, status=status.HTTP_400_BAD_REQUEST)
+
+class UsersByIdsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    @extend_schema(
+        summary='Get users by IDs',
+        description=(
+            'Fetch basic profile data for a list of user IDs. '
+            'Accepts `ids` as a comma-separated query param. '
+            'Requires either a valid Bearer token or X-Service-Api-Key header.'
+        ),
+        parameters=[
+            {'name': 'ids', 'in': 'query', 'required': True, 'schema': {'type': 'string'}},
+        ],
+        responses={
+            200: UserListResponseSerializer,
+            400: ErrorResponseSerializer,
+            401: ErrorResponseSerializer,
+        },
+        tags=['Auth'],
+    )
+    def get(self, request):
+        service_key = request.headers.get('X-Service-Api-Key')
+        if service_key:
+            expected = getattr(settings, 'SERVICE_API_KEY', '')
+            if not (expected and secrets.compare_digest(service_key.strip(), str(expected))):
+                return Response({'detail': 'Invalid service API key.'}, status=status.HTTP_401_UNAUTHORIZED)
         else:
-            users = base_qs.filter(**{f'{field}__icontains': value})
+            auth_header = request.headers.get('Authorization', '')
+            if not auth_header.startswith('Bearer '):
+                return Response({'detail': 'Authorization header missing or invalid.'}, status=status.HTTP_401_UNAUTHORIZED)
+            token = auth_header.split(' ', 1)[1]
+            if not introspect_token(token):
+                return Response({'detail': 'Invalid or expired token.'}, status=status.HTTP_401_UNAUTHORIZED)
 
+        ids_param = request.query_params.get('ids', '').strip()
+        if not ids_param:
+            return Response({'detail': 'Query parameter "ids" is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            ids = [int(i.strip()) for i in ids_param.split(',') if i.strip()]
+        except ValueError:
+            return Response({'detail': '"ids" must be a comma-separated list of integers.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not ids:
+            return Response({'count': 0, 'results': []}, status=status.HTTP_200_OK)
+
+        users = User.objects.filter(pk__in=ids, deleted_at__isnull=True)
         results = [
             {
                 'id':       u.id,

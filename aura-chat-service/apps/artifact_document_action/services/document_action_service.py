@@ -51,6 +51,7 @@ def _persist_generated_document_action(
         instruction: str,
         action: Optional[str],
         result: str,
+        fragments=None,
 ) -> tuple:
     artifact = create_artifact_for_content(
         user_id=user_id,
@@ -58,6 +59,7 @@ def _persist_generated_document_action(
         title=title,
         mode=Artifact.Mode.DIRECT,
         source_chat_id=source_chat_id,
+        fragments=fragments,
     )
     obj = document_action_repository.create(
         user_id=user_id,
@@ -205,6 +207,7 @@ class DocumentActionService:
             instruction=instruction,
             action=action,
             result=result_text,
+            fragments=fragments,
         )
         logger.info(
             "ArtifactDocumentAction generated and saved",

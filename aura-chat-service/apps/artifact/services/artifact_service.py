@@ -209,6 +209,7 @@ def create_artifact_for_content(
         title: str,
         mode: str,
         source_chat_id: int,
+        fragments=None,
 ) -> Artifact:
     try:
         artifact = artifact_repository.create(
@@ -218,6 +219,7 @@ def create_artifact_for_content(
             status=Artifact.Status.FINAL,
             mode=mode,
             source_chat_id=source_chat_id,
+            fragments=fragments,
         )
         return artifact
     except Exception:

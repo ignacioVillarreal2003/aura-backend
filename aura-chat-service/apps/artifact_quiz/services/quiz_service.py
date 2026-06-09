@@ -72,6 +72,7 @@ def _persist_generated_quiz(
         instructions: str,
         pass_score,
         questions: list,
+        fragments=None,
 ) -> tuple:
     artifact = create_artifact_for_content(
         user_id=user_id,
@@ -79,6 +80,7 @@ def _persist_generated_quiz(
         title=title,
         mode=mode,
         source_chat_id=source_chat_id,
+        fragments=fragments,
     )
     quiz = quiz_repository.create(
         user_id=user_id,
@@ -236,6 +238,7 @@ class QuizService:
             instructions=instructions,
             pass_score=passing_score,
             questions=questions,
+            fragments=fragments,
         )
         logger.info(
             "ArtifactQuiz generated and saved",

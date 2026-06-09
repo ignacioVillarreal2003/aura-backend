@@ -65,6 +65,7 @@ def _persist_generated_decision_brief(
         risks: str,
         recommendation: str,
         options: list,
+        fragments=None,
 ) -> tuple:
     artifact = create_artifact_for_content(
         user_id=user_id,
@@ -72,6 +73,7 @@ def _persist_generated_decision_brief(
         title=title,
         mode=mode,
         source_chat_id=source_chat_id,
+        fragments=fragments,
     )
     brief = decision_brief_repository.create(
         user_id=user_id,
@@ -234,6 +236,7 @@ class DecisionBriefService:
             risks=str(result_data.get("risks", "")),
             recommendation=str(result_data.get("recommendation", "")),
             options=options,
+            fragments=fragments,
         )
         logger.info(
             "ArtifactDecisionBrief generated and saved",

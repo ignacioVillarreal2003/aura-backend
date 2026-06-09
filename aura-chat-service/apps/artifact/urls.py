@@ -4,6 +4,7 @@ from apps.artifact.interaction_views import (
     ArtifactBookmarkView,
     ArtifactFeedbackView,
     ArtifactPinView,
+    ArtifactThreadReplyDetailView,
     ArtifactThreadView,
     BookmarkedArtifactListView,
     FeedbackAnalyticsView,
@@ -28,4 +29,5 @@ urlpatterns = [
     path("<int:artifact_id>/bookmark/", ArtifactBookmarkView.as_view(), name="artifact-bookmark"),
     path("<int:artifact_id>/pin/", ArtifactPinView.as_view(), name="artifact-pin"),
     path("<int:artifact_id>/thread/", ArtifactThreadView.as_view(), name="artifact-thread"),
+    path("<int:artifact_id>/thread/<int:reply_id>/", ArtifactThreadReplyDetailView.as_view(), name="artifact-thread-reply-detail"),
 ]

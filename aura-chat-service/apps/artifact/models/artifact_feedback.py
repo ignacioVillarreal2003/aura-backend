@@ -24,7 +24,9 @@ class ArtifactFeedback(models.Model):
     value = models.SmallIntegerField(choices=Value.choices)
     reason = models.CharField(max_length=32, choices=Reason.choices, null=True, blank=True)
     comment = models.CharField(max_length=500, null=True, blank=True)
+    created_by = models.BigIntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_by = models.BigIntegerField(null=True, blank=True)
     updated_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:

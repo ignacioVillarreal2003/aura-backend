@@ -12,6 +12,7 @@ from apps.artifact.interaction_serializers import (
     SendThreadReplyRequest,
     SetFeedbackRequest,
     ThreadReplyResponse,
+    UpdateThreadReplyRequest,
 )
 from apps.artifact.serializers import ArtifactSummaryResponse, PinnedArtifactResponse
 from apps.artifact.services.artifact_bookmark_service import bookmark_service
@@ -164,6 +165,44 @@ class ArtifactThreadView(APIView):
         return Response(ThreadReplyResponse(reply).data, status=status.HTTP_201_CREATED)
 
 
+_REPLY_ID_PARAM = [
+    *_ID_PARAM,
+    OpenApiParameter(name="reply_id", type=int, location=OpenApiParameter.PATH, required=True),
+]
+
+
+class ArtifactThreadReplyDetailView(APIView):
+    @extend_schema(
+        tags=["Artifacts"],
+        summary="Editar respuesta del hilo",
+        description="Actualiza el texto de una respuesta del hilo. Solo el autor puede editar su propia respuesta.",
+        parameters=_REPLY_ID_PARAM,
+        request=UpdateThreadReplyRequest,
+        responses={200: ThreadReplyResponse, **standard_error_responses(400, 401, 403, 404)},
+    )
+    def patch(self, request: Request, artifact_id: int, reply_id: int) -> Response:
+        serializer = UpdateThreadReplyRequest(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        reply = thread_service.update_reply(
+            user=request.user,
+            artifact_id=artifact_id,
+            reply_id=reply_id,
+            message_text=serializer.validated_data["message"],
+        )
+        return Response(ThreadReplyResponse(reply).data)
+
+    @extend_schema(
+        tags=["Artifacts"],
+        summary="Eliminar respuesta del hilo",
+        description="Elimina una respuesta del hilo. Solo el autor puede eliminar su propia respuesta.",
+        parameters=_REPLY_ID_PARAM,
+        responses={204: OpenApiResponse(description="Sin contenido"), **standard_error_responses(401, 403, 404)},
+    )
+    def delete(self, request: Request, artifact_id: int, reply_id: int) -> Response:
+        thread_service.delete_reply(user=request.user, artifact_id=artifact_id, reply_id=reply_id)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class PinnedArtifactListView(APIView):
     @extend_schema(
         tags=["Artifacts"],
@@ -193,7 +232,7 @@ class BookmarkedArtifactListView(APIView):
         artifacts = bookmark_service.list_bookmarked(user=request.user, chat_id=chat_id)
         paginator = StandardPagination()
         page = paginator.paginate_queryset(artifacts, request)
-        return paginator.get_paginated_response(ArtifactSummaryResponse(page, many=True).data)
+        return paginator.get_paginated_response(ArtifactSummaryResponse(page, many=True, context={'request': request}).data)
 
 
 class FeedbackAnalyticsView(APIView):

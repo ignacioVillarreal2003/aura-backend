@@ -320,6 +320,63 @@ CREATE TABLE artifact_version (
 );
 
 -- ============================================================================
+-- artifact_pin / artifact_bookmark / artifact_thread_reply / artifact_feedback
+-- ============================================================================
+CREATE TABLE artifact_pin (
+    id          BIGSERIAL PRIMARY KEY,
+    artifact_id BIGINT          NOT NULL
+        CONSTRAINT fk_artifact_pin_artifact REFERENCES artifact(id) ON DELETE CASCADE,
+    chat_id     BIGINT          NOT NULL
+        CONSTRAINT fk_artifact_pin_chat REFERENCES chat(id) ON DELETE CASCADE,
+    created_by  BIGINT          NOT NULL,
+    created_at  TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    CONSTRAINT artifact_pin_unique UNIQUE (artifact_id, chat_id)
+);
+
+CREATE TABLE artifact_bookmark (
+    id          BIGSERIAL PRIMARY KEY,
+    artifact_id BIGINT          NOT NULL
+        CONSTRAINT fk_artifact_bookmark_artifact REFERENCES artifact(id) ON DELETE CASCADE,
+    created_by  BIGINT          NOT NULL,
+    created_at  TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_artifact_bookmark UNIQUE (artifact_id, created_by)
+);
+
+CREATE TABLE artifact_thread_reply (
+    id                  BIGSERIAL PRIMARY KEY,
+    parent_artifact_id  BIGINT          NOT NULL
+        CONSTRAINT fk_artifact_thread_reply_artifact REFERENCES artifact(id) ON DELETE CASCADE,
+    message             TEXT            NOT NULL,
+    created_by          BIGINT          NOT NULL,
+    created_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    updated_by          BIGINT,
+    updated_at          TIMESTAMPTZ,
+    deleted_by          BIGINT,
+    deleted_at          TIMESTAMPTZ
+);
+
+CREATE TABLE artifact_feedback (
+    id          BIGSERIAL PRIMARY KEY,
+    artifact_id BIGINT          NOT NULL
+        CONSTRAINT fk_artifact_feedback_artifact REFERENCES artifact(id) ON DELETE CASCADE,
+    user_id     BIGINT          NOT NULL,
+    value       SMALLINT        NOT NULL,
+    reason      VARCHAR(32),
+    comment     VARCHAR(500),
+    created_by  BIGINT          NOT NULL,
+    created_at  TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    updated_by  BIGINT,
+    updated_at  TIMESTAMPTZ,
+    CONSTRAINT uq_artifact_feedback UNIQUE (artifact_id, user_id),
+    CONSTRAINT chk_artifact_feedback_value CHECK (value IN (1, -1)),
+    CONSTRAINT chk_artifact_feedback_reason CHECK (
+        reason IS NULL OR reason IN (
+            'incorrect', 'incomplete', 'off_topic', 'tone', 'too_long', 'hallucination', 'other'
+        )
+    )
+);
+
+-- ============================================================================
 -- artifact_message  (type = MESSAGE)
 -- ============================================================================
 CREATE TABLE artifact_message (
@@ -334,57 +391,6 @@ CREATE TABLE artifact_message (
     deleted_by  BIGINT,
     deleted_at  TIMESTAMPTZ,
     CONSTRAINT uq_artifact_message_artifact UNIQUE (artifact_id)
-);
-
--- ============================================================================
--- artifact_pin / artifact_bookmark / artifact_thread_reply / artifact_feedback
--- ============================================================================
-CREATE TABLE artifact_pin (
-    id          BIGSERIAL PRIMARY KEY,
-    artifact_id BIGINT          NOT NULL
-        CONSTRAINT fk_artifact_pin_artifact REFERENCES artifact(id) ON DELETE CASCADE,
-    chat_id     BIGINT          NOT NULL
-        CONSTRAINT fk_artifact_pin_chat REFERENCES chat(id) ON DELETE CASCADE,
-    pinned_by   BIGINT          NOT NULL,
-    pinned_at   TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
-    CONSTRAINT artifact_pin_unique UNIQUE (artifact_id, chat_id)
-);
-
-CREATE TABLE artifact_bookmark (
-    id          BIGSERIAL PRIMARY KEY,
-    artifact_id BIGINT          NOT NULL
-        CONSTRAINT fk_artifact_bookmark_artifact REFERENCES artifact(id) ON DELETE CASCADE,
-    user_id     BIGINT          NOT NULL,
-    created_at  TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_artifact_bookmark UNIQUE (artifact_id, user_id)
-);
-
-CREATE TABLE artifact_thread_reply (
-    id                  BIGSERIAL PRIMARY KEY,
-    parent_artifact_id  BIGINT          NOT NULL
-        CONSTRAINT fk_artifact_thread_reply_artifact REFERENCES artifact(id) ON DELETE CASCADE,
-    message             TEXT            NOT NULL,
-    created_by          BIGINT          NOT NULL,
-    created_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE artifact_feedback (
-    id          BIGSERIAL PRIMARY KEY,
-    artifact_id BIGINT          NOT NULL
-        CONSTRAINT fk_artifact_feedback_artifact REFERENCES artifact(id) ON DELETE CASCADE,
-    user_id     BIGINT          NOT NULL,
-    value       SMALLINT        NOT NULL,
-    reason      VARCHAR(32),
-    comment     VARCHAR(500),
-    created_at  TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ,
-    CONSTRAINT uq_artifact_feedback UNIQUE (artifact_id, user_id),
-    CONSTRAINT chk_artifact_feedback_value CHECK (value IN (1, -1)),
-    CONSTRAINT chk_artifact_feedback_reason CHECK (
-        reason IS NULL OR reason IN (
-            'incorrect', 'incomplete', 'off_topic', 'tone', 'too_long', 'hallucination', 'other'
-        )
-    )
 );
 
 -- ============================================================================
@@ -719,9 +725,10 @@ CREATE INDEX idx_artifact_pin_artifact ON artifact_pin (artifact_id);
 CREATE INDEX idx_artifact_pin_chat     ON artifact_pin (chat_id);
 
 CREATE INDEX idx_artifact_bookmark_artifact ON artifact_bookmark (artifact_id);
-CREATE INDEX idx_artifact_bookmark_user     ON artifact_bookmark (user_id);
+CREATE INDEX idx_artifact_bookmark_user     ON artifact_bookmark (created_by);
 
-CREATE INDEX idx_artifact_thread_reply_parent ON artifact_thread_reply (parent_artifact_id);
+CREATE INDEX idx_artifact_thread_reply_parent     ON artifact_thread_reply (parent_artifact_id);
+CREATE INDEX idx_artifact_thread_reply_deleted    ON artifact_thread_reply (deleted_at);
 
 CREATE INDEX idx_artifact_feedback_artifact   ON artifact_feedback (artifact_id);
 CREATE INDEX idx_artifact_feedback_created_at ON artifact_feedback (created_at);

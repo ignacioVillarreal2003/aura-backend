@@ -24,10 +24,6 @@ from apps.artifact_message.serializers import (
     SendMessagePostResponseSerializer,
     SendMessageRequest,
 )
-from apps.artifact_message.services.export_service import (
-    generate_message_markdown,
-    generate_message_pdf,
-)
 from apps.artifact_message.services.message_service import (
     ChatAIMode,
     broadcast_chat_ai_lock_change,
@@ -39,6 +35,10 @@ from apps.chat.repositories.chat_repository import chat_repository
 from apps.chat.ws_rate_limit import check_message_rate_limit, check_transcribe_rate_limit
 from apps.membership.repositories.membership_repository import membership_repository
 from core.authorization import AccessControl
+from apps.artifact_message.services.export_service import (
+    generate_message_markdown,
+    generate_message_pdf,
+)
 from core.authorization.permissions import (
     EXPORT_MESSAGE,
     GET_MESSAGE,
@@ -286,12 +286,8 @@ class MessageExportPDFView(APIView):
     @extend_schema(
         tags=["Messages"],
         summary="Exportar mensaje como PDF",
-        description="Descarga un mensaje como PDF. Requiere membresía activa y `EXPORT_MESSAGE`.",
         parameters=[_MESSAGE_ID_PATH_PARAM],
-        responses={
-            200: OpenApiResponse(description="PDF — Content-Type: application/pdf"),
-            **standard_error_responses(401, 403, 404),
-        },
+        responses={200: OpenApiResponse(description="PDF"), **standard_error_responses(401, 403, 404)},
     )
     def get(self, request: Request, message_id: int) -> HttpResponse:
         AccessControl.require_permissions(request.user, frozenset({EXPORT_MESSAGE}))
@@ -307,12 +303,8 @@ class MessageExportMarkdownView(APIView):
     @extend_schema(
         tags=["Messages"],
         summary="Exportar mensaje como Markdown",
-        description="Descarga un mensaje como Markdown. Requiere membresía activa y `EXPORT_MESSAGE`.",
         parameters=[_MESSAGE_ID_PATH_PARAM],
-        responses={
-            200: OpenApiResponse(description="Markdown — Content-Type: text/markdown"),
-            **standard_error_responses(401, 403, 404),
-        },
+        responses={200: OpenApiResponse(description="Markdown"), **standard_error_responses(401, 403, 404)},
     )
     def get(self, request: Request, message_id: int) -> HttpResponse:
         AccessControl.require_permissions(request.user, frozenset({EXPORT_MESSAGE}))
@@ -328,12 +320,8 @@ class MessageManageExportPDFView(APIView):
     @extend_schema(
         tags=["Messages"],
         summary="Exportar mensaje como PDF (admin)",
-        description="Descarga cualquier mensaje como PDF sin requerir membresía. Requiere `MANAGE_EXPORT_MESSAGE`.",
         parameters=[_MESSAGE_ID_PATH_PARAM],
-        responses={
-            200: OpenApiResponse(description="PDF — Content-Type: application/pdf"),
-            **standard_error_responses(401, 403, 404),
-        },
+        responses={200: OpenApiResponse(description="PDF"), **standard_error_responses(401, 403, 404)},
     )
     def get(self, request: Request, message_id: int) -> HttpResponse:
         AccessControl.require_permissions(request.user, frozenset({MANAGE_EXPORT_MESSAGE}))
@@ -351,12 +339,8 @@ class MessageManageExportMarkdownView(APIView):
     @extend_schema(
         tags=["Messages"],
         summary="Exportar mensaje como Markdown (admin)",
-        description="Descarga cualquier mensaje como Markdown sin requerir membresía. Requiere `MANAGE_EXPORT_MESSAGE`.",
         parameters=[_MESSAGE_ID_PATH_PARAM],
-        responses={
-            200: OpenApiResponse(description="Markdown — Content-Type: text/markdown"),
-            **standard_error_responses(401, 403, 404),
-        },
+        responses={200: OpenApiResponse(description="Markdown"), **standard_error_responses(401, 403, 404)},
     )
     def get(self, request: Request, message_id: int) -> HttpResponse:
         AccessControl.require_permissions(request.user, frozenset({MANAGE_EXPORT_MESSAGE}))

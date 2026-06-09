@@ -12,8 +12,8 @@ class ArtifactPin(models.Model):
         on_delete=models.CASCADE,
         related_name="pinned_artifacts",
     )
-    pinned_by = models.BigIntegerField()
-    pinned_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.BigIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False
