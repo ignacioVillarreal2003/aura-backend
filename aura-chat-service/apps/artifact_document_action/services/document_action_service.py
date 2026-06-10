@@ -56,7 +56,6 @@ def _persist_generated_document_action(
     artifact = create_artifact_for_content(
         user_id=user_id,
         artifact_type=Artifact.Type.DOCUMENT_ACTION,
-        title=title,
         mode=Artifact.Mode.DIRECT,
         source_chat_id=source_chat_id,
         fragments=fragments,
@@ -68,6 +67,7 @@ def _persist_generated_document_action(
         action=action,
         result=result,
         artifact_id=artifact.id,
+        title=title,
     )
     return artifact, obj
 
@@ -111,24 +111,6 @@ class DocumentActionService:
         return obj
 
     @transaction.atomic
-    def update_document_action(
-            self,
-            user: AuthenticatedUser,
-            document_action_id: int,
-            title: Optional[str] = None,
-            result: Optional[str] = None,
-            instruction: Optional[str] = None,
-    ) -> ArtifactDocumentAction:
-        AccessControl.require_permissions(user, frozenset({perms.UPDATE_DOCUMENT_ACTION}))
-        obj = document_action_repository.get_by_id_for_update(document_action_id)
-        if obj is None:
-            raise DocumentActionNotFoundException()
-        _assert_access(user.id, obj, require_contributor=True)
-        if title is not None:
-            artifact_repository.update(obj.artifact, updated_by=user.id, title=title)
-        return document_action_repository.update(obj, updated_by=user.id, result=result, instruction=instruction)
-
-    @transaction.atomic
     def delete_document_action(self, user: AuthenticatedUser, document_action_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({perms.DELETE_DOCUMENT_ACTION}))
         obj = document_action_repository.get_by_id_for_update(document_action_id)
@@ -156,6 +138,8 @@ class DocumentActionService:
         chat = await sync_to_async(chat_repository.get_by_id)(chat_id)
         if chat is None:
             raise ChatNotFoundException()
+        system_prompt = chat.system_prompt if chat else None
+        response_style = chat.response_style if chat else None
 
         result_data: dict | None = None
         try:
@@ -165,6 +149,8 @@ class DocumentActionService:
                     action=action,
                     user=user,
                     chat_id=chat_id,
+                    system_prompt=system_prompt,
+                    response_style=response_style,
             ):
                 et = event.get("type")
                 if et == "progress":

@@ -8,6 +8,7 @@ from langchain_core.runnables import Runnable
 from app.application.services.user_interactions.rag_agent_service.interfaces.rag_node_interface import RagNodeInterface
 from app.application.services.user_interactions.rag_agent_service.rag_agent_settings import AnswerSynthesizerSettings
 from app.application.services.user_interactions.rag_agent_service.rag_agent_state.rag_agent_state import RagAgentState
+from app.application.services.generation_shared.prompt_augmentation import augment_system_prompt
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 
 logger = logging.getLogger(__name__)
@@ -42,7 +43,12 @@ class AnswerSynthesizerNode(RagNodeInterface):
 
         try:
             await self._ensure_llm_initialized()
-            answer = await self._synthesize(query, context)
+            answer = await self._synthesize(
+                query,
+                context,
+                state.get("operator_system_prompt"),
+                state.get("response_style"),
+            )
 
             if not answer:
                 return {"answer": _NO_ANSWER_RESPONSE}
@@ -53,14 +59,26 @@ class AnswerSynthesizerNode(RagNodeInterface):
             logger.error("Answer synthesis failed — returning fallback", exc_info=True)
             return {"answer": _NO_ANSWER_RESPONSE}
 
-    async def _synthesize(self, query: str, context: str) -> str:
+    async def _synthesize(
+            self,
+            query: str,
+            context: str,
+            operator_system_prompt: Optional[str] = None,
+            response_style: Optional[str] = None,
+    ) -> str:
         user_content = (
             f"Consulta: {query}\n\n"
             f"Contexto documental:\n{context}\n\n"
             "Sintetiza la respuesta final."
         )
         prompt: List = [
-            SystemMessage(content=self._settings.system_prompt),
+            SystemMessage(
+                content=augment_system_prompt(
+                    self._settings.system_prompt,
+                    operator_system_prompt,
+                    response_style,
+                )
+            ),
             HumanMessage(content=user_content),
         ]
         response = await self._llm.ainvoke(prompt)

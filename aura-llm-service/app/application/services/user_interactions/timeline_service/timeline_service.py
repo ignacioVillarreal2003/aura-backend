@@ -25,6 +25,7 @@ from app.application.services.generation_shared.generation_messages import (
     build_context_block,
     build_generation_messages,
 )
+from app.application.services.generation_shared.prompt_augmentation import augment_system_prompt
 from app.application.services.generation_shared.generation_settings import GenerationSettings
 from app.application.services.generation_shared.generation_state import GenerationState
 from app.application.services.generation_shared.processors.attached_documents_processor import (
@@ -77,13 +78,10 @@ def _parse_events(raw_events: list, settings: TimelineSettings) -> list[Timeline
         event_title = _clean(entry.get("event"), settings.max_event_chars)
         if not event_title:
             continue
-        occurred_at = entry.get("occurred_at")
-        occurred_at = str(occurred_at).strip()[:64] if occurred_at else None
         events.append(
             TimelineEvent(
                 event=event_title,
                 description=_clean(entry.get("description"), settings.max_description_chars),
-                occurred_at=occurred_at or None,
                 occurred_label=_clean(entry.get("occurred_label"), settings.max_label_chars),
             )
         )
@@ -157,12 +155,12 @@ class TimelineService(TimelineServiceInterface):
             await self._context_processor.run(state, RAG_QUERIES)
         await self._reduction_processor.run(state, EXTRACTION_SYSTEM_PROMPT, EXTRACTION_HUMAN_PROMPT)
 
-    async def _invoke(self, state: GenerationState) -> str:
+    async def _invoke(self, state: GenerationState, request: TimelineGenerateRequest) -> str:
         context_block = build_context_block(
             state, self._generation_settings.max_context_chars, self._generation_settings.attached_reserve_ratio
         )
         llm_messages = build_generation_messages(
-            build_system_prompt(self._timeline_settings),
+            augment_system_prompt(build_system_prompt(self._timeline_settings), request.system_prompt, request.response_style),
             HUMAN_PROMPT,
             state,
             self._generation_settings.history_messages_window,
@@ -207,7 +205,7 @@ class TimelineService(TimelineServiceInterface):
             state = self._build_state(request, authenticated_user)
             await self._gather_context(state)
 
-            raw = await self._invoke(state)
+            raw = await self._invoke(state, request)
             title, summary, events = _parse_llm_output(raw, self._timeline_settings)
             if not events:
                 raise TimelineServiceException(
@@ -266,7 +264,7 @@ class TimelineService(TimelineServiceInterface):
 
             yield TimelineStreamProgress(step="generation", message="Identificando y ordenando eventos cronológicamente...")
 
-            raw = await self._invoke(state)
+            raw = await self._invoke(state, request)
             title, summary, events = _parse_llm_output(raw, self._timeline_settings)
             if not events:
                 raise TimelineServiceException(

@@ -12,8 +12,6 @@ from apps.notification.api.serializers.notification import (
     UnreadCountSerializer,
 )
 from apps.notification.api.serializers.preferences import (
-    EventPreferenceUpdateSerializer,
-    EventPreferencesEntrySerializer,
     NotificationPreferenceSerializer,
     NotificationPreferenceUpdateSerializer,
 )
@@ -26,8 +24,6 @@ __all__ = [
     "UnreadCountSerializer",
     "NotificationPreferenceSerializer",
     "NotificationPreferenceUpdateSerializer",
-    "EventPreferencesEntrySerializer",
-    "EventPreferenceUpdateSerializer",
     "EventEmissionRequestSerializer",
     "EventEmissionResponseSerializer",
     "EventDispatchOutcomeSerializer",

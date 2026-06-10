@@ -214,12 +214,13 @@ class DocumentContextProvider(DocumentContextProviderInterface):
             self,
             authenticated_user: AuthenticatedUser,
     ) -> dict[str, str]:
+        # System (trusted) call: send the service key + user id/email for scoping
+        # and audit. Roles/permissions are no longer self-asserted — the receiving
+        # service derives authorization from the service key (system principal).
         return {
             "X-Service-Api-Key": environment_variables.service_api_key,
             "X-User-Id": str(authenticated_user.id),
             "X-User-Email": str(authenticated_user.email),
-            "X-User-Roles": ",".join(authenticated_user.roles),
-            "X-User-Permissions": ",".join(authenticated_user.permissions),
         }
 
     @staticmethod

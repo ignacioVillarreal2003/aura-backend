@@ -641,23 +641,6 @@ class TestMessageServiceRunAIModes:
         assert out is expected
         dispatched.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_run_ephemeral_ai_reply_agent_does_not_persist(self, mocker):
-        self._patch_access_ok(mocker)
-        mocker.patch(
-            f"{MSG_SVC}.llm_client.agent",
-            new_callable=AsyncMock,
-            return_value=AgentRunResult(answer="resp", messages=[], fragments=[{"id": 1}]),
-        )
-        save = mocker.patch.object(MessageService, "_save_ai_message")
-        out = await MessageService().run_ephemeral_ai_reply(
-            ChatAIMode.AGENT, _user(), chat_id=1, user_message="hi"
-        )
-        assert out.answer == "resp"
-        assert out.assistant_message is None
-        save.assert_not_called()
-
-
 # ===========================================================================
 # PinnedMessageService
 # ===========================================================================

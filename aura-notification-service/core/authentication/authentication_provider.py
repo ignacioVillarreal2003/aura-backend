@@ -1,10 +1,12 @@
 import hashlib
+import json
 import logging
 import secrets
+from functools import lru_cache
 from typing import Optional
+import redis
 import requests
 from django.conf import settings
-from django.core.cache import cache as _cache
 from django.http import HttpRequest
 
 from core.authentication.authenticated_user import AuthenticatedUser
@@ -23,8 +25,27 @@ _CACHE_PREFIX = "auth_token:"
 _HEADER_SERVICE_API_KEY = "X-Service-Api-Key"
 _HEADER_USER_ID = "X-User-Id"
 _HEADER_USER_EMAIL = "X-User-Email"
-_HEADER_USER_ROLES = "X-User-Roles"
-_HEADER_USER_PERMISSIONS = "X-User-Permissions"
+
+_SERVICE_PRINCIPAL_ID = 0
+_SERVICE_PRINCIPAL_EMAIL = "service@internal"
+
+
+def _service_principal_permissions() -> tuple[str, ...]:
+    raw = getattr(settings, "SERVICE_API_PRINCIPAL_PERMISSIONS", "*")
+    if isinstance(raw, (list, tuple)):
+        items = tuple(str(p).strip() for p in raw if str(p).strip())
+    else:
+        items = tuple(p.strip() for p in str(raw).split(",") if p.strip())
+    return items or ("*",)
+
+
+def _service_principal_roles() -> tuple[str, ...]:
+    raw = getattr(settings, "SERVICE_API_PRINCIPAL_ROLES", "SERVICE")
+    if isinstance(raw, (list, tuple)):
+        items = tuple(str(r).strip() for r in raw if str(r).strip())
+    else:
+        items = tuple(r.strip() for r in str(raw).split(",") if r.strip())
+    return items or ("SERVICE",)
 
 
 def _token_cache_ttl() -> int:
@@ -35,11 +56,22 @@ def _cache_key(token: str) -> str:
     return f"{_CACHE_PREFIX}{hashlib.sha256(token.encode()).hexdigest()}"
 
 
+@lru_cache(maxsize=1)
+def _token_cache_redis() -> redis.Redis:
+    # Raw Redis client (literal key, JSON value) so the validated-token cache is
+    # shared cross-stack with the FastAPI services, which write the same
+    # `auth_token:<sha256>` key. Django's default cache would prepend a
+    # KEY_PREFIX/version and break sharing.
+    url = getattr(settings, "AUTH_TOKEN_CACHE_REDIS_URL", "") or settings.REDIS_URL
+    return redis.Redis.from_url(url, decode_responses=True)
+
+
 def _get_cached_user(token: str) -> Optional[AuthenticatedUser]:
     try:
-        data = _cache.get(_cache_key(token))
-        if data is None:
+        raw = _token_cache_redis().get(_cache_key(token))
+        if raw is None:
             return None
+        data = json.loads(raw)
         return AuthenticatedUser(
             id=data["id"],
             email=data["email"],
@@ -54,16 +86,16 @@ def _get_cached_user(token: str) -> Optional[AuthenticatedUser]:
 
 def _cache_user(token: str, user: AuthenticatedUser) -> None:
     try:
-        _cache.set(
+        _token_cache_redis().setex(
             _cache_key(token),
-            {
+            _token_cache_ttl(),
+            json.dumps({
                 "id": user.id,
                 "email": user.email,
                 "username": user.username,
                 "roles": list(user.roles),
                 "permissions": list(user.permissions),
-            },
-            timeout=_token_cache_ttl(),
+            }),
         )
     except Exception:
         logger.warning("Redis token cache write failed; token will not be cached.", exc_info=True)
@@ -97,24 +129,22 @@ class AuthenticationProvider:
         if not secrets.compare_digest(api_key, str(settings.SERVICE_API_KEY)):
             raise ServiceAuthenticationRejected(403, "invalid_service_key", "Invalid service API key")
 
+        # A valid service key implies full internal trust → system principal.
+        # X-User-Id / X-User-Email are optional audit context; self-asserted
+        # X-User-Roles / X-User-Permissions are no longer read.
         raw_user_id = (request.headers.get(_HEADER_USER_ID) or "").strip()
-        if not raw_user_id:
-            raise ServiceAuthenticationRejected(400, "missing_user_id", "X-User-Id header is required")
-
         try:
-            user_id = int(raw_user_id)
+            user_id = int(raw_user_id) if raw_user_id else _SERVICE_PRINCIPAL_ID
         except ValueError:
             raise ServiceAuthenticationRejected(400, "invalid_user_id", "X-User-Id must be a valid integer")
 
-        email = (request.headers.get(_HEADER_USER_EMAIL) or "").strip()
-        if not email:
-            raise ServiceAuthenticationRejected(400, "missing_user_email", "X-User-Email header is required")
+        email = (request.headers.get(_HEADER_USER_EMAIL) or "").strip() or _SERVICE_PRINCIPAL_EMAIL
 
         return AuthenticatedUser(
             id=user_id,
             email=email,
-            roles=tuple(_parse_comma_list(request.headers.get(_HEADER_USER_ROLES))),
-            permissions=tuple(_parse_comma_list(request.headers.get(_HEADER_USER_PERMISSIONS))),
+            roles=_service_principal_roles(),
+            permissions=_service_principal_permissions(),
         )
 
     def validate_token(self, token: str) -> AuthenticatedUser:

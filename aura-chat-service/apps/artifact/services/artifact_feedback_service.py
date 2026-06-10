@@ -34,7 +34,7 @@ class FeedbackService:
         _require_ai_artifact(user.id, artifact_id)
         return feedback_repository.set(
             artifact_id=artifact_id,
-            user_id=user.id,
+            created_by=user.id,
             value=value,
             reason=reason,
             comment=comment,
@@ -43,7 +43,7 @@ class FeedbackService:
     def delete_feedback(self, user: AuthenticatedUser, artifact_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({SET_MESSAGE_FEEDBACK}))
         _require_ai_artifact(user.id, artifact_id)
-        feedback_repository.delete(artifact_id=artifact_id, user_id=user.id)
+        feedback_repository.delete(artifact_id=artifact_id, created_by=user.id)
 
 
 feedback_service = FeedbackService()

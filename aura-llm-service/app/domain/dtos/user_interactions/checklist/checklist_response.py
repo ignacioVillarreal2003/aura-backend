@@ -5,6 +5,7 @@ from app.domain.dtos.message import Message
 from app.domain.field_limits import (
     MAX_CHECKLIST_ITEMS,
     MAX_CHECKLIST_ORDER,
+    MAX_DESCRIPTION_CHARS,
     MAX_ITEM_TEXT_CHARS,
     MAX_NOTES_CHARS,
     MAX_SECTION_CHARS,
@@ -24,6 +25,7 @@ class ChecklistItem(BaseModel):
 
 class ChecklistGenerateResponse(BaseModel):
     title: str = Field(..., min_length=1, max_length=MAX_TITLE_CHARS, description="Título descriptivo de la checklist.")
+    description: str = Field(default="", max_length=MAX_DESCRIPTION_CHARS, description="Breve descripción del propósito de la checklist.")
     items: list[ChecklistItem] = Field(
         ...,
         max_length=MAX_CHECKLIST_ITEMS,

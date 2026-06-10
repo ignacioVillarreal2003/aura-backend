@@ -3,17 +3,18 @@ from dataclasses import dataclass, field
 from typing import Callable, Iterable
 from django.conf import settings
 
-from apps.notification.models import (
-    NotificationSeverity,
-    NotificationType,
-    PreferenceChannel,
-)
+from apps.notification.models import NotificationSeverity, PreferenceChannel
+
+
+class NotificationType:
+    SYSTEM = "system"
+    ADMIN = "admin"
+    EVENT = "event"
 
 
 class EventType:
     CHAT_MEMBER_INVITED = "chat.member.invited"
     CHAT_MEMBER_REMOVED = "chat.member.removed"
-    CHAT_MESSAGE_MENTIONED = "chat.message.mentioned"
     CHAT_LOCKED = "chat.locked"
 
     AUTH_PASSWORD_CHANGED = "auth.password.changed"
@@ -93,15 +94,6 @@ _EVENTS: dict[str, EventDefinition] = {
         description="Te quitaron de un chat.",
         default_channels=(PreferenceChannel.INAPP,),
         template_id="chat_member_removed",
-        link_builder=_chat_link,
-    ),
-    EventType.CHAT_MESSAGE_MENTIONED: EventDefinition(
-        event_type=EventType.CHAT_MESSAGE_MENTIONED,
-        type=NotificationType.EVENT,
-        severity=NotificationSeverity.INFO,
-        description="Te mencionaron en un chat.",
-        default_channels=(PreferenceChannel.INAPP,),
-        template_id="chat_message_mentioned",
         link_builder=_chat_link,
     ),
     EventType.CHAT_LOCKED: EventDefinition(

@@ -7,11 +7,6 @@ class ArtifactPin(models.Model):
         on_delete=models.CASCADE,
         related_name="pins",
     )
-    chat = models.ForeignKey(
-        "chat.Chat",
-        on_delete=models.CASCADE,
-        related_name="pinned_artifacts",
-    )
     created_by = models.BigIntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -19,12 +14,12 @@ class ArtifactPin(models.Model):
         managed = False
         db_table = "artifact_pin"
         constraints = [
-            models.UniqueConstraint(fields=["artifact", "chat"], name="artifact_pin_unique"),
+            models.UniqueConstraint(fields=["artifact"], name="artifact_pin_unique"),
         ]
         indexes = [
-            models.Index(fields=["chat"], name="idx_artifact_pin_chat"),
             models.Index(fields=["artifact"], name="idx_artifact_pin_artifact"),
+            models.Index(fields=["created_by"], name="idx_artifact_pin_user"),
         ]
 
     def __str__(self):
-        return f"Pinned artifact {self.artifact_id} in chat {self.chat_id}"
+        return f"Pinned artifact {self.artifact_id} by user {self.created_by}"

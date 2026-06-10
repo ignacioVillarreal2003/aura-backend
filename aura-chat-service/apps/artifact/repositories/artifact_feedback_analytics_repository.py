@@ -28,7 +28,7 @@ class FeedbackAnalyticsRepository:
         if artifact_type is not None:
             q &= Q(artifact__type=artifact_type)
         if user_id is not None:
-            q &= Q(user_id=user_id)
+            q &= Q(created_by=user_id)
         if reason is not None:
             q &= Q(reason=reason)
         return q
@@ -125,7 +125,7 @@ class FeedbackAnalyticsRepository:
                 _ASSISTANT_FK,
                 "reason",
                 "comment",
-                "user_id",
+                "created_by",
                 "created_at",
             )[:limit]
         )
@@ -136,7 +136,7 @@ class FeedbackAnalyticsRepository:
                 "assistant_id": r[_ASSISTANT_FK],
                 "reason": r["reason"],
                 "comment": r["comment"],
-                "user_id": r["user_id"],
+                "user_id": r["created_by"],
                 "created_at": r["created_at"],
                 "message_excerpt": (r["artifact__message_content__message"] or "")[:280],
             }

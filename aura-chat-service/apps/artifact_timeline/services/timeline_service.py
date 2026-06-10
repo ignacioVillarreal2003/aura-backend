@@ -35,7 +35,6 @@ def _normalize_events(events: list) -> list:
         normalized.append({
             "title": str(ev.get("title", ev.get("event", ""))),
             "description": str(ev.get("description", "")),
-            "occurred_at": ev.get("occurred_at"),
             "occurred_label": str(ev.get("occurred_label", "")),
             "position": idx,
         })
@@ -47,6 +46,7 @@ def _persist_generated_timeline(
         *,
         user_id: int,
         title: str,
+        query: str,
         mode: str,
         source_chat_id: int,
         summary: str,
@@ -56,7 +56,6 @@ def _persist_generated_timeline(
     artifact = create_artifact_for_content(
         user_id=user_id,
         artifact_type=Artifact.Type.TIMELINE,
-        title=title,
         mode=mode,
         source_chat_id=source_chat_id,
         fragments=fragments,
@@ -66,6 +65,8 @@ def _persist_generated_timeline(
         summary=summary,
         events=events,
         artifact_id=artifact.id,
+        title=title,
+        query=query,
     )
     return artifact, timeline
 
@@ -107,27 +108,6 @@ class TimelineService:
         return timeline
 
     @transaction.atomic
-    def update_timeline(
-            self,
-            user: AuthenticatedUser,
-            timeline_id: int,
-            title: Optional[str] = None,
-            summary: Optional[str] = None,
-            events: Optional[list] = None,
-    ) -> ArtifactTimeline:
-        AccessControl.require_permissions(user, frozenset({perms.UPDATE_TIMELINE}))
-        timeline = timeline_repository.get_by_id_for_update(timeline_id)
-        if timeline is None:
-            raise TimelineNotFoundException()
-        _assert_timeline_access(user.id, timeline, require_contributor=True)
-        if title is not None:
-            artifact_repository.update(timeline.artifact, updated_by=user.id, title=title)
-        normalized = _normalize_events(events) if events is not None else None
-        return timeline_repository.update(
-            timeline, updated_by=user.id, summary=summary, events=normalized
-        )
-
-    @transaction.atomic
     def delete_timeline(self, user: AuthenticatedUser, timeline_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({perms.DELETE_TIMELINE}))
         timeline = timeline_repository.get_by_id_for_update(timeline_id)
@@ -151,6 +131,8 @@ class TimelineService:
         chat = await sync_to_async(chat_repository.get_by_id)(chat_id)
         if chat is None:
             raise ChatNotFoundException()
+        system_prompt = chat.system_prompt if chat else None
+        response_style = chat.response_style if chat else None
         history = await sync_to_async(build_chat_history)(chat_id)
 
         messages = history + [{"role": "human", "content": message}]
@@ -161,6 +143,8 @@ class TimelineService:
                     mode=mode,
                     user=user,
                     chat_id=chat_id,
+                    system_prompt=system_prompt,
+                    response_style=response_style,
             ):
                 et = event.get("type")
                 if et == "progress":
@@ -204,6 +188,7 @@ class TimelineService:
         artifact, timeline = await sync_to_async(_persist_generated_timeline)(
             user_id=user.id,
             title=title,
+            query=message,
             mode=mode,
             source_chat_id=chat_id,
             summary=summary,

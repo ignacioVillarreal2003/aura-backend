@@ -1,10 +1,24 @@
 import logging
-from asgiref.sync import async_to_sync
+from asgiref.sync import async_to_sync, sync_to_async
 from channels.layers import get_channel_layer
 
 from apps.artifact.models import Artifact
 
 logger = logging.getLogger(__name__)
+
+# Broadcast contract:
+#   * broadcast_artifact_created   -> async, awaited from async generation flows.
+#   * broadcast_artifact_deleted   -> sync, called from sync services (wrap in
+#                                     transaction.on_commit so peers are only
+#                                     notified after the delete actually commits).
+# Artifacts are immutable once generated, so there is no "updated" broadcast.
+
+
+def _resolve_artifact_title(artifact: Artifact) -> str:
+    # Title lives in the per-type detail row (artifact has no title column).
+    from apps.artifact.serializers import _get_type_title
+
+    return _get_type_title(artifact)
 
 
 async def broadcast_artifact_progress(chat_id: int, step: str, message: str) -> None:
@@ -27,13 +41,14 @@ async def broadcast_artifact_created(chat_id: int, artifact: Artifact) -> None:
     if channel_layer is None:
         return
     try:
+        title = await sync_to_async(_resolve_artifact_title)(artifact)
         await channel_layer.group_send(
             f"chat_{chat_id}",
             {
                 "type": "artifact_created",
                 "artifact_id": artifact.id,
                 "artifact_type": artifact.type,
-                "title": artifact.title,
+                "title": title,
                 "created_by": artifact.created_by,
                 "created_at": artifact.created_at.isoformat(),
             },
@@ -41,28 +56,6 @@ async def broadcast_artifact_created(chat_id: int, artifact: Artifact) -> None:
     except Exception:
         logger.warning(
             "Failed to broadcast artifact_created for chat %d", chat_id, exc_info=True
-        )
-
-
-def broadcast_artifact_updated(chat_id: int, artifact: Artifact) -> None:
-    channel_layer = get_channel_layer()
-    if channel_layer is None:
-        return
-    try:
-        async_to_sync(channel_layer.group_send)(
-            f"chat_{chat_id}",
-            {
-                "type": "artifact_updated",
-                "artifact_id": artifact.id,
-                "artifact_type": artifact.type,
-                "title": artifact.title,
-                "updated_by": artifact.updated_by,
-                "updated_at": artifact.updated_at.isoformat() if artifact.updated_at else None,
-            },
-        )
-    except Exception:
-        logger.warning(
-            "Failed to broadcast artifact_updated for chat %d", chat_id, exc_info=True
         )
 
 

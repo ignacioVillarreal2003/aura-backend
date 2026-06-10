@@ -7,6 +7,7 @@ from langchain_core.runnables import Runnable
 from app.application.services.user_interactions.agent_service.agent_state.agent_state import AgentState
 from app.application.services.user_interactions.agent_service.agent_settings import AnswerGeneratorSettings
 from app.application.services.user_interactions.agent_service.interfaces.node_interface import NodeInterface
+from app.application.services.generation_shared.prompt_augmentation import augment_system_prompt
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 
 logger = logging.getLogger(__name__)
@@ -41,7 +42,14 @@ class AnswerGeneratorNode(NodeInterface):
 
         try:
             await self._ensure_llm_initialized()
-            answer = (await self._generate(resolved_query, context)).strip()
+            answer = (
+                await self._generate(
+                    resolved_query,
+                    context,
+                    agent_state.get("operator_system_prompt"),
+                    agent_state.get("response_style"),
+                )
+            ).strip()
 
             if not answer:
                 return {"answer": _NO_CONTEXT_RESPONSE}
@@ -53,13 +61,32 @@ class AnswerGeneratorNode(NodeInterface):
             logger.error("Answer generation failed — returning fallback", exc_info=True)
             return {"answer": _NO_CONTEXT_RESPONSE}
 
-    async def _generate(self, query: str, context: str) -> str:
-        response = await self._llm.ainvoke(self._build_prompt(query, context))
+    async def _generate(
+            self,
+            query: str,
+            context: str,
+            operator_system_prompt: Optional[str] = None,
+            response_style: Optional[str] = None,
+    ) -> str:
+        response = await self._llm.ainvoke(
+            self._build_prompt(query, context, operator_system_prompt, response_style)
+        )
         return response.content if hasattr(response, "content") else str(response)
 
-    def _build_prompt(self, query: str, context: str) -> List[BaseMessage]:
+    def _build_prompt(
+            self,
+            query: str,
+            context: str,
+            operator_system_prompt: Optional[str] = None,
+            response_style: Optional[str] = None,
+    ) -> List[BaseMessage]:
+        base_system = augment_system_prompt(
+            self._settings.system_prompt,
+            operator_system_prompt,
+            response_style,
+        )
         system_content = (
-            f"{self._settings.system_prompt}\n\n"
+            f"{base_system}\n\n"
             f"Contexto documental de referencia:\n\n{context}"
         )
         return [

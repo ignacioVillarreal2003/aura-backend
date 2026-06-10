@@ -137,7 +137,7 @@ def generate_checklist_pdf(checklist: ArtifactChecklist) -> bytes:
   <div class="classification">CLASIFICACIÓN SEGÚN CONTENIDO</div>
 </div>
 <h1>CHECKLIST DE PROCEDIMIENTO</h1>
-<h2 style="border:none; margin-top:2px;">{html.escape(checklist.artifact.title)}</h2>
+<h2 style="border:none; margin-top:2px;">{html.escape(checklist.title)}</h2>
 <div class="meta">Generado: {created} &bull; Modo: {mode_label}</div>
 <div class="progress">Progreso: {checked}/{total} ítems verificados</div>
 <hr/>
@@ -160,7 +160,7 @@ def generate_checklist_markdown(checklist: ArtifactChecklist) -> str:
     lines = [
         "# CHECKLIST DE PROCEDIMIENTO",
         "",
-        f"**{checklist.artifact.title}**",
+        f"**{checklist.title}**",
         "",
         f"*Generado: {_fmt_dt(checklist.created_at)}*",
         "",

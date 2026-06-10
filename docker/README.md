@@ -40,7 +40,7 @@ docker compose `
 
 ## Migraciones de base de datos (aura-db)
 
-El esquema de `aura-db` vive en `database/aura-db/init.sql`, que **solo se ejecuta al
+El esquema de `aura-db` vive en `database/aura-db/document_processing.sql`, que **solo se ejecuta al
 inicializar un volumen nuevo**. Para una base de datos **ya existente** hay que aplicar a mano
 los scripts de `database/aura-db/migrations/` (son idempotentes: usan `IF NOT EXISTS`).
 
@@ -57,7 +57,7 @@ docker exec -i aura-db psql -U $env:DB_USER -d $env:DB_NAME `
 > (`docker cp database/aura-db/migrations/0001_artifacts.sql aura-db:/tmp/`) o redirigí el
 > contenido por stdin: `Get-Content database/aura-db/migrations/0001_artifacts.sql | docker exec -i aura-db psql -U $env:DB_USER -d $env:DB_NAME`.
 
-En instalaciones nuevas no hace falta nada: `init.sql` ya incluye estas tablas.
+En instalaciones nuevas no hace falta nada: `document_processing.sql` ya incluye estas tablas.
 
 ### Permisos de artefactos (auth-db)
 

@@ -22,6 +22,7 @@ from app.application.services.generation_shared.generation_messages import (
     build_context_block,
     build_generation_messages,
 )
+from app.application.services.generation_shared.prompt_augmentation import augment_system_prompt
 from app.application.services.generation_shared.generation_settings import GenerationSettings
 from app.application.services.generation_shared.generation_state import GenerationState
 from app.application.services.generation_shared.processors.attached_documents_processor import (
@@ -111,12 +112,22 @@ class GeneralChatService(GeneralChatServiceInterface):
             await self._context_processor.run(state, RAG_QUERIES)
         await self._reduction_processor.run(state, EXTRACTION_SYSTEM_PROMPT, EXTRACTION_HUMAN_PROMPT)
 
-    def _build_llm_messages(self, state: GenerationState, custom_system_prompt: str | None) -> list:
+    def _build_llm_messages(
+            self,
+            state: GenerationState,
+            custom_system_prompt: str | None,
+            response_style: str | None = None,
+    ) -> list:
         context_block = build_context_block(
             state, self._generation_settings.max_context_chars, self._generation_settings.attached_reserve_ratio
         )
+        system_prompt = augment_system_prompt(
+            build_system_prompt(self._general_chat_settings),
+            custom_system_prompt,
+            response_style,
+        )
         return build_generation_messages(
-            build_system_prompt(self._general_chat_settings, custom_system_prompt),
+            system_prompt,
             HUMAN_PROMPT,
             state,
             self._generation_settings.history_messages_window,
@@ -145,7 +156,9 @@ class GeneralChatService(GeneralChatServiceInterface):
             state = self._build_state(general_chat_request, authenticated_user)
             await self._gather_context(state)
 
-            llm_messages = self._build_llm_messages(state, general_chat_request.system_prompt)
+            llm_messages = self._build_llm_messages(
+                state, general_chat_request.system_prompt, general_chat_request.response_style
+            )
             llm = await self._ollama_llm_facade.get_llm_base()
             answer = (await self._ollama_llm_invoker.call_llm_content(llm=llm, llm_input=llm_messages)).strip()
             if not answer:
@@ -178,7 +191,9 @@ class GeneralChatService(GeneralChatServiceInterface):
 
             await self._gather_context(state)
 
-            llm_messages = self._build_llm_messages(state, general_chat_request.system_prompt)
+            llm_messages = self._build_llm_messages(
+                state, general_chat_request.system_prompt, general_chat_request.response_style
+            )
             llm = await self._ollama_llm_facade.get_llm_base()
 
             accumulated = ""

@@ -23,6 +23,9 @@ from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface im
 logger = logging.getLogger(__name__)
 
 
+_NODE_NAMES: frozenset[str] = frozenset(node.value for node in RagNodeName)
+
+
 def _route_after_context_retriever(state: RagAgentState) -> str:
     if state.get("retrieved_fragments"):
         return RagNodeName.answer_synthesizer.value
@@ -70,24 +73,22 @@ class RagAgentWorkflow:
         if self._compiled_workflow is None:
             raise RuntimeError("Workflow not built. Call build() first.")
 
+        # Drive the compiled graph directly (single source of truth) rather than
+        # replaying node routing by hand.
+        final_state: RagAgentState = state
         try:
-            yield ("progress", RagNodeName.query_analyzer.value)
-            delta = await self._query_analyzer_node.process(state)
-            state = {**state, **delta}
+            async for mode, chunk in self._compiled_workflow.astream(
+                    state, stream_mode=["updates", "values"]
+            ):
+                if mode == "updates":
+                    if isinstance(chunk, dict):
+                        for node_name in chunk:
+                            if node_name in _NODE_NAMES:
+                                yield ("progress", node_name)
+                elif mode == "values":
+                    final_state = chunk
 
-            yield ("progress", RagNodeName.context_retriever.value)
-            delta = await self._context_retriever_node.process(state)
-            state = {**state, **delta}
-
-            if state.get("retrieved_fragments"):
-                yield ("progress", RagNodeName.answer_synthesizer.value)
-                delta = await self._answer_synthesizer_node.process(state)
-            else:
-                yield ("progress", RagNodeName.fallback.value)
-                delta = await self._fallback_node.process(state)
-            state = {**state, **delta}
-
-            yield ("done", state)
+            yield ("done", final_state)
 
         except Exception as e:
             logger.exception("Error during streaming RAG workflow")

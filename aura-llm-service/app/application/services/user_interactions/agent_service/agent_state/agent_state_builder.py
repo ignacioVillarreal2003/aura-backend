@@ -30,6 +30,9 @@ class AgentStateBuilder:
         agent_state: AgentState = AgentState(
             authenticated_user=authenticated_user,
             messages=messages,
+            chat_id=agent_request.chat_id,
+            operator_system_prompt=agent_request.system_prompt,
+            response_style=agent_request.response_style,
             normalized_query="",
             resolved_query="",
             intent=QueryIntent.otro.value,

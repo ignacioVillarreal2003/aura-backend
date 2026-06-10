@@ -26,6 +26,11 @@ from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface im
 logger = logging.getLogger(__name__)
 
 
+# Node names emitted as streaming progress (filters out LangGraph internal keys
+# such as "__start__"/"__interrupt__" that can appear in "updates" chunks).
+_NODE_NAMES: frozenset[str] = frozenset(node.value for node in NodeName)
+
+
 # ── Routing functions ─────────────────────────────────────────────────────────
 
 def _route_after_keyword_extractor(state: AgentState) -> str:
@@ -93,57 +98,24 @@ class AgentWorkflow:
         if self._compiled_workflow is None:
             raise RuntimeError("Workflow not built. Call build() first.")
 
+        # Drive the *compiled* graph (single source of truth) instead of replaying
+        # the routing by hand. "updates" tells us which node just ran (for
+        # per-node progress) and "values" carries the reduced full state so the
+        # final snapshot always matches what invoke() would produce.
+        final_state: AgentState = state
         try:
-            yield ("progress", NodeName.input_normalizer.value)
-            delta = await self._input_normalizer_node.process(state)
-            state = {**state, **delta}
+            async for mode, chunk in self._compiled_workflow.astream(
+                    state, stream_mode=["updates", "values"]
+            ):
+                if mode == "updates":
+                    if isinstance(chunk, dict):
+                        for node_name in chunk:
+                            if node_name in _NODE_NAMES:
+                                yield ("progress", node_name)
+                elif mode == "values":
+                    final_state = chunk
 
-            yield ("progress", NodeName.context_resolver.value)
-            delta = await self._context_resolver_node.process(state)
-            state = {**state, **delta}
-
-            yield ("progress", NodeName.intent_classifier.value)
-            delta = await self._intent_classifier_node.process(state)
-            state = {**state, **delta}
-
-            yield ("progress", NodeName.keyword_extractor.value)
-            delta = await self._keyword_extractor_node.process(state)
-            state = {**state, **delta}
-
-            intent = state.get("intent", "")
-            if intent == QueryIntent.busqueda_documento.value:
-                yield ("progress", NodeName.document_fetcher.value)
-                delta = await self._document_fetcher_node.process(state)
-            else:
-                yield ("progress", NodeName.retriever.value)
-                delta = await self._retriever_node.process(state)
-            state = {**state, **delta}
-
-            if not state.get("retrieved_fragments"):
-                yield ("progress", NodeName.fallback.value)
-                delta = await self._fallback_node.process(state)
-                state = {**state, **delta}
-                yield ("done", state)
-                return
-
-            yield ("progress", NodeName.context_builder.value)
-            delta = await self._context_builder_node.process(state)
-            state = {**state, **delta}
-
-            yield ("progress", NodeName.answer_generator.value)
-            delta = await self._answer_generator_node.process(state)
-            state = {**state, **delta}
-
-            yield ("progress", NodeName.guardrails.value)
-            delta = await self._guardrails_node.process(state)
-            state = {**state, **delta}
-
-            if not state.get("guardrail_passed", True):
-                yield ("progress", NodeName.fallback.value)
-                delta = await self._fallback_node.process(state)
-                state = {**state, **delta}
-
-            yield ("done", state)
+            yield ("done", final_state)
 
         except Exception as e:
             logger.exception("Error during streaming agent workflow")

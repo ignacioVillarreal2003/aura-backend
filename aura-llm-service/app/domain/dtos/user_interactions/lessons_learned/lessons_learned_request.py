@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.message import Message
-from app.domain.field_limits import MAX_ID, MAX_MESSAGES_IN_REQUEST
+from app.domain.field_limits import MAX_ID, MAX_MESSAGES_IN_REQUEST, MAX_INSTRUCTION_CHARS
 
 
 class LessonsLearnedMode(StrEnum):
@@ -41,6 +41,19 @@ class LessonsLearnedGenerateRequest(BaseModel):
             "IDs de documentos a adjuntar como contexto prioritario. Se usan siempre "
             "(en modo direct y rag), además del input del usuario."
         ),
+    )
+
+    system_prompt: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=MAX_INSTRUCTION_CHARS,
+        description="Instrucción de sistema personalizada del operador.",
+    )
+    response_style: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=MAX_INSTRUCTION_CHARS,
+        description="Estilo de respuesta esperado por el operador.",
     )
 
     @field_validator("document_ids")

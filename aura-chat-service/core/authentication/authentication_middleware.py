@@ -11,6 +11,7 @@ from core.authentication.authentication_exceptions import (
     ServiceAuthenticationRejected,
 )
 from core.authentication.authentication_provider import authentication_provider
+from core.authentication.request_token import reset_request_token, set_request_token
 from core.middleware.correlation_id import get_correlation_id
 
 logger = logging.getLogger(__name__)
@@ -74,7 +75,15 @@ class AuthenticationMiddleware:
                 "Request authenticated with a valid bearer token.",
                 extra={"user_id": authenticated_user.id, "path": request.path},
             )
-            return self.get_response(request)
+            # Make the validated token available to outbound inter-service clients
+            # so the user's identity is forwarded (token passthrough) rather than
+            # re-asserted via trust headers. Reset afterwards so it cannot leak to
+            # the next request handled on this worker thread.
+            ctx = set_request_token(token)
+            try:
+                return self.get_response(request)
+            finally:
+                reset_request_token(ctx)
         except AuthenticationProviderInvalidTokenException as e:
             logger.warning(
                 "Bearer token is invalid or has expired.",

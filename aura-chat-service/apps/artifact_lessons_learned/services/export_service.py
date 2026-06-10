@@ -138,7 +138,7 @@ def generate_lessons_learned_pdf(ll: ArtifactLessonsLearned) -> bytes:
   <div class="classification">CLASIFICACIÓN SEGÚN CONTENIDO</div>
 </div>
 <h1>LECCIONES APRENDIDAS</h1>
-<h2 style="border:none; margin-top:2px;">{html.escape(ll.artifact.title)}</h2>
+<h2 style="border:none; margin-top:2px;">{html.escape(ll.title)}</h2>
 <div class="meta">Generado: {created} &bull; Modo: {mode_label}</div>
 {context_html}
 <hr/>
@@ -158,7 +158,7 @@ def generate_lessons_learned_markdown(ll: ArtifactLessonsLearned) -> str:
     lines = [
         "# LECCIONES APRENDIDAS",
         "",
-        f"**{ll.artifact.title}**",
+        f"**{ll.title}**",
         "",
         f"*Generado: {_fmt_dt(ll.created_at)}*",
         "",

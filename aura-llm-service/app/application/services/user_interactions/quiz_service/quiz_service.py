@@ -20,6 +20,7 @@ from app.application.services.generation_shared.generation_messages import (
     build_context_block,
     build_generation_messages,
 )
+from app.application.services.generation_shared.prompt_augmentation import augment_system_prompt
 from app.application.services.generation_shared.generation_settings import GenerationSettings
 from app.application.services.generation_shared.generation_state import GenerationState
 from app.application.services.generation_shared.processors.attached_documents_processor import (
@@ -94,7 +95,7 @@ def _parse_questions(raw_questions: list, settings: QuizSettings) -> list[QuizQu
         q_type = str(entry.get("type", QuizQuestionType.SINGLE)).strip().lower()
         if q_type not in _VALID_TYPES:
             q_type = QuizQuestionType.SINGLE
-        options = [] if q_type == QuizQuestionType.OPEN else _parse_options(entry.get("options", []), settings)
+        options = _parse_options(entry.get("options", []), settings)
         questions.append(
             QuizQuestion(
                 question=text,
@@ -119,7 +120,7 @@ def _coerce_passing_score(value: object) -> int | None:
 def _fallback_questions(raw: str, settings: QuizSettings) -> tuple[str, str, int | None, list[QuizQuestion]]:
     lines = [ln.strip().lstrip("•-*0123456789.) ") for ln in raw.splitlines() if ln.strip()]
     questions = [
-        QuizQuestion(question=ln[:settings.max_question_chars], type=QuizQuestionType.OPEN, options=[])
+        QuizQuestion(question=ln[:settings.max_question_chars], type=QuizQuestionType.SINGLE, options=[])
         for ln in lines[:settings.max_questions]
         if ln
     ]
@@ -184,12 +185,12 @@ class QuizService(QuizServiceInterface):
             await self._context_processor.run(state, RAG_QUERIES)
         await self._reduction_processor.run(state, EXTRACTION_SYSTEM_PROMPT, EXTRACTION_HUMAN_PROMPT)
 
-    async def _invoke(self, state: GenerationState) -> str:
+    async def _invoke(self, state: GenerationState, request: QuizGenerateRequest) -> str:
         context_block = build_context_block(
             state, self._generation_settings.max_context_chars, self._generation_settings.attached_reserve_ratio
         )
         llm_messages = build_generation_messages(
-            build_system_prompt(self._quiz_settings),
+            augment_system_prompt(build_system_prompt(self._quiz_settings), request.system_prompt, request.response_style),
             HUMAN_PROMPT,
             state,
             self._generation_settings.history_messages_window,
@@ -235,7 +236,7 @@ class QuizService(QuizServiceInterface):
             state = self._build_state(request, authenticated_user)
             await self._gather_context(state)
 
-            raw = await self._invoke(state)
+            raw = await self._invoke(state, request)
             title, instructions, passing_score, questions = _parse_llm_output(raw, self._quiz_settings)
             if not questions:
                 raise QuizServiceException(
@@ -294,7 +295,7 @@ class QuizService(QuizServiceInterface):
 
             yield QuizStreamProgress(step="generation", message="Formulando preguntas y opciones de respuesta...")
 
-            raw = await self._invoke(state)
+            raw = await self._invoke(state, request)
             title, instructions, passing_score, questions = _parse_llm_output(raw, self._quiz_settings)
             if not questions:
                 raise QuizServiceException(

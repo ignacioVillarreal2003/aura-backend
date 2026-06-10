@@ -41,7 +41,6 @@ class LessonsLearnedItemResponse(serializers.ModelSerializer):
 
 class LessonsLearnedResponse(serializers.ModelSerializer):
     items = LessonsLearnedItemResponse(many=True)
-    title = serializers.SerializerMethodField()
     mode = serializers.SerializerMethodField()
     source_chat_id = serializers.SerializerMethodField()
 
@@ -51,19 +50,15 @@ class LessonsLearnedResponse(serializers.ModelSerializer):
             "id",
             "artifact_id",
             "title",
+            "query",
             "context",
             "mode",
             "items",
             "source_chat_id",
             "created_by",
             "created_at",
-            "updated_by",
-            "updated_at",
         ]
         read_only_fields = fields
-
-    def get_title(self, obj) -> str:
-        return obj.artifact.title if obj.artifact_id else ""
 
     def get_mode(self, obj) -> str:
         return obj.artifact.mode if obj.artifact_id else ""
@@ -81,33 +76,8 @@ class LessonsLearnedGenerateResponse(serializers.Serializer):
         return LessonsLearnedResponse(obj["lessons_learned"]).data
 
 
-class _UpdateItemRequest(serializers.Serializer):
-    category = serializers.ChoiceField(choices=ArtifactLessonsLearnedItem.Category.choices)
-    observation = serializers.CharField(allow_blank=False, max_length=2000)
-    discussion = serializers.CharField(default="", allow_blank=True)
-    recommendation = serializers.CharField(default="", allow_blank=True)
-    position = serializers.IntegerField(min_value=0)
-
-
-class UpdateLessonsLearnedRequest(serializers.Serializer):
-    title = serializers.CharField(max_length=500, allow_blank=False, required=False)
-    context = serializers.CharField(allow_blank=True, required=False)
-    items = _UpdateItemRequest(many=True, required=False)
-
-    def validate(self, data):
-        if not data:
-            raise serializers.ValidationError("Se requiere al menos un campo a actualizar.")
-        return data
-
-    def validate_items(self, value):
-        if len(value) > 300:
-            raise serializers.ValidationError("No se pueden superar las 300 lecciones.")
-        return value
-
-
 class LessonsLearnedListResponse(serializers.ModelSerializer):
     item_count = serializers.SerializerMethodField()
-    title = serializers.SerializerMethodField()
     mode = serializers.SerializerMethodField()
     source_chat_id = serializers.SerializerMethodField()
 
@@ -127,9 +97,6 @@ class LessonsLearnedListResponse(serializers.ModelSerializer):
 
     def get_item_count(self, obj: ArtifactLessonsLearned) -> int:
         return getattr(obj, "item_count", 0)
-
-    def get_title(self, obj) -> str:
-        return obj.artifact.title if obj.artifact_id else ""
 
     def get_mode(self, obj) -> str:
         return obj.artifact.mode if obj.artifact_id else ""

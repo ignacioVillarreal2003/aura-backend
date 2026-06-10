@@ -66,6 +66,26 @@ def _broadcast_member_left(chat_id: int, member_id: int) -> None:
         )
 
 
+def _broadcast_membership_revoked(chat_id: int, member_id: int) -> None:
+    """Tell the chat group that ``member_id`` lost access so their own open
+    sockets can close instead of lingering subscribed to the group."""
+    channel_layer = get_channel_layer()
+    if channel_layer is None:
+        return
+    try:
+        async_to_sync(channel_layer.group_send)(
+            f"chat_{chat_id}",
+            {"type": "membership_revoked", "member_id": member_id},
+        )
+    except Exception:
+        logger.warning(
+            "Failed to broadcast membership_revoked for chat %d member %d",
+            chat_id,
+            member_id,
+            exc_info=True,
+        )
+
+
 class MembershipService:
     def list_members(
             self,
@@ -243,6 +263,7 @@ class MembershipService:
 
         membership_repository.soft_delete(membership, deleted_by=user.id)
         on_commit(lambda: _broadcast_member_left(chat_id, member_id))
+        on_commit(lambda: _broadcast_membership_revoked(chat_id, member_id))
         actor_id = user.id
         actor_name = user.username or user.email
         on_commit(lambda m=member_id: notification_client.emit_event(
@@ -279,6 +300,7 @@ class MembershipService:
 
         membership_repository.soft_delete(membership, deleted_by=user.id)
         on_commit(lambda: _broadcast_member_left(chat_id, user.id))
+        on_commit(lambda: _broadcast_membership_revoked(chat_id, user.id))
         logger.info(
             "User left chat.",
             extra={"chat_id": chat_id, "user_id": user.id},

@@ -16,7 +16,6 @@ class Chat(AuditModel, SoftDeleteModel):
         default=list,
         blank=True,
     )
-    is_ephemeral = models.BooleanField(default=False)
     is_locked = models.BooleanField(default=False)
 
     class Meta:

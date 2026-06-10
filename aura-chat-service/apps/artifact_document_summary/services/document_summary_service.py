@@ -1,5 +1,4 @@
 import logging
-from typing import Optional
 from asgiref.sync import sync_to_async
 
 from core.authentication.authenticated_user import AuthenticatedUser
@@ -56,7 +55,6 @@ def _persist_generated_document_summary(
     artifact = create_artifact_for_content(
         user_id=user_id,
         artifact_type=Artifact.Type.DOCUMENT_SUMMARY,
-        title=title,
         mode=Artifact.Mode.DIRECT,
         source_chat_id=source_chat_id,
         fragments=fragments,
@@ -66,6 +64,7 @@ def _persist_generated_document_summary(
         document_ids=document_ids,
         summary=summary,
         artifact_id=artifact.id,
+        title=title,
     )
     return artifact, obj
 
@@ -109,23 +108,6 @@ class DocumentSummaryService:
         return obj
 
     @transaction.atomic
-    def update_document_summary(
-            self,
-            user: AuthenticatedUser,
-            document_summary_id: int,
-            title: Optional[str] = None,
-            summary: Optional[str] = None,
-    ) -> ArtifactDocumentSummary:
-        AccessControl.require_permissions(user, frozenset({perms.UPDATE_DOCUMENT_SUMMARY}))
-        obj = document_summary_repository.get_by_id_for_update(document_summary_id)
-        if obj is None:
-            raise DocumentSummaryNotFoundException()
-        _assert_access(user.id, obj, require_contributor=True)
-        if title is not None:
-            artifact_repository.update(obj.artifact, updated_by=user.id, title=title)
-        return document_summary_repository.update(obj, updated_by=user.id, summary=summary)
-
-    @transaction.atomic
     def delete_document_summary(self, user: AuthenticatedUser, document_summary_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({perms.DELETE_DOCUMENT_SUMMARY}))
         obj = document_summary_repository.get_by_id_for_update(document_summary_id)
@@ -151,6 +133,8 @@ class DocumentSummaryService:
         chat = await sync_to_async(chat_repository.get_by_id)(chat_id)
         if chat is None:
             raise ChatNotFoundException()
+        system_prompt = chat.system_prompt if chat else None
+        response_style = chat.response_style if chat else None
 
         result_data: dict | None = None
         try:
@@ -158,6 +142,8 @@ class DocumentSummaryService:
                     document_ids=document_ids,
                     user=user,
                     chat_id=chat_id,
+                    system_prompt=system_prompt,
+                    response_style=response_style,
             ):
                 et = event.get("type")
                 if et == "progress":

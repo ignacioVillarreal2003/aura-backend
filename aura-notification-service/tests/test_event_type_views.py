@@ -12,7 +12,6 @@ URL = "/api/v1/event-types/"
 EXPECTED_EVENT_TYPES = {
     EventType.CHAT_MEMBER_INVITED,
     EventType.CHAT_MEMBER_REMOVED,
-    EventType.CHAT_MESSAGE_MENTIONED,
     EventType.CHAT_LOCKED,
     EventType.AUTH_PASSWORD_CHANGED,
     EventType.AUTH_NEW_LOGIN,

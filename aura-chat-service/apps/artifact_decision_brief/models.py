@@ -1,16 +1,18 @@
 from django.db import models
 
-from core.models.base import AuditModel
+from core.models.base import CreatedAuditModel
 from core.models.soft_delete import SoftDeleteModel
 
 
-class ArtifactDecisionBrief(AuditModel, SoftDeleteModel):
+class ArtifactDecisionBrief(CreatedAuditModel, SoftDeleteModel):
     artifact = models.OneToOneField(
         "artifact.Artifact",
         on_delete=models.CASCADE,
         related_name="decision_brief_content",
         db_column="artifact_id",
     )
+    title = models.CharField(max_length=500, default="", blank=True)
+    query = models.TextField(default="", blank=True)
     problem = models.TextField(default="", blank=True)
     context = models.TextField(default="", blank=True)
     risks = models.TextField(default="", blank=True)
@@ -29,12 +31,14 @@ class ArtifactDecisionBriefOption(models.Model):
         related_name="options",
     )
     title = models.CharField(max_length=300)
-    description = models.TextField(default="", blank=True)
     pros = models.TextField(default="", blank=True)
     cons = models.TextField(default="", blank=True)
     is_recommended = models.BooleanField(default=False)
     position = models.SmallIntegerField(default=0)
+    created_by = models.BigIntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
+    deleted_by = models.BigIntegerField(null=True, blank=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         managed = False

@@ -3,7 +3,6 @@
 from app.api.controllers.processing.graph_query_translation_controller.graph_query_translation_controller_interface import (
     GraphQueryTranslationControllerInterface,
 )
-from app.api.dependencies.idempotency import optional_idempotency_key
 from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
 from app.application.authorization.authorizer import Authorizer
@@ -28,7 +27,6 @@ class GraphQueryTranslationController(GraphQueryTranslationControllerInterface):
                 get_graph_query_translation_service
             ),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
-            _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(default_rate_limit),
     ) -> TranslateGraphQueryResponse:
         Authorizer.require_permissions(

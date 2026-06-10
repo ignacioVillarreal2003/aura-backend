@@ -47,13 +47,13 @@ class MessageRepository:
             qs = qs.annotate(
                 my_feedback=FilteredRelation(
                     "artifact__feedback",
-                    condition=Q(artifact__feedback__user_id=user_id),
+                    condition=Q(artifact__feedback__created_by=user_id),
                 )
             ).annotate(
                 is_bookmarked=Exists(
                     ArtifactBookmark.objects.filter(
                         artifact_id=OuterRef("artifact_id"),
-                        user_id=user_id,
+                        created_by=user_id,
                     )
                 ),
                 user_feedback=F("my_feedback__value"),
@@ -79,7 +79,7 @@ class MessageRepository:
             ArtifactMessage.objects
             .filter(artifact__source_chat_id=chat_id, artifact__type=Artifact.Type.MESSAGE)
             .select_related("artifact")
-            .order_by("-created_at")[:limit]
+            .order_by("-created_at", "-id")[:limit]
         )
 
     @staticmethod

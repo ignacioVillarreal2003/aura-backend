@@ -91,8 +91,12 @@ def create_app() -> FastAPI:
 def _add_middlewares(
         app: FastAPI
 ) -> None:
-    add_logging_middleware(app)
+    # Order matters: the LAST added middleware is the OUTERMOST. Auth is added
+    # first (inner) and logging last (outer) so that request_id / X-Request-ID is
+    # established before auth runs and every request — including early auth
+    # rejections — is logged.
     add_authentication_middleware(app)
+    add_logging_middleware(app)
 
 
 def _include_routers(

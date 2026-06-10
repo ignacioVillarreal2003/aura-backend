@@ -1,6 +1,5 @@
 ﻿from fastapi import APIRouter, Depends
 
-from app.api.dependencies.idempotency import optional_idempotency_key
 from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.controllers.processing.document_classify_controller.document_classify_controller_interface import (
     DocumentClassifyControllerInterface
@@ -24,7 +23,6 @@ class DocumentClassifyController(DocumentClassifyControllerInterface):
             classify_document_request: ClassifyDocumentRequest,
             document_classify_service: DocumentClassifyServiceInterface = Depends(get_document_classify_service),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
-            _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(default_rate_limit),
     ) -> ClassifyDocumentResponse:
         Authorizer.require_permissions(

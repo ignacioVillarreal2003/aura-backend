@@ -192,25 +192,6 @@ def test_lock_chat_non_owner_raises(chat, other_user):
         chat_service.lock_chat(other_user, chat.id)
 
 
-# ---------------------------------------------------------------------------
-# mute / unmute
-# ---------------------------------------------------------------------------
-
-def test_mute_chat_sets_muted_until(owner, chat):
-    until = timezone.now() + timezone.timedelta(hours=1)
-    chat_service.mute_chat(owner, chat.id, muted_until=until)
-    membership = ChatMembership.objects.get(chat_id=chat.id, member_id=owner.id)
-    assert membership.muted_until is not None
-
-
-def test_unmute_chat_clears_muted_until(owner, chat):
-    until = timezone.now() + timezone.timedelta(hours=1)
-    chat_service.mute_chat(owner, chat.id, muted_until=until)
-    chat_service.unmute_chat(owner, chat.id)
-    membership = ChatMembership.objects.get(chat_id=chat.id, member_id=owner.id)
-    assert membership.muted_until is None
-
-
 def _activate(owner, chat, member):
     membership_service.add_members(owner, chat.id, member_ids=[member.id])
     membership_service.update_member(member, chat.id, member.id, new_status="active")
@@ -230,7 +211,6 @@ def test_get_chat_attaches_personal_membership_fields(owner, chat):
     result = chat_service.get_chat(owner, chat.id)
     assert result.pinned_at is not None
     assert result.archived_at is None
-    assert result.muted_until is None
 
 
 def test_get_chat_non_member_raises(chat, other_user):

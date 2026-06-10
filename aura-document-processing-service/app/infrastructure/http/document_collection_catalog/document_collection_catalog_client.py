@@ -212,11 +212,12 @@ class DocumentCollectionCatalogClient(DocumentCollectionCatalogClientInterface):
             authorization_header: str | None,
     ) -> dict[str, str] | None:
         if self._settings.service_api_key:
+            # System (trusted) call: the service key implies a system principal
+            # downstream; no self-asserted permissions header is needed.
             return {
                 "X-Service-Api-Key": self._settings.service_api_key,
                 "X-User-Id": str(user_id),
                 "X-User-Email": self._settings.service_user_email,
-                "X-User-Permissions": "GET_USER_ACCESSIBLE_COLLECTIONS,GET_USER_ACCESSIBLE_DOCUMENTS",
                 "Accept": "application/json",
             }
         bearer = self._normalize_bearer(authorization_header or self._settings.fallback_bearer_token)

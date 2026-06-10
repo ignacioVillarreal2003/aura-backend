@@ -13,7 +13,6 @@ from apps.artifact_lessons_learned.serializers import (
     LessonsLearnedGenerateResponse,
     LessonsLearnedListResponse,
     LessonsLearnedResponse,
-    UpdateLessonsLearnedRequest,
 )
 from apps.artifact_lessons_learned.services.lessons_learned_service import lessons_learned_service
 from apps.artifact.audio import transcribe as _transcribe_audio
@@ -22,11 +21,10 @@ from apps.artifact_lessons_learned.services.export_service import (
     generate_lessons_learned_pdf,
 )
 from apps.artifact.utils import safe_filename as _safe_filename
-from apps.chat.ai_reply_lock import release, try_acquire
-from apps.chat.exceptions import ChatAccessDeniedException, ChatAiReplyInProgressException, ChatNotFoundException
+from apps.chat.ai_lock_guard import ai_reply_lock_guard
+from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.chat.ws_rate_limit import check_artifact_rate_limit, check_transcribe_rate_limit
-from apps.artifact_message.services.message_service import broadcast_chat_ai_lock_change
 from apps.membership.repositories.membership_repository import membership_repository
 from rest_framework.exceptions import ValidationError
 from core.openapi.common import standard_error_responses
@@ -84,34 +82,6 @@ class LessonsLearnedDetailView(APIView):
     )
     def get(self, request: Request, lessons_learned_id: int) -> Response:
         ll = lessons_learned_service.get_lessons_learned(user=request.user, lessons_learned_id=lessons_learned_id)
-        return Response(LessonsLearnedResponse(ll).data)
-
-    @extend_schema(
-        tags=["Lessons Learned"],
-        summary="Actualizar lecciones aprendidas",
-        description=(
-                "Actualiza el título, los campos narrativos y/o las lecciones individuales. "
-                "Enviá el array completo de lecciones con el orden actualizado. "
-                "Solo el creador o miembros del chat de origen pueden modificarlas."
-        ),
-        parameters=[_ID_PARAM],
-        request=UpdateLessonsLearnedRequest,
-        responses={
-            200: LessonsLearnedResponse,
-            **standard_error_responses(400, 401, 403, 404),
-        },
-    )
-    def patch(self, request: Request, lessons_learned_id: int) -> Response:
-        serializer = UpdateLessonsLearnedRequest(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        d = serializer.validated_data
-        ll = lessons_learned_service.update_lessons_learned(
-            user=request.user,
-            lessons_learned_id=lessons_learned_id,
-            title=d.get("title"),
-            context=d.get("context"),
-            items=d.get("items"),
-        )
         return Response(LessonsLearnedResponse(ll).data)
 
     @extend_schema(
@@ -195,21 +165,13 @@ class LessonsLearnedGenerateView(APIView):
         else:
             message = d["message"]
 
-        lock_token = await sync_to_async(try_acquire)(chat_id)
-        if not lock_token:
-            raise ChatAiReplyInProgressException()
-
-        try:
-            await sync_to_async(broadcast_chat_ai_lock_change)(chat_id, True)
+        async with ai_reply_lock_guard(chat_id):
             ll, messages, fragments = await lessons_learned_service.generate_lessons_learned(
                 user=request.user,
                 message=message,
                 mode=d["mode"],
                 chat_id=chat_id,
             )
-        finally:
-            await sync_to_async(release)(chat_id, lock_token)
-            await sync_to_async(broadcast_chat_ai_lock_change)(chat_id, False)
 
         return Response(
             LessonsLearnedGenerateResponse(
@@ -236,7 +198,7 @@ class LessonsLearnedExportPDFView(APIView):
             pdf = generate_lessons_learned_pdf(ll)
         except LessonsLearnedExportException:
             raise
-        safe_title = _safe_filename(ll.artifact.title)
+        safe_title = _safe_filename(ll.title)
         response = HttpResponse(pdf, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="lessons_learned_{safe_title}.pdf"'
         return response
@@ -256,7 +218,7 @@ class LessonsLearnedExportMarkdownView(APIView):
     def get(self, request: Request, lessons_learned_id: int) -> HttpResponse:
         ll = lessons_learned_service.get_own_lessons_learned(user=request.user, lessons_learned_id=lessons_learned_id)
         content = generate_lessons_learned_markdown(ll)
-        safe_title = _safe_filename(ll.artifact.title)
+        safe_title = _safe_filename(ll.title)
         response = HttpResponse(content, content_type="text/markdown; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="lessons_learned_{safe_title}.md"'
         return response
@@ -281,7 +243,7 @@ class LessonsLearnedManageExportPDFView(APIView):
             pdf = generate_lessons_learned_pdf(ll)
         except LessonsLearnedExportException:
             raise
-        safe_title = _safe_filename(ll.artifact.title)
+        safe_title = _safe_filename(ll.title)
         response = HttpResponse(pdf, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="lessons_learned_{safe_title}.pdf"'
         return response
@@ -303,7 +265,7 @@ class LessonsLearnedManageExportMarkdownView(APIView):
             user=request.user, lessons_learned_id=lessons_learned_id
         )
         content = generate_lessons_learned_markdown(ll)
-        safe_title = _safe_filename(ll.artifact.title)
+        safe_title = _safe_filename(ll.title)
         response = HttpResponse(content, content_type="text/markdown; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="lessons_learned_{safe_title}.md"'
         return response

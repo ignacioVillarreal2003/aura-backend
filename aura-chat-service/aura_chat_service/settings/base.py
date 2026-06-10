@@ -197,7 +197,7 @@ SPECTACULAR_SETTINGS = {
         {
             "name": "Chats",
             "description": (
-                "Create and manage chats: listing, CRUD, pin, archive, lock, mute; "
+                "Create and manage chats: listing, CRUD, pin, archive, lock; "
                 "includes `me` and `archived` collections."
             ),
         },
@@ -246,10 +246,11 @@ SPECTACULAR_SETTINGS = {
         {
             "name": "Artifacts",
             "description": (
-                "Capa documental unificada: cabecera `artifact` (type/title/status/version) con "
-                "versionado. Interacciones por `artifact_id`: feedback, bookmark, pin, thread; "
-                "listas de fijados/marcados por `chat_id`. Cada tipo (report, checklist, quiz, "
-                "timeline, lessons learned, decision brief) tiene endpoints dedicados bajo `/api/v1/`."
+                "Capa documental unificada: cabecera `artifact` (type/mode/fragments). "
+                "Interacciones por `artifact_id`: feedback, bookmark, pin, thread; "
+                "listas de fijados/marcados por `chat_id`. Cada tipo (message, report, checklist, quiz, "
+                "timeline, lessons learned, decision brief, document summary, document action) "
+                "tiene endpoints dedicados bajo `/api/v1/`."
             ),
         },
         {

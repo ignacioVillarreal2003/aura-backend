@@ -12,7 +12,6 @@ from app.domain.field_limits import (
 
 class DecisionBriefOption(BaseModel):
     title: str = Field(..., min_length=1, max_length=MAX_TITLE_CHARS, description="Título corto de la opción.")
-    description: str = Field(default="", max_length=MAX_PROSE_CHARS, description="Descripción de la opción.")
     pros: str = Field(default="", max_length=MAX_NOTES_CHARS, description="Argumentos a favor.")
     cons: str = Field(default="", max_length=MAX_NOTES_CHARS, description="Argumentos en contra.")
     is_recommended: bool = Field(

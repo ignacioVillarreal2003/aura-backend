@@ -26,14 +26,13 @@ Analizar el texto del usuario y extraer los hechos relevantes ordenados cronoló
     {{
       "event": "Título corto y concreto del evento (máx. {settings.max_event_chars} caracteres)",
       "description": "Descripción ampliada de lo ocurrido (máx. {settings.max_description_chars} caracteres)",
-      "occurred_at": "Fecha-hora ISO 8601 (p. ej. '2024-05-03T14:30:00Z') o null si no se conoce",
-      "occurred_label": "Referencia temporal en lenguaje natural si no hay fecha exacta (p. ej. 'madrugada del 3', máx. {settings.max_label_chars} caracteres)"
+      "occurred_label": "Referencia temporal del evento: si hay fecha exacta escribila en lenguaje natural (p. ej. '3 may 2024 14:30'); si es vaga usá la referencia tal como aparece (p. ej. 'madrugada del 3'). Máx. {settings.max_label_chars} caracteres."
     }}
   ]
 }}
 3. Ordená los eventos del más antiguo al más reciente.
-4. Si el texto da fecha/hora exacta usá "occurred_at"; si solo da una referencia vaga usá "occurred_label".
-5. No inventes fechas: si no hay dato temporal dejá "occurred_at" en null y "occurred_label" vacío.
+4. Siempre completá "occurred_label" con la referencia temporal disponible; si no hay dato temporal dejalo vacío.
+5. Priorizá precisión: si el texto da fecha y hora exactas, incluílas en "occurred_label" en formato legible.
 6. Cada evento debe ser un hecho concreto y verificable, sin ambigüedad ni duplicados; usá terminología militar correcta.
 7. Cuando se aporte contexto documental, basá los eventos en él con fidelidad; no inventes hechos no respaldados.
 8. Si el usuario pide modificaciones, devolvé la línea de tiempo completa actualizada.

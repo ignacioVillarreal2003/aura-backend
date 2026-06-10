@@ -29,10 +29,9 @@ El mismo catálogo se expone en vivo sin autenticación en `GET /api/v1/event-ty
 | ------------ | ------ | ---------- | ------------------ | ---------------- | ------------------------- |
 | `chat.member.invited` | `event` | `info` | `inapp` | `true` | `chat_id` → `/chats/{chat_id}` |
 | `chat.member.removed` | `event` | `warning` | `inapp` | `true` | `chat_id` → `/chats/{chat_id}` |
-| `chat.message.mentioned` | `event` | `info` | `inapp` | `true` | `chat_id` → `/chats/{chat_id}` |
 | `chat.locked` | `event` | `warning` | `inapp` | `true` | `chat_id` → `/chats/{chat_id}` |
 
-Los cuatro eventos de chat construyen el `link_url` a partir de `context.chat_id`:
+Los tres eventos de chat construyen el `link_url` a partir de `context.chat_id`:
 
 ```
 {NOTIFICATION_DEFAULT_LINK_BASE_URL}/chats/{chat_id}

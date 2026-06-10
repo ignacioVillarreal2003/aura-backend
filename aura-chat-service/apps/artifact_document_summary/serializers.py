@@ -14,7 +14,6 @@ class GenerateDocumentSummaryRequest(serializers.Serializer):
 
 
 class DocumentSummaryResponse(serializers.ModelSerializer):
-    title = serializers.SerializerMethodField()
     source_chat_id = serializers.SerializerMethodField()
 
     class Meta:
@@ -28,13 +27,8 @@ class DocumentSummaryResponse(serializers.ModelSerializer):
             "source_chat_id",
             "created_by",
             "created_at",
-            "updated_by",
-            "updated_at",
         ]
         read_only_fields = fields
-
-    def get_title(self, obj) -> str:
-        return obj.artifact.title if obj.artifact_id else ""
 
     def get_source_chat_id(self, obj) -> int | None:
         return obj.artifact.source_chat_id if obj.artifact_id else None
@@ -48,18 +42,7 @@ class DocumentSummaryGenerateResponse(serializers.Serializer):
         return DocumentSummaryResponse(obj["document_summary"]).data
 
 
-class UpdateDocumentSummaryRequest(serializers.Serializer):
-    title = serializers.CharField(max_length=500, allow_blank=False, required=False)
-    summary = serializers.CharField(allow_blank=True, required=False)
-
-    def validate(self, data):
-        if not data:
-            raise serializers.ValidationError("Se requiere al menos un campo a actualizar.")
-        return data
-
-
 class DocumentSummaryListResponse(serializers.ModelSerializer):
-    title = serializers.SerializerMethodField()
     source_chat_id = serializers.SerializerMethodField()
 
     class Meta:
@@ -74,9 +57,6 @@ class DocumentSummaryListResponse(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
-
-    def get_title(self, obj) -> str:
-        return obj.artifact.title if obj.artifact_id else ""
 
     def get_source_chat_id(self, obj) -> int | None:
         return obj.artifact.source_chat_id if obj.artifact_id else None

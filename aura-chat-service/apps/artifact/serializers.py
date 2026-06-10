@@ -2,7 +2,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from apps.artifact.models import Artifact, ArtifactVersion
+from apps.artifact.models import Artifact
 from apps.artifact.models.artifact_pin import ArtifactPin
 
 
@@ -12,10 +12,6 @@ class ArtifactResponse(serializers.ModelSerializer):
         fields = [
             "id",
             "type",
-            "title",
-            "description",
-            "status",
-            "version",
             "mode",
             "fragments",
             "source_chat_id",
@@ -28,14 +24,14 @@ class ArtifactResponse(serializers.ModelSerializer):
 
 
 class ArtifactListResponse(serializers.ModelSerializer):
+    title = serializers.SerializerMethodField()
+
     class Meta:
         model = Artifact
         fields = [
             "id",
             "type",
             "title",
-            "status",
-            "version",
             "mode",
             "source_chat_id",
             "created_by",
@@ -43,35 +39,9 @@ class ArtifactListResponse(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-
-class ArtifactVersionResponse(serializers.ModelSerializer):
-    class Meta:
-        model = ArtifactVersion
-        fields = [
-            "id",
-            "artifact_id",
-            "version_number",
-            "title",
-            "description",
-            "status",
-            "mode",
-            "change_summary",
-            "created_by",
-            "created_at",
-        ]
-        read_only_fields = fields
-
-
-class UpdateArtifactRequest(serializers.Serializer):
-    title = serializers.CharField(max_length=500, allow_blank=False, required=False)
-    description = serializers.CharField(allow_blank=True, required=False)
-    status = serializers.ChoiceField(choices=Artifact.Status.choices, required=False)
-    change_summary = serializers.CharField(allow_blank=True, required=False, default="")
-
-    def validate(self, data):
-        if not any(k in data for k in ("title", "description", "status")):
-            raise serializers.ValidationError("Se requiere al menos un campo a actualizar.")
-        return data
+    @extend_schema_field(serializers.CharField())
+    def get_title(self, obj) -> str:
+        return _get_type_title(obj)
 
 
 class ArtifactMessagePreview(serializers.Serializer):
@@ -82,6 +52,7 @@ class ArtifactMessagePreview(serializers.Serializer):
 
 
 class ArtifactSummaryResponse(serializers.ModelSerializer):
+    title = serializers.SerializerMethodField()
     message = serializers.SerializerMethodField()
     linked_id = serializers.SerializerMethodField()
     is_bookmarked = serializers.SerializerMethodField()
@@ -94,9 +65,6 @@ class ArtifactSummaryResponse(serializers.ModelSerializer):
             "id",
             "type",
             "title",
-            "description",
-            "status",
-            "version",
             "mode",
             "fragments",
             "is_bookmarked",
@@ -110,6 +78,10 @@ class ArtifactSummaryResponse(serializers.ModelSerializer):
             "linked_id",
         ]
         read_only_fields = fields
+
+    @extend_schema_field(serializers.CharField())
+    def get_title(self, obj) -> str:
+        return _get_type_title(obj)
 
     @extend_schema_field(ArtifactMessagePreview(allow_null=True))
     def get_message(self, obj):
@@ -135,7 +107,7 @@ class ArtifactSummaryResponse(serializers.ModelSerializer):
         request = self.context.get('request')
         if not request:
             return None
-        fb = ArtifactFeedback.objects.filter(artifact_id=obj.id, user_id=request.user.id).first()
+        fb = ArtifactFeedback.objects.filter(artifact_id=obj.id, created_by=request.user.id).first()
         return fb.value if fb else None
 
     @extend_schema_field(serializers.IntegerField())
@@ -172,5 +144,28 @@ class PinnedArtifactResponse(serializers.ModelSerializer):
 
     class Meta:
         model = ArtifactPin
-        fields = ["id", "artifact_id", "chat_id", "created_by", "created_at", "artifact"]
+        fields = ["id", "artifact_id", "created_by", "created_at", "artifact"]
         read_only_fields = fields
+
+
+def _get_type_title(obj: Artifact) -> str:
+    try:
+        if obj.type == Artifact.Type.REPORT:
+            return obj.report_content.title
+        if obj.type == Artifact.Type.CHECKLIST:
+            return obj.checklist_content.title
+        if obj.type == Artifact.Type.QUIZ:
+            return obj.quiz_content.title
+        if obj.type == Artifact.Type.TIMELINE:
+            return obj.timeline_content.title
+        if obj.type == Artifact.Type.LESSONS_LEARNED:
+            return obj.lessons_learned_content.title
+        if obj.type == Artifact.Type.DECISION_BRIEF:
+            return obj.decision_brief_content.title
+        if obj.type == Artifact.Type.DOCUMENT_SUMMARY:
+            return obj.document_summary_content.title
+        if obj.type == Artifact.Type.DOCUMENT_ACTION:
+            return obj.document_action_content.title
+    except ObjectDoesNotExist:
+        pass
+    return ""

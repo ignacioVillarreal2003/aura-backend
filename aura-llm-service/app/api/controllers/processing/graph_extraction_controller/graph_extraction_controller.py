@@ -3,7 +3,6 @@
 from app.api.controllers.processing.graph_extraction_controller.graph_extraction_controller_interface import (
     GraphExtractionControllerInterface,
 )
-from app.api.dependencies.idempotency import optional_idempotency_key
 from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
 from app.application.authorization.authorizer import Authorizer
@@ -26,7 +25,6 @@ class GraphExtractionController(GraphExtractionControllerInterface):
             extract_entities_relations_request: ExtractEntitiesRelationsRequest,
             graph_extraction_service: GraphExtractionServiceInterface = Depends(get_graph_extraction_service),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
-            _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(default_rate_limit),
     ) -> ExtractEntitiesRelationsResponse:
         Authorizer.require_permissions(

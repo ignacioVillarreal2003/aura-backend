@@ -54,6 +54,7 @@ def _persist_generated_lessons_learned(
         *,
         user_id: int,
         title: str,
+        query: str,
         mode: str,
         source_chat_id: int,
         context: str,
@@ -63,7 +64,6 @@ def _persist_generated_lessons_learned(
     artifact = create_artifact_for_content(
         user_id=user_id,
         artifact_type=Artifact.Type.LESSONS_LEARNED,
-        title=title,
         mode=mode,
         source_chat_id=source_chat_id,
         fragments=fragments,
@@ -73,6 +73,8 @@ def _persist_generated_lessons_learned(
         context=context,
         items=items,
         artifact_id=artifact.id,
+        title=title,
+        query=query,
     )
     return artifact, ll
 
@@ -115,30 +117,6 @@ class LessonsLearnedService:
         return ll
 
     @transaction.atomic
-    def update_lessons_learned(
-            self,
-            user: AuthenticatedUser,
-            lessons_learned_id: int,
-            title: Optional[str] = None,
-            context: Optional[str] = None,
-            items: Optional[list] = None,
-    ) -> ArtifactLessonsLearned:
-        AccessControl.require_permissions(user, frozenset({perms.UPDATE_LESSONS_LEARNED}))
-        ll = lessons_learned_repository.get_by_id_for_update(lessons_learned_id)
-        if ll is None:
-            raise LessonsLearnedNotFoundException()
-        _assert_access(user.id, ll, require_contributor=True)
-        if title is not None:
-            artifact_repository.update(ll.artifact, updated_by=user.id, title=title)
-        normalized = _normalize_items(items) if items is not None else None
-        return lessons_learned_repository.update(
-            ll,
-            updated_by=user.id,
-            context=context,
-            items=normalized,
-        )
-
-    @transaction.atomic
     def delete_lessons_learned(self, user: AuthenticatedUser, lessons_learned_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({perms.DELETE_LESSONS_LEARNED}))
         ll = lessons_learned_repository.get_by_id_for_update(lessons_learned_id)
@@ -163,6 +141,8 @@ class LessonsLearnedService:
         chat = await sync_to_async(chat_repository.get_by_id)(chat_id)
         if chat is None:
             raise ChatNotFoundException()
+        system_prompt = chat.system_prompt if chat else None
+        response_style = chat.response_style if chat else None
         history = await sync_to_async(build_chat_history)(chat_id)
 
         messages = history + [{"role": "human", "content": message}]
@@ -173,6 +153,8 @@ class LessonsLearnedService:
                     mode=mode,
                     user=user,
                     chat_id=chat_id,
+                    system_prompt=system_prompt,
+                    response_style=response_style,
             ):
                 et = event.get("type")
                 if et == "progress":
@@ -216,6 +198,7 @@ class LessonsLearnedService:
         artifact, ll = await sync_to_async(_persist_generated_lessons_learned)(
             user_id=user.id,
             title=title,
+            query=message,
             mode=mode,
             source_chat_id=chat_id,
             context=context,

@@ -40,7 +40,6 @@ class TimelineEventResponse(serializers.ModelSerializer):
             "id",
             "title",
             "description",
-            "occurred_at",
             "occurred_label",
             "position",
         ]
@@ -48,7 +47,6 @@ class TimelineEventResponse(serializers.ModelSerializer):
 
 class TimelineResponse(serializers.ModelSerializer):
     events = TimelineEventResponse(many=True)
-    title = serializers.SerializerMethodField()
     mode = serializers.SerializerMethodField()
     source_chat_id = serializers.SerializerMethodField()
 
@@ -58,19 +56,15 @@ class TimelineResponse(serializers.ModelSerializer):
             "id",
             "artifact_id",
             "title",
+            "query",
             "summary",
             "mode",
             "events",
             "source_chat_id",
             "created_by",
             "created_at",
-            "updated_by",
-            "updated_at",
         ]
         read_only_fields = fields
-
-    def get_title(self, obj) -> str:
-        return obj.artifact.title if obj.artifact_id else ""
 
     def get_mode(self, obj) -> str:
         return obj.artifact.mode if obj.artifact_id else ""
@@ -88,33 +82,8 @@ class TimelineGenerateResponse(serializers.Serializer):
         return TimelineResponse(obj["timeline"]).data
 
 
-class _UpdateEventRequest(serializers.Serializer):
-    title = serializers.CharField(max_length=300)
-    description = serializers.CharField(default="", allow_blank=True)
-    occurred_at = serializers.DateTimeField(required=False, allow_null=True)
-    occurred_label = serializers.CharField(max_length=100, default="", allow_blank=True)
-    position = serializers.IntegerField(min_value=0)
-
-
-class UpdateTimelineRequest(serializers.Serializer):
-    title = serializers.CharField(max_length=500, allow_blank=False, required=False)
-    summary = serializers.CharField(allow_blank=True, required=False)
-    events = _UpdateEventRequest(many=True, required=False)
-
-    def validate(self, data):
-        if not data:
-            raise serializers.ValidationError("Se requiere al menos un campo a actualizar.")
-        return data
-
-    def validate_events(self, value):
-        if len(value) > 300:
-            raise serializers.ValidationError("La línea de tiempo no puede superar los 300 eventos.")
-        return value
-
-
 class TimelineListResponse(serializers.ModelSerializer):
     event_count = serializers.SerializerMethodField()
-    title = serializers.SerializerMethodField()
     mode = serializers.SerializerMethodField()
     source_chat_id = serializers.SerializerMethodField()
 
@@ -134,9 +103,6 @@ class TimelineListResponse(serializers.ModelSerializer):
 
     def get_event_count(self, obj: ArtifactTimeline) -> int:
         return getattr(obj, "event_count", 0)
-
-    def get_title(self, obj) -> str:
-        return obj.artifact.title if obj.artifact_id else ""
 
     def get_mode(self, obj) -> str:
         return obj.artifact.mode if obj.artifact_id else ""

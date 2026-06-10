@@ -1,6 +1,5 @@
 ﻿from fastapi import APIRouter, Depends
 
-from app.api.dependencies.idempotency import optional_idempotency_key
 from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.controllers.processing.fragment_enrich_controller.fragment_enrich_controller_interface import (
     FragmentEnrichControllerInterface
@@ -24,7 +23,6 @@ class FragmentEnrichController(FragmentEnrichControllerInterface):
             enrich_fragment_request: EnrichFragmentRequest,
             fragment_enrich_service: FragmentEnrichServiceInterface = Depends(get_fragment_enrich_service),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
-            _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(default_rate_limit),
     ) -> EnrichFragmentResponse:
         Authorizer.require_permissions(

@@ -36,12 +36,11 @@ class GenerateDecisionBriefRequest(serializers.Serializer):
 class DecisionBriefOptionResponse(serializers.ModelSerializer):
     class Meta:
         model = ArtifactDecisionBriefOption
-        fields = ["id", "title", "description", "pros", "cons", "is_recommended", "position"]
+        fields = ["id", "title", "pros", "cons", "is_recommended", "position"]
 
 
 class DecisionBriefResponse(serializers.ModelSerializer):
     options = DecisionBriefOptionResponse(many=True)
-    title = serializers.SerializerMethodField()
     mode = serializers.SerializerMethodField()
     source_chat_id = serializers.SerializerMethodField()
 
@@ -51,6 +50,7 @@ class DecisionBriefResponse(serializers.ModelSerializer):
             "id",
             "artifact_id",
             "title",
+            "query",
             "problem",
             "context",
             "risks",
@@ -60,13 +60,8 @@ class DecisionBriefResponse(serializers.ModelSerializer):
             "source_chat_id",
             "created_by",
             "created_at",
-            "updated_by",
-            "updated_at",
         ]
         read_only_fields = fields
-
-    def get_title(self, obj) -> str:
-        return obj.artifact.title if obj.artifact_id else ""
 
     def get_mode(self, obj) -> str:
         return obj.artifact.mode if obj.artifact_id else ""
@@ -84,37 +79,8 @@ class DecisionBriefGenerateResponse(serializers.Serializer):
         return DecisionBriefResponse(obj["decision_brief"]).data
 
 
-class _UpdateOptionRequest(serializers.Serializer):
-    title = serializers.CharField(max_length=300)
-    description = serializers.CharField(default="", allow_blank=True)
-    pros = serializers.CharField(default="", allow_blank=True)
-    cons = serializers.CharField(default="", allow_blank=True)
-    is_recommended = serializers.BooleanField(default=False)
-    position = serializers.IntegerField(min_value=0)
-
-
-class UpdateDecisionBriefRequest(serializers.Serializer):
-    title = serializers.CharField(max_length=500, allow_blank=False, required=False)
-    problem = serializers.CharField(allow_blank=True, required=False)
-    context = serializers.CharField(allow_blank=True, required=False)
-    risks = serializers.CharField(allow_blank=True, required=False)
-    recommendation = serializers.CharField(allow_blank=True, required=False)
-    options = _UpdateOptionRequest(many=True, required=False)
-
-    def validate(self, data):
-        if not data:
-            raise serializers.ValidationError("Se requiere al menos un campo a actualizar.")
-        return data
-
-    def validate_options(self, value):
-        if len(value) > 50:
-            raise serializers.ValidationError("El brief no puede superar las 50 opciones.")
-        return value
-
-
 class DecisionBriefListResponse(serializers.ModelSerializer):
     option_count = serializers.SerializerMethodField()
-    title = serializers.SerializerMethodField()
     mode = serializers.SerializerMethodField()
     source_chat_id = serializers.SerializerMethodField()
 
@@ -134,9 +100,6 @@ class DecisionBriefListResponse(serializers.ModelSerializer):
 
     def get_option_count(self, obj: ArtifactDecisionBrief) -> int:
         return getattr(obj, "option_count", 0)
-
-    def get_title(self, obj) -> str:
-        return obj.artifact.title if obj.artifact_id else ""
 
     def get_mode(self, obj) -> str:
         return obj.artifact.mode if obj.artifact_id else ""

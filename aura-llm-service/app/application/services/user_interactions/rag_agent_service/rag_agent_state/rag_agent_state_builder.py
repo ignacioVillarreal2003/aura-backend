@@ -23,6 +23,9 @@ class RagAgentStateBuilder:
         return RagAgentState(
             authenticated_user=authenticated_user,
             messages=messages,
+            chat_id=agent_request.chat_id,
+            operator_system_prompt=agent_request.system_prompt,
+            response_style=agent_request.response_style,
             query="",
             keywords=[],
             retrieved_fragments=[],

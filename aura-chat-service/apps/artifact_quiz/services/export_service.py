@@ -63,8 +63,7 @@ h1 { font-size: 13pt; margin: 6px 0; font-family: Courier, monospace; }
 _TYPE_LABELS = {
     ArtifactQuizQuestion.Kind.SINGLE: "Opción única",
     ArtifactQuizQuestion.Kind.MULTIPLE: "Opción múltiple",
-    ArtifactQuizQuestion.Kind.BOOLEAN: "Verdadero/Falso",
-    ArtifactQuizQuestion.Kind.OPEN: "Respuesta abierta",
+    ArtifactQuizQuestion.Kind.BOOLEAN: "Verdadero/Falso"
 }
 
 
@@ -130,7 +129,7 @@ def generate_quiz_pdf(quiz: ArtifactQuiz, *, with_answers: bool = True) -> bytes
   <div class="classification">CLASIFICACIÓN SEGÚN CONTENIDO</div>
 </div>
 <h1>CUESTIONARIO DE EVALUACIÓN</h1>
-<h2 style="border:none; margin-top:2px;">{html.escape(quiz.artifact.title)}</h2>
+<h2 style="border:none; margin-top:2px;">{html.escape(quiz.title)}</h2>
 <div class="meta">Generado: {created} &bull; Modo: {mode_label} &bull; Puntaje mínimo: {pass_label} &bull; {len(questions)} preguntas</div>
 {instructions_html}
 <hr/>
@@ -151,7 +150,7 @@ def generate_quiz_markdown(quiz: ArtifactQuiz, *, with_answers: bool = True) -> 
     lines = [
         "# CUESTIONARIO DE EVALUACIÓN",
         "",
-        f"**{quiz.artifact.title}**",
+        f"**{quiz.title}**",
         "",
         f"*Generado: {_fmt_dt(quiz.created_at)}*",
         "",

@@ -32,7 +32,6 @@ def make_chat(chat_id=1, created_by=1, **overrides):
         system_prompt=None,
         response_style=None,
         tags=[],
-        is_ephemeral=False,
         is_locked=False,
         last_message_at=None,
         created_by=created_by,
@@ -44,7 +43,6 @@ def make_chat(chat_id=1, created_by=1, **overrides):
         unread_count=0,
         pinned_at=None,
         archived_at=None,
-        muted_until=None,
     )
     data.update(overrides)
     return SimpleNamespace(**data)

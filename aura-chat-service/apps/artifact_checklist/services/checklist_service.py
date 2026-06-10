@@ -26,11 +26,10 @@ logger = logging.getLogger(__name__)
 
 
 @transaction.atomic
-def _persist_generated_checklist(*, user_id, title, mode, source_chat_id, sections, fragments=None) -> tuple:
+def _persist_generated_checklist(*, user_id, title, description, query, mode, source_chat_id, sections, fragments=None) -> tuple:
     artifact = create_artifact_for_content(
         user_id=user_id,
         artifact_type=Artifact.Type.CHECKLIST,
-        title=title,
         mode=mode,
         source_chat_id=source_chat_id,
         fragments=fragments,
@@ -39,6 +38,9 @@ def _persist_generated_checklist(*, user_id, title, mode, source_chat_id, sectio
         user_id=user_id,
         sections=sections,
         artifact_id=artifact.id,
+        title=title,
+        description=description,
+        query=query,
     )
     return artifact, checklist
 
@@ -113,23 +115,6 @@ class ChecklistService:
         return checklist
 
     @transaction.atomic
-    def update_checklist(
-            self,
-            user: AuthenticatedUser,
-            checklist_id: int,
-            title: Optional[str] = None,
-            sections: Optional[list] = None,
-    ) -> ArtifactChecklist:
-        AccessControl.require_permissions(user, frozenset({perms.UPDATE_CHECKLIST}))
-        checklist = checklist_repository.get_by_id_for_update(checklist_id)
-        if checklist is None:
-            raise ChecklistNotFoundException()
-        _assert_checklist_access(user.id, checklist, require_contributor=True)
-        if title is not None:
-            artifact_repository.update(checklist.artifact, updated_by=user.id, title=title)
-        return checklist_repository.update(checklist, updated_by=user.id, sections=sections)
-
-    @transaction.atomic
     def delete_checklist(self, user: AuthenticatedUser, checklist_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({perms.DELETE_CHECKLIST}))
         checklist = checklist_repository.get_by_id_for_update(checklist_id)
@@ -153,6 +138,8 @@ class ChecklistService:
         chat = await sync_to_async(chat_repository.get_by_id)(chat_id)
         if chat is None:
             raise ChatNotFoundException()
+        system_prompt = chat.system_prompt if chat else None
+        response_style = chat.response_style if chat else None
         history = await sync_to_async(build_chat_history)(chat_id)
 
         messages = history + [{"role": "human", "content": message}]
@@ -163,6 +150,8 @@ class ChecklistService:
                     mode=mode,
                     user=user,
                     chat_id=chat_id,
+                    system_prompt=system_prompt,
+                    response_style=response_style,
             ):
                 et = event.get("type")
                 if et == "progress":
@@ -190,6 +179,7 @@ class ChecklistService:
             raise LLMServiceException()
 
         title = str(result_data.get("title", "")).strip()
+        description = str(result_data.get("description", "")).strip()
         items = result_data.get("items") or []
         out_messages = result_data.get("messages") or []
         fragments = llm_client.normalize_fragments(result_data.get("fragments"))
@@ -205,6 +195,8 @@ class ChecklistService:
         artifact, checklist = await sync_to_async(_persist_generated_checklist)(
             user_id=user.id,
             title=title,
+            description=description,
+            query=message,
             mode=mode,
             source_chat_id=chat_id,
             sections=sections,

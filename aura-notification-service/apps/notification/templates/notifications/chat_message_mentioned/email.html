@@ -1,7 +1,0 @@
-{% extends "notifications/email_base.html" %}
-{% block content %}
-<p>Hola{% if recipient_name %} {{ recipient_name }}{% endif %},</p>
-<p><strong>{{ actor_name|default:"Un miembro" }}</strong> te menciono en <strong>{{ chat_name|default:"un chat" }}</strong>.</p>
-{% if message_excerpt %}<blockquote style="border-left:3px solid #d1d5db;padding-left:12px;color:#374151;">{{ message_excerpt }}</blockquote>{% endif %}
-{% if link_url %}<p><a href="{{ link_url }}">Abrir el mensaje</a></p>{% endif %}
-{% endblock %}

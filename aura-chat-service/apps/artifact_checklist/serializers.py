@@ -49,7 +49,6 @@ class ChecklistSectionResponse(serializers.ModelSerializer):
 
 class ChecklistResponse(serializers.ModelSerializer):
     sections = ChecklistSectionResponse(many=True)
-    title = serializers.SerializerMethodField()
     mode = serializers.SerializerMethodField()
     source_chat_id = serializers.SerializerMethodField()
 
@@ -59,18 +58,14 @@ class ChecklistResponse(serializers.ModelSerializer):
             "id",
             "artifact_id",
             "title",
+            "query",
             "mode",
             "sections",
             "source_chat_id",
             "created_by",
             "created_at",
-            "updated_by",
-            "updated_at",
         ]
         read_only_fields = fields
-
-    def get_title(self, obj) -> str:
-        return obj.artifact.title if obj.artifact_id else ""
 
     def get_mode(self, obj) -> str:
         return obj.artifact.mode if obj.artifact_id else ""
@@ -88,39 +83,9 @@ class ChecklistGenerateResponse(serializers.Serializer):
         return ChecklistResponse(obj["checklist"]).data
 
 
-class _UpdateItemRequest(serializers.Serializer):
-    text = serializers.CharField(max_length=500)
-    is_checked = serializers.BooleanField(default=False)
-    notes = serializers.CharField(default="", allow_blank=True)
-    position = serializers.IntegerField(min_value=0)
-
-
-class _UpdateSectionRequest(serializers.Serializer):
-    title = serializers.CharField(max_length=200)
-    position = serializers.IntegerField(min_value=0)
-    items = _UpdateItemRequest(many=True)
-
-
-class UpdateChecklistRequest(serializers.Serializer):
-    title = serializers.CharField(max_length=500, allow_blank=False, required=False)
-    sections = _UpdateSectionRequest(many=True, required=False)
-
-    def validate(self, data):
-        if not data:
-            raise serializers.ValidationError("Se requiere al menos un campo a actualizar.")
-        return data
-
-    def validate_sections(self, value):
-        total = sum(len(sec.get("items", [])) for sec in value)
-        if total > 200:
-            raise serializers.ValidationError("La checklist no puede superar los 200 ítems.")
-        return value
-
-
 class ChecklistListResponse(serializers.ModelSerializer):
     item_count = serializers.SerializerMethodField()
     checked_count = serializers.SerializerMethodField()
-    title = serializers.SerializerMethodField()
     mode = serializers.SerializerMethodField()
     source_chat_id = serializers.SerializerMethodField()
 
@@ -138,9 +103,6 @@ class ChecklistListResponse(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
-
-    def get_title(self, obj) -> str:
-        return obj.artifact.title if obj.artifact_id else ""
 
     def get_mode(self, obj) -> str:
         return obj.artifact.mode if obj.artifact_id else ""

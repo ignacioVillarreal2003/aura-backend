@@ -24,12 +24,21 @@ def _cfg(name: str, default: int) -> int:
     return int(getattr(settings, name, default))
 
 
+# Atomically increment the window counter and set the TTL only on the first hit,
+# so the window does not slide (resetting EXPIRE on every call would let the
+# counter live forever under sustained traffic and over-block the user).
+_RATE_LIMIT_SCRIPT = """
+local current = redis.call('incr', KEYS[1])
+if current == 1 then
+    redis.call('expire', KEYS[1], ARGV[1])
+end
+return current
+"""
+
+
 def _fixed_window_allows(key: str, window: int, limit: int) -> bool:
-    pipe = _redis().pipeline()
-    pipe.incr(key)
-    pipe.expire(key, window)
-    count, _ = pipe.execute()
-    return count <= limit
+    count = _redis().eval(_RATE_LIMIT_SCRIPT, 1, key, window)
+    return int(count) <= limit
 
 
 def check_message_rate_limit(user_id: int, chat_id: int) -> bool:

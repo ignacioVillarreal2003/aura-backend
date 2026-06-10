@@ -18,6 +18,7 @@ from app.application.services.generation_shared.generation_messages import (
     build_context_block,
     build_generation_messages,
 )
+from app.application.services.generation_shared.prompt_augmentation import augment_system_prompt
 from app.application.services.generation_shared.generation_settings import GenerationSettings
 from app.application.services.generation_shared.generation_state import GenerationState
 from app.application.services.generation_shared.processors.attached_documents_processor import (
@@ -107,12 +108,12 @@ class ReportService(ReportServiceInterface):
             await self._context_processor.run(state, RAG_QUERIES[report_type])
         await self._reduction_processor.run(state, EXTRACTION_SYSTEM_PROMPT, EXTRACTION_HUMAN_PROMPT)
 
-    async def _invoke(self, state: GenerationState, report_type: ReportType) -> str:
+    async def _invoke(self, state: GenerationState, report_type: ReportType, request: ReportGenerateRequest) -> str:
         context_block = build_context_block(
             state, self._generation_settings.max_context_chars, self._generation_settings.attached_reserve_ratio
         )
         llm_messages = build_generation_messages(
-            build_system_prompt(report_type),
+            augment_system_prompt(build_system_prompt(report_type), request.system_prompt, request.response_style),
             HUMAN_PROMPT,
             state,
             self._generation_settings.history_messages_window,
@@ -157,7 +158,7 @@ class ReportService(ReportServiceInterface):
             state = self._build_state(request, authenticated_user)
             await self._gather_context(state, request.report_type)
 
-            content = await self._invoke(state, request.report_type)
+            content = await self._invoke(state, request.report_type, request)
 
             logger.info(
                 "Report generation completed",
@@ -214,7 +215,7 @@ class ReportService(ReportServiceInterface):
                 message=_REPORT_GENERATION_MESSAGES[request.report_type],
             )
 
-            content = await self._invoke(state, request.report_type)
+            content = await self._invoke(state, request.report_type, request)
 
             yield ReportStreamComplete(result=self._build_response(state, request.report_type, content))
         except _KNOWN_EXCEPTIONS as e:

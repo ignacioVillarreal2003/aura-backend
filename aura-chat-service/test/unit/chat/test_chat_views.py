@@ -14,12 +14,8 @@ Endpoints covered:
     POST   /api/v1/chats/unarchive/          ChatViewSet.unarchive
     POST   /DELETE /api/v1/chats/{chat_id}/pin/    ChatViewSet.pin
     POST   /DELETE /api/v1/chats/{chat_id}/lock/   ChatViewSet.lock
-    POST   /DELETE /api/v1/chats/{chat_id}/mute/   ChatViewSet.mute
 """
-from datetime import timedelta
-
 import pytest
-from django.utils import timezone
 
 from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
 from core.exceptions.base import InsufficientPermissionsException
@@ -82,13 +78,12 @@ def test_create_forwards_validated_data(api_client, mocker):
     svc = mocker.patch(f"{VIEW}.chat_service.create_chat", return_value=make_chat())
     api_client.post(
         "/api/v1/chats/",
-        {"name": "X", "tags": ["a", " a ", "b"], "is_ephemeral": True},
+        {"name": "X", "tags": ["a", " a ", "b"]},
         format="json",
     )
     _, kwargs = svc.call_args
     assert kwargs["name"] == "X"
     assert kwargs["tags"] == ["a", "b"]
-    assert kwargs["is_ephemeral"] is True
 
 
 def test_create_missing_name_returns_400(api_client, mocker):
@@ -320,51 +315,3 @@ def test_unlock_access_denied_returns_403(api_client, mocker):
 def test_lock_not_found_returns_404(api_client, mocker):
     mocker.patch(f"{VIEW}.chat_service.lock_chat", side_effect=ChatNotFoundException())
     assert api_client.post("/api/v1/chats/999/lock/").status_code == 404
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# POST/DELETE /api/v1/chats/{chat_id}/mute/  (personal)
-# ══════════════════════════════════════════════════════════════════════════════
-
-def test_mute_returns_204(api_client, mocker):
-    mocker.patch(f"{VIEW}.chat_service.mute_chat")
-    future = (timezone.now() + timedelta(hours=1)).isoformat()
-    response = api_client.post("/api/v1/chats/1/mute/", {"muted_until": future}, format="json")
-    assert response.status_code == 204
-
-
-def test_mute_forwards_muted_until(api_client, mocker):
-    svc = mocker.patch(f"{VIEW}.chat_service.mute_chat")
-    future = (timezone.now() + timedelta(hours=2)).isoformat()
-    api_client.post("/api/v1/chats/1/mute/", {"muted_until": future}, format="json")
-    _, kwargs = svc.call_args
-    assert kwargs["muted_until"] is not None
-
-
-def test_mute_past_datetime_returns_400(api_client, mocker):
-    mocker.patch(f"{VIEW}.chat_service.mute_chat")
-    past = (timezone.now() - timedelta(hours=1)).isoformat()
-    response = api_client.post("/api/v1/chats/1/mute/", {"muted_until": past}, format="json")
-    assert response.status_code == 400
-
-
-def test_mute_missing_field_returns_400(api_client, mocker):
-    mocker.patch(f"{VIEW}.chat_service.mute_chat")
-    assert api_client.post("/api/v1/chats/1/mute/", {}, format="json").status_code == 400
-
-
-def test_unmute_returns_204(api_client, mocker):
-    mocker.patch(f"{VIEW}.chat_service.unmute_chat")
-    assert api_client.delete("/api/v1/chats/1/mute/").status_code == 204
-
-
-def test_unmute_not_found_returns_404(api_client, mocker):
-    mocker.patch(f"{VIEW}.chat_service.unmute_chat", side_effect=ChatNotFoundException())
-    assert api_client.delete("/api/v1/chats/999/mute/").status_code == 404
-
-
-def test_mute_non_member_returns_403(api_client, mocker):
-    mocker.patch(f"{VIEW}.chat_service.mute_chat", side_effect=ChatAccessDeniedException())
-    future = (timezone.now() + timedelta(hours=1)).isoformat()
-    response = api_client.post("/api/v1/chats/1/mute/", {"muted_until": future}, format="json")
-    assert response.status_code == 403

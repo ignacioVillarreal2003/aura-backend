@@ -4,10 +4,7 @@ from datetime import datetime
 from typing import Iterable, Optional
 from django.utils import timezone
 
-from apps.notification.models import (
-    Notification,
-    NotificationStatus,
-)
+from apps.notification.models import Notification, NotificationStatus
 from apps.notification.services.dispatch_service import DispatchOutcome, dispatch_service
 from apps.notification.services.realtime_service import realtime_service
 from core.exceptions.base import NotFoundException, ValidationException
@@ -22,7 +19,6 @@ class NotificationService:
         *,
         status_in: Optional[Iterable[str]] = None,
         event_type: Optional[str] = None,
-        type: Optional[str] = None,
         since: Optional[datetime] = None,
     ):
         qs = Notification.objects.filter(receiver_id=user_id)
@@ -30,8 +26,6 @@ class NotificationService:
             qs = qs.filter(status__in=list(status_in))
         if event_type:
             qs = qs.filter(event_type=event_type)
-        if type:
-            qs = qs.filter(type=type)
         if since:
             qs = qs.filter(created_at__gte=since)
         return qs.order_by("-created_at", "-id")
@@ -65,11 +59,9 @@ class NotificationService:
         notification = self.get_for_user(user_id, notification_id)
 
         if new_status == NotificationStatus.READ:
-            notification.mark_read(updated_by=user_id)
-        elif new_status == NotificationStatus.UNREAD:
-            notification.mark_unread(updated_by=user_id)
+            notification.mark_read()
         else:
-            notification.archive(updated_by=user_id)
+            notification.mark_unread()
 
         realtime_service.publish_updated(
             user_id,
@@ -93,8 +85,6 @@ class NotificationService:
         updated = Notification.objects.filter(id__in=ids).update(
             status=NotificationStatus.READ,
             read_at=now,
-            updated_by=user_id,
-            updated_at=now,
         )
         if updated:
             realtime_service.publish_updated(
@@ -110,5 +100,6 @@ class NotificationService:
 
     def emit_event(self, **kwargs) -> list[DispatchOutcome]:
         return dispatch_service.dispatch_event(**kwargs)
+
 
 notification_service = NotificationService()

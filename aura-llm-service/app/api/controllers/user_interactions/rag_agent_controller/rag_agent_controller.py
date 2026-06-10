@@ -5,7 +5,6 @@ from starlette.responses import StreamingResponse
 from app.api.controllers.user_interactions.rag_agent_controller.rag_agent_controller_interface import (
     RagAgentControllerInterface,
 )
-from app.api.dependencies.idempotency import optional_idempotency_key
 from app.api.dependencies.rate_limiter import strict_rate_limit
 from app.api.openapi.common import default_error_responses
 from app.application.authorization.authorizer import Authorizer
@@ -25,7 +24,6 @@ class RagAgentController(RagAgentControllerInterface):
             agent_request: AgentRequest,
             rag_agent_service: RagAgentServiceInterface = Depends(get_rag_agent_service),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
-            _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(strict_rate_limit),
     ) -> AgentResponse:
         Authorizer.require_permissions(

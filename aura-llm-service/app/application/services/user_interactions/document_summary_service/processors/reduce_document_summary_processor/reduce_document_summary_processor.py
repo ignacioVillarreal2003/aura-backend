@@ -10,6 +10,7 @@ from app.application.services.user_interactions.document_summary_service.process
     REDUCE_SYSTEM_PROMPT,
     REDUCE_HUMAN_PROMPT,
 )
+from app.application.services.generation_shared.prompt_augmentation import augment_system_prompt
 from app.domain.dtos.user_interactions.document_summary.document_summary_stream_events import DocumentSummaryStreamDelta
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface import OllamaLLMInvokerInterface
@@ -31,13 +32,19 @@ class ReduceDocumentSummaryProcessor:
         self._ollama_llm_invoker = ollama_llm_invoker
         self._ollama_llm_streaming_invoker = ollama_llm_streaming_invoker
 
-    def _build_llm_input(self, partial_summaries: list[str]) -> list:
+    def _build_llm_input(self, document_summary_state: DocumentSummaryState) -> list:
+        partial_summaries = document_summary_state.partial_summaries
         summaries_joined = "\n\n---\n\n".join(
             f"Resumen parcial {idx + 1}:\n{summary}"
             for idx, summary in enumerate(partial_summaries)
         )
+        system_content = augment_system_prompt(
+            REDUCE_SYSTEM_PROMPT,
+            document_summary_state.system_prompt,
+            document_summary_state.response_style,
+        )
         return [
-            SystemMessage(content=REDUCE_SYSTEM_PROMPT),
+            SystemMessage(content=system_content),
             HumanMessage(content=REDUCE_HUMAN_PROMPT.format(summaries_joined=summaries_joined)),
         ]
 
@@ -54,7 +61,7 @@ class ReduceDocumentSummaryProcessor:
 
         logger.debug("Reducing partial summaries", extra={"partial_summary_count": len(partial_summaries)})
 
-        llm_input = self._build_llm_input(partial_summaries)
+        llm_input = self._build_llm_input(document_summary_state)
 
         try:
             llm = await self._ollama_llm_facade.get_llm_base()
@@ -90,7 +97,7 @@ class ReduceDocumentSummaryProcessor:
 
         logger.debug("Reducing partial summaries (stream)", extra={"partial_summary_count": len(partial_summaries)})
 
-        llm_input = self._build_llm_input(partial_summaries)
+        llm_input = self._build_llm_input(document_summary_state)
 
         try:
             llm = await self._ollama_llm_facade.get_llm_base()

@@ -12,7 +12,6 @@ from apps.artifact.interaction_views import (
 )
 from apps.artifact.views import (
     ArtifactDetailView,
-    ArtifactVersionsView,
     ChatArtifactFeedView,
     ChatArtifactManageView,
 )
@@ -24,7 +23,6 @@ urlpatterns = [
     path("bookmarked/", BookmarkedArtifactListView.as_view(), name="artifact-bookmarked-list"),
     path("feedback/analytics/", FeedbackAnalyticsView.as_view(), name="artifact-feedback-analytics"),
     path("<int:artifact_id>/", ArtifactDetailView.as_view(), name="artifact-detail"),
-    path("<int:artifact_id>/versions/", ArtifactVersionsView.as_view(), name="artifact-versions"),
     path("<int:artifact_id>/feedback/", ArtifactFeedbackView.as_view(), name="artifact-feedback"),
     path("<int:artifact_id>/bookmark/", ArtifactBookmarkView.as_view(), name="artifact-bookmark"),
     path("<int:artifact_id>/pin/", ArtifactPinView.as_view(), name="artifact-pin"),

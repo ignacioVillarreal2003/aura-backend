@@ -158,10 +158,23 @@ class MessageService:
         recent = await sync_to_async(message_repository.get_recent_messages)(
             chat_id, limit=limit
         )
+        ordered = list(reversed(recent))
+        # In a shared chat several people speak as "human". Tag each human turn
+        # with its author so the model can tell participants apart; keep
+        # single-user chats clean (no tagging) to avoid polluting the prompt.
+        human_senders = {
+            m.created_by
+            for m in ordered
+            if m.sender_type == ArtifactMessage.SenderType.USER
+        }
+        multi_user = len(human_senders) > 1
         messages: list[dict[str, str]] = []
-        for m in reversed(recent):
+        for m in ordered:
             if m.sender_type == ArtifactMessage.SenderType.USER:
-                messages.append({"role": "human", "content": m.message})
+                content = m.message
+                if multi_user and m.created_by is not None:
+                    content = f"[User {m.created_by}] {content}"
+                messages.append({"role": "human", "content": content})
             elif m.sender_type == ArtifactMessage.SenderType.ASSISTANT:
                 messages.append({"role": "assistant", "content": m.message})
         return messages
@@ -172,10 +185,12 @@ class MessageService:
             chat_id: int,
     ) -> DocumentQuestionRunResult:
         messages = await self._build_llm_messages(chat_id)
+        system_prompt, response_style = await self._get_chat_prompt_style(chat_id)
 
         try:
             llm_out: DocumentQuestionResult = await llm_client.document_question(
-                messages, user, chat_id=chat_id
+                messages, user, chat_id=chat_id,
+                system_prompt=system_prompt, response_style=response_style,
             )
         except HttpClientException as e:
             logger.error(
@@ -228,10 +243,11 @@ class MessageService:
             chat_id: int,
     ) -> DocumentQuestionRunResult:
         messages = await self._build_llm_messages(chat_id)
-        system_prompt = await self._get_chat_system_prompt(chat_id)
+        system_prompt, response_style = await self._get_chat_prompt_style(chat_id)
         try:
             result: GeneralChatResult = await llm_client.general_chat(
-                messages, user, chat_id=chat_id, system_prompt=system_prompt
+                messages, user, chat_id=chat_id,
+                system_prompt=system_prompt, response_style=response_style,
             )
         except HttpClientException as e:
             logger.error(
@@ -291,8 +307,12 @@ class MessageService:
             label: str,
     ) -> DocumentQuestionRunResult:
         messages = await self._build_llm_messages(chat_id)
+        system_prompt, response_style = await self._get_chat_prompt_style(chat_id)
         try:
-            result: AgentRunResult = await caller(messages, user, chat_id=chat_id)
+            result: AgentRunResult = await caller(
+                messages, user, chat_id=chat_id,
+                system_prompt=system_prompt, response_style=response_style,
+            )
         except HttpClientException as e:
             logger.error(
                 "LLM %s failed: %s",
@@ -356,11 +376,13 @@ class MessageService:
             chat_id: int,
     ) -> AsyncIterator[dict[str, Any]]:
         messages = await self._build_llm_messages(chat_id)
+        system_prompt, response_style = await self._get_chat_prompt_style(chat_id)
         async for payload in self._iter_ai_stream_group_payloads(
                 chat_id=chat_id,
                 user=user,
                 sse_events=llm_client.document_question_stream_events(
-                    messages, user, chat_id=chat_id
+                    messages, user, chat_id=chat_id,
+                    system_prompt=system_prompt, response_style=response_style,
                 ),
                 complete_extractor=self._extract_document_question_complete,
                 stream_url_setting_name="LLM_DOCUMENT_QUESTION_STREAM_URL",
@@ -373,12 +395,13 @@ class MessageService:
             chat_id: int,
     ) -> AsyncIterator[dict[str, Any]]:
         messages = await self._build_llm_messages(chat_id)
-        system_prompt = await self._get_chat_system_prompt(chat_id)
+        system_prompt, response_style = await self._get_chat_prompt_style(chat_id)
         async for payload in self._iter_ai_stream_group_payloads(
                 chat_id=chat_id,
                 user=user,
                 sse_events=llm_client.general_chat_stream_events(
-                    messages, user, chat_id=chat_id, system_prompt=system_prompt
+                    messages, user, chat_id=chat_id,
+                    system_prompt=system_prompt, response_style=response_style,
                 ),
                 complete_extractor=self._extract_general_chat_complete,
                 stream_url_setting_name="LLM_GENERAL_CHAT_STREAM_URL",
@@ -391,10 +414,14 @@ class MessageService:
             chat_id: int,
     ) -> AsyncIterator[dict[str, Any]]:
         messages = await self._build_llm_messages(chat_id)
+        system_prompt, response_style = await self._get_chat_prompt_style(chat_id)
         async for payload in self._iter_ai_stream_group_payloads(
                 chat_id=chat_id,
                 user=user,
-                sse_events=llm_client.rag_agent_stream_events(messages, user, chat_id=chat_id),
+                sse_events=llm_client.rag_agent_stream_events(
+                    messages, user, chat_id=chat_id,
+                    system_prompt=system_prompt, response_style=response_style,
+                ),
                 complete_extractor=self._extract_agent_complete,
                 stream_url_setting_name="LLM_RAG_AGENT_STREAM_URL",
         ):
@@ -406,10 +433,14 @@ class MessageService:
             chat_id: int,
     ) -> AsyncIterator[dict[str, Any]]:
         messages = await self._build_llm_messages(chat_id)
+        system_prompt, response_style = await self._get_chat_prompt_style(chat_id)
         async for payload in self._iter_ai_stream_group_payloads(
                 chat_id=chat_id,
                 user=user,
-                sse_events=llm_client.agent_stream_events(messages, user, chat_id=chat_id),
+                sse_events=llm_client.agent_stream_events(
+                    messages, user, chat_id=chat_id,
+                    system_prompt=system_prompt, response_style=response_style,
+                ),
                 complete_extractor=self._extract_agent_complete,
                 stream_url_setting_name="LLM_AGENT_STREAM_URL",
         ):
@@ -593,12 +624,13 @@ class MessageService:
         return "", answer, fragments
 
     @staticmethod
-    async def _get_chat_system_prompt(chat_id: int) -> str | None:
+    async def _get_chat_prompt_style(chat_id: int) -> tuple[str | None, str | None]:
         chat = await sync_to_async(chat_repository.get_by_id)(chat_id)
         if chat is None:
-            return None
-        prompt = getattr(chat, "system_prompt", None)
-        return prompt or None
+            return None, None
+        system_prompt = getattr(chat, "system_prompt", None) or None
+        response_style = getattr(chat, "response_style", None) or None
+        return system_prompt, response_style
 
     def delete_message(self, user: AuthenticatedUser, chat_id: int, message_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({DELETE_MESSAGE}))
@@ -610,88 +642,6 @@ class MessageService:
             raise MessageDeleteForbiddenException()
         msg.delete(deleted_by=user.id)
         logger.info("Message deleted.", extra={"chat_id": chat_id, "message_id": message_id, "user_id": user.id})
-
-    def send_ephemeral_message(
-            self,
-            user: AuthenticatedUser,
-            chat_id: int,
-            text: str,
-    ) -> ArtifactMessage:
-        AccessControl.require_permissions(user, frozenset({SEND_MESSAGE}))
-        self._require_send_access(chat_id, user.id)
-        return ArtifactMessage(
-            message=text,
-            sender_type=ArtifactMessage.SenderType.USER,
-            created_by=user.id,
-        )
-
-    async def run_ephemeral_document_question(
-            self,
-            user: AuthenticatedUser,
-            chat_id: int,
-            user_message: str,
-    ) -> DocumentQuestionRunResult:
-        await sync_to_async(self._require_access)(chat_id, user.id)
-        messages = [{"role": "human", "content": user_message}]
-        try:
-            llm_out: DocumentQuestionResult = await llm_client.document_question(messages, user, chat_id=chat_id)
-        except HttpClientException as e:
-            logger.error(
-                "LLM ephemeral document-question failed: %s",
-                str(e),
-                extra={"chat_id": chat_id, "user_id": user.id},
-                exc_info=True,
-            )
-            raise LLMServiceException() from e
-        return DocumentQuestionRunResult(
-            question=llm_out.question,
-            answer=llm_out.answer,
-            fragments=llm_out.fragments,
-            assistant_message=None,
-        )
-
-    async def run_ephemeral_ai_reply(
-            self,
-            mode: str,
-            user: AuthenticatedUser,
-            chat_id: int,
-            user_message: str,
-    ) -> DocumentQuestionRunResult:
-        if mode == ChatAIMode.DOCUMENT_QUESTION:
-            return await self.run_ephemeral_document_question(user, chat_id, user_message)
-
-        await sync_to_async(self._require_access)(chat_id, user.id)
-        messages = [{"role": "human", "content": user_message}]
-        try:
-            if mode == ChatAIMode.GENERAL_CHAT:
-                system_prompt = await self._get_chat_system_prompt(chat_id)
-                general = await llm_client.general_chat(
-                    messages, user, chat_id=chat_id, system_prompt=system_prompt
-                )
-                return DocumentQuestionRunResult(
-                    question="", answer=general.answer, fragments=[], assistant_message=None,
-                )
-            if mode == ChatAIMode.RAG_AGENT:
-                rag = await llm_client.rag_agent(messages, user, chat_id=chat_id)
-                return DocumentQuestionRunResult(
-                    question="", answer=rag.answer, fragments=rag.fragments, assistant_message=None,
-                )
-            if mode == ChatAIMode.AGENT:
-                agent = await llm_client.agent(messages, user, chat_id=chat_id)
-                return DocumentQuestionRunResult(
-                    question="", answer=agent.answer, fragments=agent.fragments, assistant_message=None,
-                )
-        except HttpClientException as e:
-            logger.error(
-                "LLM ephemeral %s failed: %s",
-                mode,
-                str(e),
-                extra={"chat_id": chat_id, "user_id": user.id},
-                exc_info=True,
-            )
-            raise LLMServiceException() from e
-
-        return await self.run_ephemeral_document_question(user, chat_id, user_message)
 
     def _require_access(self, chat_id: int, user_id: int):
         chat = chat_repository.get_by_id(chat_id)

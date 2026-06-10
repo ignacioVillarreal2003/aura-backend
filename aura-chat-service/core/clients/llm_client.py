@@ -127,8 +127,18 @@ class LLMClient:
             messages: list[dict[str, str]],
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> DocumentQuestionResult:
         payload: dict = {"messages": messages, "chat_id": chat_id}
+        if system_prompt:
+            stripped = system_prompt.strip()
+            if stripped:
+                payload["system_prompt"] = stripped
+        if response_style:
+            stripped = response_style.strip()
+            if stripped:
+                payload["response_style"] = stripped
 
         logger.debug(
             "Calling LLM document-question.",
@@ -157,8 +167,18 @@ class LLMClient:
             messages: list[dict[str, str]],
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         payload: dict = {"messages": messages, "chat_id": chat_id}
+        if system_prompt:
+            stripped = system_prompt.strip()
+            if stripped:
+                payload["system_prompt"] = stripped
+        if response_style:
+            stripped = response_style.strip()
+            if stripped:
+                payload["response_style"] = stripped
 
         logger.debug(
             "Calling LLM document-question stream.",
@@ -180,12 +200,17 @@ class LLMClient:
             chat_id: int,
             mode: str = "direct",
             system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> GeneralChatResult:
         payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
         if system_prompt is not None:
             stripped = system_prompt.strip()
             if stripped:
                 payload["system_prompt"] = stripped
+        if response_style:
+            stripped = response_style.strip()
+            if stripped:
+                payload["response_style"] = stripped
 
         logger.debug(
             "Calling LLM general-chat.",
@@ -215,12 +240,17 @@ class LLMClient:
             chat_id: int,
             mode: str = "direct",
             system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
         if system_prompt is not None:
             stripped = system_prompt.strip()
             if stripped:
                 payload["system_prompt"] = stripped
+        if response_style:
+            stripped = response_style.strip()
+            if stripped:
+                payload["response_style"] = stripped
 
         logger.debug(
             "Calling LLM general-chat stream.",
@@ -240,8 +270,18 @@ class LLMClient:
             messages: list[dict[str, str]],
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> AgentRunResult:
         payload: dict = {"messages": messages, "chat_id": chat_id}
+        if system_prompt:
+            stripped = system_prompt.strip()
+            if stripped:
+                payload["system_prompt"] = stripped
+        if response_style:
+            stripped = response_style.strip()
+            if stripped:
+                payload["response_style"] = stripped
 
         logger.debug(
             "Calling LLM rag-agent.",
@@ -265,8 +305,18 @@ class LLMClient:
             messages: list[dict[str, str]],
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         payload: dict = {"messages": messages, "chat_id": chat_id}
+        if system_prompt:
+            stripped = system_prompt.strip()
+            if stripped:
+                payload["system_prompt"] = stripped
+        if response_style:
+            stripped = response_style.strip()
+            if stripped:
+                payload["response_style"] = stripped
 
         logger.debug(
             "Calling LLM rag-agent stream.",
@@ -286,8 +336,18 @@ class LLMClient:
             messages: list[dict[str, str]],
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> AgentRunResult:
         payload: dict = {"messages": messages, "chat_id": chat_id}
+        if system_prompt:
+            stripped = system_prompt.strip()
+            if stripped:
+                payload["system_prompt"] = stripped
+        if response_style:
+            stripped = response_style.strip()
+            if stripped:
+                payload["response_style"] = stripped
 
         logger.debug(
             "Calling LLM agent.",
@@ -311,8 +371,18 @@ class LLMClient:
             messages: list[dict[str, str]],
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         payload: dict = {"messages": messages, "chat_id": chat_id}
+        if system_prompt:
+            stripped = system_prompt.strip()
+            if stripped:
+                payload["system_prompt"] = stripped
+        if response_style:
+            stripped = response_style.strip()
+            if stripped:
+                payload["response_style"] = stripped
 
         logger.debug(
             "Calling LLM agent stream.",
@@ -333,8 +403,18 @@ class LLMClient:
             mode: str,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> ChecklistGenerateResult:
         payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
+        if system_prompt:
+            stripped = system_prompt.strip()
+            if stripped:
+                payload["system_prompt"] = stripped
+        if response_style:
+            stripped = response_style.strip()
+            if stripped:
+                payload["response_style"] = stripped
 
         logger.debug(
             "Calling LLM checklist-generate.",
@@ -365,8 +445,18 @@ class LLMClient:
             mode: str,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
+        if system_prompt:
+            stripped = system_prompt.strip()
+            if stripped:
+                payload["system_prompt"] = stripped
+        if response_style:
+            stripped = response_style.strip()
+            if stripped:
+                payload["response_style"] = stripped
 
         logger.debug(
             "Calling LLM checklist-generate stream.",
@@ -388,8 +478,18 @@ class LLMClient:
             report_type: str,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> ReportGenerateResult:
         payload: dict = {"messages": messages, "mode": mode, "report_type": report_type, "chat_id": chat_id}
+        if system_prompt:
+            stripped = system_prompt.strip()
+            if stripped:
+                payload["system_prompt"] = stripped
+        if response_style:
+            stripped = response_style.strip()
+            if stripped:
+                payload["response_style"] = stripped
 
         logger.debug(
             "Calling LLM report-generate.",
@@ -422,8 +522,18 @@ class LLMClient:
             report_type: str,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         payload: dict = {"messages": messages, "mode": mode, "report_type": report_type, "chat_id": chat_id}
+        if system_prompt:
+            stripped = system_prompt.strip()
+            if stripped:
+                payload["system_prompt"] = stripped
+        if response_style:
+            stripped = response_style.strip()
+            if stripped:
+                payload["response_style"] = stripped
 
         logger.debug(
             "Calling LLM report-generate stream.",
@@ -444,8 +554,18 @@ class LLMClient:
             mode: str,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> TimelineGenerateResult:
         payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
+        if system_prompt:
+            stripped = system_prompt.strip()
+            if stripped:
+                payload["system_prompt"] = stripped
+        if response_style:
+            stripped = response_style.strip()
+            if stripped:
+                payload["response_style"] = stripped
 
         logger.debug(
             "Calling LLM timeline-generate.",
@@ -477,8 +597,18 @@ class LLMClient:
             mode: str,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
+        if system_prompt:
+            stripped = system_prompt.strip()
+            if stripped:
+                payload["system_prompt"] = stripped
+        if response_style:
+            stripped = response_style.strip()
+            if stripped:
+                payload["response_style"] = stripped
 
         logger.debug(
             "Calling LLM timeline-generate stream.",
@@ -499,8 +629,18 @@ class LLMClient:
             mode: str,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> QuizGenerateResult:
         payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
+        if system_prompt:
+            stripped = system_prompt.strip()
+            if stripped:
+                payload["system_prompt"] = stripped
+        if response_style:
+            stripped = response_style.strip()
+            if stripped:
+                payload["response_style"] = stripped
 
         logger.debug(
             "Calling LLM quiz-generate.",
@@ -533,8 +673,18 @@ class LLMClient:
             mode: str,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
+        if system_prompt:
+            stripped = system_prompt.strip()
+            if stripped:
+                payload["system_prompt"] = stripped
+        if response_style:
+            stripped = response_style.strip()
+            if stripped:
+                payload["response_style"] = stripped
 
         logger.debug(
             "Calling LLM quiz-generate stream.",
@@ -555,8 +705,18 @@ class LLMClient:
             mode: str,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> LessonsLearnedGenerateResult:
         payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
+        if system_prompt:
+            stripped = system_prompt.strip()
+            if stripped:
+                payload["system_prompt"] = stripped
+        if response_style:
+            stripped = response_style.strip()
+            if stripped:
+                payload["response_style"] = stripped
 
         logger.debug(
             "Calling LLM lessons-learned-generate.",
@@ -588,8 +748,18 @@ class LLMClient:
             mode: str,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
+        if system_prompt:
+            stripped = system_prompt.strip()
+            if stripped:
+                payload["system_prompt"] = stripped
+        if response_style:
+            stripped = response_style.strip()
+            if stripped:
+                payload["response_style"] = stripped
 
         logger.debug(
             "Calling LLM lessons-learned-generate stream.",
@@ -610,8 +780,18 @@ class LLMClient:
             mode: str,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> DecisionBriefGenerateResult:
         payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
+        if system_prompt:
+            stripped = system_prompt.strip()
+            if stripped:
+                payload["system_prompt"] = stripped
+        if response_style:
+            stripped = response_style.strip()
+            if stripped:
+                payload["response_style"] = stripped
 
         logger.debug(
             "Calling LLM decision-brief-generate.",
@@ -645,8 +825,18 @@ class LLMClient:
             document_ids: list[int],
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> DocumentSummaryResult:
-        payload: dict = {"document_ids": document_ids}
+        payload: dict = {"document_ids": document_ids, "chat_id": chat_id}
+        if system_prompt:
+            stripped = system_prompt.strip()
+            if stripped:
+                payload["system_prompt"] = stripped
+        if response_style:
+            stripped = response_style.strip()
+            if stripped:
+                payload["response_style"] = stripped
 
         logger.debug(
             "Calling LLM document-summary.",
@@ -675,8 +865,18 @@ class LLMClient:
             document_ids: list[int],
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload: dict = {"document_ids": document_ids}
+        payload: dict = {"document_ids": document_ids, "chat_id": chat_id}
+        if system_prompt:
+            stripped = system_prompt.strip()
+            if stripped:
+                payload["system_prompt"] = stripped
+        if response_style:
+            stripped = response_style.strip()
+            if stripped:
+                payload["response_style"] = stripped
 
         logger.debug(
             "Calling LLM document-summary stream.",
@@ -698,10 +898,20 @@ class LLMClient:
             action: str | None,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> DocumentActionResult:
-        payload: dict = {"document_ids": document_ids, "instruction": instruction}
+        payload: dict = {"document_ids": document_ids, "instruction": instruction, "chat_id": chat_id}
         if action is not None:
             payload["action"] = action
+        if system_prompt:
+            stripped = system_prompt.strip()
+            if stripped:
+                payload["system_prompt"] = stripped
+        if response_style:
+            stripped = response_style.strip()
+            if stripped:
+                payload["response_style"] = stripped
 
         logger.debug(
             "Calling LLM document-action.",
@@ -734,10 +944,20 @@ class LLMClient:
             action: str | None,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload: dict = {"document_ids": document_ids, "instruction": instruction}
+        payload: dict = {"document_ids": document_ids, "instruction": instruction, "chat_id": chat_id}
         if action is not None:
             payload["action"] = action
+        if system_prompt:
+            stripped = system_prompt.strip()
+            if stripped:
+                payload["system_prompt"] = stripped
+        if response_style:
+            stripped = response_style.strip()
+            if stripped:
+                payload["response_style"] = stripped
 
         logger.debug(
             "Calling LLM document-action stream.",
@@ -758,8 +978,18 @@ class LLMClient:
             mode: str,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
+        if system_prompt:
+            stripped = system_prompt.strip()
+            if stripped:
+                payload["system_prompt"] = stripped
+        if response_style:
+            stripped = response_style.strip()
+            if stripped:
+                payload["response_style"] = stripped
 
         logger.debug(
             "Calling LLM decision-brief-generate stream.",

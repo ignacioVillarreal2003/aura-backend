@@ -49,12 +49,12 @@ def _persist_generated_report(
         mode: str,
         source_chat_id: int,
         content: str,
+        query: str = "",
         fragments=None,
 ) -> tuple:
     artifact = create_artifact_for_content(
         user_id=user_id,
         artifact_type=Artifact.Type.REPORT,
-        title=title,
         mode=mode,
         source_chat_id=source_chat_id,
         fragments=fragments,
@@ -64,6 +64,9 @@ def _persist_generated_report(
         type=report_type,
         content=content,
         artifact_id=artifact.id,
+        title=title,
+        description="",
+        query=query,
     )
     return artifact, report
 
@@ -114,27 +117,6 @@ class ReportService:
         return report
 
     @transaction.atomic
-    def update_report(
-            self,
-            user: AuthenticatedUser,
-            report_id: int,
-            title: Optional[str] = None,
-            content: Optional[str] = None,
-    ) -> ArtifactReport:
-        AccessControl.require_permissions(user, frozenset({perms.UPDATE_REPORT}))
-        report = report_repository.get_by_id_for_update(report_id)
-        if report is None:
-            raise ReportNotFoundException()
-        _assert_report_access(user.id, report, require_contributor=True)
-        if title is not None:
-            artifact_repository.update(
-                report.artifact,
-                updated_by=user.id,
-                title=title,
-            )
-        return report_repository.update(report, updated_by=user.id, content=content)
-
-    @transaction.atomic
     def delete_report(self, user: AuthenticatedUser, report_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({perms.DELETE_REPORT}))
         report = report_repository.get_by_id_for_update(report_id)
@@ -159,6 +141,8 @@ class ReportService:
         chat = await sync_to_async(chat_repository.get_by_id)(chat_id)
         if chat is None:
             raise ChatNotFoundException()
+        system_prompt = chat.system_prompt if chat else None
+        response_style = chat.response_style if chat else None
         history = await sync_to_async(build_chat_history)(chat_id)
 
         messages = history + [{"role": "human", "content": message}]
@@ -170,6 +154,8 @@ class ReportService:
                     report_type=report_type,
                     user=user,
                     chat_id=chat_id,
+                    system_prompt=system_prompt,
+                    response_style=response_style,
             ):
                 et = event.get("type")
                 if et == "progress":
@@ -216,6 +202,7 @@ class ReportService:
             mode=mode,
             source_chat_id=chat_id,
             content=content,
+            query=message,
             fragments=fragments,
         )
 

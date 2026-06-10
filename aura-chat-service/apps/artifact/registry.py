@@ -7,6 +7,8 @@ ARTIFACT_TYPES: frozenset[str] = frozenset(
         "TIMELINE",
         "LESSONS_LEARNED",
         "DECISION_BRIEF",
+        "DOCUMENT_SUMMARY",
+        "DOCUMENT_ACTION",
     }
 )
 

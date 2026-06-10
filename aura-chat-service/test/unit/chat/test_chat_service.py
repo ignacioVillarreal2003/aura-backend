@@ -6,7 +6,7 @@ Authorization model under test
 * **Global / chat-wide mutations** (update, delete, lock, unlock): allowed for the
   chat creator (``chat.created_by``) **or** any active member whose membership role
   is ``owner``. Everyone else gets ``ChatAccessDeniedException`` (403).
-* **Personal actions** (get, pin/unpin, mute/unmute, archive/unarchive): only require
+* **Personal actions** (get, pin/unpin, archive/unarchive): only require
   the caller to be an *active member* of the chat.
 * **Create / list-mine / list-all (admin)**: gated by permissions only, no ownership.
 """
@@ -95,7 +95,7 @@ def test_get_chat_active_member_returns_chat_with_membership_fields(mocker):
     chat = make_chat(chat_id=1, created_by=1)
     membership = make_membership(
         member_id=2, chat_id=1, status="active",
-        pinned_at=None, archived_at=None, muted_until=None,
+        pinned_at=None, archived_at=None,
     )
     _patch_perms(mocker)
     _patch_chat(mocker, chat)
@@ -109,7 +109,6 @@ def test_get_chat_active_member_returns_chat_with_membership_fields(mocker):
     assert result is chat
     assert result.pinned_at == membership.pinned_at
     assert result.archived_at == membership.archived_at
-    assert result.muted_until == membership.muted_until
 
 
 def test_get_chat_not_found_raises_404(mocker):
@@ -562,64 +561,3 @@ def test_unpin_chat_not_found_raises_404(mocker):
         service.unpin_chat(user, chat_id=999)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# mute_chat / unmute_chat  (personal — active membership)
-# ══════════════════════════════════════════════════════════════════════════════
-
-def test_mute_chat_active_member_mutes(mocker):
-    user = make_user(user_id=2)
-    chat = make_chat(chat_id=1, created_by=1)
-    until = object()
-    _patch_perms(mocker)
-    _patch_chat(mocker, chat)
-    mocker.patch(f"{SVC}.membership_repository.is_active_member", return_value=True)
-    mute = mocker.patch(f"{SVC}.membership_repository.mute")
-    service.mute_chat(user, chat_id=1, muted_until=until)
-    mute.assert_called_once_with(chat_id=1, member_id=2, muted_until=until)
-
-
-def test_mute_chat_not_found_raises_404(mocker):
-    user = make_user(user_id=2)
-    _patch_perms(mocker)
-    _patch_chat(mocker, None)
-    with pytest.raises(ChatNotFoundException):
-        service.mute_chat(user, chat_id=999, muted_until=object())
-
-
-def test_mute_chat_non_member_raises_403(mocker):
-    user = make_user(user_id=99)
-    chat = make_chat(chat_id=1, created_by=1)
-    _patch_perms(mocker)
-    _patch_chat(mocker, chat)
-    mocker.patch(f"{SVC}.membership_repository.is_active_member", return_value=False)
-    with pytest.raises(ChatAccessDeniedException):
-        service.mute_chat(user, chat_id=1, muted_until=object())
-
-
-def test_unmute_chat_active_member_unmutes(mocker):
-    user = make_user(user_id=2)
-    chat = make_chat(chat_id=1, created_by=1)
-    _patch_perms(mocker)
-    _patch_chat(mocker, chat)
-    mocker.patch(f"{SVC}.membership_repository.is_active_member", return_value=True)
-    unmute = mocker.patch(f"{SVC}.membership_repository.unmute")
-    service.unmute_chat(user, chat_id=1)
-    unmute.assert_called_once_with(chat_id=1, member_id=2)
-
-
-def test_unmute_chat_non_member_raises_403(mocker):
-    user = make_user(user_id=99)
-    chat = make_chat(chat_id=1, created_by=1)
-    _patch_perms(mocker)
-    _patch_chat(mocker, chat)
-    mocker.patch(f"{SVC}.membership_repository.is_active_member", return_value=False)
-    with pytest.raises(ChatAccessDeniedException):
-        service.unmute_chat(user, chat_id=1)
-
-
-def test_unmute_chat_not_found_raises_404(mocker):
-    user = make_user(user_id=2)
-    _patch_perms(mocker)
-    _patch_chat(mocker, None)
-    with pytest.raises(ChatNotFoundException):
-        service.unmute_chat(user, chat_id=999)

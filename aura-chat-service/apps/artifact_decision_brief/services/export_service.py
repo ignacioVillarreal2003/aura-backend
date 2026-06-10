@@ -133,7 +133,7 @@ def generate_decision_brief_pdf(brief: ArtifactDecisionBrief) -> bytes:
   <div class="classification">CLASIFICACIÓN SEGÚN CONTENIDO</div>
 </div>
 <h1>BRIEF DE DECISIÓN</h1>
-<h2 style="border:none; margin-top:2px;">{html.escape(brief.artifact.title)}</h2>
+<h2 style="border:none; margin-top:2px;">{html.escape(brief.title)}</h2>
 <div class="meta">Generado: {created} &bull; Modo: {mode_label}</div>
 {_section("Problema", brief.problem)}
 {_section("Contexto", brief.context)}
@@ -155,7 +155,7 @@ def generate_decision_brief_markdown(brief: ArtifactDecisionBrief) -> str:
     lines = [
         "# BRIEF DE DECISIÓN",
         "",
-        f"**{brief.artifact.title}**",
+        f"**{brief.title}**",
         "",
         f"*Generado: {_fmt_dt(brief.created_at)}*",
         "",

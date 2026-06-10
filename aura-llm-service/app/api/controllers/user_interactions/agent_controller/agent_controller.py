@@ -2,7 +2,6 @@
 from fastapi import APIRouter, Depends
 from starlette.responses import StreamingResponse
 
-from app.api.dependencies.idempotency import optional_idempotency_key
 from app.api.dependencies.rate_limiter import strict_rate_limit
 from app.api.controllers.user_interactions.agent_controller.agent_controller_interface import (
     AgentControllerInterface
@@ -25,7 +24,6 @@ class AgentController(AgentControllerInterface):
             agent_request: AgentRequest,
             agent_service: AgentServiceInterface = Depends(get_agent_service),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
-            _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(strict_rate_limit),
     ) -> AgentResponse:
         Authorizer.require_permissions(

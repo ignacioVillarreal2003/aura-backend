@@ -1,12 +1,40 @@
+import logging
 import math
 import time
 import uuid
 from typing import Callable
+import redis.exceptions as redis_exceptions
 from fastapi import HTTPException, Request, status
+
+logger = logging.getLogger(__name__)
 
 _WINDOW_SECONDS = 60
 _STRICT_RATE = 20
 _DEFAULT_RATE = 60
+
+# Single round-trip, atomic sliding-window limiter. Evicting expired members,
+# counting, and (conditionally) adding the new member all happen in one Lua
+# script so there is no check-then-act race between concurrent requests.
+# Returns {allowed (1/0), oldest_score} where oldest_score lets us compute
+# Retry-After when the request is denied.
+_RATE_LIMIT_SCRIPT = """
+local key = KEYS[1]
+local now = tonumber(ARGV[1])
+local window = tonumber(ARGV[2])
+local limit = tonumber(ARGV[3])
+local member = ARGV[4]
+local ttl = tonumber(ARGV[5])
+
+redis.call('zremrangebyscore', key, 0, now - window)
+local count = redis.call('zcard', key)
+if count >= limit then
+    local oldest = redis.call('zrange', key, 0, 0, 'WITHSCORES')
+    return {0, oldest[2] or '0'}
+end
+redis.call('zadd', key, now, member)
+redis.call('expire', key, ttl)
+return {1, '0'}
+"""
 
 
 async def _check_rate_limit(request: Request, limit: int) -> None:
@@ -23,30 +51,39 @@ async def _check_rate_limit(request: Request, limit: int) -> None:
     key = f"rl:{identity}:{request.url.path}"
     now = time.time()
 
-    async with redis_client.client.pipeline(transaction=True) as pipe:
-        pipe.zremrangebyscore(key, 0, now - _WINDOW_SECONDS)
-        pipe.zcard(key)
-        pipe.zrange(key, 0, 0, withscores=True)
-        results = await pipe.execute()
-
-    count: int = results[1]
-    if count >= limit:
-        oldest = results[2]
-        if oldest:
-            oldest_score: float = oldest[0][1]
-            retry_after = max(1, math.ceil(oldest_score + _WINDOW_SECONDS - now))
-        else:
-            retry_after = 1
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Rate limit exceeded. Please retry later.",
-            headers={"Retry-After": str(retry_after)},
+    try:
+        allowed, oldest_score = await redis_client.client.eval(
+            _RATE_LIMIT_SCRIPT,
+            1,
+            key,
+            now,
+            _WINDOW_SECONDS,
+            limit,
+            str(uuid.uuid4()),
+            _WINDOW_SECONDS * 2,
         )
+    except (redis_exceptions.RedisError, OSError):
+        # Fail open: a transient Redis outage must not take down every endpoint.
+        logger.warning(
+            "Rate limit check failed; allowing request (fail-open).",
+            extra={"path": request.url.path},
+            exc_info=True,
+        )
+        return
 
-    async with redis_client.client.pipeline(transaction=True) as pipe:
-        pipe.zadd(key, {str(uuid.uuid4()): now})
-        pipe.expire(key, _WINDOW_SECONDS * 2)
-        await pipe.execute()
+    if int(allowed) == 1:
+        return
+
+    try:
+        oldest = float(oldest_score)
+    except (TypeError, ValueError):
+        oldest = now
+    retry_after = max(1, math.ceil(oldest + _WINDOW_SECONDS - now))
+    raise HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail="Rate limit exceeded. Please retry later.",
+        headers={"Retry-After": str(retry_after)},
+    )
 
 
 def make_rate_limiter(limit: int) -> Callable:

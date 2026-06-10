@@ -80,14 +80,14 @@ Authorization: Bearer {{authToken}}
 }
 
 
-### Cambiar estado de una notificación — archivar
+### Cambiar estado de una notificación — marcar como no leída
 PATCH {{notifBase}}/notifications/123/
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer {{authToken}}
 
 {
-  "status": "archived"
+  "status": "unread"
 }
 
 

@@ -101,7 +101,7 @@ def generate_document_summary_pdf(obj: ArtifactDocumentSummary) -> bytes:
 <div class="doc-header">
   <div class="classification">RESUMEN DE DOCUMENTO</div>
 </div>
-<h1>{html.escape(obj.artifact.title)}</h1>
+<h1>{html.escape(obj.title)}</h1>
 <div class="meta">Generado: {created}</div>
 <h2>Resumen</h2>
 <p>{html.escape(obj.summary)}</p>
@@ -117,7 +117,7 @@ def generate_document_summary_markdown(obj: ArtifactDocumentSummary) -> str:
     lines = [
         "# RESUMEN DE DOCUMENTO",
         "",
-        f"**{obj.artifact.title}**",
+        f"**{obj.title}**",
         "",
         f"*Generado: {_fmt_dt(obj.created_at)}*",
         "",

@@ -55,13 +55,14 @@ class LlmProvider(LlmProviderInterface):
     def _build_headers(
             authenticated_user: AuthenticatedUser
     ) -> dict[str, str]:
+        # System (trusted) call: authorization is derived from the service key
+        # (system principal) downstream; user id/email are sent for scoping/audit
+        # only. Self-asserted roles/permissions are no longer forwarded.
         headers: dict[str, str] = {
             "X-Service-Api-Key": environment_variables.service_api_key,
             "Accept": "application/json",
             "X-User-Id": str(authenticated_user.id),
             "X-User-Email": str(authenticated_user.email),
-            "X-User-Roles": ",".join(authenticated_user.roles),
-            "X-User-Permissions": ",".join(authenticated_user.permissions),
         }
         return headers
 

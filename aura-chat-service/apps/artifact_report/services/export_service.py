@@ -145,7 +145,7 @@ def _build_pdf(html_content: str) -> bytes:
 
 def generate_report_pdf(report: ArtifactReport) -> bytes:
     type_label = html.escape(_TYPE_LABELS.get(report.type, report.type))
-    title = html.escape(report.artifact.title)
+    title = html.escape(report.title)
     created = html.escape(_fmt_dt(report.created_at))
     mode_label = "Con documentos de contexto" if report.artifact.mode == Artifact.Mode.RAG else "Directo"
     content_html = _render_markdown(report.content)
@@ -181,7 +181,7 @@ def generate_report_markdown(report: ArtifactReport) -> str:
     lines = [
         f"# {type_label}",
         "",
-        f"**{report.artifact.title}**",
+        f"**{report.title}**",
         "",
         f"*Generado: {_fmt_dt(report.created_at)}*",
         "",

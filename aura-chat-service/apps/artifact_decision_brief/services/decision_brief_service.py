@@ -37,7 +37,6 @@ def _normalize_options(options: list) -> list:
     for idx, opt in enumerate(options):
         normalized.append({
             "title": str(opt.get("title", ""))[:300],
-            "description": str(opt.get("description", "")),
             "pros": str(opt.get("pros", "")),
             "cons": str(opt.get("cons", "")),
             "is_recommended": bool(opt.get("is_recommended", False)),
@@ -58,6 +57,7 @@ def _persist_generated_decision_brief(
         *,
         user_id: int,
         title: str,
+        query: str,
         mode: str,
         source_chat_id: int,
         problem: str,
@@ -70,7 +70,6 @@ def _persist_generated_decision_brief(
     artifact = create_artifact_for_content(
         user_id=user_id,
         artifact_type=Artifact.Type.DECISION_BRIEF,
-        title=title,
         mode=mode,
         source_chat_id=source_chat_id,
         fragments=fragments,
@@ -83,6 +82,8 @@ def _persist_generated_decision_brief(
         recommendation=recommendation,
         options=options,
         artifact_id=artifact.id,
+        title=title,
+        query=query,
     )
     return artifact, brief
 
@@ -124,36 +125,6 @@ class DecisionBriefService:
         return brief
 
     @transaction.atomic
-    def update_decision_brief(
-            self,
-            user: AuthenticatedUser,
-            decision_brief_id: int,
-            title: Optional[str] = None,
-            problem: Optional[str] = None,
-            context: Optional[str] = None,
-            risks: Optional[str] = None,
-            recommendation: Optional[str] = None,
-            options: Optional[list] = None,
-    ) -> ArtifactDecisionBrief:
-        AccessControl.require_permissions(user, frozenset({perms.UPDATE_DECISION_BRIEF}))
-        brief = decision_brief_repository.get_by_id_for_update(decision_brief_id)
-        if brief is None:
-            raise DecisionBriefNotFoundException()
-        _assert_access(user.id, brief, require_contributor=True)
-        if title is not None:
-            artifact_repository.update(brief.artifact, updated_by=user.id, title=title)
-        normalized = _normalize_options(options) if options is not None else None
-        return decision_brief_repository.update(
-            brief,
-            updated_by=user.id,
-            problem=problem,
-            context=context,
-            risks=risks,
-            recommendation=recommendation,
-            options=normalized,
-        )
-
-    @transaction.atomic
     def delete_decision_brief(self, user: AuthenticatedUser, decision_brief_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({perms.DELETE_DECISION_BRIEF}))
         brief = decision_brief_repository.get_by_id_for_update(decision_brief_id)
@@ -177,6 +148,8 @@ class DecisionBriefService:
         chat = await sync_to_async(chat_repository.get_by_id)(chat_id)
         if chat is None:
             raise ChatNotFoundException()
+        system_prompt = chat.system_prompt if chat else None
+        response_style = chat.response_style if chat else None
         history = await sync_to_async(build_chat_history)(chat_id)
 
         messages = history + [{"role": "human", "content": message}]
@@ -187,6 +160,8 @@ class DecisionBriefService:
                     mode=mode,
                     user=user,
                     chat_id=chat_id,
+                    system_prompt=system_prompt,
+                    response_style=response_style,
             ):
                 et = event.get("type")
                 if et == "progress":
@@ -229,6 +204,7 @@ class DecisionBriefService:
         artifact, brief = await sync_to_async(_persist_generated_decision_brief)(
             user_id=user.id,
             title=title,
+            query=message,
             mode=mode,
             source_chat_id=chat_id,
             problem=str(result_data.get("problem", "")),

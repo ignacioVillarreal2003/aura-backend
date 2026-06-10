@@ -50,6 +50,21 @@ class HealthController(HealthControllerInterface):
             checks["ollama"] = {"status": "not_configured", "tools_bound": False}
             overall_ok = False
 
+        redis_client = getattr(request.app.state, "redis_client", None)
+        if redis_client is not None:
+            try:
+                redis_ok = await redis_client.health_check()
+                checks["redis"] = {"status": "ok" if redis_ok else "error"}
+                if not redis_ok:
+                    overall_ok = False
+            except Exception as exc:
+                logger.warning("Redis health check failed", exc_info=exc)
+                checks["redis"] = {"status": "error"}
+                overall_ok = False
+        else:
+            checks["redis"] = {"status": "not_configured"}
+            overall_ok = False
+
         http_status = 200 if overall_ok else 503
         return JSONResponse(
             {"status": "ok" if overall_ok else "degraded", "checks": checks},

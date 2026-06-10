@@ -102,7 +102,7 @@ def generate_document_action_pdf(obj: ArtifactDocumentAction) -> bytes:
 <div class="doc-header">
   <div class="classification">ACCIÓN SOBRE DOCUMENTO{action_label}</div>
 </div>
-<h1>{html.escape(obj.artifact.title)}</h1>
+<h1>{html.escape(obj.title)}</h1>
 <div class="meta">Generado: {created}</div>
 <h2>Instrucción</h2>
 <p>{html.escape(obj.instruction)}</p>
@@ -121,7 +121,7 @@ def generate_document_action_markdown(obj: ArtifactDocumentAction) -> str:
     lines = [
         f"# ACCIÓN SOBRE DOCUMENTO{action_label}",
         "",
-        f"**{obj.artifact.title}**",
+        f"**{obj.title}**",
         "",
         f"*Generado: {_fmt_dt(obj.created_at)}*",
         "",

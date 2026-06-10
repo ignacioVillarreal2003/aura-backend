@@ -47,6 +47,12 @@ class GeneralChatRequest(BaseModel):
         max_length=MAX_INSTRUCTION_CHARS,
         description="System prompt personalizado. Si no se provee se usa el prompt por defecto de AURA.",
     )
+    response_style: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        max_length=MAX_INSTRUCTION_CHARS,
+        description="Estilo de respuesta esperado por el operador.",
+    )
 
     @field_validator("document_ids")
     @classmethod

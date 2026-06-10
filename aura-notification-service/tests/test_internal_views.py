@@ -20,12 +20,11 @@ VALID_PAYLOAD = {
 URL = "/api/v1/internal/events/"
 
 
-def _outcome(receiver_id, notification_id=None, channels=None, suppressed=False):
+def _outcome(receiver_id, notification_id=None, channels=None):
     return DispatchOutcome(
         receiver_id=receiver_id,
         notification_id=notification_id,
         channels=channels or {},
-        suppressed=suppressed,
     )
 
 
@@ -71,8 +70,8 @@ class TestInternalEventEmissionView:
 
     def test_response_includes_per_recipient_outcomes(self, api_client, internal_token_header):
         outcomes = [
-            _outcome(10, notification_id=1, channels={"inapp": "sent"}, suppressed=False),
-            _outcome(20, notification_id=2, channels={"inapp": "sent"}, suppressed=False),
+            _outcome(10, notification_id=1, channels={"inapp": "sent"}),
+            _outcome(20, notification_id=2, channels={"inapp": "sent"}),
         ]
         with patch(_SVC) as svc:
             svc.emit_event.return_value = outcomes
@@ -83,20 +82,6 @@ class TestInternalEventEmissionView:
         assert len(response.data["outcomes"]) == 2
         assert response.data["outcomes"][0]["receiver_id"] == 10
         assert response.data["outcomes"][1]["receiver_id"] == 20
-
-    def test_suppressed_outcomes_counted_separately(self, api_client, internal_token_header):
-        outcomes = [
-            _outcome(10, notification_id=1, channels={"inapp": "sent"}, suppressed=False),
-            _outcome(20, notification_id=None, channels={"inapp": "suppressed"}, suppressed=True),
-        ]
-        with patch(_SVC) as svc:
-            svc.emit_event.return_value = outcomes
-            response = api_client.post(
-                URL, VALID_PAYLOAD, format="json", **internal_token_header
-            )
-
-        assert response.data["created"] == 1
-        assert response.data["suppressed"] == 1
 
     def test_response_includes_summary_counts(self, api_client, internal_token_header):
         outcomes = [
@@ -109,7 +94,6 @@ class TestInternalEventEmissionView:
             )
 
         assert "created" in response.data
-        assert "suppressed" in response.data
         assert "skipped" in response.data
         assert "pending_email" in response.data
         assert response.data["pending_email"] == 1

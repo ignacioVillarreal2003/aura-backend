@@ -16,11 +16,11 @@ No sustituye al **servicio de identidad/autenticación** que firma JWT ni al cat
 
 ## 2. Conceptos en lenguaje simple (sin jerga innecesaria)
 
-- **Chat** (`chat`): contenedor nombrado con prompts y estilo de respuesta opcionales, etiquetas (`tags`), flag **`is_ephemeral`** (historial/flujo efímero según reglas de producto), **`is_locked`** (nadie puede enviar mientras está bloqueado) y auditoría con **borrado lógico** en soft delete del núcleo.
-- **Membresía** (`chat_membership`): relaciona un **usuario del ecosistema** (`member_id` numérico) con un chat. Incluye **rol** (`owner`, `editor`, `reader`), **estado** (`active`, `inactive`, `pending`) y timestamps de producto (**unión**, **silencio hasta**, **pin personal**, **archivo personal**, **último leído**, etc.).
+- **Chat** (`chat`): contenedor nombrado con prompts y estilo de respuesta opcionales, etiquetas (`tags`), **`is_locked`** (nadie puede enviar mientras está bloqueado) y auditoría con **borrado lógico** en soft delete del núcleo.
+- **Membresía** (`chat_membership`): relaciona un **usuario del ecosistema** (`member_id` numérico) con un chat. Incluye **rol** (`owner`, `editor`, `reader`), **estado** (`active`, `inactive`, `pending`) y timestamps de producto (**unión**, **pin personal**, **archivo personal**, **último leído**, etc.).
 - **Mensaje** (`artifact_message` + cabecera `artifact` tipo MESSAGE): fila del historial con texto, tipo de remitente (usuario vs sistema/asistente), enlace al chat vía `artifact.source_chat_id` y soft delete.
 
-En conjunto: *quién tiene acceso*, *con qué capacidad*, *qué texto se registró*, más *preferencias por usuario sobre la misma conversación* (pin, archivo, mute, leídos).
+En conjunto: *quién tiene acceso*, *con qué capacidad*, *qué texto se registró*, más *preferencias por usuario sobre la misma conversación* (pin, archivo, leídos).
 
 ---
 
@@ -46,8 +46,8 @@ Los modelos están **gestionados por Django salvo donde se note lo contrario**; 
 
 | Concepto | Tabla / idea | Propósito |
 |----------|----------------|-----------|
-| Conversación | `chat` | Núcleo: nombre, prompts, tags, ephemeral, locked, orden temporal de actividad. |
-| Pertenencia y preferencias por usuario | `chat_membership` | Rol, estado, pin/archivo/mute/leídos personales sobre el mismo chat. |
+| Conversación | `chat` | Núcleo: nombre, prompts, tags, locked, orden temporal de actividad. |
+| Pertenencia y preferencias por usuario | `chat_membership` | Rol, estado, pin/archivo/leídos personales sobre el mismo chat. |
 | Mensaje | `artifact_message` | Histórico; la API expone `id` (PK del mensaje) y `artifact_id` (cabecera). |
 | Cabecera documental | `artifact` | Tipo, título, versión, `source_chat_id`; unifica mensajes, informes, checklists, etc. |
 | Enlace de solo lectura | `chat_share_link` | UUID (`token`), expiración opcional; rutas públicas en `/api/v1/share/`. |
@@ -62,7 +62,7 @@ Orden mental: **chat** → **miembros** → **mensajes** y extensiones (**share*
 
 ### 5.1 Crear y descubrir conversaciones
 
-1. Con `CREATE_CHAT` se hace **POST** a **`/api/v1/chats/`** con nombre opcionalmente enriquecido por prompts/tags/ephemeral ([endpoints.md](endpoints.md)).
+1. Con `CREATE_CHAT` se hace **POST** a **`/api/v1/chats/`** con nombre opcionalmente enriquecido por prompts/tags ([endpoints.md](endpoints.md)).
 2. **`GET .../chats/`** lista la bandeja con filtros `search`, `ordering` y `tags` (deben coincidir **todas** las etiquetas pedidas). **`.../chats/me/`** acota a chats creados por el usuario.
 3. **Archivado personal**: **POST** `.../chats/archive/` y `.../chats/unarchive/` con listas de ids; **GET** `.../chats/archived/` para la bandeja archivada.
 

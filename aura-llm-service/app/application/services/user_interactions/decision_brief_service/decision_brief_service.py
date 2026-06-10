@@ -26,6 +26,7 @@ from app.application.services.generation_shared.generation_messages import (
     build_context_block,
     build_generation_messages,
 )
+from app.application.services.generation_shared.prompt_augmentation import augment_system_prompt
 from app.application.services.generation_shared.generation_settings import GenerationSettings
 from app.application.services.generation_shared.generation_state import GenerationState
 from app.application.services.generation_shared.processors.attached_documents_processor import (
@@ -168,12 +169,12 @@ class DecisionBriefService(DecisionBriefServiceInterface):
             await self._context_processor.run(state, RAG_QUERIES)
         await self._reduction_processor.run(state, EXTRACTION_SYSTEM_PROMPT, EXTRACTION_HUMAN_PROMPT)
 
-    async def _invoke(self, state: GenerationState) -> str:
+    async def _invoke(self, state: GenerationState, request: DecisionBriefGenerateRequest) -> str:
         context_block = build_context_block(
             state, self._generation_settings.max_context_chars, self._generation_settings.attached_reserve_ratio
         )
         llm_messages = build_generation_messages(
-            build_system_prompt(self._decision_brief_settings),
+            augment_system_prompt(build_system_prompt(self._decision_brief_settings), request.system_prompt, request.response_style),
             HUMAN_PROMPT,
             state,
             self._generation_settings.history_messages_window,
@@ -223,7 +224,7 @@ class DecisionBriefService(DecisionBriefServiceInterface):
             state = self._build_state(request, authenticated_user)
             await self._gather_context(state)
 
-            raw = await self._invoke(state)
+            raw = await self._invoke(state, request)
             title, problem, context, risks, recommendation, options = _parse_llm_output(raw,
                                                                                         self._decision_brief_settings)
             if not options:
@@ -285,7 +286,7 @@ class DecisionBriefService(DecisionBriefServiceInterface):
 
             yield DecisionBriefStreamProgress(step="generation", message="Analizando opciones y elaborando el brief de decisión...")
 
-            raw = await self._invoke(state)
+            raw = await self._invoke(state, request)
             title, problem, context, risks, recommendation, options = _parse_llm_output(raw,
                                                                                         self._decision_brief_settings)
             if not options:

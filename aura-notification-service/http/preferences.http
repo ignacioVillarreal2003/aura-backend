@@ -38,32 +38,3 @@ Authorization: Bearer {{authToken}}
 {
   "mute_until": null
 }
-
-
-### Listar preferencias por tipo de evento (catálogo con overrides del usuario)
-GET {{notifBase}}/me/notification-preferences/event-types/
-Accept: application/json
-Authorization: Bearer {{authToken}}
-
-
-### Actualizar preferencia para un tipo de evento — deshabilitar email
-PUT {{notifBase}}/me/notification-preferences/event-types/chat.member.invited/
-Accept: application/json
-Content-Type: application/json
-Authorization: Bearer {{authToken}}
-
-{
-  "email_enabled": false
-}
-
-
-### Actualizar preferencia para un tipo de evento — habilitar ambos canales
-PUT {{notifBase}}/me/notification-preferences/event-types/chat.member.invited/
-Accept: application/json
-Content-Type: application/json
-Authorization: Bearer {{authToken}}
-
-{
-  "inapp_enabled": true,
-  "email_enabled": true
-}

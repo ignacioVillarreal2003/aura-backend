@@ -217,22 +217,6 @@ class MembershipRepository:
         ).update(archived_at=None)
 
     @staticmethod
-    def mute(chat_id: int, member_id: int, muted_until) -> None:
-        ChatMembership.objects.filter(
-            chat_id=chat_id,
-            member_id=member_id,
-            status="active",
-        ).update(muted_until=muted_until)
-
-    @staticmethod
-    def unmute(chat_id: int, member_id: int) -> None:
-        ChatMembership.objects.filter(
-            chat_id=chat_id,
-            member_id=member_id,
-            status="active",
-        ).update(muted_until=None)
-
-    @staticmethod
     def soft_delete_by_chat(chat_id: int, deleted_by: int) -> None:
         now = timezone.now()
         ChatMembership.objects.filter(chat_id=chat_id).update(

@@ -2,7 +2,6 @@
 from fastapi import APIRouter, Depends
 from starlette.responses import StreamingResponse
 
-from app.api.dependencies.idempotency import optional_idempotency_key
 from app.api.dependencies.rate_limiter import strict_rate_limit
 from app.api.controllers.user_interactions.document_action_controller.document_action_controller_interface import (
     DocumentActionControllerInterface
@@ -27,7 +26,6 @@ class DocumentActionController(DocumentActionControllerInterface):
             document_action_request: DocumentActionRequest,
             document_action_service: DocumentActionServiceInterface = Depends(get_document_action_service),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
-            _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(strict_rate_limit),
     ) -> DocumentActionResponse:
         Authorizer.require_permissions(

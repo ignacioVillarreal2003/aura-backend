@@ -77,8 +77,6 @@ def _fmt_dt(dt) -> str:
 
 
 def _event_when(event) -> str:
-    if event.occurred_at is not None:
-        return _fmt_dt(event.occurred_at)
     return event.occurred_label or "—"
 
 
@@ -130,7 +128,7 @@ def generate_timeline_pdf(timeline: ArtifactTimeline) -> bytes:
   <div class="classification">CLASIFICACIÓN SEGÚN CONTENIDO</div>
 </div>
 <h1>LÍNEA DE TIEMPO</h1>
-<h2 style="border:none; margin-top:2px;">{html.escape(timeline.artifact.title)}</h2>
+<h2 style="border:none; margin-top:2px;">{html.escape(timeline.title)}</h2>
 <div class="meta">Generado: {created} &bull; Modo: {mode_label} &bull; {len(events)} eventos</div>
 {summary_html}
 <hr/>
@@ -150,7 +148,7 @@ def generate_timeline_markdown(timeline: ArtifactTimeline) -> str:
     lines = [
         "# LÍNEA DE TIEMPO",
         "",
-        f"**{timeline.artifact.title}**",
+        f"**{timeline.title}**",
         "",
         f"*Generado: {_fmt_dt(timeline.created_at)}*",
         "",

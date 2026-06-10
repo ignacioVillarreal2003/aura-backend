@@ -2,7 +2,6 @@
 from fastapi import APIRouter, Depends
 from starlette.responses import StreamingResponse
 
-from app.api.dependencies.idempotency import optional_idempotency_key
 from app.api.dependencies.rate_limiter import default_rate_limit, strict_rate_limit
 from app.api.controllers.user_interactions.document_summary_controller.document_summary_controller_interface import (
     DocumentSummaryControllerInterface
@@ -27,7 +26,6 @@ class DocumentSummaryController(DocumentSummaryControllerInterface):
             document_summary_request: DocumentSummaryRequest,
             document_summary_service: DocumentSummaryServiceInterface = Depends(get_document_summary_service),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
-            _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(strict_rate_limit),
     ) -> DocumentSummaryResponse:
         Authorizer.require_permissions(

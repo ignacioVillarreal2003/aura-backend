@@ -67,6 +67,8 @@ def _persist_generated_quiz(
         *,
         user_id: int,
         title: str,
+        description: str,
+        query: str,
         mode: str,
         source_chat_id: int,
         instructions: str,
@@ -77,7 +79,6 @@ def _persist_generated_quiz(
     artifact = create_artifact_for_content(
         user_id=user_id,
         artifact_type=Artifact.Type.QUIZ,
-        title=title,
         mode=mode,
         source_chat_id=source_chat_id,
         fragments=fragments,
@@ -88,6 +89,9 @@ def _persist_generated_quiz(
         pass_score=pass_score,
         questions=questions,
         artifact_id=artifact.id,
+        title=title,
+        description=description,
+        query=query,
     )
     return artifact, quiz
 
@@ -129,34 +133,6 @@ class QuizService:
         return quiz
 
     @transaction.atomic
-    def update_quiz(
-            self,
-            user: AuthenticatedUser,
-            quiz_id: int,
-            title: Optional[str] = None,
-            instructions: Optional[str] = None,
-            pass_score: Optional[int] = None,
-            pass_score_provided: bool = False,
-            questions: Optional[list] = None,
-    ) -> ArtifactQuiz:
-        AccessControl.require_permissions(user, frozenset({perms.UPDATE_QUIZ}))
-        quiz = quiz_repository.get_by_id_for_update(quiz_id)
-        if quiz is None:
-            raise QuizNotFoundException()
-        _assert_quiz_access(user.id, quiz, require_contributor=True)
-        if title is not None:
-            artifact_repository.update(quiz.artifact, updated_by=user.id, title=title)
-        normalized = _normalize_questions(questions) if questions is not None else None
-        return quiz_repository.update(
-            quiz,
-            updated_by=user.id,
-            instructions=instructions,
-            pass_score=pass_score,
-            pass_score_provided=pass_score_provided,
-            questions=normalized,
-        )
-
-    @transaction.atomic
     def delete_quiz(self, user: AuthenticatedUser, quiz_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({perms.DELETE_QUIZ}))
         quiz = quiz_repository.get_by_id_for_update(quiz_id)
@@ -180,6 +156,8 @@ class QuizService:
         chat = await sync_to_async(chat_repository.get_by_id)(chat_id)
         if chat is None:
             raise ChatNotFoundException()
+        system_prompt = chat.system_prompt if chat else None
+        response_style = chat.response_style if chat else None
         history = await sync_to_async(build_chat_history)(chat_id)
         messages = history + [{"role": "human", "content": message}]
         result_data: dict | None = None
@@ -189,6 +167,8 @@ class QuizService:
                     mode=mode,
                     user=user,
                     chat_id=chat_id,
+                    system_prompt=system_prompt,
+                    response_style=response_style,
             ):
                 et = event.get("type")
                 if et == "progress":
@@ -216,6 +196,7 @@ class QuizService:
             raise LLMServiceException()
 
         title = str(result_data.get("title", "")).strip()
+        description = str(result_data.get("description", "")).strip()
         raw_questions = result_data.get("questions") or []
         out_messages = result_data.get("messages") or []
         fragments = llm_client.normalize_fragments(result_data.get("fragments"))
@@ -233,6 +214,8 @@ class QuizService:
         artifact, quiz = await sync_to_async(_persist_generated_quiz)(
             user_id=user.id,
             title=title,
+            description=description,
+            query=message,
             mode=mode,
             source_chat_id=chat_id,
             instructions=instructions,

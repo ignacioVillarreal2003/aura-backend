@@ -2,7 +2,6 @@
 from fastapi import APIRouter, Depends
 from starlette.responses import StreamingResponse
 
-from app.api.dependencies.idempotency import optional_idempotency_key
 from app.api.dependencies.rate_limiter import default_rate_limit, strict_rate_limit
 from app.api.controllers.user_interactions.general_chat_controller.general_chat_controller_interface import (
     GeneralChatControllerInterface,
@@ -27,7 +26,6 @@ class GeneralChatController(GeneralChatControllerInterface):
             general_chat_request: GeneralChatRequest,
             general_chat_service: GeneralChatServiceInterface = Depends(get_general_chat_service),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
-            _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(default_rate_limit),
     ) -> GeneralChatResponse:
         Authorizer.require_permissions(

@@ -16,22 +16,16 @@ Todos los endpoints de lectura devuelven objetos con los siguientes campos:
 | ----- | ---- | ----------- |
 | `id` | entero | ID de la notificación |
 | `receiver_id` | entero | ID del usuario destinatario |
-| `title` | string \| null | Título corto. Se usa como asunto en emails. Null si no fue especificado |
+| `event_type` | string | Identificador del evento (p. ej. `chat.member.invited`) |
 | `message` | string (≤ 500) | Texto renderizado de la notificación |
-| `type` | string | Tipo: `system` · `admin` · `user` · `event` |
-| `event_type` | string \| null | Identificador del evento (p. ej. `chat.member.invited`) |
-| `event_key` | string \| null | Clave de idempotencia usada al crear la notificación |
 | `data` | objeto | Contexto original del evento (para uso del frontend) |
 | `severity` | string | `info` · `success` · `warning` · `critical` |
 | `link_url` | string \| null | Deep link opcional para la UI |
-| `sender_name` | string \| null | Nombre del actor que generó la notificación |
-| `target_scope` | string | Alcance: `individual` u otro valor definido por el productor |
-| `target_label` | string \| null | Etiqueta de agrupación opcional |
-| `status` | string | `unread` · `read` · `archived` |
+| `actor_name` | string \| null | Nombre del actor que generó la notificación |
+| `status` | string | `unread` · `read` |
 | `read_at` | datetime \| null | Momento en que se marcó como leída |
 | `created_by` | entero \| null | ID del actor que disparó la notificación |
 | `created_at` | datetime | Fecha de creación |
-| `updated_at` | datetime | Última modificación |
 
 ---
 
@@ -45,7 +39,6 @@ Todos los endpoints de lectura devuelven objetos con los siguientes campos:
 | --------- | ---- | ----------- |
 | `status` | string, repetible | Filtra por estado. Se puede repetir: `?status=unread&status=read` |
 | `event_type` | string | Filtra por tipo de evento exacto |
-| `type` | string | Filtra por tipo de notificación (`system`, `event`, etc.) |
 | `since` | datetime ISO 8601 | Solo notificaciones con `created_at >= valor` (p. ej. `2024-01-15T10:30:00Z`) |
 | `page` | entero | Número de página (base 1) |
 | `page_size` | entero | Resultados por página. Por defecto **20**, máximo **100** |
@@ -61,22 +54,16 @@ Todos los endpoints de lectura devuelven objetos con los siguientes campos:
     {
       "id": 123,
       "receiver_id": 42,
-      "title": "Nueva invitación",
-      "message": "Te invitaron al chat Proyecto X",
-      "type": "event",
       "event_type": "chat.member.invited",
-      "event_key": "chat-15-invite-42",
+      "message": "Te invitaron al chat Proyecto X",
       "data": { "chat_id": 15, "chat_name": "Proyecto X" },
       "severity": "info",
       "link_url": "https://app.ejemplo.com/chats/15",
-      "sender_name": "otro.usuario",
-      "target_scope": "individual",
-      "target_label": null,
+      "actor_name": "otro.usuario",
       "status": "unread",
       "read_at": null,
       "created_by": 7,
-      "created_at": "2024-05-10T14:23:00Z",
-      "updated_at": "2024-05-10T14:23:00Z"
+      "created_at": "2024-05-10T14:23:00Z"
     }
   ]
 }
@@ -124,7 +111,7 @@ Cambia el estado de una notificación del usuario autenticado.
 { "status": "read" }
 ```
 
-Valores válidos para `status`: `unread` · `read` · `archived`
+Valores válidos para `status`: `unread` · `read`
 
 Tras el cambio el servicio publica un evento en tiempo real (SSE `notification.updated`) con `{ "id": <id>, "status": <nuevo_status> }`.
 

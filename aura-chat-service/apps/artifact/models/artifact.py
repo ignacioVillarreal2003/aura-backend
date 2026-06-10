@@ -16,20 +16,11 @@ class Artifact(AuditModel, SoftDeleteModel):
         DOCUMENT_SUMMARY = "DOCUMENT_SUMMARY", "Document Summary"
         DOCUMENT_ACTION = "DOCUMENT_ACTION", "Document Action"
 
-    class Status(models.TextChoices):
-        DRAFT = "draft", "Borrador"
-        FINAL = "final", "Final"
-        ARCHIVED = "archived", "Archivado"
-
     class Mode(models.TextChoices):
         DIRECT = "direct", "Directo"
         RAG = "rag", "Con documentos"
 
     type = models.CharField(max_length=32, choices=Type.choices)
-    title = models.CharField(max_length=500, default="", blank=True)
-    description = models.TextField(default="", blank=True)
-    status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT)
-    version = models.IntegerField(default=1)
     mode = models.CharField(max_length=16, choices=Mode.choices, default=Mode.DIRECT)
     fragments = models.JSONField(null=True, blank=True, default=None)
     source_chat = models.ForeignKey(
@@ -45,28 +36,4 @@ class Artifact(AuditModel, SoftDeleteModel):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"[{self.type}] {self.title[:50]}"
-
-
-class ArtifactVersion(models.Model):
-    artifact = models.ForeignKey(
-        Artifact,
-        on_delete=models.CASCADE,
-        related_name="versions",
-    )
-    version_number = models.IntegerField()
-    title = models.CharField(max_length=500)
-    description = models.TextField(default="", blank=True)
-    status = models.CharField(max_length=16)
-    mode = models.CharField(max_length=16, default="direct")
-    change_summary = models.TextField(default="", blank=True)
-    created_by = models.BigIntegerField()
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        managed = False
-        db_table = "artifact_version"
-        ordering = ["-version_number"]
-
-    def __str__(self):
-        return f"{self.artifact_id} v{self.version_number}"
+        return f"[{self.type}] artifact:{self.id}"

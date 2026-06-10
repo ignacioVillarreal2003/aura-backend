@@ -23,14 +23,14 @@ class PinService:
     def pin(self, user: AuthenticatedUser, artifact_id: int) -> ArtifactPin:
         AccessControl.require_permissions(user, frozenset({PIN_MESSAGE}))
         chat_id = self._require_chat_owner(user, artifact_id)
-        pin, _ = pin_repository.pin(artifact_id, chat_id, created_by=user.id)
+        pin, _ = pin_repository.pin(artifact_id, created_by=user.id)
         logger.info("Artifact pinned.", extra={"chat_id": chat_id, "artifact_id": artifact_id, "user_id": user.id})
         return pin
 
     def unpin(self, user: AuthenticatedUser, artifact_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({PIN_MESSAGE}))
         chat_id = self._require_chat_owner(user, artifact_id)
-        pin_repository.unpin(artifact_id, chat_id)
+        pin_repository.unpin(artifact_id)
         logger.info("Artifact unpinned.", extra={"chat_id": chat_id, "artifact_id": artifact_id, "user_id": user.id})
 
     @staticmethod

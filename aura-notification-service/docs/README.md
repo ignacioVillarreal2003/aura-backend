@@ -11,7 +11,7 @@ Es el **centro de notificaciones** de la plataforma Aura. Los demás microservic
 Flujo completo de una notificación:
 
 1. Un microservicio productor llama a `POST /api/v1/internal/events/` con el tipo de evento y los destinatarios.
-2. El servicio consulta las **preferencias** de cada usuario (canal habilitado, mute, quiet hours) y decide si entrega por **in-app**, **email** o ambos.
+2. El servicio consulta las **preferencias globales** de cada usuario (canal habilitado, mute) y decide si entrega por **in-app**, **email** o ambos.
 3. Si corresponde in-app: crea una fila en Postgres y publica en **Redis pub/sub** → el frontend la recibe por **SSE** sin polling.
 4. Si corresponde email: crea una fila de despacho `PENDING` y encola una tarea en **RabbitMQ** → el worker Celery renderiza la plantilla y envía por SMTP con reintentos automáticos.
 
@@ -29,7 +29,7 @@ aura-notification-service (Django/Gunicorn)
         ├── PreferenceService  →  ¿entrego? ¿por qué canal?
         ├── TemplateService    →  renderiza mensaje e email
         │
-        ├── Postgres           ←  notification + notification_dispatch + preferences
+        ├── Postgres           ←  notification + email_dispatch + notification_preference
         │
         ├── Redis pub/sub      →  NotificationStreamView (SSE)  →  navegador
         │
@@ -53,8 +53,6 @@ aura-notification-service (Django/Gunicorn)
 | `GET` | `/api/v1/notifications/stream/` | `NOTIFICATION_STREAM_SUBSCRIBE` |
 | `GET` | `/api/v1/me/notification-preferences/` | `NOTIFICATION_PREFERENCES_GLOBAL_GET` |
 | `PUT` | `/api/v1/me/notification-preferences/` | `NOTIFICATION_PREFERENCES_GLOBAL_PUT` |
-| `GET` | `/api/v1/me/notification-preferences/event-types/` | `NOTIFICATION_PREFERENCES_EVENT_TYPES_GET` |
-| `PUT` | `/api/v1/me/notification-preferences/event-types/{event_type}/` | `NOTIFICATION_PREFERENCES_EVENT_TYPE_PUT` |
 
 ### Sin autenticación
 
@@ -74,14 +72,6 @@ aura-notification-service (Django/Gunicorn)
 
 ---
 
-## Idempotencia
-
-Al emitir un evento se puede enviar `idempotency_key` (string ≤ 128). El servicio guarda esa clave como `event_key` en la fila de notificación. Si llega un segundo request con la misma combinación `(receiver_id, event_key)`, la base de datos rechaza la inserción duplicada y el servicio devuelve la notificación existente marcándola como `suppressed: true` en el `outcome`. Esto protege contra reintentos del productor.
-
-**Requisito:** la tabla `notification` en Postgres debe tener un índice único parcial sobre `(receiver_id, event_key) WHERE event_key IS NOT NULL`. Los modelos Django usan `managed = False` y no gestionan migraciones.
-
----
-
 ## Tipos de evento registrados
 
 Definidos en `apps/notification/events/registry.py`.
@@ -90,7 +80,6 @@ Definidos en `apps/notification/events/registry.py`.
 | ------------ | --------- | ------------------- | ----------- |
 | `chat.member.invited` | `info` | `inapp` | Sí |
 | `chat.member.removed` | `warning` | `inapp` | Sí |
-| `chat.message.mentioned` | `info` | `inapp` | Sí |
 | `chat.locked` | `warning` | `inapp` | Sí |
 | `auth.password.changed` | `critical` | `inapp`, `email` | **No** |
 | `auth.new_login` | `warning` | `inapp`, `email` | Sí |

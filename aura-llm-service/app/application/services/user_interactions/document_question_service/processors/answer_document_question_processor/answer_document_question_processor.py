@@ -7,6 +7,7 @@ from app.application.services.user_interactions.document_question_service.proces
     ANSWER_HUMAN_PROMPT,
 )
 from app.application.services.user_interactions.document_question_service.document_question_state import DocumentQuestionState
+from app.application.services.generation_shared.prompt_augmentation import augment_system_prompt
 from app.domain.constants.message_role import MessageRole
 from app.application.services.user_interactions.document_question_service.exceptions.document_question_service_exceptions import (
     DocumentQuestionServiceException,
@@ -118,8 +119,13 @@ class AnswerDocumentQuestionProcessor:
             elif msg.role == MessageRole.assistant:
                 history.append(AIMessage(content=msg.content))
 
+        system_content = augment_system_prompt(
+            ANSWER_SYSTEM_PROMPT,
+            document_question_state.system_prompt,
+            document_question_state.response_style,
+        )
         return [
-            SystemMessage(content=ANSWER_SYSTEM_PROMPT),
+            SystemMessage(content=system_content),
             *history,
             HumanMessage(
                 content=ANSWER_HUMAN_PROMPT.format(
