@@ -168,8 +168,6 @@ class UserAuthorizationService:
         if clearance is None:
             return DocumentCollection.objects.none()
         compartment_ids = user_compartment_repository.list_compartment_ids_by_user_id(target_user_id)
-        if not compartment_ids:
-            return DocumentCollection.objects.none()
         return document_collection_repository.list_accessible(
             max_rank=clearance.classification_level.rank,
             compartment_ids=compartment_ids,
@@ -185,8 +183,6 @@ class UserAuthorizationService:
         if clearance is None:
             return DocumentInDocumentCollection.objects.none()
         compartment_ids = user_compartment_repository.list_compartment_ids_by_user_id(target_user_id)
-        if not compartment_ids:
-            return DocumentInDocumentCollection.objects.none()
         accessible_collections = document_collection_repository.list_accessible(
             max_rank=clearance.classification_level.rank,
             compartment_ids=compartment_ids,

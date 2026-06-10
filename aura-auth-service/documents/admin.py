@@ -125,61 +125,44 @@ def _get_doc_mac_assignments(doc_id):
     return current_level_id, current_comp_ids
 
 
-def _db_ensure_level_collection(level_id, actor_user_id):
-    """Find or create the admin collection for a level, writing directly to the DB."""
-    admin_name = f'__admin_level_{level_id}__'
+def _db_assign_strict_mac_collection(doc_id, level_id, comp_ids, actor_user_id):
+    """Assign document to a single strict MAC collection and remove old MAC/admin links."""
+    if level_id is None:
+        return
+        
+    sorted_ids = sorted(comp_ids)
+    if sorted_ids:
+        key = '_'.join(str(i) for i in sorted_ids)
+        name = f'__mac_{level_id}_comp_{key}__'
+    else:
+        name = f'__mac_{level_id}__'
+        
     with connections['aura_db'].cursor() as cursor:
+        # 1. Find or create the exact collection
         cursor.execute(
             "SELECT id FROM document_collection WHERE name = %s AND deleted_at IS NULL LIMIT 1",
-            [admin_name],
+            [name],
         )
         row = cursor.fetchone()
         if row:
-            return row[0]
-        cursor.execute(
-            """
-            INSERT INTO document_collection (name, classification_level_id, created_by, created_at)
-            VALUES (%s, %s, %s, NOW()) RETURNING id
-            """,
-            [admin_name, level_id, actor_user_id],
-        )
-        return cursor.fetchone()[0]
-
-
-def _db_ensure_comp_collection(compartment_id, actor_user_id):
-    """Find or create the admin collection for a compartment, writing directly to the DB."""
-    admin_name = f'__admin_comp_{compartment_id}__'
-    with connections['aura_db'].cursor() as cursor:
-        cursor.execute(
-            "SELECT id FROM document_collection WHERE name = %s AND deleted_at IS NULL LIMIT 1",
-            [admin_name],
-        )
-        row = cursor.fetchone()
-        if row:
-            return row[0]
-        cursor.execute(
-            """
-            INSERT INTO document_collection (name, classification_level_id, created_by, created_at)
-            VALUES (%s, NULL, %s, NOW()) RETURNING id
-            """,
-            [admin_name, actor_user_id],
-        )
-        col_id = cursor.fetchone()[0]
-        cursor.execute(
-            """
-            INSERT INTO document_collection_compartment
-                (document_collection_id, compartment_id, created_by, created_at)
-            VALUES (%s, %s, %s, NOW())
-            ON CONFLICT ON CONSTRAINT doc_coll_comp_coll_compartment_unique DO NOTHING
-            """,
-            [col_id, compartment_id, actor_user_id],
-        )
-        return col_id
-
-
-def _db_link_doc(collection_id, document_id, actor_user_id):
-    """Link a document to a collection (idempotent) via direct DB insert."""
-    with connections['aura_db'].cursor() as cursor:
+            col_id = row[0]
+        else:
+            cursor.execute(
+                """INSERT INTO document_collection (name, classification_level_id, created_by, created_at)
+                   VALUES (%s, %s, %s, NOW()) RETURNING id""",
+                [name, level_id, actor_user_id],
+            )
+            col_id = cursor.fetchone()[0]
+            for comp_id in sorted_ids:
+                cursor.execute(
+                    """INSERT INTO document_collection_compartment
+                           (document_collection_id, compartment_id, created_by, created_at)
+                       VALUES (%s, %s, %s, NOW())
+                       ON CONFLICT ON CONSTRAINT doc_coll_comp_coll_compartment_unique DO NOTHING""",
+                    [col_id, comp_id, actor_user_id],
+                )
+        
+        # 2. Link document to the strict collection
         cursor.execute(
             """
             INSERT INTO document_in_document_collection
@@ -190,122 +173,25 @@ def _db_link_doc(collection_id, document_id, actor_user_id):
                 WHERE document_collection_id = %s AND document_id = %s AND deleted_at IS NULL
             )
             """,
-            [collection_id, document_id, actor_user_id, collection_id, document_id],
+            [col_id, doc_id, actor_user_id, col_id, doc_id],
         )
-
-
-def _db_unlink_doc_from_level(doc_id, level_id, actor_user_id):
-    """Soft-delete all active links from a document to collections at a given level."""
-    with connections['aura_db'].cursor() as cursor:
-        cursor.execute(
-            """
-            UPDATE document_in_document_collection
-            SET deleted_at = NOW(), deleted_by = %s
-            WHERE document_id = %s
-              AND deleted_at IS NULL
-              AND document_collection_id IN (
-                SELECT id FROM document_collection
-                WHERE classification_level_id = %s AND deleted_at IS NULL
-              )
-            """,
-            [actor_user_id, doc_id, level_id],
-        )
-
-
-def _db_unlink_doc_from_comp(doc_id, compartment_id, actor_user_id):
-    """Soft-delete all active links from a document to collections for a given compartment."""
-    with connections['aura_db'].cursor() as cursor:
-        cursor.execute(
-            """
-            UPDATE document_in_document_collection
-            SET deleted_at = NOW(), deleted_by = %s
-            WHERE document_id = %s
-              AND deleted_at IS NULL
-              AND document_collection_id IN (
-                SELECT dc.id FROM document_collection dc
-                JOIN document_collection_compartment dcc ON dcc.document_collection_id = dc.id
-                WHERE dcc.compartment_id = %s AND dc.deleted_at IS NULL
-              )
-            """,
-            [actor_user_id, doc_id, compartment_id],
-        )
-
-
-def _db_ensure_mac_collection(level_id, comp_ids, actor_user_id):
-    """Find or create a combined MAC collection with both a classification level and compartments."""
-    sorted_ids = sorted(comp_ids)
-    key = '_'.join(str(i) for i in sorted_ids)
-    name = f'__mac_{level_id}_{key}__'
-    with connections['aura_db'].cursor() as cursor:
-        cursor.execute(
-            "SELECT id FROM document_collection WHERE name = %s AND deleted_at IS NULL LIMIT 1",
-            [name],
-        )
-        row = cursor.fetchone()
-        if row:
-            return row[0]
-        cursor.execute(
-            """INSERT INTO document_collection (name, classification_level_id, created_by, created_at)
-               VALUES (%s, %s, %s, NOW()) RETURNING id""",
-            [name, level_id, actor_user_id],
-        )
-        col_id = cursor.fetchone()[0]
-        for comp_id in sorted_ids:
-            cursor.execute(
-                """INSERT INTO document_collection_compartment
-                       (document_collection_id, compartment_id, created_by, created_at)
-                   VALUES (%s, %s, %s, NOW())
-                   ON CONFLICT ON CONSTRAINT doc_coll_comp_coll_compartment_unique DO NOTHING""",
-                [col_id, comp_id, actor_user_id],
-            )
-        return col_id
-
-
-def _db_sync_mac_collection(doc_id, actor_user_id):
-    """Rebuild the combined MAC collection link based on current admin single-dimension assignments."""
-    with connections['aura_db'].cursor() as cursor:
+        
+        # 3. Unlink document from ANY other __mac_, __admin_level_, or __admin_comp_ collection
         cursor.execute(
             """UPDATE document_in_document_collection
                SET deleted_at = NOW(), deleted_by = %s
                WHERE document_id = %s
                  AND deleted_at IS NULL
+                 AND document_collection_id != %s
                  AND document_collection_id IN (
                      SELECT id FROM document_collection
-                     WHERE LEFT(name, 6) = '__mac_' AND deleted_at IS NULL
+                     WHERE (LEFT(name, 6) = '__mac_' 
+                         OR LEFT(name, 14) = '__admin_level_' 
+                         OR LEFT(name, 13) = '__admin_comp_')
+                       AND deleted_at IS NULL
                  )""",
-            [actor_user_id, doc_id],
+            [actor_user_id, doc_id, col_id],
         )
-        cursor.execute(
-            """SELECT dc.classification_level_id
-               FROM document_in_document_collection dic
-               JOIN document_collection dc ON dic.document_collection_id = dc.id
-               WHERE dic.document_id = %s
-                 AND dic.deleted_at IS NULL
-                 AND dc.deleted_at IS NULL
-                 AND LEFT(dc.name, 14) = '__admin_level_'
-                 AND dc.classification_level_id IS NOT NULL
-               LIMIT 1""",
-            [doc_id],
-        )
-        level_row = cursor.fetchone()
-        if not level_row:
-            return
-        level_id = level_row[0]
-        cursor.execute(
-            """SELECT DISTINCT dcc.compartment_id
-               FROM document_in_document_collection dic
-               JOIN document_collection dc ON dic.document_collection_id = dc.id
-               JOIN document_collection_compartment dcc ON dcc.document_collection_id = dc.id
-               WHERE dic.document_id = %s
-                 AND dic.deleted_at IS NULL
-                 AND dc.deleted_at IS NULL
-                 AND LEFT(dc.name, 13) = '__admin_comp_'""",
-            [doc_id],
-        )
-        comp_ids = frozenset(row[0] for row in cursor.fetchall())
-    if comp_ids:
-        col_id = _db_ensure_mac_collection(level_id, comp_ids, actor_user_id)
-        _db_link_doc(col_id, doc_id, actor_user_id)
 
 
 # ── Forms ─────────────────────────────────────────────────────────────────────
@@ -552,24 +438,13 @@ class DocumentAdmin(admin.ModelAdmin):
                 except Exception:
                     pass
 
-                # Level change (direct DB — API rejects None level or empty compartments).
+                # Update MAC assignment directly via strict collection logic
                 new_level_id_raw = request.POST.get('classification_level_id', '').strip()
                 new_level_id = int(new_level_id_raw) if new_level_id_raw else None
-                if new_level_id != current_level_id:
-                    if current_level_id:
-                        _db_unlink_doc_from_level(doc_id, current_level_id, request.user.pk)
-                    if new_level_id:
-                        col_id = _db_ensure_level_collection(new_level_id, request.user.pk)
-                        _db_link_doc(col_id, doc_id, request.user.pk)
-
-                # Compartments change (direct DB).
                 new_comp_ids = set(int(c) for c in request.POST.getlist('compartment_ids') if c)
-                for comp_id in new_comp_ids - current_comp_ids:
-                    col_id = _db_ensure_comp_collection(comp_id, request.user.pk)
-                    _db_link_doc(col_id, doc_id, request.user.pk)
-                for comp_id in current_comp_ids - new_comp_ids:
-                    _db_unlink_doc_from_comp(doc_id, comp_id, request.user.pk)
-                _db_sync_mac_collection(doc_id, request.user.pk)
+                
+                if new_level_id is not None:
+                    _db_assign_strict_mac_collection(doc_id, new_level_id, new_comp_ids, request.user.pk)
 
                 # Build audit details — only include fields that actually changed.
                 level_name_map = {l['id']: l['name'] for l in all_levels}
@@ -724,16 +599,11 @@ class DocumentAdmin(admin.ModelAdmin):
         except Document.DoesNotExist:
             new_object = Document(pk=document_id, name=name_from_form)
 
-        # Assign MAC groups (direct DB — API rejects None level or empty compartments).
+        # Assign MAC groups via strict collection logic
         cl_id_raw = request.POST.get('classification_level_id', '').strip()
-        if cl_id_raw:
-            col_id = _db_ensure_level_collection(int(cl_id_raw), request.user.pk)
-            _db_link_doc(col_id, document_id, request.user.pk)
         comp_ids_raw_list = [int(c) for c in request.POST.getlist('compartment_ids') if c]
-        for comp_id_int in comp_ids_raw_list:
-            col_id = _db_ensure_comp_collection(comp_id_int, request.user.pk)
-            _db_link_doc(col_id, document_id, request.user.pk)
-        _db_sync_mac_collection(document_id, request.user.pk)
+        if cl_id_raw:
+            _db_assign_strict_mac_collection(document_id, int(cl_id_raw), comp_ids_raw_list, request.user.pk)
 
         # Build audit details with resolved names.
         try:

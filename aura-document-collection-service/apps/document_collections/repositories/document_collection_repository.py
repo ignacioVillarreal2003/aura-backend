@@ -23,12 +23,13 @@ class DocumentCollectionRepository:
         max_rank: int,
         compartment_ids: list[int],
     ) -> QuerySet[DocumentCollection]:
+        qs = self._base_qs().filter(classification_level__rank__lte=max_rank)
+        
         if not compartment_ids:
-            return self._base_qs().none()
+            return qs.annotate(total=Count("compartments", distinct=True)).filter(total=0)
+
         return (
-            self._base_qs()
-            .filter(classification_level__rank__lte=max_rank)
-            .annotate(
+            qs.annotate(
                 total=Count("compartments", distinct=True),
                 matched=Count(
                     "compartments",
@@ -36,7 +37,7 @@ class DocumentCollectionRepository:
                     distinct=True,
                 ),
             )
-            .filter(total=F("matched"), total__gt=0)
+            .filter(total=F("matched"))
         )
 
     def create(
