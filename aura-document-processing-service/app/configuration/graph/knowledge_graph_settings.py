@@ -30,6 +30,11 @@ class KnowledgeGraphSettings(BaseSettings):
 
     accessible_documents_max: int = Field(default=10_000, ge=1, le=1_000_000)
 
+    context_max_entities: int = Field(default=8, ge=1, le=25)
+    context_max_relations: int = Field(default=30, ge=1, le=100)
+    context_max_chars: int = Field(default=4_000, ge=500, le=20_000)
+    context_neighbor_depth: int = Field(default=1, ge=1, le=3)
+
     allowed_entity_types: Optional[str] = Field(default=None)
     allowed_relation_types: Optional[str] = Field(default=None)
 

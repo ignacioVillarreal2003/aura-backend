@@ -1,7 +1,6 @@
 import hashlib
 import json
 import logging
-import os
 import secrets
 from typing import NoReturn, Optional
 from pydantic import ValidationError
@@ -71,23 +70,6 @@ async def _cache_user(redis_client, token: str, user: AuthenticatedUserResponse,
 
 
 _HEADER_SERVICE_API_KEY = "X-Service-Api-Key"
-_HEADER_USER_ID = "X-User-Id"
-_HEADER_USER_EMAIL = "X-User-Email"
-
-_SERVICE_PRINCIPAL_ID = 0
-_SERVICE_PRINCIPAL_EMAIL = "service@internal"
-
-
-def _service_principal_permissions() -> tuple[str, ...]:
-    raw = os.getenv("SERVICE_API_PRINCIPAL_PERMISSIONS", "*")
-    items = tuple(p.strip() for p in raw.split(",") if p.strip())
-    return items or ("*",)
-
-
-def _service_principal_roles() -> tuple[str, ...]:
-    raw = os.getenv("SERVICE_API_PRINCIPAL_ROLES", "SERVICE")
-    items = tuple(r.strip() for r in raw.split(",") if r.strip())
-    return items or ("SERVICE",)
 
 
 class AuthenticationProvider(AuthenticationProviderInterface):
@@ -113,45 +95,13 @@ class AuthenticationProvider(AuthenticationProviderInterface):
         self._require_non_empty_service_api_key(request, api_key)
         self._assert_service_api_key_valid(request, api_key)
 
-        # A valid service key implies full internal trust → system principal.
-        # X-User-Id / X-User-Email are optional audit context; self-asserted
-        # X-User-Roles / X-User-Permissions are no longer read.
-        user_id = self._parse_optional_user_id(request)
-        email = (request.headers.get(_HEADER_USER_EMAIL) or "").strip() or _SERVICE_PRINCIPAL_EMAIL
-
-        logger.debug(
-            "Service-to-service request authenticated as system principal.",
-            extra={
-                "user_id": user_id,
-                "path": request.url.path
-            }
-        )
+        logger.debug("Service-to-service request authenticated.", extra={"path": request.url.path})
         return AuthenticatedUser(
-            id=UserId(user_id),
-            email=email,
-            roles=_service_principal_roles(),
-            permissions=_service_principal_permissions(),
+            id=UserId(0),
+            email="service@internal",
+            roles=(),
+            permissions=(),
         )
-
-    @staticmethod
-    def _parse_optional_user_id(request: Request) -> int:
-        raw_user_id = (request.headers.get(_HEADER_USER_ID) or "").strip()
-        if not raw_user_id:
-            return _SERVICE_PRINCIPAL_ID
-        try:
-            return int(raw_user_id)
-        except ValueError:
-            logger.warning(
-                "User id header must be a whole number.",
-                extra={"path": request.url.path},
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "detail": "X-User-Id must be a valid integer",
-                    "error": "invalid_user_id"
-                }
-            ) from None
 
     @staticmethod
     def _read_optional_service_api_key(

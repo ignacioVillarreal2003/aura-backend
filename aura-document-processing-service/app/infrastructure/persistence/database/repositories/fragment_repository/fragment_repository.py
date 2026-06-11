@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.field_limits import MAX_FRAGMENTS_IN_LIST
 
+from app.domain.dtos.document.document_search.document_similarity_hit import DocumentSimilarityHit
 from app.infrastructure.persistence.database.orm.fragment import Fragment
 from app.infrastructure.persistence.database.repositories.database_exceptions import (
     DatabaseConstraintViolationException,
@@ -256,6 +257,113 @@ class FragmentRepository(FragmentRepositoryInterface):
                 extra={"k": k, "threshold": threshold},
             )
             raise DatabaseException("Failed to run vector similarity search.") from e
+
+    async def search_documents_by_similarity(
+            self,
+            query_vector: List[float],
+            database_session: AsyncSession,
+            k: int,
+            threshold: float,
+            pool_size: int,
+            document_ids: List[int] | None = None,
+    ) -> List[DocumentSimilarityHit]:
+        if not query_vector:
+            raise DatabaseException("The search vector cannot be empty.")
+
+        if not (0.0 <= threshold <= 1.0):
+            raise DatabaseException(
+                "The similarity threshold must be between 0.0 and 1.0."
+            )
+
+        if k < 1:
+            raise DatabaseException("The result count k must be at least 1.")
+
+        if pool_size < k:
+            raise DatabaseException("The candidate pool size must be at least k.")
+
+        try:
+            logger.debug(
+                "Executing document-level vector similarity search.",
+                extra={
+                    "k": k,
+                    "threshold": threshold,
+                    "pool_size": pool_size,
+                    "doc_filter": len(document_ids) if document_ids else "none",
+                }
+            )
+
+            query_vector_str = "[" + ",".join(str(float(v)) for v in query_vector) + "]"
+
+            doc_id_filter = ""
+            if document_ids:
+                ids_literal = ",".join(str(int(d)) for d in document_ids)
+                doc_id_filter = f"AND document_id IN ({ids_literal})"
+
+            sql = text(
+                f"""
+                SELECT document_id,
+                       MAX(cosine_similarity)                                  AS best_similarity,
+                       COUNT(*)                                                AS matched_fragments,
+                       (ARRAY_AGG(content ORDER BY cosine_similarity DESC))[1] AS best_fragment_content
+                FROM (
+                    SELECT document_id,
+                           content,
+                           1 - (vector <=> :query_vector) AS cosine_similarity
+                    FROM fragment
+                    WHERE vector IS NOT NULL
+                      AND deleted_at IS NULL
+                      AND 1 - (vector <=> :query_vector) >= :threshold
+                      {doc_id_filter}
+                    ORDER BY cosine_similarity DESC
+                    LIMIT :pool_size
+                ) AS top_fragments
+                GROUP BY document_id
+                ORDER BY best_similarity DESC
+                LIMIT :k
+                """
+            )
+
+            result = await database_session.execute(
+                sql,
+                {
+                    "query_vector": query_vector_str,
+                    "threshold": threshold,
+                    "pool_size": pool_size,
+                    "k": k,
+                }
+            )
+            rows = result.fetchall()
+
+            hits = [
+                DocumentSimilarityHit(
+                    document_id=row.document_id,
+                    best_similarity=min(max(float(row.best_similarity), 0.0), 1.0),
+                    matched_fragments=int(row.matched_fragments),
+                    best_fragment_content=row.best_fragment_content,
+                )
+                for row in rows
+            ]
+
+            logger.debug(
+                "The document-level vector similarity search completed.",
+                extra={
+                    "k": k,
+                    "threshold": threshold,
+                    "results": len(hits)
+                }
+            )
+            return hits
+
+        except DatabaseException:
+            raise
+        except ValueError as e:
+            raise DatabaseException("The search vector is invalid.") from e
+        except SQLAlchemyError as e:
+            logger.exception(
+                "Database error during document-level vector similarity search.",
+                extra={"k": k, "threshold": threshold},
+            )
+            raise DatabaseException("Failed to run document-level vector similarity search.") from e
 
     async def get_most_relevant_fragments_bm25(
             self,

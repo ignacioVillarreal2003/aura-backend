@@ -212,8 +212,6 @@ class DocumentCollectionCatalogClient(DocumentCollectionCatalogClientInterface):
             authorization_header: str | None,
     ) -> dict[str, str] | None:
         if self._settings.service_api_key:
-            # System (trusted) call: the service key implies a system principal
-            # downstream; no self-asserted permissions header is needed.
             return {
                 "X-Service-Api-Key": self._settings.service_api_key,
                 "X-User-Id": str(user_id),

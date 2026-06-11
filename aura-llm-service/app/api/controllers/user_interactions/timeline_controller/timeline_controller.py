@@ -1,4 +1,3 @@
-from collections.abc import AsyncIterator
 from fastapi import APIRouter, Depends
 from starlette.responses import StreamingResponse
 
@@ -7,14 +6,15 @@ from app.api.controllers.user_interactions.timeline_controller.timeline_controll
 )
 from app.api.dependencies.rate_limiter import default_rate_limit, strict_rate_limit
 from app.api.openapi.common import default_error_responses
+from app.api.sse import sse_response
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.application.services.user_interactions.timeline_service.timeline_service import get_timeline_service
+from app.api.dependencies.app_state_services import get_timeline_service
 from app.application.services.user_interactions.timeline_service.timeline_service_interface import TimelineServiceInterface
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.user_interactions.timeline.timeline_request import TimelineGenerateRequest
 from app.domain.dtos.user_interactions.timeline.timeline_response import TimelineGenerateResponse
-from app.domain.dtos.user_interactions.timeline.timeline_stream_events import TimelineStreamEvent
+
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 
 
@@ -47,22 +47,12 @@ class TimelineController(TimelineControllerInterface):
             required_permissions=frozenset({Permissions.LLM_TIMELINE_GENERATE}),
         )
 
-        async def sse_bytes() -> AsyncIterator[bytes]:
-            async for event in timeline_service.generate_stream(
-                    request=timeline_request,
-                    authenticated_user=authenticated_user,
-            ):
-                yield _fmt(event)
-
-        return StreamingResponse(
-            sse_bytes(),
-            media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+        return sse_response(
+            timeline_service.generate_stream(
+                request=timeline_request,
+                authenticated_user=authenticated_user,
+            )
         )
-
-
-def _fmt(event: TimelineStreamEvent) -> bytes:
-    return f"data: {event.model_dump_json()}\n\n".encode("utf-8")
 
 
 router = APIRouter()

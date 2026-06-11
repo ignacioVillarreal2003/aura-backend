@@ -1,11 +1,10 @@
 import json
 import logging
 from typing import Optional
-from fastapi import HTTPException, Request, status
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
 
-from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
+from app.application.authorization.exceptions.authorization_exceptions import UnauthorizedException
 from app.application.exceptions.app_exception import RequestValidationException
 from app.application.services.processing.fragment_enrich_service.exceptions.fragment_enrich_service_exceptions import (
     FragmentEnrichServiceException,
@@ -138,13 +137,3 @@ class FragmentEnrichService(FragmentEnrichServiceInterface):
                 status_code=502,
             ) from e
 
-
-async def get_fragment_enrich_service(request: Request) -> FragmentEnrichServiceInterface:
-    try:
-        return request.app.state.fragment_enrich_service
-    except AttributeError:
-        logger.error("FragmentEnrichService not found in application state")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="FragmentEnrichService is not available",
-        )

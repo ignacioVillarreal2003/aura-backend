@@ -87,6 +87,11 @@ class RagAgentServiceSettings(BaseSettings):
     rerank_max_fragments: int = Field(default=10, ge=1, le=100)
     adjacent_chunks: int = Field(default=1, ge=0, le=3)
 
+    use_graph_context: bool = Field(default=True)
+    graph_max_terms: int = Field(default=8, ge=1, le=15)
+    graph_max_entities: int = Field(default=8, ge=1, le=25)
+    graph_max_relations: int = Field(default=30, ge=1, le=100)
+
     query_analyzer: QueryAnalyzerSettings = Field(default_factory=QueryAnalyzerSettings)
     answer_synthesizer: AnswerSynthesizerSettings = Field(default_factory=AnswerSynthesizerSettings)
 

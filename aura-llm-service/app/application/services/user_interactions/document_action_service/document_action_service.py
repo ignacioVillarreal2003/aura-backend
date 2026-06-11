@@ -2,9 +2,8 @@ import logging
 from collections.abc import AsyncIterator
 from typing import Optional
 
-from fastapi import HTTPException, Request, status
 
-from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
+from app.application.authorization.exceptions.authorization_exceptions import UnauthorizedException
 from app.application.exceptions.app_exception import RequestValidationException
 from app.application.services.user_interactions.document_action_service.constants.processing_strategy import ProcessingStrategy
 from app.application.services.user_interactions.document_action_service.document_action_settings import DocumentActionServiceSettings
@@ -244,13 +243,3 @@ class DocumentActionService(DocumentActionServiceInterface):
         if not state.result.strip():
             state.result = _STATIC_FALLBACK_MESSAGE
 
-
-async def get_document_action_service(request: Request) -> DocumentActionServiceInterface:
-    try:
-        return request.app.state.document_action_service
-    except AttributeError:
-        logger.error("DocumentActionService not found in application state")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="DocumentActionService is not available",
-        )

@@ -3,9 +3,8 @@ import logging
 from collections.abc import AsyncIterator
 from typing import Optional
 
-from fastapi import HTTPException, Request, status
 
-from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
+from app.application.authorization.exceptions.authorization_exceptions import UnauthorizedException
 from app.application.exceptions.app_exception import RequestValidationException
 from app.application.services.user_interactions.rag_agent_service.constants.rag_node_name import RagNodeName
 from app.application.services.user_interactions.rag_agent_service.exceptions.rag_agent_service_exceptions import RagAgentServiceException
@@ -29,6 +28,9 @@ from app.domain.field_limits import MAX_MESSAGE_CONTENT_CHARS
 from app.infrastructure.http.document_context_provider.interfaces.document_context_provider_interface import (
     DocumentContextProviderInterface,
 )
+from app.infrastructure.http.graph_context_provider.interfaces.graph_context_provider_interface import (
+    GraphContextProviderInterface,
+)
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 
 logger = logging.getLogger(__name__)
@@ -48,6 +50,10 @@ _STREAM_PROGRESS_MESSAGES: dict[str, tuple[str, str]] = {
     RagNodeName.query_analyzer.value: (
         RagNodeName.query_analyzer.value,
         "Analizando y reformulando la consulta...",
+    ),
+    RagNodeName.graph_context_retriever.value: (
+        RagNodeName.graph_context_retriever.value,
+        "Consultando el grafo de conocimiento...",
     ),
     RagNodeName.context_retriever.value: (
         RagNodeName.context_retriever.value,
@@ -70,6 +76,7 @@ class RagAgentService(RagAgentServiceInterface):
             ollama_llm_facade: OllamaLLMFacadeInterface,
             document_context_provider: DocumentContextProviderInterface,
             rag_agent_settings: Optional[RagAgentServiceSettings] = None,
+            graph_context_provider: Optional[GraphContextProviderInterface] = None,
     ) -> None:
         self._rag_agent_settings = rag_agent_settings or RagAgentServiceSettings()
 
@@ -77,6 +84,7 @@ class RagAgentService(RagAgentServiceInterface):
             ollama_llm_facade=ollama_llm_facade,
             document_context_provider=document_context_provider,
             settings=self._rag_agent_settings,
+            graph_context_provider=graph_context_provider,
         )
         self._workflow_built = False
         self._workflow_lock = asyncio.Lock()
@@ -179,13 +187,3 @@ class RagAgentService(RagAgentServiceInterface):
             fragments=fragments,
         )
 
-
-async def get_rag_agent_service(request: Request) -> RagAgentServiceInterface:
-    try:
-        return request.app.state.rag_agent_service
-    except AttributeError:
-        logger.error("RagAgentService not found in application state")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="RAG agent service is not available",
-        )

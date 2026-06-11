@@ -24,6 +24,10 @@ from app.domain.dtos.graph.graph_extraction.graph_extraction_progress import (
     GraphExtractionError,
     GraphExtractionProgressResponse,
 )
+from app.domain.dtos.graph.graph_extraction.graph_upsert_items import (
+    EntityUpsertItem,
+    RelationUpsertItem,
+)
 from app.infrastructure.http.llm_provider.llm_provider_interface import LlmProviderInterface
 from app.infrastructure.persistence.database.database_manager.database_manager_interface import (
     DatabaseManagerInterface,
@@ -329,15 +333,17 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             )
             return self._content_tail(fragment.content)
 
-        entities_count = 0
+        entity_items, relation_items = self._build_upsert_batches(
+            entities=response.entities,
+            relations=response.relations,
+        )
+
         try:
-            for entity in response.entities:
-                await self._upsert_entity(
-                    entity=entity,
-                    document_id=document_id,
-                    fragment_id=fragment_id,
-                )
-                entities_count += 1
+            await self._entity_repository.upsert_entities(
+                entities=entity_items,
+                document_id=document_id,
+                fragment_id=fragment_id,
+            )
         except Exception as e:
             await self._record_fragment_error(
                 job_id=job_id,
@@ -348,15 +354,12 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             )
             return self._content_tail(fragment.content)
 
-        relations_count = 0
         try:
-            for relation in response.relations:
-                if await self._upsert_relation(
-                        relation=relation,
-                        document_id=document_id,
-                        fragment_id=fragment_id,
-                ):
-                    relations_count += 1
+            await self._relation_repository.upsert_relations(
+                relations=relation_items,
+                document_id=document_id,
+                fragment_id=fragment_id,
+            )
         except Exception as e:
             await self._record_fragment_error(
                 job_id=job_id,
@@ -366,6 +369,9 @@ class GraphExtractionService(GraphExtractionServiceInterface):
                 stage="upsert_relation",
             )
             return self._content_tail(fragment.content)
+
+        entities_count = len(entity_items)
+        relations_count = len(relation_items)
 
         await self._job_progress_store.mark_progress(
             job_id=job_id,
@@ -396,73 +402,92 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             return ""
         return content[-window:] if len(content) > window else content
 
-    async def _upsert_entity(
+    def _build_upsert_batches(
             self,
             *,
-            entity: ExtractedEntity,
-            document_id: int,
-            fragment_id: int,
-    ) -> None:
-        canonical_name = self._canonicalize_name(entity.name)
-        if not canonical_name:
-            return
-        await self._entity_repository.upsert_entity(
-            canonical_name=canonical_name,
-            display_name=entity.name,
-            entity_type=entity.type,
-            aliases=list(entity.aliases),
-            description=entity.description,
-            document_id=document_id,
-            fragment_id=fragment_id,
-        )
+            entities: list[ExtractedEntity],
+            relations: list[ExtractedRelation],
+    ) -> tuple[list[EntityUpsertItem], list[RelationUpsertItem]]:
+        """Deduplicate the LLM output for a fragment into two write batches.
 
-    async def _upsert_relation(
-            self,
-            *,
-            relation: ExtractedRelation,
-            document_id: int,
-            fragment_id: int,
-    ) -> bool:
-        source_canonical = self._canonicalize_name(relation.source.name)
-        target_canonical = self._canonicalize_name(relation.target.name)
-        if not source_canonical or not target_canonical:
-            return False
-        if (
-                source_canonical == target_canonical
-                and relation.source.type == relation.target.type
-        ):
-            return False
+        Entities are keyed by ``(canonical_name, type)``; aliases are unioned
+        and the first non-empty description wins. Relation endpoints are added
+        to the entity batch so the relation MATCH always finds its nodes.
+        Relations are keyed by the full quintuple keeping the highest
+        confidence seen in the fragment.
+        """
+        entity_map: dict[tuple[str, str], EntityUpsertItem] = {}
 
-        normalized_relation_type = normalize_relation_type(relation.type)
-        await self._entity_repository.upsert_entity(
-            canonical_name=source_canonical,
-            display_name=relation.source.name,
-            entity_type=relation.source.type,
-            aliases=[],
-            description=None,
-            document_id=document_id,
-            fragment_id=fragment_id,
-        )
-        await self._entity_repository.upsert_entity(
-            canonical_name=target_canonical,
-            display_name=relation.target.name,
-            entity_type=relation.target.type,
-            aliases=[],
-            description=None,
-            document_id=document_id,
-            fragment_id=fragment_id,
-        )
-        await self._relation_repository.upsert_relation(
-            source_canonical_name=source_canonical,
-            source_type=relation.source.type,
-            target_canonical_name=target_canonical,
-            target_type=relation.target.type,
-            relation_type=normalized_relation_type,
-            confidence=relation.confidence,
-            document_id=document_id,
-            fragment_id=fragment_id,
-        )
-        return True
+        def add_entity(
+                name: str,
+                entity_type,
+                aliases: list[str],
+                description: Optional[str],
+        ) -> Optional[str]:
+            canonical = self._canonicalize_name(name)
+            if not canonical:
+                return None
+            key = (canonical, entity_type.value)
+            existing = entity_map.get(key)
+            if existing is None:
+                entity_map[key] = EntityUpsertItem(
+                    canonical_name=canonical,
+                    display_name=name,
+                    entity_type=entity_type,
+                    aliases=tuple(dict.fromkeys(a for a in aliases if a and a.strip())),
+                    description=description,
+                )
+            else:
+                merged_aliases = tuple(
+                    dict.fromkeys(
+                        [*existing.aliases, *(a for a in aliases if a and a.strip())]
+                    )
+                )
+                entity_map[key] = existing.model_copy(
+                    update={
+                        "aliases": merged_aliases,
+                        "description": existing.description or description,
+                    }
+                )
+            return canonical
+
+        for entity in entities:
+            add_entity(entity.name, entity.type, list(entity.aliases), entity.description)
+
+        relation_map: dict[tuple[str, str, str, str, str], RelationUpsertItem] = {}
+        for relation in relations:
+            source_canonical = self._canonicalize_name(relation.source.name)
+            target_canonical = self._canonicalize_name(relation.target.name)
+            if not source_canonical or not target_canonical:
+                continue
+            if (
+                    source_canonical == target_canonical
+                    and relation.source.type == relation.target.type
+            ):
+                continue
+            add_entity(relation.source.name, relation.source.type, [], None)
+            add_entity(relation.target.name, relation.target.type, [], None)
+            relation_type = normalize_relation_type(relation.type)
+            confidence = float(max(0.0, min(1.0, relation.confidence)))
+            key = (
+                source_canonical,
+                relation.source.type.value,
+                target_canonical,
+                relation.target.type.value,
+                relation_type,
+            )
+            existing_relation = relation_map.get(key)
+            if existing_relation is None or confidence > existing_relation.confidence:
+                relation_map[key] = RelationUpsertItem(
+                    source_canonical_name=source_canonical,
+                    source_type=relation.source.type,
+                    target_canonical_name=target_canonical,
+                    target_type=relation.target.type,
+                    relation_type=relation_type,
+                    confidence=confidence,
+                )
+
+        return list(entity_map.values()), list(relation_map.values())
 
     async def _record_fragment_error(
             self,

@@ -24,11 +24,16 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 FROM dependencies AS runtime
 
-COPY . .
+# Whisper model baked into the image so transcription works without runtime
+# downloads. Must stay in sync with WHISPER_MODEL_SIZE in the environment.
+ARG WHISPER_MODEL_SIZE=small
 
-RUN mkdir -p /app/.cache/huggingface
+RUN mkdir -p /app/.cache/huggingface \
+    && python -c "from faster_whisper.utils import download_model; download_model('${WHISPER_MODEL_SIZE}')" \
+    && chown app:app /app \
+    && chown -R app:app /app/.cache
 
-RUN chown -R app:app /app
+COPY --chown=app:app . .
 
 USER app
 

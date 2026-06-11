@@ -141,14 +141,33 @@ class GraphQueryService(GraphQueryServiceInterface):
                     "reason": str(e),
                 },
             )
+            fallback_entities = await self._fulltext_fallback(
+                question=request.question,
+                accessible_ids=accessible_ids,
+                max_results=max_results,
+            )
             return GraphQueryResponse(
                 intent=QueryIntent.UNKNOWN,
                 confidence=translation.confidence,
-                entities=[],
+                entities=fallback_entities,
                 relations=[],
-                nodes=[],
-                explanation="The query could not be answered with the structured intent.",
+                nodes=self._build_nodes(fallback_entities, []),
+                explanation=(
+                    "The structured intent could not be executed; results come from "
+                    "a fulltext entity search over the question."
+                    if fallback_entities
+                    else "The query could not be answered with the structured intent."
+                ),
             )
+
+        if not entities and not relations:
+            fallback_entities = await self._fulltext_fallback(
+                question=request.question,
+                accessible_ids=accessible_ids,
+                max_results=max_results,
+            )
+            if fallback_entities:
+                entities = fallback_entities
 
         nodes = self._build_nodes(entities, relations)
         has_more = (len(entities) + len(relations)) >= max_results
@@ -164,6 +183,30 @@ class GraphQueryService(GraphQueryServiceInterface):
             interpreted_as=interpreted_as,
             has_more=has_more,
         )
+
+    async def _fulltext_fallback(
+            self,
+            *,
+            question: str,
+            accessible_ids: list[int],
+            max_results: int,
+    ) -> list[GraphEntityResponse]:
+        """Last-resort entity lookup: run the raw question through the
+        fulltext index so vague or unparseable questions still surface
+        the entities they mention instead of returning nothing."""
+        try:
+            return await self._entity_repository.fulltext_search(
+                query_string=question,
+                entity_type=None,
+                accessible_document_ids=accessible_ids,
+                limit=max_results,
+            )
+        except Exception:
+            logger.warning(
+                "Fulltext fallback for the graph query failed (non-fatal).",
+                exc_info=True,
+            )
+            return []
 
     @staticmethod
     def _merge_llm_parameter_aliases(

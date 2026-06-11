@@ -1,4 +1,3 @@
-from collections.abc import AsyncIterator
 from fastapi import APIRouter, Depends
 from starlette.responses import StreamingResponse
 
@@ -7,14 +6,15 @@ from app.api.controllers.user_interactions.quiz_controller.quiz_controller_inter
 )
 from app.api.dependencies.rate_limiter import default_rate_limit, strict_rate_limit
 from app.api.openapi.common import default_error_responses
+from app.api.sse import sse_response
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.application.services.user_interactions.quiz_service.quiz_service import get_quiz_service
+from app.api.dependencies.app_state_services import get_quiz_service
 from app.application.services.user_interactions.quiz_service.quiz_service_interface import QuizServiceInterface
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.user_interactions.quiz.quiz_request import QuizGenerateRequest
 from app.domain.dtos.user_interactions.quiz.quiz_response import QuizGenerateResponse
-from app.domain.dtos.user_interactions.quiz.quiz_stream_events import QuizStreamEvent
+
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 
 
@@ -47,22 +47,12 @@ class QuizController(QuizControllerInterface):
             required_permissions=frozenset({Permissions.LLM_QUIZ_GENERATE}),
         )
 
-        async def sse_bytes() -> AsyncIterator[bytes]:
-            async for event in quiz_service.generate_stream(
-                    request=quiz_request,
-                    authenticated_user=authenticated_user,
-            ):
-                yield _fmt(event)
-
-        return StreamingResponse(
-            sse_bytes(),
-            media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+        return sse_response(
+            quiz_service.generate_stream(
+                request=quiz_request,
+                authenticated_user=authenticated_user,
+            )
         )
-
-
-def _fmt(event: QuizStreamEvent) -> bytes:
-    return f"data: {event.model_dump_json()}\n\n".encode("utf-8")
 
 
 router = APIRouter()

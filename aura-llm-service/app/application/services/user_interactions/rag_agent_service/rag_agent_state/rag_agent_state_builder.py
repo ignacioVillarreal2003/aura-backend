@@ -30,6 +30,7 @@ class RagAgentStateBuilder:
             keywords=[],
             retrieved_fragments=[],
             context="",
+            graph_facts="",
             answer="",
             fallback_triggered=False,
         )

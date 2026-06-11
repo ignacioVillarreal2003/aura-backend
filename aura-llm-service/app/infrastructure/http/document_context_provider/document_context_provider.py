@@ -30,6 +30,7 @@ from app.infrastructure.http.document_context_provider.exceptions.document_conte
 from app.infrastructure.http.document_context_provider.interfaces.document_context_provider_interface import (
     DocumentContextProviderInterface,
 )
+from app.infrastructure.http.authentication_provider.request_token import get_request_token
 from app.infrastructure.http.http_client.exceptions.http_client_exceptions import (
     HttpClientCircuitBreakerException,
     HttpClientConnectionException,
@@ -214,9 +215,9 @@ class DocumentContextProvider(DocumentContextProviderInterface):
             self,
             authenticated_user: AuthenticatedUser,
     ) -> dict[str, str]:
-        # System (trusted) call: send the service key + user id/email for scoping
-        # and audit. Roles/permissions are no longer self-asserted — the receiving
-        # service derives authorization from the service key (system principal).
+        token = get_request_token()
+        if token:
+            return {"Authorization": token}
         return {
             "X-Service-Api-Key": environment_variables.service_api_key,
             "X-User-Id": str(authenticated_user.id),

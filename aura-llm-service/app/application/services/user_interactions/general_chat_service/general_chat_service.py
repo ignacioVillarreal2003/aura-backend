@@ -1,8 +1,7 @@
 import logging
 from collections.abc import AsyncIterator
-from fastapi import HTTPException, Request, status
 
-from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
+from app.application.authorization.exceptions.authorization_exceptions import UnauthorizedException
 from app.application.exceptions.app_exception import RequestValidationException
 from app.application.services.user_interactions.general_chat_service.general_chat_service_exceptions import (
     GeneralChatServiceException,
@@ -258,13 +257,3 @@ class GeneralChatService(GeneralChatServiceInterface):
                 code="GeneralChatStreamError",
             )
 
-
-async def get_general_chat_service(request: Request) -> GeneralChatServiceInterface:
-    try:
-        return request.app.state.general_chat_service
-    except AttributeError:
-        logger.error("GeneralChatService not found in application state")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="GeneralChatService is not available",
-        )

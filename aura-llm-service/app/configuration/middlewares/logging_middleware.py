@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 _X_REQUEST_ID = "X-Request-ID"
 _X_REQUEST_ID_BYTES = b"x-request-id"
+_SKIP_PATHS = frozenset({"/metrics", "/api/v1/health", "/api/v1/ready"})
 
 
 class LoggingMiddleware:
@@ -26,6 +27,10 @@ class LoggingMiddleware:
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        if scope.get("path") in _SKIP_PATHS:
             await self.app(scope, receive, send)
             return
 

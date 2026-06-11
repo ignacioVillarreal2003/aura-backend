@@ -30,6 +30,10 @@ def openapi_tags_metadata() -> list[dict[str, str]]:
             "description": "Descarga de archivos de documentos.",
         },
         {
+            "name": "document-search",
+            "description": "Búsqueda de documentos por similitud de contenido (vectorial).",
+        },
+        {
             "name": "fragment-query",
             "description": "Consulta de fragmentos de contexto.",
         },

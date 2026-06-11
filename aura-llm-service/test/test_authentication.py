@@ -62,7 +62,7 @@ class TestServiceToServiceAuth:
 
     def test_valid_service_auth_passes_middleware(self, client, mock_document_classify_service):
         from app.domain.constants.document_type import DocumentType
-        from app.domain.dtos.document_classify.classify_document_response import ClassifyDocumentResponse
+        from app.domain.dtos.processing.document_classify.classify_document_response import ClassifyDocumentResponse
 
         mock_document_classify_service.classify_document.return_value = ClassifyDocumentResponse(
             type=DocumentType.informe,

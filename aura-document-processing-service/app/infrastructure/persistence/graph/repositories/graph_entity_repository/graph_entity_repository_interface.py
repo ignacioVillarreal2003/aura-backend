@@ -3,6 +3,7 @@ from typing import Optional
 
 from app.domain.constants.graph.entity_type import EntityType
 from app.domain.dtos.graph.graph_entity.graph_entity_response import GraphEntityResponse
+from app.domain.dtos.graph.graph_extraction.graph_upsert_items import EntityUpsertItem
 
 
 class GraphEntityRepositoryInterface(ABC):
@@ -15,6 +16,16 @@ class GraphEntityRepositoryInterface(ABC):
             entity_type: EntityType,
             aliases: list[str],
             description: Optional[str],
+            document_id: int,
+            fragment_id: int,
+    ) -> None:
+        pass
+
+    @abstractmethod
+    async def upsert_entities(
+            self,
+            *,
+            entities: list[EntityUpsertItem],
             document_id: int,
             fragment_id: int,
     ) -> None:

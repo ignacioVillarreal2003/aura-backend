@@ -9,9 +9,11 @@ from app.api.controllers.document import (
     delete_document_router,
     document_download_router,
     document_query_router,
+    document_search_router,
     post_process_document_router,
 )
 from app.api.controllers.graph import (
+    graph_context_router,
     graph_entity_router,
     graph_extraction_router,
     graph_ontology_router,
@@ -54,6 +56,12 @@ router.include_router(
 )
 
 router.include_router(
+    document_search_router,
+    prefix="/document-search",
+    tags=["document-search"],
+)
+
+router.include_router(
     fragment_query_router,
     prefix="/fragment-query",
     tags=["fragment-query"],
@@ -75,6 +83,12 @@ router.include_router(
     graph_query_router,
     prefix="/graph/query",
     tags=["graph-query"],
+)
+
+router.include_router(
+    graph_context_router,
+    prefix="/graph/context",
+    tags=["graph-context"],
 )
 
 router.include_router(

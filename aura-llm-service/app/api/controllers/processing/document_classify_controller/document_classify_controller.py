@@ -7,7 +7,7 @@ from app.api.controllers.processing.document_classify_controller.document_classi
 from app.api.openapi.common import default_error_responses
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.application.services.processing.document_classify_service.document_classify_service import get_document_classify_service
+from app.api.dependencies.app_state_services import get_document_classify_service
 from app.application.services.processing.document_classify_service.interfaces.document_classify_service_interface import (
     DocumentClassifyServiceInterface,
 )

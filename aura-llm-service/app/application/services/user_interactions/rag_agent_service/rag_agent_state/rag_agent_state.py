@@ -17,5 +17,6 @@ class RagAgentState(TypedDict):
     keywords: List[str]
     retrieved_fragments: List[FragmentResponse]
     context: str
+    graph_facts: str
     answer: str
     fallback_triggered: bool

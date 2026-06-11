@@ -38,6 +38,32 @@ docker compose `
   up -d
 ```
 
+## Modelos de ML (descarga y mantenimiento)
+
+Los modelos quedan **horneados en las imágenes en build time**, así el arranque de los
+contenedores no depende de descargas por red:
+
+| Imagen | Modelos incluidos | Build args (defaults) |
+|---|---|---|
+| `aura-document-processing-service` (CPU) | text splitter `paraphrase-multilingual-mpnet-base-v2`, reranker `BAAI/bge-reranker-v2-m3`, tiktoken `cl100k_base` | `TEXT_SPLITTER_HF_MODEL`, `EMBEDDER_HF_MODEL` (vacío: el embedder activo es Ollama), `RERANKER_MODEL`, `TIKTOKEN_ENCODING` |
+| `aura-document-processing-service` (GPU) | ídem pero splitter/embedder `intfloat/multilingual-e5-large` | los mismos |
+| `aura-chat-service` | Whisper (`faster-whisper`) tamaño `small` | `WHISPER_MODEL_SIZE` |
+| `llm` (Ollama) | se descargan al **primer arranque** al volumen `llm_data` (`ollama pull` con reintentos); arranques siguientes no tocan la red | — |
+
+Reglas para mantener todo consistente:
+
+- Si cambiás un modelo en `.env.docker` / `.env.docker.gpu`, actualizá el build arg (o el
+  default del Dockerfile) y rebuildeá: `docker compose ... build aura-document-processing-service`.
+- Los volúmenes `huggingface_cache` y `chat_hf_cache` se **siembran desde la imagen** la primera
+  vez que se crean. Si ya existían de antes y querés que tomen los modelos horneados nuevos,
+  borralos (`docker volume rm <proyecto>_huggingface_cache`) y volvé a levantar; si no, el modelo
+  que falte se descarga una única vez al volumen en runtime.
+- El healthcheck del contenedor `llm` recién da *healthy* cuando la API responde **y** los modelos
+  requeridos (`OLLAMA_LLM_FACADE_MODEL_NAME` + `EMBEDDER_OLLAMA_MODEL` si el embedder activo es
+  ollama) están disponibles localmente. Los servicios que dependen de él esperan a eso.
+- El **primer** `up` sigue siendo el más lento (build de imágenes con torch + primer
+  `ollama pull`); a partir de ahí, levantar el stack no descarga nada.
+
 ## Migraciones de base de datos (aura-db)
 
 El esquema de `aura-db` vive en `database/aura-db/document_processing.sql`, que **solo se ejecuta al

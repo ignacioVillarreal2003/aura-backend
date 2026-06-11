@@ -6,6 +6,7 @@ from django.conf import settings
 
 from core.authentication.authentication_exceptions import AuthenticationProviderException
 from core.authentication.authentication_provider import authentication_provider
+from core.authentication.request_token import reset_request_token, set_request_token
 
 logger = logging.getLogger(__name__)
 
@@ -62,4 +63,8 @@ class WebSocketAuthMiddleware(BaseMiddleware):
             await send({"type": "websocket.close", "code": 4003})
             return
 
-        return await super().__call__(scope, receive, send)
+        ctx = set_request_token(token)
+        try:
+            return await super().__call__(scope, receive, send)
+        finally:
+            reset_request_token(ctx)

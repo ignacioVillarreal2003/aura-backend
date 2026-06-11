@@ -36,8 +36,9 @@ class AnswerSynthesizerNode(RagNodeInterface):
 
         query: str = state.get("query", "")
         context: str = state.get("context", "")
+        graph_facts: str = state.get("graph_facts", "")
 
-        if not query or not context:
+        if not query or (not context and not graph_facts):
             logger.info("Missing query or context — returning fallback answer")
             return {"answer": _NO_ANSWER_RESPONSE}
 
@@ -48,6 +49,7 @@ class AnswerSynthesizerNode(RagNodeInterface):
                 context,
                 state.get("operator_system_prompt"),
                 state.get("response_style"),
+                graph_facts,
             )
 
             if not answer:
@@ -65,12 +67,19 @@ class AnswerSynthesizerNode(RagNodeInterface):
             context: str,
             operator_system_prompt: Optional[str] = None,
             response_style: Optional[str] = None,
+            graph_facts: str = "",
     ) -> str:
-        user_content = (
-            f"Consulta: {query}\n\n"
-            f"Contexto documental:\n{context}\n\n"
-            "Sintetiza la respuesta final."
-        )
+        sections = [f"Consulta: {query}"]
+        if context:
+            sections.append(f"Contexto documental:\n{context}")
+        if graph_facts:
+            sections.append(
+                "Hechos del grafo de conocimiento (relaciones entre entidades "
+                "extraídas de los documentos; cada hecho indica sus documentos fuente):\n"
+                f"{graph_facts}"
+            )
+        sections.append("Sintetiza la respuesta final.")
+        user_content = "\n\n".join(sections)
         prompt: List = [
             SystemMessage(
                 content=augment_system_prompt(

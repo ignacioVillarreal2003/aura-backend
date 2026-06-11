@@ -14,6 +14,7 @@ from apps.chat.exceptions import (
 from apps.chat.models.chat import Chat
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.membership.repositories.membership_repository import membership_repository
+from core.clients.notification_client import notification_client
 from apps.chat.repositories.share_link_repository import share_link_repository
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization import AccessControl
@@ -249,6 +250,19 @@ class ChatService:
             self._require_owner_or_creator(chat, user, "lock")
             chat_repository.update(chat, updated_by=user.id, is_locked=True)
         _broadcast_chat_locked_changed(chat_id, is_locked=True, by=user.id)
+        recipient_ids = [
+            member_id
+            for member_id in membership_repository.get_active_member_ids(chat_id)
+            if member_id != user.id
+        ]
+        if recipient_ids:
+            notification_client.emit_event(
+                event_type="chat.locked",
+                recipient_ids=recipient_ids,
+                actor_id=user.id,
+                actor_name=user.username or user.email,
+                context={"chat_id": chat_id, "chat_name": chat.name},
+            )
         logger.info("Chat locked.", extra={"chat_id": chat_id, "user_id": user.id})
 
     def unlock_chat(self, user: AuthenticatedUser, chat_id: int) -> None:

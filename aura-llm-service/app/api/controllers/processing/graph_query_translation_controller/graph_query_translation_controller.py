@@ -7,9 +7,7 @@ from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.application.services.processing.graph_query_translation_service.graph_query_translation_service import (
-    get_graph_query_translation_service,
-)
+from app.api.dependencies.app_state_services import get_graph_query_translation_service
 from app.application.services.processing.graph_query_translation_service.interfaces.graph_query_translation_service_interface import (
     GraphQueryTranslationServiceInterface,
 )

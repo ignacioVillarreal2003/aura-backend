@@ -1,3 +1,6 @@
+from app.api.controllers.graph.graph_context_controller.graph_context_controller import (
+    router as graph_context_router,
+)
 from app.api.controllers.graph.graph_query_controller.graph_query_controller import (
     router as graph_query_router,
 )
@@ -21,6 +24,7 @@ from app.api.controllers.graph.graph_stats_controller.graph_stats_controller imp
 )
 
 __all__ = [
+    "graph_context_router",
     "graph_query_router",
     "graph_entity_router",
     "graph_path_router",

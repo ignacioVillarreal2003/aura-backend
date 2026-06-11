@@ -101,51 +101,26 @@ def _cache_user(token: str, user: AuthenticatedUser) -> None:
 
 
 _HEADER_SERVICE_API_KEY = "X-Service-Api-Key"
-_HEADER_USER_ID = "X-User-Id"
-_HEADER_USER_EMAIL = "X-User-Email"
-
-_SERVICE_PRINCIPAL_ID = 0
-_SERVICE_PRINCIPAL_EMAIL = "service@internal"
 
 
-def _service_principal_permissions() -> tuple[str, ...]:
-    raw = getattr(settings, "SERVICE_API_PRINCIPAL_PERMISSIONS", "*")
-    if isinstance(raw, (list, tuple)):
-        items = [str(p).strip() for p in raw if str(p).strip()]
-    else:
-        items = [p.strip() for p in str(raw).split(",") if p.strip()]
-    return tuple(items) or ("*",)
-
-
-def _service_principal_roles() -> tuple[str, ...]:
-    raw = getattr(settings, "SERVICE_API_PRINCIPAL_ROLES", "SERVICE")
-    if isinstance(raw, (list, tuple)):
-        items = [str(r).strip() for r in raw if str(r).strip()]
-    else:
-        items = [r.strip() for r in str(raw).split(",") if r.strip()]
-    return tuple(items) or ("SERVICE",)
-
-
-def build_service_user_headers(authenticated_user: Optional[AuthenticatedUser] = None) -> dict[str, str]:
-    """Headers for an outbound inter-service call.
-
-    Preferred path: forward the caller's bearer token so the downstream service
-    validates it (shared token cache / auth service) and acts with the real
-    user's permissions. Fallback (no token in context — e.g. background/system
-    work): the service API key, with the user id/email only as audit context.
-    Permission/role trust headers are intentionally no longer sent: a valid
-    service key already implies full internal trust.
-    """
+def build_service_user_headers(user: Optional["AuthenticatedUser"] = None) -> dict[str, str]:
     from core.authentication.request_token import get_request_token
 
     token = get_request_token()
     if token:
         return {"Authorization": _format_bearer_token(token)}
 
-    headers: dict[str, str] = {_HEADER_SERVICE_API_KEY: str(settings.SERVICE_API_KEY)}
-    if authenticated_user is not None:
-        headers[_HEADER_USER_ID] = str(authenticated_user.id)
-        headers[_HEADER_USER_EMAIL] = str(authenticated_user.email)
+    # Without a user JWT the request authenticates with the service key and
+    # must forward the acting user's identity, roles and permissions so the
+    # downstream service can authorize and rate-limit on the real user.
+    headers = {_HEADER_SERVICE_API_KEY: str(settings.SERVICE_API_KEY)}
+    if user is not None:
+        headers["X-User-Id"] = str(user.id)
+        headers["X-User-Email"] = str(user.email)
+        if user.roles:
+            headers["X-User-Roles"] = ",".join(user.roles)
+        if user.permissions:
+            headers["X-User-Permissions"] = ",".join(user.permissions)
     return headers
 
 
@@ -157,57 +132,13 @@ class AuthenticationProvider:
 
         api_key = raw_key.strip()
         if not api_key:
-            logger.warning(
-                "Service API key header was present but empty.",
-                extra={"path": request.path},
-            )
-            raise ServiceAuthenticationRejected(
-                401,
-                "missing_service_key",
-                "Service API key required",
-            )
+            raise ServiceAuthenticationRejected(401, "missing_service_key", "Service API key required")
 
         if not secrets.compare_digest(api_key, settings.SERVICE_API_KEY):
-            logger.warning(
-                "Service API key does not match the configured value.",
-                extra={"path": request.path},
-            )
-            raise ServiceAuthenticationRejected(
-                403,
-                "invalid_service_key",
-                "Invalid service API key",
-            )
+            raise ServiceAuthenticationRejected(403, "invalid_service_key", "Invalid service API key")
 
-        # A valid service key implies full internal trust → system principal.
-        # We no longer read the self-asserted X-User-Roles / X-User-Permissions
-        # headers; X-User-Id / X-User-Email are accepted only as optional audit
-        # context (token-less background/system calls may omit them).
-        raw_user_id = (request.headers.get(_HEADER_USER_ID) or "").strip()
-        try:
-            user_id = int(raw_user_id) if raw_user_id else _SERVICE_PRINCIPAL_ID
-        except ValueError:
-            logger.warning(
-                "User id header must be a whole number.",
-                extra={"path": request.path},
-            )
-            raise ServiceAuthenticationRejected(
-                400,
-                "invalid_user_id",
-                "X-User-Id must be a valid integer",
-            )
-
-        email = (request.headers.get(_HEADER_USER_EMAIL) or "").strip() or _SERVICE_PRINCIPAL_EMAIL
-
-        logger.debug(
-            "Service-to-service request authenticated as system principal.",
-            extra={"user_id": user_id, "path": request.path},
-        )
-        return AuthenticatedUser(
-            id=user_id,
-            email=email,
-            roles=_service_principal_roles(),
-            permissions=_service_principal_permissions(),
-        )
+        logger.debug("Service-to-service request authenticated.", extra={"path": request.path})
+        return AuthenticatedUser(id=0, email="service@internal", roles=(), permissions=())
 
     def validate_token(self, token: str) -> AuthenticatedUser:
         cached = _get_cached_user(token)

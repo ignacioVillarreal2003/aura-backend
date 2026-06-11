@@ -1,5 +1,4 @@
-﻿from collections.abc import AsyncIterator
-from fastapi import APIRouter, Depends
+﻿from fastapi import APIRouter, Depends
 from starlette.responses import StreamingResponse
 
 from app.api.dependencies.rate_limiter import default_rate_limit, strict_rate_limit
@@ -7,16 +6,17 @@ from app.api.controllers.user_interactions.general_chat_controller.general_chat_
     GeneralChatControllerInterface,
 )
 from app.api.openapi.common import default_error_responses
+from app.api.sse import sse_response
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.application.services.user_interactions.general_chat_service.general_chat_service import get_general_chat_service
+from app.api.dependencies.app_state_services import get_general_chat_service
 from app.application.services.user_interactions.general_chat_service.general_chat_service_interface import (
     GeneralChatServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.user_interactions.general_chat.general_chat_request import GeneralChatRequest
 from app.domain.dtos.user_interactions.general_chat.general_chat_response import GeneralChatResponse
-from app.domain.dtos.user_interactions.general_chat.general_chat_stream_events import GeneralChatStreamEvent
+
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 
 
@@ -49,26 +49,12 @@ class GeneralChatController(GeneralChatControllerInterface):
             required_permissions=frozenset({Permissions.LLM_GENERAL_CHAT}),
         )
 
-        async def sse_bytes() -> AsyncIterator[bytes]:
-            async for event in general_chat_service.execute_general_chat_stream(
-                    general_chat_request=general_chat_request,
-                    authenticated_user=authenticated_user,
-            ):
-                yield _fmt(event)
-
-        return StreamingResponse(
-            sse_bytes(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
+        return sse_response(
+            general_chat_service.execute_general_chat_stream(
+                general_chat_request=general_chat_request,
+                authenticated_user=authenticated_user,
+            )
         )
-
-
-def _fmt(event: GeneralChatStreamEvent) -> bytes:
-    return f"data: {event.model_dump_json()}\n\n".encode("utf-8")
 
 
 router = APIRouter()

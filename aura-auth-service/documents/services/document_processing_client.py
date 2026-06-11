@@ -6,6 +6,8 @@ import mimetypes
 import requests
 from django.conf import settings
 
+from accounts.request_token import get_request_token
+
 logger = logging.getLogger(__name__)
 
 
@@ -49,12 +51,15 @@ def create_document_from_admin(*, raw_document, actor_user, chat_id=None, name=N
     if description:
         data['description'] = description
 
-    headers = {
-        'X-Service-Api-Key': settings.DOCUMENT_PROCESSING_SERVICE_API_KEY,
-        'X-User-Id': str(actor_user.pk),
-        'X-User-Email': actor_user.email or f'{actor_user.username}@local',
-        'X-User-Permissions': 'INGEST_DOCUMENT',
-    }
+    token = get_request_token()
+    if token:
+        headers = {'Authorization': token}
+    else:
+        headers = {
+            'X-Service-Api-Key': settings.DOCUMENT_PROCESSING_SERVICE_API_KEY,
+            'X-User-Id': str(actor_user.pk),
+            'X-User-Email': actor_user.email or f'{actor_user.username}@local',
+        }
 
     logger.info(
         '[doc-processing] POST %s | file=%s size=%s bytes | chat_id=%s actor=%s',

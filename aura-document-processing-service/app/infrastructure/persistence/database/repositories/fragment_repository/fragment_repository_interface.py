@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.dtos.document.document_search.document_similarity_hit import DocumentSimilarityHit
 from app.infrastructure.persistence.database.orm.fragment import Fragment
 
 
@@ -46,6 +47,18 @@ class FragmentRepositoryInterface(ABC):
             threshold: float = 0.3,
             document_ids: list[int] | None = None,
     ) -> list[Fragment]:
+        pass
+
+    @abstractmethod
+    async def search_documents_by_similarity(
+            self,
+            query_vector: list[float],
+            database_session: AsyncSession,
+            k: int,
+            threshold: float,
+            pool_size: int,
+            document_ids: list[int] | None = None,
+    ) -> list[DocumentSimilarityHit]:
         pass
 
     @abstractmethod

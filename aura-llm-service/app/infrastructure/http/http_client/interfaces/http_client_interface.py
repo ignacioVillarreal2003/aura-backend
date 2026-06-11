@@ -82,10 +82,3 @@ class HttpClientInterface(ABC):
             self
     ) -> bool:
         pass
-
-    @property
-    @abstractmethod
-    def client(
-            self
-    ) -> httpx.AsyncClient:
-        pass

@@ -2,7 +2,8 @@
 
 from notifications.models.notification import (
     Notification,
-    NotificationType,
+    NotificationEventType,
+    NotificationSeverity,
     NotificationStatus,
     IndividualNotification,
     GroupNotification,
@@ -11,7 +12,8 @@ from notifications.models.notification import (
 
 __all__ = [
     'Notification',
-    'NotificationType',
+    'NotificationEventType',
+    'NotificationSeverity',
     'NotificationStatus',
     'IndividualNotification',
     'GroupNotification',

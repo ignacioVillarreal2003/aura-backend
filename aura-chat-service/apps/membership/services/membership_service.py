@@ -174,14 +174,12 @@ class MembershipService:
             actor_id = user.id
             actor_name = user.username or user.email
             context = {"chat_id": chat_id, "chat_name": chat.name}
-            idem_key = f"chat-{chat_id}-invite-{'-'.join(str(i) for i in sorted(receiver_ids))}"
             on_commit(lambda: notification_client.emit_event(
                 event_type="chat.member.invited",
                 recipient_ids=receiver_ids,
                 actor_id=actor_id,
                 actor_name=actor_name,
                 context=context,
-                idempotency_key=idem_key,
             ))
 
         return created
@@ -271,7 +269,7 @@ class MembershipService:
             recipient_ids=[m],
             actor_id=actor_id,
             actor_name=actor_name,
-            context={"chat_id": chat_id},
+            context={"chat_id": chat_id, "chat_name": chat.name},
         ))
         logger.info(
             "Member removed from chat.",

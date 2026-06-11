@@ -12,10 +12,9 @@ langgraph>=0.2.0
 langchain-ollama>=0.2.0
 
 # ============================================
-# Servicios Externos & Mensajería
+# Servicios Externos
 # ============================================
 httpx>=0.28.0
-aio-pika>=9.5.8
 redis[asyncio]>=5.0.0
 
 # ============================================
@@ -30,5 +29,5 @@ aiobreaker>=1.2.0
 # ============================================
 # Monitoreo
 # ============================================
-prometheus-fastapi-instrumentator
-python-json-logger
+prometheus-fastapi-instrumentator>=7.0.0
+python-json-logger>=3.0.0

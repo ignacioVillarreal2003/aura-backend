@@ -2,11 +2,10 @@ import json
 import logging
 from typing import Optional
 
-from fastapi import HTTPException, Request, status
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
 
-from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
+from app.application.authorization.exceptions.authorization_exceptions import UnauthorizedException
 from app.application.exceptions.app_exception import RequestValidationException
 from app.application.services.processing.graph_extraction_service.exceptions.graph_extraction_service_exceptions import (
     GraphExtractionServiceException,
@@ -272,15 +271,42 @@ class GraphExtractionService(GraphExtractionServiceInterface):
         )
         min_conf = self._graph_extraction_settings.min_relation_confidence
 
-        filtered_entities = [
-            e for e in result.entities
-            if e.type.value in allowed_entity_set
-        ]
-        filtered_relations = [
-            r for r in result.relations
-            if (allowed_relation_set is None or r.type.lower() in allowed_relation_set)
-            and r.confidence >= min_conf
-        ]
+        filtered_entities: list = []
+        seen_entities: set[tuple[str, str]] = set()
+        for e in result.entities:
+            if e.type.value not in allowed_entity_set:
+                continue
+            key = (e.name.strip().lower(), e.type.value)
+            if key in seen_entities:
+                continue
+            seen_entities.add(key)
+            filtered_entities.append(e)
+
+        filtered_relations: list = []
+        seen_relations: set[tuple[str, str, str, str, str]] = set()
+        for r in result.relations:
+            if allowed_relation_set is not None and r.type.lower() not in allowed_relation_set:
+                continue
+            if r.confidence < min_conf:
+                continue
+            # Drop relations whose endpoints carry a type outside the whitelist:
+            # the persistence layer would otherwise create out-of-ontology nodes.
+            if (
+                r.source.type.value not in allowed_entity_set
+                or r.target.type.value not in allowed_entity_set
+            ):
+                continue
+            key = (
+                r.source.name.strip().lower(),
+                r.source.type.value,
+                r.target.name.strip().lower(),
+                r.target.type.value,
+                r.type.lower(),
+            )
+            if key in seen_relations:
+                continue
+            seen_relations.add(key)
+            filtered_relations.append(r)
 
         discarded_entities = len(result.entities) - len(filtered_entities)
         discarded_relations = len(result.relations) - len(filtered_relations)
@@ -299,13 +325,3 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             relations=filtered_relations,
         )
 
-
-async def get_graph_extraction_service(request: Request) -> GraphExtractionServiceInterface:
-    try:
-        return request.app.state.graph_extraction_service
-    except AttributeError:
-        logger.error("GraphExtractionService not found in application state")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="GraphExtractionService is not available",
-        )

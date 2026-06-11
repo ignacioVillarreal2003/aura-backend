@@ -35,6 +35,7 @@ from app.infrastructure.persistence.database.repositories.document_repository.do
 from app.infrastructure.messaging.rabbitmq.publisher.interfaces.graph_extraction_publisher_interface import (
     GraphExtractionPublisherInterface,
 )
+from app.infrastructure.http.notification_service.notification_client import NotificationClient
 from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository_interface import (
     FragmentRepositoryInterface
 )
@@ -54,6 +55,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             database_manager: DatabaseManagerInterface,
             document_ingestion_service_settings: Optional[DocumentIngestionServiceSettings] = None,
             graph_extraction_publisher: Optional[GraphExtractionPublisherInterface] = None,
+            notification_client: Optional[NotificationClient] = None,
     ) -> None:
         self._document_repository = document_repository
         self._fragment_repository = fragment_repository
@@ -64,6 +66,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
         self._database_manager = database_manager
         self._settings = document_ingestion_service_settings or DocumentIngestionServiceSettings()
         self._graph_extraction_publisher = graph_extraction_publisher
+        self._notification_client = notification_client
 
     async def process_document(
             self,
@@ -101,6 +104,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             )
 
             await self._publish_graph_extraction_event(document)
+            await self._emit_processing_notification(document, succeeded=True)
 
         except (
                 DocumentIngestionServiceReadException,
@@ -108,12 +112,14 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                 DocumentIngestionServiceSplitException,
                 DocumentIngestionServiceEmbedException,
                 DocumentIngestionServicePersistenceException,
-        ):
+        ) as e:
             await self._mark_document_as_failed(document)
+            await self._emit_processing_notification(document, succeeded=False, reason=str(e))
             raise
 
         except Exception as e:
             await self._mark_document_as_failed(document)
+            await self._emit_processing_notification(document, succeeded=False)
             logger.exception(
                 "An unexpected error occurred during document ingestion.",
                 extra={
@@ -387,6 +393,34 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                     "document_id": document.id,
                     "owner_user_id": document.created_by,
                 },
+            )
+
+    async def _emit_processing_notification(
+            self,
+            document: Document,
+            *,
+            succeeded: bool,
+            reason: str | None = None,
+    ) -> None:
+        if self._notification_client is None or document.created_by is None:
+            return
+        event_type = "document.processing.done" if succeeded else "document.processing.failed"
+        context: dict = {
+            "document_id": int(document.id),
+            "document_name": document.name,
+        }
+        if reason:
+            context["reason"] = reason[:300]
+        try:
+            await self._notification_client.emit_event(
+                event_type=event_type,
+                recipient_ids=[int(document.created_by)],
+                context=context,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to emit document processing notification.",
+                extra={"document_id": document.id, "event_type": event_type},
             )
 
     @staticmethod

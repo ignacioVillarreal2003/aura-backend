@@ -1,13 +1,24 @@
-"""Client for internal calls to aura-notification-service."""
+"""Client for internal calls to aura-notification-service.
 
+The notification service exposes a single internal endpoint for producers:
+``POST /api/v1/internal/events/`` authenticated with the ``X-Internal-Token``
+header. Producers send a semantic ``event_type`` plus ``recipient_ids`` and a
+``context`` dict; the service resolves templates, channels and user
+preferences on its side.
+"""
+
+import logging
+import threading
 from urllib.parse import urlsplit, urlunsplit
 
 import requests
 from django.conf import settings
 
+logger = logging.getLogger(__name__)
+
 
 class NotificationServiceError(Exception):
-    """Raised when notification service call fails for admin flows."""
+    """Raised when a synchronous notification service call fails (admin flows)."""
 
 
 def _normalize_base_url(url: str) -> str:
@@ -27,82 +38,59 @@ def _extract_error(response: requests.Response) -> str:
     return payload.get('detail') or payload.get('message') or payload.get('error') or 'Sin detalles adicionales.'
 
 
-def _serialize_id(value):
-    """Serialize UUID/int ids safely for JSON payloads."""
-
-    return str(value) if value is not None else None
-
-
-def _candidate_base_urls(configured_url: str) -> list[str]:
-    """Return a single normalized base URL for the notification service."""
-    return [_normalize_base_url(configured_url)]
-
-
-def create_notifications_from_admin(*, receiver_ids, message, notification_type, target_scope, target_label, actor_user_id):
-    """
-    Create notifications by calling the trusted internal endpoint of aura-notification-service.
-    Raises requests.HTTPError on non-success responses.
-    """
-    base_urls = _candidate_base_urls(settings.NOTIFICATION_SERVICE_URL)
+def _build_payload(*, event_type, recipient_ids, actor_id=None, actor_name='', context=None, link_url=None) -> dict:
     payload = {
-        'receiver_ids': [_serialize_id(item) for item in receiver_ids],
-        'message': message,
-        'type': notification_type,
-        'target_scope': target_scope,
-        'target_label': target_label,
-        'actor_user_id': _serialize_id(actor_user_id),
+        'event_type': event_type,
+        'recipient_ids': [int(item) for item in recipient_ids],
     }
+    if actor_id is not None:
+        payload['actor_id'] = int(actor_id)
+    if actor_name:
+        payload['actor_name'] = str(actor_name)
+    if context:
+        payload['context'] = context
+    if link_url:
+        payload['link_url'] = link_url
+    return payload
 
-    request_kwargs = {
-        'json': payload,
-        'headers': {'X-Internal-Token': settings.NOTIFICATION_INTERNAL_API_TOKEN},
-        'timeout': (4, settings.NOTIFICATION_SERVICE_TIMEOUT_SECONDS),
-        'allow_redirects': False,
-    }
 
-    last_timeout_exc = None
-    last_connection_exc = None
-    last_response = None
+def emit_event(*, event_type, recipient_ids, actor_id=None, actor_name='', context=None, link_url=None) -> dict:
+    """
+    Emit a notification event synchronously.
 
-    for base_url in base_urls:
-        url = f"{base_url}/api/v1/internal/notifications/admin-create/"
-        try:
-            response = requests.post(url, **request_kwargs)
+    Returns the service response body (``created``, ``skipped``, ``pending_email``,
+    ``outcomes``). Raises NotificationServiceError on any failure — use this for
+    admin flows where the caller needs feedback.
+    """
+    base_url = _normalize_base_url(settings.NOTIFICATION_SERVICE_URL)
+    payload = _build_payload(
+        event_type=event_type,
+        recipient_ids=recipient_ids,
+        actor_id=actor_id,
+        actor_name=actor_name,
+        context=context,
+        link_url=link_url,
+    )
+    url = f"{base_url}/api/v1/internal/events/"
 
-            # Retry once when service redirects HTTP/HTTPS or canonical path.
-            if response.status_code in (301, 302, 307, 308):
-                redirect_url = response.headers.get('Location')
-                if redirect_url:
-                    if redirect_url.startswith('/'):
-                        parsed = urlsplit(url)
-                        redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
-                    response = requests.post(redirect_url, **request_kwargs)
-
-            if response.ok:
-                return response.json()
-
-            last_response = response
-        except requests.Timeout as exc:
-            last_timeout_exc = exc
-            continue
-        except requests.ConnectionError as exc:
-            last_connection_exc = exc
-            continue
-        except requests.RequestException as exc:
-            raise NotificationServiceError('Ocurrio un error al contactar el servicio de notificaciones.') from exc
-
-    if last_response is None:
-        if last_timeout_exc is not None:
-            raise NotificationServiceError(
-                'El servicio de notificaciones no respondio a tiempo. Verifica que este activo en 8004.'
-            ) from last_timeout_exc
-        if last_connection_exc is not None:
-            raise NotificationServiceError(
-                'No se pudo conectar con el servicio de notificaciones. Verifica que este activo en 8004.'
-            ) from last_connection_exc
-        raise NotificationServiceError('No fue posible contactar al servicio de notificaciones.')
-
-    response = last_response
+    try:
+        response = requests.post(
+            url,
+            json=payload,
+            headers={'X-Internal-Token': settings.NOTIFICATION_INTERNAL_API_TOKEN},
+            timeout=(4, settings.NOTIFICATION_SERVICE_TIMEOUT_SECONDS),
+            allow_redirects=False,
+        )
+    except requests.Timeout as exc:
+        raise NotificationServiceError(
+            'El servicio de notificaciones no respondio a tiempo. Verifica que este activo.'
+        ) from exc
+    except requests.ConnectionError as exc:
+        raise NotificationServiceError(
+            'No se pudo conectar con el servicio de notificaciones. Verifica que este activo.'
+        ) from exc
+    except requests.RequestException as exc:
+        raise NotificationServiceError('Ocurrio un error al contactar el servicio de notificaciones.') from exc
 
     if response.status_code in (301, 302, 307, 308):
         raise NotificationServiceError(
@@ -114,3 +102,51 @@ def create_notifications_from_admin(*, receiver_ids, message, notification_type,
         )
 
     return response.json()
+
+
+def emit_event_async(*, event_type, recipient_ids, actor_id=None, actor_name='', context=None, link_url=None) -> None:
+    """
+    Fire-and-forget event emission for request-path flows (login, password change).
+
+    Never raises: a notification failure must not break authentication. Errors
+    are logged only.
+    """
+
+    def _send():
+        try:
+            emit_event(
+                event_type=event_type,
+                recipient_ids=recipient_ids,
+                actor_id=actor_id,
+                actor_name=actor_name,
+                context=context,
+                link_url=link_url,
+            )
+        except NotificationServiceError as exc:
+            logger.warning("Failed to emit notification event '%s': %s", event_type, exc)
+        except Exception:
+            logger.exception("Unexpected error emitting notification event '%s'.", event_type)
+
+    threading.Thread(target=_send, name=f'notif-{event_type}', daemon=True).start()
+
+
+def create_notifications_from_admin(*, receiver_ids, message, target_scope, target_label, actor_user_id, actor_name=''):
+    """
+    Send an admin broadcast through the notification service.
+
+    ``target_scope``/``target_label`` are kept inside ``context`` so the admin
+    panel can keep splitting individual vs group sends when reading the
+    ``data`` JSONB column back. Raises NotificationServiceError on failure.
+    """
+    context = {
+        'message': message,
+        'target_scope': target_scope,
+        'target_label': target_label,
+    }
+    return emit_event(
+        event_type='admin.broadcast',
+        recipient_ids=receiver_ids,
+        actor_id=actor_user_id,
+        actor_name=actor_name,
+        context=context,
+    )

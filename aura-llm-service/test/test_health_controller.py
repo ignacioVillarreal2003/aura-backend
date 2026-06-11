@@ -3,7 +3,7 @@ Tests for:
   GET /api/v1/health  (liveness — always 200, no auth)
   GET /api/v1/ready   (readiness — 200/503 depending on app.state)
 """
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 HEALTH_URL = "/api/v1/health"
 READY_URL = "/api/v1/ready"
@@ -73,15 +73,19 @@ class TestReadinessEndpoint:
 
     def test_all_ok_returns_200(self, app, client):
         mock_http = MagicMock()
-        mock_http.health_check.return_value = {"status": "healthy"}
+        mock_http.health_check = AsyncMock(return_value={"status": "healthy"})
         mock_ollama = MagicMock()
         mock_ollama.is_healthy.return_value = True
         mock_ollama.tools_bound = True
+        mock_redis = MagicMock()
+        mock_redis.health_check = AsyncMock(return_value=True)
 
         original_http = getattr(app.state, "http_client", None)
         original_ollama = getattr(app.state, "ollama_llm_facade", None)
+        original_redis = getattr(app.state, "redis_client", None)
         app.state.http_client = mock_http
         app.state.ollama_llm_facade = mock_ollama
+        app.state.redis_client = mock_redis
         try:
             response = client.get(READY_URL)
             assert response.status_code == 200
@@ -95,6 +99,10 @@ class TestReadinessEndpoint:
                 app.state.ollama_llm_facade = original_ollama
             elif hasattr(app.state, "ollama_llm_facade"):
                 delattr(app.state, "ollama_llm_facade")
+            if original_redis is not None:
+                app.state.redis_client = original_redis
+            elif hasattr(app.state, "redis_client"):
+                delattr(app.state, "redis_client")
 
     def test_response_includes_checks_field(self, client):
         response = client.get(READY_URL)

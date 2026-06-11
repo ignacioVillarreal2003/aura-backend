@@ -320,6 +320,8 @@ WHISPER_COMPUTE_TYPE = config("WHISPER_COMPUTE_TYPE", default="int8")
 
 WHISPER_MAX_CONCURRENCY = config("WHISPER_MAX_CONCURRENCY", default=2, cast=int)
 
+WHISPER_PRELOAD = config("WHISPER_PRELOAD", default=False, cast=bool)
+
 NOTIFICATION_SERVICE_URL = config("NOTIFICATION_SERVICE_URL").strip()
 NOTIFICATION_INTERNAL_API_TOKEN = config("NOTIFICATION_INTERNAL_API_TOKEN")
 
@@ -409,6 +411,11 @@ LOGGING = {
         "core": {
             "handlers": ["console"],
             "level": _LOG_LEVEL,
+            "propagate": False,
+        },
+        "daphne": {
+            "handlers": ["console"],
+            "level": "WARNING",
             "propagate": False,
         },
     },

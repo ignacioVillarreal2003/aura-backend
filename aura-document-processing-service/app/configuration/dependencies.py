@@ -17,6 +17,7 @@ from app.application.services.document.document_ingestion_service.document_inges
 )
 from app.application.services.document.delete_document_service.delete_document_service import DeleteDocumentService
 from app.application.services.document.document_query_service.document_query_service import DocumentQueryService
+from app.application.services.document.document_search_service.document_search_service import DocumentSearchService
 from app.application.services.document.post_process_document_service.post_process_document_service import (
     PostProcessDocumentService,
 )
@@ -33,6 +34,7 @@ from app.application.services.fragment.post_process_fragment_service.post_proces
 from app.application.services.fragment.post_process_fragment_service.post_process_fragment_service_settings import (
     PostProcessFragmentServiceSettings,
 )
+from app.application.services.graph.graph_context_service.graph_context_service import GraphContextService
 from app.application.services.graph.graph_entity_service.graph_entity_service import GraphEntityService
 from app.application.services.graph.graph_extraction_service.graph_extraction_service import (
     GraphExtractionService,
@@ -53,6 +55,7 @@ from app.infrastructure.http.document_collection_catalog.document_collection_cat
 )
 from app.infrastructure.http.http_client.http_client import HttpClient
 from app.infrastructure.http.llm_provider.llm_provider import LlmProvider
+from app.infrastructure.http.notification_service.notification_client import NotificationClient
 from app.infrastructure.messaging.rabbitmq.consumer.document_ingestion_consumer import DocumentIngestionConsumer
 from app.infrastructure.messaging.rabbitmq.consumer.graph_extraction_consumer import GraphExtractionConsumer
 from app.infrastructure.messaging.rabbitmq.consumer.post_process_document_consumer import PostProcessDocumentConsumer
@@ -132,6 +135,7 @@ async def _rollback_partial_startup(
         "graph_stats_service",
         "graph_stats_repository",
         "graph_path_service",
+        "graph_context_service",
         "graph_entity_service",
         "graph_query_service",
         "graph_extraction_service",
@@ -163,6 +167,7 @@ async def _rollback_partial_startup(
         "document_job_progress_store",
         "redis_client",
         "document_ingestion_service",
+        "document_search_service",
         "fragment_query_service",
         "document_query_service",
         "authorizer",
@@ -190,6 +195,20 @@ async def _rollback_partial_startup(
                     "Startup rollback: could not remove app.state attribute.",
                     extra={"key": key},
                 )
+
+
+async def _warmup_reranker(reranker_factory: RerankerFactory) -> None:
+    try:
+        reranker = reranker_factory.reranker
+        warmup = getattr(reranker, "warmup", None)
+        if warmup is not None:
+            await warmup()
+            logger.info("The reranker model was warmed up successfully.")
+    except Exception:
+        logger.warning(
+            "Reranker warmup failed; the model will be loaded lazily on first use.",
+            exc_info=True,
+        )
 
 
 async def startup_dependencies(app: FastAPI) -> None:
@@ -281,6 +300,9 @@ async def startup_dependencies(app: FastAPI) -> None:
 
         reranker_factory = RerankerFactory()
         app.state.reranker_factory = reranker_factory
+        app.state.reranker_warmup_task = asyncio.create_task(
+            _warmup_reranker(reranker_factory)
+        )
 
         fragment_query_service = FragmentQueryService(
             document_repository=document_repository,
@@ -292,6 +314,16 @@ async def startup_dependencies(app: FastAPI) -> None:
             document_collection_catalog_client=document_collection_catalog_client,
         )
         app.state.fragment_query_service = fragment_query_service
+
+        document_search_service = DocumentSearchService(
+            document_repository=document_repository,
+            fragment_repository=fragment_repository,
+            embedder_factory=embedder_factory,
+            authorizer=authorizer,
+            document_collection_repository=document_collection_repository,
+            document_collection_catalog_client=document_collection_catalog_client,
+        )
+        app.state.document_search_service = document_search_service
 
         document_job_progress_store = DocumentPostProcessJobProgressStore(
             redis_client=redis_client.client,
@@ -334,6 +366,14 @@ async def startup_dependencies(app: FastAPI) -> None:
                 extra={"queue": rabbitmq_manager_settings.graph_extraction_queue},
             )
 
+        notification_client = NotificationClient()
+        app.state.notification_client = notification_client
+        if not notification_client.enabled:
+            logger.warning(
+                "Notification client is disabled: NOTIFICATION_SERVICE_URL or "
+                "NOTIFICATION_INTERNAL_API_TOKEN is not configured.",
+            )
+
         document_ingestion_service = DocumentIngestionService(
             database_manager=database_manager,
             document_repository=document_repository,
@@ -343,6 +383,7 @@ async def startup_dependencies(app: FastAPI) -> None:
             text_splitter_factory=text_splitter_factory,
             embedder_factory=embedder_factory,
             graph_extraction_publisher=graph_extraction_publisher,
+            notification_client=notification_client,
         )
         app.state.document_ingestion_service = document_ingestion_service
 
@@ -584,6 +625,16 @@ async def _wire_knowledge_graph_module(
         knowledge_graph_settings=knowledge_graph_settings,
     )
     app.state.graph_entity_service = graph_entity_service
+
+    graph_context_service = GraphContextService(
+        entity_repository=graph_entity_repository,
+        relation_repository=graph_relation_repository,
+        document_collection_repository=document_collection_repository,
+        document_collection_catalog_client=document_collection_catalog_client,
+        authorizer=authorizer,
+        knowledge_graph_settings=knowledge_graph_settings,
+    )
+    app.state.graph_context_service = graph_context_service
 
     graph_path_service = GraphPathService(
         path_repository=graph_path_repository,

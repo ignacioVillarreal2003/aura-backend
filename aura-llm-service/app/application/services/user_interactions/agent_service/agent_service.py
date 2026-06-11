@@ -2,9 +2,8 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 from typing import Optional
-from fastapi import HTTPException, Request, status
 
-from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
+from app.application.authorization.exceptions.authorization_exceptions import UnauthorizedException
 from app.application.exceptions.app_exception import RequestValidationException
 from app.application.services.user_interactions.agent_service.agent_settings import AgentServiceSettings
 from app.application.services.user_interactions.agent_service.agent_state.agent_state import AgentState
@@ -202,13 +201,3 @@ class AgentService(AgentServiceInterface):
             fragments=fragments,
         )
 
-
-async def get_agent_service(request: Request) -> AgentServiceInterface:
-    try:
-        return request.app.state.agent_service
-    except AttributeError:
-        logger.error("AgentService not found in application state")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Agent service is not available",
-        )

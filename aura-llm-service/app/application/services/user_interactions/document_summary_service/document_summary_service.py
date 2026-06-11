@@ -1,9 +1,8 @@
 import logging
 from collections.abc import AsyncIterator
 from typing import Optional
-from fastapi import HTTPException, Request, status
 
-from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
+from app.application.authorization.exceptions.authorization_exceptions import UnauthorizedException
 from app.application.exceptions.app_exception import RequestValidationException
 from app.application.services.user_interactions.document_summary_service.constants.summarization_strategy import SummarizationStrategy
 from app.application.services.user_interactions.document_summary_service.document_summary_settings import DocumentSummaryServiceSettings
@@ -221,13 +220,3 @@ class DocumentSummaryService(DocumentSummaryServiceInterface):
         if not state.summary.strip():
             state.summary = _STATIC_FALLBACK_MESSAGE
 
-
-async def get_document_summary_service(request: Request) -> DocumentSummaryServiceInterface:
-    try:
-        return request.app.state.document_summary_service
-    except AttributeError:
-        logger.error("DocumentSummaryService not found in application state")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="DocumentSummaryService is not available",
-        )

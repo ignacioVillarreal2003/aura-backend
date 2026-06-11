@@ -1,5 +1,4 @@
-﻿from collections.abc import AsyncIterator
-from fastapi import APIRouter, Depends
+﻿from fastapi import APIRouter, Depends
 from starlette.responses import StreamingResponse
 
 from app.api.dependencies.rate_limiter import strict_rate_limit
@@ -7,14 +6,15 @@ from app.api.controllers.user_interactions.agent_controller.agent_controller_int
     AgentControllerInterface
 )
 from app.api.openapi.common import default_error_responses
+from app.api.sse import sse_response
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.application.services.user_interactions.agent_service.agent_service import get_agent_service
+from app.api.dependencies.app_state_services import get_agent_service
 from app.application.services.user_interactions.agent_service.interfaces.agent_service_interface import AgentServiceInterface
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.user_interactions.agent.agent_request import AgentRequest
 from app.domain.dtos.user_interactions.agent.agent_response import AgentResponse
-from app.domain.dtos.user_interactions.agent.agent_stream_events import AgentStreamEvent
+
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 
 
@@ -47,26 +47,12 @@ class AgentController(AgentControllerInterface):
             required_permissions=frozenset({Permissions.LLM_AGENT}),
         )
 
-        async def sse_bytes() -> AsyncIterator[bytes]:
-            async for event in agent_service.execute_agent_stream(
-                    agent_request=agent_request,
-                    authenticated_user=authenticated_user,
-            ):
-                yield _fmt(event)
-
-        return StreamingResponse(
-            sse_bytes(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
+        return sse_response(
+            agent_service.execute_agent_stream(
+                agent_request=agent_request,
+                authenticated_user=authenticated_user,
+            )
         )
-
-
-def _fmt(event: AgentStreamEvent) -> bytes:
-    return f"data: {event.model_dump_json()}\n\n".encode("utf-8")
 
 
 router = APIRouter()

@@ -6,16 +6,17 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.infrastructure.http.authentication_provider.authentication_provider_exception import (
+from app.infrastructure.http.authentication_provider.exceptions.authentication_provider_exception import (
     AuthenticationProviderException,
     AuthenticationProviderInvalidTokenException,
     AuthenticationProviderServiceUnavailableException,
     AuthenticationProviderUnauthorizedException,
     AuthenticationProviderUserNotFoundException
 )
-from app.infrastructure.http.authentication_provider.authentication_provider_interface import (
+from app.infrastructure.http.authentication_provider.interfaces.authentication_provider_interface import (
     AuthenticationProviderInterface
 )
+from app.infrastructure.http.authentication_provider.request_token import set_request_token
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +136,9 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
         try:
             authenticated_user = await authentication_provider.validate_token(token)
             request.state.authenticated_user = AuthenticatedUser.model_validate(authenticated_user)
+            bearer = token if token.lower().startswith("bearer ") else f"Bearer {token}"
+            request.state.authorization_header_outbound = bearer
+            set_request_token(bearer)
             logger.debug(
                 "Request authenticated with a valid bearer token.",
                 extra={

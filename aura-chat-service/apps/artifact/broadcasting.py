@@ -6,16 +6,8 @@ from apps.artifact.models import Artifact
 
 logger = logging.getLogger(__name__)
 
-# Broadcast contract:
-#   * broadcast_artifact_created   -> async, awaited from async generation flows.
-#   * broadcast_artifact_deleted   -> sync, called from sync services (wrap in
-#                                     transaction.on_commit so peers are only
-#                                     notified after the delete actually commits).
-# Artifacts are immutable once generated, so there is no "updated" broadcast.
-
 
 def _resolve_artifact_title(artifact: Artifact) -> str:
-    # Title lives in the per-type detail row (artifact has no title column).
     from apps.artifact.serializers import _get_type_title
 
     return _get_type_title(artifact)

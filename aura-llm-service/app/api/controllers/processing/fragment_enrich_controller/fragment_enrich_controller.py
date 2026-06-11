@@ -7,7 +7,7 @@ from app.api.controllers.processing.fragment_enrich_controller.fragment_enrich_c
 from app.api.openapi.common import default_error_responses
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.application.services.processing.fragment_enrich_service.fragment_enrich_service import get_fragment_enrich_service
+from app.api.dependencies.app_state_services import get_fragment_enrich_service
 from app.application.services.processing.fragment_enrich_service.interfaces.fragment_enrich_service_interface import (
     FragmentEnrichServiceInterface
 )

@@ -159,8 +159,6 @@ class ArtifactService:
         artifact_repository.soft_delete(artifact, deleted_by=user.id)
         logger.info("Artifact deleted", extra={"user_id": user.id, "artifact_id": artifact_id})
         if chat_id:
-            # Notify peers only after the delete actually commits, otherwise a
-            # client re-fetching on the event could still read the live artifact.
             transaction.on_commit(
                 lambda: broadcast_artifact_deleted(chat_id, artifact_id, deleted_by=user.id)
             )

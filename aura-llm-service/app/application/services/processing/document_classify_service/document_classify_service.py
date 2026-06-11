@@ -1,11 +1,10 @@
 import json
 import logging
 from typing import Optional
-from fastapi import HTTPException, Request, status
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
 
-from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
+from app.application.authorization.exceptions.authorization_exceptions import UnauthorizedException
 from app.application.exceptions.app_exception import RequestValidationException
 from app.application.services.processing.document_classify_service.document_classify_prompt import (
     HUMAN_PROMPT,
@@ -150,13 +149,3 @@ class DocumentClassifyService(DocumentClassifyServiceInterface):
                 status_code=502,
             ) from e
 
-
-async def get_document_classify_service(request: Request) -> DocumentClassifyServiceInterface:
-    try:
-        return request.app.state.document_classify_service
-    except AttributeError:
-        logger.error("DocumentClassifyService not found in application state")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="DocumentClassifyService is not available",
-        )

@@ -1,9 +1,8 @@
 import logging
 from collections.abc import AsyncIterator
 from typing import Optional
-from fastapi import HTTPException, Request, status
 
-from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
+from app.application.authorization.exceptions.authorization_exceptions import UnauthorizedException
 from app.application.exceptions.app_exception import RequestValidationException
 from app.application.services.user_interactions.document_question_service.document_question_settings import (
     DocumentQuestionServiceSettings,
@@ -255,13 +254,3 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
         if not state.answer.strip():
             state.answer = _STATIC_FALLBACK_MESSAGE
 
-
-async def get_document_question_service(request: Request) -> DocumentQuestionServiceInterface:
-    try:
-        return request.app.state.document_question_service
-    except AttributeError:
-        logger.error("DocumentQuestionService not found in application state")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="DocumentQuestionService is not available",
-        )

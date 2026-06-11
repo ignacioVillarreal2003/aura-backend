@@ -1,6 +1,6 @@
 import logging
 
-from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
+from app.application.authorization.exceptions.authorization_exceptions import UnauthorizedException
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 
 logger = logging.getLogger(__name__)

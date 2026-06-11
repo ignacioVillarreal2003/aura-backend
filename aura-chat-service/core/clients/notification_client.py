@@ -20,8 +20,7 @@ class NotificationClient:
             actor_id: int | None = None,
             actor_name: str = "",
             context: dict[str, Any] | None = None,
-            idempotency_key: str | None = None,
-            channels_override: list[str] | None = None,
+            link_url: str | None = None,
     ) -> None:
         base = getattr(settings, "NOTIFICATION_SERVICE_URL", "").strip().rstrip("/")
         token = getattr(settings, "NOTIFICATION_INTERNAL_API_TOKEN", "")
@@ -42,10 +41,8 @@ class NotificationClient:
             payload["actor_name"] = actor_name
         if context:
             payload["context"] = context
-        if idempotency_key:
-            payload["idempotency_key"] = idempotency_key
-        if channels_override:
-            payload["channels_override"] = channels_override
+        if link_url:
+            payload["link_url"] = link_url
 
         _executor.submit(self._dispatch, payload, base, token)
 
