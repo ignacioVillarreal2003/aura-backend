@@ -5,6 +5,8 @@ from typing import Optional
 from fastapi import FastAPI
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app.infrastructure.http.request_id_context import set_request_id
+
 logger = logging.getLogger(__name__)
 
 _X_REQUEST_ID = "X-Request-ID"
@@ -36,6 +38,7 @@ class LoggingMiddleware:
 
         request_id = self._resolve_request_id(scope)
         scope.setdefault("state", {})["request_id"] = request_id
+        set_request_id(request_id)
 
         started = time.perf_counter()
         status_holder = {"code": 500}

@@ -211,6 +211,12 @@ class DocumentCollectionCatalogClient(DocumentCollectionCatalogClientInterface):
             user_id: int,
             authorization_header: str | None,
     ) -> dict[str, str] | None:
+        bearer = self._normalize_bearer(authorization_header)
+        if bearer is not None:
+            return {
+                "Authorization": bearer,
+                "Accept": "application/json",
+            }
         if self._settings.service_api_key:
             return {
                 "X-Service-Api-Key": self._settings.service_api_key,
@@ -218,11 +224,11 @@ class DocumentCollectionCatalogClient(DocumentCollectionCatalogClientInterface):
                 "X-User-Email": self._settings.service_user_email,
                 "Accept": "application/json",
             }
-        bearer = self._normalize_bearer(authorization_header or self._settings.fallback_bearer_token)
-        if bearer is None:
+        fallback_bearer = self._normalize_bearer(self._settings.fallback_bearer_token)
+        if fallback_bearer is None:
             return None
         return {
-            "Authorization": bearer,
+            "Authorization": fallback_bearer,
             "Accept": "application/json",
         }
 

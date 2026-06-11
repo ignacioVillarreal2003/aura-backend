@@ -13,6 +13,7 @@ from app.configuration.dependencies import shutdown_dependencies, startup_depend
 from app.configuration.environment_variables import environment_variables
 from app.configuration.logging_configuration import configure_logging
 from app.configuration.middlewares.authentication_middleware import add_authentication_middleware
+from app.configuration.middlewares.body_size_limit_middleware import add_body_size_limit_middleware
 from app.configuration.middlewares.logging_middleware import add_logging_middleware
 
 _root_log_level = getattr(
@@ -29,6 +30,7 @@ async def lifespan(
         app: FastAPI
 ):
     logger.info("Starting application")
+    environment_variables.warn_insecure_configuration()
     try:
         await startup_dependencies(
             app=app
@@ -91,10 +93,12 @@ def create_app() -> FastAPI:
 def _add_middlewares(
         app: FastAPI
 ) -> None:
-    # Order matters: the LAST added middleware is the OUTERMOST. Auth is added
-    # first (inner) and logging last (outer) so that request_id / X-Request-ID is
-    # established before auth runs and every request — including early auth
-    # rejections — is logged.
+    # Order matters: the LAST added middleware is the OUTERMOST. The body size
+    # limit is added first (innermost, it only wraps body reads), then auth, and
+    # logging last (outer) so that request_id / X-Request-ID is established
+    # before auth runs and every request — including early auth rejections and
+    # oversized-body rejections — is logged.
+    add_body_size_limit_middleware(app)
     add_authentication_middleware(app)
     add_logging_middleware(app)
 

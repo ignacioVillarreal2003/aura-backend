@@ -6,10 +6,12 @@ Rate limiting is enforced per-user (authenticated) or per-IP (unauthenticated) u
 
 ### Limits
 
-| Tier | Requests / 60 s | Applied to |
+| Tier | Requests / window (default) | Applied to |
 |---|---|---|
 | Default | 60 | `/document-question`, `/document-classify`, `/fragment-enrich`, `/graph-extraction`, `/graph-query-translation` |
 | Strict | 20 | `/document-question/stream`, `/document-summary`, `/document-action`, `/agent`, `/rag-agent` |
+
+Window size and per-tier limits are configurable via `RATE_LIMIT_WINDOW_SECONDS`, `RATE_LIMIT_DEFAULT_PER_WINDOW` and `RATE_LIMIT_STRICT_PER_WINDOW` (see [getting-started](getting-started.md)).
 
 ### Redis key format
 
@@ -28,8 +30,9 @@ Retry-After: 42
 
 ```json
 {
-  "error": "RateLimitExceeded",
-  "message": "Too many requests. Please retry after 42 seconds."
+  "error": "HttpError",
+  "message": "Rate limit exceeded. Please retry later.",
+  "request_id": "..."
 }
 ```
 

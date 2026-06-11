@@ -71,7 +71,11 @@ All variables are read by `app/configuration/environment_variables.py` via `pyda
 | `LOG_LEVEL` | `INFO` | One of: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 | `CORS_ORIGINS` | `["*"]` | JSON list of allowed CORS origins |
 | `ENVIRONMENT` | `development` | Arbitrary label; no functional effect |
-| `SERVICE_API_KEY` | `service_api_key` | Secret shared with other services for internal auth |
+| `SERVICE_API_KEY` | `service_api_key` | Secret shared with other services for internal auth (a startup warning is logged if left at this default) |
+| `MAX_REQUEST_BODY_BYTES` | `10485760` (10 MiB) | Requests with a larger body are rejected with `413` |
+| `RATE_LIMIT_WINDOW_SECONDS` | `60` | Sliding window size for rate limiting |
+| `RATE_LIMIT_DEFAULT_PER_WINDOW` | `60` | Requests allowed per window on default-tier endpoints |
+| `RATE_LIMIT_STRICT_PER_WINDOW` | `20` | Requests allowed per window on strict-tier endpoints |
 
 ### Authentication Provider
 

@@ -24,6 +24,12 @@ class EnvironmentVariables(BaseSettings):
     environment: str = Field(default="development")
     service_api_key: str = Field(default="service_api_key")
 
+    # Cross-cutting API limits.
+    max_request_body_bytes: int = Field(default=10 * 1024 * 1024, ge=1024)
+    rate_limit_window_seconds: int = Field(default=60, ge=1, le=3600)
+    rate_limit_default_per_window: int = Field(default=60, ge=1)
+    rate_limit_strict_per_window: int = Field(default=20, ge=1)
+
     @field_validator(
         "log_level"
     )
@@ -63,6 +69,15 @@ class EnvironmentVariables(BaseSettings):
         logger.info(f"Log Level: {self.log_level}")
         logger.info(f"Reload: {self.app_reload}")
         logger.info("=" * 60)
+
+    def warn_insecure_configuration(
+            self
+    ) -> None:
+        if self.service_api_key == "service_api_key":
+            logger.warning(
+                "SERVICE_API_KEY is still set to its insecure default value. "
+                "Set a real secret before exposing this service."
+            )
 
     def is_development(
             self

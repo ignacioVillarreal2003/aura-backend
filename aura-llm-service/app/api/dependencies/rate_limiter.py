@@ -6,11 +6,13 @@ from typing import Callable
 import redis.exceptions as redis_exceptions
 from fastapi import HTTPException, Request, status
 
+from app.configuration.environment_variables import environment_variables
+
 logger = logging.getLogger(__name__)
 
-_WINDOW_SECONDS = 60
-_STRICT_RATE = 20
-_DEFAULT_RATE = 60
+_WINDOW_SECONDS = environment_variables.rate_limit_window_seconds
+_STRICT_RATE = environment_variables.rate_limit_strict_per_window
+_DEFAULT_RATE = environment_variables.rate_limit_default_per_window
 
 # Single round-trip, atomic sliding-window limiter. Evicting expired members,
 # counting, and (conditionally) adding the new member all happen in one Lua
