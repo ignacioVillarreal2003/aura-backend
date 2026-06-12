@@ -1,5 +1,4 @@
 import logging
-
 from fastapi import APIRouter, Depends, Path
 
 from app.api.controllers.graph.graph_extraction_controller.graph_extraction_controller_interface import (

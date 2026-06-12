@@ -2,7 +2,7 @@ import enum
 import logging
 import time
 from asyncio import Lock
-from typing import List, Optional
+from typing import Any, List, Optional
 import httpx
 from fastapi import HTTPException, Request, status
 from langchain_core.runnables import Runnable
@@ -24,6 +24,46 @@ logger = logging.getLogger(__name__)
 _CIRCUIT_RECOVERY_COOLDOWN: float = 30.0
 _CIRCUIT_FAILURE_THRESHOLD: int = 1
 _PROBE_TIMEOUT: float = 10.0
+
+
+# Sampling params that Ollama only accepts inside the `options` payload.
+_OLLAMA_OPTION_KEYS = frozenset({
+    "temperature", "top_p", "top_k", "seed", "repeat_penalty", "repeat_last_n",
+    "num_ctx", "num_predict", "num_gpu", "num_thread",
+    "mirostat", "mirostat_eta", "mirostat_tau", "tfs_z",
+})
+
+# OpenAI-style aliases callers may use, mapped to the Ollama option name.
+_OLLAMA_OPTION_ALIASES = {
+    "max_tokens": "num_predict",
+    "max_output_tokens": "num_predict",
+}
+
+
+class _ChatOllamaWithCallTimeOptions(ChatOllama):
+    """ChatOllama forwards unknown call-time kwargs verbatim to
+    ``AsyncClient.chat()``, which rejects sampling params like ``temperature``
+    (NeMo Guardrails passes one per self-check call). Fold them into
+    ``options`` instead."""
+
+    def _chat_params(
+            self,
+            messages: Any,
+            stop: Optional[List[str]] = None,
+            **kwargs: Any,
+    ) -> dict:
+        overrides = {
+            key: kwargs.pop(key)
+            for key in list(kwargs)
+            if key in _OLLAMA_OPTION_KEYS
+        }
+        for alias, option_key in _OLLAMA_OPTION_ALIASES.items():
+            if alias in kwargs:
+                overrides.setdefault(option_key, kwargs.pop(alias))
+        params = super()._chat_params(messages, stop=stop, **kwargs)
+        if overrides:
+            params["options"].update(overrides)
+        return params
 
 
 class _CircuitState(enum.Enum):
@@ -175,8 +215,8 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
         try:
             logger.debug("Building base LLM")
             kwargs = self._settings.get_chat_ollama_kwargs()
-            self._llm_base = ChatOllama(**kwargs)
-            self._llm_json = ChatOllama(**kwargs, format="json")
+            self._llm_base = _ChatOllamaWithCallTimeOptions(**kwargs)
+            self._llm_json = _ChatOllamaWithCallTimeOptions(**kwargs, format="json")
             logger.info("Base LLM built successfully")
         except Exception as e:
             raise LLMInitializationError(f"Failed to build ChatOllama: {e}") from e

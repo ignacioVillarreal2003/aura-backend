@@ -11,7 +11,7 @@ class NemoGuardrailsSettings(BaseSettings):
         extra="ignore",
     )
 
-    enabled: bool = Field(default=False)
+    enabled: bool = Field(default=True)
 
     fail_open: bool = Field(default=True)
 

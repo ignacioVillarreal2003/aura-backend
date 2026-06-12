@@ -14,15 +14,10 @@ _EXCLUDED_PATH_PREFIXES = (
     "/metrics",
 )
 
-# JSON fields that carry free-form user intent. Bulk document content
-# (processing endpoints) is deliberately not inspected: it is data to process,
-# not instructions from the end user, and the per-flow prompts already treat
-# it as untrusted input.
 _USER_TEXT_FIELDS = ("instruction", "question")
 
 
 def extract_user_texts(payload: object) -> list[str]:
-    """Pull the user-authored texts out of a request body."""
     if not isinstance(payload, dict):
         return []
 
@@ -46,13 +41,6 @@ def extract_user_texts(payload: object) -> list[str]:
 
 
 class GuardrailsMiddleware:
-    """Runs the NeMo Guardrails input filter on every JSON POST under /api/v1.
-
-    Sits innermost in the middleware chain, so authentication and body size
-    limits have already been enforced. The body is buffered and replayed to
-    the downstream app.
-    """
-
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
 
@@ -73,8 +61,14 @@ class GuardrailsMiddleware:
 
         body = await self._read_body(receive)
 
+        body_replayed = False
+
         async def replay_receive() -> Message:
-            return {"type": "http.request", "body": body, "more_body": False}
+            nonlocal body_replayed
+            if not body_replayed:
+                body_replayed = True
+                return {"type": "http.request", "body": body, "more_body": False}
+            return await receive()
 
         texts = self._parse_user_texts(body)
         if texts:
@@ -85,7 +79,6 @@ class GuardrailsMiddleware:
                         await self._send_blocked(scope, send, guardrails.settings.blocked_message)
                         return
             except Exception:
-                # Only reachable with fail_open disabled: reject explicitly.
                 logger.exception("Guardrails check failed with fail-open disabled.")
                 await self._send_unavailable(send)
                 return

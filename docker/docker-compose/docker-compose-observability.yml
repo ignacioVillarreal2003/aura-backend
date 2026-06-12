@@ -10,7 +10,8 @@ services:
     volumes:
       - phoenix_data:/mnt/data
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:6006/healthz', timeout=5)\""]
+      # La imagen de Phoenix es distroless (sin /bin/sh): hay que usar forma exec, no CMD-SHELL
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6006/healthz', timeout=5)"]
       interval: 15s
       timeout: 10s
       retries: 10

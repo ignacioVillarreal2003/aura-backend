@@ -32,7 +32,6 @@ class PostProcessFragmentController(PostProcessFragmentControllerInterface):
                 get_post_process_fragment_service
             ),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
-            _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(strict_rate_limit),
     ) -> PostProcessFragmentsStartResponse:
         return await post_process_fragment_service.start_all(
@@ -46,7 +45,6 @@ class PostProcessFragmentController(PostProcessFragmentControllerInterface):
                 get_post_process_fragment_service
             ),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
-            _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(strict_rate_limit),
     ) -> PostProcessFragmentsStartResponse:
         return await post_process_fragment_service.start_for_documents(

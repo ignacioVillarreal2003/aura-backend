@@ -4,7 +4,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio.session import AsyncSession
 
 from app.application.services.document.document_query_service.interfaces.document_query_service_interface import (
-    DocumentQueryServiceInterface
+    DocumentQueryServiceInterface,
 )
 from app.domain.constants.document.document_type import DocumentType
 from app.domain.dtos.document.document_query.document_list_response import DocumentListResponse
@@ -49,4 +49,3 @@ class DocumentQueryControllerInterface(ABC):
             authenticated_user: AuthenticatedUser,
     ) -> DocumentListResponse:
         pass
-

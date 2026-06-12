@@ -3,7 +3,6 @@ from fastapi import APIRouter, Depends, Response, status
 from app.api.controllers.document.post_process_document_controller.post_process_document_controller_interface import (
     PostProcessDocumentControllerInterface,
 )
-from app.api.dependencies.idempotency import optional_idempotency_key
 from app.api.dependencies.rate_limiter import default_rate_limit, strict_rate_limit
 from app.api.openapi.common import default_error_responses
 from app.application.services.document.post_process_document_service.interfaces.post_process_document_service_interface import (
@@ -32,7 +31,6 @@ class PostProcessDocumentController(PostProcessDocumentControllerInterface):
                 get_post_process_document_service
             ),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
-            _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(strict_rate_limit),
     ) -> PostProcessDocumentsStartResponse:
         return await post_process_document_service.start_all(
@@ -46,7 +44,6 @@ class PostProcessDocumentController(PostProcessDocumentControllerInterface):
                 get_post_process_document_service
             ),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
-            _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(strict_rate_limit),
     ) -> PostProcessDocumentsStartResponse:
         return await post_process_document_service.start_for_documents(

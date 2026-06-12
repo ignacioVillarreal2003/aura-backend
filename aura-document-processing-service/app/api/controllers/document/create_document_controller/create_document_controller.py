@@ -29,7 +29,6 @@ class CreateDocumentController(CreateDocumentControllerInterface):
             create_document_service: CreateDocumentServiceInterface = Depends(get_create_document_service),
             database_session: AsyncSession = Depends(get_database_session),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
-            _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(strict_rate_limit),
     ) -> CreateDocumentResponse:
         return await create_document_service.create_document(
