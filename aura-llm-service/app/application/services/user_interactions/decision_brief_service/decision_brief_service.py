@@ -19,7 +19,7 @@ from app.application.services.user_interactions.decision_brief_service.decision_
     DecisionBriefSettings,
 )
 from app.application.services.generation_shared.generation_settings import GenerationSettings
-from app.application.services.generation_shared.generation_state import GenerationState
+from app.application.services.generation_shared.state.generation_state import GenerationState
 from app.application.services.generation_shared.output_parsing import clean_text, fallback_lines
 from app.application.services.generation_shared.structured_generation_service import StructuredGenerationService
 from app.domain.dtos.user_interactions.decision_brief.decision_brief_request import DecisionBriefGenerateRequest
@@ -40,7 +40,6 @@ from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface i
 
 logger = logging.getLogger(__name__)
 
-# (title, problem, context, risks, recommendation, options)
 _ParsedBrief = tuple[str, str, str, str, str, list[DecisionBriefOption]]
 
 

@@ -15,15 +15,6 @@ _SKIP_PATHS = frozenset({"/metrics", "/api/v1/health", "/api/v1/ready"})
 
 
 class LoggingMiddleware:
-    """Pure-ASGI request logger.
-
-    Implemented as a raw ASGI middleware (not BaseHTTPMiddleware) so it can wrap
-    streaming/SSE responses without buffering and measure the *full* response
-    duration — BaseHTTPMiddleware would report time-to-first-byte for streams.
-    Registered as the outermost middleware so ``request_id`` is available to every
-    inner middleware (incl. auth) and to the exception handlers.
-    """
-
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
 

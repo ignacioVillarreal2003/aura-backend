@@ -14,7 +14,7 @@ class DecisionBriefServiceInterface(ABC):
             request: DecisionBriefGenerateRequest,
             authenticated_user: AuthenticatedUser,
     ) -> DecisionBriefGenerateResponse:
-        ...
+        pass
 
     @abstractmethod
     async def generate_stream(
@@ -22,4 +22,4 @@ class DecisionBriefServiceInterface(ABC):
             request: DecisionBriefGenerateRequest,
             authenticated_user: AuthenticatedUser,
     ) -> AsyncIterator[DecisionBriefStreamEvent]:
-        ...
+        pass

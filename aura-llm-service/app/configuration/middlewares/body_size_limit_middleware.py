@@ -13,15 +13,6 @@ class _BodyTooLargeError(Exception):
 
 
 class BodySizeLimitMiddleware:
-    """Rejects request bodies above a configured byte limit with 413.
-
-    Declared Content-Length values are checked up front; chunked bodies
-    (no Content-Length) are counted as they stream in, so an oversized body is
-    cut off without ever buffering it past the limit. Pydantic field limits
-    bound individual values, but without this cap an arbitrarily large JSON
-    body would still be read and parsed in full before validation runs.
-    """
-
     def __init__(self, app: ASGIApp, max_body_bytes: int) -> None:
         self.app = app
         self.max_body_bytes = max_body_bytes

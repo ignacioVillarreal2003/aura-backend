@@ -2,9 +2,17 @@ FROM python:3.13-slim
 
 WORKDIR /application
 
-COPY requirements/requirements.txt .
+COPY requirements/requirements.txt requirements/requirements-observability.txt requirements/requirements-guardrails.txt ./
 
-RUN pip install --no-cache-dir --upgrade -r requirements.txt
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends g++ \
+    && pip install --no-cache-dir --upgrade \
+        -r requirements.txt \
+        -r requirements-observability.txt \
+        -r requirements-guardrails.txt \
+    && apt-get purge -y g++ \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY ./app ./app
 

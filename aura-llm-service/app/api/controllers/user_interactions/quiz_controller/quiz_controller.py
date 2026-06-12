@@ -30,6 +30,7 @@ class QuizController(QuizControllerInterface):
             authenticated_user=authenticated_user,
             required_permissions=frozenset({Permissions.LLM_QUIZ_GENERATE}),
         )
+
         return await quiz_service.generate(
             request=quiz_request,
             authenticated_user=authenticated_user,

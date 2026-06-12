@@ -29,9 +29,10 @@ class DocumentClassifyController(DocumentClassifyControllerInterface):
             authenticated_user=authenticated_user,
             required_permissions=frozenset({Permissions.LLM_DOCUMENT_CLASSIFY}),
         )
+
         return await document_classify_service.classify_document(
             classify_document_request=classify_document_request,
-            authenticated_user=authenticated_user
+            authenticated_user=authenticated_user,
         )
 
 

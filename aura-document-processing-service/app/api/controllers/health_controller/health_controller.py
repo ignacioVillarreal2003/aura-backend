@@ -37,6 +37,30 @@ class HealthController:
                 checks["database"] = {"status": "error"}
                 overall_ok = False
 
+        rabbitmq_manager = getattr(request.app.state, "rabbitmq_manager", None)
+        if rabbitmq_manager is not None:
+            try:
+                result = await rabbitmq_manager.health_check()
+                checks["rabbitmq"] = {"status": result.get("status", "error")}
+                if result.get("status") != "healthy":
+                    overall_ok = False
+            except Exception as exc:
+                logger.warning("RabbitMQ health check failed", exc_info=exc)
+                checks["rabbitmq"] = {"status": "error"}
+                overall_ok = False
+
+        minio_manager = getattr(request.app.state, "minio_manager", None)
+        if minio_manager is not None:
+            try:
+                result = await minio_manager.health_check()
+                checks["object_storage"] = {"status": result.get("status", "error")}
+                if result.get("status") != "healthy":
+                    overall_ok = False
+            except Exception as exc:
+                logger.warning("Object storage health check failed", exc_info=exc)
+                checks["object_storage"] = {"status": "error"}
+                overall_ok = False
+
         http_status = 200 if overall_ok else 503
         return JSONResponse(
             {"status": "ok" if overall_ok else "degraded", "checks": checks},

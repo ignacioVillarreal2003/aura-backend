@@ -64,6 +64,36 @@ Reglas para mantener todo consistente:
 - El **primer** `up` sigue siendo el más lento (build de imágenes con torch + primer
   `ollama pull`); a partir de ahí, levantar el stack no descarga nada.
 
+## Trazas de IA (Phoenix)
+
+El stack de observabilidad incluye **Phoenix** (`arizephoenix/phoenix:17.4.0`), un LangSmith
+self-hosted para inspeccionar las generaciones del `aura-llm-service`: cada request aparece como
+una traza con la consulta del usuario, las llamadas LLM (prompts completos, respuesta, latencia,
+tokens), las búsquedas de contexto con los fragmentos recuperados (contenido + documento de
+origen) y los grafos LangGraph del agente RAG como árboles de spans.
+
+- UI: http://localhost:6006
+- Los datos persisten en el volumen `phoenix_data` (SQLite interno).
+- El tracing del `aura-llm-service` se activa automáticamente vía el *merge* de
+  `docker-compose-observability.yml` (variables `TRACING_*`); si levantás los servicios sin el
+  fichero de observabilidad, el servicio arranca con tracing deshabilitado.
+- Para desarrollo local fuera de docker: levantá solo Phoenix
+  (`docker run -d --name phoenix -p 6006:6006 arizephoenix/phoenix:17.4.0`) y descomentá
+  `TRACING_ENABLED=True` en el `.env` del servicio.
+
+## Filtro de entrada (NeMo Guardrails)
+
+El `aura-llm-service` corre **NVIDIA NeMo Guardrails** como filtro de entrada local en todos
+sus endpoints: un middleware extrae el texto del usuario (último mensaje, `instruction`,
+`question`) y lo clasifica con el mismo modelo Ollama local antes de que llegue al servicio
+(jailbreak, inyección de prompt, pedidos dañinos → `400 input_blocked_by_guardrails`).
+
+- Se controla con `NEMO_GUARDRAILS_ENABLED` (activo en `.env.docker`).
+- `NEMO_GUARDRAILS_FAIL_OPEN=True` (default): si el guard falla, el request pasa y se loguea;
+  con `False`, falla con 503.
+- El contenido bruto de documentos (endpoints de processing) no se filtra: es dato a procesar,
+  no instrucción del usuario.
+
 ## Migraciones de base de datos (aura-db)
 
 El esquema de `aura-db` vive en `database/aura-db/document_processing.sql`, que **solo se ejecuta al

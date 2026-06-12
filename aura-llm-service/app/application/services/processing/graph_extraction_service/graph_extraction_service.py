@@ -1,7 +1,6 @@
 import json
 import logging
 from typing import Optional
-
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
 
@@ -193,11 +192,11 @@ class GraphExtractionService(GraphExtractionServiceInterface):
         return raw, llm_input
 
     async def _invoke_repair(
-        self,
-        original_llm_input: list,
-        malformed_output: str,
-        parse_error: str,
-        user_id: int,
+            self,
+            original_llm_input: list,
+            malformed_output: str,
+            parse_error: str,
+            user_id: int,
     ) -> str:
         repair_message = HumanMessage(
             content=REPAIR_PROMPT.format(
@@ -246,12 +245,10 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             ) from e
 
     def _apply_filters(
-        self,
-        result: ExtractEntitiesRelationsResponse,
-        state: GraphExtractionState,
+            self,
+            result: ExtractEntitiesRelationsResponse,
+            state: GraphExtractionState,
     ) -> ExtractEntitiesRelationsResponse:
-        # Normalize allowed types through EntityType.parse() so custom strings
-        # map consistently to their enum equivalents before comparison
         raw_allowed = {t.lower() for t in state.allowed_entity_types}
         allowed_entity_set = {EntityType.parse(t).value for t in state.allowed_entity_types}
         unmapped = raw_allowed - allowed_entity_set
@@ -289,11 +286,9 @@ class GraphExtractionService(GraphExtractionServiceInterface):
                 continue
             if r.confidence < min_conf:
                 continue
-            # Drop relations whose endpoints carry a type outside the whitelist:
-            # the persistence layer would otherwise create out-of-ontology nodes.
             if (
-                r.source.type.value not in allowed_entity_set
-                or r.target.type.value not in allowed_entity_set
+                    r.source.type.value not in allowed_entity_set
+                    or r.target.type.value not in allowed_entity_set
             ):
                 continue
             key = (
@@ -324,4 +319,3 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             entities=filtered_entities,
             relations=filtered_relations,
         )
-

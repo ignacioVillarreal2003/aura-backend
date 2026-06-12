@@ -12,7 +12,7 @@ from app.application.services.user_interactions.document_action_service.processo
     REDUCE_GUIDANCE_PROMPT,
     DEFAULT_GUIDANCE_PROMPT,
 )
-from app.application.services.generation_shared.prompt_augmentation import augment_system_prompt
+from app.application.services.generation_shared.prompts.prompt_augmentation import augment_system_prompt
 from app.domain.dtos.user_interactions.document_action.document_action_stream_events import DocumentActionStreamDelta
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface import OllamaLLMInvokerInterface

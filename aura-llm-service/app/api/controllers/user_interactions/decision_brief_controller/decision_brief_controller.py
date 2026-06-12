@@ -32,6 +32,7 @@ class DecisionBriefController(DecisionBriefControllerInterface):
             authenticated_user=authenticated_user,
             required_permissions=frozenset({Permissions.LLM_DECISION_BRIEF_GENERATE}),
         )
+
         return await decision_brief_service.generate(
             request=decision_brief_request,
             authenticated_user=authenticated_user,

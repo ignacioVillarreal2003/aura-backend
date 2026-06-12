@@ -70,6 +70,10 @@ async def _cache_user(redis_client, token: str, user: AuthenticatedUserResponse,
 
 
 _HEADER_SERVICE_API_KEY = "X-Service-Api-Key"
+_HEADER_USER_ID = "X-User-Id"
+_HEADER_USER_EMAIL = "X-User-Email"
+_HEADER_USER_ROLES = "X-User-Roles"
+_HEADER_USER_PERMISSIONS = "X-User-Permissions"
 
 
 class AuthenticationProvider(AuthenticationProviderInterface):
@@ -95,13 +99,85 @@ class AuthenticationProvider(AuthenticationProviderInterface):
         self._require_non_empty_service_api_key(request, api_key)
         self._assert_service_api_key_valid(request, api_key)
 
-        logger.debug("Service-to-service request authenticated.", extra={"path": request.url.path})
-        return AuthenticatedUser(
-            id=UserId(0),
-            email="service@internal",
-            roles=(),
-            permissions=(),
+        user_id = self._read_required_user_id(request)
+        email = self._read_required_user_email(request)
+        roles = self._parse_comma_list(request.headers.get(_HEADER_USER_ROLES))
+        permissions = self._parse_comma_list(request.headers.get(_HEADER_USER_PERMISSIONS))
+
+        logger.debug(
+            "Service-to-service request authenticated on behalf of a user.",
+            extra={"path": request.url.path, "user_id": user_id},
         )
+        return AuthenticatedUser(
+            id=UserId(user_id),
+            email=email,
+            roles=roles,
+            permissions=permissions,
+        )
+
+    @staticmethod
+    def _read_required_user_id(
+            request: Request
+    ) -> int:
+        raw_user_id = (request.headers.get(_HEADER_USER_ID) or "").strip()
+        if not raw_user_id:
+            logger.warning(
+                "Service request is missing the X-User-Id header.",
+                extra={"path": request.url.path},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "detail": "The X-User-Id header is required for service requests",
+                    "error": "missing_user_id",
+                },
+            )
+        try:
+            user_id = int(raw_user_id)
+        except ValueError:
+            logger.warning(
+                "Service request sent a non-integer X-User-Id header.",
+                extra={"path": request.url.path},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "detail": "The X-User-Id header must be an integer",
+                    "error": "invalid_user_id",
+                },
+            )
+        if user_id <= 0:
+            logger.warning(
+                "Service request sent a non-positive X-User-Id header.",
+                extra={"path": request.url.path},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "detail": "The X-User-Id header must be a positive integer",
+                    "error": "invalid_user_id",
+                },
+            )
+        return user_id
+
+    @staticmethod
+    def _read_required_user_email(
+            request: Request
+    ) -> str:
+        email = (request.headers.get(_HEADER_USER_EMAIL) or "").strip()
+        if not email:
+            logger.warning(
+                "Service request is missing the X-User-Email header.",
+                extra={"path": request.url.path},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "detail": "The X-User-Email header is required for service requests",
+                    "error": "missing_user_email",
+                },
+            )
+        return email
 
     @staticmethod
     def _read_optional_service_api_key(

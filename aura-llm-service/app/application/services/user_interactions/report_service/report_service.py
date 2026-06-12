@@ -11,7 +11,7 @@ from app.application.services.user_interactions.report_service.report_prompt imp
     build_system_prompt,
 )
 from app.application.services.generation_shared.generation_settings import GenerationSettings
-from app.application.services.generation_shared.generation_state import GenerationState
+from app.application.services.generation_shared.state.generation_state import GenerationState
 from app.application.services.generation_shared.structured_generation_service import StructuredGenerationService
 from app.domain.dtos.user_interactions.report.report_request import ReportGenerateRequest, ReportType
 from app.domain.dtos.user_interactions.report.report_response import ReportGenerateResponse
@@ -51,7 +51,6 @@ class ReportService(
     extraction_system_prompt = EXTRACTION_SYSTEM_PROMPT
     extraction_human_prompt = EXTRACTION_HUMAN_PROMPT
 
-    # Reports are free-form prose, not a JSON structure.
     uses_json_mode = False
 
     def __init__(

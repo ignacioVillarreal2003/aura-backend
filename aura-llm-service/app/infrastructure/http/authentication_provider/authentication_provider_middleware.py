@@ -1,6 +1,6 @@
 import logging
 from typing import Callable, Optional
-from fastapi import HTTPException, Request, Response
+from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
@@ -68,25 +68,6 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
                     "error": "service_not_configured"
                 }
             )
-
-        try:
-            authenticated_user = provider.evaluate_service_auth(request)
-        except HTTPException as e:
-            return JSONResponse(
-                status_code=e.status_code,
-                content=e.detail
-            )
-
-        if authenticated_user is not None:
-            request.state.authenticated_user = authenticated_user
-            logger.debug(
-                "Request authenticated with service credentials.",
-                extra={
-                    "user_id": authenticated_user.id,
-                    "path": request.url.path
-                }
-            )
-            return await call_next(request)
 
         token = self._extract_token(request)
 
@@ -244,8 +225,8 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
             path: str
     ) -> bool:
         normalised = path.rstrip("/")
-        for rule in self.excluded_paths:
-            rule = rule.rstrip("/")
+        for excluded in self.excluded_paths:
+            rule = excluded.rstrip("/")
             if rule.endswith("*"):
                 if normalised.startswith(rule[:-1]):
                     return True

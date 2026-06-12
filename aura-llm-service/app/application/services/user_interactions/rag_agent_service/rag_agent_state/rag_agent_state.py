@@ -15,8 +15,10 @@ class RagAgentState(TypedDict):
     response_style: Optional[str]
     query: str
     keywords: List[str]
+    intent: str
     retrieved_fragments: List[FragmentResponse]
     context: str
     graph_facts: str
     answer: str
+    guardrail_passed: bool
     fallback_triggered: bool

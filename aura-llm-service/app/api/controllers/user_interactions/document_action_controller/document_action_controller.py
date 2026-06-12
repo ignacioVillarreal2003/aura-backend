@@ -3,7 +3,7 @@ from starlette.responses import StreamingResponse
 
 from app.api.dependencies.rate_limiter import strict_rate_limit
 from app.api.controllers.user_interactions.document_action_controller.document_action_controller_interface import (
-    DocumentActionControllerInterface
+    DocumentActionControllerInterface,
 )
 from app.api.openapi.common import default_error_responses
 from app.api.sse import sse_response
@@ -11,7 +11,7 @@ from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
 from app.api.dependencies.app_state_services import get_document_action_service
 from app.application.services.user_interactions.document_action_service.interfaces.document_action_service_interface import (
-    DocumentActionServiceInterface
+    DocumentActionServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.user_interactions.document_action.document_action_request import DocumentActionRequest
@@ -34,7 +34,7 @@ class DocumentActionController(DocumentActionControllerInterface):
         )
         return await document_action_service.execute_document_action(
             document_action_request=document_action_request,
-            authenticated_user=authenticated_user
+            authenticated_user=authenticated_user,
         )
 
     async def execute_document_action_stream(

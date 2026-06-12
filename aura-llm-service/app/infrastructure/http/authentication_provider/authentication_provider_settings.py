@@ -19,10 +19,6 @@ class AuthenticationProviderSettings(BaseSettings):
 
     max_bearer_token_characters: int = Field(default=8192, ge=256, le=65536)
 
-    max_service_user_email_length: int = Field(default=320, ge=16, le=1024)
-    max_service_roles_header_characters: int = Field(default=16_000, ge=256, le=200_000)
-    max_service_permissions_header_characters: int = Field(default=32_000, ge=256, le=400_000)
-
     token_cache_ttl_seconds: int = Field(default=60, ge=1, le=86400)
 
     allowed_authentication_hosts: Optional[str] = Field(default=None)

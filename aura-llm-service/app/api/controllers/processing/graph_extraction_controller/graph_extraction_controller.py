@@ -12,8 +12,12 @@ from app.application.services.processing.graph_extraction_service.interfaces.gra
     GraphExtractionServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.dtos.processing.graph_extraction.extract_entities_relations_request import ExtractEntitiesRelationsRequest
-from app.domain.dtos.processing.graph_extraction.extract_entities_relations_response import ExtractEntitiesRelationsResponse
+from app.domain.dtos.processing.graph_extraction.extract_entities_relations_request import (
+    ExtractEntitiesRelationsRequest,
+)
+from app.domain.dtos.processing.graph_extraction.extract_entities_relations_response import (
+    ExtractEntitiesRelationsResponse,
+)
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 
 
@@ -29,6 +33,7 @@ class GraphExtractionController(GraphExtractionControllerInterface):
             authenticated_user=authenticated_user,
             required_permissions=frozenset({Permissions.LLM_GRAPH_EXTRACTION}),
         )
+
         return await graph_extraction_service.extract_entities_relations(
             extract_entities_relations_request=extract_entities_relations_request,
             authenticated_user=authenticated_user,

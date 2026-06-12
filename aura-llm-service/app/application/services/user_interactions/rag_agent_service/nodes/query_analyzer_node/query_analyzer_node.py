@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
 
+from app.application.services.user_interactions.rag_agent_service.constants.rag_query_intent import RagQueryIntent
 from app.application.services.user_interactions.rag_agent_service.interfaces.rag_node_interface import RagNodeInterface
 from app.application.services.user_interactions.rag_agent_service.rag_agent_settings import QueryAnalyzerSettings
 from app.application.services.user_interactions.rag_agent_service.rag_agent_state.rag_agent_state import RagAgentState
@@ -37,7 +38,7 @@ class QueryAnalyzerNode(RagNodeInterface):
         last_human = self._get_last_human_message(messages)
         if not last_human:
             logger.warning("No human message found in state")
-            return {"query": "", "keywords": []}
+            return {"query": "", "keywords": [], "intent": RagQueryIntent.question.value}
 
         history = self._get_recent_history(messages)
 
@@ -46,12 +47,16 @@ class QueryAnalyzerNode(RagNodeInterface):
             result = await self._analyze(last_human, history)
             logger.info(
                 "Query analyzed",
-                extra={"query_length": len(result["query"]), "keywords_count": len(result["keywords"])},
+                extra={
+                    "query_length": len(result["query"]),
+                    "keywords_count": len(result["keywords"]),
+                    "intent": result["intent"],
+                },
             )
             return result
         except Exception:
             logger.error("Query analysis failed — using raw message as fallback", exc_info=True)
-            return {"query": last_human, "keywords": []}
+            return {"query": last_human, "keywords": [], "intent": RagQueryIntent.question.value}
 
     async def _analyze(self, query: str, history: List[AnyMessage]) -> Dict[str, Any]:
         history_text = self._format_history(history)
@@ -76,10 +81,20 @@ class QueryAnalyzerNode(RagNodeInterface):
             query = str(data.get("query", fallback_query)).strip() or fallback_query
             keywords_raw = data.get("keywords", [])
             keywords = [str(k).strip() for k in keywords_raw if k and str(k).strip()]
-            return {"query": query, "keywords": keywords[: self._settings.max_keywords]}
+            intent_raw = str(data.get("intent", "")).strip().lower()
+            intent = (
+                intent_raw
+                if intent_raw in {i.value for i in RagQueryIntent}
+                else RagQueryIntent.question.value
+            )
+            return {
+                "query": query,
+                "keywords": keywords[: self._settings.max_keywords],
+                "intent": intent,
+            }
         except Exception:
             logger.warning("Failed to parse query analyzer response — using fallback", exc_info=True)
-            return {"query": fallback_query, "keywords": []}
+            return {"query": fallback_query, "keywords": [], "intent": RagQueryIntent.question.value}
 
     async def _ensure_llm_initialized(self) -> None:
         if self._llm is not None:

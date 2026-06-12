@@ -1,6 +1,3 @@
-"""Context-local request id, set by the logging middleware and read by the
-shared HTTP client so the X-Request-ID header propagates to downstream services."""
-
 from contextvars import ContextVar
 from typing import Optional
 

@@ -21,19 +21,20 @@ from app.application.services.generation_shared.generation_messages import (
     build_context_block,
     build_generation_messages,
 )
-from app.application.services.generation_shared.prompt_augmentation import augment_system_prompt
+from app.application.services.generation_shared.prompts.prompt_augmentation import augment_system_prompt
 from app.application.services.generation_shared.generation_settings import GenerationSettings
-from app.application.services.generation_shared.generation_state import GenerationState
-from app.application.services.generation_shared.processors.attached_documents_processor import (
+from app.configuration.tracing import trace_generation
+from app.application.services.generation_shared.state.generation_state import GenerationState
+from app.application.services.generation_shared.processors.attached_documents_processor.attached_documents_processor import (
     AttachedDocumentsProcessor,
 )
-from app.application.services.generation_shared.processors.context_reduction_processor import (
+from app.application.services.generation_shared.processors.context_reduction_processor.context_reduction_processor import (
     ContextReductionProcessor,
 )
-from app.application.services.generation_shared.processors.context_retrieval_processor import (
+from app.application.services.generation_shared.processors.context_retrieval_processor.context_retrieval_processor import (
     ContextRetrievalProcessor,
 )
-from app.application.services.generation_shared.processors.query_reformulation_processor import (
+from app.application.services.generation_shared.processors.query_reformulation_processor.query_reformulation_processor import (
     QueryReformulationProcessor,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
@@ -81,14 +82,10 @@ class GeneralChatService(GeneralChatServiceInterface):
         self._ollama_llm_streaming_invoker = ollama_llm_streaming_invoker
         self._generation_settings = generation_settings or GenerationSettings()
         self._general_chat_settings = general_chat_settings or GeneralChatSettings()
-        self._reformulation_processor = QueryReformulationProcessor(
-            self._generation_settings, ollama_llm_facade, ollama_llm_invoker
-        )
-        self._context_processor = ContextRetrievalProcessor(self._generation_settings, document_context_provider)
-        self._attached_processor = AttachedDocumentsProcessor(self._generation_settings, document_context_provider)
-        self._reduction_processor = ContextReductionProcessor(
-            self._generation_settings, ollama_llm_facade, ollama_llm_invoker
-        )
+        self._reformulation_processor = QueryReformulationProcessor(ollama_llm_facade, ollama_llm_invoker)
+        self._context_processor = ContextRetrievalProcessor(document_context_provider)
+        self._attached_processor = AttachedDocumentsProcessor(document_context_provider)
+        self._reduction_processor = ContextReductionProcessor(ollama_llm_facade, ollama_llm_invoker)
         logger.info("GeneralChatService initialized")
 
     def _build_state(
@@ -142,6 +139,7 @@ class GeneralChatService(GeneralChatServiceInterface):
             fragments=state.all_fragments,
         )
 
+    @trace_generation("general_chat")
     async def execute_general_chat(
             self,
             general_chat_request: GeneralChatRequest,
@@ -180,6 +178,7 @@ class GeneralChatService(GeneralChatServiceInterface):
                 "Error inesperado al procesar la solicitud de chat."
             ) from e
 
+    @trace_generation("general_chat_stream")
     async def execute_general_chat_stream(
             self,
             general_chat_request: GeneralChatRequest,

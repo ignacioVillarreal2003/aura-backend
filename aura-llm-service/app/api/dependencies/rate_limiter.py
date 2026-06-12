@@ -14,11 +14,6 @@ _WINDOW_SECONDS = environment_variables.rate_limit_window_seconds
 _STRICT_RATE = environment_variables.rate_limit_strict_per_window
 _DEFAULT_RATE = environment_variables.rate_limit_default_per_window
 
-# Single round-trip, atomic sliding-window limiter. Evicting expired members,
-# counting, and (conditionally) adding the new member all happen in one Lua
-# script so there is no check-then-act race between concurrent requests.
-# Returns {allowed (1/0), oldest_score} where oldest_score lets us compute
-# Retry-After when the request is denied.
 _RATE_LIMIT_SCRIPT = """
 local key = KEYS[1]
 local now = tonumber(ARGV[1])
@@ -65,7 +60,6 @@ async def _check_rate_limit(request: Request, limit: int) -> None:
             _WINDOW_SECONDS * 2,
         )
     except (redis_exceptions.RedisError, OSError):
-        # Fail open: a transient Redis outage must not take down every endpoint.
         logger.warning(
             "Rate limit check failed; allowing request (fail-open).",
             extra={"path": request.url.path},

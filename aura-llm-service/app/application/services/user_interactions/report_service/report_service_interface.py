@@ -14,7 +14,7 @@ class ReportServiceInterface(ABC):
             request: ReportGenerateRequest,
             authenticated_user: AuthenticatedUser,
     ) -> ReportGenerateResponse:
-        ...
+        pass
 
     @abstractmethod
     async def generate_stream(
@@ -22,4 +22,4 @@ class ReportServiceInterface(ABC):
             request: ReportGenerateRequest,
             authenticated_user: AuthenticatedUser,
     ) -> AsyncIterator[ReportStreamEvent]:
-        ...
+        pass

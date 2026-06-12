@@ -1,14 +1,11 @@
 import hashlib
 import json
 import logging
-import secrets
 from typing import NoReturn, Optional
 from pydantic import ValidationError
 from fastapi import HTTPException, Request, status
 
-from app.configuration.environment_variables import environment_variables
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.types import UserId
 from app.infrastructure.http.authentication_provider.authentication_provider_settings import (
     AuthenticationProviderSettings
 )
@@ -69,13 +66,6 @@ async def _cache_user(redis_client, token: str, user: AuthenticatedUserResponse,
         logger.warning("Redis token cache write failed; token will not be cached.", exc_info=True)
 
 
-_HEADER_SERVICE_API_KEY = "X-Service-Api-Key"
-_HEADER_SERVICE_USER_ID = "X-User-Id"
-_HEADER_SERVICE_USER_EMAIL = "X-User-Email"
-_HEADER_SERVICE_USER_ROLES = "X-User-Roles"
-_HEADER_SERVICE_USER_PERMISSIONS = "X-User-Permissions"
-
-
 class AuthenticationProvider(AuthenticationProviderInterface):
     def __init__(
             self,
@@ -86,154 +76,6 @@ class AuthenticationProvider(AuthenticationProviderInterface):
         self._http_client = http_client
         self._settings = authentication_provider_settings or AuthenticationProviderSettings()
         self._redis_client = redis_client
-
-    def evaluate_service_auth(
-            self,
-            request: Request
-    ) -> Optional[AuthenticatedUser]:
-        raw_key = self._read_optional_service_api_key(request)
-        if raw_key is None:
-            return None
-
-        api_key = raw_key.strip()
-        self._require_non_empty_service_api_key(request, api_key)
-        self._assert_service_api_key_valid(request, api_key)
-
-        authenticated_user = self._resolve_service_user(request)
-        logger.debug(
-            "Service-to-service request authenticated.",
-            extra={"path": request.url.path, "user_id": authenticated_user.id},
-        )
-        return authenticated_user
-
-    def _resolve_service_user(
-            self,
-            request: Request
-    ) -> AuthenticatedUser:
-        # Internal services act on behalf of the end user that triggered the
-        # work (e.g. document ingestion), so the user's identity, roles and
-        # permissions must be forwarded in X-User-* headers. There is no
-        # anonymous service identity: permission-protected endpoints need the
-        # real user to authorize and rate-limit correctly.
-        raw_user_id = (request.headers.get(_HEADER_SERVICE_USER_ID) or "").strip()
-        if not raw_user_id:
-            self._reject_service_user_headers(
-                request,
-                reason="missing_user_id",
-                detail="X-User-Id header is required for service requests",
-            )
-
-        try:
-            user_id = int(raw_user_id)
-            if user_id <= 0:
-                raise ValueError("user id must be positive")
-        except ValueError:
-            self._reject_service_user_headers(
-                request,
-                reason="invalid_user_id",
-                detail="X-User-Id header must be a positive integer",
-            )
-
-        email = (request.headers.get(_HEADER_SERVICE_USER_EMAIL) or "").strip()
-        if not email:
-            self._reject_service_user_headers(
-                request,
-                reason="missing_user_email",
-                detail="X-User-Email header is required for service requests",
-            )
-        if len(email) > self._settings.max_service_user_email_length:
-            self._reject_service_user_headers(
-                request,
-                reason="user_email_too_long",
-                detail="X-User-Email header exceeds the configured maximum length",
-            )
-
-        roles_header = request.headers.get(_HEADER_SERVICE_USER_ROLES)
-        if roles_header and len(roles_header) > self._settings.max_service_roles_header_characters:
-            self._reject_service_user_headers(
-                request,
-                reason="roles_header_too_long",
-                detail="X-User-Roles header exceeds the configured maximum length",
-            )
-
-        permissions_header = request.headers.get(_HEADER_SERVICE_USER_PERMISSIONS)
-        if permissions_header and len(permissions_header) > self._settings.max_service_permissions_header_characters:
-            self._reject_service_user_headers(
-                request,
-                reason="permissions_header_too_long",
-                detail="X-User-Permissions header exceeds the configured maximum length",
-            )
-
-        return AuthenticatedUser(
-            id=UserId(user_id),
-            email=email,
-            roles=self._parse_comma_list(roles_header),
-            permissions=self._parse_comma_list(permissions_header),
-        )
-
-    @staticmethod
-    def _reject_service_user_headers(
-            request: Request,
-            reason: str,
-            detail: str,
-    ) -> NoReturn:
-        logger.warning(
-            "Service-to-service request carries missing or invalid X-User-* headers.",
-            extra={"path": request.url.path, "error_code": reason},
-        )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "detail": detail,
-                "error": reason,
-            },
-        )
-
-    @staticmethod
-    def _read_optional_service_api_key(
-            request: Request
-    ) -> Optional[str]:
-        return request.headers.get(_HEADER_SERVICE_API_KEY)
-
-    @staticmethod
-    def _require_non_empty_service_api_key(
-            request: Request,
-            api_key: str
-    ) -> None:
-        if not api_key:
-            logger.warning(
-                "Service API key header was present but empty.",
-                extra={
-                    "path": request.url.path
-                }
-            )
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={
-                    "detail": "Service API key required",
-                    "error": "missing_service_key"
-                }
-            )
-
-    @staticmethod
-    def _assert_service_api_key_valid(
-            request: Request,
-            api_key: str
-    ) -> None:
-        if not secrets.compare_digest(api_key, environment_variables.service_api_key):
-            logger.warning(
-                "Service API key does not match the configured value.",
-                extra={
-                    "path": request.url.path
-                }
-            )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={
-                    "detail": "Invalid service API key",
-                    "error": "invalid_service_key"
-                }
-            )
 
     async def validate_token(
             self,
@@ -324,14 +166,6 @@ class AuthenticationProvider(AuthenticationProviderInterface):
     ) -> str:
         stripped = token.strip()
         return stripped if stripped.lower().startswith("bearer ") else f"Bearer {stripped}"
-
-    @staticmethod
-    def _parse_comma_list(
-            value: Optional[str]
-    ) -> list[str]:
-        if not value:
-            return []
-        return [item.strip() for item in value.split(",") if item.strip()]
 
     def _handle_http_error(
             self,

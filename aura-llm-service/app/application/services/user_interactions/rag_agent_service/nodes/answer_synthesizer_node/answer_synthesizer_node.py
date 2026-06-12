@@ -8,7 +8,7 @@ from langchain_core.runnables import Runnable
 from app.application.services.user_interactions.rag_agent_service.interfaces.rag_node_interface import RagNodeInterface
 from app.application.services.user_interactions.rag_agent_service.rag_agent_settings import AnswerSynthesizerSettings
 from app.application.services.user_interactions.rag_agent_service.rag_agent_state.rag_agent_state import RagAgentState
-from app.application.services.generation_shared.prompt_augmentation import augment_system_prompt
+from app.application.services.generation_shared.prompts.prompt_augmentation import augment_system_prompt
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 
 logger = logging.getLogger(__name__)

@@ -7,7 +7,7 @@ from app.application.services.user_interactions.document_question_service.proces
     ANSWER_HUMAN_PROMPT,
 )
 from app.application.services.user_interactions.document_question_service.document_question_state import DocumentQuestionState
-from app.application.services.generation_shared.prompt_augmentation import augment_system_prompt
+from app.application.services.generation_shared.prompts.prompt_augmentation import augment_system_prompt
 from app.domain.constants.message_role import MessageRole
 from app.application.services.user_interactions.document_question_service.exceptions.document_question_service_exceptions import (
     DocumentQuestionServiceException,
@@ -100,10 +100,12 @@ class AnswerDocumentQuestionProcessor:
             attached_ids = {f.id for f in document_question_state.attached_fragments}
             rag_only = [f for f in document_question_state.fragments if f.id not in attached_ids]
             parts = [document_question_state.reduced_attached_context]
-            parts.extend(f.content for f in rag_only)
+            parts.extend(f"[{f.document.name}]\n{f.content}" for f in rag_only)
             context = "\n\n---\n\n".join(p for p in parts if p)
         else:
-            context = "\n\n---\n\n".join(f.content for f in document_question_state.all_fragments)
+            context = "\n\n---\n\n".join(
+                f"[{f.document.name}]\n{f.content}" for f in document_question_state.all_fragments
+            )
         if len(context) > max_context_chars:
             context = context[:max_context_chars]
 

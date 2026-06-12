@@ -13,7 +13,8 @@ from app.application.services.processing.fragment_enrich_service.fragment_enrich
     HUMAN_PROMPT,
     SYSTEM_PROMPT,
 )
-from app.application.services.processing.fragment_enrich_service.fragment_enrich_settings import FragmentEnrichServiceSettings
+from app.application.services.processing.fragment_enrich_service.fragment_enrich_settings import \
+    FragmentEnrichServiceSettings
 from app.application.services.processing.fragment_enrich_service.fragment_enrich_state import FragmentEnrichState
 from app.application.services.processing.fragment_enrich_service.interfaces.fragment_enrich_service_interface import (
     FragmentEnrichServiceInterface,
@@ -102,7 +103,7 @@ class FragmentEnrichService(FragmentEnrichServiceInterface):
             HumanMessage(content=HUMAN_PROMPT.format(content=state.content)),
         ]
         try:
-            llm = await self._ollama_llm_facade.get_llm_base()
+            llm = await self._ollama_llm_facade.get_llm_json()
             return await self._ollama_llm_invoker.call_llm_content(llm=llm, llm_input=llm_input)
         except LLMInvocationError as e:
             logger.warning(
@@ -136,4 +137,3 @@ class FragmentEnrichService(FragmentEnrichServiceInterface):
                 "La respuesta del modelo no tiene el formato JSON esperado.",
                 status_code=502,
             ) from e
-

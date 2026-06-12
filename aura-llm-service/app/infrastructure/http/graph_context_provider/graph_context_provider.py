@@ -1,7 +1,7 @@
 import logging
 from typing import Optional
 
-from app.configuration.environment_variables import environment_variables
+from app.configuration.tracing import retrieval_span, set_span_output
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.authentication_provider.request_token import get_request_token
 from app.infrastructure.http.graph_context_provider.dtos.graph_context_dtos import (
@@ -20,14 +20,6 @@ logger = logging.getLogger(__name__)
 
 
 class GraphContextProvider(GraphContextProviderInterface):
-    """HTTP client for the document-processing knowledge-graph context endpoint.
-
-    Unlike the document context provider, this client never raises: graph
-    enrichment is a best-effort complement to vector retrieval, so every
-    failure path (disabled, timeout, 4xx/5xx, malformed body) degrades to
-    an empty :class:`GraphContextResult`.
-    """
-
     def __init__(
             self,
             http_client: HttpClientInterface,
@@ -69,13 +61,18 @@ class GraphContextProvider(GraphContextProviderInterface):
         )
 
         try:
-            response = await self._http_client.post(
-                url=self._settings.url,
-                json=request_body.model_dump(exclude_none=True, mode="json"),
-                headers=self._build_headers(authenticated_user),
-                timeout=self._settings.timeout_seconds,
-            )
-            result = GraphContextResult.model_validate(response.json())
+            with retrieval_span(
+                    "retrieve_graph_context",
+                    [question or "", *terms],
+            ) as span:
+                response = await self._http_client.post(
+                    url=self._settings.url,
+                    json=request_body.model_dump(exclude_none=True, mode="json"),
+                    headers=self._build_headers(authenticated_user),
+                    timeout=self._settings.timeout_seconds,
+                )
+                result = GraphContextResult.model_validate(response.json())
+                set_span_output(span, result.context_text)
             logger.info(
                 "Graph context retrieved for RAG.",
                 extra={
@@ -99,10 +96,10 @@ class GraphContextProvider(GraphContextProviderInterface):
             authenticated_user: AuthenticatedUser,
     ) -> dict[str, str]:
         token = get_request_token()
-        if token:
-            return {"Authorization": token}
-        return {
-            "X-Service-Api-Key": environment_variables.service_api_key,
-            "X-User-Id": str(authenticated_user.id),
-            "X-User-Email": str(authenticated_user.email),
-        }
+        if not token:
+            logger.warning(
+                "No JWT available for outbound request; the downstream service will reject it.",
+                extra={"user_id": authenticated_user.id},
+            )
+            return {}
+        return {"Authorization": token}

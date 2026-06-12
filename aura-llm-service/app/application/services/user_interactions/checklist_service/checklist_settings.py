@@ -1,9 +1,17 @@
-from dataclasses import dataclass
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-@dataclass(frozen=True)
-class ChecklistSettings:
-    max_title_chars: int = 100
-    max_item_text_chars: int = 500
-    max_section_chars: int = 200
-    max_items: int = 200
+class ChecklistSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="CHECKLIST_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    max_title_chars: int = Field(default=100, ge=1, le=1_000)
+    max_item_text_chars: int = Field(default=500, ge=1, le=10_000)
+    max_section_chars: int = Field(default=200, ge=1, le=2_000)
+    max_items: int = Field(default=200, ge=1, le=10_000)

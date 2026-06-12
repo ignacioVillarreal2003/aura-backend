@@ -22,4 +22,4 @@ class GeneralChatServiceInterface(ABC):
             general_chat_request: GeneralChatRequest,
             authenticated_user: AuthenticatedUser,
     ) -> AsyncIterator[GeneralChatStreamEvent]:
-        ...
+        pass

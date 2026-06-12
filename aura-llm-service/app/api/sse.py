@@ -1,21 +1,15 @@
-"""Server-Sent Events helpers shared by the streaming controllers."""
-
 import asyncio
 import contextlib
 from collections.abc import AsyncIterator
-
 from pydantic import BaseModel
 from starlette.responses import StreamingResponse
 
 SSE_HEADERS = {
     "Cache-Control": "no-cache",
     "Connection": "keep-alive",
-    # Tell nginx not to buffer the stream so events reach the client as emitted.
     "X-Accel-Buffering": "no",
 }
 
-# Comment frame ignored by EventSource clients; keeps the connection alive
-# through proxy idle timeouts while the LLM has not produced a token yet.
 _HEARTBEAT_FRAME = b": ping\n\n"
 _HEARTBEAT_INTERVAL_SECONDS = 15.0
 

@@ -1,8 +1,11 @@
 import logging
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_SERVICE_API_KEY = "service_api_key"
+_PRODUCTION_ENVIRONMENT_NAMES = frozenset({"production", "prod"})
 
 
 class EnvironmentVariables(BaseSettings):
@@ -53,6 +56,22 @@ class EnvironmentVariables(BaseSettings):
 
         return v
 
+    @model_validator(mode="after")
+    def validate_service_api_key_strength(
+            self
+    ) -> "EnvironmentVariables":
+        if self.service_api_key == DEFAULT_SERVICE_API_KEY:
+            if self.is_production():
+                raise ValueError(
+                    "SERVICE_API_KEY is still the default value; "
+                    "set a strong secret before running in production."
+                )
+            logger.warning(
+                "SERVICE_API_KEY is using the default development value; "
+                "set a strong secret before deploying."
+            )
+        return self
+
     def log_configuration(
             self
     ) -> None:
@@ -67,13 +86,12 @@ class EnvironmentVariables(BaseSettings):
     def is_development(
             self
     ) -> bool:
-        return (self.app_reload or
-                self.log_level == "DEBUG")
+        return not self.is_production()
 
     def is_production(
             self
     ) -> bool:
-        return not self.is_development()
+        return self.environment.strip().lower() in _PRODUCTION_ENVIRONMENT_NAMES
 
 
 environment_variables = EnvironmentVariables()

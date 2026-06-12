@@ -16,6 +16,9 @@ class DocumentContextProviderSettings(BaseSettings):
     timeout_seconds: float = Field(default=30.0, gt=0, le=300)
     max_fragments_per_document_response: int = Field(default=100, ge=1, le=500)
 
+    log_payloads: bool = Field(default=False)
+    log_payload_max_chars: int = Field(default=300, ge=50, le=10_000)
+
     @field_validator(
         "question_context_fragments_url",
         "document_context_fragments_url",

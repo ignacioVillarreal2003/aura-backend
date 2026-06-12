@@ -10,7 +10,9 @@ from app.api.sse import sse_response
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
 from app.api.dependencies.app_state_services import get_checklist_service
-from app.application.services.user_interactions.checklist_service.checklist_service_interface import ChecklistServiceInterface
+from app.application.services.user_interactions.checklist_service.checklist_service_interface import (
+    ChecklistServiceInterface,
+)
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.user_interactions.checklist.checklist_request import ChecklistGenerateRequest
 from app.domain.dtos.user_interactions.checklist.checklist_response import ChecklistGenerateResponse
@@ -30,6 +32,7 @@ class ChecklistController(ChecklistControllerInterface):
             authenticated_user=authenticated_user,
             required_permissions=frozenset({Permissions.LLM_CHECKLIST_GENERATE}),
         )
+
         return await checklist_service.generate(
             request=checklist_request,
             authenticated_user=authenticated_user,

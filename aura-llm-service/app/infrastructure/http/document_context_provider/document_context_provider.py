@@ -2,7 +2,7 @@ import logging
 from typing import NoReturn, Optional
 from fastapi import HTTPException, Request, status
 
-from app.configuration.environment_variables import environment_variables
+from app.configuration.tracing import record_retrieved_documents, retrieval_span
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.document_context_provider.document_context_provider_request_builders import (
     build_legacy_question_retrieval_request,
@@ -73,18 +73,33 @@ class DocumentContextProvider(DocumentContextProviderInterface):
             },
         )
 
+        if self._settings.log_payloads:
+            logger.info(
+                "Retrieval queries",
+                extra={
+                    "user_id": authenticated_user.id,
+                    "semantic_queries": [q.text for q in request.semantic_queries],
+                    "bm25_queries": [q.text for q in request.bm25_queries],
+                },
+            )
+
         try:
-            response = await self._http_client.post(
-                url=self._settings.question_context_fragments_url,
-                json=request.model_dump(exclude_none=True, mode="json"),
-                headers=self._build_headers(authenticated_user),
-                timeout=self._settings.timeout_seconds,
-            )
-            max_fragments = calculate_question_response_max_fragments(request)
-            fragments = parse_and_apply_limits(
-                raw_data=response.json(),
-                max_fragments=max_fragments,
-            )
+            with retrieval_span(
+                    "retrieve_fragments_by_question",
+                    [q.text for q in request.semantic_queries] + [q.text for q in request.bm25_queries],
+            ) as span:
+                response = await self._http_client.post(
+                    url=self._settings.question_context_fragments_url,
+                    json=request.model_dump(exclude_none=True, mode="json"),
+                    headers=self._build_headers(authenticated_user),
+                    timeout=self._settings.timeout_seconds,
+                )
+                max_fragments = calculate_question_response_max_fragments(request)
+                fragments = parse_and_apply_limits(
+                    raw_data=response.json(),
+                    max_fragments=max_fragments,
+                )
+                record_retrieved_documents(span, fragments.fragments)
 
             logger.info(
                 "Context fragments by question retrieved successfully.",
@@ -94,20 +109,21 @@ class DocumentContextProvider(DocumentContextProviderInterface):
                     "fragments_limit": max_fragments,
                 },
             )
+            self._log_fragments(fragments)
             return fragments
 
         except DocumentContextProviderError:
             raise
         except _HTTP_ERROR_TYPES as e:
             self._handle_http_error(e)
-        except Exception:
+        except Exception as e:
             logger.exception(
                 "Unexpected error retrieving context fragments by question.",
                 extra={"user_id": authenticated_user.id},
             )
             raise DocumentContextProviderError(
                 "Unexpected error while retrieving fragments from the external service."
-            )
+            ) from e
 
     async def retrieve_context_fragments_by_question(
             self,
@@ -172,17 +188,22 @@ class DocumentContextProvider(DocumentContextProviderInterface):
         request_body = self._build_document_request(document_ids)
 
         try:
-            response = await self._http_client.post(
-                url=self._settings.document_context_fragments_url,
-                json=request_body.model_dump(),
-                headers=self._build_headers(authenticated_user),
-                timeout=self._settings.timeout_seconds,
-            )
+            with retrieval_span(
+                    "retrieve_fragments_by_document",
+                    [f"document_ids: {document_ids}"],
+            ) as span:
+                response = await self._http_client.post(
+                    url=self._settings.document_context_fragments_url,
+                    json=request_body.model_dump(),
+                    headers=self._build_headers(authenticated_user),
+                    timeout=self._settings.timeout_seconds,
+                )
 
-            fragments = parse_and_apply_limits(
-                raw_data=response.json(),
-                max_fragments=self._settings.max_fragments_per_document_response,
-            )
+                fragments = parse_and_apply_limits(
+                    raw_data=response.json(),
+                    max_fragments=self._settings.max_fragments_per_document_response,
+                )
+                record_retrieved_documents(span, fragments.fragments)
 
             logger.info(
                 "Context fragments by document retrieved successfully.",
@@ -193,13 +214,14 @@ class DocumentContextProvider(DocumentContextProviderInterface):
                     "fragments_limit": self._settings.max_fragments_per_document_response,
                 },
             )
+            self._log_fragments(fragments)
             return fragments
 
         except DocumentContextProviderError:
             raise
         except _HTTP_ERROR_TYPES as e:
             self._handle_http_error(e)
-        except Exception:
+        except Exception as e:
             logger.exception(
                 "Unexpected error retrieving context fragments by document.",
                 extra={
@@ -209,6 +231,26 @@ class DocumentContextProvider(DocumentContextProviderInterface):
             )
             raise DocumentContextProviderError(
                 "Unexpected error while retrieving fragments from the external service."
+            ) from e
+
+    def _log_fragments(self, fragments: FragmentListResponse) -> None:
+        if not self._settings.log_payloads:
+            return
+        max_chars = self._settings.log_payload_max_chars
+        for fragment in fragments.fragments:
+            preview = fragment.content[:max_chars]
+            if len(fragment.content) > max_chars:
+                preview += f"... [+{len(fragment.content) - max_chars} chars]"
+            logger.info(
+                "Retrieved fragment",
+                extra={
+                    "fragment_id": fragment.id,
+                    "document_id": fragment.document_id,
+                    "document_name": fragment.document.name,
+                    "fragment_index": fragment.fragment_index,
+                    "fragment_chars": len(fragment.content),
+                    "fragment_preview": preview,
+                },
             )
 
     def _build_headers(
@@ -216,13 +258,13 @@ class DocumentContextProvider(DocumentContextProviderInterface):
             authenticated_user: AuthenticatedUser,
     ) -> dict[str, str]:
         token = get_request_token()
-        if token:
-            return {"Authorization": token}
-        return {
-            "X-Service-Api-Key": environment_variables.service_api_key,
-            "X-User-Id": str(authenticated_user.id),
-            "X-User-Email": str(authenticated_user.email),
-        }
+        if not token:
+            logger.warning(
+                "No JWT available for outbound request; the downstream service will reject it.",
+                extra={"user_id": authenticated_user.id},
+            )
+            return {}
+        return {"Authorization": token}
 
     @staticmethod
     def _build_document_request(
@@ -284,9 +326,9 @@ async def get_document_context_provider(
 ) -> DocumentContextProviderInterface:
     try:
         return request.app.state.document_context_provider
-    except AttributeError:
+    except AttributeError as e:
         logger.error("DocumentContextProvider not found in application state.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Document context provider service is not available",
-        )
+        ) from e

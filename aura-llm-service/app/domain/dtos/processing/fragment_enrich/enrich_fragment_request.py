@@ -1,18 +1,15 @@
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.domain.field_limits import MAX_CONTENT_CHARS
+from app.domain.validation import stripped_non_blank
 
 
 class EnrichFragmentRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=MAX_CONTENT_CHARS)
 
-    @model_validator(mode="after")
-    def validate_request(self) -> "EnrichFragmentRequest":
-        content = self.content.strip()
-        if not content:
-            raise ValueError("Content must not be blank.")
-        if content != self.content:
-            return self.model_copy(update={"content": content})
-        return self
+    @field_validator("content")
+    @classmethod
+    def _strip_content(cls, value: str) -> str:
+        return stripped_non_blank(value, "Content must not be blank.")
 
     model_config = {"frozen": True}

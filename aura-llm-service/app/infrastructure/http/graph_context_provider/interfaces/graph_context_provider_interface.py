@@ -22,9 +22,4 @@ class GraphContextProviderInterface(ABC):
             max_entities: int = 8,
             max_relations: int = 30,
     ) -> GraphContextResult:
-        """Fetch compact graph facts for the question/terms.
-
-        Implementations must be failure-tolerant: any transport or parsing
-        error returns an empty result instead of raising, so the RAG flow
-        never breaks because of the knowledge graph."""
         pass

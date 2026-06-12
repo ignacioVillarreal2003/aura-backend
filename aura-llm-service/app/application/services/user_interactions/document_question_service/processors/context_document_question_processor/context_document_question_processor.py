@@ -43,13 +43,9 @@ def _build_question_context_fragments_request(
             semantic_queries.append(SemanticQuery(text=kw, max_fragments=sf))
 
     bm25_queries: list[BM25Query] = []
-    enable_bm25 = settings.enable_dual_bm25 and (
-            bool(state.history_messages)
-            or (base and base != original)
-    )
-    if enable_bm25:
+    if settings.enable_dual_bm25:
         bm25_queries.append(BM25Query(text=original, max_fragments=bf))
-        if base:
+        if base and base != original:
             bm25_queries.append(BM25Query(text=base, max_fragments=bf))
 
     pool = (
@@ -108,6 +104,14 @@ class ContextDocumentQuestionProcessor:
         except DocumentQuestionServiceException:
             raise
         except Exception as e:
+            if document_question_state.attached_fragments or document_question_state.reduced_attached_context:
+                logger.warning(
+                    "Context retrieval failed; answering with attached documents only",
+                    extra={"error_type": type(e).__name__},
+                    exc_info=True,
+                )
+                document_question_state.fragments = []
+                return
             logger.exception(
                 "Failed to retrieve context fragments",
                 extra={

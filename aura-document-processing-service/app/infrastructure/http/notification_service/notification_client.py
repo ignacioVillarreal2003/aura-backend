@@ -21,10 +21,23 @@ class NotificationClient:
 
     def __init__(self, settings: Optional[NotificationClientSettings] = None) -> None:
         self._settings = settings or NotificationClientSettings()
+        self._client: Optional[httpx.AsyncClient] = None
 
     @property
     def enabled(self) -> bool:
         return bool(self._settings.service_url and self._settings.internal_api_token)
+
+    def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                timeout=self._settings.request_timeout_seconds,
+            )
+        return self._client
+
+    async def aclose(self) -> None:
+        if self._client is not None and not self._client.is_closed:
+            await self._client.aclose()
+        self._client = None
 
     async def emit_event(
             self,
@@ -61,8 +74,7 @@ class NotificationClient:
         headers = {"X-Internal-Token": self._settings.internal_api_token}
 
         try:
-            async with httpx.AsyncClient(timeout=self._settings.request_timeout_seconds) as client:
-                response = await client.post(url, json=payload, headers=headers)
+            response = await self._get_client().post(url, json=payload, headers=headers)
             if response.status_code >= 400:
                 logger.warning(
                     "Notification service rejected event.",

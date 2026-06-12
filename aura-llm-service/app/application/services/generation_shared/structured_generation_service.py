@@ -1,13 +1,3 @@
-"""Template base for the structured-generation services.
-
-Checklist, quiz, timeline, lessons-learned, decision-brief and report all run
-the same pipeline: load attached documents, optionally retrieve RAG context,
-reduce the context if it overflows, invoke the LLM and parse its output into a
-typed response. Subclasses only supply prompts, output parsing and response
-building; the pipeline, streaming progress events and the error contract live
-here so they stay consistent across services.
-"""
-
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Sequence
@@ -20,20 +10,21 @@ from app.application.services.generation_shared.generation_messages import (
     build_generation_messages,
 )
 from app.application.services.generation_shared.generation_settings import GenerationSettings
-from app.application.services.generation_shared.generation_state import GenerationState
-from app.application.services.generation_shared.processors.attached_documents_processor import (
+from app.application.services.generation_shared.state.generation_state import GenerationState
+from app.application.services.generation_shared.processors.attached_documents_processor.attached_documents_processor import (
     AttachedDocumentsProcessor,
 )
-from app.application.services.generation_shared.processors.context_reduction_processor import (
+from app.application.services.generation_shared.processors.context_reduction_processor.context_reduction_processor import (
     ContextReductionProcessor,
 )
-from app.application.services.generation_shared.processors.context_retrieval_processor import (
+from app.application.services.generation_shared.processors.context_retrieval_processor.context_retrieval_processor import (
     ContextRetrievalProcessor,
 )
-from app.application.services.generation_shared.processors.query_reformulation_processor import (
+from app.application.services.generation_shared.processors.query_reformulation_processor.query_reformulation_processor import (
     QueryReformulationProcessor,
 )
-from app.application.services.generation_shared.prompt_augmentation import augment_system_prompt
+from app.application.services.generation_shared.prompts.prompt_augmentation import augment_system_prompt
+from app.configuration.tracing import trace_generation
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.message import Message
@@ -67,30 +58,21 @@ TResponse = TypeVar("TResponse")
 
 
 class StructuredGenerationService(ABC, Generic[TRequest, TParsed, TResponse]):
-    # Human-readable name used in log messages, e.g. "checklist".
     label: ClassVar[str]
-    # Service-specific exception type; must accept (message, *, status_code).
     exception_cls: ClassVar[type[AppException]]
-    # User-facing Spanish message for unexpected (500) failures.
     unexpected_error_message: ClassVar[str]
-    # Progress message emitted right before the LLM call (see also
-    # _generation_progress_message for per-request variants).
     generation_step_message: ClassVar[str] = ""
 
-    # Stream event models (uniform shapes across services):
-    # progress(step, message) / complete(result) / error(message, code).
     stream_progress_event: ClassVar[type]
     stream_complete_event: ClassVar[type]
     stream_error_event: ClassVar[type]
 
-    # Prompts.
     human_prompt: ClassVar[str]
     extraction_system_prompt: ClassVar[str]
     extraction_human_prompt: ClassVar[str]
-    # Default RAG query expansions (see also _rag_queries for per-request variants).
+
     rag_queries: ClassVar[list[str]] = []
 
-    # Whether the LLM is invoked in JSON mode or free-form text mode.
     uses_json_mode: ClassVar[bool] = True
 
     def __init__(
@@ -98,37 +80,34 @@ class StructuredGenerationService(ABC, Generic[TRequest, TParsed, TResponse]):
             ollama_llm_facade: OllamaLLMFacadeInterface,
             ollama_llm_invoker: OllamaLLMInvokerInterface,
             document_context_provider: DocumentContextProviderInterface,
-            generation_settings: GenerationSettings | None = None,
+            generation_settings: Optional[GenerationSettings] = None,
     ) -> None:
         self._ollama_llm_facade = ollama_llm_facade
         self._ollama_llm_invoker = ollama_llm_invoker
         self._generation_settings = generation_settings or GenerationSettings()
         self._reformulation_processor = QueryReformulationProcessor(
-            self._generation_settings, ollama_llm_facade, ollama_llm_invoker
+            ollama_llm_facade, ollama_llm_invoker
         )
-        self._context_processor = ContextRetrievalProcessor(self._generation_settings, document_context_provider)
-        self._attached_processor = AttachedDocumentsProcessor(self._generation_settings, document_context_provider)
+        self._context_processor = ContextRetrievalProcessor(document_context_provider)
+        self._attached_processor = AttachedDocumentsProcessor(document_context_provider)
         self._reduction_processor = ContextReductionProcessor(
-            self._generation_settings, ollama_llm_facade, ollama_llm_invoker
+            ollama_llm_facade, ollama_llm_invoker
         )
         self._known_exceptions: tuple[type[Exception], ...] = (
             RequestValidationException,
             self.exception_cls,
             UnauthorizedException,
         )
-        # Log under the subclass module so records keep their service of origin.
         self._logger = logging.getLogger(type(self).__module__)
         self._logger.info("%s initialized", type(self).__name__)
 
-    # ------------------------------------------------------------------ hooks
-
     @abstractmethod
     def _system_prompt(self, request: TRequest) -> str:
-        """Base system prompt before operator augmentation."""
+        pass
 
     @abstractmethod
     def _parse_output(self, raw: str, request: TRequest) -> TParsed:
-        """Parse the raw LLM output; raise exception_cls(status_code=502) if unusable."""
+        pass
 
     @abstractmethod
     def _build_response(
@@ -138,7 +117,7 @@ class StructuredGenerationService(ABC, Generic[TRequest, TParsed, TResponse]):
             parsed: TParsed,
             raw: str,
     ) -> TResponse:
-        """Build the typed response from the parsed output."""
+        pass
 
     def _rag_queries(self, request: TRequest) -> list[str]:
         return self.rag_queries
@@ -154,8 +133,6 @@ class StructuredGenerationService(ABC, Generic[TRequest, TParsed, TResponse]):
 
     def _result_log_extra(self, parsed: TParsed) -> dict[str, Any]:
         return {}
-
-    # --------------------------------------------------------------- pipeline
 
     def _build_state(
             self,
@@ -190,7 +167,6 @@ class StructuredGenerationService(ABC, Generic[TRequest, TParsed, TResponse]):
             state: GenerationState,
             request: TRequest,
     ) -> AsyncIterator[Any]:
-        """Same pipeline as _collect_context, interleaving stream progress events."""
         if state.document_ids:
             yield self.stream_progress_event(step="loading_documents", message=_LOADING_DOCUMENTS_MESSAGE)
             await self._attached_processor.run(state)
@@ -229,8 +205,7 @@ class StructuredGenerationService(ABC, Generic[TRequest, TParsed, TResponse]):
     def _conversation_with_answer(state: GenerationState, answer: str) -> list[Message]:
         return [*state.messages, Message(role=MessageRole.assistant, content=answer)]
 
-    # ------------------------------------------------------------- public API
-
+    @trace_generation()
     async def generate(
             self,
             request: TRequest,
@@ -269,6 +244,7 @@ class StructuredGenerationService(ABC, Generic[TRequest, TParsed, TResponse]):
             )
             raise self.exception_cls(self.unexpected_error_message, status_code=500) from e
 
+    @trace_generation()
     async def generate_stream(
             self,
             request: TRequest,

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.infrastructure.http.document_context_provider.dtos.fragment_response import FragmentResponse
 
@@ -12,17 +12,18 @@ class FragmentListResponse(BaseModel):
         max_length=_MAX_FRAGMENTS_IN_LIST,
     )
 
-    @model_validator(mode="after")
-    def validate_fragments(self) -> "FragmentListResponse":
+    @field_validator("fragments")
+    @classmethod
+    def _validate_fragments(cls, fragments: list[FragmentResponse]) -> list[FragmentResponse]:
         seen_ids: set[int] = set()
-        for fragment in self.fragments:
+        for fragment in fragments:
             if fragment.id in seen_ids:
                 raise ValueError(f"Duplicate fragment id detected: {fragment.id}")
             seen_ids.add(fragment.id)
 
         result: list[FragmentResponse] = []
         total_chars = 0
-        for fragment in self.fragments:
+        for fragment in fragments:
             remaining = _MAX_TOTAL_FRAGMENTS_LIST_CHARS - total_chars
             if remaining <= 0:
                 break
@@ -35,7 +36,7 @@ class FragmentListResponse(BaseModel):
                 )
                 break
 
-        return self.model_copy(update={"fragments": result})
+        return result
 
     model_config = {
         "from_attributes": True,

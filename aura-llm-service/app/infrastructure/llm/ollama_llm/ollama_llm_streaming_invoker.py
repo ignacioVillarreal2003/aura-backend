@@ -10,6 +10,7 @@ from app.infrastructure.llm.ollama_llm.exceptions.ollama_llm_invoker_exceptions 
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_streaming_invoker_interface import (
     OllamaLLMStreamingInvokerInterface,
 )
+from app.infrastructure.llm.ollama_llm.llm_payload_logging import log_llm_input, log_llm_output
 from app.infrastructure.llm.ollama_llm.ollama_llm_invoker_settings import OllamaLLMInvokerSettings
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,8 @@ class OllamaLLMStreamingInvoker(OllamaLLMStreamingInvokerInterface):
             llm_input: List[BaseMessage],
     ) -> AsyncIterator[str]:
         logger.debug("Starting LLM stream", extra={"message_count": len(llm_input)})
+        if self._settings.log_payloads:
+            log_llm_input(logger, llm_input, self._settings.log_payload_max_chars)
 
         gen: AsyncIterator[Any] | None = None
         first_chunk: Any = _STREAM_EMPTY
@@ -91,12 +94,17 @@ class OllamaLLMStreamingInvoker(OllamaLLMStreamingInvokerInterface):
             return
 
         total_chars = 0
+        payload_buffer: list[str] = []
+        payload_buffered_chars = 0
         try:
             text = self._chunk_to_text(first_chunk)
             if text:
                 total_chars += len(text)
                 if total_chars > self._settings.max_stream_response_chars:
                     raise LLMInvocationError("Streaming response exceeded maximum allowed size.")
+                if self._settings.log_payloads and payload_buffered_chars < self._settings.log_payload_max_chars:
+                    payload_buffer.append(text)
+                    payload_buffered_chars += len(text)
                 yield text
 
             async for chunk in gen:
@@ -105,6 +113,9 @@ class OllamaLLMStreamingInvoker(OllamaLLMStreamingInvokerInterface):
                     total_chars += len(text)
                     if total_chars > self._settings.max_stream_response_chars:
                         raise LLMInvocationError("Streaming response exceeded maximum allowed size.")
+                    if self._settings.log_payloads and payload_buffered_chars < self._settings.log_payload_max_chars:
+                        payload_buffer.append(text)
+                        payload_buffered_chars += len(text)
                     yield text
 
         except LLMInvocationError:
@@ -121,6 +132,9 @@ class OllamaLLMStreamingInvoker(OllamaLLMStreamingInvokerInterface):
                 extra={"error_type": type(e).__name__},
             )
             raise LLMInvocationError("LLM could not process the streaming request.") from e
+
+        if self._settings.log_payloads:
+            log_llm_output(logger, "".join(payload_buffer), self._settings.log_payload_max_chars)
 
         logger.debug("LLM streaming completed successfully", extra={"total_chars": total_chars})
 

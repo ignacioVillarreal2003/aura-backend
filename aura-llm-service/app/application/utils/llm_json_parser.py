@@ -6,7 +6,6 @@ logger = logging.getLogger(__name__)
 
 
 def _extract_balanced_object(s: str) -> str:
-    """Return the first balanced {...} substring, handling nested objects and strings."""
     start = s.find("{")
     if start < 0:
         return ""

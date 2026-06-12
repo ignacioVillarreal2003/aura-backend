@@ -10,11 +10,12 @@ from app.api.sse import sse_response
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
 from app.api.dependencies.app_state_services import get_rag_agent_service
-from app.application.services.user_interactions.rag_agent_service.interfaces.rag_agent_service_interface import RagAgentServiceInterface
+from app.application.services.user_interactions.rag_agent_service.interfaces.rag_agent_service_interface import (
+    RagAgentServiceInterface,
+)
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.user_interactions.agent.agent_request import AgentRequest
 from app.domain.dtos.user_interactions.agent.agent_response import AgentResponse
-
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 
 
@@ -30,6 +31,7 @@ class RagAgentController(RagAgentControllerInterface):
             authenticated_user=authenticated_user,
             required_permissions=frozenset({Permissions.LLM_AGENT}),
         )
+
         return await rag_agent_service.execute(
             agent_request=agent_request,
             authenticated_user=authenticated_user,

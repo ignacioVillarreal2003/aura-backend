@@ -410,14 +410,21 @@ class FragmentRepository(FragmentRepositoryInterface):
                        deleted_at
                 FROM fragment
                 WHERE deleted_at IS NULL
-                  AND content @@@ '{sanitized}'
+                  AND content @@@ :search_query
                   {doc_id_filter}
-                  AND paradedb.score(id) >= {float(min_score)}
+                  AND paradedb.score(id) >= :min_score
                 ORDER BY paradedb.score(id) DESC
-                LIMIT {int(k)}
+                LIMIT :k
                 """
             )
-            result = await database_session.execute(sql)
+            result = await database_session.execute(
+                sql,
+                {
+                    "search_query": sanitized,
+                    "min_score": float(min_score),
+                    "k": int(k),
+                },
+            )
             rows = result.fetchall()
 
             fragments = [

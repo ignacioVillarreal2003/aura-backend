@@ -114,7 +114,7 @@ class DocumentClassifyService(DocumentClassifyServiceInterface):
             ),
         ]
         try:
-            llm = await self._ollama_llm_facade.get_llm_base()
+            llm = await self._ollama_llm_facade.get_llm_json()
             return await self._ollama_llm_invoker.call_llm_content(llm=llm, llm_input=llm_input)
         except LLMInvocationError as e:
             logger.warning(
@@ -148,4 +148,3 @@ class DocumentClassifyService(DocumentClassifyServiceInterface):
                 "La respuesta del modelo no tiene el formato JSON esperado.",
                 status_code=502,
             ) from e
-

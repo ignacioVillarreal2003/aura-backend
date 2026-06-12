@@ -674,6 +674,12 @@ async def shutdown_dependencies(app: FastAPI) -> None:
         except Exception:
             logger.exception("Failed to dispose the Neo4j manager during shutdown.")
 
+    if notification_client := getattr(state, "notification_client", None):
+        try:
+            await notification_client.aclose()
+        except Exception:
+            logger.exception("Failed to close the notification client during shutdown.")
+
     if redis_client := getattr(state, "redis_client", None):
         await redis_client.dispose()
 

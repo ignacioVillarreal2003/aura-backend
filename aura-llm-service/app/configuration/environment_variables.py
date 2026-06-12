@@ -22,7 +22,6 @@ class EnvironmentVariables(BaseSettings):
     log_level: str = Field(default="INFO")
     cors_origins: list[str] = Field(default=["*"])
     environment: str = Field(default="development")
-    service_api_key: str = Field(default="service_api_key")
 
     # Cross-cutting API limits.
     max_request_body_bytes: int = Field(default=10 * 1024 * 1024, ge=1024)
@@ -69,15 +68,6 @@ class EnvironmentVariables(BaseSettings):
         logger.info(f"Log Level: {self.log_level}")
         logger.info(f"Reload: {self.app_reload}")
         logger.info("=" * 60)
-
-    def warn_insecure_configuration(
-            self
-    ) -> None:
-        if self.service_api_key == "service_api_key":
-            logger.warning(
-                "SERVICE_API_KEY is still set to its insecure default value. "
-                "Set a real secret before exposing this service."
-            )
 
     def is_development(
             self

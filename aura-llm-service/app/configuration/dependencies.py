@@ -3,11 +3,14 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 from fastapi import FastAPI
 
-from app.application.services.user_interactions.document_action_service.document_action_service import DocumentActionService
-from app.application.services.user_interactions.document_summary_service.document_summary_service import DocumentSummaryService
-from app.application.services.user_interactions.agent_service.agent_service import AgentService
-from app.application.services.user_interactions.document_question_service.document_question_service import DocumentQuestionService
-from app.application.services.processing.document_classify_service.document_classify_service import DocumentClassifyService
+from app.application.services.user_interactions.document_action_service.document_action_service import \
+    DocumentActionService
+from app.application.services.user_interactions.document_summary_service.document_summary_service import \
+    DocumentSummaryService
+from app.application.services.user_interactions.document_question_service.document_question_service import \
+    DocumentQuestionService
+from app.application.services.processing.document_classify_service.document_classify_service import \
+    DocumentClassifyService
 from app.application.services.processing.fragment_enrich_service.fragment_enrich_service import FragmentEnrichService
 from app.application.services.processing.graph_extraction_service.graph_extraction_service import GraphExtractionService
 from app.application.services.processing.graph_query_translation_service.graph_query_translation_service import (
@@ -19,8 +22,11 @@ from app.application.services.user_interactions.report_service.report_service im
 from app.application.services.user_interactions.checklist_service.checklist_service import ChecklistService
 from app.application.services.user_interactions.timeline_service.timeline_service import TimelineService
 from app.application.services.user_interactions.quiz_service.quiz_service import QuizService
-from app.application.services.user_interactions.lessons_learned_service.lessons_learned_service import LessonsLearnedService
-from app.application.services.user_interactions.decision_brief_service.decision_brief_service import DecisionBriefService
+from app.application.services.user_interactions.lessons_learned_service.lessons_learned_service import \
+    LessonsLearnedService
+from app.application.services.user_interactions.decision_brief_service.decision_brief_service import \
+    DecisionBriefService
+from app.infrastructure.guardrails.nemo_guardrails_service import NemoGuardrailsService
 from app.infrastructure.http.authentication_provider.authentication_provider import AuthenticationProvider
 from app.infrastructure.http.document_context_provider.document_context_provider import DocumentContextProvider
 from app.infrastructure.http.graph_context_provider.graph_context_provider import GraphContextProvider
@@ -38,14 +44,6 @@ _CleanupFn = Callable[[], Awaitable[None]]
 
 
 class _DependencyRegistry:
-    """Tracks every resource attached to app.state during startup.
-
-    Registration is the single source of truth: rollback clears exactly what
-    was registered (in reverse order) and runs the cleanup callbacks of the
-    resources that own connections, so the manual to-clear list cannot drift
-    out of sync with the actual startup sequence.
-    """
-
     def __init__(self, app: FastAPI) -> None:
         self._app = app
         self._registered: list[str] = []
@@ -107,6 +105,8 @@ async def startup_dependencies(app: FastAPI) -> None:
         await ollama_facade.initialize()
         registry.register("ollama_llm_facade", ollama_facade)
 
+        registry.register("nemo_guardrails", NemoGuardrailsService(ollama_llm_facade=ollama_facade))
+
         invoker_settings = OllamaLLMInvokerSettings()
         ollama_llm_invoker = OllamaLLMInvoker(settings=invoker_settings)
         ollama_llm_streaming_invoker = OllamaLLMStreamingInvoker(settings=invoker_settings)
@@ -139,13 +139,6 @@ async def startup_dependencies(app: FastAPI) -> None:
             "graph_query_translation_service", GraphQueryTranslationService(**processing_service_kwargs)
         )
 
-        registry.register(
-            "agent_service",
-            AgentService(
-                ollama_llm_facade=ollama_facade,
-                document_context_provider=document_context_provider,
-            ),
-        )
         registry.register(
             "rag_agent_service",
             RagAgentService(

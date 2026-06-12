@@ -14,7 +14,7 @@ class ChecklistServiceInterface(ABC):
             request: ChecklistGenerateRequest,
             authenticated_user: AuthenticatedUser,
     ) -> ChecklistGenerateResponse:
-        ...
+        pass
 
     @abstractmethod
     async def generate_stream(
@@ -22,4 +22,4 @@ class ChecklistServiceInterface(ABC):
             request: ChecklistGenerateRequest,
             authenticated_user: AuthenticatedUser,
     ) -> AsyncIterator[ChecklistStreamEvent]:
-        ...
+        pass

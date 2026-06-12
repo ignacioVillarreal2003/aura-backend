@@ -54,7 +54,7 @@ class GraphQueryTranslationService(GraphQueryTranslationServiceInterface):
         self._ollama_llm_facade = ollama_llm_facade
         self._ollama_llm_invoker = ollama_llm_invoker
         self._graph_query_translation_settings = (
-            graph_query_translation_service_settings or GraphQueryTranslationServiceSettings()
+                graph_query_translation_service_settings or GraphQueryTranslationServiceSettings()
         )
 
     async def translate_graph_query(
@@ -175,11 +175,11 @@ class GraphQueryTranslationService(GraphQueryTranslationServiceInterface):
         return raw, llm_input
 
     async def _invoke_repair(
-        self,
-        original_llm_input: list,
-        malformed_output: str,
-        parse_error: str,
-        user_id: int,
+            self,
+            original_llm_input: list,
+            malformed_output: str,
+            parse_error: str,
+            user_id: int,
     ) -> str:
         repair_message = HumanMessage(
             content=REPAIR_PROMPT.format(
@@ -226,4 +226,3 @@ class GraphQueryTranslationService(GraphQueryTranslationServiceInterface):
                 "La respuesta del modelo no tiene el formato JSON esperado.",
                 status_code=502,
             ) from e
-

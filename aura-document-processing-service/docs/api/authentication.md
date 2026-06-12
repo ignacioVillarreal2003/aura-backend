@@ -39,14 +39,14 @@ Las siguientes rutas **no** exigen autenticación en el middleware (lista alinea
 | Ruta |
 |------|
 | `/` |
-| `/api/health` |
+| `/api/v1/health` |
+| `/api/v1/ready` |
 | `/api/docs` |
 | `/api/redoc` |
 | `/api/openapi.json` |
-| `/api/create-document/internal` |
 | `/metrics` |
 
-Nota: `/api/health` y `/api/create-document/internal` pueden estar reservadas para integración u orquestación; si no hay handler registrado para alguna de ellas, el framework responderá según su configuración (p. ej. 404). La exclusión solo significa que **no** se exige Bearer ni cabeceras de servicio en esa ruta.
+Nota: la exclusión solo significa que **no** se exige Bearer ni cabeceras de servicio en esa ruta; `/api/v1/health` y `/api/v1/ready` quedan abiertas para las probes de liveness/readiness del orquestador.
 
 ## Errores de dominio y validación (después de autenticar)
 

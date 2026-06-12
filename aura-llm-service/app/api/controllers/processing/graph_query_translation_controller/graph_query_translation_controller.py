@@ -13,7 +13,9 @@ from app.application.services.processing.graph_query_translation_service.interfa
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.processing.graph_query_translation.translate_graph_query_request import TranslateGraphQueryRequest
-from app.domain.dtos.processing.graph_query_translation.translate_graph_query_response import TranslateGraphQueryResponse
+from app.domain.dtos.processing.graph_query_translation.translate_graph_query_response import (
+    TranslateGraphQueryResponse,
+)
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 
 
@@ -31,6 +33,7 @@ class GraphQueryTranslationController(GraphQueryTranslationControllerInterface):
             authenticated_user=authenticated_user,
             required_permissions=frozenset({Permissions.LLM_GRAPH_QUERY_TRANSLATION}),
         )
+
         return await graph_query_translation_service.translate_graph_query(
             translate_graph_query_request=translate_graph_query_request,
             authenticated_user=authenticated_user,

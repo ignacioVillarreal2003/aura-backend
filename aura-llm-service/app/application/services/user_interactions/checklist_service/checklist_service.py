@@ -15,7 +15,7 @@ from app.application.services.user_interactions.checklist_service.checklist_serv
     ChecklistServiceInterface
 from app.application.services.user_interactions.checklist_service.checklist_settings import ChecklistSettings
 from app.application.services.generation_shared.generation_settings import GenerationSettings
-from app.application.services.generation_shared.generation_state import GenerationState
+from app.application.services.generation_shared.state.generation_state import GenerationState
 from app.application.services.generation_shared.output_parsing import clean_text, fallback_lines
 from app.application.services.generation_shared.structured_generation_service import StructuredGenerationService
 from app.domain.dtos.user_interactions.checklist.checklist_request import ChecklistGenerateRequest

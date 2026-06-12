@@ -28,10 +28,12 @@ class RagAgentStateBuilder:
             response_style=agent_request.response_style,
             query="",
             keywords=[],
+            intent="",
             retrieved_fragments=[],
             context="",
             graph_facts="",
             answer="",
+            guardrail_passed=True,
             fallback_triggered=False,
         )
 

@@ -13,7 +13,7 @@ from app.application.services.user_interactions.quiz_service.quiz_service_except
 from app.application.services.user_interactions.quiz_service.quiz_service_interface import QuizServiceInterface
 from app.application.services.user_interactions.quiz_service.quiz_settings import QuizSettings
 from app.application.services.generation_shared.generation_settings import GenerationSettings
-from app.application.services.generation_shared.generation_state import GenerationState
+from app.application.services.generation_shared.state.generation_state import GenerationState
 from app.application.services.generation_shared.output_parsing import clean_text, fallback_lines
 from app.application.services.generation_shared.structured_generation_service import StructuredGenerationService
 from app.domain.dtos.user_interactions.quiz.quiz_request import QuizGenerateRequest
@@ -38,7 +38,6 @@ logger = logging.getLogger(__name__)
 
 _VALID_TYPES = {t.value for t in QuizQuestionType}
 
-# (title, instructions, passing_score, questions)
 _ParsedQuiz = tuple[str, str, int | None, list[QuizQuestion]]
 
 

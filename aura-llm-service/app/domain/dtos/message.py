@@ -1,12 +1,9 @@
 import re
-
 from pydantic import BaseModel, Field, field_validator
 
 from app.domain.constants.message_role import MessageRole
 from app.domain.field_limits import MAX_MESSAGE_CONTENT_CHARS
 
-# Caracteres de control (C0/C1) excepto \n y \t: nunca son contenido legítimo
-# de un mensaje y pueden usarse para romper el formato de los prompts.
 _CONTROL_CHARS_PATTERN = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
 
 

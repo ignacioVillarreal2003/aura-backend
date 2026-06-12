@@ -17,7 +17,7 @@ from app.application.services.user_interactions.timeline_service.timeline_servic
 )
 from app.application.services.user_interactions.timeline_service.timeline_settings import TimelineSettings
 from app.application.services.generation_shared.generation_settings import GenerationSettings
-from app.application.services.generation_shared.generation_state import GenerationState
+from app.application.services.generation_shared.state.generation_state import GenerationState
 from app.application.services.generation_shared.output_parsing import clean_text, fallback_lines
 from app.application.services.generation_shared.structured_generation_service import StructuredGenerationService
 from app.domain.dtos.user_interactions.timeline.timeline_request import TimelineGenerateRequest
@@ -35,7 +35,6 @@ from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface i
 
 logger = logging.getLogger(__name__)
 
-# (title, summary, events)
 _ParsedTimeline = tuple[str, str, list[TimelineEvent]]
 
 

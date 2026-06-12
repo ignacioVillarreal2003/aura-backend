@@ -1,15 +1,6 @@
-"""FastAPI dependencies that resolve services registered on app.state at startup.
-
-Every service follows the same contract: it is attached to ``app.state`` by
-``startup_dependencies`` and resolved here with a 503 if the application did
-not finish starting up. ``state_dependency`` builds those resolvers so each
-service is a one-liner instead of a copy-pasted getter.
-"""
-
 import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
-
 from fastapi import HTTPException, Request, status
 
 logger = logging.getLogger(__name__)
@@ -19,7 +10,7 @@ def state_dependency(attribute: str, display_name: str) -> Callable[[Request], A
     async def _resolve(request: Request) -> Any:
         try:
             return getattr(request.app.state, attribute)
-        except AttributeError:
+        except AttributeError as e:
             logger.error(
                 "Service not found in application state.",
                 extra={"state_attribute": attribute},
@@ -27,7 +18,7 @@ def state_dependency(attribute: str, display_name: str) -> Callable[[Request], A
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"{display_name} is not available",
-            )
+            ) from e
 
     return _resolve
 
@@ -41,7 +32,6 @@ get_graph_extraction_service = state_dependency("graph_extraction_service", "Gra
 get_graph_query_translation_service = state_dependency(
     "graph_query_translation_service", "GraphQueryTranslationService"
 )
-get_agent_service = state_dependency("agent_service", "Agent service")
 get_rag_agent_service = state_dependency("rag_agent_service", "RAG agent service")
 get_general_chat_service = state_dependency("general_chat_service", "GeneralChatService")
 get_report_service = state_dependency("report_service", "Report service")

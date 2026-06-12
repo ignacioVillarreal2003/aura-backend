@@ -59,7 +59,6 @@ Si el contenido no contiene entidades válidas:
 - Devolver "entities": [] y "relations": [].
 """.strip()
 
-
 HUMAN_PROMPT = """
 Documento: {document_id}
 Fragmento: {fragment_id}
@@ -79,7 +78,6 @@ Fragmento de texto (puede estar truncado):
 
 Devuelve únicamente el JSON solicitado.
 """.strip()
-
 
 REPAIR_PROMPT = """
 Tu respuesta anterior no pudo ser interpretada como JSON válido.

@@ -1,0 +1,19 @@
+target-version = "py313"
+line-length = 120
+extend-exclude = [".venv", ".idea", ".pytest_cache"]
+
+[lint]
+select = [
+    "F",    # pyflakes: imports sin uso, variables sin uso, nombres indefinidos
+    "E9",   # errores de sintaxis
+    "B",    # flake8-bugbear: bugs probables
+    "PLE",  # pylint errors
+    "PLW",  # pylint warnings
+    "RET505", # else innecesario tras return
+]
+ignore = [
+    "B008", # Depends(...) en defaults es el idioma estándar de FastAPI
+]
+
+[lint.per-file-ignores]
+"**/__init__.py" = ["F401"]

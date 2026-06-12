@@ -32,6 +32,7 @@ class LessonsLearnedController(LessonsLearnedControllerInterface):
             authenticated_user=authenticated_user,
             required_permissions=frozenset({Permissions.LLM_LESSONS_LEARNED_GENERATE}),
         )
+
         return await lessons_learned_service.generate(
             request=lessons_learned_request,
             authenticated_user=authenticated_user,

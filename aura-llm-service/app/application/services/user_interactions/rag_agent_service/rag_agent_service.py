@@ -59,9 +59,17 @@ _STREAM_PROGRESS_MESSAGES: dict[str, tuple[str, str]] = {
         RagNodeName.context_retriever.value,
         "Buscando información relevante en los documentos...",
     ),
+    RagNodeName.document_fetcher.value: (
+        RagNodeName.document_fetcher.value,
+        "Recuperando el contenido completo de los documentos...",
+    ),
     RagNodeName.answer_synthesizer.value: (
         RagNodeName.answer_synthesizer.value,
         "Elaborando la respuesta con el contexto encontrado...",
+    ),
+    RagNodeName.guardrails.value: (
+        RagNodeName.guardrails.value,
+        "Verificando la calidad y seguridad de la respuesta...",
     ),
     RagNodeName.fallback.value: (
         RagNodeName.fallback.value,

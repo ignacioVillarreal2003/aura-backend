@@ -274,9 +274,9 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
 async def get_ollama_llm_facade(request: Request) -> OllamaLLMFacadeInterface:
     try:
         return request.app.state.ollama_llm_facade
-    except AttributeError:
+    except AttributeError as e:
         logger.error("OllamaLLMFacade not found in application state")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="LLM service is not available",
-        )
+        ) from e

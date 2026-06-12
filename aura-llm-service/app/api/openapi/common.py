@@ -1,5 +1,4 @@
 from typing import Any, Optional, TypeVar, Union
-
 from pydantic import BaseModel, Field
 
 T = TypeVar("T")
