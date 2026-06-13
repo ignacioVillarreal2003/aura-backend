@@ -66,4 +66,4 @@ aiobreaker>=1.2.0
 # ============================================
 # Monitoreo
 # ============================================
-prometheus-fastapi-instrumentator
+prometheus-fastapi-instrumentator>=7.0.0
