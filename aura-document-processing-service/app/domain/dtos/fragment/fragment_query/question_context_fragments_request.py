@@ -39,7 +39,7 @@ class _RerankConfig(BaseModel):
     max_fragments: Optional[int] = Field(default=None, ge=1, le=MAX_TOTAL_FRAGMENTS)
 
     @model_validator(mode="after")
-    def validate_rerank_consistency(self) -> "RerankConfig":
+    def validate_rerank_consistency(self) -> "_RerankConfig":
         if self.enabled and self.max_fragments is None:
             raise ValueError("rerank.max_fragments is required when rerank is enabled.")
         if not self.enabled and self.max_fragments is not None:

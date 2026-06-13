@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timezone
 from typing import Optional
-from sqlalchemy import desc, or_, select
+from sqlalchemy import desc, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -61,22 +61,39 @@ class DocumentRepository(DocumentRepositoryInterface):
     async def get_documents_by_chat_id(
             self,
             chat_id: int,
-            database_session: AsyncSession
+            database_session: AsyncSession,
+            page: Optional[int] = None,
+            size: Optional[int] = None,
     ) -> list[Document]:
         try:
+            paginate = page is not None and size is not None
             logger.debug(
                 "Fetching documents by chat ID.",
                 extra={
-                    "chat_id": chat_id
+                    "chat_id": chat_id,
+                    "page": page,
+                    "size": size,
+                    "paginated": paginate,
                 }
             )
 
-            result = await database_session.execute(
-                select(Document).where(
+            query = (
+                select(Document)
+                .where(
                     Document.chat_id == chat_id,
                     Document.deleted_at.is_(None),
-                ).limit(MAX_DOCUMENTS_IN_LIST)
+                )
+                .order_by(desc(Document.created_at), desc(Document.id))
             )
+
+            if paginate:
+                query = query.offset((page - 1) * size).limit(size)
+            else:
+                # Unpaginated request: return everything for the chat, but bound the
+                # result set to a safe maximum to avoid unbounded reads.
+                query = query.limit(MAX_DOCUMENTS_IN_LIST)
+
+            result = await database_session.execute(query)
             documents = list(result.scalars().all())
 
             logger.debug(
@@ -141,45 +158,11 @@ class DocumentRepository(DocumentRepositoryInterface):
             )
             raise DatabaseException("Failed to fetch documents by IDs.") from e
 
-    async def get_documents_missing_metadata(
-            self,
-            database_session: AsyncSession,
-            limit: int = 1000,
-            offset: int = 0,
-    ) -> list[Document]:
-        try:
-            logger.debug(
-                "Fetching documents that are missing metadata.",
-                extra={"limit": limit, "offset": offset},
-            )
-
-            result = await database_session.execute(
-                select(Document).where(
-                    Document.deleted_at.is_(None),
-                    or_(
-                        Document.type.is_(None),
-                        Document.category.is_(None),
-                        Document.description.is_(None)
-                    )
-                ).order_by(Document.id).limit(limit).offset(offset)
-            )
-            documents = list(result.scalars().all())
-
-            logger.debug(
-                "Documents missing metadata were fetched.",
-                extra={"count": len(documents), "offset": offset},
-            )
-            return documents
-
-        except SQLAlchemyError as e:
-            logger.exception("Database error while fetching documents missing metadata.")
-            raise DatabaseException("Failed to fetch documents missing metadata.") from e
-
     async def get_documents(
             self,
             database_session: AsyncSession,
-            page: int,
-            size: int,
+            page: Optional[int] = None,
+            size: Optional[int] = None,
             name: Optional[str] = None,
             description: Optional[str] = None,
             category: Optional[str] = None,
@@ -188,11 +171,13 @@ class DocumentRepository(DocumentRepositoryInterface):
             created_to: Optional[datetime] = None
     ) -> list[Document]:
         try:
+            paginate = page is not None and size is not None
             logger.debug(
                 "Searching documents with filters.",
                 extra={
                     "page": page,
                     "size": size,
+                    "paginated": paginate,
                     "name_filter_set": name is not None,
                     "description_filter_set": description is not None,
                     "category_filter_set": category is not None,
@@ -220,7 +205,12 @@ class DocumentRepository(DocumentRepositoryInterface):
             if created_to is not None:
                 query = query.where(Document.created_at <= created_to)
 
-            query = query.offset((page - 1) * size).limit(size)
+            if paginate:
+                query = query.offset((page - 1) * size).limit(size)
+            else:
+                # Unpaginated request: return everything matching, but bound the
+                # result set to a safe maximum to avoid unbounded reads.
+                query = query.limit(MAX_DOCUMENTS_IN_LIST)
 
             result = await database_session.execute(query)
             documents = list(result.scalars().all())

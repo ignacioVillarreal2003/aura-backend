@@ -885,7 +885,7 @@ async def get_minio_client(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Object storage is not available"
-        )
+        ) from None
     except asyncio.CancelledError:
         raise
     except HTTPException:
@@ -895,4 +895,4 @@ async def get_minio_client(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="A storage error occurred"
-        )
+        ) from None

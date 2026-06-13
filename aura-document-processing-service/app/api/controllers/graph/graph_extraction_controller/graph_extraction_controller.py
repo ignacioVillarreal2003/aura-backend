@@ -46,6 +46,7 @@ class GraphExtractionController(GraphExtractionControllerInterface):
             authenticated_user=authenticated_user,
             required_permissions=frozenset({Permissions.GRAPH_EXTRACTION_PROGRESS}),
         )
+
         return await graph_extraction_service.get_progress(document_id=document_id)
 
     async def reextract(
@@ -65,15 +66,6 @@ class GraphExtractionController(GraphExtractionControllerInterface):
             document_id=request.document_id,
             user=authenticated_user,
             force=request.force,
-        )
-        logger.info(
-            "Graph re-extraction command published via HTTP.",
-            extra={
-                "document_id": request.document_id,
-                "force": request.force,
-                "user_id": authenticated_user.id,
-                "message_id": message_id,
-            },
         )
         return GraphReextractResponse(
             document_id=request.document_id,

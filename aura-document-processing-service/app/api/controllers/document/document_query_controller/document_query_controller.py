@@ -8,6 +8,8 @@ from app.api.controllers.document.document_query_controller.document_query_contr
 )
 from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
+from app.application.authorization.authorizer import Authorizer
+from app.application.authorization.permissions import Permissions
 from app.application.services.document.document_query_service.document_query_service import get_document_query_service
 from app.application.services.document.document_query_service.interfaces.document_query_service_interface import (
     DocumentQueryServiceInterface,
@@ -35,6 +37,11 @@ class DocumentQueryController(DocumentQueryControllerInterface):
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
             _rl: None = Depends(default_rate_limit),
     ) -> DocumentResponse:
+        Authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.GET_DOCUMENT}),
+        )
+
         return await document_query_service.get_document(
             document_id=document_id,
             database_session=database_session,
@@ -43,8 +50,8 @@ class DocumentQueryController(DocumentQueryControllerInterface):
 
     async def get_documents(
             self,
-            page: int = Query(1, ge=1),
-            size: int = Query(1, ge=1, le=MAX_DOCUMENT_QUERY_PAGE_SIZE),
+            page: Optional[int] = Query(None, ge=1),
+            size: Optional[int] = Query(None, ge=1, le=MAX_DOCUMENT_QUERY_PAGE_SIZE),
             name: Optional[str] = Query(None, max_length=MAX_NAME_CHARS),
             description: Optional[str] = Query(None, max_length=MAX_DESCRIPTION_CHARS),
             category: Optional[str] = Query(None, max_length=MAX_CATEGORY_CHARS),
@@ -56,6 +63,11 @@ class DocumentQueryController(DocumentQueryControllerInterface):
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
             _rl: None = Depends(default_rate_limit),
     ) -> DocumentListResponse:
+        Authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LIST_DOCUMENTS}),
+        )
+
         return await document_query_service.get_documents(
             database_session=database_session,
             authenticated_user=authenticated_user,
@@ -72,15 +84,24 @@ class DocumentQueryController(DocumentQueryControllerInterface):
     async def get_documents_by_chat(
             self,
             chat_id: int,
+            page: Optional[int] = Query(None, ge=1),
+            size: Optional[int] = Query(None, ge=1, le=MAX_DOCUMENT_QUERY_PAGE_SIZE),
             document_query_service: DocumentQueryServiceInterface = Depends(get_document_query_service),
             database_session: AsyncSession = Depends(get_database_session),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
             _rl: None = Depends(default_rate_limit),
     ) -> DocumentListResponse:
+        Authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LIST_DOCUMENTS_BY_CHAT}),
+        )
+
         return await document_query_service.get_documents_by_chat(
             chat_id=chat_id,
             database_session=database_session,
             authenticated_user=authenticated_user,
+            page=page,
+            size=size,
         )
 
 
@@ -123,7 +144,11 @@ router.add_api_route(
     response_model=DocumentListResponse,
     operation_id="listDocuments",
     summary="Listar documentos",
-    description="Devuelve documentos paginados con filtros opcionales.",
+    description=(
+        "Devuelve documentos con filtros opcionales. La paginación es opcional: "
+        "si se omiten 'page' y 'size' se devuelven todos los documentos que coinciden "
+        "(hasta un máximo de seguridad); si se envía alguno, se pagina."
+    ),
     responses=_response_list,
 )
 router.add_api_route(
@@ -133,6 +158,10 @@ router.add_api_route(
     response_model=DocumentListResponse,
     operation_id="listDocumentsByChat",
     summary="Listar documentos por chat",
-    description="Devuelve los documentos asociados a un chat.",
+    description=(
+        "Devuelve los documentos asociados a un chat. La paginación es opcional: "
+        "si se omiten 'page' y 'size' se devuelven todos los documentos del chat "
+        "(hasta un máximo de seguridad); si se envía alguno, se pagina."
+    ),
     responses=_response_list,
 )

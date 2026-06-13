@@ -3,7 +3,6 @@ import logging
 import uuid
 from datetime import datetime
 from typing import Optional
-
 from fastapi import HTTPException, Request, status
 
 from app.application.services.graph.graph_extraction_service.exceptions.graph_extraction_service_exception import (
@@ -14,8 +13,9 @@ from app.application.services.graph.graph_extraction_service.exceptions.graph_ex
 from app.application.services.graph.graph_extraction_service.interfaces.graph_extraction_service_interface import (
     GraphExtractionServiceInterface,
 )
-from app.configuration.graph.knowledge_graph_settings import KnowledgeGraphSettings
+from app.application.services.graph.knowledge_graph_settings import KnowledgeGraphSettings
 from app.domain.authentication.authenticated_user import AuthenticatedUser
+from app.domain.constants.processing_status import ProcessingStatus
 from app.domain.constants.graph.relation_type import normalize_relation_type
 from app.domain.dtos.graph.graph_field_limits import MAX_KG_ERROR_MESSAGE_CHARS
 from app.domain.dtos.graph.graph_extraction.extracted_entity import ExtractedEntity
@@ -53,23 +53,6 @@ logger = logging.getLogger(__name__)
 
 
 class GraphExtractionService(GraphExtractionServiceInterface):
-    """Coordinates per-document extraction of entities and relations.
-
-    Flow per document:
-        1. Acquire a Redis-backed lock keyed by ``document_id`` (idempotent).
-        2. Fetch fragments from Postgres in a single read session.
-        3. For each fragment, call ``LlmProvider.extract_entities_relations``
-           in parallel (bounded by ``extraction_concurrency``).
-        4. Canonicalise entities (lowercase, strip), normalise relation types,
-           and ``MERGE`` everything into Neo4j via the dedicated repositories.
-        5. Update the Redis progress snapshot incrementally.
-
-    Idempotency: ``MERGE`` plus ``apoc.coll.toSet`` ensure re-runs only
-    union the source-document/fragment id arrays. The lock prevents
-    concurrent runs for the same document; a Redis snapshot keyed by
-    ``document_id`` allows the API and the caller to observe progress.
-    """
-
     def __init__(
             self,
             *,
@@ -137,6 +120,10 @@ class GraphExtractionService(GraphExtractionServiceInterface):
                 document_id=document_id,
                 user=user,
             )
+            await self._set_graph_status(document_id, ProcessingStatus.processed)
+        except Exception:
+            await self._set_graph_status(document_id, ProcessingStatus.failed)
+            raise
         finally:
             await self._job_progress_store.complete_job(
                 job_id=job_id,
@@ -145,6 +132,35 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             await self._job_progress_store.release_extraction_lock(
                 document_id=document_id,
                 job_id=job_id,
+            )
+
+    async def _set_graph_status(
+            self,
+            document_id: int,
+            status: ProcessingStatus,
+    ) -> None:
+        try:
+            async def _operation(session):
+                document = await self._document_repository.get_document_by_id(
+                    document_id=document_id,
+                    database_session=session,
+                )
+                if document is None:
+                    return
+                document.graph_status = status
+                await self._document_repository.update_document(
+                    document=document,
+                    database_session=session,
+                )
+
+            await self._database_manager.run_write_transaction_with_retry(
+                _operation,
+                operation_name="graph_extraction.set_graph_status",
+            )
+        except Exception:
+            logger.warning(
+                "Failed to update the document graph status.",
+                extra={"document_id": document_id, "graph_status": status.value},
             )
 
     async def get_progress(

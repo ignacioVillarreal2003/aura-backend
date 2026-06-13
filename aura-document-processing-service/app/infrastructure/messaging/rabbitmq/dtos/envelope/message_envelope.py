@@ -19,7 +19,7 @@ class MessageEnvelope(Generic[T]):
     @classmethod
     def wrap(
             cls,
-            command: T
+            command: T,
     ) -> "MessageEnvelope[T]":
         return cls(
             message_id=str(uuid.uuid4()),
@@ -43,7 +43,7 @@ class MessageEnvelope(Generic[T]):
             cls,
             data: bytes,
             command_type: Type[T],
-            retry_count: int = 0
+            retry_count: int = 0,
     ) -> "MessageEnvelope[T]":
         payload = json.loads(data.decode("utf-8"))
         return cls(
@@ -51,5 +51,5 @@ class MessageEnvelope(Generic[T]):
             command=command_type.model_validate(payload["command"]),
             published_at=datetime.fromisoformat(payload["published_at"]),
             version=payload.get("version", 1),
-            retry_count=retry_count
+            retry_count=retry_count,
         )

@@ -1,5 +1,4 @@
 import logging
-
 import aio_pika.abc
 
 logger = logging.getLogger(__name__)

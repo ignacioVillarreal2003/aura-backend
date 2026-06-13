@@ -4,9 +4,10 @@ from sqlalchemy.ext.asyncio.session import AsyncSession
 from app.api.controllers.document.document_search_controller.document_search_controller_interface import (
     DocumentSearchControllerInterface,
 )
-from app.api.dependencies.document_catalog_auth import get_document_catalog_authorization_header
 from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
+from app.application.authorization.authorizer import Authorizer
+from app.application.authorization.permissions import Permissions
 from app.application.services.document.document_search_service.document_search_service import (
     get_document_search_service,
 )
@@ -27,14 +28,17 @@ class DocumentSearchController(DocumentSearchControllerInterface):
             document_search_service: DocumentSearchServiceInterface = Depends(get_document_search_service),
             database_session: AsyncSession = Depends(get_database_session),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
-            authorization_header: str | None = Depends(get_document_catalog_authorization_header),
             _rl: None = Depends(default_rate_limit),
     ) -> DocumentSearchListResponse:
+        Authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.SEARCH_DOCUMENTS_BY_CONTENT}),
+        )
+
         return await document_search_service.search_documents_by_content(
             document_search_request=document_search_request,
             database_session=database_session,
             authenticated_user=authenticated_user,
-            authorization_header=authorization_header,
         )
 
 

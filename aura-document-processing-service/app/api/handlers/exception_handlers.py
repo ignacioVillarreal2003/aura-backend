@@ -56,8 +56,6 @@ async def request_validation_exception_handler(
         exc: RequestValidationError
 ) -> JSONResponse:
     request_id = _get_request_id(request)
-    # Pydantic v2 puts the original exception object inside ctx when a custom
-    # validator raises ValueError; it must be encoded before JSONResponse.
     errors = jsonable_encoder(exc.errors())
     logger.warning(
         "Request validation failed",

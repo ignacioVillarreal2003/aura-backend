@@ -145,9 +145,9 @@ class ReaderFactory:
             self
     ) -> list[ReaderType]:
         if self._settings.docling_enabled:
-            return [ReaderType.docling] + _BASE_READER_PRIORITY
+            return [ReaderType.docling, *_BASE_READER_PRIORITY]
 
-        return _BASE_READER_PRIORITY + [ReaderType.docling]
+        return [*_BASE_READER_PRIORITY, ReaderType.docling]
 
     def _effective_reader_priority(
             self,

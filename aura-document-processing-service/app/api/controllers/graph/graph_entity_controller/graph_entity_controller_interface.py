@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from typing import Optional
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.services.graph.graph_entity_service.interfaces.graph_entity_service_interface import (

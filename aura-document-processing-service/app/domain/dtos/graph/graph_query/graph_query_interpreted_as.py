@@ -6,19 +6,11 @@ from app.domain.constants.graph.query_intent import QueryIntent
 from app.domain.dtos.graph.graph_field_limits import (
     MAX_ENTITY_TYPE_CHARS,
     MAX_ONTOLOGY_RELATION_TYPES,
-    MAX_RELATION_TYPE_CHARS,
 )
 from app.domain.field_limits import MAX_ENTITY_NAME_CHARS, MAX_ID
 
 
 class GraphQueryInterpretedAs(BaseModel):
-    """Human-readable summary of what the LLM extracted from the natural-language question.
-
-    Returned in GraphQueryResponse so the frontend can display feedback such as
-    "Searching neighbors of 'Fuerza Aérea Uruguaya' up to depth 2" and allow
-    the user to correct or refine the query.
-    """
-
     intent: QueryIntent = Field(...)
     entity_name: Optional[str] = Field(
         default=None,

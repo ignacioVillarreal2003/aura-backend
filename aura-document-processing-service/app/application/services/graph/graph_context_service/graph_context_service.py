@@ -1,16 +1,13 @@
 import asyncio
 import logging
 from typing import Optional
-
 from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.authorization.authorizer import Authorizer
-from app.application.authorization.permissions import Permissions
 from app.application.services.graph.graph_context_service.interfaces.graph_context_service_interface import (
     GraphContextServiceInterface,
 )
-from app.configuration.graph.knowledge_graph_settings import KnowledgeGraphSettings
+from app.application.services.graph.knowledge_graph_settings import KnowledgeGraphSettings
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.graph.graph_context.graph_context_request import GraphContextRequest
 from app.domain.dtos.graph.graph_context.graph_context_response import (
@@ -21,9 +18,6 @@ from app.domain.dtos.graph.graph_entity.graph_entity_response import GraphEntity
 from app.domain.dtos.graph.graph_entity.graph_relation_response import GraphRelationResponse
 from app.infrastructure.http.document_collection_catalog.document_collection_catalog_client_interface import (
     DocumentCollectionCatalogClientInterface,
-)
-from app.infrastructure.persistence.database.repositories.document_collection_repository.document_collection_repository_interface import (
-    DocumentCollectionRepositoryInterface,
 )
 from app.infrastructure.persistence.graph.repositories.graph_entity_repository.graph_entity_repository_interface import (
     GraphEntityRepositoryInterface,
@@ -39,31 +33,17 @@ _MAX_PROVENANCE_DOCS_SHOWN = 5
 
 
 class GraphContextService(GraphContextServiceInterface):
-    """Builds a compact, prompt-ready slice of the knowledge graph for RAG.
-
-    Designed to be cheap and deterministic: no LLM call is involved. The
-    caller (typically the RAG agent in the LLM service) sends the keywords
-    it already extracted; this service matches them against graph entities
-    (prefix first, fulltext fallback), expands one hop of relations around
-    the best matches, and renders the result as plain-text facts with
-    document provenance so they can be appended to a synthesis prompt.
-    """
-
     def __init__(
             self,
             *,
             entity_repository: GraphEntityRepositoryInterface,
             relation_repository: GraphRelationRepositoryInterface,
-            document_collection_repository: DocumentCollectionRepositoryInterface,
             document_collection_catalog_client: DocumentCollectionCatalogClientInterface,
-            authorizer: Authorizer,
             knowledge_graph_settings: Optional[KnowledgeGraphSettings] = None,
     ) -> None:
         self._entity_repository = entity_repository
         self._relation_repository = relation_repository
-        self._document_collection_repository = document_collection_repository
         self._document_collection_catalog_client = document_collection_catalog_client
-        self._authorizer = authorizer
         self._settings = knowledge_graph_settings or KnowledgeGraphSettings()
 
     async def get_context(
@@ -74,15 +54,8 @@ class GraphContextService(GraphContextServiceInterface):
             database_session: AsyncSession,
             authorization_header: str | None = None,
     ) -> GraphContextResponse:
-        self._authorizer.require_permissions(
-            authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.GRAPH_QUERY}),
-        )
-
         accessible_ids = await self._resolve_accessible_ids(
             user_id=int(authenticated_user.id),
-            chat_id=request.chat_id,
-            database_session=database_session,
             authorization_header=authorization_header,
         )
         if not accessible_ids:
@@ -281,21 +254,13 @@ class GraphContextService(GraphContextServiceInterface):
             self,
             *,
             user_id: int,
-            chat_id: Optional[int],
-            database_session: AsyncSession,
             authorization_header: str | None,
     ) -> list[int]:
-        collection_ids = await self._document_collection_catalog_client.fetch_all_accessible_collection_ids(
+        accessible = await self._document_collection_catalog_client.fetch_all_accessible_document_ids(
             user_id=user_id,
             authorization_header=authorization_header,
         )
-        return await self._document_collection_repository.list_all_accessible_document_ids(
-            user_id=user_id,
-            chat_id=chat_id,
-            accessible_collection_ids=collection_ids,
-            database_session=database_session,
-            limit=self._settings.accessible_documents_max,
-        )
+        return list(accessible)
 
     @staticmethod
     def _canonicalize(name: str) -> str:

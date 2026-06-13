@@ -22,6 +22,12 @@ CREATE TABLE document
     embedder_type          VARCHAR(255),
     split_size             INT,
     split_overlap          INT,
+    enrichment_status      VARCHAR(32)  NOT NULL DEFAULT 'pending'
+        CONSTRAINT chk_document_enrichment_status
+            CHECK (enrichment_status IN ('pending', 'processed', 'failed', 'not_required')),
+    graph_status           VARCHAR(32)  NOT NULL DEFAULT 'pending'
+        CONSTRAINT chk_document_graph_status
+            CHECK (graph_status IN ('pending', 'processed', 'failed', 'not_required')),
     processing_started_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     processing_finished_at TIMESTAMPTZ,
     created_by             BIGINT       NOT NULL,
@@ -43,6 +49,9 @@ CREATE TABLE fragment
     summary        TEXT,
     entities       JSONB,
     topics         TEXT[],
+    enrichment_status VARCHAR(32) NOT NULL DEFAULT 'pending'
+        CONSTRAINT chk_fragment_enrichment_status
+            CHECK (enrichment_status IN ('pending', 'processed', 'failed', 'not_required')),
     created_by     BIGINT      NOT NULL,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_by     BIGINT,
@@ -53,6 +62,8 @@ CREATE TABLE fragment
 
 
 CREATE INDEX idx_document_status ON document (status);
+CREATE INDEX idx_document_enrichment_status ON document (enrichment_status);
+CREATE INDEX idx_document_graph_status ON document (graph_status);
 CREATE INDEX idx_document_deleted_at ON document (deleted_at);
 CREATE INDEX idx_document_chat_active ON document (chat_id) WHERE (deleted_at IS NULL);
 

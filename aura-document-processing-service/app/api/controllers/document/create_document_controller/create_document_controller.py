@@ -4,10 +4,11 @@ from sqlalchemy.ext.asyncio.session import AsyncSession
 from app.api.controllers.document.create_document_controller.create_document_controller_interface import (
     CreateDocumentControllerInterface,
 )
-from app.api.dependencies.idempotency import optional_idempotency_key
 from app.api.dependencies.rate_limiter import strict_rate_limit
 from app.api.openapi.common import default_error_responses
 from app.api.schemas.document.create_document_form import parse_create_document_request
+from app.application.authorization.authorizer import Authorizer
+from app.application.authorization.permissions import Permissions
 from app.application.services.document.create_document_service.create_document_service import (
     get_create_document_service,
 )
@@ -31,6 +32,11 @@ class CreateDocumentController(CreateDocumentControllerInterface):
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
             _rl: None = Depends(strict_rate_limit),
     ) -> CreateDocumentResponse:
+        Authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.INGEST_DOCUMENT}),
+        )
+
         return await create_document_service.create_document(
             create_document_request=create_document_request,
             raw_document=file,

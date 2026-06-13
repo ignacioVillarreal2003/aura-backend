@@ -21,9 +21,6 @@ COPY requirements/requirements.gpu.txt .
 
 RUN pip install --no-cache-dir --upgrade -r requirements.gpu.txt
 
-# Models baked into the image so containers start without downloading from the
-# network. Defaults must stay in sync with .env.docker.gpu: both the text
-# splitter and the active embedder run multilingual-e5-large on Hugging Face.
 ARG TEXT_SPLITTER_HF_MODEL="intfloat/multilingual-e5-large"
 ARG EMBEDDER_HF_MODEL="intfloat/multilingual-e5-large"
 ARG RERANKER_MODEL="BAAI/bge-reranker-v2-m3"

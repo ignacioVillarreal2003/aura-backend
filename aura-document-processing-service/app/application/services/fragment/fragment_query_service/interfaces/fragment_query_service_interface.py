@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from typing import Optional
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.dtos.fragment.fragment_query.documents_context_fragments_request import (

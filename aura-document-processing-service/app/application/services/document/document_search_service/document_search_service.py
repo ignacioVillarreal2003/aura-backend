@@ -3,9 +3,6 @@ from typing import Optional
 from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.authorization.authorizer import Authorizer
-from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
-from app.application.authorization.permissions import Permissions
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
 from app.application.services.document.document_search_service.document_search_service_settings import (
     DocumentSearchServiceSettings,
@@ -31,9 +28,6 @@ from app.domain.field_limits import MAX_DOCUMENT_SEARCH_SNIPPET_CHARS
 from app.infrastructure.http.document_collection_catalog.document_collection_catalog_client_interface import (
     DocumentCollectionCatalogClientInterface,
 )
-from app.infrastructure.persistence.database.repositories.document_collection_repository.document_collection_repository_interface import (
-    DocumentCollectionRepositoryInterface,
-)
 from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
     DocumentRepositoryInterface,
 )
@@ -50,16 +44,12 @@ class DocumentSearchService(DocumentSearchServiceInterface):
             document_repository: DocumentRepositoryInterface,
             fragment_repository: FragmentRepositoryInterface,
             embedder_factory: EmbedderFactory,
-            authorizer: Authorizer,
-            document_collection_repository: DocumentCollectionRepositoryInterface,
             document_collection_catalog_client: DocumentCollectionCatalogClientInterface,
             document_search_service_settings: Optional[DocumentSearchServiceSettings] = None,
     ) -> None:
         self._document_repository = document_repository
         self._fragment_repository = fragment_repository
         self._embedder_factory = embedder_factory
-        self._authorizer = authorizer
-        self._document_collection_repository = document_collection_repository
         self._document_collection_catalog_client = document_collection_catalog_client
         self._settings = document_search_service_settings or DocumentSearchServiceSettings()
 
@@ -80,22 +70,12 @@ class DocumentSearchService(DocumentSearchServiceInterface):
         )
 
         try:
-            self._authorizer.require_permissions(
-                authenticated_user=authenticated_user,
-                required_permissions=frozenset({Permissions.SEARCH_DOCUMENTS_BY_CONTENT}),
+            accessible_doc_set: set[int] = set(
+                await self._document_collection_catalog_client.fetch_all_accessible_document_ids(
+                    user_id=int(authenticated_user.id),
+                    authorization_header=authorization_header,
+                )
             )
-
-            collection_doc_ids = await self._document_collection_catalog_client.fetch_all_accessible_document_ids(
-                user_id=int(authenticated_user.id),
-                authorization_header=authorization_header,
-            )
-            own_doc_ids = await self._document_collection_repository.list_all_accessible_document_ids(
-                user_id=int(authenticated_user.id),
-                database_session=database_session,
-                accessible_collection_ids=frozenset(),
-                chat_id=None,
-            )
-            accessible_doc_set: set[int] = set(own_doc_ids) | collection_doc_ids
             logger.debug(
                 "Accessible document IDs resolved for the content search.",
                 extra={
@@ -136,7 +116,6 @@ class DocumentSearchService(DocumentSearchServiceInterface):
             return DocumentSearchListResponse(results=results)
 
         except (
-                UnauthorizedException,
                 DocumentSearchInvalidRequestException,
                 DocumentSearchEmbeddingException,
                 DocumentSearchRetrievalException,
@@ -233,4 +212,4 @@ async def get_document_search_service(request: Request) -> DocumentSearchService
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="DocumentSearchService is not registered on the application state.",
-        )
+        ) from None

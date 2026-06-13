@@ -5,7 +5,7 @@ from neo4j.exceptions import Neo4jError
 from app.domain.constants.graph.entity_type import EntityType
 from app.domain.dtos.graph.graph_entity.graph_relation_response import GraphRelationResponse
 from app.domain.dtos.graph.graph_extraction.graph_upsert_items import RelationUpsertItem
-from app.infrastructure.persistence.graph.neo4j_manager.neo4j_manager_interface import Neo4jManagerInterface
+from app.infrastructure.persistence.graph.neo4j_manager.interfaces.neo4j_manager_interface import Neo4jManagerInterface
 from app.infrastructure.persistence.graph.repositories.graph_record_mappers import (
     map_entity_node,
     map_relationship,

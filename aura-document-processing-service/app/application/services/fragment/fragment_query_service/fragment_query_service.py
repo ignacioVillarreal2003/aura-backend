@@ -4,7 +4,6 @@ from typing import Optional, Protocol, TypeVar
 from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.authorization.permissions import Permissions
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
 from app.application.processors.rerankers.reranker_factory import RerankerFactory
 from app.application.services.fragment.fragment_query_service.exceptions.fragment_query_service_exception import (
@@ -14,7 +13,6 @@ from app.application.services.fragment.fragment_query_service.exceptions.fragmen
     FragmentQueryRetrievalException,
     FragmentQueryServiceException,
 )
-from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
 from app.application.services.fragment.fragment_query_service.fragment_query_service_settings import (
     FragmentQueryServiceSettings,
@@ -36,9 +34,6 @@ from app.infrastructure.http.document_collection_catalog.document_collection_cat
 )
 from app.infrastructure.persistence.database.orm.document import Document
 from app.infrastructure.persistence.database.orm.fragment import Fragment
-from app.infrastructure.persistence.database.repositories.document_collection_repository.document_collection_repository_interface import (
-    DocumentCollectionRepositoryInterface,
-)
 from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
     DocumentRepositoryInterface,
 )
@@ -76,8 +71,6 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             fragment_repository: FragmentRepositoryInterface,
             embedder_factory: EmbedderFactory,
             reranker_factory: RerankerFactory,
-            authorizer: Authorizer,
-            document_collection_repository: DocumentCollectionRepositoryInterface,
             document_collection_catalog_client: DocumentCollectionCatalogClientInterface,
             fragment_query_service_settings: Optional[FragmentQueryServiceSettings] = None,
     ) -> None:
@@ -86,8 +79,6 @@ class FragmentQueryService(FragmentQueryServiceInterface):
         self._embedder_factory = embedder_factory
         self._reranker_factory = reranker_factory
         self._settings = fragment_query_service_settings or FragmentQueryServiceSettings()
-        self._authorizer = authorizer
-        self._document_collection_repository = document_collection_repository
         self._document_collection_catalog_client = document_collection_catalog_client
 
     async def retrieve_context_fragments_by_question(
@@ -108,11 +99,6 @@ class FragmentQueryService(FragmentQueryServiceInterface):
         )
 
         try:
-            self._authorizer.require_permissions(
-                authenticated_user=authenticated_user,
-                required_permissions=frozenset({Permissions.LIST_CONTEXT_FRAGMENTS_BY_QUESTION}),
-            )
-
             collection_doc_ids = await self._document_collection_catalog_client.fetch_all_accessible_document_ids(
                 user_id=int(authenticated_user.id),
                 authorization_header=authorization_header,
@@ -124,13 +110,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                     "collection_doc_count": len(collection_doc_ids),
                 },
             )
-            own_doc_ids = await self._document_collection_repository.list_all_accessible_document_ids(
-                user_id=int(authenticated_user.id),
-                database_session=database_session,
-                accessible_collection_ids=frozenset(),
-                chat_id=question_context_fragments_request.chat_id,
-            )
-            accessible_doc_ids = list(set(own_doc_ids) | collection_doc_ids)
+            accessible_doc_ids = list(collection_doc_ids)
             accessible_doc_set: set[int] = set(accessible_doc_ids)
 
             semantic_ranked_lists: list[list[Fragment]] = []
@@ -139,7 +119,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                     self._get_query_embedding(q.text) for q in question_context_fragments_request.semantic_queries
                 ])
                 fragment_lists: list[list[Fragment]] = []
-                for q, vector in zip(question_context_fragments_request.semantic_queries, vectors):
+                for q, vector in zip(question_context_fragments_request.semantic_queries, vectors, strict=True):
                     fragment_lists.append(
                         await self._retrieve_similar_fragments(
                             database_session=database_session,
@@ -212,8 +192,6 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 adjacent_added = len(adjacent)
                 fragments = fragments + adjacent
 
-            # Deduplicate by fragment ID preserving insertion order
-            # (main fragments take priority; adjacent are appended after)
             seen_ids: set[int] = set()
             deduped: list[Fragment] = []
             for f in fragments:
@@ -275,11 +253,6 @@ class FragmentQueryService(FragmentQueryServiceInterface):
         )
 
         try:
-            self._authorizer.require_permissions(
-                authenticated_user=authenticated_user,
-                required_permissions=frozenset({Permissions.LIST_CONTEXT_FRAGMENTS_BY_DOCUMENTS}),
-            )
-
             documents = await self._get_documents_by_ids_or_raise(
                 document_ids=documents_context_fragments_request.document_ids,
                 database_session=database_session,
@@ -295,14 +268,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                     "collection_doc_count": len(collection_doc_ids),
                 },
             )
-            owned_ids = await self._document_collection_repository.get_accessible_document_ids(
-                user_id=int(authenticated_user.id),
-                document_ids=documents_context_fragments_request.document_ids,
-                chat_id=None,
-                accessible_collection_ids=frozenset(),
-                database_session=database_session,
-            )
-            allowed_ids = owned_ids | (set(documents_context_fragments_request.document_ids) & collection_doc_ids)
+            allowed_ids = set(documents_context_fragments_request.document_ids) & collection_doc_ids
             if len(allowed_ids) != len(set(documents_context_fragments_request.document_ids)):
                 logger.warning(
                     "Unauthorized or missing documents in fragments-by-documents request.",
@@ -502,4 +468,4 @@ async def get_fragment_query_service(request: Request) -> FragmentQueryServiceIn
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="FragmentQueryService is not registered on the application state.",
-        )
+        ) from None

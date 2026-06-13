@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from typing import Optional
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.authentication.authenticated_user import AuthenticatedUser

@@ -1,8 +1,12 @@
 import math
 import time
 import uuid
-from typing import Callable
+from typing import Callable, Optional
 from fastapi import HTTPException, Request, status
+
+from app.infrastructure.persistence.memory_database.redis_client.interfaces.redis_client_interface import (
+    RedisClientInterface,
+)
 
 _WINDOW_SECONDS = 60
 _STRICT_RATE = 20
@@ -10,7 +14,7 @@ _DEFAULT_RATE = 60
 
 
 async def _check_rate_limit(request: Request, limit: int) -> None:
-    redis_client = getattr(request.app.state, "redis_client", None)
+    redis_client: Optional[RedisClientInterface] = getattr(request.app.state, "redis_client", None)
     if redis_client is None:
         return
 

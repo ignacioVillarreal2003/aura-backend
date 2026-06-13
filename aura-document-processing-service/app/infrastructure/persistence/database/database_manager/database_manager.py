@@ -526,14 +526,14 @@ async def get_database_session(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Database is not available"
-        )
+        ) from None
 
     except DatabaseSessionException:
         logger.exception("A database session error occurred.")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="A database error occurred"
-        )
+        ) from None
 
     except AppException:
         raise

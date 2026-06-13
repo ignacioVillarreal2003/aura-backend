@@ -8,8 +8,6 @@ from typing import Optional
 from fastapi import HTTPException, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.authorization.authorizer import Authorizer
-from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
 from app.application.services.document.create_document_service.create_document_service_settings import (
     CreateDocumentServiceSettings
 )
@@ -30,13 +28,14 @@ from app.application.services.document.create_document_service.interfaces.create
 )
 from app.domain.constants.document.document_mime_type import DocumentMimeType
 from app.domain.constants.document.document_status import DocumentStatus
-from app.application.authorization.permissions import Permissions
+from app.domain.constants.processing_status import ProcessingStatus
 from app.domain.dtos.document.create_document.create_document_request import CreateDocumentRequest
 from app.domain.dtos.document.create_document.create_document_response import CreateDocumentResponse
 from app.infrastructure.messaging.rabbitmq.dtos.commands.document_ingestion_command import DocumentIngestionCommand
 from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.field_limits import MAX_NAME_CHARS
+from app.infrastructure.http.authentication_provider.request_token import get_request_token
 from app.infrastructure.persistence.database.orm.document import Document
 from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_exception import RabbitMQPublishException
 from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
@@ -61,7 +60,6 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             document_repository: DocumentRepositoryInterface,
             document_storage: DocumentStorageInterface,
             rabbitmq_manager: RabbitMQManagerInterface,
-            authorizer: Authorizer,
             outbox_lite: Optional[RedisOutboxLite] = None,
             create_document_service_settings: Optional[CreateDocumentServiceSettings] = None,
     ) -> None:
@@ -69,7 +67,6 @@ class CreateDocumentService(CreateDocumentServiceInterface):
         self._document_storage = document_storage
         self._rabbitmq_manager = rabbitmq_manager
         self._settings = create_document_service_settings or CreateDocumentServiceSettings()
-        self._authorizer = authorizer
         self._outbox_lite = outbox_lite
         self._utils = CreateDocumentServiceUtils(
             create_document_service_settings=self._settings
@@ -95,11 +92,6 @@ class CreateDocumentService(CreateDocumentServiceInterface):
         )
 
         try:
-            self._authorizer.require_permissions(
-                authenticated_user=authenticated_user,
-                required_permissions=frozenset({Permissions.INGEST_DOCUMENT}),
-            )
-
             try:
                 self._validate_file_present(raw_document)
                 self._validate_filename(raw_document)
@@ -149,6 +141,16 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 status=DocumentStatus.uploaded,
                 storage_url=object_name,
                 file_size_bytes=file_size,
+                enrichment_status=(
+                    ProcessingStatus.pending
+                    if create_document_request.post_process
+                    else ProcessingStatus.not_required
+                ),
+                graph_status=(
+                    ProcessingStatus.pending
+                    if create_document_request.post_process_graph
+                    else ProcessingStatus.not_required
+                ),
                 processing_started_at=now,
                 created_by=authenticated_user.id,
                 created_at=now
@@ -179,7 +181,11 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 filename=raw_document.filename,
                 mime_type=raw_document.content_type or "",
                 created_by=authenticated_user.id,
-                prefer_docling=create_document_request.prefer_docling
+                user=authenticated_user.model_dump(mode="json"),
+                prefer_docling=create_document_request.prefer_docling,
+                post_process=create_document_request.post_process,
+                post_process_graph=create_document_request.post_process_graph,
+                auth_token=get_request_token(),
             )
             envelope = MessageEnvelope.wrap(command)
 
@@ -221,7 +227,6 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             return CreateDocumentResponse.model_validate(database_document)
 
         except (
-                UnauthorizedException,
                 CreateDocumentValidationException,
                 CreateDocumentUploadException,
                 CreateDocumentPersistenceException,
@@ -438,4 +443,4 @@ async def get_create_document_service(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="CreateDocumentService is not registered on the application state."
-        )
+        ) from None

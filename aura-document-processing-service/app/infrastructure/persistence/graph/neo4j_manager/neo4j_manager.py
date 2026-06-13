@@ -7,12 +7,12 @@ from fastapi import HTTPException, Request, status
 from neo4j import AsyncDriver, AsyncGraphDatabase, AsyncManagedTransaction
 from neo4j.exceptions import AuthError, Neo4jError, ServiceUnavailable
 
-from app.infrastructure.persistence.graph.neo4j_manager.neo4j_manager_exception import (
+from app.infrastructure.persistence.graph.neo4j_manager.exceptions.neo4j_manager_exception import (
     Neo4jConnectionException,
     Neo4jManagerException,
     Neo4jNotStartedException,
 )
-from app.infrastructure.persistence.graph.neo4j_manager.neo4j_manager_interface import (
+from app.infrastructure.persistence.graph.neo4j_manager.interfaces.neo4j_manager_interface import (
     Neo4jManagerInterface,
 )
 from app.infrastructure.persistence.graph.neo4j_manager.neo4j_manager_settings import (

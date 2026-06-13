@@ -34,7 +34,7 @@ class CreateDocumentServiceUtils:
         except ValueError:
             raise CreateDocumentUnsupportedTypeException(
                 "This content type could not be mapped to a supported document format."
-            )
+            ) from None
 
         logger.debug(
             "The document MIME type was resolved.",

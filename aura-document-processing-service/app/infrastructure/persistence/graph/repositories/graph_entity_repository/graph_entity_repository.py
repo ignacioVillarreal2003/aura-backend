@@ -6,7 +6,7 @@ from neo4j.exceptions import Neo4jError
 from app.domain.constants.graph.entity_type import EntityType
 from app.domain.dtos.graph.graph_entity.graph_entity_response import GraphEntityResponse
 from app.domain.dtos.graph.graph_extraction.graph_upsert_items import EntityUpsertItem
-from app.infrastructure.persistence.graph.neo4j_manager.neo4j_manager_interface import Neo4jManagerInterface
+from app.infrastructure.persistence.graph.neo4j_manager.interfaces.neo4j_manager_interface import Neo4jManagerInterface
 from app.infrastructure.persistence.graph.repositories.graph_entity_repository.graph_entity_repository_interface import (
     GraphEntityRepositoryInterface,
 )
@@ -96,20 +96,11 @@ ORDER BY e.canonical_name ASC
 LIMIT $limit
 """
 
-# Lucene operators and separators that must be stripped or escaped before the
-# user-provided text reaches db.index.fulltext.queryNodes; otherwise queries
-# with characters like "/", ":" or unbalanced quotes raise Lucene parse errors.
 _LUCENE_SPECIAL_CHARS_PATTERN = re.compile(r'[+\-!(){}\[\]^"~*?:\\/]|&&|\|\|')
 _MIN_PREFIX_TOKEN_LENGTH = 3
 
 
 def build_lucene_query(raw: str) -> str:
-    """Convert free text into a safe Lucene OR-query with prefix expansion.
-
-    Each whitespace token is stripped of Lucene operators; tokens of at least
-    ``_MIN_PREFIX_TOKEN_LENGTH`` chars get a trailing ``*`` so partial words
-    still match (useful for autocomplete and RAG keyword lookups).
-    """
     sanitized = _LUCENE_SPECIAL_CHARS_PATTERN.sub(" ", raw)
     tokens = [t for t in sanitized.split() if t]
     if not tokens:

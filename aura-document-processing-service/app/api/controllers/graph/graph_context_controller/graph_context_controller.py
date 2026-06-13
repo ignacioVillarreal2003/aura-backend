@@ -4,9 +4,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.controllers.graph.graph_context_controller.graph_context_controller_interface import (
     GraphContextControllerInterface,
 )
-from app.api.dependencies.document_catalog_auth import get_document_catalog_authorization_header
 from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
+from app.application.authorization.authorizer import Authorizer
+from app.application.authorization.permissions import Permissions
 from app.application.services.graph.graph_context_service.graph_context_service import get_graph_context_service
 from app.application.services.graph.graph_context_service.interfaces.graph_context_service_interface import (
     GraphContextServiceInterface,
@@ -25,14 +26,17 @@ class GraphContextController(GraphContextControllerInterface):
             graph_context_service: GraphContextServiceInterface = Depends(get_graph_context_service),
             database_session: AsyncSession = Depends(get_database_session),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
-            authorization_header: str | None = Depends(get_document_catalog_authorization_header),
             _rl: None = Depends(default_rate_limit),
     ) -> GraphContextResponse:
+        Authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.GRAPH_QUERY}),
+        )
+
         return await graph_context_service.get_context(
             request=graph_context_request,
             authenticated_user=authenticated_user,
             database_session=database_session,
-            authorization_header=authorization_header,
         )
 
 

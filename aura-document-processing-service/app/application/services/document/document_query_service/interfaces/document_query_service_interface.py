@@ -24,8 +24,8 @@ class DocumentQueryServiceInterface(ABC):
             self,
             database_session: AsyncSession,
             authenticated_user: AuthenticatedUser,
-            page: int,
-            size: int,
+            page: Optional[int] = None,
+            size: Optional[int] = None,
             name: Optional[str] = None,
             description: Optional[str] = None,
             category: Optional[str] = None,
@@ -41,6 +41,8 @@ class DocumentQueryServiceInterface(ABC):
             chat_id: int,
             database_session: AsyncSession,
             authenticated_user: AuthenticatedUser,
+            page: Optional[int] = None,
+            size: Optional[int] = None,
     ) -> DocumentListResponse:
         pass
 

@@ -11,13 +11,6 @@ MAX_CONTEXT_RELATIONS = 100
 
 
 class GraphContextRequest(BaseModel):
-    """Request for compact graph context to complement RAG retrieval.
-
-    ``terms`` should carry the keywords/entities the caller already
-    extracted from the user question (e.g. by the RAG query analyzer);
-    ``question`` is used as a fulltext fallback when terms match nothing.
-    """
-
     question: Optional[str] = Field(default=None, max_length=MAX_QUERY_QUESTION_CHARS)
     terms: list[str] = Field(default_factory=list, max_length=MAX_CONTEXT_TERMS)
     chat_id: Optional[ChatId] = Field(default=None, gt=0, le=MAX_ID)

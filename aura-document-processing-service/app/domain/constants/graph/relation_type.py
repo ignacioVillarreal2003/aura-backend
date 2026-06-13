@@ -31,12 +31,6 @@ DEFAULT_ALLOWED_RELATION_TYPES: Final[tuple[str, ...]] = (
 
 
 def normalize_relation_type(raw: str) -> str:
-    """Normalize an LLM-provided relation type into a snake_case token.
-
-    Returns ``related_to`` when the input cannot be normalized into a
-    valid token. The graph layer never persists arbitrary strings; only
-    the normalized form reaches Neo4j.
-    """
     if not raw:
         return "related_to"
     candidate = raw.strip().lower()

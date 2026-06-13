@@ -5,6 +5,8 @@ from app.api.controllers.graph.graph_stats_controller.graph_stats_controller_int
 )
 from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
+from app.application.authorization.authorizer import Authorizer
+from app.application.authorization.permissions import Permissions
 from app.application.services.graph.graph_stats_service.graph_stats_service import get_graph_stats_service
 from app.application.services.graph.graph_stats_service.interfaces.graph_stats_service_interface import (
     GraphStatsServiceInterface,
@@ -21,6 +23,10 @@ class GraphStatsController(GraphStatsControllerInterface):
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
             _rl: None = Depends(default_rate_limit),
     ) -> GraphStatsResponse:
+        Authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.GRAPH_STATS}),
+        )
         return await graph_stats_service.get_stats(
             authenticated_user=authenticated_user,
         )

@@ -8,76 +8,56 @@ from app.application.processors.readers.reader_factory import ReaderFactory
 from app.application.processors.rerankers.reranker_factory import RerankerFactory
 from app.application.processors.text_cleaners.text_cleaner_factory import TextCleanerFactory
 from app.application.processors.text_splitters.text_splitter_factory import TextSplitterFactory
-from app.application.authorization.authorizer import Authorizer
 from app.application.services.document.create_document_service.create_document_service import CreateDocumentService
-from app.application.services.document.document_download_service.document_download_service import \
-    DocumentDownloadService
+from app.application.services.document.document_download_service.document_download_service import (
+    DocumentDownloadService,
+)
 from app.application.services.document.document_ingestion_service.document_ingestion_service import (
     DocumentIngestionService,
+)
+from app.application.services.document.document_enrichment_service.document_enrichment_service import (
+    DocumentEnrichmentService,
 )
 from app.application.services.document.delete_document_service.delete_document_service import DeleteDocumentService
 from app.application.services.document.document_query_service.document_query_service import DocumentQueryService
 from app.application.services.document.document_search_service.document_search_service import DocumentSearchService
-from app.application.services.document.post_process_document_service.post_process_document_service import (
-    PostProcessDocumentService,
-)
 from app.application.services.document.post_process_document_service.post_process_document_processor import (
     PostProcessDocumentProcessor,
 )
 from app.application.services.fragment.fragment_query_service.fragment_query_service import FragmentQueryService
-from app.application.services.fragment.post_process_fragment_service.post_process_fragment_service import (
-    PostProcessFragmentService,
-)
 from app.application.services.fragment.post_process_fragment_service.post_process_fragment_processor import (
     PostProcessFragmentProcessor,
-)
-from app.application.services.fragment.post_process_fragment_service.post_process_fragment_service_settings import (
-    PostProcessFragmentServiceSettings,
 )
 from app.application.services.graph.graph_context_service.graph_context_service import GraphContextService
 from app.application.services.graph.graph_entity_service.graph_entity_service import GraphEntityService
 from app.application.services.graph.graph_extraction_service.graph_extraction_service import (
     GraphExtractionService,
 )
+from app.application.services.graph.graph_ontology_service.graph_ontology_service import GraphOntologyService
 from app.application.services.graph.graph_path_service.graph_path_service import GraphPathService
 from app.application.services.graph.graph_query_service.graph_query_service import GraphQueryService
 from app.application.services.graph.graph_stats_service.graph_stats_service import GraphStatsService
-from app.configuration.graph.knowledge_graph_settings import KnowledgeGraphSettings
+from app.application.services.graph.knowledge_graph_settings import KnowledgeGraphSettings
 from app.infrastructure.http.authentication_provider.authentication_provider import AuthenticationProvider
-from app.infrastructure.http.authentication_provider.authentication_provider_settings import (
-    AuthenticationProviderSettings,
-)
 from app.infrastructure.http.document_collection_catalog.document_collection_catalog_client import (
     DocumentCollectionCatalogClient,
 )
-from app.infrastructure.http.document_collection_catalog.document_collection_catalog_settings import (
-    DocumentCollectionCatalogSettings,
-)
 from app.infrastructure.http.http_client.http_client import HttpClient
 from app.infrastructure.http.llm_provider.llm_provider import LlmProvider
-from app.infrastructure.http.notification_service.notification_client import NotificationClient
 from app.infrastructure.messaging.rabbitmq.consumer.document_ingestion_consumer import DocumentIngestionConsumer
+from app.infrastructure.messaging.rabbitmq.consumer.document_enrichment_consumer import DocumentEnrichmentConsumer
 from app.infrastructure.messaging.rabbitmq.consumer.graph_extraction_consumer import GraphExtractionConsumer
-from app.infrastructure.messaging.rabbitmq.consumer.post_process_document_consumer import PostProcessDocumentConsumer
-from app.infrastructure.messaging.rabbitmq.consumer.post_process_fragment_consumer import PostProcessFragmentConsumer
 from app.infrastructure.messaging.rabbitmq.publisher.graph_extraction_publisher import (
     GraphExtractionPublisher,
 )
-from app.infrastructure.messaging.rabbitmq.publisher.post_process_document_job_publisher import (
-    PostProcessDocumentJobPublisher,
-)
-from app.infrastructure.messaging.rabbitmq.publisher.post_process_fragment_job_publisher import (
-    PostProcessFragmentJobPublisher,
+from app.infrastructure.messaging.rabbitmq.publisher.document_enrichment_publisher import (
+    DocumentEnrichmentPublisher,
 )
 from app.infrastructure.messaging.rabbitmq.reliable_publish.outbox_lite_worker import OutboxLiteWorker
 from app.infrastructure.messaging.rabbitmq.reliable_publish.redis_outbox_lite import RedisOutboxLite
 from app.infrastructure.messaging.rabbitmq.rabbitmq_manager import RabbitMQManager
-from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_settings import RabbitMQManagerSettings
 from app.infrastructure.persistence.database.database_manager.database_manager import DatabaseManager
-from app.infrastructure.persistence.database.repositories.chat_repository.chat_repository import ChatRepository
-from app.infrastructure.persistence.database.repositories.document_collection_repository.document_collection_repository import (
-    DocumentCollectionRepository,
-)
+from app.infrastructure.http.chat_membership.chat_membership_provider import ChatMembershipProvider
 from app.infrastructure.persistence.database.repositories.document_repository.document_repository import (
     DocumentRepository,
 )
@@ -85,7 +65,7 @@ from app.infrastructure.persistence.database.repositories.fragment_repository.fr
     FragmentRepository,
 )
 from app.infrastructure.persistence.graph.neo4j_manager.neo4j_manager import Neo4jManager
-from app.infrastructure.persistence.graph.neo4j_manager.neo4j_manager_exception import Neo4jConnectionException
+from app.infrastructure.persistence.graph.neo4j_manager.exceptions.neo4j_manager_exception import Neo4jConnectionException
 from app.infrastructure.persistence.graph.repositories.graph_entity_repository.graph_entity_repository import (
     GraphEntityRepository,
 )
@@ -101,14 +81,10 @@ from app.infrastructure.persistence.graph.repositories.graph_stats_repository.gr
 from app.infrastructure.persistence.memory_database.graph_extraction_job_progress_store.graph_extraction_job_progress_store import (
     GraphExtractionJobProgressStore,
 )
+from app.infrastructure.persistence.memory_database.redis_client.interfaces.redis_client_interface import (
+    RedisClientInterface,
+)
 from app.infrastructure.persistence.memory_database.redis_client.redis_client import RedisClient
-from app.infrastructure.persistence.memory_database.redis_client.redis_client_settings import RedisClientSettings
-from app.infrastructure.persistence.memory_database.document_post_process_job_progress_store.document_post_process_job_progress_store import (
-    DocumentPostProcessJobProgressStore,
-)
-from app.infrastructure.persistence.memory_database.fragment_post_process_job_progress_store.fragment_post_process_job_progress_store import (
-    FragmentPostProcessJobProgressStore,
-)
 from app.infrastructure.persistence.storages.document_storage.document_storage import DocumentStorage
 from app.infrastructure.persistence.storages.minio_manager.minio_manager import MinioManager
 
@@ -132,6 +108,7 @@ async def _rollback_partial_startup(
                 extra={"resource": name},
             )
     to_clear = [
+        "graph_ontology_service",
         "graph_stats_service",
         "graph_stats_repository",
         "graph_path_service",
@@ -147,36 +124,29 @@ async def _rollback_partial_startup(
         "graph_extraction_job_progress_store",
         "neo4j_manager",
         "knowledge_graph_settings",
-        "post_process_fragment_service",
-        "post_process_document_service",
         "document_download_service",
         "create_document_service",
         "delete_document_service",
-        "post_process_fragment_consumer",
-        "post_process_document_consumer",
+        "document_enrichment_consumer",
+        "document_enrichment_publisher",
+        "document_enrichment_service",
         "post_process_fragment_processor",
         "post_process_document_processor",
         "outbox_lite_worker",
-        "post_process_fragment_job_publisher",
-        "post_process_document_job_publisher",
         "llm_provider",
         "document_ingestion_consumer",
         "outbox_lite",
         "rabbitmq_manager",
-        "fragment_job_progress_store",
-        "document_job_progress_store",
         "redis_client",
         "document_ingestion_service",
         "document_search_service",
         "fragment_query_service",
         "document_query_service",
-        "authorizer",
         "text_splitter_factory",
         "text_cleaner_factory",
         "reader_factory",
         "embedder_factory",
-        "chat_repository",
-        "document_collection_repository",
+        "chat_membership_provider",
         "fragment_repository",
         "document_repository",
         "authentication_provider",
@@ -235,43 +205,32 @@ async def startup_dependencies(app: FastAPI) -> None:
         app.state.http_client = http_client
         cleanup_stack.append(("http_client", http_client.stop))
 
-        redis_client_settings = RedisClientSettings()
-        redis_client = RedisClient(redis_client_settings=redis_client_settings)
+        redis_client: RedisClientInterface = RedisClient()
         await redis_client.initialize()
         app.state.redis_client = redis_client
         cleanup_stack.append(("redis_client", redis_client.dispose))
 
-        authentication_provider_settings = AuthenticationProviderSettings()
         authentication_provider = AuthenticationProvider(
             http_client=http_client,
-            authentication_provider_settings=authentication_provider_settings,
             redis_client=redis_client.client,
         )
-        app.state.authentication_provider_settings = authentication_provider_settings
         app.state.authentication_provider = authentication_provider
 
-        document_collection_catalog_settings = DocumentCollectionCatalogSettings()
         document_collection_catalog_client = DocumentCollectionCatalogClient(
             http_client=http_client,
-            settings=document_collection_catalog_settings,
         )
-        app.state.document_collection_catalog_settings = document_collection_catalog_settings
         app.state.document_collection_catalog_client = document_collection_catalog_client
-        fb = document_collection_catalog_settings.fallback_bearer_token
-        if fb and str(fb).strip():
-            app.state.document_collection_catalog_fallback_bearer = str(fb).strip()
+
+        chat_membership_provider = ChatMembershipProvider(
+            http_client=http_client,
+        )
+        app.state.chat_membership_provider = chat_membership_provider
 
         document_repository: DocumentRepository = DocumentRepository()
         app.state.document_repository = document_repository
 
         fragment_repository: FragmentRepository = FragmentRepository()
         app.state.fragment_repository = fragment_repository
-
-        document_collection_repository: DocumentCollectionRepository = DocumentCollectionRepository()
-        app.state.document_collection_repository = document_collection_repository
-
-        chat_repository: ChatRepository = ChatRepository()
-        app.state.chat_repository = chat_repository
 
         embedder_factory = EmbedderFactory()
         await asyncio.to_thread(lambda: embedder_factory.embedder)
@@ -281,20 +240,17 @@ async def startup_dependencies(app: FastAPI) -> None:
         app.state.reader_factory = reader_factory
 
         text_cleaner_factory = TextCleanerFactory()
-        text_cleaner_factory.cleaner
+        _ = text_cleaner_factory.cleaner
         app.state.text_cleaner_factory = text_cleaner_factory
 
         text_splitter_factory = TextSplitterFactory()
         await asyncio.to_thread(lambda: text_splitter_factory.splitter)
         app.state.text_splitter_factory = text_splitter_factory
 
-        authorizer = Authorizer()
-        app.state.authorizer = authorizer
-
         document_query_service = DocumentQueryService(
             document_repository=document_repository,
-            chat_repository=chat_repository,
-            authorizer=authorizer,
+            document_collection_catalog_client=document_collection_catalog_client,
+            chat_membership_provider=chat_membership_provider,
         )
         app.state.document_query_service = document_query_service
 
@@ -309,8 +265,6 @@ async def startup_dependencies(app: FastAPI) -> None:
             fragment_repository=fragment_repository,
             embedder_factory=embedder_factory,
             reranker_factory=reranker_factory,
-            authorizer=authorizer,
-            document_collection_repository=document_collection_repository,
             document_collection_catalog_client=document_collection_catalog_client,
         )
         app.state.fragment_query_service = fragment_query_service
@@ -319,26 +273,11 @@ async def startup_dependencies(app: FastAPI) -> None:
             document_repository=document_repository,
             fragment_repository=fragment_repository,
             embedder_factory=embedder_factory,
-            authorizer=authorizer,
-            document_collection_repository=document_collection_repository,
             document_collection_catalog_client=document_collection_catalog_client,
         )
         app.state.document_search_service = document_search_service
 
-        document_job_progress_store = DocumentPostProcessJobProgressStore(
-            redis_client=redis_client.client,
-            settings=redis_client_settings,
-        )
-        app.state.document_job_progress_store = document_job_progress_store
-
-        fragment_job_progress_store = FragmentPostProcessJobProgressStore(
-            redis_client=redis_client.client,
-            settings=redis_client_settings,
-        )
-        app.state.fragment_job_progress_store = fragment_job_progress_store
-
-        rabbitmq_manager_settings = RabbitMQManagerSettings()
-        rabbitmq_manager = RabbitMQManager(rabbit_mq_manager_settings=rabbitmq_manager_settings)
+        rabbitmq_manager = RabbitMQManager()
         await rabbitmq_manager.start()
         app.state.rabbitmq_manager = rabbitmq_manager
         cleanup_stack.append(("rabbitmq_manager", rabbitmq_manager.stop))
@@ -346,7 +285,6 @@ async def startup_dependencies(app: FastAPI) -> None:
         outbox_lite = RedisOutboxLite(
             redis_client=redis_client.client,
             rabbitmq_manager=rabbitmq_manager,
-            settings=redis_client_settings,
         )
         app.state.outbox_lite = outbox_lite
 
@@ -357,22 +295,45 @@ async def startup_dependencies(app: FastAPI) -> None:
         if knowledge_graph_settings.enabled:
             graph_extraction_publisher = GraphExtractionPublisher(
                 rabbitmq_manager=rabbitmq_manager,
-                knowledge_graph_settings=knowledge_graph_settings,
                 outbox_lite=outbox_lite,
             )
             app.state.graph_extraction_publisher = graph_extraction_publisher
             logger.info(
                 "Knowledge graph extraction publisher was registered.",
-                extra={"queue": rabbitmq_manager_settings.graph_extraction_queue},
+                extra={"queue": rabbitmq_manager.settings.graph_extraction_queue},
             )
 
-        notification_client = NotificationClient()
-        app.state.notification_client = notification_client
-        if not notification_client.enabled:
-            logger.warning(
-                "Notification client is disabled: NOTIFICATION_SERVICE_URL or "
-                "NOTIFICATION_INTERNAL_API_TOKEN is not configured.",
-            )
+        llm_provider = LlmProvider(http_client=http_client)
+        app.state.llm_provider = llm_provider
+
+        post_process_document_processor = PostProcessDocumentProcessor(
+            database_manager=database_manager,
+            document_repository=document_repository,
+            fragment_repository=fragment_repository,
+            llm_provider=llm_provider,
+        )
+        app.state.post_process_document_processor = post_process_document_processor
+
+        post_process_fragment_processor = PostProcessFragmentProcessor(
+            database_manager=database_manager,
+            fragment_repository=fragment_repository,
+            llm_provider=llm_provider,
+        )
+        app.state.post_process_fragment_processor = post_process_fragment_processor
+
+        document_enrichment_service = DocumentEnrichmentService(
+            post_process_document_processor=post_process_document_processor,
+            post_process_fragment_processor=post_process_fragment_processor,
+            database_manager=database_manager,
+            document_repository=document_repository,
+        )
+        app.state.document_enrichment_service = document_enrichment_service
+
+        document_enrichment_publisher = DocumentEnrichmentPublisher(
+            rabbitmq_manager=rabbitmq_manager,
+            outbox_lite=outbox_lite,
+        )
+        app.state.document_enrichment_publisher = document_enrichment_publisher
 
         document_ingestion_service = DocumentIngestionService(
             database_manager=database_manager,
@@ -383,7 +344,7 @@ async def startup_dependencies(app: FastAPI) -> None:
             text_splitter_factory=text_splitter_factory,
             embedder_factory=embedder_factory,
             graph_extraction_publisher=graph_extraction_publisher,
-            notification_client=notification_client,
+            document_enrichment_publisher=document_enrichment_publisher,
         )
         app.state.document_ingestion_service = document_ingestion_service
 
@@ -398,71 +359,26 @@ async def startup_dependencies(app: FastAPI) -> None:
         await document_ingestion_consumer.start()
         app.state.document_ingestion_consumer = document_ingestion_consumer
 
-        llm_provider = LlmProvider(http_client=http_client)
-        app.state.llm_provider = llm_provider
-
-        post_process_document_job_publisher = PostProcessDocumentJobPublisher(
+        document_enrichment_consumer = DocumentEnrichmentConsumer(
             rabbitmq_manager=rabbitmq_manager,
-            outbox_lite=outbox_lite,
+            document_enrichment_service=document_enrichment_service,
         )
-        app.state.post_process_document_job_publisher = post_process_document_job_publisher
-
-        post_process_fragment_job_publisher = PostProcessFragmentJobPublisher(
-            rabbitmq_manager=rabbitmq_manager,
-            outbox_lite=outbox_lite,
-        )
-        app.state.post_process_fragment_job_publisher = post_process_fragment_job_publisher
+        await document_enrichment_consumer.start()
+        app.state.document_enrichment_consumer = document_enrichment_consumer
 
         outbox_lite_worker = OutboxLiteWorker(
             outbox=outbox_lite,
             database_manager=database_manager,
-            document_job_progress_store=document_job_progress_store,
-            fragment_job_progress_store=fragment_job_progress_store,
-            rabbitmq_settings=rabbitmq_manager_settings,
-            settings=redis_client_settings,
+            rabbitmq_settings=rabbitmq_manager.settings,
         )
         await outbox_lite_worker.start()
         app.state.outbox_lite_worker = outbox_lite_worker
         cleanup_stack.append(("outbox_lite_worker", outbox_lite_worker.stop))
 
-        post_process_document_processor = PostProcessDocumentProcessor(
-            database_manager=database_manager,
-            document_repository=document_repository,
-            fragment_repository=fragment_repository,
-            llm_provider=llm_provider,
-            job_progress_store=document_job_progress_store,
-        )
-        app.state.post_process_document_processor = post_process_document_processor
-
-        post_process_fragment_service_settings = PostProcessFragmentServiceSettings()
-        post_process_fragment_processor = PostProcessFragmentProcessor(
-            database_manager=database_manager,
-            fragment_repository=fragment_repository,
-            llm_provider=llm_provider,
-            job_progress_store=fragment_job_progress_store,
-            post_process_fragment_service_settings=post_process_fragment_service_settings,
-        )
-        app.state.post_process_fragment_processor = post_process_fragment_processor
-
-        post_process_document_consumer = PostProcessDocumentConsumer(
-            rabbitmq_manager=rabbitmq_manager,
-            processor=post_process_document_processor,
-        )
-        await post_process_document_consumer.start()
-        app.state.post_process_document_consumer = post_process_document_consumer
-
-        post_process_fragment_consumer = PostProcessFragmentConsumer(
-            rabbitmq_manager=rabbitmq_manager,
-            processor=post_process_fragment_processor,
-        )
-        await post_process_fragment_consumer.start()
-        app.state.post_process_fragment_consumer = post_process_fragment_consumer
-
         delete_document_service = DeleteDocumentService(
             document_repository=document_repository,
             fragment_repository=fragment_repository,
-            chat_repository=chat_repository,
-            authorizer=authorizer,
+            chat_membership_provider=chat_membership_provider,
         )
         app.state.delete_document_service = delete_document_service
 
@@ -470,7 +386,6 @@ async def startup_dependencies(app: FastAPI) -> None:
             document_repository=document_repository,
             document_storage=document_storage,
             rabbitmq_manager=rabbitmq_manager,
-            authorizer=authorizer,
             outbox_lite=outbox_lite,
         )
         app.state.create_document_service = create_document_service
@@ -478,29 +393,10 @@ async def startup_dependencies(app: FastAPI) -> None:
         document_download_service = DocumentDownloadService(
             document_repository=document_repository,
             document_storage=document_storage,
-            chat_repository=chat_repository,
-            authorizer=authorizer,
+            document_collection_catalog_client=document_collection_catalog_client,
+            chat_membership_provider=chat_membership_provider,
         )
         app.state.document_download_service = document_download_service
-
-        post_process_document_service = PostProcessDocumentService(
-            database_manager=database_manager,
-            document_repository=document_repository,
-            job_progress_store=document_job_progress_store,
-            post_process_document_job_publisher=post_process_document_job_publisher,
-            authorizer=authorizer,
-        )
-        app.state.post_process_document_service = post_process_document_service
-
-        post_process_fragment_service = PostProcessFragmentService(
-            database_manager=database_manager,
-            fragment_repository=fragment_repository,
-            job_progress_store=fragment_job_progress_store,
-            post_process_fragment_job_publisher=post_process_fragment_job_publisher,
-            authorizer=authorizer,
-            post_process_fragment_service_settings=post_process_fragment_service_settings,
-        )
-        app.state.post_process_fragment_service = post_process_fragment_service
 
         if knowledge_graph_settings.enabled:
             await _wire_knowledge_graph_module(
@@ -509,13 +405,10 @@ async def startup_dependencies(app: FastAPI) -> None:
                 knowledge_graph_settings=knowledge_graph_settings,
                 rabbitmq_manager=rabbitmq_manager,
                 redis_client=redis_client,
-                redis_client_settings=redis_client_settings,
                 database_manager=database_manager,
                 document_repository=document_repository,
                 fragment_repository=fragment_repository,
-                document_collection_repository=document_collection_repository,
                 document_collection_catalog_client=document_collection_catalog_client,
-                authorizer=authorizer,
                 llm_provider=llm_provider,
             )
         else:
@@ -536,14 +429,11 @@ async def _wire_knowledge_graph_module(
         cleanup_stack: list[tuple[str, _CleanupFn]],
         knowledge_graph_settings: KnowledgeGraphSettings,
         rabbitmq_manager: RabbitMQManager,
-        redis_client: RedisClient,
-        redis_client_settings: RedisClientSettings,
+        redis_client: RedisClientInterface,
         database_manager: DatabaseManager,
         document_repository: DocumentRepository,
         fragment_repository: FragmentRepository,
-        document_collection_repository: DocumentCollectionRepository,
         document_collection_catalog_client: DocumentCollectionCatalogClient,
-        authorizer: Authorizer,
         llm_provider: LlmProvider,
 ) -> None:
     logger.info(
@@ -579,7 +469,6 @@ async def _wire_knowledge_graph_module(
 
     graph_extraction_job_progress_store = GraphExtractionJobProgressStore(
         redis_client=redis_client.client,
-        settings=redis_client_settings,
         lock_ttl_seconds=knowledge_graph_settings.extraction_lock_ttl_seconds,
         snapshot_ttl_seconds=knowledge_graph_settings.extraction_snapshot_ttl_seconds,
     )
@@ -609,9 +498,7 @@ async def _wire_knowledge_graph_module(
         entity_repository=graph_entity_repository,
         relation_repository=graph_relation_repository,
         path_repository=graph_path_repository,
-        document_collection_repository=document_collection_repository,
         document_collection_catalog_client=document_collection_catalog_client,
-        authorizer=authorizer,
         knowledge_graph_settings=knowledge_graph_settings,
     )
     app.state.graph_query_service = graph_query_service
@@ -619,9 +506,7 @@ async def _wire_knowledge_graph_module(
     graph_entity_service = GraphEntityService(
         entity_repository=graph_entity_repository,
         relation_repository=graph_relation_repository,
-        document_collection_repository=document_collection_repository,
         document_collection_catalog_client=document_collection_catalog_client,
-        authorizer=authorizer,
         knowledge_graph_settings=knowledge_graph_settings,
     )
     app.state.graph_entity_service = graph_entity_service
@@ -629,18 +514,14 @@ async def _wire_knowledge_graph_module(
     graph_context_service = GraphContextService(
         entity_repository=graph_entity_repository,
         relation_repository=graph_relation_repository,
-        document_collection_repository=document_collection_repository,
         document_collection_catalog_client=document_collection_catalog_client,
-        authorizer=authorizer,
         knowledge_graph_settings=knowledge_graph_settings,
     )
     app.state.graph_context_service = graph_context_service
 
     graph_path_service = GraphPathService(
         path_repository=graph_path_repository,
-        document_collection_repository=document_collection_repository,
         document_collection_catalog_client=document_collection_catalog_client,
-        authorizer=authorizer,
         knowledge_graph_settings=knowledge_graph_settings,
     )
     app.state.graph_path_service = graph_path_service
@@ -650,9 +531,11 @@ async def _wire_knowledge_graph_module(
 
     graph_stats_service = GraphStatsService(
         stats_repository=graph_stats_repository,
-        authorizer=authorizer,
     )
     app.state.graph_stats_service = graph_stats_service
+
+    graph_ontology_service = GraphOntologyService()
+    app.state.graph_ontology_service = graph_ontology_service
 
     logger.info("The knowledge graph module was bootstrapped successfully.")
 
@@ -673,12 +556,6 @@ async def shutdown_dependencies(app: FastAPI) -> None:
             await neo4j_manager.dispose()
         except Exception:
             logger.exception("Failed to dispose the Neo4j manager during shutdown.")
-
-    if notification_client := getattr(state, "notification_client", None):
-        try:
-            await notification_client.aclose()
-        except Exception:
-            logger.exception("Failed to close the notification client during shutdown.")
 
     if redis_client := getattr(state, "redis_client", None):
         await redis_client.dispose()

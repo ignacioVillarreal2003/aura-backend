@@ -1,8 +1,12 @@
 import logging
+from typing import Optional
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from app.api.openapi.common import ErrorBodyApp
+from app.infrastructure.persistence.memory_database.redis_client.interfaces.redis_client_interface import (
+    RedisClientInterface,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +19,7 @@ class HealthController:
         checks: dict[str, object] = {}
         overall_ok = True
 
-        redis_client = getattr(request.app.state, "redis_client", None)
+        redis_client: Optional[RedisClientInterface] = getattr(request.app.state, "redis_client", None)
         if redis_client is not None:
             try:
                 await redis_client.client.ping()

@@ -3,9 +3,8 @@ from typing import Optional
 
 from fastapi import HTTPException, Request, status
 
-from app.configuration.graph.knowledge_graph_settings import KnowledgeGraphSettings
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.types import UserId
+from app.infrastructure.http.authentication_provider.request_token import get_request_token
 from app.infrastructure.messaging.rabbitmq.dtos.commands.graph_extraction_command import (
     GraphExtractionCommand,
 )
@@ -23,12 +22,10 @@ class GraphExtractionPublisher(GraphExtractionPublisherInterface):
     def __init__(
             self,
             rabbitmq_manager: RabbitMQManagerInterface,
-            knowledge_graph_settings: Optional[KnowledgeGraphSettings] = None,
             outbox_lite: Optional[RedisOutboxLite] = None,
     ) -> None:
         self._manager = rabbitmq_manager
         self._settings = rabbitmq_manager.settings
-        self._knowledge_graph_settings = knowledge_graph_settings or KnowledgeGraphSettings()
         self._outbox_lite = outbox_lite
 
     async def publish(
@@ -43,6 +40,7 @@ class GraphExtractionPublisher(GraphExtractionPublisherInterface):
                 document_id=document_id,
                 user=user.model_dump(mode="json"),
                 force=force,
+                auth_token=get_request_token(),
             )
         )
         headers = {
@@ -76,25 +74,6 @@ class GraphExtractionPublisher(GraphExtractionPublisherInterface):
             },
         )
         return envelope.message_id
-
-    async def publish_for_document_owner(
-            self,
-            *,
-            document_id: int,
-            owner_user_id: int,
-            force: bool = False,
-    ) -> str:
-        principal = AuthenticatedUser(
-            id=UserId(int(owner_user_id)),
-            email=self._knowledge_graph_settings.system_principal_email,
-            roles=self._knowledge_graph_settings.resolve_system_principal_roles(),
-            permissions=self._knowledge_graph_settings.resolve_system_principal_permissions(),
-        )
-        return await self.publish(
-            document_id=document_id,
-            user=principal,
-            force=force,
-        )
 
 
 async def get_graph_extraction_publisher(

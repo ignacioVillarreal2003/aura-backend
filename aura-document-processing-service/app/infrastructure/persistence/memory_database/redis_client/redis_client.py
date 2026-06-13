@@ -5,12 +5,15 @@ from typing import Optional
 import redis.asyncio as aioredis
 from redis.asyncio.connection import ConnectionPool
 
+from app.infrastructure.persistence.memory_database.redis_client.interfaces.redis_client_interface import (
+    RedisClientInterface,
+)
 from app.infrastructure.persistence.memory_database.redis_client.redis_client_settings import RedisClientSettings
 
 logger = logging.getLogger(__name__)
 
 
-class RedisClient:
+class RedisClient(RedisClientInterface):
     def __init__(self, redis_client_settings: Optional[RedisClientSettings] = None) -> None:
         self._settings = redis_client_settings or RedisClientSettings()
         self._pool: Optional[ConnectionPool] = None

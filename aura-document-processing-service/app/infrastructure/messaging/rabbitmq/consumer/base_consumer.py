@@ -1,11 +1,11 @@
 import json
 import logging
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar
-
+from typing import Generic, Optional, TypeVar
 import aio_pika.abc
 from pydantic import BaseModel, ValidationError
 
+from app.infrastructure.http.authentication_provider.request_token import get_request_token, set_request_token
 from app.infrastructure.messaging.rabbitmq.consumer.consumer_utils import extract_retry_count
 from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
 from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
@@ -20,6 +20,15 @@ class BaseConsumer(ABC, Generic[T]):
         self._manager = rabbitmq_manager
         self._settings = rabbitmq_manager.settings
 
+    @property
+    @abstractmethod
+    def _queue_name(self) -> str:
+        pass
+
+    @property
+    def _prefetch_count(self) -> Optional[int]:
+        return None
+
     @abstractmethod
     def _get_command_type(self) -> type[T]:
         pass
@@ -27,6 +36,17 @@ class BaseConsumer(ABC, Generic[T]):
     @abstractmethod
     async def _process(self, envelope: MessageEnvelope[T]) -> None:
         pass
+
+    async def start(self) -> None:
+        await self._manager.start_consumer(
+            queue_name=self._queue_name,
+            callback=self._handle_message,
+            prefetch_count=self._prefetch_count,
+        )
+        logger.info(
+            "The consumer was registered on the queue.",
+            extra={"queue": self._queue_name, "prefetch_count": self._prefetch_count},
+        )
 
     async def _handle_message(self, message: aio_pika.abc.AbstractIncomingMessage) -> None:
         retry_count = extract_retry_count(message)
@@ -36,6 +56,7 @@ class BaseConsumer(ABC, Generic[T]):
             logger.error(
                 "A message exceeded the maximum delivery attempts and will be discarded.",
                 extra={
+                    "queue": self._queue_name,
                     "retry_count": retry_count,
                     "max_delivery_attempts": self._settings.max_delivery_attempts,
                     "message_id": message_id,
@@ -49,6 +70,7 @@ class BaseConsumer(ABC, Generic[T]):
             logger.error(
                 "The message body exceeded the configured maximum size; discarding without requeue.",
                 extra={
+                    "queue": self._queue_name,
                     "message_id": message_id,
                     "body_bytes": len(body),
                     "max_message_body_bytes": self._settings.max_message_body_bytes,
@@ -66,14 +88,14 @@ class BaseConsumer(ABC, Generic[T]):
         except UnicodeDecodeError as e:
             logger.error(
                 "The message body was not valid UTF-8; discarding without requeue.",
-                extra={"message_id": message_id, "error": type(e).__name__},
+                extra={"queue": self._queue_name, "message_id": message_id, "error": type(e).__name__},
             )
             await message.nack(requeue=False)
             return
         except json.JSONDecodeError as e:
             logger.error(
                 "The message body was not valid JSON; discarding without requeue.",
-                extra={"message_id": message_id, "error": type(e).__name__},
+                extra={"queue": self._queue_name, "message_id": message_id, "error": type(e).__name__},
             )
             await message.nack(requeue=False)
             return
@@ -81,6 +103,7 @@ class BaseConsumer(ABC, Generic[T]):
             logger.error(
                 "The message envelope failed schema validation; discarding without requeue.",
                 extra={
+                    "queue": self._queue_name,
                     "message_id": message_id,
                     "error": type(e).__name__,
                     "error_count": len(e.errors()),
@@ -91,21 +114,36 @@ class BaseConsumer(ABC, Generic[T]):
         except (KeyError, ValueError) as e:
             logger.error(
                 "The message envelope is missing required fields; discarding without requeue.",
-                extra={"message_id": message_id, "error": type(e).__name__},
+                extra={"queue": self._queue_name, "message_id": message_id, "error": type(e).__name__},
             )
             await message.nack(requeue=False)
             return
 
+        # Re-establish the requesting user's bearer token (carried in the command)
+        # in the async context so downstream HTTP providers authenticate as that
+        # user; restored afterwards so it never leaks to the next message.
+        previous_token = get_request_token()
+        set_request_token(getattr(envelope.command, "auth_token", None))
         try:
             await self._process(envelope)
             await message.ack()
             logger.info(
                 "The queue message was processed and acknowledged.",
-                extra={"message_id": envelope.message_id, "retry_count": retry_count},
+                extra={
+                    "queue": self._queue_name,
+                    "message_id": envelope.message_id,
+                    "retry_count": retry_count,
+                },
             )
         except Exception:
             logger.exception(
                 "The message handler failed; negative-acknowledging for dead-letter retry.",
-                extra={"message_id": envelope.message_id, "retry_count": retry_count},
+                extra={
+                    "queue": self._queue_name,
+                    "message_id": envelope.message_id,
+                    "retry_count": retry_count,
+                },
             )
             await message.nack(requeue=False)
+        finally:
+            set_request_token(previous_token)

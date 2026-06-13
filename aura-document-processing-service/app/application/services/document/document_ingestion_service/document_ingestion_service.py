@@ -12,6 +12,10 @@ from app.application.processors.text_splitters.text_splitter_factory import Text
 from app.application.services.document.document_ingestion_service.document_ingestion_service_settings import (
     DocumentIngestionServiceSettings
 )
+from app.domain.authentication.authenticated_user import AuthenticatedUser
+from app.infrastructure.messaging.rabbitmq.publisher.interfaces.document_enrichment_publisher_interface import (
+    DocumentEnrichmentPublisherInterface,
+)
 from app.application.services.document.document_ingestion_service.exceptions.document_ingestion_service_exception import (
     DocumentIngestionServiceCleanException,
     DocumentIngestionServiceEmbedException,
@@ -35,7 +39,6 @@ from app.infrastructure.persistence.database.repositories.document_repository.do
 from app.infrastructure.messaging.rabbitmq.publisher.interfaces.graph_extraction_publisher_interface import (
     GraphExtractionPublisherInterface,
 )
-from app.infrastructure.http.notification_service.notification_client import NotificationClient
 from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository_interface import (
     FragmentRepositoryInterface
 )
@@ -55,7 +58,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             database_manager: DatabaseManagerInterface,
             document_ingestion_service_settings: Optional[DocumentIngestionServiceSettings] = None,
             graph_extraction_publisher: Optional[GraphExtractionPublisherInterface] = None,
-            notification_client: Optional[NotificationClient] = None,
+            document_enrichment_publisher: Optional[DocumentEnrichmentPublisherInterface] = None,
     ) -> None:
         self._document_repository = document_repository
         self._fragment_repository = fragment_repository
@@ -66,20 +69,25 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
         self._database_manager = database_manager
         self._settings = document_ingestion_service_settings or DocumentIngestionServiceSettings()
         self._graph_extraction_publisher = graph_extraction_publisher
-        self._notification_client = notification_client
+        self._document_enrichment_publisher = document_enrichment_publisher
 
     async def process_document(
             self,
             document: Document,
             local_file_path: Path,
-            prefer_docling: bool = False
+            user: AuthenticatedUser,
+            prefer_docling: bool = False,
+            post_process: bool = True,
+            post_process_graph: bool = True,
     ) -> None:
         logger.info(
             "Document ingestion was initiated.",
             extra={
                 "document_id": document.id,
                 "file_name": local_file_path.name,
-                "prefer_docling": prefer_docling
+                "prefer_docling": prefer_docling,
+                "post_process": post_process,
+                "post_process_graph": post_process_graph,
             }
         )
 
@@ -103,8 +111,11 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                 }
             )
 
-            await self._publish_graph_extraction_event(document)
-            await self._emit_processing_notification(document, succeeded=True)
+            if post_process:
+                await self._publish_document_enrichment_event(document, user)
+
+            if post_process_graph:
+                await self._publish_graph_extraction_event(document, user)
 
         except (
                 DocumentIngestionServiceReadException,
@@ -112,14 +123,12 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                 DocumentIngestionServiceSplitException,
                 DocumentIngestionServiceEmbedException,
                 DocumentIngestionServicePersistenceException,
-        ) as e:
+        ):
             await self._mark_document_as_failed(document)
-            await self._emit_processing_notification(document, succeeded=False, reason=str(e))
             raise
 
         except Exception as e:
             await self._mark_document_as_failed(document)
-            await self._emit_processing_notification(document, succeeded=False)
             logger.exception(
                 "An unexpected error occurred during document ingestion.",
                 extra={
@@ -265,7 +274,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                 created_by=document.created_by,
                 created_at=now
             )
-            for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings))
+            for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings, strict=True))
         ]
 
         logger.debug(
@@ -371,56 +380,48 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                 }
             )
 
+    async def _publish_document_enrichment_event(
+            self,
+            document: Document,
+            user: AuthenticatedUser,
+    ) -> None:
+        if self._document_enrichment_publisher is None:
+            return
+        try:
+            await self._document_enrichment_publisher.publish(
+                document_id=int(document.id),
+                user=user,
+            )
+            logger.info(
+                "A document enrichment event was enqueued.",
+                extra={"document_id": document.id, "user_id": user.id},
+            )
+        except Exception:
+            logger.warning(
+                "Failed to enqueue document enrichment; document ingestion succeeded.",
+                extra={"document_id": document.id, "user_id": user.id},
+            )
+
     async def _publish_graph_extraction_event(
             self,
             document: Document,
+            user: AuthenticatedUser,
     ) -> None:
         if self._graph_extraction_publisher is None:
             return
         try:
-            await self._graph_extraction_publisher.publish_for_document_owner(
+            await self._graph_extraction_publisher.publish(
                 document_id=int(document.id),
-                owner_user_id=int(document.created_by),
+                user=user,
             )
             logger.info(
                 "A knowledge graph extraction event was enqueued.",
-                extra={"document_id": document.id},
+                extra={"document_id": document.id, "user_id": user.id},
             )
         except Exception:
             logger.warning(
                 "Failed to enqueue knowledge graph extraction; document ingestion succeeded.",
-                extra={
-                    "document_id": document.id,
-                    "owner_user_id": document.created_by,
-                },
-            )
-
-    async def _emit_processing_notification(
-            self,
-            document: Document,
-            *,
-            succeeded: bool,
-            reason: str | None = None,
-    ) -> None:
-        if self._notification_client is None or document.created_by is None:
-            return
-        event_type = "document.processing.done" if succeeded else "document.processing.failed"
-        context: dict = {
-            "document_id": int(document.id),
-            "document_name": document.name,
-        }
-        if reason:
-            context["reason"] = reason[:300]
-        try:
-            await self._notification_client.emit_event(
-                event_type=event_type,
-                recipient_ids=[int(document.created_by)],
-                context=context,
-            )
-        except Exception:
-            logger.warning(
-                "Failed to emit document processing notification.",
-                extra={"document_id": document.id, "event_type": event_type},
+                extra={"document_id": document.id, "user_id": user.id},
             )
 
     @staticmethod
@@ -455,5 +456,5 @@ async def get_document_ingestion_service(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="DocumentIngestionService is not registered on the application state."
-        )
+        ) from None
 

@@ -23,104 +23,13 @@ class DocumentCollectionCatalogClient(DocumentCollectionCatalogClientInterface):
         self._http_client = http_client
         self._settings = settings or DocumentCollectionCatalogSettings()
 
-    async def fetch_all_accessible_collection_ids(
-            self,
-            *,
-            user_id: int,
-            authorization_header: str | None,
-    ) -> frozenset[int]:
-        headers = self._build_request_headers(user_id=user_id, authorization_header=authorization_header)
-        if headers is None:
-            logger.debug(
-                "Skipping accessible-collections fetch: no credentials available.",
-                extra={"user_id": user_id},
-            )
-            return frozenset()
-
-        url = f"{self._settings.accessible_collections_url.rstrip('/')}/{user_id}/accessible-collections/"
-        ids: set[int] = set()
-        pages_read = 0
-        timeout = self._settings.request_timeout_seconds
-
-        try:
-            while url and pages_read < self._settings.max_pages:
-                if pages_read == 0:
-                    response = await self._http_client.get(
-                        url,
-                        headers=headers,
-                        params={"page_size": self._settings.page_size},
-                        timeout=timeout,
-                    )
-                else:
-                    response = await self._http_client.get(
-                        url,
-                        headers=headers,
-                        timeout=timeout,
-                    )
-                pages_read += 1
-                if response.status_code >= 400:
-                    logger.warning(
-                        "Accessible collections request failed.",
-                        extra={
-                            "user_id": user_id,
-                            "status_code": response.status_code,
-                        },
-                    )
-                    return frozenset()
-
-                payload_any: Any = response.json()
-                if not isinstance(payload_any, dict):
-                    logger.warning(
-                        "Unexpected accessible-collections payload shape.",
-                        extra={"user_id": user_id},
-                    )
-                    return frozenset()
-
-                payload = payload_any
-                results = payload.get("results")
-                if isinstance(results, list):
-                    for row in results:
-                        if isinstance(row, dict):
-                            cid = row.get("id")
-                            if isinstance(cid, int):
-                                ids.add(cid)
-                            elif isinstance(cid, str) and cid.isdigit():
-                                ids.add(int(cid))
-
-                nxt = payload.get("next")
-                if isinstance(nxt, str) and nxt.strip():
-                    url = nxt.strip()
-                else:
-                    url = ""
-
-            if pages_read >= self._settings.max_pages:
-                logger.warning(
-                    "Stopped paginating accessible-collections after max_pages.",
-                    extra={"user_id": user_id, "max_pages": self._settings.max_pages},
-                )
-
-        except (HttpClientException, httpx.RequestError):
-            logger.exception(
-                "Error while fetching accessible collections.",
-                extra={"user_id": user_id},
-            )
-            return frozenset()
-        except ValueError:
-            logger.exception(
-                "Invalid JSON while fetching accessible collections.",
-                extra={"user_id": user_id},
-            )
-            return frozenset()
-
-        return frozenset(ids)
-
     async def fetch_all_accessible_document_ids(
             self,
             *,
             user_id: int,
             authorization_header: str | None,
     ) -> frozenset[int]:
-        headers = self._build_request_headers(user_id=user_id, authorization_header=authorization_header)
+        headers = self._build_request_headers(authorization_header=authorization_header)
         if headers is None:
             logger.debug(
                 "Skipping accessible-documents fetch: no credentials available.",
@@ -208,20 +117,12 @@ class DocumentCollectionCatalogClient(DocumentCollectionCatalogClientInterface):
     def _build_request_headers(
             self,
             *,
-            user_id: int,
             authorization_header: str | None,
     ) -> dict[str, str] | None:
         bearer = self._normalize_bearer(authorization_header)
         if bearer is not None:
             return {
                 "Authorization": bearer,
-                "Accept": "application/json",
-            }
-        if self._settings.service_api_key:
-            return {
-                "X-Service-Api-Key": self._settings.service_api_key,
-                "X-User-Id": str(user_id),
-                "X-User-Email": self._settings.service_user_email,
                 "Accept": "application/json",
             }
         fallback_bearer = self._normalize_bearer(self._settings.fallback_bearer_token)

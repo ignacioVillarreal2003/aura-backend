@@ -1,8 +1,9 @@
 import os
 # Set before any app module is imported so EnvironmentVariables() picks up these values.
-os.environ.setdefault("SERVICE_API_KEY", "test-service-key")
 os.environ.setdefault("AUTHENTICATION_PROVIDER_AUTHENTICATION_URL", "http://auth.test")
 
+import base64
+import json
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock
 
@@ -14,9 +15,16 @@ from app.api.controllers import router
 from app.api.handlers.exception_handlers import register_exception_handlers
 from app.application.authorization.authorizer import Authorizer
 from app.configuration.cors_configuration import configure_cors
-from app.configuration.environment_variables import environment_variables
 from app.configuration.middlewares.authentication_middleware import add_authentication_middleware
-from app.infrastructure.http.authentication_provider.authentication_provider import AuthenticationProvider
+from app.infrastructure.http.authentication_provider.authentication_provider_exception import (
+    AuthenticationProviderInvalidTokenException,
+)
+from app.infrastructure.http.authentication_provider.authentication_provider_interface import (
+    AuthenticationProviderInterface,
+)
+from app.infrastructure.http.authentication_provider.dtos.authenticated_user_response import (
+    AuthenticatedUserResponse,
+)
 from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
 
 TEST_USER_ID = 42
@@ -28,28 +36,48 @@ ALL_PERMISSIONS = [
     "LIST_DOCUMENTS",
     "LIST_DOCUMENTS_BY_CHAT",
     "DOWNLOAD_DOCUMENT",
+    "DOWNLOAD_DOCUMENT_ADMIN",
     "SOFT_DELETE_DOCUMENT",
     "SOFT_DELETE_DOCUMENTS_BY_CHAT",
-    "POST_PROCESS_DOCUMENTS_START_ALL",
-    "POST_PROCESS_DOCUMENTS_START",
-    "POST_PROCESS_DOCUMENTS_STATUS",
-    "POST_PROCESS_DOCUMENTS_STOP",
-    "POST_PROCESS_FRAGMENTS_START_ALL",
-    "POST_PROCESS_FRAGMENTS_START",
-    "POST_PROCESS_FRAGMENTS_STATUS",
-    "POST_PROCESS_FRAGMENTS_STOP",
+    "SOFT_DELETE_DOCUMENT_ADMIN",
     "LIST_CONTEXT_FRAGMENTS_BY_QUESTION",
     "LIST_CONTEXT_FRAGMENTS_BY_DOCUMENTS",
     "SEARCH_DOCUMENTS_BY_CONTENT",
     "GRAPH_QUERY",
     "GRAPH_ENTITY",
     "GRAPH_PATH",
+    "GRAPH_SEARCH",
+    "GRAPH_ONTOLOGY",
+    "GRAPH_STATS",
+    "GRAPH_EXTRACTION_PROGRESS",
+    "GRAPH_REEXTRACT",
 ]
 
 
 async def _mock_db_session():
     """Yield a MagicMock session so no real DB connection is needed."""
     yield MagicMock()
+
+
+def make_bearer_token(user_id=TEST_USER_ID, email=TEST_USER_EMAIL, permissions=None) -> str:
+    """Encode the user payload in the token so the fake provider can resolve it."""
+    payload = {
+        "id": user_id,
+        "email": email,
+        "permissions": permissions or [],
+    }
+    return base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
+
+
+class FakeAuthenticationProvider(AuthenticationProviderInterface):
+    """Resolves the user from the token payload instead of calling the auth service."""
+
+    async def validate_token(self, token: str) -> AuthenticatedUserResponse:
+        try:
+            payload = json.loads(base64.urlsafe_b64decode(token.encode()))
+            return AuthenticatedUserResponse.model_validate(payload)
+        except Exception as e:
+            raise AuthenticationProviderInvalidTokenException("Invalid or expired token") from e
 
 
 def create_test_app() -> FastAPI:
@@ -66,8 +94,7 @@ def create_test_app() -> FastAPI:
     # Replace the real DB session dependency with a no-op mock.
     test_app.dependency_overrides[get_database_session] = _mock_db_session
 
-    mock_http = MagicMock()
-    test_app.state.authentication_provider = AuthenticationProvider(http_client=mock_http)
+    test_app.state.authentication_provider = FakeAuthenticationProvider()
     test_app.state.authorizer = Authorizer()
 
     return test_app
@@ -87,27 +114,21 @@ def client(app):
 @pytest.fixture
 def service_headers():
     """
-    Factory for service-to-service auth headers.
+    Factory for bearer auth headers.
 
     Usage:
         response = client.get(url, headers=service_headers(permissions=["PERM"]))
     """
     def _make(user_id=TEST_USER_ID, email=TEST_USER_EMAIL, permissions=None):
-        headers = {
-            "X-Service-Api-Key": environment_variables.service_api_key,
-            "X-User-Id": str(user_id),
-            "X-User-Email": email,
-        }
-        if permissions is not None:
-            headers["X-User-Permissions"] = ",".join(permissions)
-        return headers
+        token = make_bearer_token(user_id=user_id, email=email, permissions=permissions)
+        return {"Authorization": f"Bearer {token}"}
 
     return _make
 
 
 @pytest.fixture
 def auth_headers(service_headers):
-    """Service headers pre-loaded with all document-processing permissions."""
+    """Bearer headers pre-loaded with all document-processing permissions."""
     return service_headers(permissions=ALL_PERMISSIONS)
 
 
@@ -144,18 +165,8 @@ def mock_document_download_service(app):
 
 
 @pytest.fixture
-def mock_post_process_document_service(app):
-    yield from _mock_service(app, "post_process_document_service")
-
-
-@pytest.fixture
 def mock_fragment_query_service(app):
     yield from _mock_service(app, "fragment_query_service")
-
-
-@pytest.fixture
-def mock_post_process_fragment_service(app):
-    yield from _mock_service(app, "post_process_fragment_service")
 
 
 @pytest.fixture

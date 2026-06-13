@@ -3,7 +3,6 @@ from typing import AsyncIterator, Optional
 from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
 from app.application.services.document.document_download_service.document_download_service_settings import (
     DocumentDownloadServiceSettings
@@ -19,12 +18,14 @@ from app.application.services.document.document_download_service.interfaces.docu
     DocumentDownloadServiceInterface
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.application.authorization.permissions import Permissions
 from app.domain.constants.document.document_status import DocumentStatus
-from app.infrastructure.persistence.database.orm.document import Document
-from app.infrastructure.persistence.database.repositories.chat_repository.chat_repository_interface import (
-    ChatRepositoryInterface
+from app.infrastructure.http.chat_membership.chat_membership_provider_interface import (
+    ChatMembershipProviderInterface,
 )
+from app.infrastructure.http.document_collection_catalog.document_collection_catalog_client_interface import (
+    DocumentCollectionCatalogClientInterface,
+)
+from app.infrastructure.persistence.database.orm.document import Document
 from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
     DocumentRepositoryInterface
 )
@@ -44,14 +45,14 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
             self,
             document_repository: DocumentRepositoryInterface,
             document_storage: DocumentStorageInterface,
-            chat_repository: ChatRepositoryInterface,
-            authorizer: Authorizer,
+            document_collection_catalog_client: DocumentCollectionCatalogClientInterface,
+            chat_membership_provider: ChatMembershipProviderInterface,
             document_download_service_settings: Optional[DocumentDownloadServiceSettings] = None
     ) -> None:
         self._document_repository = document_repository
         self._document_storage = document_storage
-        self._chat_repository = chat_repository
-        self._authorizer = authorizer
+        self._document_collection_catalog_client = document_collection_catalog_client
+        self._chat_membership_provider = chat_membership_provider
         self._settings = document_download_service_settings or DocumentDownloadServiceSettings()
 
     async def download_document(
@@ -71,14 +72,10 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
         try:
             if document_id <= 0:
                 raise DocumentDownloadInvalidRequestException("The document identifier must be a positive number.")
-            self._authorizer.require_permissions(
-                authenticated_user=authenticated_user,
-                required_permissions=frozenset({Permissions.DOWNLOAD_DOCUMENT}),
-            )
 
             document = await self._get_document_or_raise(document_id, database_session)
 
-            await self._require_chat_access(document, authenticated_user, database_session)
+            await self._require_document_access(document, authenticated_user)
 
             return await self._stream_document(document, authenticated_user.id)
 
@@ -114,10 +111,6 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
         try:
             if document_id <= 0:
                 raise DocumentDownloadInvalidRequestException("The document identifier must be a positive number.")
-            self._authorizer.require_permissions(
-                authenticated_user=authenticated_user,
-                required_permissions=frozenset({Permissions.DOWNLOAD_DOCUMENT_ADMIN}),
-            )
 
             document = await self._get_document_or_raise(document_id, database_session)
 
@@ -166,21 +159,25 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
 
         return document
 
-    async def _require_chat_access(
+    async def _require_document_access(
             self,
             document: Document,
             authenticated_user: AuthenticatedUser,
-            database_session: AsyncSession,
     ) -> None:
-        if document.created_by == authenticated_user.id:
+        accessible_ids = await self._document_collection_catalog_client.fetch_all_accessible_document_ids(
+            user_id=int(authenticated_user.id),
+            authorization_header=None,
+        )
+        if int(document.id) in accessible_ids:
             return
 
         if document.chat_id is not None:
-            chat = await self._chat_repository.get_chat_by_id(
-                chat_id=document.chat_id,
-                database_session=database_session,
+            membership = await self._chat_membership_provider.get_membership(
+                chat_id=int(document.chat_id),
+                user_id=int(authenticated_user.id),
+                authorization_header=None,
             )
-            if chat is not None and chat.created_by == authenticated_user.id:
+            if membership.is_member:
                 return
 
         logger.warning(
@@ -238,4 +235,4 @@ async def get_document_download_service(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="DocumentDownloadService is not registered on the application state."
-        )
+        ) from None

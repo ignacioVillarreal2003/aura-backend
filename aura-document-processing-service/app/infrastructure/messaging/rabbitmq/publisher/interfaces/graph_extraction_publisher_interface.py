@@ -13,13 +13,3 @@ class GraphExtractionPublisherInterface(ABC):
             force: bool = False,
     ) -> str:
         pass
-
-    @abstractmethod
-    async def publish_for_document_owner(
-            self,
-            *,
-            document_id: int,
-            owner_user_id: int,
-            force: bool = False,
-    ) -> str:
-        pass

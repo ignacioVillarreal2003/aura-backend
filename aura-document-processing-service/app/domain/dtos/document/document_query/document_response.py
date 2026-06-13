@@ -22,6 +22,8 @@ class DocumentResponse(BaseModel):
     file_size_bytes: int = Field(..., ge=MIN_FILE_SIZE_BYTES)
     type: Optional[str] = Field(default=None, max_length=64)
     category: Optional[str] = Field(default=None, min_length=1, max_length=MAX_CATEGORY_CHARS)
+    enrichment_status: str = Field(default="pending", min_length=1, max_length=32)
+    graph_status: str = Field(default="pending", min_length=1, max_length=32)
     processing_started_at: Optional[datetime] = Field(default=None)
     processing_finished_at: Optional[datetime] = Field(default=None)
     created_by: UserId = Field(..., gt=0, le=MAX_ID)

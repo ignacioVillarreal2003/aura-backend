@@ -62,6 +62,7 @@ class FragmentResponse(BaseModel):
     summary: Optional[str] = Field(default=None, min_length=1, max_length=MAX_FRAGMENT_SUMMARY_CHARS)
     entities: Optional[dict[str, object]] = Field(default=None)
     topics: Optional[list[str]] = Field(default=None, max_length=MAX_TOPICS)
+    enrichment_status: str = Field(default="pending", min_length=1, max_length=32)
     document: _Document = Field(...)
 
     @field_validator("content", mode="before")

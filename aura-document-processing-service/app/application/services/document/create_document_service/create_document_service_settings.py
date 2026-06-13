@@ -72,7 +72,6 @@ class CreateDocumentServiceSettings(BaseSettings):
         "image/tiff": [b"II*\x00", b"MM\x00*"],
         "image/bmp": [b"BM"],
         "image/webp": [b"RIFF"],
-        # text/plain, text/markdown, text/csv, application/csv: no magic bytes
     }
 
     @field_validator(

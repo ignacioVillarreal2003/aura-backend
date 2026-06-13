@@ -4,7 +4,6 @@ from typing import Any, Optional, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
-from app.configuration.environment_variables import environment_variables
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.authentication_provider.request_token import get_request_token
 from app.infrastructure.http.http_client.http_client_exceptions import (
@@ -53,26 +52,11 @@ class LlmProvider(LlmProviderInterface):
         self._settings = llm_provider_settings or LlmProviderSettings()
 
     @staticmethod
-    def _build_headers(
-            authenticated_user: AuthenticatedUser
-    ) -> dict[str, str]:
+    def _build_headers() -> dict[str, str]:
+        headers = {"Accept": "application/json"}
         token = get_request_token()
         if token:
-            return {"Authorization": token, "Accept": "application/json"}
-        # Background flows (e.g. queue consumers) have no user JWT left, so the
-        # request authenticates with the service key and forwards the original
-        # user's identity, roles and permissions for the LLM service to act on
-        # the user's behalf (authorization and per-user rate limiting).
-        headers = {
-            "X-Service-Api-Key": environment_variables.service_api_key,
-            "Accept": "application/json",
-            "X-User-Id": str(authenticated_user.id),
-            "X-User-Email": str(authenticated_user.email),
-        }
-        if authenticated_user.roles:
-            headers["X-User-Roles"] = ",".join(authenticated_user.roles)
-        if authenticated_user.permissions:
-            headers["X-User-Permissions"] = ",".join(authenticated_user.permissions)
+            headers["Authorization"] = token
         return headers
 
     def _raise_if_classify_payload_too_large(
@@ -197,7 +181,7 @@ class LlmProvider(LlmProviderInterface):
             response = await self._http_client.post(
                 url=url,
                 json=json_body,
-                headers=self._build_headers(authenticated_user),
+                headers=self._build_headers(),
                 timeout=timeout,
             )
             try:

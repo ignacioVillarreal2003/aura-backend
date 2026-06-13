@@ -1,10 +1,9 @@
 import logging
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_SERVICE_API_KEY = "service_api_key"
 _PRODUCTION_ENVIRONMENT_NAMES = frozenset({"production", "prod"})
 
 
@@ -25,7 +24,6 @@ class EnvironmentVariables(BaseSettings):
     log_level: str = Field(default="INFO")
     cors_origins: list[str] = Field(default=["*"])
     environment: str = Field(default="development")
-    service_api_key: str = Field(default="service_api_key")
 
     @field_validator(
         "log_level"
@@ -55,22 +53,6 @@ class EnvironmentVariables(BaseSettings):
             raise ValueError("At least one CORS origin must be specified")
 
         return v
-
-    @model_validator(mode="after")
-    def validate_service_api_key_strength(
-            self
-    ) -> "EnvironmentVariables":
-        if self.service_api_key == DEFAULT_SERVICE_API_KEY:
-            if self.is_production():
-                raise ValueError(
-                    "SERVICE_API_KEY is still the default value; "
-                    "set a strong secret before running in production."
-                )
-            logger.warning(
-                "SERVICE_API_KEY is using the default development value; "
-                "set a strong secret before deploying."
-            )
-        return self
 
     def log_configuration(
             self

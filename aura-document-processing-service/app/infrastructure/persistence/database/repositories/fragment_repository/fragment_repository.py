@@ -2,12 +2,12 @@ import logging
 import re
 from datetime import datetime, timezone
 from typing import List, Optional
-from sqlalchemy import and_, func, or_, select, text, update
+from sqlalchemy import and_, or_, select, text, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import load_only
 
 from app.domain.field_limits import MAX_FRAGMENTS_IN_LIST
-
 from app.domain.dtos.document.document_search.document_similarity_hit import DocumentSimilarityHit
 from app.infrastructure.persistence.database.orm.fragment import Fragment
 from app.infrastructure.persistence.database.repositories.database_exceptions import (
@@ -32,62 +32,10 @@ def _sanitize_bm25_search_input(raw: str, max_chars: int) -> str:
 
 
 class FragmentRepository(FragmentRepositoryInterface):
-    async def count_fragments_missing_metadata(
-            self,
-            database_session: AsyncSession
-    ) -> int:
-        try:
-            result = await database_session.execute(
-                select(func.count(Fragment.id)).where(
-                    Fragment.deleted_at.is_(None),
-                    or_(
-                        Fragment.summary.is_(None),
-                        Fragment.entities.is_(None),
-                        Fragment.topics.is_(None)
-                    )
-                )
-            )
-            return int(result.scalar_one())
-        except SQLAlchemyError as e:
-            logger.exception("Database error while counting fragments missing metadata.")
-            raise DatabaseException("Failed to count fragments missing metadata.") from e
-
-    async def count_fragments_missing_metadata_by_document_ids(
-            self,
-            document_ids: List[int],
-            database_session: AsyncSession
-    ) -> int:
-        if not document_ids:
-            return 0
-        try:
-            total = 0
-            for chunk in chunked_ids(document_ids):
-                result = await database_session.execute(
-                    select(func.count(Fragment.id)).where(
-                        Fragment.deleted_at.is_(None),
-                        Fragment.document_id.in_(chunk),
-                        or_(
-                            Fragment.summary.is_(None),
-                            Fragment.entities.is_(None),
-                            Fragment.topics.is_(None)
-                        )
-                    )
-                )
-                total += int(result.scalar_one())
-            return total
-        except SQLAlchemyError as e:
-            logger.exception(
-                "Database error while counting fragments missing metadata for document IDs.",
-                extra={"document_ids_count": len(document_ids)},
-            )
-            raise DatabaseException(
-                "Failed to count fragments missing metadata for the given document IDs."
-            ) from e
-
     async def get_fragment_by_id(
             self,
             fragment_id: int,
-            database_session: AsyncSession
+            database_session: AsyncSession,
     ) -> Optional[Fragment]:
         try:
             result = await database_session.execute(
@@ -107,7 +55,7 @@ class FragmentRepository(FragmentRepositoryInterface):
     async def get_fragments_by_document_id(
             self,
             document_id: int,
-            database_session: AsyncSession
+            database_session: AsyncSession,
     ) -> List[Fragment]:
         try:
             logger.debug(
@@ -119,6 +67,14 @@ class FragmentRepository(FragmentRepositoryInterface):
 
             result = await database_session.execute(
                 select(Fragment)
+                .options(
+                    load_only(
+                        Fragment.id,
+                        Fragment.document_id,
+                        Fragment.content,
+                        Fragment.fragment_index,
+                    )
+                )
                 .where(
                     Fragment.document_id == document_id,
                     Fragment.deleted_at.is_(None)
@@ -462,7 +418,7 @@ class FragmentRepository(FragmentRepositoryInterface):
     async def get_fragments_by_document_ids(
             self,
             document_ids: List[int],
-            database_session: AsyncSession
+            database_session: AsyncSession,
     ) -> List[Fragment]:
         if not document_ids:
             return []
@@ -501,81 +457,6 @@ class FragmentRepository(FragmentRepositoryInterface):
                 extra={"document_ids_count": len(document_ids)},
             )
             raise DatabaseException("Failed to fetch fragments by document IDs.") from e
-
-    async def get_fragment_ids_missing_metadata(
-            self,
-            database_session: AsyncSession,
-            limit: int,
-            last_fragment_id: Optional[int] = None
-    ) -> List[int]:
-        try:
-            conditions = [
-                Fragment.deleted_at.is_(None),
-                or_(
-                    Fragment.summary.is_(None),
-                    Fragment.entities.is_(None),
-                    Fragment.topics.is_(None)
-                )
-            ]
-            if last_fragment_id is not None:
-                conditions.append(Fragment.id > last_fragment_id)
-
-            result = await database_session.execute(
-                select(Fragment.id)
-                .where(*conditions)
-                .order_by(Fragment.id)
-                .limit(limit)
-            )
-            return [int(row[0]) for row in result.fetchall()]
-        except SQLAlchemyError as e:
-            logger.exception("Database error while fetching fragment IDs missing metadata.")
-            raise DatabaseException("Failed to fetch paginated fragment IDs missing metadata.") from e
-
-    async def get_fragment_ids_missing_metadata_by_document_ids(
-            self,
-            document_ids: List[int],
-            database_session: AsyncSession,
-            limit: int,
-            last_fragment_id: Optional[int] = None
-    ) -> List[int]:
-        if not document_ids:
-            return []
-        try:
-            collected: list[int] = []
-            for chunk in chunked_ids(document_ids):
-                remaining = limit - len(collected)
-                if remaining <= 0:
-                    break
-                conditions = [
-                    Fragment.deleted_at.is_(None),
-                    Fragment.document_id.in_(chunk),
-                    or_(
-                        Fragment.summary.is_(None),
-                        Fragment.entities.is_(None),
-                        Fragment.topics.is_(None)
-                    )
-                ]
-                if last_fragment_id is not None:
-                    conditions.append(Fragment.id > last_fragment_id)
-
-                result = await database_session.execute(
-                    select(Fragment.id)
-                    .where(*conditions)
-                    .order_by(Fragment.id)
-                    .limit(remaining)
-                )
-                collected.extend(int(row[0]) for row in result.fetchall())
-
-            collected.sort()
-            return collected[:limit]
-        except SQLAlchemyError as e:
-            logger.exception(
-                "Database error while fetching fragment IDs missing metadata for document IDs.",
-                extra={"document_ids_count": len(document_ids)},
-            )
-            raise DatabaseException(
-                "Failed to fetch paginated fragment IDs missing metadata for the given document IDs."
-            ) from e
 
     async def get_adjacent_fragments(
             self,
@@ -626,7 +507,7 @@ class FragmentRepository(FragmentRepositoryInterface):
     async def create_fragments(
             self,
             fragments: List[Fragment],
-            database_session: AsyncSession
+            database_session: AsyncSession,
     ) -> List[Fragment]:
         if not fragments:
             return []
@@ -664,7 +545,7 @@ class FragmentRepository(FragmentRepositoryInterface):
     async def update_fragment(
             self,
             fragment: Fragment,
-            database_session: AsyncSession
+            database_session: AsyncSession,
     ) -> Fragment:
         try:
             logger.debug(
@@ -701,7 +582,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             self,
             document_id: int,
             user_id: int,
-            database_session: AsyncSession
+            database_session: AsyncSession,
     ) -> int:
         try:
             logger.debug(

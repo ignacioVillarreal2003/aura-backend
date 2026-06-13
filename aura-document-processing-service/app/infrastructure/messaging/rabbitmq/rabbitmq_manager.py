@@ -358,9 +358,8 @@ class RabbitMQManager(RabbitMQManagerInterface):
                 queue_args["x-message-ttl"] = self._settings.message_ttl_ms
 
             await self._declare_work_queue(exchange, self._settings.document_ingestion_queue, queue_args)
-            await self._declare_work_queue(exchange, self._settings.post_process_document_queue, queue_args)
-            await self._declare_work_queue(exchange, self._settings.post_process_fragment_queue, queue_args)
             await self._declare_work_queue(exchange, self._settings.graph_extraction_queue, queue_args)
+            await self._declare_work_queue(exchange, self._settings.document_enrichment_queue, queue_args)
 
             self._exchanges[self._settings.exchange] = exchange
             self._exchanges[self._settings.dlx_exchange] = dlx_exchange
@@ -370,9 +369,8 @@ class RabbitMQManager(RabbitMQManagerInterface):
                 extra={
                     "exchange": self._settings.exchange,
                     "document_ingestion_queue": self._settings.document_ingestion_queue,
-                    "post_process_document_queue": self._settings.post_process_document_queue,
-                    "post_process_fragment_queue": self._settings.post_process_fragment_queue,
                     "graph_extraction_queue": self._settings.graph_extraction_queue,
+                    "document_enrichment_queue": self._settings.document_enrichment_queue,
                     "dlx_exchange": self._settings.dlx_exchange,
                     "dlq_queue": self._settings.dlq_queue
                 }

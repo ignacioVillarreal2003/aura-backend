@@ -6,8 +6,6 @@ from app.domain.constants.graph.entity_type import EntityType
 
 
 class EntityUpsertItem(BaseModel):
-    """A single entity ready to be merged into Neo4j as part of a batch."""
-
     model_config = ConfigDict(frozen=True)
 
     canonical_name: str = Field(min_length=1)
@@ -18,8 +16,6 @@ class EntityUpsertItem(BaseModel):
 
 
 class RelationUpsertItem(BaseModel):
-    """A single relation ready to be merged into Neo4j as part of a batch."""
-
     model_config = ConfigDict(frozen=True)
 
     source_canonical_name: str = Field(min_length=1)

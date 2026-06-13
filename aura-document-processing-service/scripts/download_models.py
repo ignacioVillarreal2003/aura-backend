@@ -1,10 +1,3 @@
-"""Pre-downloads the ML models used by the service into the Hugging Face cache.
-
-Intended to run at image build time so containers start without downloading
-models from the network. Instantiating the real classes (instead of a raw
-snapshot download) fetches exactly the files the runtime needs and validates
-that each model actually loads.
-"""
 import argparse
 import logging
 import sys

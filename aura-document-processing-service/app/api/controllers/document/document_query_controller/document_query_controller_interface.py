@@ -44,6 +44,8 @@ class DocumentQueryControllerInterface(ABC):
     async def get_documents_by_chat(
             self,
             chat_id: int,
+            page: Optional[int],
+            size: Optional[int],
             document_query_service: DocumentQueryServiceInterface,
             database_session: AsyncSession,
             authenticated_user: AuthenticatedUser,

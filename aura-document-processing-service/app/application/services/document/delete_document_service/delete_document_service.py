@@ -10,7 +10,6 @@ from app.application.services.document.delete_document_service.exceptions.delete
     DeleteDocumentServiceException,
     DeleteFragmentsFailedException
 )
-from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
 from app.application.services.document.delete_document_service.delete_document_service_settings import (
     DeleteDocumentServiceSettings
@@ -19,11 +18,10 @@ from app.application.services.document.delete_document_service.interfaces.delete
     DeleteDocumentServiceInterface
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.application.authorization.permissions import Permissions
-from app.infrastructure.persistence.database.orm.document import Document
-from app.infrastructure.persistence.database.repositories.chat_repository.chat_repository_interface import (
-    ChatRepositoryInterface,
+from app.infrastructure.http.chat_membership.chat_membership_provider_interface import (
+    ChatMembershipProviderInterface,
 )
+from app.infrastructure.persistence.database.orm.document import Document
 from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
     DocumentRepositoryInterface
 )
@@ -39,16 +37,13 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             self,
             document_repository: DocumentRepositoryInterface,
             fragment_repository: FragmentRepositoryInterface,
-            chat_repository: ChatRepositoryInterface,
-            authorizer: Authorizer,
+            chat_membership_provider: ChatMembershipProviderInterface,
             delete_document_service_settings: Optional[DeleteDocumentServiceSettings] = None
     ) -> None:
         self._document_repository = document_repository
         self._fragment_repository = fragment_repository
-        self._chat_repository = chat_repository
+        self._chat_membership_provider = chat_membership_provider
         self._settings = delete_document_service_settings or DeleteDocumentServiceSettings()
-
-        self._authorizer = authorizer
 
     async def soft_delete_document(
             self,
@@ -67,14 +62,10 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
         try:
             if document_id <= 0:
                 raise DeleteDocumentInvalidRequestException("The document identifier must be a positive number.")
-            self._authorizer.require_permissions(
-                authenticated_user=authenticated_user,
-                required_permissions=frozenset({Permissions.SOFT_DELETE_DOCUMENT}),
-            )
 
             document = await self._get_document_or_raise(document_id, database_session)
 
-            await self._require_document_access(document, authenticated_user, database_session)
+            await self._require_document_access(document, authenticated_user)
 
             await self._soft_delete_fragments(document.id, authenticated_user.id, database_session)
             await self._soft_delete_document(document.id, authenticated_user.id, database_session)
@@ -123,16 +114,13 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
         try:
             if chat_id <= 0:
                 raise DeleteDocumentInvalidRequestException("The chat identifier must be a positive number.")
-            self._authorizer.require_permissions(
-                authenticated_user=authenticated_user,
-                required_permissions=frozenset({Permissions.SOFT_DELETE_DOCUMENTS_BY_CHAT}),
-            )
 
-            chat = await self._chat_repository.get_chat_by_id(
+            membership = await self._chat_membership_provider.get_membership(
                 chat_id=chat_id,
-                database_session=database_session,
+                user_id=int(authenticated_user.id),
+                authorization_header=None,
             )
-            if chat is None or chat.created_by != authenticated_user.id:
+            if not membership.is_owner:
                 logger.warning(
                     "Unauthorized soft delete by chat attempt.",
                     extra={
@@ -191,21 +179,68 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
                 "An unexpected error occurred while soft deleting documents for the chat."
             ) from e
 
+    async def soft_delete_document_admin(
+            self,
+            document_id: int,
+            database_session: AsyncSession,
+            authenticated_user: AuthenticatedUser
+    ) -> None:
+        logger.info(
+            "An admin soft delete for the document was initiated.",
+            extra={
+                "document_id": document_id,
+                "user_id": authenticated_user.id
+            }
+        )
+
+        try:
+            if document_id <= 0:
+                raise DeleteDocumentInvalidRequestException("The document identifier must be a positive number.")
+
+            document = await self._get_document_or_raise(document_id, database_session)
+
+            await self._soft_delete_fragments(document.id, authenticated_user.id, database_session)
+            await self._soft_delete_document(document.id, authenticated_user.id, database_session)
+
+            logger.info(
+                "The document was soft deleted successfully by an admin.",
+                extra={
+                    "document_id": document_id,
+                    "user_id": authenticated_user.id
+                }
+            )
+
+        except (
+                DeleteDocumentInvalidRequestException,
+                DeleteDocumentNotFoundException,
+                UnauthorizedException,
+                DeleteFragmentsFailedException,
+                DeleteDocumentFailedException,
+        ):
+            raise
+        except Exception as e:
+            logger.exception(
+                "An unexpected error occurred during the admin soft delete.",
+                extra={
+                    "document_id": document_id
+                }
+            )
+            raise DeleteDocumentServiceException(
+                "An unexpected error occurred while soft deleting the document."
+            ) from e
+
     async def _require_document_access(
             self,
             document,
             authenticated_user: AuthenticatedUser,
-            database_session: AsyncSession,
     ) -> None:
-        if document.created_by == authenticated_user.id:
-            return
-
         if document.chat_id is not None:
-            chat = await self._chat_repository.get_chat_by_id(
-                chat_id=document.chat_id,
-                database_session=database_session,
+            membership = await self._chat_membership_provider.get_membership(
+                chat_id=int(document.chat_id),
+                user_id=int(authenticated_user.id),
+                authorization_header=None,
             )
-            if chat is not None and chat.created_by == authenticated_user.id:
+            if membership.is_owner:
                 return
 
         logger.warning(
@@ -299,4 +334,4 @@ async def get_delete_document_service(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="DeleteDocumentService is not registered on the application state."
-        )
+        ) from None

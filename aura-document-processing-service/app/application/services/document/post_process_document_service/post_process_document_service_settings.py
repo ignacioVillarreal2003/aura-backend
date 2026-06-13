@@ -11,4 +11,4 @@ class PostProcessDocumentServiceSettings(BaseSettings):
         extra="ignore",
     )
 
-    max_document_ids: int = Field(default=500, ge=1, le=10000)
+    classify_sample_size: int = Field(default=40, ge=2, le=500)

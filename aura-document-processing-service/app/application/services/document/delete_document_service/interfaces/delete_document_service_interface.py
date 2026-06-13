@@ -22,3 +22,12 @@ class DeleteDocumentServiceInterface(ABC):
             authenticated_user: AuthenticatedUser
     ) -> None:
         pass
+
+    @abstractmethod
+    async def soft_delete_document_admin(
+            self,
+            document_id: int,
+            database_session: AsyncSession,
+            authenticated_user: AuthenticatedUser
+    ) -> None:
+        pass

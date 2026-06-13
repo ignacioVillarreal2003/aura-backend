@@ -1,10 +1,14 @@
 from abc import ABC, abstractmethod
 
+from app.domain.authentication.authenticated_user import AuthenticatedUser
+
 
 class PostProcessFragmentProcessorInterface(ABC):
     @abstractmethod
-    async def run_job(
+    async def process_document_fragments(
             self,
-            job_id: str,
+            *,
+            document_id: int,
+            user: AuthenticatedUser,
     ) -> None:
         pass

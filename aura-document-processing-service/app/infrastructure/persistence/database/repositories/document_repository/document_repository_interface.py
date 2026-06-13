@@ -20,7 +20,9 @@ class DocumentRepositoryInterface(ABC):
     async def get_documents_by_chat_id(
             self,
             chat_id: int,
-            database_session: AsyncSession
+            database_session: AsyncSession,
+            page: Optional[int] = None,
+            size: Optional[int] = None,
     ) -> list[Document]:
         pass
 
@@ -33,20 +35,11 @@ class DocumentRepositoryInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_documents_missing_metadata(
-            self,
-            database_session: AsyncSession,
-            limit: int = 1000,
-            offset: int = 0,
-    ) -> list[Document]:
-        pass
-
-    @abstractmethod
     async def get_documents(
             self,
             database_session: AsyncSession,
-            page: int,
-            size: int,
+            page: Optional[int] = None,
+            size: Optional[int] = None,
             name: Optional[str] = None,
             description: Optional[str] = None,
             category: Optional[str] = None,
