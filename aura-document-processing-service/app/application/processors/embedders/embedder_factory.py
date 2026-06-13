@@ -1,7 +1,6 @@
 import importlib
 import logging
 import threading
-from fastapi import HTTPException, Request, status
 
 from app.application.processors.embedders.constants.embedder_type import EmbedderType
 from app.application.processors.embedders.embedder_settings import EmbedderSettings
@@ -160,16 +159,3 @@ class EmbedderFactory:
                 }
             )
             raise EmbedderInitializationException("Failed to initialize the embedder.") from e
-
-
-async def get_embedder_factory(
-        request: Request
-) -> EmbedderFactory:
-    factory = getattr(request.app.state, "embedder_factory", None)
-    if factory is None:
-        logger.error("The embedder factory was not registered on the application state.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Embedder factory is not configured"
-        )
-    return factory

@@ -2,17 +2,17 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from sqlalchemy import select
 
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.constants.document.document_status import DocumentStatus
 from app.domain.types import UserId
 from app.infrastructure.messaging.rabbitmq.dtos.commands.document_ingestion_command import DocumentIngestionCommand
 from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
 from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_settings import RabbitMQManagerSettings
 from app.infrastructure.messaging.rabbitmq.reliable_publish.redis_outbox_lite import RedisOutboxLite
 from app.infrastructure.persistence.database.database_manager.database_manager_interface import DatabaseManagerInterface
-from app.infrastructure.persistence.database.orm.document import Document
+from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
+    DocumentRepositoryInterface,
+)
 from app.infrastructure.persistence.memory_database.redis_client.redis_client_settings import RedisClientSettings
 
 logger = logging.getLogger(__name__)
@@ -24,11 +24,13 @@ class OutboxLiteWorker:
             *,
             outbox: RedisOutboxLite,
             database_manager: DatabaseManagerInterface,
+            document_repository: DocumentRepositoryInterface,
             rabbitmq_settings: RabbitMQManagerSettings,
             settings: Optional[RedisClientSettings] = None,
     ) -> None:
         self._outbox = outbox
         self._database_manager = database_manager
+        self._document_repository = document_repository
         self._rabbitmq_settings = rabbitmq_settings
         self._settings = settings or RedisClientSettings()
         self._task: Optional[asyncio.Task] = None
@@ -67,14 +69,11 @@ class OutboxLiteWorker:
             seconds=self._settings.outbox_document_reconcile_age_seconds
         )
         async with self._database_manager.session() as session:
-            result = await session.execute(
-                select(Document).where(
-                    Document.deleted_at.is_(None),
-                    Document.status == DocumentStatus.uploaded.value,
-                    Document.created_at <= cutoff,
-                ).order_by(Document.created_at.asc()).limit(self._settings.outbox_document_reconcile_batch_size)
+            documents = await self._document_repository.get_stale_uploaded_documents(
+                created_before=cutoff,
+                limit=self._settings.outbox_document_reconcile_batch_size,
+                database_session=session,
             )
-            documents = list(result.scalars().all())
 
         for document in documents:
             aggregate_id = str(document.id)

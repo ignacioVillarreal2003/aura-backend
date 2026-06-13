@@ -1,5 +1,4 @@
 import logging
-from fastapi import HTTPException, Request, status
 
 from app.application.services.graph.graph_stats_service.interfaces.graph_stats_service_interface import (
     GraphStatsServiceInterface,
@@ -27,14 +26,3 @@ class GraphStatsService(GraphStatsServiceInterface):
             authenticated_user: AuthenticatedUser,
     ) -> GraphStatsResponse:
         return await self._stats_repository.get_stats()
-
-
-async def get_graph_stats_service(request: Request) -> GraphStatsServiceInterface:
-    service = getattr(request.app.state, "graph_stats_service", None)
-    if service is None:
-        logger.error("GraphStatsService is not registered on the application state.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Knowledge graph stats service is not available.",
-        )
-    return service

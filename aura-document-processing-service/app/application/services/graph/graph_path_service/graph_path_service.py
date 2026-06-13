@@ -1,6 +1,5 @@
 import logging
 from typing import Optional
-from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.services.graph.graph_path_service.interfaces.graph_path_service_interface import (
@@ -71,16 +70,3 @@ class GraphPathService(GraphPathServiceInterface):
         if not name:
             return ""
         return " ".join(name.strip().lower().split())
-
-
-async def get_graph_path_service(
-        request: Request,
-) -> GraphPathServiceInterface:
-    service = getattr(request.app.state, "graph_path_service", None)
-    if service is None:
-        logger.error("GraphPathService is not registered on the application state.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Knowledge graph path service is not available.",
-        )
-    return service

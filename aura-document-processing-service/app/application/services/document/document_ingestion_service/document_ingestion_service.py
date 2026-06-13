@@ -2,7 +2,6 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
-from fastapi import HTTPException, Request, status
 import asyncio
 
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
@@ -445,16 +444,3 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                     "exception_type": type(e).__name__
                 }
             )
-
-async def get_document_ingestion_service(
-        request: Request
-) -> DocumentIngestionServiceInterface:
-    try:
-        return request.app.state.document_ingestion_service
-    except AttributeError:
-        logger.error("DocumentIngestionService is not registered on the application state.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="DocumentIngestionService is not registered on the application state."
-        ) from None
-

@@ -8,7 +8,6 @@ from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.application.services.graph.graph_query_service.graph_query_service import get_graph_query_service
 from app.application.services.graph.graph_query_service.interfaces.graph_query_service_interface import (
     GraphQueryServiceInterface,
 )
@@ -17,7 +16,9 @@ from app.domain.dtos.graph.graph_query.graph_query_request import GraphQueryRequ
 from app.domain.dtos.graph.graph_query.graph_query_response import GraphQueryResponse
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
-
+from app.api.dependencies.services import (
+    get_graph_query_service,
+)
 
 class GraphQueryController(GraphQueryControllerInterface):
     async def query(
@@ -38,7 +39,6 @@ class GraphQueryController(GraphQueryControllerInterface):
             authenticated_user=authenticated_user,
             database_session=database_session,
         )
-
 
 router = APIRouter()
 graph_query_controller = GraphQueryController()

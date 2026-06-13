@@ -1,6 +1,5 @@
 import logging
 from typing import Optional
-from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
@@ -202,14 +201,3 @@ class DocumentSearchService(DocumentSearchServiceInterface):
         if len(normalized) <= MAX_DOCUMENT_SEARCH_SNIPPET_CHARS:
             return normalized
         return normalized[: MAX_DOCUMENT_SEARCH_SNIPPET_CHARS - 1].rstrip() + "…"
-
-
-async def get_document_search_service(request: Request) -> DocumentSearchServiceInterface:
-    try:
-        return request.app.state.document_search_service
-    except AttributeError:
-        logger.error("DocumentSearchService is not registered on the application state.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="DocumentSearchService is not registered on the application state.",
-        ) from None

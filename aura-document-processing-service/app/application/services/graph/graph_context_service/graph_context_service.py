@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from typing import Optional
-from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.services.graph.graph_context_service.interfaces.graph_context_service_interface import (
@@ -267,16 +266,3 @@ class GraphContextService(GraphContextServiceInterface):
         if not name:
             return ""
         return " ".join(name.strip().lower().split())
-
-
-async def get_graph_context_service(
-        request: Request,
-) -> GraphContextServiceInterface:
-    service = getattr(request.app.state, "graph_context_service", None)
-    if service is None:
-        logger.error("GraphContextService is not registered on the application state.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Knowledge graph context service is not available.",
-        )
-    return service

@@ -7,14 +7,15 @@ from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.application.services.graph.graph_stats_service.graph_stats_service import get_graph_stats_service
 from app.application.services.graph.graph_stats_service.interfaces.graph_stats_service_interface import (
     GraphStatsServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.graph.graph_stats.graph_stats_response import GraphStatsResponse
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
-
+from app.api.dependencies.services import (
+    get_graph_stats_service,
+)
 
 class GraphStatsController(GraphStatsControllerInterface):
     async def get_stats(
@@ -30,7 +31,6 @@ class GraphStatsController(GraphStatsControllerInterface):
         return await graph_stats_service.get_stats(
             authenticated_user=authenticated_user,
         )
-
 
 router = APIRouter()
 graph_stats_controller = GraphStatsController()

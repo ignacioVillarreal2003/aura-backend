@@ -65,6 +65,11 @@ class RabbitMQManagerSettings(BaseSettings):
 
     document_ingestion_lock_ttl_seconds: int = Field(default=1800, ge=60, le=86400)
     document_ingestion_lock_key_prefix: str = Field(default="aura:ingestion", max_length=128)
+    document_ingestion_temp_dir_name: str = Field(
+        default="doc_ingestion",
+        max_length=128,
+        description="Subdirectory name under the OS temp dir used for ingestion scratch files.",
+    )
 
     @field_validator(
         "url",

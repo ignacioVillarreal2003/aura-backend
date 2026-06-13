@@ -10,7 +10,6 @@ from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.application.services.document.document_query_service.document_query_service import get_document_query_service
 from app.application.services.document.document_query_service.interfaces.document_query_service_interface import (
     DocumentQueryServiceInterface,
 )
@@ -26,7 +25,9 @@ from app.domain.dtos.document.document_query.document_list_response import Docum
 from app.domain.dtos.document.document_query.document_response import DocumentResponse
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
-
+from app.api.dependencies.services import (
+    get_document_query_service,
+)
 
 class DocumentQueryController(DocumentQueryControllerInterface):
     async def get_document(
@@ -103,7 +104,6 @@ class DocumentQueryController(DocumentQueryControllerInterface):
             page=page,
             size=size,
         )
-
 
 router = APIRouter()
 document_query_controller = DocumentQueryController()

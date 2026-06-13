@@ -7,14 +7,15 @@ from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.application.services.graph.graph_ontology_service.graph_ontology_service import get_graph_ontology_service
 from app.application.services.graph.graph_ontology_service.interfaces.graph_ontology_service_interface import (
     GraphOntologyServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.graph.graph_ontology.graph_ontology_response import GraphOntologyResponse
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
-
+from app.api.dependencies.services import (
+    get_graph_ontology_service,
+)
 
 class GraphOntologyController(GraphOntologyControllerInterface):
     async def get_ontology(
@@ -31,7 +32,6 @@ class GraphOntologyController(GraphOntologyControllerInterface):
         return await graph_ontology_service.get_ontology(
             authenticated_user=authenticated_user,
         )
-
 
 router = APIRouter()
 graph_ontology_controller = GraphOntologyController()

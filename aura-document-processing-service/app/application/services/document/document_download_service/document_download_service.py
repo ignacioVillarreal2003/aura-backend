@@ -1,6 +1,5 @@
 import logging
 from typing import AsyncIterator, Optional
-from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
@@ -223,16 +222,3 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
             else document.mime_type
         )
         return content_stream, document.name, mime_str
-
-
-async def get_document_download_service(
-        request: Request
-) -> DocumentDownloadServiceInterface:
-    try:
-        return request.app.state.document_download_service
-    except AttributeError:
-        logger.error("DocumentDownloadService is not registered on the application state.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="DocumentDownloadService is not registered on the application state."
-        ) from None

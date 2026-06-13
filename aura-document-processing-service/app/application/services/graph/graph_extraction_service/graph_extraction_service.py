@@ -3,7 +3,6 @@ import logging
 import uuid
 from datetime import datetime
 from typing import Optional
-from fastapi import HTTPException, Request, status
 
 from app.application.services.graph.graph_extraction_service.exceptions.graph_extraction_service_exception import (
     GraphExtractionAlreadyRunningException,
@@ -556,23 +555,3 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             except ValueError:
                 return None
         return None
-
-
-async def get_graph_extraction_service(
-        request: Request,
-) -> GraphExtractionServiceInterface:
-    service = getattr(request.app.state, "graph_extraction_service", None)
-    if service is None:
-        logger.error("GraphExtractionService is not registered on the application state.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Knowledge graph extraction service is not available.",
-        )
-    return service
-
-
-__all__ = [
-    "GraphExtractionService",
-    "GraphExtractionServiceException",
-    "get_graph_extraction_service",
-]

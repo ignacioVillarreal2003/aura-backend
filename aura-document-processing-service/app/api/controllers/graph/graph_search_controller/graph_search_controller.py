@@ -9,7 +9,6 @@ from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.application.services.graph.graph_entity_service.graph_entity_service import get_graph_entity_service
 from app.application.services.graph.graph_entity_service.interfaces.graph_entity_service_interface import (
     GraphEntityServiceInterface,
 )
@@ -20,10 +19,12 @@ from app.domain.dtos.graph.graph_search.graph_search_response import GraphSearch
 from app.domain.field_limits import MAX_ENTITY_NAME_CHARS
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
+from app.api.dependencies.services import (
+    get_graph_entity_service,
+)
 
 _DEFAULT_SEARCH_LIMIT = 10
 _MAX_SEARCH_LIMIT = min(50, MAX_QUERY_RESULTS)
-
 
 class GraphSearchController(GraphSearchControllerInterface):
     async def search(
@@ -54,7 +55,6 @@ class GraphSearchController(GraphSearchControllerInterface):
             total=len(trimmed),
             has_more=has_more,
         )
-
 
 router = APIRouter()
 graph_search_controller = GraphSearchController()

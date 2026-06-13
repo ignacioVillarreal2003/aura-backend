@@ -1,6 +1,5 @@
 import logging
 from typing import Optional
-from fastapi import HTTPException, Request, status
 
 from app.application.services.graph.graph_ontology_service.interfaces.graph_ontology_service_interface import (
     GraphOntologyServiceInterface,
@@ -31,14 +30,3 @@ class GraphOntologyService(GraphOntologyServiceInterface):
             query_max_results=self._settings.query_max_results,
             query_max_depth=self._settings.query_max_neighbor_depth,
         )
-
-
-async def get_graph_ontology_service(request: Request) -> GraphOntologyServiceInterface:
-    service = getattr(request.app.state, "graph_ontology_service", None)
-    if service is None:
-        logger.error("GraphOntologyService is not registered on the application state.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Knowledge graph ontology service is not available.",
-        )
-    return service

@@ -1,9 +1,10 @@
 import hashlib
 import json
 import logging
-from typing import Any, NoReturn, Optional
+from typing import NoReturn, Optional
 from pydantic import ValidationError
 from fastapi import HTTPException, Request, status
+import redis.asyncio as aioredis
 
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.authentication_provider.authentication_provider_settings import (
@@ -38,29 +39,23 @@ def _cache_key(token: str) -> str:
     return f"{_CACHE_PREFIX}{hashlib.sha256(token.encode()).hexdigest()}"
 
 
-async def _get_cached_user(redis_client, token: str) -> Optional[AuthenticatedUserResponse]:
+async def _get_cached_user(redis_client: aioredis.Redis, token: str) -> Optional[AuthenticatedUserResponse]:
     try:
         raw = await redis_client.get(_cache_key(token))
         if raw is None:
             return None
-        return AuthenticatedUserResponse.model_validate(json.loads(raw))
+        return AuthenticatedUserResponse.model_validate_json(raw)
     except Exception:
         logger.warning("Redis token cache read failed; falling back to auth service.", exc_info=True)
         return None
 
 
-async def _cache_user(redis_client, token: str, user: AuthenticatedUserResponse, ttl: int) -> None:
+async def _cache_user(redis_client: aioredis.Redis, token: str, user: AuthenticatedUserResponse, ttl: int) -> None:
     try:
         await redis_client.setex(
             _cache_key(token),
             ttl,
-            json.dumps({
-                "id": user.id,
-                "email": user.email,
-                "username": user.username,
-                "roles": list(user.roles),
-                "permissions": list(user.permissions),
-            }),
+            user.model_dump_json(),
         )
     except Exception:
         logger.warning("Redis token cache write failed; token will not be cached.", exc_info=True)
@@ -70,7 +65,7 @@ class AuthenticationProvider(AuthenticationProviderInterface):
     def __init__(
             self,
             http_client: HttpClientInterface,
-            redis_client: Any,
+            redis_client: Optional[aioredis.Redis],
             authentication_provider_settings: Optional[AuthenticationProviderSettings] = None,
     ) -> None:
         self._http_client = http_client

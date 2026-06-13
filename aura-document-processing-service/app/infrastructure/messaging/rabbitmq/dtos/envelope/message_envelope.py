@@ -2,7 +2,7 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Generic, Type, TypeVar
+from typing import Generic, TypeVar
 from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
@@ -42,7 +42,7 @@ class MessageEnvelope(Generic[T]):
     def from_bytes(
             cls,
             data: bytes,
-            command_type: Type[T],
+            command_type: type[T],
             retry_count: int = 0,
     ) -> "MessageEnvelope[T]":
         payload = json.loads(data.decode("utf-8"))

@@ -1,6 +1,5 @@
 import logging
 from typing import Optional
-from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.services.graph.graph_entity_service.exceptions.graph_entity_service_exception import (
@@ -138,16 +137,3 @@ class GraphEntityService(GraphEntityServiceInterface):
         if not name:
             return ""
         return " ".join(name.strip().lower().split())
-
-
-async def get_graph_entity_service(
-        request: Request,
-) -> GraphEntityServiceInterface:
-    service = getattr(request.app.state, "graph_entity_service", None)
-    if service is None:
-        logger.error("GraphEntityService is not registered on the application state.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Knowledge graph entity service is not available.",
-        )
-    return service

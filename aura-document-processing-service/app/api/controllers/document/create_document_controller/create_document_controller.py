@@ -9,9 +9,6 @@ from app.api.openapi.common import default_error_responses
 from app.api.schemas.document.create_document_form import parse_create_document_request
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.application.services.document.create_document_service.create_document_service import (
-    get_create_document_service,
-)
 from app.application.services.document.create_document_service.interfaces.create_document_service_interface import (
     CreateDocumentServiceInterface,
 )
@@ -20,7 +17,9 @@ from app.domain.dtos.document.create_document.create_document_request import Cre
 from app.domain.dtos.document.create_document.create_document_response import CreateDocumentResponse
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
-
+from app.api.dependencies.services import (
+    get_create_document_service,
+)
 
 class CreateDocumentController(CreateDocumentControllerInterface):
     async def create_document(
@@ -43,7 +42,6 @@ class CreateDocumentController(CreateDocumentControllerInterface):
             database_session=database_session,
             authenticated_user=authenticated_user,
         )
-
 
 router = APIRouter()
 create_document_controller = CreateDocumentController()

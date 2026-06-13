@@ -1,6 +1,5 @@
 import logging
 from typing import Any, Optional
-from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.services.graph.graph_query_service.interfaces.graph_query_service_interface import (
@@ -521,16 +520,3 @@ class GraphQueryService(GraphQueryServiceInterface):
 
 class _GraphIntentParameterError(Exception):
     pass
-
-
-async def get_graph_query_service(
-        request: Request,
-) -> GraphQueryServiceInterface:
-    service = getattr(request.app.state, "graph_query_service", None)
-    if service is None:
-        logger.error("GraphQueryService is not registered on the application state.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Knowledge graph query service is not available.",
-        )
-    return service

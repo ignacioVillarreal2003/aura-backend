@@ -1,10 +1,11 @@
 import logging
 from datetime import datetime, timezone
 from typing import Optional
-from sqlalchemy import desc, select
+from sqlalchemy import asc, desc, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.constants.document.document_status import DocumentStatus
 from app.domain.constants.document.document_type import DocumentType
 from app.domain.field_limits import MAX_DOCUMENTS_IN_LIST
 from app.infrastructure.persistence.database.orm.document import Document
@@ -347,3 +348,35 @@ class DocumentRepository(DocumentRepositoryInterface):
                 extra={"document_id": document_id, "user_id": user_id},
             )
             raise DatabaseException("Failed to soft-delete the document.") from e
+
+    async def get_stale_uploaded_documents(
+            self,
+            created_before: datetime,
+            limit: int,
+            database_session: AsyncSession,
+    ) -> list[Document]:
+        try:
+            logger.debug(
+                "Fetching stale uploaded documents for outbox reconciliation.",
+                extra={"created_before": created_before.isoformat(), "limit": limit},
+            )
+            result = await database_session.execute(
+                select(Document)
+                .where(
+                    Document.deleted_at.is_(None),
+                    Document.status == DocumentStatus.uploaded.value,
+                    Document.created_at <= created_before,
+                )
+                .order_by(asc(Document.created_at))
+                .limit(limit)
+            )
+            documents = list(result.scalars().all())
+            logger.debug(
+                "Stale uploaded document lookup completed.",
+                extra={"count": len(documents)},
+            )
+            return documents
+
+        except SQLAlchemyError as e:
+            logger.exception("Database error while fetching stale uploaded documents.")
+            raise DatabaseException("Failed to fetch stale uploaded documents.") from e

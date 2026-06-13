@@ -9,16 +9,15 @@ from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.application.services.document.document_download_service.document_download_service import (
-    get_document_download_service,
-)
 from app.application.services.document.document_download_service.interfaces.document_download_service_interface import (
     DocumentDownloadServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
-
+from app.api.dependencies.services import (
+    get_document_download_service,
+)
 
 class DocumentDownloadController(DocumentDownloadControllerInterface):
     async def download_document(
@@ -72,7 +71,6 @@ class DocumentDownloadController(DocumentDownloadControllerInterface):
                 "Content-Disposition": f"attachment; filename=\"{filename}\"",
             },
         )
-
 
 router = APIRouter()
 document_download_controller = DocumentDownloadController()

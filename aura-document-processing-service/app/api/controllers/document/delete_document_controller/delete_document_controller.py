@@ -8,16 +8,15 @@ from app.api.dependencies.rate_limiter import strict_rate_limit
 from app.api.openapi.common import default_error_responses
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.application.services.document.delete_document_service.delete_document_service import (
-    get_delete_document_service,
-)
 from app.application.services.document.delete_document_service.interfaces.delete_document_service_interface import (
     DeleteDocumentServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
-
+from app.api.dependencies.services import (
+    get_delete_document_service,
+)
 
 class DeleteDocumentController(DeleteDocumentControllerInterface):
     async def soft_delete_document(
@@ -79,7 +78,6 @@ class DeleteDocumentController(DeleteDocumentControllerInterface):
             authenticated_user=authenticated_user,
         )
         return Response(status_code=status.HTTP_204_NO_CONTENT)
-
 
 router = APIRouter()
 delete_document_controller = DeleteDocumentController()

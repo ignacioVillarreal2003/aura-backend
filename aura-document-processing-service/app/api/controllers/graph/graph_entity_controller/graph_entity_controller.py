@@ -9,7 +9,6 @@ from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.application.services.graph.graph_entity_service.graph_entity_service import get_graph_entity_service
 from app.application.services.graph.graph_entity_service.interfaces.graph_entity_service_interface import (
     GraphEntityServiceInterface,
 )
@@ -21,7 +20,9 @@ from app.domain.dtos.graph.graph_entity.graph_entity_with_relations_response imp
 from app.domain.field_limits import MAX_ENTITY_NAME_CHARS, MAX_PATH_HOPS
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
-
+from app.api.dependencies.services import (
+    get_graph_entity_service,
+)
 
 class GraphEntityController(GraphEntityControllerInterface):
     async def get_entity(
@@ -48,7 +49,6 @@ class GraphEntityController(GraphEntityControllerInterface):
             authenticated_user=authenticated_user,
             database_session=database_session,
         )
-
 
 router = APIRouter()
 graph_entity_controller = GraphEntityController()

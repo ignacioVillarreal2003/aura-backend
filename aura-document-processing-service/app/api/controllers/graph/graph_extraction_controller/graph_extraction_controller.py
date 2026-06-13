@@ -8,9 +8,7 @@ from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.application.services.graph.graph_extraction_service.graph_extraction_service import (
-    get_graph_extraction_service,
-)
+from app.api.dependencies.services import get_graph_extraction_service
 from app.application.services.graph.graph_extraction_service.interfaces.graph_extraction_service_interface import (
     GraphExtractionServiceInterface,
 )

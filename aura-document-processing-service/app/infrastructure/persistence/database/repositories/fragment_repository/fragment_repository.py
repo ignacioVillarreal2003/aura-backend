@@ -1,7 +1,7 @@
 import logging
 import re
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Optional
 from sqlalchemy import and_, or_, select, text, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,7 +56,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             self,
             document_id: int,
             database_session: AsyncSession,
-    ) -> List[Fragment]:
+    ) -> list[Fragment]:
         try:
             logger.debug(
                 "Fetching fragments by document ID.",
@@ -102,12 +102,12 @@ class FragmentRepository(FragmentRepositoryInterface):
 
     async def get_most_similar_fragments(
             self,
-            query_vector: List[float],
+            query_vector: list[float],
             database_session: AsyncSession,
             k: int = 3,
             threshold: float = 0.3,
-            document_ids: List[int] | None = None,
-    ) -> List[Fragment]:
+            document_ids: list[int] | None = None,
+    ) -> list[Fragment]:
         if not query_vector:
             raise DatabaseException("The search vector cannot be empty.")
 
@@ -131,10 +131,7 @@ class FragmentRepository(FragmentRepositoryInterface):
 
             query_vector_str = "[" + ",".join(str(float(v)) for v in query_vector) + "]"
 
-            doc_id_filter = ""
-            if document_ids:
-                ids_literal = ",".join(str(int(d)) for d in document_ids)
-                doc_id_filter = f"AND document_id IN ({ids_literal})"
+            doc_id_clause = "AND document_id = ANY(:doc_ids)" if document_ids else ""
 
             sql = text(
                 f"""
@@ -157,20 +154,21 @@ class FragmentRepository(FragmentRepositoryInterface):
                 WHERE vector IS NOT NULL
                   AND deleted_at IS NULL
                   AND 1 - (vector <=> :query_vector) >= :threshold
-                  {doc_id_filter}
+                  {doc_id_clause}
                 ORDER BY cosine_similarity DESC
                 LIMIT :k
                 """
             )
 
-            result = await database_session.execute(
-                sql,
-                {
-                    "query_vector": query_vector_str,
-                    "threshold": threshold,
-                    "k": k,
-                }
-            )
+            params: dict = {
+                "query_vector": query_vector_str,
+                "threshold": threshold,
+                "k": k,
+            }
+            if document_ids:
+                params["doc_ids"] = list(document_ids)
+
+            result = await database_session.execute(sql, params)
             rows = result.fetchall()
 
             fragments = [
@@ -216,13 +214,13 @@ class FragmentRepository(FragmentRepositoryInterface):
 
     async def search_documents_by_similarity(
             self,
-            query_vector: List[float],
+            query_vector: list[float],
             database_session: AsyncSession,
             k: int,
             threshold: float,
             pool_size: int,
-            document_ids: List[int] | None = None,
-    ) -> List[DocumentSimilarityHit]:
+            document_ids: list[int] | None = None,
+    ) -> list[DocumentSimilarityHit]:
         if not query_vector:
             raise DatabaseException("The search vector cannot be empty.")
 
@@ -250,10 +248,7 @@ class FragmentRepository(FragmentRepositoryInterface):
 
             query_vector_str = "[" + ",".join(str(float(v)) for v in query_vector) + "]"
 
-            doc_id_filter = ""
-            if document_ids:
-                ids_literal = ",".join(str(int(d)) for d in document_ids)
-                doc_id_filter = f"AND document_id IN ({ids_literal})"
+            doc_id_clause = "AND document_id = ANY(:doc_ids)" if document_ids else ""
 
             sql = text(
                 f"""
@@ -269,7 +264,7 @@ class FragmentRepository(FragmentRepositoryInterface):
                     WHERE vector IS NOT NULL
                       AND deleted_at IS NULL
                       AND 1 - (vector <=> :query_vector) >= :threshold
-                      {doc_id_filter}
+                      {doc_id_clause}
                     ORDER BY cosine_similarity DESC
                     LIMIT :pool_size
                 ) AS top_fragments
@@ -279,15 +274,16 @@ class FragmentRepository(FragmentRepositoryInterface):
                 """
             )
 
-            result = await database_session.execute(
-                sql,
-                {
-                    "query_vector": query_vector_str,
-                    "threshold": threshold,
-                    "pool_size": pool_size,
-                    "k": k,
-                }
-            )
+            params: dict = {
+                "query_vector": query_vector_str,
+                "threshold": threshold,
+                "pool_size": pool_size,
+                "k": k,
+            }
+            if document_ids:
+                params["doc_ids"] = list(document_ids)
+
+            result = await database_session.execute(sql, params)
             rows = result.fetchall()
 
             hits = [
@@ -330,7 +326,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             min_score: float = 0.0,
             query_max_chars: int = 512,
             document_ids: list[int] | None = None,
-    ) -> List[Fragment]:
+    ) -> list[Fragment]:
         sanitized = _sanitize_bm25_search_input(query, query_max_chars)
         if not sanitized:
             logger.debug(
@@ -343,10 +339,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             raise DatabaseException("The BM25 result count k must be at least 1.")
 
         try:
-            doc_id_filter = ""
-            if document_ids:
-                ids_literal = ",".join(str(int(d)) for d in document_ids)
-                doc_id_filter = f"AND document_id IN ({ids_literal})"
+            doc_id_clause = "AND document_id = ANY(:doc_ids)" if document_ids else ""
 
             sql = text(
                 f"""
@@ -367,20 +360,21 @@ class FragmentRepository(FragmentRepositoryInterface):
                 FROM fragment
                 WHERE deleted_at IS NULL
                   AND content @@@ :search_query
-                  {doc_id_filter}
+                  {doc_id_clause}
                   AND paradedb.score(id) >= :min_score
                 ORDER BY paradedb.score(id) DESC
                 LIMIT :k
                 """
             )
-            result = await database_session.execute(
-                sql,
-                {
-                    "search_query": sanitized,
-                    "min_score": float(min_score),
-                    "k": int(k),
-                },
-            )
+            params: dict = {
+                "search_query": sanitized,
+                "min_score": float(min_score),
+                "k": int(k),
+            }
+            if document_ids:
+                params["doc_ids"] = list(document_ids)
+
+            result = await database_session.execute(sql, params)
             rows = result.fetchall()
 
             fragments = [
@@ -417,9 +411,9 @@ class FragmentRepository(FragmentRepositoryInterface):
 
     async def get_fragments_by_document_ids(
             self,
-            document_ids: List[int],
+            document_ids: list[int],
             database_session: AsyncSession,
-    ) -> List[Fragment]:
+    ) -> list[Fragment]:
         if not document_ids:
             return []
         try:
@@ -460,11 +454,11 @@ class FragmentRepository(FragmentRepositoryInterface):
 
     async def get_adjacent_fragments(
             self,
-            fragments: List[Fragment],
+            fragments: list[Fragment],
             window: int,
             database_session: AsyncSession,
             exclude_ids: set[int],
-    ) -> List[Fragment]:
+    ) -> list[Fragment]:
         if not fragments or window <= 0:
             return []
 
@@ -506,9 +500,9 @@ class FragmentRepository(FragmentRepositoryInterface):
 
     async def create_fragments(
             self,
-            fragments: List[Fragment],
+            fragments: list[Fragment],
             database_session: AsyncSession,
-    ) -> List[Fragment]:
+    ) -> list[Fragment]:
         if not fragments:
             return []
 

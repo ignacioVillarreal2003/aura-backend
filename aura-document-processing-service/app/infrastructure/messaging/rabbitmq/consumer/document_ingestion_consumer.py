@@ -29,6 +29,12 @@ from app.infrastructure.persistence.storages.document_storage.document_storage_i
 
 logger = logging.getLogger(__name__)
 
+_RELEASE_LOCK_SCRIPT = (
+    "if redis.call('get', KEYS[1]) == ARGV[1] "
+    "then return redis.call('del', KEYS[1]) "
+    "else return 0 end"
+)
+
 
 class DocumentIngestionConsumer(BaseConsumer[DocumentIngestionCommand], DocumentIngestionConsumerInterface):
     def __init__(
@@ -95,7 +101,7 @@ class DocumentIngestionConsumer(BaseConsumer[DocumentIngestionCommand], Document
             return
 
         try:
-            temp_dir = Path(tempfile.gettempdir()) / "doc_ingestion"
+            temp_dir = Path(tempfile.gettempdir()) / self._settings.document_ingestion_temp_dir_name
             temp_dir.mkdir(parents=True, exist_ok=True)
             safe_name = Path(document_ingestion_command.filename).name
             temp_path = temp_dir / f"{uuid.uuid4().hex}_{safe_name}"
@@ -174,10 +180,4 @@ class DocumentIngestionConsumer(BaseConsumer[DocumentIngestionCommand], Document
         return f"{self._settings.document_ingestion_lock_key_prefix}:document:{document_id}:lock"
 
     async def _release_document_lock(self, lock_key: str, lock_token: str) -> None:
-        await self._redis.execute_command(
-            "EVAL",
-            "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
-            1,
-            lock_key,
-            lock_token,
-        )
+        await self._redis.eval(_RELEASE_LOCK_SCRIPT, 1, lock_key, lock_token)

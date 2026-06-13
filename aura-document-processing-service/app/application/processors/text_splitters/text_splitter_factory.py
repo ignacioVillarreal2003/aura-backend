@@ -1,7 +1,6 @@
 import importlib
 import logging
 import threading
-from fastapi import HTTPException, Request, status
 
 from app.application.processors.text_splitters.constants.text_splitter_type import TextSplitterType
 from app.application.processors.text_splitters.exceptions.text_splitter_exception import (
@@ -155,16 +154,3 @@ class TextSplitterFactory:
                 }
             )
             raise TextSplitterInitializationException("Failed to initialize the text splitter.") from e
-
-
-async def get_text_splitter_factory(
-        request: Request
-) -> TextSplitterFactory:
-    factory = getattr(request.app.state, "text_splitter_factory", None)
-    if factory is None:
-        logger.error("The text splitter factory was not registered on the application state.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Text splitter factory is not configured"
-        )
-    return factory

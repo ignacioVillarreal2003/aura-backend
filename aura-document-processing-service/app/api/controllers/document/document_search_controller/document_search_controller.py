@@ -8,9 +8,6 @@ from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.application.services.document.document_search_service.document_search_service import (
-    get_document_search_service,
-)
 from app.application.services.document.document_search_service.interfaces.document_search_service_interface import (
     DocumentSearchServiceInterface,
 )
@@ -19,7 +16,9 @@ from app.domain.dtos.document.document_search.document_search_request import Doc
 from app.domain.dtos.document.document_search.document_search_response import DocumentSearchListResponse
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
-
+from app.api.dependencies.services import (
+    get_document_search_service,
+)
 
 class DocumentSearchController(DocumentSearchControllerInterface):
     async def search_documents_by_content(
@@ -40,7 +39,6 @@ class DocumentSearchController(DocumentSearchControllerInterface):
             database_session=database_session,
             authenticated_user=authenticated_user,
         )
-
 
 router = APIRouter()
 document_search_controller = DocumentSearchController()

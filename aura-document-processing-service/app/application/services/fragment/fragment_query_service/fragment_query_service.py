@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from typing import Optional, Protocol, TypeVar
-from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
@@ -458,14 +457,3 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             return fragments
         except Exception as e:
             raise FragmentQueryRetrievalException("Failed to retrieve fragments for the documents.") from e
-
-
-async def get_fragment_query_service(request: Request) -> FragmentQueryServiceInterface:
-    try:
-        return request.app.state.fragment_query_service
-    except AttributeError:
-        logger.error("FragmentQueryService is not registered on the application state.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="FragmentQueryService is not registered on the application state.",
-        ) from None

@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
-from fastapi import HTTPException, Request, UploadFile, status
+from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.services.document.create_document_service.create_document_service_settings import (
@@ -431,16 +431,3 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                     "exception_type": type(e).__name__
                 }
             )
-
-
-async def get_create_document_service(
-        request: Request
-) -> CreateDocumentServiceInterface:
-    try:
-        return request.app.state.create_document_service
-    except AttributeError:
-        logger.error("CreateDocumentService is not registered on the application state.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="CreateDocumentService is not registered on the application state."
-        ) from None

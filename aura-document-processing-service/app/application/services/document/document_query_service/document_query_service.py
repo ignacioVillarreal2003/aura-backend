@@ -1,7 +1,6 @@
 import logging
 from datetime import datetime
 from typing import Optional
-from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
@@ -335,16 +334,3 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             )
             raise DocumentQueryNotFoundException("The document was not found.")
         return document
-
-
-async def get_document_query_service(
-        request: Request,
-) -> DocumentQueryServiceInterface:
-    try:
-        return request.app.state.document_query_service
-    except AttributeError:
-        logger.error("DocumentQueryService is not registered on the application state.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="DocumentQueryService is not registered on the application state.",
-        ) from None

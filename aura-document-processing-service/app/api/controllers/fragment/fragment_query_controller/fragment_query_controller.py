@@ -8,7 +8,6 @@ from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.application.services.fragment.fragment_query_service.fragment_query_service import get_fragment_query_service
 from app.application.services.fragment.fragment_query_service.interfaces.fragment_query_service_interface import (
     FragmentQueryServiceInterface,
 )
@@ -22,7 +21,9 @@ from app.domain.dtos.fragment.fragment_query.question_context_fragments_request 
 )
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
-
+from app.api.dependencies.services import (
+    get_fragment_query_service,
+)
 
 class FragmentQueryController(FragmentQueryControllerInterface):
     async def retrieve_context_fragments_by_question(
@@ -62,7 +63,6 @@ class FragmentQueryController(FragmentQueryControllerInterface):
             database_session=database_session,
             authenticated_user=authenticated_user,
         )
-
 
 router = APIRouter()
 fragment_query_controller = FragmentQueryController()

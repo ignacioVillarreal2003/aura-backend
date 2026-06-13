@@ -73,3 +73,12 @@ class DocumentRepositoryInterface(ABC):
             database_session: AsyncSession
     ) -> bool:
         pass
+
+    @abstractmethod
+    async def get_stale_uploaded_documents(
+            self,
+            created_before: datetime,
+            limit: int,
+            database_session: AsyncSession,
+    ) -> list[Document]:
+        pass
