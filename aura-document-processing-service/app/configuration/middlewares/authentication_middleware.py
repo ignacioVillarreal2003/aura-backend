@@ -6,12 +6,11 @@ from app.infrastructure.http.authentication_provider.authentication_provider_mid
 
 _EXCLUDED_PATHS = [
     "/",
-    "/api/health",
     "/api/v1/health",
+    "/api/v1/ready",
     "/api/docs",
     "/api/redoc",
     "/api/openapi.json",
-    "/api/v1/create-document/internal",
     "/metrics"
 ]
 

@@ -1,0 +1,48 @@
+name: aura-llm-service CI
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "aura-llm-service/**"
+      - ".github/workflows/aura-llm-service.yml"
+  pull_request:
+    paths:
+      - "aura-llm-service/**"
+      - ".github/workflows/aura-llm-service.yml"
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: aura-llm-service
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements/requirements.txt
+          pip install pytest pytest-asyncio pytest-cov ruff
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Tests + coverage
+        env:
+          CORS_ORIGINS: '["http://localhost:3000","http://localhost:4200"]'
+          AUTHENTICATION_PROVIDER_AUTHENTICATION_URL: http://auth.test/validate
+          DOCUMENT_CONTEXT_PROVIDER_QUESTION_CONTEXT_FRAGMENTS_URL: http://docs.test/by-question
+          DOCUMENT_CONTEXT_PROVIDER_DOCUMENT_CONTEXT_FRAGMENTS_URL: http://docs.test/by-document
+        run: pytest -q --cov=app --cov-report=term-missing --cov-fail-under=70

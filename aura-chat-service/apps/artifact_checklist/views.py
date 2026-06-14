@@ -13,17 +13,15 @@ from apps.artifact_checklist.serializers import (
     ChecklistListResponse,
     ChecklistResponse,
     GenerateChecklistRequest,
-    UpdateChecklistRequest,
 )
 from apps.artifact_checklist.services.checklist_service import checklist_service
 from apps.artifact.audio import transcribe as _transcribe_audio
 from apps.artifact_checklist.services.export_service import generate_checklist_markdown, generate_checklist_pdf
 from apps.artifact.utils import safe_filename as _safe_filename
-from apps.chat.ai_reply_lock import release, try_acquire
-from apps.chat.exceptions import ChatAccessDeniedException, ChatAiReplyInProgressException, ChatNotFoundException
+from apps.chat.ai_lock_guard import ai_reply_lock_guard
+from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.chat.ws_rate_limit import check_artifact_rate_limit, check_transcribe_rate_limit
-from apps.artifact_message.services.message_service import broadcast_chat_ai_lock_change
 from apps.membership.repositories.membership_repository import membership_repository
 from rest_framework.exceptions import ValidationError
 from core.openapi.common import standard_error_responses
@@ -81,33 +79,6 @@ class ChecklistDetailView(APIView):
     )
     def get(self, request: Request, checklist_id: int) -> Response:
         checklist = checklist_service.get_checklist(user=request.user, checklist_id=checklist_id)
-        return Response(ChecklistResponse(checklist).data)
-
-    @extend_schema(
-        tags=["Checklists"],
-        summary="Actualizar checklist",
-        description=(
-                "Actualiza el título y/o los ítems de la checklist. "
-                "Enviá el array completo de ítems con los estados actualizados. "
-                "Solo el creador o miembros del chat de origen pueden modificarla."
-        ),
-        parameters=[_ID_PARAM],
-        request=UpdateChecklistRequest,
-        responses={
-            200: ChecklistResponse,
-            **standard_error_responses(400, 401, 403, 404),
-        },
-    )
-    def patch(self, request: Request, checklist_id: int) -> Response:
-        serializer = UpdateChecklistRequest(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        d = serializer.validated_data
-        checklist = checklist_service.update_checklist(
-            user=request.user,
-            checklist_id=checklist_id,
-            title=d.get("title"),
-            sections=d.get("sections"),
-        )
         return Response(ChecklistResponse(checklist).data)
 
     @extend_schema(
@@ -191,21 +162,13 @@ class ChecklistGenerateView(APIView):
         else:
             message = d["message"]
 
-        lock_token = await sync_to_async(try_acquire)(chat_id)
-        if not lock_token:
-            raise ChatAiReplyInProgressException()
-
-        try:
-            await sync_to_async(broadcast_chat_ai_lock_change)(chat_id, True)
+        async with ai_reply_lock_guard(chat_id):
             checklist, messages, fragments = await checklist_service.generate_checklist(
                 user=request.user,
                 message=message,
                 mode=d["mode"],
                 chat_id=chat_id,
             )
-        finally:
-            await sync_to_async(release)(chat_id, lock_token)
-            await sync_to_async(broadcast_chat_ai_lock_change)(chat_id, False)
 
         return Response(
             ChecklistGenerateResponse({"checklist": checklist, "messages": messages, "fragments": fragments}).data,
@@ -230,7 +193,7 @@ class ChecklistExportPDFView(APIView):
             pdf = generate_checklist_pdf(checklist)
         except ChecklistExportException:
             raise
-        safe_title = _safe_filename(checklist.artifact.title)
+        safe_title = _safe_filename(checklist.title)
         response = HttpResponse(pdf, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="checklist_{safe_title}.pdf"'
         return response
@@ -250,7 +213,7 @@ class ChecklistExportMarkdownView(APIView):
     def get(self, request: Request, checklist_id: int) -> HttpResponse:
         checklist = checklist_service.get_own_checklist(user=request.user, checklist_id=checklist_id)
         content = generate_checklist_markdown(checklist)
-        safe_title = _safe_filename(checklist.artifact.title)
+        safe_title = _safe_filename(checklist.title)
         response = HttpResponse(content, content_type="text/markdown; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="checklist_{safe_title}.md"'
         return response
@@ -273,7 +236,7 @@ class ChecklistManageExportPDFView(APIView):
             pdf = generate_checklist_pdf(checklist)
         except ChecklistExportException:
             raise
-        safe_title = _safe_filename(checklist.artifact.title)
+        safe_title = _safe_filename(checklist.title)
         response = HttpResponse(pdf, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="checklist_{safe_title}.pdf"'
         return response
@@ -293,7 +256,7 @@ class ChecklistManageExportMarkdownView(APIView):
     def get(self, request: Request, checklist_id: int) -> HttpResponse:
         checklist = checklist_service.get_checklist_admin_export(user=request.user, checklist_id=checklist_id)
         content = generate_checklist_markdown(checklist)
-        safe_title = _safe_filename(checklist.artifact.title)
+        safe_title = _safe_filename(checklist.title)
         response = HttpResponse(content, content_type="text/markdown; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="checklist_{safe_title}.md"'
         return response

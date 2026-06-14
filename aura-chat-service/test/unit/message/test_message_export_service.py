@@ -10,26 +10,24 @@ import json
 
 import pytest
 
-from apps.message.exceptions import PDFGenerationException
-from apps.message.services.export_service import (
+from apps.artifact_message.exceptions import PDFGenerationException
+from apps.artifact_message.services.export_service import (
     _fmt_dt,
     _render_markdown,
-    generate_ai_responses_markdown,
-    generate_chat_json,
     generate_chat_markdown,
     generate_chat_pdf,
     generate_message_pdf,
 )
 from test.conftest import make_chat, make_message
 
-EXPORT = "apps.message.services.export_service"
+EXPORT = "apps.artifact_message.services.export_service"
 
 
 def _conversation():
     """A small user/AI conversation."""
     return [
         make_message(msg_id=1, sender_type="user", message="¿Cuál es el plan?"),
-        make_message(msg_id=2, sender_type="system", message="El plan es avanzar."),
+        make_message(msg_id=2, sender_type="assistant", message="El plan es avanzar."),
         make_message(msg_id=3, sender_type="user", message="Entendido."),
     ]
 
@@ -111,63 +109,6 @@ def test_chat_markdown_empty_conversation():
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# generate_ai_responses_markdown — only SYSTEM messages
-# ══════════════════════════════════════════════════════════════════════════════
-
-def test_ai_responses_markdown_includes_only_ai_messages():
-    chat = make_chat()
-    md = generate_ai_responses_markdown(chat, _conversation())
-    assert "El plan es avanzar." in md      # AI message
-    assert "¿Cuál es el plan?" not in md     # user message excluded
-    assert "Entendido." not in md            # user message excluded
-
-
-def test_ai_responses_markdown_numbers_responses():
-    chat = make_chat()
-    messages = [
-        make_message(msg_id=1, sender_type="system", message="Respuesta uno"),
-        make_message(msg_id=2, sender_type="system", message="Respuesta dos"),
-    ]
-    md = generate_ai_responses_markdown(chat, messages)
-    assert "## Response 1" in md
-    assert "## Response 2" in md
-    assert "2 response(s)" in md
-
-
-def test_ai_responses_markdown_no_ai_messages():
-    chat = make_chat()
-    messages = [make_message(msg_id=1, sender_type="user", message="solo usuario")]
-    md = generate_ai_responses_markdown(chat, messages)
-    assert "0 response(s)" in md
-    assert "solo usuario" not in md
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# generate_chat_json
-# ══════════════════════════════════════════════════════════════════════════════
-
-def test_chat_json_is_valid_json():
-    payload = generate_chat_json(make_chat(), _conversation())
-    parsed = json.loads(payload)
-    assert isinstance(parsed, dict)
-
-
-def test_chat_json_includes_chat_metadata():
-    chat = make_chat(chat_id=42, name="Misión")
-    parsed = json.loads(generate_chat_json(chat, _conversation()))
-    assert parsed["chat"]["id"] == 42
-    assert parsed["chat"]["name"] == "Misión"
-
-
-def test_chat_json_includes_messages_and_count():
-    parsed = json.loads(generate_chat_json(make_chat(), _conversation()))
-    assert parsed["message_count"] == 3
-    assert len(parsed["messages"]) == 3
-    assert parsed["messages"][0]["message"] == "¿Cuál es el plan?"
-    assert parsed["messages"][1]["sender_type"] == "system"
-
-
-# ══════════════════════════════════════════════════════════════════════════════
 # generate_chat_pdf
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -182,7 +123,7 @@ def test_chat_pdf_handles_empty_conversation():
 
 
 def test_chat_pdf_raises_on_pisa_error(mocker):
-    mocker.patch(f"{EXPORT}.pisa.CreatePDF", return_value=mocker.Mock(err=1))
+    mocker.patch("core.export.pdf_export.pisa.CreatePDF", return_value=mocker.Mock(err=1))
     with pytest.raises(PDFGenerationException):
         generate_chat_pdf(make_chat(), _conversation())
 
@@ -192,12 +133,12 @@ def test_chat_pdf_raises_on_pisa_error(mocker):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def test_message_pdf_returns_pdf_bytes():
-    msg = make_message(sender_type="system", message="# Respuesta\n\nDetalle.")
+    msg = make_message(sender_type="assistant", message="# Respuesta\n\nDetalle.")
     pdf = generate_message_pdf(make_chat(), msg)
     assert pdf[:4] == b"%PDF"
 
 
 def test_message_pdf_raises_on_pisa_error(mocker):
-    mocker.patch(f"{EXPORT}.pisa.CreatePDF", return_value=mocker.Mock(err=1))
+    mocker.patch("core.export.pdf_export.pisa.CreatePDF", return_value=mocker.Mock(err=1))
     with pytest.raises(PDFGenerationException):
         generate_message_pdf(make_chat(), make_message())

@@ -9,11 +9,7 @@ from apps.notification.api.views.notification_views import (
     NotificationListView,
     NotificationUnreadCountView,
 )
-from apps.notification.api.views.preference_views import (
-    EventPreferenceDetailView,
-    EventPreferenceListView,
-    GlobalPreferenceView,
-)
+from apps.notification.api.views.preference_views import GlobalPreferenceView
 from apps.notification.api.views.stream_view import NotificationStreamView
 
 app_name = "notifications-v1"
@@ -26,16 +22,6 @@ urlpatterns = [
     path("notifications/stream/", NotificationStreamView.as_view(), name="notification-stream"),
     path("notifications/<int:pk>/", NotificationDetailView.as_view(), name="notification-detail"),
     path("me/notification-preferences/", GlobalPreferenceView.as_view(), name="prefs-global"),
-    path(
-        "me/notification-preferences/event-types/",
-        EventPreferenceListView.as_view(),
-        name="prefs-events",
-    ),
-    path(
-        "me/notification-preferences/event-types/<str:event_type>/",
-        EventPreferenceDetailView.as_view(),
-        name="prefs-event-detail",
-    ),
     path("event-types/", EventTypeCatalogueView.as_view(), name="event-types"),
     path(
         "internal/events/",

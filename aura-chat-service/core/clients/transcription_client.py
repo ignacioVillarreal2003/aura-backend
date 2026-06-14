@@ -39,6 +39,16 @@ def _get_model():
     return _model
 
 
+def preload_model_in_background() -> None:
+    def _load() -> None:
+        try:
+            _get_model()
+        except Exception:
+            logger.exception("Whisper model preload failed; it will be retried on first use.")
+
+    threading.Thread(target=_load, name="whisper-preload", daemon=True).start()
+
+
 class TranscriptionClient:
     def transcribe(self, audio_file) -> str:
         if not _slots.acquire(blocking=False):

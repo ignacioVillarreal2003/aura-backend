@@ -4,13 +4,11 @@ from sqlalchemy.ext.asyncio.session import AsyncSession
 from app.api.controllers.document.create_document_controller.create_document_controller_interface import (
     CreateDocumentControllerInterface,
 )
-from app.api.dependencies.idempotency import optional_idempotency_key
 from app.api.dependencies.rate_limiter import strict_rate_limit
 from app.api.openapi.common import default_error_responses
 from app.api.schemas.document.create_document_form import parse_create_document_request
-from app.application.services.document.create_document_service.create_document_service import (
-    get_create_document_service,
-)
+from app.application.authorization.authorizer import Authorizer
+from app.application.authorization.permissions import Permissions
 from app.application.services.document.create_document_service.interfaces.create_document_service_interface import (
     CreateDocumentServiceInterface,
 )
@@ -19,7 +17,9 @@ from app.domain.dtos.document.create_document.create_document_request import Cre
 from app.domain.dtos.document.create_document.create_document_response import CreateDocumentResponse
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
-
+from app.api.dependencies.services import (
+    get_create_document_service,
+)
 
 class CreateDocumentController(CreateDocumentControllerInterface):
     async def create_document(
@@ -29,16 +29,19 @@ class CreateDocumentController(CreateDocumentControllerInterface):
             create_document_service: CreateDocumentServiceInterface = Depends(get_create_document_service),
             database_session: AsyncSession = Depends(get_database_session),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
-            _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(strict_rate_limit),
     ) -> CreateDocumentResponse:
+        Authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.INGEST_DOCUMENT}),
+        )
+
         return await create_document_service.create_document(
             create_document_request=create_document_request,
             raw_document=file,
             database_session=database_session,
             authenticated_user=authenticated_user,
         )
-
 
 router = APIRouter()
 create_document_controller = CreateDocumentController()

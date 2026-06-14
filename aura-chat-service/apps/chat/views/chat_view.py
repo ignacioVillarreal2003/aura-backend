@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 
 from apps.chat.repositories.chat_repository import ALLOWED_ORDERINGS
-from apps.chat.serializers.request import BulkChatIdsRequest, CreateChatRequest, MuteChatRequest, UpdateChatRequest
+from apps.chat.serializers.request import BulkChatIdsRequest, CreateChatRequest, UpdateChatRequest
 from apps.chat.serializers.response import ChatListResponse, ChatManageListResponse, ChatResponse
 from apps.chat.services.chat_service import chat_service
 from core.openapi.common import standard_error_responses
@@ -69,7 +69,7 @@ def _list_filters(request: Request) -> dict:
         summary="List chats",
         description=(
                 "Paginated list of chats the user can access. Filter by `search`, `ordering`, and comma-separated `tags` "
-                "(ALL tags must match). Rows use **ChatListResponse** (unread counts, pin state, archive, mute)."
+                "(ALL tags must match). Rows use **ChatListResponse** (unread counts, pin state, archive)."
         ),
         parameters=[_SEARCH_PARAM, _ORDERING_PARAM, _TAGS_PARAM],
         responses={200: ChatListResponse(many=True), **standard_error_responses(401)},
@@ -78,8 +78,7 @@ def _list_filters(request: Request) -> dict:
         tags=["Chats"],
         summary="Create chat",
         description=(
-                "Creates a new chat with optional system prompt, response style, tags, and `is_ephemeral` (no persistent "
-                "history / ephemeral AI flow per product rules)."
+                "Creates a new chat with optional system prompt, response style, and tags."
         ),
         request=CreateChatRequest,
         responses={201: ChatResponse, **standard_error_responses(400, 401)},
@@ -279,35 +278,4 @@ class ChatViewSet(ViewSet):
             chat_service.lock_chat(user=request.user, chat_id=chat_id)
         else:
             chat_service.unlock_chat(user=request.user, chat_id=chat_id)
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-    @extend_schema(
-        methods=["POST"],
-        tags=["Chats"],
-        summary="Mute chat",
-        description="Silences this chat for the current user until the given datetime.",
-        parameters=[_CHAT_ID_PARAM],
-        request=MuteChatRequest,
-        responses={204: OpenApiResponse(description="No content"), **standard_error_responses(400, 401, 403, 404)},
-    )
-    @extend_schema(
-        methods=["DELETE"],
-        tags=["Chats"],
-        summary="Unmute chat",
-        description="Clears mute for the current user (notifications / unread behaviour per product).",
-        parameters=[_CHAT_ID_PARAM],
-        responses={204: OpenApiResponse(description="No content"), **standard_error_responses(401, 403, 404)},
-    )
-    @action(detail=True, methods=["post", "delete"], url_path="mute")
-    def mute(self, request: Request, chat_id=None) -> Response:
-        if request.method == "POST":
-            serializer = MuteChatRequest(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            chat_service.mute_chat(
-                user=request.user,
-                chat_id=chat_id,
-                muted_until=serializer.validated_data["muted_until"],
-            )
-        else:
-            chat_service.unmute_chat(user=request.user, chat_id=chat_id)
         return Response(status=status.HTTP_204_NO_CONTENT)

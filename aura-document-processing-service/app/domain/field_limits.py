@@ -39,6 +39,11 @@ MAX_TOTAL_FRAGMENTS_LIST_CHARS: Final[int] = 300_000
 
 # ─── Query and retrieval ───────────────────────────────────────────────────────
 
+MAX_DOCUMENT_SEARCH_QUERY_CHARS: Final[int] = 1_000
+MAX_DOCUMENT_SEARCH_RESULTS: Final[int] = 50
+DEFAULT_DOCUMENT_SEARCH_RESULTS: Final[int] = 10
+MAX_DOCUMENT_SEARCH_SNIPPET_CHARS: Final[int] = 500
+
 MAX_CHARS_PER_QUERY: Final[int] = 16_000
 MAX_QUERIES_PER_TYPE: Final[int] = 10
 MAX_FRAGMENTS_PER_QUERY_STRATEGY: Final[int] = 50

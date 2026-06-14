@@ -4,11 +4,17 @@ import time
 logger = logging.getLogger(__name__)
 
 
+_SKIP_PATHS = frozenset({"/metrics", "/api/v1/health"})
+
+
 class RequestLoggingMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
+        if request.path in _SKIP_PATHS:
+            return self.get_response(request)
+
         start = time.monotonic()
 
         response = self.get_response(request)

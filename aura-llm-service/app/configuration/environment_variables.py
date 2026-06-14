@@ -20,9 +20,14 @@ class EnvironmentVariables(BaseSettings):
     app_port: int = Field(default=8000, ge=1, le=65535)
     app_reload: bool = Field(default=False)
     log_level: str = Field(default="INFO")
-    cors_origins: list[str] = Field(default=["*"])
+
+    cors_origins: list[str]
     environment: str = Field(default="development")
-    service_api_key: str = Field(default="service_api_key")
+
+    max_request_body_bytes: int = Field(default=10 * 1024 * 1024, ge=1024)
+    rate_limit_window_seconds: int = Field(default=60, ge=1, le=3600)
+    rate_limit_default_per_window: int = Field(default=60, ge=1)
+    rate_limit_strict_per_window: int = Field(default=20, ge=1)
 
     @field_validator(
         "log_level"
@@ -64,16 +69,15 @@ class EnvironmentVariables(BaseSettings):
         logger.info(f"Reload: {self.app_reload}")
         logger.info("=" * 60)
 
-    def is_development(
-            self
-    ) -> bool:
-        return (self.app_reload or
-                self.log_level == "DEBUG")
-
     def is_production(
             self
     ) -> bool:
-        return not self.is_development()
+        return self.environment.strip().lower() in {"production", "prod"}
+
+    def is_development(
+            self
+    ) -> bool:
+        return not self.is_production()
 
 
 environment_variables = EnvironmentVariables()

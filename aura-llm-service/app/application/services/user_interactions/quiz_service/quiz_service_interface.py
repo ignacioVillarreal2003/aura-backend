@@ -14,7 +14,7 @@ class QuizServiceInterface(ABC):
             request: QuizGenerateRequest,
             authenticated_user: AuthenticatedUser,
     ) -> QuizGenerateResponse:
-        ...
+        pass
 
     @abstractmethod
     async def generate_stream(
@@ -22,4 +22,4 @@ class QuizServiceInterface(ABC):
             request: QuizGenerateRequest,
             authenticated_user: AuthenticatedUser,
     ) -> AsyncIterator[QuizStreamEvent]:
-        ...
+        pass

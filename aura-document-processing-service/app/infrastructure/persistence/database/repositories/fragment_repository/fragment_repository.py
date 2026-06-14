@@ -1,13 +1,14 @@
 import logging
 import re
 from datetime import datetime, timezone
-from typing import List, Optional
-from sqlalchemy import and_, func, or_, select, text, update
+from typing import Optional
+from sqlalchemy import and_, or_, select, text, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import load_only
 
 from app.domain.field_limits import MAX_FRAGMENTS_IN_LIST
-
+from app.domain.dtos.document.document_search.document_similarity_hit import DocumentSimilarityHit
 from app.infrastructure.persistence.database.orm.fragment import Fragment
 from app.infrastructure.persistence.database.repositories.database_exceptions import (
     DatabaseConstraintViolationException,
@@ -31,62 +32,10 @@ def _sanitize_bm25_search_input(raw: str, max_chars: int) -> str:
 
 
 class FragmentRepository(FragmentRepositoryInterface):
-    async def count_fragments_missing_metadata(
-            self,
-            database_session: AsyncSession
-    ) -> int:
-        try:
-            result = await database_session.execute(
-                select(func.count(Fragment.id)).where(
-                    Fragment.deleted_at.is_(None),
-                    or_(
-                        Fragment.summary.is_(None),
-                        Fragment.entities.is_(None),
-                        Fragment.topics.is_(None)
-                    )
-                )
-            )
-            return int(result.scalar_one())
-        except SQLAlchemyError as e:
-            logger.exception("Database error while counting fragments missing metadata.")
-            raise DatabaseException("Failed to count fragments missing metadata.") from e
-
-    async def count_fragments_missing_metadata_by_document_ids(
-            self,
-            document_ids: List[int],
-            database_session: AsyncSession
-    ) -> int:
-        if not document_ids:
-            return 0
-        try:
-            total = 0
-            for chunk in chunked_ids(document_ids):
-                result = await database_session.execute(
-                    select(func.count(Fragment.id)).where(
-                        Fragment.deleted_at.is_(None),
-                        Fragment.document_id.in_(chunk),
-                        or_(
-                            Fragment.summary.is_(None),
-                            Fragment.entities.is_(None),
-                            Fragment.topics.is_(None)
-                        )
-                    )
-                )
-                total += int(result.scalar_one())
-            return total
-        except SQLAlchemyError as e:
-            logger.exception(
-                "Database error while counting fragments missing metadata for document IDs.",
-                extra={"document_ids_count": len(document_ids)},
-            )
-            raise DatabaseException(
-                "Failed to count fragments missing metadata for the given document IDs."
-            ) from e
-
     async def get_fragment_by_id(
             self,
             fragment_id: int,
-            database_session: AsyncSession
+            database_session: AsyncSession,
     ) -> Optional[Fragment]:
         try:
             result = await database_session.execute(
@@ -106,8 +55,8 @@ class FragmentRepository(FragmentRepositoryInterface):
     async def get_fragments_by_document_id(
             self,
             document_id: int,
-            database_session: AsyncSession
-    ) -> List[Fragment]:
+            database_session: AsyncSession,
+    ) -> list[Fragment]:
         try:
             logger.debug(
                 "Fetching fragments by document ID.",
@@ -118,6 +67,14 @@ class FragmentRepository(FragmentRepositoryInterface):
 
             result = await database_session.execute(
                 select(Fragment)
+                .options(
+                    load_only(
+                        Fragment.id,
+                        Fragment.document_id,
+                        Fragment.content,
+                        Fragment.fragment_index,
+                    )
+                )
                 .where(
                     Fragment.document_id == document_id,
                     Fragment.deleted_at.is_(None)
@@ -145,12 +102,12 @@ class FragmentRepository(FragmentRepositoryInterface):
 
     async def get_most_similar_fragments(
             self,
-            query_vector: List[float],
+            query_vector: list[float],
             database_session: AsyncSession,
             k: int = 3,
             threshold: float = 0.3,
-            document_ids: List[int] | None = None,
-    ) -> List[Fragment]:
+            document_ids: list[int] | None = None,
+    ) -> list[Fragment]:
         if not query_vector:
             raise DatabaseException("The search vector cannot be empty.")
 
@@ -174,10 +131,7 @@ class FragmentRepository(FragmentRepositoryInterface):
 
             query_vector_str = "[" + ",".join(str(float(v)) for v in query_vector) + "]"
 
-            doc_id_filter = ""
-            if document_ids:
-                ids_literal = ",".join(str(int(d)) for d in document_ids)
-                doc_id_filter = f"AND document_id IN ({ids_literal})"
+            doc_id_clause = "AND document_id = ANY(:doc_ids)" if document_ids else ""
 
             sql = text(
                 f"""
@@ -200,20 +154,21 @@ class FragmentRepository(FragmentRepositoryInterface):
                 WHERE vector IS NOT NULL
                   AND deleted_at IS NULL
                   AND 1 - (vector <=> :query_vector) >= :threshold
-                  {doc_id_filter}
+                  {doc_id_clause}
                 ORDER BY cosine_similarity DESC
                 LIMIT :k
                 """
             )
 
-            result = await database_session.execute(
-                sql,
-                {
-                    "query_vector": query_vector_str,
-                    "threshold": threshold,
-                    "k": k,
-                }
-            )
+            params: dict = {
+                "query_vector": query_vector_str,
+                "threshold": threshold,
+                "k": k,
+            }
+            if document_ids:
+                params["doc_ids"] = list(document_ids)
+
+            result = await database_session.execute(sql, params)
             rows = result.fetchall()
 
             fragments = [
@@ -257,6 +212,111 @@ class FragmentRepository(FragmentRepositoryInterface):
             )
             raise DatabaseException("Failed to run vector similarity search.") from e
 
+    async def search_documents_by_similarity(
+            self,
+            query_vector: list[float],
+            database_session: AsyncSession,
+            k: int,
+            threshold: float,
+            pool_size: int,
+            document_ids: list[int] | None = None,
+    ) -> list[DocumentSimilarityHit]:
+        if not query_vector:
+            raise DatabaseException("The search vector cannot be empty.")
+
+        if not (0.0 <= threshold <= 1.0):
+            raise DatabaseException(
+                "The similarity threshold must be between 0.0 and 1.0."
+            )
+
+        if k < 1:
+            raise DatabaseException("The result count k must be at least 1.")
+
+        if pool_size < k:
+            raise DatabaseException("The candidate pool size must be at least k.")
+
+        try:
+            logger.debug(
+                "Executing document-level vector similarity search.",
+                extra={
+                    "k": k,
+                    "threshold": threshold,
+                    "pool_size": pool_size,
+                    "doc_filter": len(document_ids) if document_ids else "none",
+                }
+            )
+
+            query_vector_str = "[" + ",".join(str(float(v)) for v in query_vector) + "]"
+
+            doc_id_clause = "AND document_id = ANY(:doc_ids)" if document_ids else ""
+
+            sql = text(
+                f"""
+                SELECT document_id,
+                       MAX(cosine_similarity)                                  AS best_similarity,
+                       COUNT(*)                                                AS matched_fragments,
+                       (ARRAY_AGG(content ORDER BY cosine_similarity DESC))[1] AS best_fragment_content
+                FROM (
+                    SELECT document_id,
+                           content,
+                           1 - (vector <=> :query_vector) AS cosine_similarity
+                    FROM fragment
+                    WHERE vector IS NOT NULL
+                      AND deleted_at IS NULL
+                      AND 1 - (vector <=> :query_vector) >= :threshold
+                      {doc_id_clause}
+                    ORDER BY cosine_similarity DESC
+                    LIMIT :pool_size
+                ) AS top_fragments
+                GROUP BY document_id
+                ORDER BY best_similarity DESC
+                LIMIT :k
+                """
+            )
+
+            params: dict = {
+                "query_vector": query_vector_str,
+                "threshold": threshold,
+                "pool_size": pool_size,
+                "k": k,
+            }
+            if document_ids:
+                params["doc_ids"] = list(document_ids)
+
+            result = await database_session.execute(sql, params)
+            rows = result.fetchall()
+
+            hits = [
+                DocumentSimilarityHit(
+                    document_id=row.document_id,
+                    best_similarity=min(max(float(row.best_similarity), 0.0), 1.0),
+                    matched_fragments=int(row.matched_fragments),
+                    best_fragment_content=row.best_fragment_content,
+                )
+                for row in rows
+            ]
+
+            logger.debug(
+                "The document-level vector similarity search completed.",
+                extra={
+                    "k": k,
+                    "threshold": threshold,
+                    "results": len(hits)
+                }
+            )
+            return hits
+
+        except DatabaseException:
+            raise
+        except ValueError as e:
+            raise DatabaseException("The search vector is invalid.") from e
+        except SQLAlchemyError as e:
+            logger.exception(
+                "Database error during document-level vector similarity search.",
+                extra={"k": k, "threshold": threshold},
+            )
+            raise DatabaseException("Failed to run document-level vector similarity search.") from e
+
     async def get_most_relevant_fragments_bm25(
             self,
             *,
@@ -266,7 +326,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             min_score: float = 0.0,
             query_max_chars: int = 512,
             document_ids: list[int] | None = None,
-    ) -> List[Fragment]:
+    ) -> list[Fragment]:
         sanitized = _sanitize_bm25_search_input(query, query_max_chars)
         if not sanitized:
             logger.debug(
@@ -279,10 +339,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             raise DatabaseException("The BM25 result count k must be at least 1.")
 
         try:
-            doc_id_filter = ""
-            if document_ids:
-                ids_literal = ",".join(str(int(d)) for d in document_ids)
-                doc_id_filter = f"AND document_id IN ({ids_literal})"
+            doc_id_clause = "AND document_id = ANY(:doc_ids)" if document_ids else ""
 
             sql = text(
                 f"""
@@ -302,14 +359,22 @@ class FragmentRepository(FragmentRepositoryInterface):
                        deleted_at
                 FROM fragment
                 WHERE deleted_at IS NULL
-                  AND content @@@ '{sanitized}'
-                  {doc_id_filter}
-                  AND paradedb.score(id) >= {float(min_score)}
+                  AND content @@@ :search_query
+                  {doc_id_clause}
+                  AND paradedb.score(id) >= :min_score
                 ORDER BY paradedb.score(id) DESC
-                LIMIT {int(k)}
+                LIMIT :k
                 """
             )
-            result = await database_session.execute(sql)
+            params: dict = {
+                "search_query": sanitized,
+                "min_score": float(min_score),
+                "k": int(k),
+            }
+            if document_ids:
+                params["doc_ids"] = list(document_ids)
+
+            result = await database_session.execute(sql, params)
             rows = result.fetchall()
 
             fragments = [
@@ -346,9 +411,9 @@ class FragmentRepository(FragmentRepositoryInterface):
 
     async def get_fragments_by_document_ids(
             self,
-            document_ids: List[int],
-            database_session: AsyncSession
-    ) -> List[Fragment]:
+            document_ids: list[int],
+            database_session: AsyncSession,
+    ) -> list[Fragment]:
         if not document_ids:
             return []
         try:
@@ -387,88 +452,13 @@ class FragmentRepository(FragmentRepositoryInterface):
             )
             raise DatabaseException("Failed to fetch fragments by document IDs.") from e
 
-    async def get_fragment_ids_missing_metadata(
-            self,
-            database_session: AsyncSession,
-            limit: int,
-            last_fragment_id: Optional[int] = None
-    ) -> List[int]:
-        try:
-            conditions = [
-                Fragment.deleted_at.is_(None),
-                or_(
-                    Fragment.summary.is_(None),
-                    Fragment.entities.is_(None),
-                    Fragment.topics.is_(None)
-                )
-            ]
-            if last_fragment_id is not None:
-                conditions.append(Fragment.id > last_fragment_id)
-
-            result = await database_session.execute(
-                select(Fragment.id)
-                .where(*conditions)
-                .order_by(Fragment.id)
-                .limit(limit)
-            )
-            return [int(row[0]) for row in result.fetchall()]
-        except SQLAlchemyError as e:
-            logger.exception("Database error while fetching fragment IDs missing metadata.")
-            raise DatabaseException("Failed to fetch paginated fragment IDs missing metadata.") from e
-
-    async def get_fragment_ids_missing_metadata_by_document_ids(
-            self,
-            document_ids: List[int],
-            database_session: AsyncSession,
-            limit: int,
-            last_fragment_id: Optional[int] = None
-    ) -> List[int]:
-        if not document_ids:
-            return []
-        try:
-            collected: list[int] = []
-            for chunk in chunked_ids(document_ids):
-                remaining = limit - len(collected)
-                if remaining <= 0:
-                    break
-                conditions = [
-                    Fragment.deleted_at.is_(None),
-                    Fragment.document_id.in_(chunk),
-                    or_(
-                        Fragment.summary.is_(None),
-                        Fragment.entities.is_(None),
-                        Fragment.topics.is_(None)
-                    )
-                ]
-                if last_fragment_id is not None:
-                    conditions.append(Fragment.id > last_fragment_id)
-
-                result = await database_session.execute(
-                    select(Fragment.id)
-                    .where(*conditions)
-                    .order_by(Fragment.id)
-                    .limit(remaining)
-                )
-                collected.extend(int(row[0]) for row in result.fetchall())
-
-            collected.sort()
-            return collected[:limit]
-        except SQLAlchemyError as e:
-            logger.exception(
-                "Database error while fetching fragment IDs missing metadata for document IDs.",
-                extra={"document_ids_count": len(document_ids)},
-            )
-            raise DatabaseException(
-                "Failed to fetch paginated fragment IDs missing metadata for the given document IDs."
-            ) from e
-
     async def get_adjacent_fragments(
             self,
-            fragments: List[Fragment],
+            fragments: list[Fragment],
             window: int,
             database_session: AsyncSession,
             exclude_ids: set[int],
-    ) -> List[Fragment]:
+    ) -> list[Fragment]:
         if not fragments or window <= 0:
             return []
 
@@ -510,9 +500,9 @@ class FragmentRepository(FragmentRepositoryInterface):
 
     async def create_fragments(
             self,
-            fragments: List[Fragment],
-            database_session: AsyncSession
-    ) -> List[Fragment]:
+            fragments: list[Fragment],
+            database_session: AsyncSession,
+    ) -> list[Fragment]:
         if not fragments:
             return []
 
@@ -549,7 +539,7 @@ class FragmentRepository(FragmentRepositoryInterface):
     async def update_fragment(
             self,
             fragment: Fragment,
-            database_session: AsyncSession
+            database_session: AsyncSession,
     ) -> Fragment:
         try:
             logger.debug(
@@ -586,7 +576,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             self,
             document_id: int,
             user_id: int,
-            database_session: AsyncSession
+            database_session: AsyncSession,
     ) -> int:
         try:
             logger.debug(

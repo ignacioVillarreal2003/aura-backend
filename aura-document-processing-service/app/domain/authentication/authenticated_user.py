@@ -1,4 +1,4 @@
-from typing import List
+from typing import Optional
 from pydantic import BaseModel, Field, PrivateAttr
 
 from app.domain.types import UserId
@@ -6,9 +6,12 @@ from app.domain.types import UserId
 
 class AuthenticatedUser(BaseModel):
     id: UserId = Field(...)
-    email: str = Field(...)
-    roles: List[str] = Field(default_factory=list)
-    permissions: List[str] = Field(default_factory=list)
+    # Optional because system-initiated principals (e.g. an outbox reconcile job
+    # with no request context) carry only the owner's id. Real authenticated users
+    # always have an email, enforced by the auth service response DTO.
+    email: Optional[str] = Field(default=None)
+    roles: list[str] = Field(default_factory=list)
+    permissions: list[str] = Field(default_factory=list)
 
     _roles_set: frozenset[str] = PrivateAttr()
     _permissions_set: frozenset[str] = PrivateAttr()

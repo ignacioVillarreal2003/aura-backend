@@ -4,10 +4,10 @@ from sqlalchemy.ext.asyncio.session import AsyncSession
 from app.api.controllers.fragment.fragment_query_controller.fragment_query_controller_interface import (
     FragmentQueryControllerInterface,
 )
-from app.api.dependencies.document_catalog_auth import get_document_catalog_authorization_header
 from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
-from app.application.services.fragment.fragment_query_service.fragment_query_service import get_fragment_query_service
+from app.application.authorization.authorizer import Authorizer
+from app.application.authorization.permissions import Permissions
 from app.application.services.fragment.fragment_query_service.interfaces.fragment_query_service_interface import (
     FragmentQueryServiceInterface,
 )
@@ -21,7 +21,9 @@ from app.domain.dtos.fragment.fragment_query.question_context_fragments_request 
 )
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
-
+from app.api.dependencies.services import (
+    get_fragment_query_service,
+)
 
 class FragmentQueryController(FragmentQueryControllerInterface):
     async def retrieve_context_fragments_by_question(
@@ -30,14 +32,17 @@ class FragmentQueryController(FragmentQueryControllerInterface):
             fragment_query_service: FragmentQueryServiceInterface = Depends(get_fragment_query_service),
             database_session: AsyncSession = Depends(get_database_session),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
-            authorization_header: str | None = Depends(get_document_catalog_authorization_header),
             _rl: None = Depends(default_rate_limit),
     ) -> FragmentListResponse:
+        Authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LIST_CONTEXT_FRAGMENTS_BY_QUESTION}),
+        )
+
         return await fragment_query_service.retrieve_context_fragments_by_question(
             question_context_fragments_request=question_context_fragments_request,
             database_session=database_session,
             authenticated_user=authenticated_user,
-            authorization_header=authorization_header,
         )
 
     async def retrieve_context_fragments_by_documents(
@@ -46,16 +51,18 @@ class FragmentQueryController(FragmentQueryControllerInterface):
             fragment_query_service: FragmentQueryServiceInterface = Depends(get_fragment_query_service),
             database_session: AsyncSession = Depends(get_database_session),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
-            authorization_header: str | None = Depends(get_document_catalog_authorization_header),
             _rl: None = Depends(default_rate_limit),
     ) -> FragmentListResponse:
+        Authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.LIST_CONTEXT_FRAGMENTS_BY_DOCUMENTS}),
+        )
+
         return await fragment_query_service.retrieve_context_fragments_by_documents(
             documents_context_fragments_request=documents_context_fragments_request,
             database_session=database_session,
             authenticated_user=authenticated_user,
-            authorization_header=authorization_header,
         )
-
 
 router = APIRouter()
 fragment_query_controller = FragmentQueryController()

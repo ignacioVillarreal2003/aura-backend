@@ -55,7 +55,7 @@ class UpdateThreadReplyRequest(serializers.Serializer):
 class FeedbackResponse(serializers.ModelSerializer):
     class Meta:
         model = ArtifactFeedback
-        fields = ["id", "artifact_id", "user_id", "value", "reason", "comment", "created_at", "updated_at"]
+        fields = ["id", "artifact_id", "value", "reason", "comment", "created_by", "created_at", "updated_at"]
         read_only_fields = fields
 
 
@@ -73,7 +73,7 @@ class ThreadReplyResponse(serializers.ModelSerializer):
 class ArtifactPinResponse(serializers.ModelSerializer):
     class Meta:
         model = ArtifactPin
-        fields = ["id", "artifact_id", "chat_id", "created_by", "created_at"]
+        fields = ["id", "artifact_id", "created_by", "created_at"]
         read_only_fields = fields
 
 

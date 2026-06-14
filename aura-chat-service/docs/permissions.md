@@ -19,7 +19,6 @@ Referencia de rutas que usan cada permiso: [endpoints.md](endpoints.md).
 | `ARCHIVE_CHAT` | Archivar uno o más chats (bulk). |
 | `UNARCHIVE_CHAT` | Restaurar chats archivados (bulk). |
 | `LOCK_CHAT` | Bloquear o desbloquear envío de mensajes en el chat. |
-| `MUTE_CHAT` | Silenciar o dejar de silenciar el chat para el usuario. |
 
 ## Share links
 

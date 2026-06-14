@@ -1,7 +1,6 @@
 import importlib
 import logging
 import threading
-from fastapi import HTTPException, Request, status
 
 from app.application.processors.rerankers.constants.reranker_type import RerankerType
 from app.application.processors.rerankers.exceptions.reranker_exception import (
@@ -88,14 +87,3 @@ class RerankerFactory:
                 }
             )
             raise RerankerInitializationException("Failed to initialize the reranker.") from e
-
-
-async def get_reranker_factory(request: Request) -> RerankerFactory:
-    factory = getattr(request.app.state, "reranker_factory", None)
-    if factory is None:
-        logger.error("The reranker factory was not registered on the application state.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Reranker factory is not configured.",
-        )
-    return factory

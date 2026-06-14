@@ -1,45 +1,23 @@
-# Virtual environments
 .venv/
 venv/
-
-# Version control
 .git/
 .gitignore
-
-# IDE
 .idea/
 .vscode/
-
-# Python cache (all levels)
 **/__pycache__/
 **/*.py[cod]
 **/*.pyo
-
-# Logs
 *.log
-
-# Environment files (secrets must come from env vars / secrets manager)
-.env
-.env.*
-
-# Database
+env/.env
+env/.env.docker
 db.sqlite3
-
-# Tests
 test/
-
-# Docker files (no need to copy into image)
 .dockerignore
 Dockerfile
 docker-compose*.yml
-
-# Docs
 *.md
-
-# Dev config
 pytest.ini
 setup.cfg
 .coveragerc
-
 docs/
 .claude/

@@ -60,12 +60,16 @@ class RabbitMQManagerSettings(BaseSettings):
     dlq_queue: str = Field(default="aura.dead")
 
     document_ingestion_queue: str = Field(default="document.ingestion")
-    post_process_document_queue: str = Field(default="post_process.document")
-    post_process_fragment_queue: str = Field(default="post_process.fragment")
     graph_extraction_queue: str = Field(default="graph.extraction")
+    document_enrichment_queue: str = Field(default="document.enrichment")
 
     document_ingestion_lock_ttl_seconds: int = Field(default=1800, ge=60, le=86400)
     document_ingestion_lock_key_prefix: str = Field(default="aura:ingestion", max_length=128)
+    document_ingestion_temp_dir_name: str = Field(
+        default="doc_ingestion",
+        max_length=128,
+        description="Subdirectory name under the OS temp dir used for ingestion scratch files.",
+    )
 
     @field_validator(
         "url",
@@ -79,7 +83,7 @@ class RabbitMQManagerSettings(BaseSettings):
         v = str(v).strip()
         if not v:
             raise ValueError("The RabbitMQ URL cannot be empty.")
-        if not (v.startswith("amqp://") or v.startswith("amqps://")):
+        if not v.startswith(("amqp://", "amqps://")):
             raise ValueError(
                 "The RabbitMQ URL must start with amqp:// for plain connections or amqps:// for TLS."
             )
@@ -88,9 +92,8 @@ class RabbitMQManagerSettings(BaseSettings):
     @field_validator(
         "exchange",
         "document_ingestion_queue",
-        "post_process_document_queue",
-        "post_process_fragment_queue",
         "graph_extraction_queue",
+        "document_enrichment_queue",
         "dlx_exchange",
         "dlq_queue",
         mode="before"

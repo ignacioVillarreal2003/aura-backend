@@ -15,6 +15,9 @@ class DocumentQuestionState:
     chat_id: Optional[int] = None
     document_ids: list[int] = field(default_factory=list)
 
+    system_prompt: Optional[str] = None
+    response_style: Optional[str] = None
+
     base_question: Optional[str] = None
     keyword_question: Optional[str] = None
 
@@ -35,6 +38,8 @@ class DocumentQuestionState:
             authenticated_user=authenticated_user,
             chat_id=document_question_request.chat_id,
             document_ids=list(document_question_request.document_ids),
+            system_prompt=document_question_request.system_prompt,
+            response_style=document_question_request.response_style,
         )
 
     @property

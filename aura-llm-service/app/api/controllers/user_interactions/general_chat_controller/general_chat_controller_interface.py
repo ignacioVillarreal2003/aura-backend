@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-
 from starlette.responses import StreamingResponse
 
 from app.application.services.user_interactions.general_chat_service.general_chat_service_interface import (

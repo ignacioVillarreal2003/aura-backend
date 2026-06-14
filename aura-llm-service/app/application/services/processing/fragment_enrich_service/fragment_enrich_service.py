@@ -1,11 +1,10 @@
 import json
 import logging
 from typing import Optional
-from fastapi import HTTPException, Request, status
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
 
-from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
+from app.application.authorization.exceptions.authorization_exceptions import UnauthorizedException
 from app.application.exceptions.app_exception import RequestValidationException
 from app.application.services.processing.fragment_enrich_service.exceptions.fragment_enrich_service_exceptions import (
     FragmentEnrichServiceException,
@@ -14,7 +13,8 @@ from app.application.services.processing.fragment_enrich_service.fragment_enrich
     HUMAN_PROMPT,
     SYSTEM_PROMPT,
 )
-from app.application.services.processing.fragment_enrich_service.fragment_enrich_settings import FragmentEnrichServiceSettings
+from app.application.services.processing.fragment_enrich_service.fragment_enrich_settings import \
+    FragmentEnrichServiceSettings
 from app.application.services.processing.fragment_enrich_service.fragment_enrich_state import FragmentEnrichState
 from app.application.services.processing.fragment_enrich_service.interfaces.fragment_enrich_service_interface import (
     FragmentEnrichServiceInterface,
@@ -103,7 +103,7 @@ class FragmentEnrichService(FragmentEnrichServiceInterface):
             HumanMessage(content=HUMAN_PROMPT.format(content=state.content)),
         ]
         try:
-            llm = await self._ollama_llm_facade.get_llm_base()
+            llm = await self._ollama_llm_facade.get_llm_json()
             return await self._ollama_llm_invoker.call_llm_content(llm=llm, llm_input=llm_input)
         except LLMInvocationError as e:
             logger.warning(
@@ -137,14 +137,3 @@ class FragmentEnrichService(FragmentEnrichServiceInterface):
                 "La respuesta del modelo no tiene el formato JSON esperado.",
                 status_code=502,
             ) from e
-
-
-async def get_fragment_enrich_service(request: Request) -> FragmentEnrichServiceInterface:
-    try:
-        return request.app.state.fragment_enrich_service
-    except AttributeError:
-        logger.error("FragmentEnrichService not found in application state")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="FragmentEnrichService is not available",
-        )

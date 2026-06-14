@@ -18,12 +18,14 @@ class DocumentSummaryRepository:
             document_ids: list,
             summary: str,
             artifact_id: int,
+            title: str = "",
     ) -> ArtifactDocumentSummary:
         obj = ArtifactDocumentSummary.objects.create(
             created_by=user_id,
             document_ids=document_ids,
             summary=summary,
             artifact_id=artifact_id,
+            title=title,
         )
         return _with_related(ArtifactDocumentSummary.objects.filter(id=obj.id)).first()
 
@@ -44,23 +46,6 @@ class DocumentSummaryRepository:
 
     def list_all(self):
         return _with_related(ArtifactDocumentSummary.objects.all())
-
-    def update(
-            self,
-            obj: ArtifactDocumentSummary,
-            *,
-            updated_by: int,
-            summary: Optional[str] = None,
-    ) -> ArtifactDocumentSummary:
-        update_fields = []
-        if summary is not None:
-            obj.summary = summary
-            update_fields.append("summary")
-        if update_fields:
-            obj.updated_by = updated_by
-            update_fields.append("updated_by")
-            obj.save(update_fields=update_fields)
-        return _with_related(ArtifactDocumentSummary.objects.filter(id=obj.id)).first()
 
     def soft_delete(self, obj: ArtifactDocumentSummary, deleted_by: int) -> None:
         obj.delete(deleted_by=deleted_by)

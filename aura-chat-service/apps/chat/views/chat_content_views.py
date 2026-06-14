@@ -24,7 +24,8 @@ class ClearChatContentView(APIView):
         summary="Limpiar contenido del chat",
         description=(
                 "Elimina suavemente **todos los artefactos** del chat (mensajes, informes, checklists, "
-                "quizzes, líneas de tiempo, lecciones aprendidas y briefs de decisión). "
+                "quizzes, líneas de tiempo, lecciones aprendidas, briefs de decisión, resúmenes y "
+                "acciones de documentos). "
                 "Solo el propietario del chat puede ejecutar esta acción."
         ),
         parameters=[_CHAT_PARAM],

@@ -1,6 +1,5 @@
 ﻿from fastapi import APIRouter, Depends
 
-from app.api.dependencies.idempotency import optional_idempotency_key
 from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.controllers.processing.document_classify_controller.document_classify_controller_interface import (
     DocumentClassifyControllerInterface
@@ -8,7 +7,7 @@ from app.api.controllers.processing.document_classify_controller.document_classi
 from app.api.openapi.common import default_error_responses
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.application.services.processing.document_classify_service.document_classify_service import get_document_classify_service
+from app.api.dependencies.app_state_services import get_document_classify_service
 from app.application.services.processing.document_classify_service.interfaces.document_classify_service_interface import (
     DocumentClassifyServiceInterface,
 )
@@ -24,16 +23,16 @@ class DocumentClassifyController(DocumentClassifyControllerInterface):
             classify_document_request: ClassifyDocumentRequest,
             document_classify_service: DocumentClassifyServiceInterface = Depends(get_document_classify_service),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
-            _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(default_rate_limit),
     ) -> ClassifyDocumentResponse:
         Authorizer.require_permissions(
             authenticated_user=authenticated_user,
             required_permissions=frozenset({Permissions.LLM_DOCUMENT_CLASSIFY}),
         )
+
         return await document_classify_service.classify_document(
             classify_document_request=classify_document_request,
-            authenticated_user=authenticated_user
+            authenticated_user=authenticated_user,
         )
 
 

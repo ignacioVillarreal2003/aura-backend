@@ -29,7 +29,17 @@ from accounts.services.auth_service import (
 )
 from accounts.models import User, RefreshToken
 from accounts.admin_parts.utils.audit import log_audit
+from notifications.services.notification_client import emit_event_async
 from django.utils import timezone
+
+
+def _is_new_device_login(user, request) -> bool:
+    """A login counts as new-device when no previous refresh token (revoked or
+    not) was issued with the same user agent."""
+    user_agent = request.META.get('HTTP_USER_AGENT', '')
+    if not user_agent:
+        return False
+    return not RefreshToken.objects.filter(user=user, user_agent=user_agent).exists()
 
 
 class LoginView(APIView):
@@ -64,7 +74,19 @@ class LoginView(APIView):
                 source='api',
             )
             return Response({'detail': 'Invalid credentials.'}, status=status.HTTP_401_UNAUTHORIZED)
+        is_new_device = _is_new_device_login(user, request)
         tokens = issue_tokens_for_user(user, request=request)
+        if is_new_device:
+            emit_event_async(
+                event_type='auth.new_login',
+                recipient_ids=[user.pk],
+                context={
+                    'location': request.META.get('REMOTE_ADDR') or '',
+                    'user_agent': request.META.get('HTTP_USER_AGENT', '')[:255],
+                    'recipient_email': user.email,
+                    'recipient_name': user.username,
+                },
+            )
         log_audit(
             actor=user,
             action='LOGIN',
@@ -328,6 +350,16 @@ class ChangePasswordView(APIView):
 
         # Revoke all active refresh tokens — forces re-login
         RefreshToken.objects.filter(user=user, is_revoked=False).update(is_revoked=True)
+
+        emit_event_async(
+            event_type='auth.password.changed',
+            recipient_ids=[user.pk],
+            context={
+                'at': timezone.localtime().strftime('%d/%m/%Y %H:%M'),
+                'recipient_email': user.email,
+                'recipient_name': user.username,
+            },
+        )
 
         log_audit(
             actor=user,

@@ -1,4 +1,3 @@
-from collections.abc import AsyncIterator
 from fastapi import APIRouter, Depends
 from starlette.responses import StreamingResponse
 
@@ -7,14 +6,17 @@ from app.api.controllers.user_interactions.checklist_controller.checklist_contro
 )
 from app.api.dependencies.rate_limiter import default_rate_limit, strict_rate_limit
 from app.api.openapi.common import default_error_responses
+from app.api.sse import sse_response
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.application.services.user_interactions.checklist_service.checklist_service import get_checklist_service
-from app.application.services.user_interactions.checklist_service.checklist_service_interface import ChecklistServiceInterface
+from app.api.dependencies.app_state_services import get_checklist_service
+from app.application.services.user_interactions.checklist_service.checklist_service_interface import (
+    ChecklistServiceInterface,
+)
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.user_interactions.checklist.checklist_request import ChecklistGenerateRequest
 from app.domain.dtos.user_interactions.checklist.checklist_response import ChecklistGenerateResponse
-from app.domain.dtos.user_interactions.checklist.checklist_stream_events import ChecklistStreamEvent
+
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 
 
@@ -30,6 +32,7 @@ class ChecklistController(ChecklistControllerInterface):
             authenticated_user=authenticated_user,
             required_permissions=frozenset({Permissions.LLM_CHECKLIST_GENERATE}),
         )
+
         return await checklist_service.generate(
             request=checklist_request,
             authenticated_user=authenticated_user,
@@ -47,22 +50,12 @@ class ChecklistController(ChecklistControllerInterface):
             required_permissions=frozenset({Permissions.LLM_CHECKLIST_GENERATE}),
         )
 
-        async def sse_bytes() -> AsyncIterator[bytes]:
-            async for event in checklist_service.generate_stream(
-                    request=checklist_request,
-                    authenticated_user=authenticated_user,
-            ):
-                yield _fmt(event)
-
-        return StreamingResponse(
-            sse_bytes(),
-            media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+        return sse_response(
+            checklist_service.generate_stream(
+                request=checklist_request,
+                authenticated_user=authenticated_user,
+            )
         )
-
-
-def _fmt(event: ChecklistStreamEvent) -> bytes:
-    return f"data: {event.model_dump_json()}\n\n".encode("utf-8")
 
 
 router = APIRouter()

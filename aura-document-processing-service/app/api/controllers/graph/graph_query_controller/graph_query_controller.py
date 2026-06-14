@@ -4,10 +4,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.controllers.graph.graph_query_controller.graph_query_controller_interface import (
     GraphQueryControllerInterface,
 )
-from app.api.dependencies.document_catalog_auth import get_document_catalog_authorization_header
 from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
-from app.application.services.graph.graph_query_service.graph_query_service import get_graph_query_service
+from app.application.authorization.authorizer import Authorizer
+from app.application.authorization.permissions import Permissions
 from app.application.services.graph.graph_query_service.interfaces.graph_query_service_interface import (
     GraphQueryServiceInterface,
 )
@@ -16,7 +16,9 @@ from app.domain.dtos.graph.graph_query.graph_query_request import GraphQueryRequ
 from app.domain.dtos.graph.graph_query.graph_query_response import GraphQueryResponse
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
-
+from app.api.dependencies.services import (
+    get_graph_query_service,
+)
 
 class GraphQueryController(GraphQueryControllerInterface):
     async def query(
@@ -25,16 +27,18 @@ class GraphQueryController(GraphQueryControllerInterface):
             graph_query_service: GraphQueryServiceInterface = Depends(get_graph_query_service),
             database_session: AsyncSession = Depends(get_database_session),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
-            authorization_header: str | None = Depends(get_document_catalog_authorization_header),
             _rl: None = Depends(default_rate_limit),
     ) -> GraphQueryResponse:
+        Authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.GRAPH_QUERY}),
+        )
+
         return await graph_query_service.execute(
             request=graph_query_request,
             authenticated_user=authenticated_user,
             database_session=database_session,
-            authorization_header=authorization_header,
         )
-
 
 router = APIRouter()
 graph_query_controller = GraphQueryController()

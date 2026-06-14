@@ -1,15 +1,16 @@
 import logging
 from collections.abc import AsyncIterator, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
-from asgiref.sync import async_to_sync, sync_to_async
-from channels.layers import get_channel_layer
+from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.db import transaction
 
 from apps.chat.exceptions import ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.membership.repositories.membership_repository import membership_repository
+from apps.membership.models.chat_membership import ChatMembership
+from core.ws.group_broadcast import send_to_chat_group
 from apps.artifact_message.exceptions import (
     ChatLockedException,
     LLMServiceException,
@@ -40,14 +41,23 @@ from core.clients.llm_client import (
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class _AiStreamState:
+    """Mutable accumulation state for a single AI SSE stream."""
+
+    accumulated_answer: str = ""
+    received_complete: bool = False
+    last_question: str = ""
+    last_fragments: list[Any] = field(default_factory=list)
+
+
 class ChatAIMode:
     DOCUMENT_QUESTION = "document_question"
     GENERAL_CHAT = "general_chat"
     RAG_AGENT = "rag_agent"
-    AGENT = "agent"
 
     DEFAULT = DOCUMENT_QUESTION
-    ALL = frozenset({DOCUMENT_QUESTION, GENERAL_CHAT, RAG_AGENT, AGENT})
+    ALL = frozenset({DOCUMENT_QUESTION, GENERAL_CHAT, RAG_AGENT})
 
     @classmethod
     def normalize(cls, value: Any) -> str:
@@ -57,34 +67,12 @@ class ChatAIMode:
 
 
 def _broadcast_user_message_to_chat_group(chat_id: int, msg: ArtifactMessage) -> None:
-    channel_layer = get_channel_layer()
-    if channel_layer is None:
-        return
     payload = MessageResponse(msg).data
-    try:
-        async_to_sync(channel_layer.group_send)(
-            f"chat_{chat_id}",
-            {"type": "user_message", **payload},
-        )
-    except Exception:
-        logger.warning(
-            "Failed to broadcast user_message for chat %d", chat_id, exc_info=True
-        )
+    send_to_chat_group(chat_id, {"type": "user_message", **payload})
 
 
 def broadcast_chat_ai_lock_change(chat_id: int, locked: bool) -> None:
-    channel_layer = get_channel_layer()
-    if channel_layer is None:
-        return
-    try:
-        async_to_sync(channel_layer.group_send)(
-            f"chat_{chat_id}",
-            {"type": "chat_ai_lock_changed", "locked": locked},
-        )
-    except Exception:
-        logger.warning(
-            "Failed to broadcast ai_lock_change for chat %d", chat_id, exc_info=True
-        )
+    send_to_chat_group(chat_id, {"type": "chat_ai_lock_changed", "locked": locked})
 
 
 @dataclass
@@ -158,10 +146,23 @@ class MessageService:
         recent = await sync_to_async(message_repository.get_recent_messages)(
             chat_id, limit=limit
         )
+        ordered = list(reversed(recent))
+        # In a shared chat several people speak as "human". Tag each human turn
+        # with its author so the model can tell participants apart; keep
+        # single-user chats clean (no tagging) to avoid polluting the prompt.
+        human_senders = {
+            m.created_by
+            for m in ordered
+            if m.sender_type == ArtifactMessage.SenderType.USER
+        }
+        multi_user = len(human_senders) > 1
         messages: list[dict[str, str]] = []
-        for m in reversed(recent):
+        for m in ordered:
             if m.sender_type == ArtifactMessage.SenderType.USER:
-                messages.append({"role": "human", "content": m.message})
+                content = m.message
+                if multi_user and m.created_by is not None:
+                    content = f"[User {m.created_by}] {content}"
+                messages.append({"role": "human", "content": content})
             elif m.sender_type == ArtifactMessage.SenderType.ASSISTANT:
                 messages.append({"role": "assistant", "content": m.message})
         return messages
@@ -172,10 +173,12 @@ class MessageService:
             chat_id: int,
     ) -> DocumentQuestionRunResult:
         messages = await self._build_llm_messages(chat_id)
+        system_prompt, response_style = await self._get_chat_prompt_style(chat_id)
 
         try:
             llm_out: DocumentQuestionResult = await llm_client.document_question(
-                messages, user, chat_id=chat_id
+                messages, user, chat_id=chat_id,
+                system_prompt=system_prompt, response_style=response_style,
             )
         except HttpClientException as e:
             logger.error(
@@ -218,8 +221,6 @@ class MessageService:
             return await self.run_general_chat(user, chat_id)
         if mode == ChatAIMode.RAG_AGENT:
             return await self.run_rag_agent(user, chat_id)
-        if mode == ChatAIMode.AGENT:
-            return await self.run_agent(user, chat_id)
         return await self.run_document_question(user, chat_id)
 
     async def run_general_chat(
@@ -228,10 +229,11 @@ class MessageService:
             chat_id: int,
     ) -> DocumentQuestionRunResult:
         messages = await self._build_llm_messages(chat_id)
-        system_prompt = await self._get_chat_system_prompt(chat_id)
+        system_prompt, response_style = await self._get_chat_prompt_style(chat_id)
         try:
             result: GeneralChatResult = await llm_client.general_chat(
-                messages, user, chat_id=chat_id, system_prompt=system_prompt
+                messages, user, chat_id=chat_id,
+                system_prompt=system_prompt, response_style=response_style,
             )
         except HttpClientException as e:
             logger.error(
@@ -268,19 +270,6 @@ class MessageService:
             label="rag-agent",
         )
 
-    async def run_agent(
-            self,
-            user: AuthenticatedUser,
-            chat_id: int,
-    ) -> DocumentQuestionRunResult:
-        return await self._run_agent_flow(
-            user=user,
-            chat_id=chat_id,
-            caller=llm_client.agent,
-            url_setting_name="LLM_AGENT_URL",
-            label="agent",
-        )
-
     async def _run_agent_flow(
             self,
             *,
@@ -291,8 +280,12 @@ class MessageService:
             label: str,
     ) -> DocumentQuestionRunResult:
         messages = await self._build_llm_messages(chat_id)
+        system_prompt, response_style = await self._get_chat_prompt_style(chat_id)
         try:
-            result: AgentRunResult = await caller(messages, user, chat_id=chat_id)
+            result: AgentRunResult = await caller(
+                messages, user, chat_id=chat_id,
+                system_prompt=system_prompt, response_style=response_style,
+            )
         except HttpClientException as e:
             logger.error(
                 "LLM %s failed: %s",
@@ -346,8 +339,6 @@ class MessageService:
             return self.iter_general_chat_stream_group_payloads(user, chat_id)
         if mode == ChatAIMode.RAG_AGENT:
             return self.iter_rag_agent_stream_group_payloads(user, chat_id)
-        if mode == ChatAIMode.AGENT:
-            return self.iter_agent_stream_group_payloads(user, chat_id)
         return self.iter_document_question_stream_group_payloads(user, chat_id)
 
     async def iter_document_question_stream_group_payloads(
@@ -356,11 +347,13 @@ class MessageService:
             chat_id: int,
     ) -> AsyncIterator[dict[str, Any]]:
         messages = await self._build_llm_messages(chat_id)
+        system_prompt, response_style = await self._get_chat_prompt_style(chat_id)
         async for payload in self._iter_ai_stream_group_payloads(
                 chat_id=chat_id,
                 user=user,
                 sse_events=llm_client.document_question_stream_events(
-                    messages, user, chat_id=chat_id
+                    messages, user, chat_id=chat_id,
+                    system_prompt=system_prompt, response_style=response_style,
                 ),
                 complete_extractor=self._extract_document_question_complete,
                 stream_url_setting_name="LLM_DOCUMENT_QUESTION_STREAM_URL",
@@ -373,12 +366,13 @@ class MessageService:
             chat_id: int,
     ) -> AsyncIterator[dict[str, Any]]:
         messages = await self._build_llm_messages(chat_id)
-        system_prompt = await self._get_chat_system_prompt(chat_id)
+        system_prompt, response_style = await self._get_chat_prompt_style(chat_id)
         async for payload in self._iter_ai_stream_group_payloads(
                 chat_id=chat_id,
                 user=user,
                 sse_events=llm_client.general_chat_stream_events(
-                    messages, user, chat_id=chat_id, system_prompt=system_prompt
+                    messages, user, chat_id=chat_id,
+                    system_prompt=system_prompt, response_style=response_style,
                 ),
                 complete_extractor=self._extract_general_chat_complete,
                 stream_url_setting_name="LLM_GENERAL_CHAT_STREAM_URL",
@@ -391,29 +385,93 @@ class MessageService:
             chat_id: int,
     ) -> AsyncIterator[dict[str, Any]]:
         messages = await self._build_llm_messages(chat_id)
+        system_prompt, response_style = await self._get_chat_prompt_style(chat_id)
         async for payload in self._iter_ai_stream_group_payloads(
                 chat_id=chat_id,
                 user=user,
-                sse_events=llm_client.rag_agent_stream_events(messages, user, chat_id=chat_id),
+                sse_events=llm_client.rag_agent_stream_events(
+                    messages, user, chat_id=chat_id,
+                    system_prompt=system_prompt, response_style=response_style,
+                ),
                 complete_extractor=self._extract_agent_complete,
                 stream_url_setting_name="LLM_RAG_AGENT_STREAM_URL",
         ):
             yield payload
 
-    async def iter_agent_stream_group_payloads(
+    @staticmethod
+    def _compose_complete_event(
+            answer: str,
+            question: str,
+            fragments: list[Any],
+            assistant_msg: "ArtifactMessage | None",
+    ) -> dict[str, Any]:
+        event: dict[str, Any] = {
+            "type": "ai_complete",
+            "message": answer,
+            "answer": answer,
+            "question": question,
+            "fragments": fragments,
+        }
+        if assistant_msg:
+            event["id"] = assistant_msg.id
+            event["sender_type"] = assistant_msg.sender_type
+            event["created_by"] = assistant_msg.created_by
+            event["created_at"] = assistant_msg.created_at.isoformat()
+        return event
+
+    async def _handle_stream_complete(
             self,
-            user: AuthenticatedUser,
             chat_id: int,
-    ) -> AsyncIterator[dict[str, Any]]:
-        messages = await self._build_llm_messages(chat_id)
-        async for payload in self._iter_ai_stream_group_payloads(
-                chat_id=chat_id,
-                user=user,
-                sse_events=llm_client.agent_stream_events(messages, user, chat_id=chat_id),
-                complete_extractor=self._extract_agent_complete,
-                stream_url_setting_name="LLM_AGENT_STREAM_URL",
-        ):
-            yield payload
+            user: AuthenticatedUser,
+            sse: dict[str, Any],
+            state: _AiStreamState,
+            complete_extractor: Callable[
+                [dict[str, Any], str, str, list[Any]], tuple[str, str, list[Any]]
+            ],
+    ) -> dict[str, Any]:
+        result = sse.get("result") or {}
+        if not isinstance(result, dict):
+            result = {}
+        question, answer, fragments = complete_extractor(
+            result, state.accumulated_answer, state.last_question, state.last_fragments
+        )
+        assistant_msg: ArtifactMessage | None = None
+        if answer:
+            assistant_msg = await sync_to_async(self._save_ai_message)(
+                chat_id, user.id, answer, fragments or None
+            )
+            logger.info(
+                "AI response saved (stream).",
+                extra={"chat_id": chat_id, "message_id": assistant_msg.id},
+            )
+        return self._compose_complete_event(answer, question, fragments, assistant_msg)
+
+    async def _build_fallback_complete_event(
+            self,
+            chat_id: int,
+            user: AuthenticatedUser,
+            state: _AiStreamState,
+    ) -> dict[str, Any] | None:
+        answer = state.accumulated_answer.strip()
+        if not answer:
+            return None
+        assistant_msg: ArtifactMessage | None = None
+        try:
+            assistant_msg = await sync_to_async(self._save_ai_message)(
+                chat_id, user.id, answer, state.last_fragments or None
+            )
+            logger.info(
+                "AI response saved (stream fallback).",
+                extra={"chat_id": chat_id, "message_id": assistant_msg.id},
+            )
+        except Exception:
+            logger.exception(
+                "Failed to save fallback AI message.",
+                extra={"chat_id": chat_id},
+            )
+        return self._compose_complete_event(
+            answer, state.last_question, state.last_fragments, assistant_msg
+        )
 
     async def _iter_ai_stream_group_payloads(
             self,
@@ -426,53 +484,17 @@ class MessageService:
             ],
             stream_url_setting_name: str,
     ) -> AsyncIterator[dict[str, Any]]:
-        accumulated_answer = ""
-        received_complete = False
-        last_question = ""
-        last_fragments: list[Any] = []
-
-        async def _build_and_save_complete() -> dict[str, Any] | None:
-            answer = accumulated_answer.strip()
-            if not answer:
-                return None
-            assistant_msg: ArtifactMessage | None = None
-            try:
-                assistant_msg = await sync_to_async(self._save_ai_message)(
-                    chat_id, user.id, answer, last_fragments or None
-                )
-                logger.info(
-                    "AI response saved (stream fallback).",
-                    extra={"chat_id": chat_id, "message_id": assistant_msg.id},
-                )
-            except Exception:
-                logger.exception(
-                    "Failed to save fallback AI message.",
-                    extra={"chat_id": chat_id},
-                )
-            event: dict[str, Any] = {
-                "type": "ai_complete",
-                "message": answer,
-                "answer": answer,
-                "question": last_question,
-                "fragments": last_fragments,
-            }
-            if assistant_msg:
-                event["id"] = assistant_msg.id
-                event["sender_type"] = assistant_msg.sender_type
-                event["created_by"] = assistant_msg.created_by
-                event["created_at"] = assistant_msg.created_at.isoformat()
-            return event
-
+        state = _AiStreamState()
         try:
             async for sse in sse_events:
                 et = sse.get("type")
                 if et == "meta":
-                    last_question = str(sse.get("question", ""))
-                    last_fragments = llm_client.normalize_fragments(sse.get("fragments"))
+                    state.last_question = str(sse.get("question", ""))
+                    state.last_fragments = llm_client.normalize_fragments(sse.get("fragments"))
                     yield {
                         "type": "ai_context",
-                        "question": last_question,
-                        "fragments": last_fragments,
+                        "question": state.last_question,
+                        "fragments": state.last_fragments,
                     }
                 elif et == "progress":
                     yield {
@@ -482,46 +504,13 @@ class MessageService:
                     }
                 elif et == "delta":
                     delta = str(sse.get("text", ""))
-                    accumulated_answer += delta
-                    yield {
-                        "type": "ai_delta",
-                        "delta": delta,
-                    }
+                    state.accumulated_answer += delta
+                    yield {"type": "ai_delta", "delta": delta}
                 elif et == "complete":
-                    received_complete = True
-                    result = sse.get("result") or {}
-                    if not isinstance(result, dict):
-                        result = {}
-                    q, answer, fragments = complete_extractor(
-                        result, accumulated_answer, last_question, last_fragments
+                    state.received_complete = True
+                    yield await self._handle_stream_complete(
+                        chat_id, user, sse, state, complete_extractor
                     )
-
-                    assistant_msg: ArtifactMessage | None = None
-                    if answer:
-                        assistant_msg = await sync_to_async(self._save_ai_message)(
-                            chat_id, user.id, answer, fragments or None
-                        )
-                        logger.info(
-                            "AI response saved (stream).",
-                            extra={
-                                "chat_id": chat_id,
-                                "message_id": assistant_msg.id,
-                            },
-                        )
-
-                    event: dict[str, Any] = {
-                        "type": "ai_complete",
-                        "message": answer,
-                        "answer": answer,
-                        "question": q,
-                        "fragments": fragments,
-                    }
-                    if assistant_msg:
-                        event["id"] = assistant_msg.id
-                        event["sender_type"] = assistant_msg.sender_type
-                        event["created_by"] = assistant_msg.created_by
-                        event["created_at"] = assistant_msg.created_at.isoformat()
-                    yield event
                 elif et == "error":
                     yield {
                         "type": "ai_error",
@@ -541,14 +530,14 @@ class MessageService:
                 },
                 exc_info=True,
             )
-            fallback = await _build_and_save_complete()
+            fallback = await self._build_fallback_complete_event(chat_id, user, state)
             if fallback:
                 yield fallback
                 return
             raise LLMServiceException() from e
 
-        if not received_complete:
-            fallback = await _build_and_save_complete()
+        if not state.received_complete:
+            fallback = await self._build_fallback_complete_event(chat_id, user, state)
             if fallback:
                 yield fallback
 
@@ -593,12 +582,13 @@ class MessageService:
         return "", answer, fragments
 
     @staticmethod
-    async def _get_chat_system_prompt(chat_id: int) -> str | None:
+    async def _get_chat_prompt_style(chat_id: int) -> tuple[str | None, str | None]:
         chat = await sync_to_async(chat_repository.get_by_id)(chat_id)
         if chat is None:
-            return None
-        prompt = getattr(chat, "system_prompt", None)
-        return prompt or None
+            return None, None
+        system_prompt = getattr(chat, "system_prompt", None) or None
+        response_style = getattr(chat, "response_style", None) or None
+        return system_prompt, response_style
 
     def delete_message(self, user: AuthenticatedUser, chat_id: int, message_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({DELETE_MESSAGE}))
@@ -610,88 +600,6 @@ class MessageService:
             raise MessageDeleteForbiddenException()
         msg.delete(deleted_by=user.id)
         logger.info("Message deleted.", extra={"chat_id": chat_id, "message_id": message_id, "user_id": user.id})
-
-    def send_ephemeral_message(
-            self,
-            user: AuthenticatedUser,
-            chat_id: int,
-            text: str,
-    ) -> ArtifactMessage:
-        AccessControl.require_permissions(user, frozenset({SEND_MESSAGE}))
-        self._require_send_access(chat_id, user.id)
-        return ArtifactMessage(
-            message=text,
-            sender_type=ArtifactMessage.SenderType.USER,
-            created_by=user.id,
-        )
-
-    async def run_ephemeral_document_question(
-            self,
-            user: AuthenticatedUser,
-            chat_id: int,
-            user_message: str,
-    ) -> DocumentQuestionRunResult:
-        await sync_to_async(self._require_access)(chat_id, user.id)
-        messages = [{"role": "human", "content": user_message}]
-        try:
-            llm_out: DocumentQuestionResult = await llm_client.document_question(messages, user, chat_id=chat_id)
-        except HttpClientException as e:
-            logger.error(
-                "LLM ephemeral document-question failed: %s",
-                str(e),
-                extra={"chat_id": chat_id, "user_id": user.id},
-                exc_info=True,
-            )
-            raise LLMServiceException() from e
-        return DocumentQuestionRunResult(
-            question=llm_out.question,
-            answer=llm_out.answer,
-            fragments=llm_out.fragments,
-            assistant_message=None,
-        )
-
-    async def run_ephemeral_ai_reply(
-            self,
-            mode: str,
-            user: AuthenticatedUser,
-            chat_id: int,
-            user_message: str,
-    ) -> DocumentQuestionRunResult:
-        if mode == ChatAIMode.DOCUMENT_QUESTION:
-            return await self.run_ephemeral_document_question(user, chat_id, user_message)
-
-        await sync_to_async(self._require_access)(chat_id, user.id)
-        messages = [{"role": "human", "content": user_message}]
-        try:
-            if mode == ChatAIMode.GENERAL_CHAT:
-                system_prompt = await self._get_chat_system_prompt(chat_id)
-                general = await llm_client.general_chat(
-                    messages, user, chat_id=chat_id, system_prompt=system_prompt
-                )
-                return DocumentQuestionRunResult(
-                    question="", answer=general.answer, fragments=[], assistant_message=None,
-                )
-            if mode == ChatAIMode.RAG_AGENT:
-                rag = await llm_client.rag_agent(messages, user, chat_id=chat_id)
-                return DocumentQuestionRunResult(
-                    question="", answer=rag.answer, fragments=rag.fragments, assistant_message=None,
-                )
-            if mode == ChatAIMode.AGENT:
-                agent = await llm_client.agent(messages, user, chat_id=chat_id)
-                return DocumentQuestionRunResult(
-                    question="", answer=agent.answer, fragments=agent.fragments, assistant_message=None,
-                )
-        except HttpClientException as e:
-            logger.error(
-                "LLM ephemeral %s failed: %s",
-                mode,
-                str(e),
-                extra={"chat_id": chat_id, "user_id": user.id},
-                exc_info=True,
-            )
-            raise LLMServiceException() from e
-
-        return await self.run_ephemeral_document_question(user, chat_id, user_message)
 
     def _require_access(self, chat_id: int, user_id: int):
         chat = chat_repository.get_by_id(chat_id)
@@ -708,7 +616,7 @@ class MessageService:
         role = membership_repository.get_role(chat_id, user_id)
         if role is None:
             raise MessageAccessDeniedException()
-        if role == "reader":
+        if role == ChatMembership.Role.READER:
             raise ReaderCannotSendMessageException()
         if chat.is_locked:
             raise ChatLockedException()

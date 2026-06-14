@@ -13,7 +13,7 @@ from accounts.admin_parts.common import _is_admin_or_super_user, _is_super_admin
 from accounts.admin_parts.utils.audit import log_audit
 from notifications.models import (
     Notification,
-    NotificationType,
+    NotificationEventType,
     IndividualNotification,
     GroupNotification,
     SystemNotification,
@@ -42,21 +42,23 @@ class BaseNotificationAdmin(admin.ModelAdmin):
     readonly_fields = (
         'receiver_display',
         'sender_display',
+        'event_type',
         'message',
+        'severity',
+        'link_url',
         'status',
         'target_label',
         'read_at',
         'created_at',
-        'updated_at',
         'deleted_at',
         'deleted_by',
     )
     fieldsets = (
         ('Notificación', {
-            'fields': ('receiver_display', 'sender_display', 'message', 'status', 'target_label'),
+            'fields': ('receiver_display', 'sender_display', 'event_type', 'message', 'severity', 'link_url', 'status', 'target_label'),
         }),
         ('Fechas', {
-            'fields': ('created_at', 'read_at', 'updated_at', 'deleted_at', 'deleted_by'),
+            'fields': ('created_at', 'read_at', 'deleted_at', 'deleted_by'),
             'classes': ('collapse',),
         }),
     )
@@ -75,6 +77,8 @@ class BaseNotificationAdmin(admin.ModelAdmin):
     receiver_display.short_description = 'Destinatario'
 
     def sender_display(self, obj):
+        if obj.actor_name:
+            return obj.actor_name
         if not obj.created_by:
             return 'Sistema'
         user_map = getattr(self, '_user_map', {})
@@ -90,7 +94,7 @@ class BaseNotificationAdmin(admin.ModelAdmin):
     message_short.short_description = 'Mensaje'
 
     def status_badge(self, obj):
-        colours = {'unread': 'green', 'read': '#888', 'archived': 'navy'}
+        colours = {'unread': 'green', 'read': '#888'}
         colour = colours.get(obj.status, 'black')
         return format_html(
             '<span style="color:{};font-weight:bold;">{}</span>',
@@ -208,7 +212,10 @@ class IndividualNotificationAdmin(BaseNotificationAdmin):
         return base.exclude(pk__in=self._privileged_user_ids()).order_by('username')
 
     def get_queryset(self, request):
-        qs = Notification.objects.filter(target_scope='individual').order_by('-created_at')
+        qs = Notification.objects.filter(
+            event_type=NotificationEventType.ADMIN_BROADCAST,
+            data__target_scope='individual',
+        ).order_by('-created_at')
         if not _is_effective_superadmin(request):
             qs = qs.exclude(receiver_id__in=self._privileged_user_ids())
         return qs
@@ -230,10 +237,10 @@ class IndividualNotificationAdmin(BaseNotificationAdmin):
                     result = create_notifications_from_admin(
                         receiver_ids=receiver_ids,
                         message=message,
-                        notification_type=NotificationType.ADMIN,
                         target_scope='individual',
                         target_label='manual_admin_individual',
                         actor_user_id=request.user.pk,
+                        actor_name=request.user.username,
                     )
                     self.message_user(
                         request,
@@ -247,7 +254,7 @@ class IndividualNotificationAdmin(BaseNotificationAdmin):
                         details={
                             'receiver_ids': receiver_ids,
                             'message': message,
-                            'type': NotificationType.ADMIN,
+                            'event_type': NotificationEventType.ADMIN_BROADCAST,
                             'target_scope': 'individual',
                             'created': result.get('created', 0),
                         },
@@ -280,7 +287,10 @@ class GroupNotificationAdmin(BaseNotificationAdmin):
     """Admin section: Grupales."""
 
     def get_queryset(self, request):
-        return Notification.objects.filter(target_scope='group').order_by('-created_at')
+        return Notification.objects.filter(
+            event_type=NotificationEventType.ADMIN_BROADCAST,
+            data__target_scope='group',
+        ).order_by('-created_at')
 
     def send_notification_view(self, request):
         if not _is_admin_or_super_user(request.user):
@@ -316,10 +326,10 @@ class GroupNotificationAdmin(BaseNotificationAdmin):
                     result = create_notifications_from_admin(
                         receiver_ids=target_user_ids,
                         message=message,
-                        notification_type=NotificationType.ADMIN,
                         target_scope='group',
                         target_label=target_label,
                         actor_user_id=request.user.pk,
+                        actor_name=request.user.username,
                     )
                     self.message_user(
                         request,
@@ -334,7 +344,7 @@ class GroupNotificationAdmin(BaseNotificationAdmin):
                             'target_label': target_label,
                             'receiver_ids': target_user_ids,
                             'message': message,
-                            'type': NotificationType.ADMIN,
+                            'event_type': NotificationEventType.ADMIN_BROADCAST,
                             'target_scope': 'group',
                             'created': result.get('created', 0),
                         },
@@ -382,4 +392,8 @@ class SystemNotificationAdmin(BaseNotificationAdmin):
     allow_send_notifications = False
 
     def get_queryset(self, request):
-        return Notification.objects.filter(type=NotificationType.SYSTEM).order_by('-created_at')
+        return (
+            Notification.objects
+            .exclude(event_type=NotificationEventType.ADMIN_BROADCAST)
+            .order_by('-created_at')
+        )

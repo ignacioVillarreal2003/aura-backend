@@ -5,6 +5,8 @@ import logging
 import requests
 from django.conf import settings
 
+from accounts.request_token import get_request_token
+
 logger = logging.getLogger(__name__)
 
 _TIMEOUT = 10
@@ -23,11 +25,16 @@ class MacServiceClient:
         return getattr(settings, 'DOC_COLLECTION_SERVICE_API_KEY', '')
 
     def _headers(self, user):
+        token = get_request_token()
+        if token:
+            return {
+                'Authorization': token,
+                'Content-Type': 'application/json',
+            }
         return {
             'X-Service-Api-Key': self._api_key(),
             'X-User-Id': str(user.pk),
             'X-User-Email': str(user.email),
-            'X-User-Permissions': '*',
             'Content-Type': 'application/json',
         }
 

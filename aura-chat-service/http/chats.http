@@ -41,20 +41,7 @@ Authorization: Bearer {{authToken}}
   "name": "Proyecto Alpha",
   "system_prompt": "Eres un asistente experto en análisis de documentos.",
   "response_style": "Responde de forma concisa y estructurada.",
-  "tags": ["trabajo", "documentos"],
-  "is_ephemeral": false
-}
-
-
-### Crear chat efímero
-POST {{chatBase}}/chats/
-Accept: application/json
-Content-Type: application/json
-Authorization: Bearer {{authToken}}
-
-{
-  "name": "Consulta rápida",
-  "is_ephemeral": true
+  "tags": ["trabajo", "documentos"]
 }
 
 
@@ -122,18 +109,3 @@ Authorization: Bearer {{authToken}}
 DELETE {{chatBase}}/chats/1/lock/
 Authorization: Bearer {{authToken}}
 
-
-### Silenciar chat hasta una fecha
-POST {{chatBase}}/chats/1/mute/
-Accept: application/json
-Content-Type: application/json
-Authorization: Bearer {{authToken}}
-
-{
-  "muted_until": "2026-06-01T08:00:00Z"
-}
-
-
-### Quitar silencio del chat — responde 204
-DELETE {{chatBase}}/chats/1/mute/
-Authorization: Bearer {{authToken}}

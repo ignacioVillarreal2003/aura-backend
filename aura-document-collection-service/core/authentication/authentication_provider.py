@@ -1,10 +1,12 @@
 import hashlib
+import json
 import logging
 import secrets
+from functools import lru_cache
 from typing import Optional
 import httpx
+import redis
 from django.conf import settings
-from django.core.cache import cache as _cache
 from django.http import HttpRequest
 
 from core.authentication.authenticated_user import AuthenticatedUser
@@ -29,11 +31,22 @@ def _cache_key(token: str) -> str:
     return f"{_CACHE_PREFIX}{hashlib.sha256(token.encode()).hexdigest()}"
 
 
+@lru_cache(maxsize=1)
+def _token_cache_redis() -> redis.Redis:
+    # Raw Redis client (literal key, JSON value) so the validated-token cache is
+    # shared cross-stack with the FastAPI services, which write the same
+    # `auth_token:<sha256>` key. Django's default cache would prepend a
+    # KEY_PREFIX/version and break sharing.
+    url = getattr(settings, "AUTH_TOKEN_CACHE_REDIS_URL", "") or settings.REDIS_URL
+    return redis.Redis.from_url(url, decode_responses=True)
+
+
 def _get_cached_user(token: str) -> Optional[AuthenticatedUser]:
     try:
-        data = _cache.get(_cache_key(token))
-        if data is None:
+        raw = _token_cache_redis().get(_cache_key(token))
+        if raw is None:
             return None
+        data = json.loads(raw)
         return AuthenticatedUser(
             id=data["id"],
             email=data["email"],
@@ -48,26 +61,22 @@ def _get_cached_user(token: str) -> Optional[AuthenticatedUser]:
 
 def _cache_user(token: str, user: AuthenticatedUser) -> None:
     try:
-        _cache.set(
+        _token_cache_redis().setex(
             _cache_key(token),
-            {
+            _token_cache_ttl(),
+            json.dumps({
                 "id": user.id,
                 "email": user.email,
                 "username": user.username,
                 "roles": list(user.roles),
                 "permissions": list(user.permissions),
-            },
-            timeout=_token_cache_ttl(),
+            }),
         )
     except Exception:
         logger.warning("Redis token cache write failed; token will not be cached.", exc_info=True)
 
 
 _HEADER_SERVICE_API_KEY = "X-Service-Api-Key"
-_HEADER_USER_ID = "X-User-Id"
-_HEADER_USER_EMAIL = "X-User-Email"
-_HEADER_USER_ROLES = "X-User-Roles"
-_HEADER_USER_PERMISSIONS = "X-User-Permissions"
 
 
 class AuthenticationProvider:
@@ -99,53 +108,8 @@ class AuthenticationProvider:
                 "Invalid service API key",
             )
 
-        raw_user_id = (request.headers.get(_HEADER_USER_ID) or "").strip()
-        if not raw_user_id:
-            logger.warning(
-                "Service-to-service call is missing the user id header.",
-                extra={"path": request.path},
-            )
-            raise ServiceAuthenticationRejected(
-                400,
-                "missing_user_id",
-                "X-User-Id header is required",
-            )
-
-        try:
-            user_id = int(raw_user_id)
-        except ValueError:
-            logger.warning(
-                "User id header must be a whole number.",
-                extra={"path": request.path},
-            )
-            raise ServiceAuthenticationRejected(
-                400,
-                "invalid_user_id",
-                "X-User-Id must be a valid integer",
-            )
-
-        email = (request.headers.get(_HEADER_USER_EMAIL) or "").strip()
-        if not email:
-            logger.warning(
-                "Service-to-service call is missing the user email header.",
-                extra={"path": request.path},
-            )
-            raise ServiceAuthenticationRejected(
-                400,
-                "missing_user_email",
-                "X-User-Email header is required",
-            )
-
-        logger.debug(
-            "Service-to-service request authenticated successfully.",
-            extra={"user_id": user_id, "path": request.path},
-        )
-        return AuthenticatedUser(
-            id=user_id,
-            email=email,
-            roles=_parse_comma_list(request.headers.get(_HEADER_USER_ROLES)),
-            permissions=_parse_comma_list(request.headers.get(_HEADER_USER_PERMISSIONS)),
-        )
+        logger.debug("Service-to-service request authenticated.", extra={"path": request.path})
+        return AuthenticatedUser(id=0, email="service@internal", roles=(), permissions=())
 
     def validate_token(self, token: str) -> AuthenticatedUser:
         cached = _get_cached_user(token)

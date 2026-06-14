@@ -1,15 +1,13 @@
 import logging
 from typing import Optional
 
-from app.infrastructure.persistence.memory_database.document_post_process_job_progress_store.document_post_process_job_progress_store_interface import (
-    DocumentPostProcessJobProgressStoreInterface,
-)
 from app.application.services.document.post_process_document_service.interfaces.post_process_document_processor_interface import (
     PostProcessDocumentProcessorInterface,
 )
+from app.application.services.document.post_process_document_service.post_process_document_service_settings import (
+    PostProcessDocumentServiceSettings,
+)
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.dtos.document.post_process_document.post_process_document_error import PostProcessDocumentError
-from app.domain.field_limits import MAX_POST_PROCESS_ERROR_MESSAGE_CHARS
 from app.infrastructure.persistence.database.orm.document import Document
 from app.infrastructure.persistence.database.orm.fragment import Fragment
 from app.infrastructure.http.llm_provider.llm_provider_interface import LlmProviderInterface
@@ -41,186 +39,19 @@ class PostProcessDocumentProcessor(PostProcessDocumentProcessorInterface):
             document_repository: DocumentRepositoryInterface,
             fragment_repository: FragmentRepositoryInterface,
             llm_provider: LlmProviderInterface,
-            job_progress_store: DocumentPostProcessJobProgressStoreInterface,
             llm_provider_settings: Optional[LlmProviderSettings] = None,
+            post_process_document_service_settings: Optional[PostProcessDocumentServiceSettings] = None,
     ) -> None:
         self._database_manager = database_manager
         self._document_repository = document_repository
         self._fragment_repository = fragment_repository
         self._llm_provider = llm_provider
-        self._job_progress_store = job_progress_store
         self._llm_settings = llm_provider_settings or LlmProviderSettings()
+        self._settings = post_process_document_service_settings or PostProcessDocumentServiceSettings()
 
-    async def run_job(
-            self,
-            job_id: str,
-    ) -> None:
-        manifest = await self._job_progress_store.get_document_job_manifest(job_id)
-        if manifest is None:
-            logger.warning(
-                "No Redis manifest was found for the document post-process job; skipping.",
-                extra={"job_id": job_id},
-            )
-            return
-
-        snapshot = await self._job_progress_store.get_document_job_snapshot()
-        if snapshot is None or snapshot.get("job_id") != job_id:
-            logger.warning(
-                "The document post-process job snapshot is missing or does not match; skipping.",
-                extra={"job_id": job_id},
-            )
-            return
-
-        try:
-            user = AuthenticatedUser.model_validate(manifest["user"])
-        except Exception as e:
-            logger.error(
-                "The stored job principal could not be deserialized; aborting the job.",
-                extra={"job_id": job_id, "error": type(e).__name__},
-            )
-            await self._job_progress_store.abort_document_job(job_id)
-            return
-
-        document_ids_raw = manifest.get("document_ids")
-        if document_ids_raw is not None:
-            document_ids: list[int] = list(document_ids_raw)
-            if not document_ids:
-                await self._job_progress_store.complete_document_job(job_id)
-                return
-            await self._run_explicit_documents(job_id=job_id, document_ids=document_ids, user=user)
-        else:
-            await self._run_all_documents(job_id=job_id, user=user)
-
-    async def _run_explicit_documents(
+    async def process_document_metadata(
             self,
             *,
-            job_id: str,
-            document_ids: list[int],
-            user: AuthenticatedUser,
-    ) -> None:
-        try:
-            for document_id in document_ids:
-                if await self._job_progress_store.is_document_stop_requested(job_id):
-                    logger.info(
-                        "Document post-processing stopped cooperatively.",
-                        extra={"job_id": job_id},
-                    )
-                    break
-
-                await self._job_progress_store.mark_document_job_progress(
-                    job_id,
-                    current_document_id=document_id,
-                )
-
-                try:
-                    await self._process_single_document(
-                        job_id=job_id,
-                        document_id=document_id,
-                        user=user,
-                    )
-                    await self._job_progress_store.mark_document_job_progress(
-                        job_id,
-                        processed_increment=1,
-                    )
-                except Exception as e:
-                    raw = str(e) or type(e).__name__
-                    msg = f"{type(e).__name__}: {raw}"[:2000]
-                    await self._job_progress_store.append_document_job_error(
-                        job_id,
-                        PostProcessDocumentError(
-                            document_id=document_id,
-                            error=msg,
-                        ).model_dump(mode="json"),
-                    )
-                    await self._job_progress_store.mark_document_job_progress(
-                        job_id,
-                        failed_increment=1,
-                    )
-                    logger.exception(
-                        "A document failed during post-processing.",
-                        extra={"job_id": job_id, "document_id": document_id},
-                    )
-        finally:
-            await self._job_progress_store.complete_document_job(job_id)
-
-    async def _run_all_documents(
-            self,
-            *,
-            job_id: str,
-            user: AuthenticatedUser,
-    ) -> None:
-        _page = 100
-        failed_ids: set[int] = set()
-        try:
-            while True:
-                if await self._job_progress_store.is_document_stop_requested(job_id):
-                    logger.info(
-                        "Document post-processing stopped cooperatively.",
-                        extra={"job_id": job_id},
-                    )
-                    break
-
-                async with self._database_manager.session() as session:
-                    batch = await self._document_repository.get_documents_missing_metadata(
-                        database_session=session,
-                        limit=_page + len(failed_ids),
-                        offset=0,
-                    )
-
-                pending = [d for d in batch if d.id not in failed_ids]
-                if not pending:
-                    break
-
-                stop_outer = False
-                for doc in pending:
-                    if await self._job_progress_store.is_document_stop_requested(job_id):
-                        stop_outer = True
-                        break
-
-                    await self._job_progress_store.mark_document_job_progress(
-                        job_id,
-                        current_document_id=doc.id,
-                    )
-
-                    try:
-                        await self._process_single_document(
-                            job_id=job_id,
-                            document_id=doc.id,
-                            user=user,
-                        )
-                        await self._job_progress_store.mark_document_job_progress(
-                            job_id,
-                            processed_increment=1,
-                        )
-                    except Exception as e:
-                        failed_ids.add(doc.id)
-                        raw = str(e) or type(e).__name__
-                        msg = f"{type(e).__name__}: {raw}"[:MAX_POST_PROCESS_ERROR_MESSAGE_CHARS]
-                        await self._job_progress_store.append_document_job_error(
-                            job_id,
-                            PostProcessDocumentError(
-                                document_id=doc.id,
-                                error=msg,
-                            ).model_dump(mode="json"),
-                        )
-                        await self._job_progress_store.mark_document_job_progress(
-                            job_id,
-                            failed_increment=1,
-                        )
-                        logger.exception(
-                            "A document failed during post-processing.",
-                            extra={"job_id": job_id, "document_id": doc.id},
-                        )
-
-                if stop_outer:
-                    break
-        finally:
-            await self._job_progress_store.complete_document_job(job_id)
-
-    async def _process_single_document(
-            self,
-            *,
-            job_id: str,
             document_id: int,
             user: AuthenticatedUser,
     ) -> None:
@@ -273,7 +104,7 @@ class PostProcessDocumentProcessor(PostProcessDocumentProcessorInterface):
 
         logger.info(
             "Document metadata was updated after classification.",
-            extra={"job_id": job_id, "document_id": document_id},
+            extra={"document_id": document_id},
         )
 
     def _build_classification_content(
@@ -282,9 +113,10 @@ class PostProcessDocumentProcessor(PostProcessDocumentProcessorInterface):
             fragments: list[Fragment],
     ) -> str:
         max_len = self._llm_settings.max_classify_content_length
+        sample = self._select_sample_fragments(fragments)
         parts: list[str] = []
         total = 0
-        for fragment in sorted(fragments, key=lambda f: _safe_fragment_index(f)):
+        for fragment in sample:
             piece = (fragment.content or "").strip()
             if not piece:
                 continue
@@ -299,3 +131,26 @@ class PostProcessDocumentProcessor(PostProcessDocumentProcessorInterface):
         if not body:
             return document.name
         return body
+
+    def _select_sample_fragments(
+            self,
+            fragments: list[Fragment],
+    ) -> list[Fragment]:
+        """Pick a representative, evenly-spaced sample across the document.
+
+        Instead of feeding the whole document (or only its head) to the
+        classifier, take ``classify_sample_size`` fragments spread uniformly
+        from start to end. This keeps the prompt bounded and cheap while still
+        covering the beginning, middle and end of the document.
+        """
+        ordered = sorted(fragments, key=lambda f: _safe_fragment_index(f))
+        sample_size = self._settings.classify_sample_size
+        total = len(ordered)
+        if total <= sample_size:
+            return ordered
+
+        last = total - 1
+        picked_indices = sorted(
+            {round(i * last / (sample_size - 1)) for i in range(sample_size)}
+        )
+        return [ordered[index] for index in picked_indices]

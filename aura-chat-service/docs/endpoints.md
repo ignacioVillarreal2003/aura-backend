@@ -40,8 +40,6 @@ Prefijo: **`/api/v1/chats/`**
 | `DELETE /api/v1/chats/{chat_id}/pin/` | `PIN_CHAT` | Quita pin. |
 | `POST /api/v1/chats/{chat_id}/lock/` | `LOCK_CHAT` | Bloquea envío de mensajes. |
 | `DELETE /api/v1/chats/{chat_id}/lock/` | `LOCK_CHAT` | Desbloquea. |
-| `POST /api/v1/chats/{chat_id}/mute/` | `MUTE_CHAT` | Silencia hasta `muted_until`. |
-| `DELETE /api/v1/chats/{chat_id}/mute/` | `MUTE_CHAT` | Quita mute. |
 | `DELETE /api/v1/chats/{chat_id}/clear/` | `CLEAR_CHAT_HISTORY` | Borra suavemente todos los artifacts del chat (owner). |
 | `POST /api/v1/chats/{chat_id}/read/` | `MARK_CHAT_AS_READ` | Marca leído (membresía). |
 | `POST /api/v1/chats/{chat_id}/transcribe/` | `SEND_MESSAGE` | Transcribe audio multipart; requiere membresía activa y chat no bloqueado. |

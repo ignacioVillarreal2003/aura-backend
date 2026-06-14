@@ -47,8 +47,8 @@ class ContextDocumentActionProcessor:
         fragments_by_document: dict[int, list[FragmentResponse]] = {}
         all_fragments: list[FragmentResponse] = []
 
-        for doc_id, result in zip(state.document_ids, results):
-            if isinstance(result, Exception):
+        for doc_id, result in zip(state.document_ids, results, strict=True):
+            if isinstance(result, BaseException):
                 logger.warning(
                     "Failed to retrieve fragments for document",
                     extra={"document_id": doc_id, "error_type": type(result).__name__},

@@ -1,7 +1,6 @@
 import importlib
 import logging
 import threading
-from fastapi import HTTPException, Request, status
 
 from app.application.processors.text_cleaners.constants.text_cleaner_type import TextCleanerType
 from app.application.processors.text_cleaners.exceptions.text_cleaner_exception import (
@@ -154,16 +153,3 @@ class TextCleanerFactory:
                 }
             )
             raise TextCleanerInitializationException("Failed to initialize the text cleaner.") from e
-
-
-async def get_text_cleaner_factory(
-        request: Request
-) -> TextCleanerFactory:
-    factory = getattr(request.app.state, "text_cleaner_factory", None)
-    if factory is None:
-        logger.error("The text cleaner factory was not registered on the application state.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Text cleaner factory is not configured"
-        )
-    return factory

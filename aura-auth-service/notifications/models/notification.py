@@ -1,7 +1,7 @@
 """
 Notification models for aura-auth-service admin.
 
-These are managed=False mirrors of tables owned by docker/db/init.sql.
+These are managed=False mirrors of tables owned by docker/database/aura-db/notification.sql.
 All reads/writes are routed to aura_db via AuraDbRouter.
 """
 
@@ -9,21 +9,34 @@ from django.db import models
 from django.utils import timezone
 
 
-class NotificationType(models.TextChoices):
-    SYSTEM = 'system', 'Sistema'
-    ADMIN = 'admin', 'Administrador'
+class NotificationEventType(models.TextChoices):
+    CHAT_MEMBER_INVITED = 'chat.member.invited', 'Invitación a chat'
+    CHAT_MEMBER_REMOVED = 'chat.member.removed', 'Removido de chat'
+    CHAT_LOCKED = 'chat.locked', 'Chat bloqueado'
+    AUTH_PASSWORD_CHANGED = 'auth.password.changed', 'Cambio de contraseña'
+    AUTH_NEW_LOGIN = 'auth.new_login', 'Nuevo inicio de sesión'
+    DOCUMENT_PROCESSING_DONE = 'document.processing.done', 'Documento procesado'
+    DOCUMENT_PROCESSING_FAILED = 'document.processing.failed', 'Procesamiento fallido'
+    ADMIN_BROADCAST = 'admin.broadcast', 'Mensaje de administrador'
+    SYSTEM_ANNOUNCEMENT = 'system.announcement', 'Anuncio del sistema'
+
+
+class NotificationSeverity(models.TextChoices):
+    INFO = 'info', 'Info'
+    SUCCESS = 'success', 'Éxito'
+    WARNING = 'warning', 'Advertencia'
+    CRITICAL = 'critical', 'Crítica'
 
 
 class NotificationStatus(models.TextChoices):
     UNREAD = 'unread', 'No leída'
     READ = 'read', 'Leída'
-    ARCHIVED = 'archived', 'Archivada'
 
 
 class Notification(models.Model):
     """
     Mirror of the notification table in aura_db.
-    Schema is owned by docker/db/init.sql.
+    Schema is owned by docker/database/aura-db/notification.sql.
     """
 
     id = models.BigAutoField(primary_key=True)
@@ -31,36 +44,32 @@ class Notification(models.Model):
         db_index=True,
         verbose_name='Receptor (user ID)',
     )
+    event_type = models.CharField(
+        max_length=128,
+        choices=NotificationEventType.choices,
+        verbose_name='Tipo de evento',
+    )
     message = models.CharField(max_length=500, verbose_name='Mensaje')
-    type = models.CharField(
-        max_length=20,
-        choices=NotificationType.choices,
-        verbose_name='Tipo',
+    data = models.JSONField(default=dict, blank=True, verbose_name='Datos del evento')
+    severity = models.CharField(
+        max_length=16,
+        choices=NotificationSeverity.choices,
+        default=NotificationSeverity.INFO,
+        verbose_name='Severidad',
     )
-    target_scope = models.CharField(
-        max_length=20,
-        default='individual',
-        verbose_name='Alcance',
-    )
-    target_label = models.CharField(
-        max_length=255,
-        null=True,
-        blank=True,
-        verbose_name='Etiqueta de destino',
-    )
+    link_url = models.URLField(max_length=2048, null=True, blank=True, verbose_name='Link')
+    actor_name = models.CharField(max_length=255, null=True, blank=True, verbose_name='Actor')
     status = models.CharField(
-        max_length=20,
+        max_length=16,
         choices=NotificationStatus.choices,
         default=NotificationStatus.UNREAD,
         verbose_name='Estado',
     )
     read_at = models.DateTimeField(null=True, blank=True, verbose_name='Leída el')
-    created_by = models.BigIntegerField(null=True, blank=True, verbose_name='Creado por (user ID)')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Creado el')
-    updated_by = models.BigIntegerField(null=True, blank=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    deleted_by = models.BigIntegerField(null=True, blank=True, verbose_name='Eliminado por (user ID)')
+    created_by = models.BigIntegerField(null=True, blank=True, verbose_name='Creado por (user ID)')
     deleted_at = models.DateTimeField(null=True, blank=True, verbose_name='Eliminado el')
+    deleted_by = models.BigIntegerField(null=True, blank=True, verbose_name='Eliminado por (user ID)')
 
     class Meta:
         app_label = 'notifications'
@@ -71,16 +80,25 @@ class Notification(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"[{self.type}] → user:{self.receiver_id} | {self.message[:60]}"
+        return f"[{self.event_type}] → user:{self.receiver_id} | {self.message[:60]}"
+
+    @property
+    def target_scope(self):
+        """Admin broadcast scope (`individual` / `group`), stored in the data JSONB."""
+        return (self.data or {}).get('target_scope')
+
+    @property
+    def target_label(self):
+        return (self.data or {}).get('target_label')
 
     def soft_delete(self, deleted_by: int = None):
         self.deleted_at = timezone.now()
         self.deleted_by = deleted_by
-        self.save(update_fields=['deleted_at', 'deleted_by', 'updated_at'])
+        self.save(update_fields=['deleted_at', 'deleted_by'])
 
 
 class IndividualNotification(Notification):
-    """Proxy model for individual notifications in admin."""
+    """Proxy model for individual admin broadcasts in admin."""
 
     class Meta:
         proxy = True
@@ -90,7 +108,7 @@ class IndividualNotification(Notification):
 
 
 class GroupNotification(Notification):
-    """Proxy model for group notifications in admin."""
+    """Proxy model for group admin broadcasts in admin."""
 
     class Meta:
         proxy = True
@@ -100,7 +118,7 @@ class GroupNotification(Notification):
 
 
 class SystemNotification(Notification):
-    """Proxy model for system notifications in admin."""
+    """Proxy model for service-generated notifications in admin."""
 
     class Meta:
         proxy = True

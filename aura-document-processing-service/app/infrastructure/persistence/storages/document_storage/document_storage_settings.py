@@ -225,7 +225,7 @@ class DocumentStorageSettings(BaseSettings):
         else:
             stem = unique_suffix
 
-        return "/".join(parts + [f"{stem}{ext}"])
+        return "/".join([*parts, f"{stem}{ext}"])
 
     @staticmethod
     def sanitize_metadata_value(

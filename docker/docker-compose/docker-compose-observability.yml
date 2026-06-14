@@ -1,4 +1,32 @@
 services:
+  phoenix:
+    image: arizephoenix/phoenix:17.4.0
+    container_name: phoenix
+    ports:
+      - "6006:6006"
+      - "4317:4317"
+    environment:
+      - PHOENIX_WORKING_DIR=/mnt/data
+    volumes:
+      - phoenix_data:/mnt/data
+    healthcheck:
+      # La imagen de Phoenix es distroless (sin /bin/sh): hay que usar forma exec, no CMD-SHELL
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6006/healthz', timeout=5)"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  aura-llm-service:
+    environment:
+      TRACING_ENABLED: "true"
+      TRACING_ENDPOINT: http://phoenix:6006/v1/traces
+      TRACING_PROJECT_NAME: aura-llm-service
+    depends_on:
+      phoenix:
+        condition: service_healthy
+
   prometheus:
     image: prom/prometheus:v2.53.0
     container_name: prometheus
@@ -58,6 +86,7 @@ services:
     restart: unless-stopped
 
 volumes:
+  phoenix_data:
   prometheus_data:
   elasticsearch_data:
   grafana_data:

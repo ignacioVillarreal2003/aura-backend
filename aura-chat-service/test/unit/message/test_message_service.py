@@ -10,37 +10,38 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from apps.chat.exceptions import ChatNotFoundException
-from apps.message.exceptions import (
+from apps.artifact_message.exceptions import (
     ChatLockedException,
     MessageAccessDeniedException,
     MessageDeleteForbiddenException,
     MessageNotFoundException,
-    NoMessageToRegenerateException,
     NotAIMessageException,
     NotChatOwnerException,
     LLMServiceException,
     ReaderCannotSendMessageException,
+)
+from apps.artifact.exceptions import (
     TranscriptionBusyException,
     TranscriptionException,
 )
 from core.clients.exceptions import HttpClientException
 from core.clients.llm_client import AgentRunResult, DocumentQuestionResult, GeneralChatResult
 from core.clients.transcription_client import TranscriptionBusyError
-from apps.message.services.bookmark_service import BookmarkService
-from apps.message.services.feedback_service import FeedbackService
-from apps.message.services.message_service import ChatAIMode, MessageService
-from apps.message.services.pinned_message_service import PinnedMessageService
-from apps.message.services.thread_service import ThreadService
+from apps.artifact.services.artifact_bookmark_service import BookmarkService
+from apps.artifact.services.artifact_feedback_service import FeedbackService
+from apps.artifact_message.services.message_service import ChatAIMode, MessageService
+from apps.artifact.services.artifact_pin_service import PinService
+from apps.artifact.services.artifact_thread_service import ThreadService
 from test.conftest import make_artifact, make_chat, make_message, make_pin, make_user, make_feedback, make_thread_reply
 
 # ---------------------------------------------------------------------------
 # Module path constants used for patching
 # ---------------------------------------------------------------------------
-MSG_SVC = "apps.message.services.message_service"
-PIN_SVC = "apps.message.services.pinned_message_service"
-BKM_SVC = "apps.message.services.bookmark_service"
-FBK_SVC = "apps.message.services.feedback_service"
-THR_SVC = "apps.message.services.thread_service"
+MSG_SVC = "apps.artifact_message.services.message_service"
+PIN_SVC = "apps.artifact.services.artifact_pin_service"
+BKM_SVC = "apps.artifact.services.artifact_bookmark_service"
+FBK_SVC = "apps.artifact.services.artifact_feedback_service"
+THR_SVC = "apps.artifact.services.artifact_thread_service"
 
 
 # ---------------------------------------------------------------------------
@@ -72,29 +73,6 @@ def _msg(msg_id=1, chat_id=1, created_by=1, sender_type="user"):
 # MessageService
 # ===========================================================================
 
-class TestMessageServiceTranscribeAudio:
-
-    def test_transcribe_audio_returns_text(self, mocker):
-        mocker.patch(f"{MSG_SVC}.transcription_client.transcribe", return_value="hola mundo")
-        assert MessageService().transcribe_audio(object()) == "hola mundo"
-
-    def test_transcribe_audio_busy_raises_busy_exception(self, mocker):
-        mocker.patch(
-            f"{MSG_SVC}.transcription_client.transcribe",
-            side_effect=TranscriptionBusyError(),
-        )
-        with pytest.raises(TranscriptionBusyException):
-            MessageService().transcribe_audio(object())
-
-    def test_transcribe_audio_other_error_raises_transcription_exception(self, mocker):
-        mocker.patch(
-            f"{MSG_SVC}.transcription_client.transcribe",
-            side_effect=RuntimeError("boom"),
-        )
-        with pytest.raises(TranscriptionException):
-            MessageService().transcribe_audio(object())
-
-
 class TestMessageServiceRunDocumentQuestion:
 
     def _patch_access_ok(self, mocker):
@@ -107,7 +85,7 @@ class TestMessageServiceRunDocumentQuestion:
         mocker.patch(f"{MSG_SVC}.message_repository.get_recent_messages", return_value=[])
         result = DocumentQuestionResult(question="q", answer="respuesta", fragments=[{"x": 1}])
         mocker.patch(f"{MSG_SVC}.llm_client.document_question", new_callable=AsyncMock, return_value=result)
-        ai_msg = _msg(msg_id=7, sender_type="system")
+        ai_msg = _msg(msg_id=7, sender_type="assistant")
         save = mocker.patch.object(MessageService, "_save_ai_message", return_value=ai_msg)
         out = await MessageService().run_document_question(_user(), chat_id=1)
         assert out.answer == "respuesta"
@@ -149,7 +127,7 @@ class TestMessageServiceRunDocumentQuestion:
         self._patch_access_ok(mocker)
         m_user = _msg(msg_id=1, sender_type="user")
         m_user.message = "pregunta"
-        m_ai = _msg(msg_id=2, sender_type="system")
+        m_ai = _msg(msg_id=2, sender_type="assistant")
         m_ai.message = "respuesta"
         mocker.patch(f"{MSG_SVC}.message_repository.get_recent_messages", return_value=[m_user, m_ai])
         llm = mocker.patch(
@@ -163,23 +141,6 @@ class TestMessageServiceRunDocumentQuestion:
         roles = {h["content"]: h["role"] for h in history}
         assert roles["pregunta"] == "human"       # USER → human
         assert roles["respuesta"] == "assistant"  # SYSTEM → assistant
-
-    @pytest.mark.asyncio
-    async def test_regen_feedback_appended_as_last_human_turn(self, mocker):
-        self._patch_access_ok(mocker)
-        m_user = _msg(msg_id=1, sender_type="user")
-        m_user.message = "pregunta"
-        mocker.patch(f"{MSG_SVC}.message_repository.get_recent_messages", return_value=[m_user])
-        llm = mocker.patch(
-            f"{MSG_SVC}.llm_client.document_question",
-            new_callable=AsyncMock,
-            return_value=DocumentQuestionResult(question="q", answer="", fragments=[]),
-        )
-        await MessageService().run_document_question(
-            _user(), chat_id=1, regen_feedback="Corregí: estaba incompleta."
-        )
-        history = llm.call_args[0][0]
-        assert history[-1] == {"role": "human", "content": "Corregí: estaba incompleta."}
 
     @pytest.mark.asyncio
     async def test_no_regen_feedback_leaves_history_unchanged(self, mocker):
@@ -302,44 +263,6 @@ class TestMessageServiceGetMessagesAdmin:
             svc.get_messages_admin(_user(), chat_id=99)
 
 
-class TestMessageServiceClearHistory:
-
-    def test_clear_history_owner_succeeds(self, mocker):
-        mocker.patch(f"{MSG_SVC}.chat_repository.get_by_id", return_value=_chat())
-        mocker.patch(f"{MSG_SVC}.membership_repository.is_active_member", return_value=True)
-        mocker.patch(f"{MSG_SVC}.membership_repository.is_chat_owner", return_value=True)
-        soft_delete = mocker.patch(f"{MSG_SVC}.message_repository.soft_delete_by_chat")
-
-        svc = MessageService()
-        svc.clear_history(_user(), chat_id=1)
-
-        soft_delete.assert_called_once_with(1, deleted_by=1)
-
-    def test_clear_history_non_owner_raises(self, mocker):
-        mocker.patch(f"{MSG_SVC}.chat_repository.get_by_id", return_value=_chat())
-        mocker.patch(f"{MSG_SVC}.membership_repository.is_active_member", return_value=True)
-        mocker.patch(f"{MSG_SVC}.membership_repository.is_chat_owner", return_value=False)
-
-        svc = MessageService()
-        with pytest.raises(NotChatOwnerException):
-            svc.clear_history(_user(user_id=2), chat_id=1)
-
-    def test_clear_history_not_member_raises(self, mocker):
-        mocker.patch(f"{MSG_SVC}.chat_repository.get_by_id", return_value=_chat())
-        mocker.patch(f"{MSG_SVC}.membership_repository.is_active_member", return_value=False)
-
-        svc = MessageService()
-        with pytest.raises(MessageAccessDeniedException):
-            svc.clear_history(_user(user_id=99), chat_id=1)
-
-    def test_clear_history_chat_not_found_raises(self, mocker):
-        mocker.patch(f"{MSG_SVC}.chat_repository.get_by_id", return_value=None)
-
-        svc = MessageService()
-        with pytest.raises(ChatNotFoundException):
-            svc.clear_history(_user(), chat_id=99)
-
-
 class TestMessageServiceDeleteMessage:
 
     def test_delete_message_owner_succeeds(self, mocker):
@@ -394,67 +317,6 @@ class TestMessageServiceDeleteMessage:
         svc = MessageService()
         with pytest.raises(MessageAccessDeniedException):
             svc.delete_message(_user(user_id=99), chat_id=1, message_id=1)
-
-
-class TestMessageServiceDeleteLastAiMessage:
-
-    def test_delete_last_ai_message_happy_path(self, mocker):
-        ai_msg = _msg(sender_type="system")
-        mocker.patch(f"{MSG_SVC}.chat_repository.get_by_id", return_value=_chat())
-        mocker.patch(f"{MSG_SVC}.membership_repository.is_active_member", return_value=True)
-        mocker.patch(f"{MSG_SVC}.message_repository.get_last_ai_message", return_value=ai_msg)
-        mocker.patch(f"{MSG_SVC}.feedback_repository.get", return_value=None)
-
-        svc = MessageService()
-        hint = svc.delete_last_ai_message(_user(), chat_id=1)
-
-        ai_msg.delete.assert_called_once_with(deleted_by=1)
-        assert hint is None
-
-    def test_delete_last_ai_message_builds_hint_from_negative_feedback(self, mocker):
-        from apps.message.models.message_feedback import MessageFeedback
-
-        ai_msg = _msg(sender_type="system")
-        fb = SimpleNamespace(
-            value=MessageFeedback.Value.THUMBS_DOWN,
-            reason=MessageFeedback.Reason.INCOMPLETE,
-            comment="Faltó el paso 3",
-        )
-        mocker.patch(f"{MSG_SVC}.chat_repository.get_by_id", return_value=_chat())
-        mocker.patch(f"{MSG_SVC}.membership_repository.is_active_member", return_value=True)
-        mocker.patch(f"{MSG_SVC}.message_repository.get_last_ai_message", return_value=ai_msg)
-        mocker.patch(f"{MSG_SVC}.feedback_repository.get", return_value=fb)
-
-        svc = MessageService()
-        hint = svc.delete_last_ai_message(_user(), chat_id=1)
-
-        assert hint is not None
-        assert "incompleta" in hint
-        assert "Faltó el paso 3" in hint
-
-    def test_delete_last_ai_message_no_hint_on_thumbs_up(self, mocker):
-        from apps.message.models.message_feedback import MessageFeedback
-
-        ai_msg = _msg(sender_type="system")
-        fb = SimpleNamespace(value=MessageFeedback.Value.THUMBS_UP, reason=None, comment=None)
-        mocker.patch(f"{MSG_SVC}.chat_repository.get_by_id", return_value=_chat())
-        mocker.patch(f"{MSG_SVC}.membership_repository.is_active_member", return_value=True)
-        mocker.patch(f"{MSG_SVC}.message_repository.get_last_ai_message", return_value=ai_msg)
-        mocker.patch(f"{MSG_SVC}.feedback_repository.get", return_value=fb)
-
-        svc = MessageService()
-        hint = svc.delete_last_ai_message(_user(), chat_id=1)
-
-        assert hint is None
-
-    def test_delete_last_ai_message_none_raises(self, mocker):
-        mocker.patch(f"{MSG_SVC}.chat_repository.get_by_id", return_value=_chat())
-        mocker.patch(f"{MSG_SVC}.membership_repository.is_active_member", return_value=True)
-        mocker.patch(f"{MSG_SVC}.message_repository.get_last_ai_message", return_value=None)
-
-        svc = MessageService()
-        with pytest.raises(NoMessageToRegenerateException):
-            svc.delete_last_ai_message(_user(), chat_id=1)
 
 
 class TestChatAIMode:
@@ -533,7 +395,7 @@ class TestMessageServiceRunAIModes:
             new_callable=AsyncMock,
             return_value=GeneralChatResult(answer="hola", messages=[]),
         )
-        ai_msg = _msg(msg_id=11, sender_type="system")
+        ai_msg = _msg(msg_id=11, sender_type="assistant")
         save = mocker.patch.object(MessageService, "_save_ai_message", return_value=ai_msg)
         out = await MessageService().run_general_chat(_user(), chat_id=1)
         assert out.answer == "hola"
@@ -565,40 +427,12 @@ class TestMessageServiceRunAIModes:
             new_callable=AsyncMock,
             return_value=AgentRunResult(answer="resp", messages=[], fragments=[{"id": 5}]),
         )
-        ai_msg = _msg(msg_id=12, sender_type="system")
+        ai_msg = _msg(msg_id=12, sender_type="assistant")
         save = mocker.patch.object(MessageService, "_save_ai_message", return_value=ai_msg)
         out = await MessageService().run_rag_agent(_user(), chat_id=1)
         assert out.answer == "resp"
         assert out.fragments == [{"id": 5}]
         save.assert_called_once_with(1, 1, "resp", [{"id": 5}])
-
-    @pytest.mark.asyncio
-    async def test_run_agent_saves_answer(self, mocker):
-        self._patch_access_ok(mocker)
-        mocker.patch(
-            f"{MSG_SVC}.llm_client.agent",
-            new_callable=AsyncMock,
-            return_value=AgentRunResult(answer="tool-answer", messages=[], fragments=[]),
-        )
-        save = mocker.patch.object(
-            MessageService, "_save_ai_message", return_value=_msg(sender_type="system")
-        )
-        out = await MessageService().run_agent(_user(), chat_id=1)
-        assert out.answer == "tool-answer"
-        save.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_run_agent_empty_answer_skips_save(self, mocker):
-        self._patch_access_ok(mocker)
-        mocker.patch(
-            f"{MSG_SVC}.llm_client.agent",
-            new_callable=AsyncMock,
-            return_value=AgentRunResult(answer="   ", messages=[], fragments=[]),
-        )
-        save = mocker.patch.object(MessageService, "_save_ai_message")
-        out = await MessageService().run_agent(_user(), chat_id=1)
-        assert out.assistant_message is None
-        save.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_run_general_chat_http_error_raises_llm_exception(self, mocker):
@@ -612,24 +446,12 @@ class TestMessageServiceRunAIModes:
             await MessageService().run_general_chat(_user(), chat_id=1)
 
     @pytest.mark.asyncio
-    async def test_run_agent_http_error_raises_llm_exception(self, mocker):
-        self._patch_access_ok(mocker)
-        mocker.patch(
-            f"{MSG_SVC}.llm_client.agent",
-            new_callable=AsyncMock,
-            side_effect=HttpClientException("boom", status_code=500),
-        )
-        with pytest.raises(LLMServiceException):
-            await MessageService().run_agent(_user(), chat_id=1)
-
-    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "mode,target",
         [
             (ChatAIMode.DOCUMENT_QUESTION, "run_document_question"),
             (ChatAIMode.GENERAL_CHAT, "run_general_chat"),
             (ChatAIMode.RAG_AGENT, "run_rag_agent"),
-            (ChatAIMode.AGENT, "run_agent"),
         ],
     )
     async def test_run_ai_reply_dispatches_by_mode(self, mocker, mode, target):
@@ -641,35 +463,18 @@ class TestMessageServiceRunAIModes:
         assert out is expected
         dispatched.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_run_ephemeral_ai_reply_agent_does_not_persist(self, mocker):
-        self._patch_access_ok(mocker)
-        mocker.patch(
-            f"{MSG_SVC}.llm_client.agent",
-            new_callable=AsyncMock,
-            return_value=AgentRunResult(answer="resp", messages=[], fragments=[{"id": 1}]),
-        )
-        save = mocker.patch.object(MessageService, "_save_ai_message")
-        out = await MessageService().run_ephemeral_ai_reply(
-            ChatAIMode.AGENT, _user(), chat_id=1, user_message="hi"
-        )
-        assert out.answer == "resp"
-        assert out.assistant_message is None
-        save.assert_not_called()
-
-
 # ===========================================================================
-# PinnedMessageService
+# PinService
 # ===========================================================================
 
-class TestPinnedMessageService:
+class TestPinService:
 
     def test_list_pinned_happy_path(self, mocker):
         pin = make_pin()
         mocker.patch(f"{PIN_SVC}.membership_repository.is_active_member", return_value=True)
         mocker.patch(f"{PIN_SVC}.pinned_message_repository.list_by_chat", return_value=[pin])
 
-        svc = PinnedMessageService()
+        svc = PinService()
         result = svc.list_pinned(_user(), chat_id=1)
 
         assert result == [pin]
@@ -677,7 +482,7 @@ class TestPinnedMessageService:
     def test_list_pinned_not_member_raises(self, mocker):
         mocker.patch(f"{PIN_SVC}.membership_repository.is_active_member", return_value=False)
 
-        svc = PinnedMessageService()
+        svc = PinService()
         with pytest.raises(MessageAccessDeniedException):
             svc.list_pinned(_user(), chat_id=1)
 
@@ -688,7 +493,7 @@ class TestPinnedMessageService:
         mocker.patch(f"{PIN_SVC}.artifact_repository.get_by_id", return_value=make_artifact(source_chat_id=1))
         mocker.patch(f"{PIN_SVC}.pinned_message_repository.pin", return_value=(pin, True))
 
-        svc = PinnedMessageService()
+        svc = PinService()
         result = svc.pin_message(_user(), chat_id=1, artifact_id=1)
 
         assert result is pin
@@ -696,7 +501,7 @@ class TestPinnedMessageService:
     def test_pin_message_not_member_raises(self, mocker):
         mocker.patch(f"{PIN_SVC}.membership_repository.is_active_member", return_value=False)
 
-        svc = PinnedMessageService()
+        svc = PinService()
         with pytest.raises(MessageAccessDeniedException):
             svc.pin_message(_user(), chat_id=1, artifact_id=1)
 
@@ -704,7 +509,7 @@ class TestPinnedMessageService:
         mocker.patch(f"{PIN_SVC}.membership_repository.is_active_member", return_value=True)
         mocker.patch(f"{PIN_SVC}.membership_repository.is_chat_owner", return_value=False)
 
-        svc = PinnedMessageService()
+        svc = PinService()
         with pytest.raises(NotChatOwnerException):
             svc.pin_message(_user(user_id=2), chat_id=1, artifact_id=1)
 
@@ -713,7 +518,7 @@ class TestPinnedMessageService:
         mocker.patch(f"{PIN_SVC}.membership_repository.is_chat_owner", return_value=True)
         mocker.patch(f"{PIN_SVC}.artifact_repository.get_by_id", return_value=None)
 
-        svc = PinnedMessageService()
+        svc = PinService()
         with pytest.raises(MessageNotFoundException):
             svc.pin_message(_user(), chat_id=1, artifact_id=999)
 
@@ -722,7 +527,7 @@ class TestPinnedMessageService:
         mocker.patch(f"{PIN_SVC}.membership_repository.is_chat_owner", return_value=True)
         unpin = mocker.patch(f"{PIN_SVC}.pinned_message_repository.unpin")
 
-        svc = PinnedMessageService()
+        svc = PinService()
         svc.unpin_message(_user(), chat_id=1, artifact_id=1)
 
         unpin.assert_called_once_with(1, 1)
@@ -730,7 +535,7 @@ class TestPinnedMessageService:
     def test_unpin_message_not_member_raises(self, mocker):
         mocker.patch(f"{PIN_SVC}.membership_repository.is_active_member", return_value=False)
 
-        svc = PinnedMessageService()
+        svc = PinService()
         with pytest.raises(MessageAccessDeniedException):
             svc.unpin_message(_user(), chat_id=1, artifact_id=1)
 
@@ -738,7 +543,7 @@ class TestPinnedMessageService:
         mocker.patch(f"{PIN_SVC}.membership_repository.is_active_member", return_value=True)
         mocker.patch(f"{PIN_SVC}.membership_repository.is_chat_owner", return_value=False)
 
-        svc = PinnedMessageService()
+        svc = PinService()
         with pytest.raises(NotChatOwnerException):
             svc.unpin_message(_user(user_id=2), chat_id=1, artifact_id=1)
 
@@ -846,7 +651,7 @@ class TestBookmarkService:
 
 class TestFeedbackService:
 
-    def _ai_artifact(self, sender_type="system"):
+    def _ai_artifact(self, sender_type="assistant"):
         """Return an artifact SimpleNamespace whose message_content has the given sender_type."""
         artifact = make_artifact(source_chat_id=1)
         artifact.message_content = SimpleNamespace(sender_type=sender_type)

@@ -14,7 +14,7 @@ class TimelineServiceInterface(ABC):
             request: TimelineGenerateRequest,
             authenticated_user: AuthenticatedUser,
     ) -> TimelineGenerateResponse:
-        ...
+        pass
 
     @abstractmethod
     async def generate_stream(
@@ -22,4 +22,4 @@ class TimelineServiceInterface(ABC):
             request: TimelineGenerateRequest,
             authenticated_user: AuthenticatedUser,
     ) -> AsyncIterator[TimelineStreamEvent]:
-        ...
+        pass

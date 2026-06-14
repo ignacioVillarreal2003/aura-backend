@@ -23,7 +23,8 @@ class ChatFeedView(APIView):
         summary="Feed unificado del chat",
         description=(
                 "Devuelve todos los artefactos del chat (mensajes, informes, checklists, "
-                "quizzes, timelines, lecciones aprendidas y decision briefs) ordenados "
+                "quizzes, timelines, lecciones aprendidas, decision briefs, resúmenes y "
+                "acciones de documentos) ordenados "
                 "cronológicamente. El usuario debe ser miembro activo del chat y tener "
                 "el permiso `LIST_ARTIFACTS`."
         ),

@@ -1,5 +1,4 @@
 from pathlib import Path
-
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -15,4 +14,4 @@ class FragmentEnrichServiceSettings(BaseSettings):
         extra="ignore",
     )
 
-    max_content_chars: int = Field(default=120_000, ge=1_000, le=500_000)
+    max_content_chars: int = Field(default=20_000, ge=1_000, le=500_000)

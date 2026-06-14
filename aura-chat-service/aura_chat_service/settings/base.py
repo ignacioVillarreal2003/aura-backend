@@ -147,7 +147,6 @@ CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
 
 AUTHENTICATION_SERVICE_URL = config("AUTHENTICATION_SERVICE_URL").strip()
-SERVICE_API_KEY = config("SERVICE_API_KEY")
 AUTH_TOKEN_CACHE_TTL_SECONDS = config("AUTH_TOKEN_CACHE_TTL_SECONDS", default=60, cast=int)
 AUTH_SERVICE_TIMEOUT = config("AUTH_SERVICE_TIMEOUT", default=10, cast=float)
 
@@ -164,8 +163,13 @@ WS_ARTIFACT_RATE_LIMIT_WINDOW = config("WS_ARTIFACT_RATE_LIMIT_WINDOW", default=
 WS_TRANSCRIBE_RATE_LIMIT_MAX = config("WS_TRANSCRIBE_RATE_LIMIT_MAX", default=5, cast=int)
 WS_TRANSCRIBE_RATE_LIMIT_WINDOW = config("WS_TRANSCRIBE_RATE_LIMIT_WINDOW", default=60, cast=int)
 
+# When Redis is unreachable the rate-limit checks fall back to this decision.
+# True (default) favours availability (let traffic through); set False to fail
+# closed and block on Redis errors instead (favours abuse protection).
+WS_RATE_LIMIT_FAIL_OPEN = config("WS_RATE_LIMIT_FAIL_OPEN", default=True, cast=bool)
+
 AUTHENTICATION_EXCLUDED_PATHS = [
-    "/api/v1/health",
+    "/api/v1/health*",
     "/metrics",
     "/api/schema*",
     "/api/docs*",
@@ -192,13 +196,13 @@ SPECTACULAR_SETTINGS = {
     "TAGS": [
         {
             "name": "Health",
-            "description": "Liveness/readiness: database and Redis checks (`GET /api/v1/health`).",
+            "description": "Liveness/readiness: chequeos de base de datos y Redis (`GET /api/v1/health`).",
         },
         {
             "name": "Chats",
             "description": (
-                "Create and manage chats: listing, CRUD, pin, archive, lock, mute; "
-                "includes `me` and `archived` collections."
+                "Creación y gestión de chats: listado, CRUD, fijar, archivar, bloquear; "
+                "incluye las colecciones `me` y `archived`."
             ),
         },
         {
@@ -212,13 +216,13 @@ SPECTACULAR_SETTINGS = {
         },
         {
             "name": "Memberships",
-            "description": "List/update members, invite users, roles, leave chat.",
+            "description": "Listar/actualizar miembros, invitar usuarios, roles, abandonar chat.",
         },
         {
             "name": "Share Links",
             "description": (
-                "Authenticated management of share tokens; **public** read-only message list uses "
-                "`GET /api/v1/share/{token}/messages/` (AllowAny)."
+                "Gestión autenticada de tokens de compartición; el listado de mensajes **público** "
+                "de solo lectura usa `GET /api/v1/share/{token}/messages/` (AllowAny)."
             ),
         },
         {
@@ -238,7 +242,7 @@ SPECTACULAR_SETTINGS = {
         {
             "name": "Assistants",
             "description": (
-                "Asistentes especializados configurables (Custom GPTs equivalent). "
+                "Asistentes especializados configurables (equivalente a Custom GPTs). "
                 "Los admins crean asistentes con system prompts fijos; "
                 "los usuarios inician sesiones de chat pre-configuradas."
             ),
@@ -246,10 +250,11 @@ SPECTACULAR_SETTINGS = {
         {
             "name": "Artifacts",
             "description": (
-                "Capa documental unificada: cabecera `artifact` (type/title/status/version) con "
-                "versionado. Interacciones por `artifact_id`: feedback, bookmark, pin, thread; "
-                "listas de fijados/marcados por `chat_id`. Cada tipo (report, checklist, quiz, "
-                "timeline, lessons learned, decision brief) tiene endpoints dedicados bajo `/api/v1/`."
+                "Capa documental unificada: cabecera `artifact` (type/mode/fragments). "
+                "Interacciones por `artifact_id`: feedback, bookmark, pin, thread; "
+                "listas de fijados/marcados por `chat_id`. Cada tipo (message, report, checklist, quiz, "
+                "timeline, lessons learned, decision brief, document summary, document action) "
+                "tiene endpoints dedicados bajo `/api/v1/`."
             ),
         },
         {
@@ -303,8 +308,8 @@ SPECTACULAR_SETTINGS = {
                 "scheme": "bearer",
                 "bearerFormat": "JWT",
                 "description": (
-                    "Use Authorization Bearer with the JWT from your identity provider. "
-                    "Claims must include application permission strings required by each operation (e.g. LIST_CHATS)."
+                    "Usá Authorization Bearer con el JWT de tu proveedor de identidad. "
+                    "Los claims deben incluir los permisos de aplicación requeridos por cada operación (p. ej. LIST_CHATS)."
                 ),
             },
         },
@@ -319,8 +324,13 @@ WHISPER_COMPUTE_TYPE = config("WHISPER_COMPUTE_TYPE", default="int8")
 
 WHISPER_MAX_CONCURRENCY = config("WHISPER_MAX_CONCURRENCY", default=2, cast=int)
 
+WHISPER_PRELOAD = config("WHISPER_PRELOAD", default=False, cast=bool)
+
 NOTIFICATION_SERVICE_URL = config("NOTIFICATION_SERVICE_URL").strip()
 NOTIFICATION_INTERNAL_API_TOKEN = config("NOTIFICATION_INTERNAL_API_TOKEN")
+
+DOCUMENT_PROCESSING_SERVICE_URL = config("DOCUMENT_PROCESSING_SERVICE_URL", default="").strip()
+DOCUMENT_PROCESSING_SERVICE_TIMEOUT = config("DOCUMENT_PROCESSING_SERVICE_TIMEOUT", default=5, cast=int)
 
 LLM_DOCUMENT_QUESTION_URL = config("LLM_DOCUMENT_QUESTION_URL").strip()
 LLM_DOCUMENT_QUESTION_STREAM_URL = config("LLM_DOCUMENT_QUESTION_STREAM_URL").strip()
@@ -328,8 +338,6 @@ LLM_GENERAL_CHAT_URL = config("LLM_GENERAL_CHAT_URL").strip()
 LLM_GENERAL_CHAT_STREAM_URL = config("LLM_GENERAL_CHAT_STREAM_URL").strip()
 LLM_RAG_AGENT_URL = config("LLM_RAG_AGENT_URL").strip()
 LLM_RAG_AGENT_STREAM_URL = config("LLM_RAG_AGENT_STREAM_URL").strip()
-LLM_AGENT_URL = config("LLM_AGENT_URL").strip()
-LLM_AGENT_STREAM_URL = config("LLM_AGENT_STREAM_URL").strip()
 LLM_CHECKLIST_GENERATE_URL = config("LLM_CHECKLIST_GENERATE_URL").strip()
 LLM_CHECKLIST_GENERATE_STREAM_URL = config("LLM_CHECKLIST_GENERATE_STREAM_URL", default="").strip()
 LLM_REPORT_GENERATE_URL = config("LLM_REPORT_GENERATE_URL").strip()
@@ -408,6 +416,11 @@ LOGGING = {
         "core": {
             "handlers": ["console"],
             "level": _LOG_LEVEL,
+            "propagate": False,
+        },
+        "daphne": {
+            "handlers": ["console"],
+            "level": "WARNING",
             "propagate": False,
         },
     },

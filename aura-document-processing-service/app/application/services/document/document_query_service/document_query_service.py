@@ -1,17 +1,13 @@
 import logging
 from datetime import datetime
 from typing import Optional
-from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
 from app.application.services.document.document_query_service.document_query_service_settings import (
     DocumentQueryServiceSettings
 )
-from app.application.authorization.permissions import Permissions
 from app.domain.constants.document.document_type import DocumentType
-from app.domain.field_limits import MAX_DOCUMENTS_IN_LIST
 
 from app.application.services.document.document_query_service.exceptions.document_query_service_exception import (
     DocumentQueryInvalidRequestException,
@@ -24,10 +20,14 @@ from app.application.services.document.document_query_service.interfaces.documen
 from app.domain.dtos.document.document_query.document_list_response import DocumentListResponse
 from app.domain.dtos.document.document_query.document_response import DocumentResponse
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.infrastructure.persistence.database.orm.document import Document
-from app.infrastructure.persistence.database.repositories.chat_repository.chat_repository_interface import (
-    ChatRepositoryInterface
+from app.infrastructure.http.chat_membership.chat_membership_provider_interface import (
+    ChatMembershipProviderInterface,
 )
+from app.infrastructure.http.authentication_provider.request_token import get_request_token
+from app.infrastructure.http.document_collection_catalog.document_collection_catalog_client_interface import (
+    DocumentCollectionCatalogClientInterface,
+)
+from app.infrastructure.persistence.database.orm.document import Document
 from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
     DocumentRepositoryInterface
 )
@@ -39,15 +39,14 @@ class DocumentQueryService(DocumentQueryServiceInterface):
     def __init__(
             self,
             document_repository: DocumentRepositoryInterface,
-            chat_repository: ChatRepositoryInterface,
-            authorizer: Authorizer,
+            document_collection_catalog_client: DocumentCollectionCatalogClientInterface,
+            chat_membership_provider: ChatMembershipProviderInterface,
             document_query_service_settings: Optional[DocumentQueryServiceSettings] = None
     ) -> None:
         self._document_repository = document_repository
-        self._chat_repository = chat_repository
+        self._document_collection_catalog_client = document_collection_catalog_client
+        self._chat_membership_provider = chat_membership_provider
         self._settings = document_query_service_settings or DocumentQueryServiceSettings()
-
-        self._authorizer = authorizer
 
     async def get_document(
             self,
@@ -66,12 +65,10 @@ class DocumentQueryService(DocumentQueryServiceInterface):
         try:
             if document_id <= 0:
                 raise DocumentQueryInvalidRequestException("The document identifier must be a positive number.")
-            self._authorizer.require_permissions(
-                authenticated_user=authenticated_user,
-                required_permissions=frozenset({Permissions.GET_DOCUMENT}),
-            )
 
             document = await self._get_document_or_raise(document_id, database_session)
+
+            await self._require_document_access(document, authenticated_user)
 
             logger.info(
                 "The document was fetched successfully.",
@@ -101,8 +98,8 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             self,
             database_session: AsyncSession,
             authenticated_user: AuthenticatedUser,
-            page: int,
-            size: int,
+            page: Optional[int] = None,
+            size: Optional[int] = None,
             name: Optional[str] = None,
             description: Optional[str] = None,
             category: Optional[str] = None,
@@ -114,28 +111,35 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             f is not None
             for f in (name, description, category, document_type, created_from, created_to)
         )
+        # Pagination is opt-in: if neither page nor size is supplied the full result
+        # set is returned (bounded by the repository safety cap). Supplying either one
+        # turns pagination on and the missing value falls back to its default.
+        paginate = page is not None or size is not None
 
         logger.info(
             "Fetching the document list was initiated.",
             extra={
                 "page": page,
                 "size": size,
+                "paginated": paginate,
                 "has_filters": has_filters,
                 "user_id": authenticated_user.id
             }
         )
 
         try:
-            self._authorizer.require_permissions(
-                authenticated_user=authenticated_user,
-                required_permissions=frozenset({Permissions.LIST_DOCUMENTS}),
-            )
-            if page < 1:
-                raise DocumentQueryInvalidRequestException("The page number must be a positive integer.")
-            if size < 1:
-                raise DocumentQueryInvalidRequestException("The page size must be a positive integer.")
-            if size > self._settings.max_page_size:
-                raise DocumentQueryInvalidRequestException("The page size exceeds the maximum allowed value.")
+            effective_page: Optional[int] = None
+            effective_size: Optional[int] = None
+            if paginate:
+                effective_page = page if page is not None else self._settings.default_page
+                effective_size = size if size is not None else self._settings.default_page_size
+                if effective_page < 1:
+                    raise DocumentQueryInvalidRequestException("The page number must be a positive integer.")
+                if effective_size < 1:
+                    raise DocumentQueryInvalidRequestException("The page size must be a positive integer.")
+                if effective_size > self._settings.max_page_size:
+                    raise DocumentQueryInvalidRequestException("The page size exceeds the maximum allowed value.")
+
             for _field_value in (name, description, category):
                 if _field_value is not None and len(_field_value) > self._settings.max_filter_length:
                     raise DocumentQueryInvalidRequestException("A filter value exceeds the maximum allowed length.")
@@ -144,8 +148,8 @@ class DocumentQueryService(DocumentQueryServiceInterface):
 
             documents: list[Document] = await self._document_repository.get_documents(
                 database_session=database_session,
-                page=page,
-                size=size,
+                page=effective_page,
+                size=effective_size,
                 name=name,
                 description=description,
                 category=category,
@@ -157,8 +161,9 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             logger.info(
                 "The document list was fetched successfully.",
                 extra={
-                    "page": page,
-                    "size": size,
+                    "page": effective_page,
+                    "size": effective_size,
+                    "paginated": paginate,
                     "count": len(documents),
                     "user_id": authenticated_user.id
                 }
@@ -190,11 +195,21 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             chat_id: int,
             database_session: AsyncSession,
             authenticated_user: AuthenticatedUser,
+            page: Optional[int] = None,
+            size: Optional[int] = None,
     ) -> DocumentListResponse:
+        # Pagination is opt-in: if neither page nor size is supplied the full result
+        # set is returned (bounded by the repository safety cap). Supplying either one
+        # turns pagination on and the missing value falls back to its default.
+        paginate = page is not None or size is not None
+
         logger.info(
             "Fetching documents by chat was initiated.",
             extra={
                 "chat_id": chat_id,
+                "page": page,
+                "size": size,
+                "paginated": paginate,
                 "user_id": authenticated_user.id
             }
         )
@@ -202,16 +217,25 @@ class DocumentQueryService(DocumentQueryServiceInterface):
         try:
             if chat_id <= 0:
                 raise DocumentQueryInvalidRequestException("The chat identifier must be a positive number.")
-            self._authorizer.require_permissions(
-                authenticated_user=authenticated_user,
-                required_permissions=frozenset({Permissions.LIST_DOCUMENTS_BY_CHAT}),
-            )
 
-            chat = await self._chat_repository.get_chat_by_id(
+            effective_page: Optional[int] = None
+            effective_size: Optional[int] = None
+            if paginate:
+                effective_page = page if page is not None else self._settings.default_page
+                effective_size = size if size is not None else self._settings.default_page_size
+                if effective_page < 1:
+                    raise DocumentQueryInvalidRequestException("The page number must be a positive integer.")
+                if effective_size < 1:
+                    raise DocumentQueryInvalidRequestException("The page size must be a positive integer.")
+                if effective_size > self._settings.max_page_size:
+                    raise DocumentQueryInvalidRequestException("The page size exceeds the maximum allowed value.")
+
+            membership = await self._chat_membership_provider.get_membership(
                 chat_id=chat_id,
-                database_session=database_session,
+                user_id=int(authenticated_user.id),
+                authorization_header=get_request_token(),
             )
-            if chat is None or chat.created_by != authenticated_user.id:
+            if not membership.is_member:
                 logger.warning(
                     "Unauthorized list documents by chat attempt.",
                     extra={
@@ -226,17 +250,17 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             documents = await self._document_repository.get_documents_by_chat_id(
                 chat_id=chat_id,
                 database_session=database_session,
+                page=effective_page,
+                size=effective_size,
             )
-
-            if len(documents) > MAX_DOCUMENTS_IN_LIST:
-                raise DocumentQueryInvalidRequestException(
-                    "The number of documents in this chat exceeds the maximum allowed for a single request."
-                )
 
             logger.info(
                 "Documents by chat were fetched successfully.",
                 extra={
                     "chat_id": chat_id,
+                    "page": effective_page,
+                    "size": effective_size,
+                    "paginated": paginate,
                     "count": len(documents),
                     "user_id": authenticated_user.id
                 }
@@ -263,6 +287,41 @@ class DocumentQueryService(DocumentQueryServiceInterface):
                 "An unexpected error occurred while fetching documents by chat."
             ) from e
 
+    async def _require_document_access(
+            self,
+            document: Document,
+            authenticated_user: AuthenticatedUser,
+    ) -> None:
+        # Service-to-service calls authenticate by forwarding the caller's bearer
+        # token, so the downstream services derive identity and permissions from
+        # it (the user is allowed to check their own access).
+        authorization_header = get_request_token()
+
+        accessible_ids = await self._document_collection_catalog_client.fetch_all_accessible_document_ids(
+            user_id=int(authenticated_user.id),
+            authorization_header=authorization_header,
+        )
+        if int(document.id) in accessible_ids:
+            return
+
+        if document.chat_id is not None:
+            membership = await self._chat_membership_provider.get_membership(
+                chat_id=int(document.chat_id),
+                user_id=int(authenticated_user.id),
+                authorization_header=authorization_header,
+            )
+            if membership.is_member:
+                return
+
+        logger.warning(
+            "Unauthorized document access attempt.",
+            extra={
+                "document_id": document.id,
+                "user_id": authenticated_user.id,
+            },
+        )
+        raise UnauthorizedException("You are not authorized to access this document.")
+
     async def _get_document_or_raise(
             self,
             document_id: int,
@@ -281,16 +340,3 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             )
             raise DocumentQueryNotFoundException("The document was not found.")
         return document
-
-
-async def get_document_query_service(
-        request: Request,
-) -> DocumentQueryServiceInterface:
-    try:
-        return request.app.state.document_query_service
-    except AttributeError:
-        logger.error("DocumentQueryService is not registered on the application state.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="DocumentQueryService is not registered on the application state.",
-        )

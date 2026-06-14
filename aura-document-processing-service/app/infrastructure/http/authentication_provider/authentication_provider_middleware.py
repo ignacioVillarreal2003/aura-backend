@@ -1,6 +1,6 @@
 import logging
 from typing import Callable, Optional
-from fastapi import HTTPException, Request, Response
+from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
@@ -16,6 +16,7 @@ from app.infrastructure.http.authentication_provider.authentication_provider_exc
 from app.infrastructure.http.authentication_provider.authentication_provider_interface import (
     AuthenticationProviderInterface
 )
+from app.infrastructure.http.authentication_provider.request_token import set_request_token
 
 logger = logging.getLogger(__name__)
 
@@ -68,33 +69,6 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
                 }
             )
 
-        try:
-            authenticated_user = provider.evaluate_service_auth(request)
-        except HTTPException as e:
-            return JSONResponse(
-                status_code=e.status_code,
-                content=e.detail
-            )
-
-        if authenticated_user is not None:
-            request.state.authenticated_user = authenticated_user
-            auth_hdr = request.headers.get("Authorization")
-            if auth_hdr and auth_hdr.strip():
-                stripped = auth_hdr.strip()
-                request.state.authorization_header_outbound = (
-                    stripped if stripped.lower().startswith("bearer ") else f"Bearer {stripped}"
-                )
-            else:
-                request.state.authorization_header_outbound = None
-            logger.debug(
-                "Request authenticated with service credentials.",
-                extra={
-                    "user_id": authenticated_user.id,
-                    "path": request.url.path
-                }
-            )
-            return await call_next(request)
-
         token = self._extract_token(request)
 
         if not token:
@@ -143,7 +117,8 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
         try:
             authenticated_user = await authentication_provider.validate_token(token)
             request.state.authenticated_user = AuthenticatedUser.model_validate(authenticated_user)
-            request.state.authorization_header_outbound = f"Bearer {token}"
+            bearer = token if token.lower().startswith("bearer ") else f"Bearer {token}"
+            set_request_token(bearer)
             logger.debug(
                 "Request authenticated with a valid bearer token.",
                 extra={

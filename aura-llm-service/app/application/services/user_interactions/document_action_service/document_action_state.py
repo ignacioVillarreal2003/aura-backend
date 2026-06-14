@@ -15,11 +15,14 @@ class DocumentActionState:
     action: Optional[DocumentActionType]
     authenticated_user: AuthenticatedUser
 
+    chat_id: Optional[int] = None
     fragments_by_document: dict[int, list[FragmentResponse]] = field(default_factory=dict)
     all_fragments: list[FragmentResponse] = field(default_factory=list)
     strategy: Optional[ProcessingStrategy] = None
     partial_results: list[str] = field(default_factory=list)
     result: str = ""
+    system_prompt: Optional[str] = None
+    response_style: Optional[str] = None
 
     @classmethod
     def from_request(
@@ -32,4 +35,7 @@ class DocumentActionState:
             instruction=request.instruction,
             action=request.action,
             authenticated_user=authenticated_user,
+            chat_id=request.chat_id,
+            system_prompt=request.system_prompt,
+            response_style=request.response_style,
         )

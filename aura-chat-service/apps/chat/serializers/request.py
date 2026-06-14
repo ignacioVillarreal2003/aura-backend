@@ -1,4 +1,3 @@
-from django.utils import timezone
 from rest_framework import serializers
 
 _SYSTEM_PROMPT_MAX = 8000
@@ -50,25 +49,8 @@ class CreateChatRequest(serializers.Serializer):
         default=list,
         help_text="Up to 20 unique tags; each max 50 characters.",
     )
-    is_ephemeral = serializers.BooleanField(
-        required=False,
-        default=False,
-        help_text="If true, uses the ephemeral message / AI flow (no long-lived history per business rules).",
-    )
-
     def validate_tags(self, value: list[str]) -> list[str]:
         return _normalize_tags(value)
-
-
-class MuteChatRequest(serializers.Serializer):
-    muted_until = serializers.DateTimeField(
-        help_text="UTC datetime after which the chat is no longer muted for this user.",
-    )
-
-    def validate_muted_until(self, value):
-        if value <= timezone.now():
-            raise serializers.ValidationError("muted_until must be in the future.")
-        return value
 
 
 class UpdateChatRequest(serializers.Serializer):

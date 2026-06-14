@@ -1,16 +1,15 @@
 ﻿from fastapi import APIRouter, Depends
 
-from app.api.dependencies.idempotency import optional_idempotency_key
 from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.controllers.processing.fragment_enrich_controller.fragment_enrich_controller_interface import (
-    FragmentEnrichControllerInterface
+    FragmentEnrichControllerInterface,
 )
 from app.api.openapi.common import default_error_responses
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.application.services.processing.fragment_enrich_service.fragment_enrich_service import get_fragment_enrich_service
+from app.api.dependencies.app_state_services import get_fragment_enrich_service
 from app.application.services.processing.fragment_enrich_service.interfaces.fragment_enrich_service_interface import (
-    FragmentEnrichServiceInterface
+    FragmentEnrichServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.processing.fragment_enrich.enrich_fragment_request import EnrichFragmentRequest
@@ -24,16 +23,16 @@ class FragmentEnrichController(FragmentEnrichControllerInterface):
             enrich_fragment_request: EnrichFragmentRequest,
             fragment_enrich_service: FragmentEnrichServiceInterface = Depends(get_fragment_enrich_service),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
-            _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(default_rate_limit),
     ) -> EnrichFragmentResponse:
         Authorizer.require_permissions(
             authenticated_user=authenticated_user,
             required_permissions=frozenset({Permissions.LLM_FRAGMENT_ENRICH}),
         )
+
         return await fragment_enrich_service.enrich_fragment(
             enrich_fragment_request=enrich_fragment_request,
-            authenticated_user=authenticated_user
+            authenticated_user=authenticated_user,
         )
 
 

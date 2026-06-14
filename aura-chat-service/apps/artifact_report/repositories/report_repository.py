@@ -1,6 +1,5 @@
 import logging
 from typing import Optional
-from django.db import transaction
 
 from apps.artifact_report.models import ArtifactReport
 
@@ -15,12 +14,18 @@ class ReportRepository:
             type: str,
             content: str,
             artifact_id: int,
+            title: str = "",
+            description: str = "",
+            query: str = "",
     ) -> ArtifactReport:
         return ArtifactReport.objects.create(
             created_by=user_id,
             type=type,
             content=content,
             artifact_id=artifact_id,
+            title=title,
+            description=description,
+            query=query,
         )
 
     def get_by_id(self, report_id: int) -> Optional[ArtifactReport]:
@@ -56,24 +61,6 @@ class ReportRepository:
         if report_type:
             qs = qs.filter(type=report_type)
         return qs
-
-    @transaction.atomic
-    def update(
-            self,
-            report: ArtifactReport,
-            *,
-            updated_by: int,
-            content: Optional[str] = None,
-    ) -> ArtifactReport:
-        update_fields = []
-        if content is not None:
-            report.content = content
-            update_fields.append("content")
-        if update_fields:
-            report.updated_by = updated_by
-            update_fields.append("updated_by")
-            report.save(update_fields=update_fields)
-        return report
 
     def soft_delete(self, report: ArtifactReport, deleted_by: int) -> None:
         report.delete(deleted_by=deleted_by)

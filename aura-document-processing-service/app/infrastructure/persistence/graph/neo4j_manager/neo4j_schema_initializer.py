@@ -2,7 +2,7 @@ import logging
 from neo4j import AsyncDriver
 from neo4j.exceptions import Neo4jError
 
-from app.infrastructure.persistence.graph.neo4j_manager.neo4j_manager_exception import (
+from app.infrastructure.persistence.graph.neo4j_manager.exceptions.neo4j_manager_exception import (
     Neo4jSchemaInitializationException,
 )
 

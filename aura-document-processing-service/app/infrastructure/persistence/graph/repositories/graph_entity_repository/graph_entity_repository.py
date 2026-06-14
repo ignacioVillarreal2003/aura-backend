@@ -1,10 +1,12 @@
 import logging
+import re
 from typing import Optional
 from neo4j.exceptions import Neo4jError
 
 from app.domain.constants.graph.entity_type import EntityType
 from app.domain.dtos.graph.graph_entity.graph_entity_response import GraphEntityResponse
-from app.infrastructure.persistence.graph.neo4j_manager.neo4j_manager_interface import Neo4jManagerInterface
+from app.domain.dtos.graph.graph_extraction.graph_upsert_items import EntityUpsertItem
+from app.infrastructure.persistence.graph.neo4j_manager.interfaces.neo4j_manager_interface import Neo4jManagerInterface
 from app.infrastructure.persistence.graph.repositories.graph_entity_repository.graph_entity_repository_interface import (
     GraphEntityRepositoryInterface,
 )
@@ -28,6 +30,29 @@ ON MATCH SET
     e.aliases = reduce(acc = coalesce(e.aliases, []), item IN $aliases |
                     CASE WHEN item IN acc THEN acc ELSE acc + [item] END),
     e.description = coalesce(e.description, $description),
+    e.source_document_ids = coalesce(e.source_document_ids, []) +
+                    CASE WHEN $document_id IN coalesce(e.source_document_ids, []) THEN [] ELSE [$document_id] END,
+    e.source_fragment_ids = coalesce(e.source_fragment_ids, []) +
+                    CASE WHEN $fragment_id IN coalesce(e.source_fragment_ids, []) THEN [] ELSE [$fragment_id] END,
+    e.updated_at = datetime()
+"""
+
+_UPSERT_ENTITIES_BATCH_CYPHER = """
+UNWIND $entities AS item
+MERGE (e:Entity {canonical_name: item.canonical_name, type: item.entity_type})
+ON CREATE SET
+    e.display_name = item.display_name,
+    e.aliases = item.aliases,
+    e.description = item.description,
+    e.source_document_ids = [$document_id],
+    e.source_fragment_ids = [$fragment_id],
+    e.created_at = datetime(),
+    e.updated_at = datetime()
+ON MATCH SET
+    e.display_name = coalesce(e.display_name, item.display_name),
+    e.aliases = reduce(acc = coalesce(e.aliases, []), alias IN item.aliases |
+                    CASE WHEN alias IN acc THEN acc ELSE acc + [alias] END),
+    e.description = coalesce(e.description, item.description),
     e.source_document_ids = coalesce(e.source_document_ids, []) +
                     CASE WHEN $document_id IN coalesce(e.source_document_ids, []) THEN [] ELSE [$document_id] END,
     e.source_fragment_ids = coalesce(e.source_fragment_ids, []) +
@@ -70,6 +95,22 @@ RETURN e
 ORDER BY e.canonical_name ASC
 LIMIT $limit
 """
+
+_LUCENE_SPECIAL_CHARS_PATTERN = re.compile(r'[+\-!(){}\[\]^"~*?:\\/]|&&|\|\|')
+_MIN_PREFIX_TOKEN_LENGTH = 3
+
+
+def build_lucene_query(raw: str) -> str:
+    sanitized = _LUCENE_SPECIAL_CHARS_PATTERN.sub(" ", raw)
+    tokens = [t for t in sanitized.split() if t]
+    if not tokens:
+        return ""
+    parts = [
+        f"{token}*" if len(token) >= _MIN_PREFIX_TOKEN_LENGTH else token
+        for token in tokens
+    ]
+    return " OR ".join(parts)
+
 
 _FULLTEXT_SEARCH_CYPHER = """
 CALL db.index.fulltext.queryNodes("entity_fulltext", $query_string)
@@ -121,6 +162,45 @@ class GraphEntityRepository(GraphEntityRepositoryInterface):
             )
             raise GraphPersistenceException(
                 "Failed to upsert an entity in the knowledge graph."
+            ) from e
+
+    async def upsert_entities(
+            self,
+            *,
+            entities: list[EntityUpsertItem],
+            document_id: int,
+            fragment_id: int,
+    ) -> None:
+        if not entities:
+            return
+        params = {
+            "entities": [
+                {
+                    "canonical_name": item.canonical_name,
+                    "display_name": item.display_name,
+                    "entity_type": item.entity_type.value,
+                    "aliases": list(item.aliases),
+                    "description": item.description,
+                }
+                for item in entities
+            ],
+            "document_id": document_id,
+            "fragment_id": fragment_id,
+        }
+        try:
+            await self._neo4j_manager.execute_write(_UPSERT_ENTITIES_BATCH_CYPHER, params)
+        except Neo4jError as e:
+            logger.exception(
+                "Neo4j error while upserting an entity batch.",
+                extra={
+                    "batch_size": len(entities),
+                    "document_id": document_id,
+                    "fragment_id": fragment_id,
+                    "neo4j_code": getattr(e, "code", None),
+                },
+            )
+            raise GraphPersistenceException(
+                "Failed to upsert an entity batch in the knowledge graph."
             ) from e
 
     async def find_by_name(
@@ -254,8 +334,11 @@ class GraphEntityRepository(GraphEntityRepositoryInterface):
     ) -> list[GraphEntityResponse]:
         if not accessible_document_ids or not query_string.strip():
             return []
+        lucene_query = build_lucene_query(query_string)
+        if not lucene_query:
+            return []
         params = {
-            "query_string": query_string.strip(),
+            "query_string": lucene_query,
             "entity_type": entity_type.value if entity_type is not None else None,
             "accessible_ids": accessible_document_ids,
             "limit": int(limit),

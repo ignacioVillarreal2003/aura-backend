@@ -24,7 +24,6 @@ urlpatterns = [
          name="chat-detail"),
     path("<int:chat_id>/pin/", _v.as_view({"post": "pin", "delete": "pin"}), name="chat-pin"),
     path("<int:chat_id>/lock/", _v.as_view({"post": "lock", "delete": "lock"}), name="chat-lock"),
-    path("<int:chat_id>/mute/", _v.as_view({"post": "mute", "delete": "mute"}), name="chat-mute"),
     path("<int:chat_id>/clear/", ClearChatContentView.as_view(), name="chat-clear"),
     path("<int:chat_id>/read/", MarkChatAsReadView.as_view(), name="chat-mark-read"),
     path("<int:chat_id>/share-links/", ShareLinkListView.as_view(), name="share-link-list"),

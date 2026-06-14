@@ -9,7 +9,7 @@ from aiobreaker import CircuitBreaker, CircuitBreakerError
 from fastapi import HTTPException, Request, status
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from app.infrastructure.http.http_client.http_client_exceptions import (
+from app.infrastructure.http.http_client.exceptions.http_client_exceptions import (
     HttpClientCircuitBreakerException,
     HttpClientConnectionException,
     HttpClientException,
@@ -17,7 +17,8 @@ from app.infrastructure.http.http_client.http_client_exceptions import (
     HttpClientTimeoutException,
 )
 from app.infrastructure.http.http_client.http_client_settings import HttpClientSettings
-from app.infrastructure.http.http_client.http_client_interface import HttpClientInterface
+from app.infrastructure.http.http_client.interfaces.http_client_interface import HttpClientInterface
+from app.infrastructure.http.request_id_context import get_request_id
 
 logger = logging.getLogger(__name__)
 
@@ -175,8 +176,12 @@ class HttpClient(HttpClientInterface):
         if not self._attempt_with_retry:
             raise HttpClientNotStartedException("The HTTP client is not started; call start() first.")
 
-        if headers is not None:
-            kwargs["headers"] = headers
+        merged_headers = dict(headers) if headers is not None else {}
+        request_id = get_request_id()
+        if request_id and not any(k.lower() == "x-request-id" for k in merged_headers):
+            merged_headers["X-Request-ID"] = request_id
+        if merged_headers:
+            kwargs["headers"] = merged_headers
         if timeout is not None:
             kwargs["timeout"] = httpx.Timeout(timeout)
 

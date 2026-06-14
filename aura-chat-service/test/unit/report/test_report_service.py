@@ -2,27 +2,45 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from apps.report.exceptions import (
+from apps.artifact_report.exceptions import (
     LLMServiceException,
     ReportAccessDeniedException,
     ReportNotFoundException,
 )
-from apps.report.services.report_service import ReportService, _auto_title
+from apps.artifact_report.services.report_service import ReportService, _auto_title
 from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
 from core.clients.exceptions import HttpClientException
 from core.clients.llm_client import ReportGenerateResult
 from test.conftest import make_message, make_report, make_user
 
-SVC = "apps.report.services.report_service"
+SVC = "apps.artifact_report.services.report_service"
+# get/list/delete now delegate to ArtifactCrudService; access checks live in the
+# shared base + artifact_access, so patch permissions/membership there.
+ACCESS = "apps.artifact.services.artifact_access"
+CRUD = "apps.artifact.services.artifact_crud_service"
 
 service = ReportService()
 
 
+@pytest.fixture(autouse=True)
+def _patch_atomic(mocker):
+    """delete/generate wrap writes in transaction.atomic(); no-op it for mock-only tests."""
+    mocker.patch("django.db.transaction.Atomic.__enter__", return_value=None)
+    mocker.patch("django.db.transaction.Atomic.__exit__", return_value=False)
+
+
+def _patch_delete_extras(mocker):
+    """The shared _delete also cleans up interactions and soft-deletes the artifact."""
+    mocker.patch(f"{CRUD}._cleanup_artifact_interactions")
+    mocker.patch(f"{CRUD}.artifact_repository.soft_delete")
+
+
 def _patch_access(mocker, *, report, is_member=False, is_contributor=False):
-    mocker.patch(f"{SVC}.AccessControl.require_permissions")
+    mocker.patch("core.authorization.access.AccessControl.require_permissions")
     mocker.patch(f"{SVC}.report_repository.get_by_id", return_value=report)
-    mocker.patch(f"{SVC}.membership_repository.is_active_member", return_value=is_member)
-    mocker.patch(f"{SVC}.membership_repository.is_active_contributor", return_value=is_contributor)
+    mocker.patch(f"{SVC}.report_repository.get_by_id_for_update", return_value=report)
+    mocker.patch(f"{ACCESS}.membership_repository.is_active_member", return_value=is_member)
+    mocker.patch(f"{ACCESS}.membership_repository.is_active_contributor", return_value=is_contributor)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -87,6 +105,7 @@ def test_delete_creator_can_delete_own_report(mocker):
     user = make_user(user_id=1)
     rp = make_report(report_id=1, created_by=1, source_chat_id=10)
     _patch_access(mocker, report=rp)
+    _patch_delete_extras(mocker)
     soft_delete = mocker.patch(f"{SVC}.report_repository.soft_delete")
     service.delete_report(user, 1)
     soft_delete.assert_called_once_with(rp, deleted_by=1)
@@ -97,6 +116,7 @@ def test_delete_contributor_member_can_delete(mocker):
     user = make_user(user_id=2)
     rp = make_report(report_id=1, created_by=1, source_chat_id=10)
     _patch_access(mocker, report=rp, is_contributor=True)
+    _patch_delete_extras(mocker)
     soft_delete = mocker.patch(f"{SVC}.report_repository.soft_delete")
     service.delete_report(user, 1)
     soft_delete.assert_called_once()
@@ -121,79 +141,21 @@ def test_delete_non_member_raises_403(mocker):
 
 def test_delete_not_found_raises_404(mocker):
     user = make_user(user_id=1)
-    mocker.patch(f"{SVC}.AccessControl.require_permissions")
-    mocker.patch(f"{SVC}.report_repository.get_by_id", return_value=None)
+    mocker.patch("core.authorization.access.AccessControl.require_permissions")
+    mocker.patch(f"{SVC}.report_repository.get_by_id_for_update", return_value=None)
     with pytest.raises(ReportNotFoundException):
         service.delete_report(user, 999)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# update_report — owner or editor only; reader cannot update
+# list_reports — chat filter validation (always scoped to a chat)
 # ══════════════════════════════════════════════════════════════════════════════
-
-def test_update_creator_can_update_own_report(mocker):
-    user = make_user(user_id=1)
-    rp = make_report(report_id=1, created_by=1, source_chat_id=10)
-    updated = make_report(report_id=1, title="Nuevo título")
-    _patch_access(mocker, report=rp)
-    mocker.patch(f"{SVC}.report_repository.update", return_value=updated)
-    result = service.update_report(user, 1, title="Nuevo título")
-    assert result.title == "Nuevo título"
-
-
-def test_update_contributor_member_can_update(mocker):
-    """Owner or editor role can update someone else's report."""
-    user = make_user(user_id=2)
-    rp = make_report(report_id=1, created_by=1, source_chat_id=10)
-    updated = make_report(report_id=1, title="Actualizado")
-    _patch_access(mocker, report=rp, is_contributor=True)
-    mocker.patch(f"{SVC}.report_repository.update", return_value=updated)
-    result = service.update_report(user, 1, title="Actualizado")
-    assert result.title == "Actualizado"
-
-
-def test_update_reader_member_raises_403(mocker):
-    """Reader is an active member but cannot modify the report."""
-    user = make_user(user_id=2)
-    rp = make_report(report_id=1, created_by=1, source_chat_id=10)
-    _patch_access(mocker, report=rp, is_member=True, is_contributor=False)
-    with pytest.raises(ReportAccessDeniedException):
-        service.update_report(user, 1, title="X")
-
-
-def test_update_non_member_raises_403(mocker):
-    user = make_user(user_id=2)
-    rp = make_report(report_id=1, created_by=1, source_chat_id=10)
-    _patch_access(mocker, report=rp, is_member=False, is_contributor=False)
-    with pytest.raises(ReportAccessDeniedException):
-        service.update_report(user, 1, title="X")
-
-
-def test_update_not_found_raises_404(mocker):
-    user = make_user(user_id=1)
-    mocker.patch(f"{SVC}.AccessControl.require_permissions")
-    mocker.patch(f"{SVC}.report_repository.get_by_id", return_value=None)
-    with pytest.raises(ReportNotFoundException):
-        service.update_report(user, 999, title="X")
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# list_reports — chat filter validation
-# ══════════════════════════════════════════════════════════════════════════════
-
-def test_list_reports_no_chat_id_returns_user_own(mocker):
-    user = make_user(user_id=1)
-    mocker.patch(f"{SVC}.AccessControl.require_permissions")
-    repo = mocker.patch(f"{SVC}.report_repository.list_by_user", return_value=[])
-    service.list_reports(user, chat_id=None)
-    repo.assert_called_once_with(user_id=1, report_type=None)
-
 
 def test_list_reports_with_chat_id_checks_membership(mocker):
     user = make_user(user_id=1)
-    mocker.patch(f"{SVC}.AccessControl.require_permissions")
-    mocker.patch(f"{SVC}.chat_repository.get_by_id", return_value=object())
-    mocker.patch(f"{SVC}.membership_repository.is_active_member", return_value=True)
+    mocker.patch("core.authorization.access.AccessControl.require_permissions")
+    mocker.patch(f"{CRUD}.chat_repository.get_by_id", return_value=object())
+    mocker.patch(f"{CRUD}.membership_repository.is_active_member", return_value=True)
     repo = mocker.patch(f"{SVC}.report_repository.list_by_chat", return_value=[])
     service.list_reports(user, chat_id=5)
     repo.assert_called_once_with(source_chat_id=5, report_type=None)
@@ -202,9 +164,9 @@ def test_list_reports_with_chat_id_checks_membership(mocker):
 def test_list_reports_reader_can_list_chat_reports(mocker):
     """Reader role can list reports in a chat (read-only operation)."""
     user = make_user(user_id=2)
-    mocker.patch(f"{SVC}.AccessControl.require_permissions")
-    mocker.patch(f"{SVC}.chat_repository.get_by_id", return_value=object())
-    mocker.patch(f"{SVC}.membership_repository.is_active_member", return_value=True)
+    mocker.patch("core.authorization.access.AccessControl.require_permissions")
+    mocker.patch(f"{CRUD}.chat_repository.get_by_id", return_value=object())
+    mocker.patch(f"{CRUD}.membership_repository.is_active_member", return_value=True)
     repo = mocker.patch(f"{SVC}.report_repository.list_by_chat", return_value=[])
     service.list_reports(user, chat_id=5)
     repo.assert_called_once_with(source_chat_id=5, report_type=None)
@@ -212,27 +174,29 @@ def test_list_reports_reader_can_list_chat_reports(mocker):
 
 def test_list_reports_chat_not_found_raises_404(mocker):
     user = make_user(user_id=1)
-    mocker.patch(f"{SVC}.AccessControl.require_permissions")
-    mocker.patch(f"{SVC}.chat_repository.get_by_id", return_value=None)
+    mocker.patch("core.authorization.access.AccessControl.require_permissions")
+    mocker.patch(f"{CRUD}.chat_repository.get_by_id", return_value=None)
     with pytest.raises(ChatNotFoundException):
         service.list_reports(user, chat_id=999)
 
 
 def test_list_reports_not_chat_member_raises_403(mocker):
     user = make_user(user_id=1)
-    mocker.patch(f"{SVC}.AccessControl.require_permissions")
-    mocker.patch(f"{SVC}.chat_repository.get_by_id", return_value=object())
-    mocker.patch(f"{SVC}.membership_repository.is_active_member", return_value=False)
+    mocker.patch("core.authorization.access.AccessControl.require_permissions")
+    mocker.patch(f"{CRUD}.chat_repository.get_by_id", return_value=object())
+    mocker.patch(f"{CRUD}.membership_repository.is_active_member", return_value=False)
     with pytest.raises(ChatAccessDeniedException):
         service.list_reports(user, chat_id=5)
 
 
 def test_list_reports_with_type_filter(mocker):
     user = make_user(user_id=1)
-    mocker.patch(f"{SVC}.AccessControl.require_permissions")
-    repo = mocker.patch(f"{SVC}.report_repository.list_by_user", return_value=[])
-    service.list_reports(user, report_type="SITREP", chat_id=None)
-    repo.assert_called_once_with(user_id=1, report_type="SITREP")
+    mocker.patch("core.authorization.access.AccessControl.require_permissions")
+    mocker.patch(f"{CRUD}.chat_repository.get_by_id", return_value=object())
+    mocker.patch(f"{CRUD}.membership_repository.is_active_member", return_value=True)
+    repo = mocker.patch(f"{SVC}.report_repository.list_by_chat", return_value=[])
+    service.list_reports(user, report_type="SITREP", chat_id=5)
+    repo.assert_called_once_with(source_chat_id=5, report_type="SITREP")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -300,9 +264,9 @@ def test_get_report_admin_export_returns_report_without_access_check(mocker):
     """Admin export bypasses creator/membership checks entirely."""
     user = make_user(user_id=999)  # neither creator nor member
     rp = make_report(report_id=1, created_by=1, source_chat_id=10)
-    mocker.patch(f"{SVC}.AccessControl.require_permissions")
+    mocker.patch("core.authorization.access.AccessControl.require_permissions")
     mocker.patch(f"{SVC}.report_repository.get_by_id", return_value=rp)
-    is_member = mocker.patch(f"{SVC}.membership_repository.is_active_member")
+    is_member = mocker.patch(f"{ACCESS}.membership_repository.is_active_member")
     result = service.get_report_admin_export(user, 1)
     assert result is rp
     is_member.assert_not_called()
@@ -310,7 +274,7 @@ def test_get_report_admin_export_returns_report_without_access_check(mocker):
 
 def test_get_report_admin_export_not_found_raises_404(mocker):
     user = make_user(user_id=1)
-    mocker.patch(f"{SVC}.AccessControl.require_permissions")
+    mocker.patch("core.authorization.access.AccessControl.require_permissions")
     mocker.patch(f"{SVC}.report_repository.get_by_id", return_value=None)
     with pytest.raises(ReportNotFoundException):
         service.get_report_admin_export(user, 999)
@@ -342,67 +306,6 @@ def test_auto_title_falls_back_when_content_blank():
 # generate_report (async)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _llm_result(content="Cuerpo del informe", report_type="SITREP", messages=None, fragments=None):
-    return ReportGenerateResult(
-        report_type=report_type,
-        content=content,
-        messages=messages if messages is not None else [{"role": "human", "content": "x"}],
-        fragments=fragments if fragments is not None else [{"content": "frag", "document": {}}],
-    )
-
-
-@pytest.mark.asyncio
-async def test_generate_report_without_chat_creates_and_returns(mocker):
-    user = make_user(user_id=1)
-    mocker.patch(f"{SVC}.AccessControl.require_permissions")
-    result = _llm_result()
-    mocker.patch(f"{SVC}.llm_client.generate_report", new_callable=AsyncMock, return_value=result)
-    created = make_report(report_id=5)
-    create = mocker.patch(f"{SVC}.report_repository.create", return_value=created)
-    report, messages, fragments = await service.generate_report(user, "SITREP", "Genera", "direct")
-    assert report is created
-    assert messages == result.messages
-    assert fragments == result.fragments
-    _, kwargs = create.call_args
-    assert kwargs["source_chat_id"] is None
-    assert kwargs["user_id"] == 1
-
-
-@pytest.mark.asyncio
-async def test_generate_report_no_chat_does_not_query_history(mocker):
-    user = make_user(user_id=1)
-    mocker.patch(f"{SVC}.AccessControl.require_permissions")
-    mocker.patch(f"{SVC}.report_repository.create", return_value=make_report())
-    recent = mocker.patch(f"{SVC}.message_repository.get_recent_messages")
-    llm = mocker.patch(f"{SVC}.llm_client.generate_report", new_callable=AsyncMock, return_value=_llm_result())
-    await service.generate_report(user, "SITREP", "Genera", "direct")
-    recent.assert_not_called()
-    _, kwargs = llm.call_args
-    assert kwargs["messages"] == [{"role": "human", "content": "Genera"}]
-
-
-@pytest.mark.asyncio
-async def test_generate_report_with_chat_builds_history_with_role_mapping(mocker):
-    user = make_user(user_id=1)
-    mocker.patch(f"{SVC}.AccessControl.require_permissions")
-    mocker.patch(f"{SVC}.chat_repository.get_by_id", return_value=object())
-    mocker.patch(f"{SVC}.membership_repository.is_active_contributor", return_value=True)
-    msgs = [
-        make_message(msg_id=1, sender_type="user", message="pregunta"),
-        make_message(msg_id=2, sender_type="system", message="respuesta"),
-    ]
-    mocker.patch(f"{SVC}.message_repository.get_recent_messages", return_value=msgs)
-    llm = mocker.patch(f"{SVC}.llm_client.generate_report", new_callable=AsyncMock, return_value=_llm_result())
-    mocker.patch(f"{SVC}.report_repository.create", return_value=make_report())
-    await service.generate_report(user, "SITREP", "Genera", "direct", chat_id=10)
-    _, kwargs = llm.call_args
-    history = kwargs["messages"]
-    roles = {h["content"]: h["role"] for h in history}
-    assert roles["pregunta"] == "human"   # USER → human
-    assert roles["respuesta"] == "assistant"  # SYSTEM → assistant
-    assert history[-1] == {"role": "human", "content": "Genera"}
-
-
 @pytest.mark.asyncio
 async def test_generate_report_chat_not_found_raises_404(mocker):
     user = make_user(user_id=1)
@@ -410,58 +313,3 @@ async def test_generate_report_chat_not_found_raises_404(mocker):
     mocker.patch(f"{SVC}.chat_repository.get_by_id", return_value=None)
     with pytest.raises(ChatNotFoundException):
         await service.generate_report(user, "SITREP", "x", "direct", chat_id=99)
-
-
-@pytest.mark.asyncio
-async def test_generate_report_non_contributor_raises_403(mocker):
-    user = make_user(user_id=1)
-    mocker.patch(f"{SVC}.AccessControl.require_permissions")
-    mocker.patch(f"{SVC}.chat_repository.get_by_id", return_value=object())
-    mocker.patch(f"{SVC}.membership_repository.is_active_contributor", return_value=False)
-    with pytest.raises(ChatAccessDeniedException):
-        await service.generate_report(user, "SITREP", "x", "direct", chat_id=10)
-
-
-@pytest.mark.asyncio
-async def test_generate_report_llm_http_error_raises_502(mocker):
-    user = make_user(user_id=1)
-    mocker.patch(f"{SVC}.AccessControl.require_permissions")
-    mocker.patch(
-        f"{SVC}.llm_client.generate_report",
-        new_callable=AsyncMock,
-        side_effect=HttpClientException("boom", status_code=503),
-    )
-    with pytest.raises(LLMServiceException):
-        await service.generate_report(user, "SITREP", "x", "direct")
-
-
-@pytest.mark.asyncio
-async def test_generate_report_empty_content_raises_and_skips_create(mocker):
-    user = make_user(user_id=1)
-    mocker.patch(f"{SVC}.AccessControl.require_permissions")
-    mocker.patch(
-        f"{SVC}.llm_client.generate_report",
-        new_callable=AsyncMock,
-        return_value=_llm_result(content="   "),
-    )
-    create = mocker.patch(f"{SVC}.report_repository.create")
-    with pytest.raises(LLMServiceException):
-        await service.generate_report(user, "SITREP", "x", "direct")
-    create.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_generate_report_uses_result_type_and_auto_title(mocker):
-    """The persisted report uses the LLM's returned type and an auto title from content."""
-    user = make_user(user_id=1)
-    mocker.patch(f"{SVC}.AccessControl.require_permissions")
-    mocker.patch(
-        f"{SVC}.llm_client.generate_report",
-        new_callable=AsyncMock,
-        return_value=_llm_result(content="Resumen ejecutivo\ndetalle", report_type="INTSUM"),
-    )
-    create = mocker.patch(f"{SVC}.report_repository.create", return_value=make_report())
-    await service.generate_report(user, "SITREP", "x", "direct")
-    _, kwargs = create.call_args
-    assert kwargs["type"] == "INTSUM"            # result.report_type, not the requested type
-    assert kwargs["title"] == "Resumen ejecutivo"  # derived by _auto_title

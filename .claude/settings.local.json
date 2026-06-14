@@ -71,7 +71,27 @@
       "Bash(./.venv/Scripts/python.exe -m py_compile apps/chat/ai_reply_lock.py apps/chat/ws_rate_limit.py apps/chat/consumers/chat_consumer.py apps/artifact_message/views.py apps/artifact_report/views.py apps/artifact_checklist/views.py apps/artifact_quiz/views.py apps/artifact_timeline/views.py apps/artifact_lessons_learned/views.py apps/artifact_decision_brief/views.py core/pagination/pagination.py aura_chat_service/settings/base.py)",
       "Bash(./.venv/Scripts/python.exe -m py_compile apps/chat/consumers/chat_consumer.py apps/chat/ws_rate_limit.py apps/chat/ai_reply_lock.py)",
       "Bash(./.venv/Scripts/python.exe -c \"import fakeredis; print\\('fakeredis', fakeredis.__version__\\)\")",
-      "Bash(./.venv/Scripts/python.exe -m py_compile apps/chat/consumers/chat_consumer.py)"
+      "Bash(./.venv/Scripts/python.exe -m py_compile apps/chat/consumers/chat_consumer.py)",
+      "Bash(grep -vE '\\\\.\\(pyc|exe|dll|pem\\)$')",
+      "Bash(grep -vE '\\\\.\\(pyc|exe|dll\\)$')",
+      "Bash(grep -iE 'docker-compose|Dockerfile|\\\\.ya?ml$|requirements|pyproject|\\\\.cfg$|nginx|gateway|\\\\.github|Makefile|\\\\.toml$')",
+      "Bash(grep -vE '\\\\.pyc$')",
+      "Bash(grep -vE 'Lib/site-packages|templates/|\\\\.html$')",
+      "Bash(grep -E '\\\\.py$')",
+      "Bash(xargs wc -l)",
+      "Bash(grep -c '\\\\.pyc$')",
+      "Bash(grep '\\\\.pyc$')",
+      "Read(//c/Users/ignac/Desktop/AURA/**)",
+      "Read(//c/Users/ignac/**)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(python -m py_compile app/configuration/metrics.py app/main.py)",
+      "Bash(python -m py_compile app/infrastructure/llm/ollama_llm/ollama_llm_facade_settings.py)",
+      "Bash(python -m py_compile aura-document-processing-service/app/application/services/document/document_query_service/document_query_service.py aura-document-processing-service/app/infrastructure/http/chat_membership/chat_membership_provider.py aura-auth-service/scripts/setup_db.py)",
+      "Bash(python -m py_compile app/api/schemas/document/create_document_form.py app/domain/dtos/document/create_document/create_document_request.py)",
+      "Bash(python -m py_compile /c/Users/ignac/Desktop/AURA/aura-backend/aura-llm-service/app/configuration/middlewares/guardrails_middleware.py /c/Users/ignac/Desktop/AURA/aura-backend/aura-llm-service/app/infrastructure/guardrails/nemo_guardrails_settings.py)",
+      "Bash(python *)"
     ]
   }
 }

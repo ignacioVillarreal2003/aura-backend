@@ -1,12 +1,15 @@
 import logging
+import time
 from typing import List, Optional
 import httpx
 from langchain_core.messages import BaseMessage
 from langchain_core.runnables import Runnable
 from tenacity import AsyncRetrying, before_sleep_log, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+from app.configuration.metrics import model_name_of, record_llm_usage, usage_tokens
 from app.infrastructure.llm.ollama_llm.exceptions.ollama_llm_invoker_exceptions import LLMInvocationError
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface import OllamaLLMInvokerInterface
+from app.infrastructure.llm.ollama_llm.llm_payload_logging import log_llm_input, log_llm_output
 from app.infrastructure.llm.ollama_llm.ollama_llm_invoker_settings import OllamaLLMInvokerSettings
 
 logger = logging.getLogger(__name__)
@@ -33,8 +36,11 @@ class OllamaLLMInvoker(OllamaLLMInvokerInterface):
             llm_input: List[BaseMessage],
     ) -> BaseMessage:
         logger.debug("Invoking LLM", extra={"message_count": len(llm_input)})
+        if self._settings.log_payloads:
+            log_llm_input(logger, llm_input, self._settings.log_payload_max_chars)
 
         response: BaseMessage | None = None
+        started = time.perf_counter()
         try:
             async for attempt in AsyncRetrying(
                     stop=stop_after_attempt(self._settings.max_retry_attempts),
@@ -70,6 +76,18 @@ class OllamaLLMInvoker(OllamaLLMInvokerInterface):
             raise LLMInvocationError(
                 f"Expected BaseMessage response, got {type(response).__name__}."
             )
+
+        input_tokens, output_tokens = usage_tokens(response)
+        record_llm_usage(
+            model=model_name_of(llm),
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            duration_seconds=time.perf_counter() - started,
+        )
+
+        if self._settings.log_payloads:
+            content = response.content if isinstance(response.content, str) else str(response.content)
+            log_llm_output(logger, content, self._settings.log_payload_max_chars)
 
         logger.debug("LLM invocation successful")
         return response

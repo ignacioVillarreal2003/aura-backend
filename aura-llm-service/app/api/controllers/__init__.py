@@ -2,7 +2,6 @@ from fastapi import APIRouter
 
 from app.api.controllers.user_interactions import (
     document_summary_controller,
-    agent_controller,
     document_question_controller,
     document_action_controller,
     rag_agent_controller,
@@ -19,8 +18,8 @@ from app.api.controllers.processing import (
     fragment_enrich_controller,
     graph_extraction_controller,
     graph_query_translation_controller,
-    health_controller
 )
+from app.api.controllers import health_controller
 
 router = APIRouter()
 
@@ -45,12 +44,6 @@ router.include_router(
     document_action_controller.router,
     prefix="/document-action",
     tags=["document-action"],
-)
-
-router.include_router(
-    agent_controller.router,
-    prefix="/agent",
-    tags=["agent"],
 )
 
 router.include_router(

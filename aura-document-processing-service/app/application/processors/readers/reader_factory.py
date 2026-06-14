@@ -4,7 +4,6 @@ import platform
 import shutil
 from pathlib import Path
 from typing import Optional
-from fastapi import HTTPException, Request, status
 
 from app.application.processors.readers.constants.reader_type import ReaderType
 from app.application.processors.readers.exceptions.reader_exception import (
@@ -145,9 +144,9 @@ class ReaderFactory:
             self
     ) -> list[ReaderType]:
         if self._settings.docling_enabled:
-            return [ReaderType.docling] + _BASE_READER_PRIORITY
+            return [ReaderType.docling, *_BASE_READER_PRIORITY]
 
-        return _BASE_READER_PRIORITY + [ReaderType.docling]
+        return [*_BASE_READER_PRIORITY, ReaderType.docling]
 
     def _effective_reader_priority(
             self,
@@ -311,17 +310,3 @@ class ReaderFactory:
                     "exception_type": type(e).__name__
                 }
             )
-
-
-async def get_reader_factory(
-        request: Request
-) -> ReaderFactory:
-    factory = getattr(request.app.state, "reader_factory", None)
-    if factory is None:
-        logger.error("The reader factory was not registered on the application state.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Reader factory is not configured"
-        )
-    return factory
-

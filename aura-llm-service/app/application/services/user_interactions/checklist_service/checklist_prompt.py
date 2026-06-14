@@ -21,6 +21,7 @@ Analizar el procedimiento o instrucción del usuario y extraer todos los pasos d
 2. El JSON debe seguir exactamente este esquema:
 {{
   "title": "Título descriptivo de la checklist (máx. {settings.max_title_chars} caracteres)",
+  "description": "Breve descripción del propósito de la checklist (máx. 200 caracteres)",
   "items": [
     {{
       "section": "Nombre de la fase o sección (p. ej. 'Pre-vuelo', 'Operación', 'Post-operación') (máx. {settings.max_section_chars} caracteres)",

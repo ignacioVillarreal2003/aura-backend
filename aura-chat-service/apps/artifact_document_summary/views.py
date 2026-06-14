@@ -13,7 +13,6 @@ from apps.artifact_document_summary.serializers import (
     DocumentSummaryGenerateResponse,
     DocumentSummaryListResponse,
     DocumentSummaryResponse,
-    UpdateDocumentSummaryRequest,
 )
 from apps.artifact_document_summary.services.document_summary_service import document_summary_service
 from apps.artifact_document_summary.services.export_service import (
@@ -21,11 +20,10 @@ from apps.artifact_document_summary.services.export_service import (
     generate_document_summary_pdf,
 )
 from apps.artifact.utils import safe_filename as _safe_filename
-from apps.chat.ai_reply_lock import release, try_acquire
-from apps.chat.exceptions import ChatAccessDeniedException, ChatAiReplyInProgressException, ChatNotFoundException
+from apps.chat.ai_lock_guard import ai_reply_lock_guard
+from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.chat.ws_rate_limit import check_artifact_rate_limit
-from apps.artifact_message.services.message_service import broadcast_chat_ai_lock_change
 from apps.membership.repositories.membership_repository import membership_repository
 from rest_framework.exceptions import ValidationError
 from core.openapi.common import standard_error_responses
@@ -84,29 +82,6 @@ class DocumentSummaryDetailView(APIView):
     def get(self, request: Request, document_summary_id: int) -> Response:
         obj = document_summary_service.get_document_summary(
             user=request.user, document_summary_id=document_summary_id
-        )
-        return Response(DocumentSummaryResponse(obj).data)
-
-    @extend_schema(
-        tags=["Document Summaries"],
-        summary="Actualizar resumen de documento",
-        description="Actualiza el título y/o el texto del resumen. Solo el creador o miembros del chat de origen pueden modificarlo.",
-        parameters=[_ID_PARAM],
-        request=UpdateDocumentSummaryRequest,
-        responses={
-            200: DocumentSummaryResponse,
-            **standard_error_responses(400, 401, 403, 404),
-        },
-    )
-    def patch(self, request: Request, document_summary_id: int) -> Response:
-        serializer = UpdateDocumentSummaryRequest(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        d = serializer.validated_data
-        obj = document_summary_service.update_document_summary(
-            user=request.user,
-            document_summary_id=document_summary_id,
-            title=d.get("title"),
-            summary=d.get("summary"),
         )
         return Response(DocumentSummaryResponse(obj).data)
 
@@ -182,20 +157,12 @@ class DocumentSummaryGenerateView(APIView):
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
 
-        lock_token = await sync_to_async(try_acquire)(chat_id)
-        if not lock_token:
-            raise ChatAiReplyInProgressException()
-
-        try:
-            await sync_to_async(broadcast_chat_ai_lock_change)(chat_id, True)
+        async with ai_reply_lock_guard(chat_id):
             obj, fragments = await document_summary_service.generate_document_summary(
                 user=request.user,
                 document_ids=document_ids,
                 chat_id=chat_id,
             )
-        finally:
-            await sync_to_async(release)(chat_id, lock_token)
-            await sync_to_async(broadcast_chat_ai_lock_change)(chat_id, False)
 
         return Response(
             DocumentSummaryGenerateResponse(
@@ -223,7 +190,7 @@ class DocumentSummaryExportPDFView(APIView):
             pdf = generate_document_summary_pdf(obj)
         except DocumentSummaryExportException:
             raise
-        safe_title = _safe_filename(obj.artifact.title)
+        safe_title = _safe_filename(obj.title)
         response = HttpResponse(pdf, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="document_summary_{safe_title}.pdf"'
         return response
@@ -244,7 +211,7 @@ class DocumentSummaryExportMarkdownView(APIView):
             user=request.user, document_summary_id=document_summary_id
         )
         content = generate_document_summary_markdown(obj)
-        safe_title = _safe_filename(obj.artifact.title)
+        safe_title = _safe_filename(obj.title)
         response = HttpResponse(content, content_type="text/markdown; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="document_summary_{safe_title}.md"'
         return response
@@ -269,7 +236,7 @@ class DocumentSummaryManageExportPDFView(APIView):
             pdf = generate_document_summary_pdf(obj)
         except DocumentSummaryExportException:
             raise
-        safe_title = _safe_filename(obj.artifact.title)
+        safe_title = _safe_filename(obj.title)
         response = HttpResponse(pdf, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="document_summary_{safe_title}.pdf"'
         return response
@@ -291,7 +258,7 @@ class DocumentSummaryManageExportMarkdownView(APIView):
             user=request.user, document_summary_id=document_summary_id
         )
         content = generate_document_summary_markdown(obj)
-        safe_title = _safe_filename(obj.artifact.title)
+        safe_title = _safe_filename(obj.title)
         response = HttpResponse(content, content_type="text/markdown; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="document_summary_{safe_title}.md"'
         return response

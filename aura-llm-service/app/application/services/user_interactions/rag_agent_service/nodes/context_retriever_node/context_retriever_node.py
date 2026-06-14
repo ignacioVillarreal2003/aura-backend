@@ -1,7 +1,7 @@
 import logging
-from collections import defaultdict
 from typing import Any, Dict, List, Optional
 
+from app.application.services.user_interactions.rag_agent_service.context_formatting import build_document_context
 from app.application.services.user_interactions.rag_agent_service.interfaces.rag_node_interface import RagNodeInterface
 from app.application.services.user_interactions.rag_agent_service.rag_agent_settings import RagAgentServiceSettings
 from app.application.services.user_interactions.rag_agent_service.rag_agent_state.rag_agent_state import RagAgentState
@@ -43,7 +43,7 @@ class ContextRetrieverNode(RagNodeInterface):
 
         try:
             fragments = await self._retrieve(authenticated_user, query, keywords)
-            context = self._build_context(fragments)
+            context = build_document_context(fragments, self._settings.max_context_chars)
             logger.info(
                 "Context retrieved",
                 extra={"fragments_count": len(fragments), "context_chars": len(context)},
@@ -86,42 +86,6 @@ class ContextRetrieverNode(RagNodeInterface):
             request=request,
         )
         return response.fragments
-
-    def _build_context(self, fragments: List[FragmentResponse]) -> str:
-        if not fragments:
-            return ""
-
-        grouped: Dict[int, List[FragmentResponse]] = defaultdict(list)
-        for fragment in fragments:
-            grouped[fragment.document_id].append(fragment)
-
-        for doc_id in grouped:
-            grouped[doc_id].sort(key=lambda f: f.fragment_index)
-
-        parts: List[str] = []
-        total_chars = 0
-
-        for doc_id, doc_fragments in grouped.items():
-            section_parts = [f"=== Documento #{doc_id} ==="]
-            section_chars = len(section_parts[0])
-
-            for i, fragment in enumerate(doc_fragments, start=1):
-                remaining = self._settings.max_context_chars - total_chars - section_chars
-                if remaining <= 0:
-                    break
-                content = fragment.content[:remaining]
-                fragment_text = f"\n[Fragmento {i}]\n{content}"
-                section_parts.append(fragment_text)
-                section_chars += len(fragment_text)
-
-            section = "\n".join(section_parts)
-            total_chars += len(section)
-            parts.append(section)
-
-            if total_chars >= self._settings.max_context_chars:
-                break
-
-        return "\n\n".join(parts)
 
     @staticmethod
     def _build_keywords_string(keywords: List[str]) -> Optional[str]:

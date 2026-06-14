@@ -1,0 +1,193 @@
+import logging
+
+from fastapi import HTTPException, Request, status
+
+from app.application.processors.embedders.embedder_factory import EmbedderFactory
+from app.application.processors.readers.reader_factory import ReaderFactory
+from app.application.processors.rerankers.reranker_factory import RerankerFactory
+from app.application.processors.text_cleaners.text_cleaner_factory import TextCleanerFactory
+from app.application.processors.text_splitters.text_splitter_factory import TextSplitterFactory
+from app.application.services.document.create_document_service.interfaces.create_document_service_interface import (
+    CreateDocumentServiceInterface,
+)
+from app.application.services.document.delete_document_service.interfaces.delete_document_service_interface import (
+    DeleteDocumentServiceInterface,
+)
+from app.application.services.document.document_download_service.interfaces.document_download_service_interface import (
+    DocumentDownloadServiceInterface,
+)
+from app.application.services.document.document_ingestion_service.interfaces.document_ingestion_service_interface import (
+    DocumentIngestionServiceInterface,
+)
+from app.application.services.document.document_query_service.interfaces.document_query_service_interface import (
+    DocumentQueryServiceInterface,
+)
+from app.application.services.document.document_search_service.interfaces.document_search_service_interface import (
+    DocumentSearchServiceInterface,
+)
+from app.application.services.fragment.fragment_query_service.interfaces.fragment_query_service_interface import (
+    FragmentQueryServiceInterface,
+)
+from app.application.services.graph.graph_context_service.interfaces.graph_context_service_interface import (
+    GraphContextServiceInterface,
+)
+from app.application.services.graph.graph_entity_service.interfaces.graph_entity_service_interface import (
+    GraphEntityServiceInterface,
+)
+from app.application.services.graph.graph_extraction_service.interfaces.graph_extraction_service_interface import (
+    GraphExtractionServiceInterface,
+)
+from app.application.services.graph.graph_ontology_service.interfaces.graph_ontology_service_interface import (
+    GraphOntologyServiceInterface,
+)
+from app.application.services.graph.graph_path_service.interfaces.graph_path_service_interface import (
+    GraphPathServiceInterface,
+)
+from app.application.services.graph.graph_query_service.interfaces.graph_query_service_interface import (
+    GraphQueryServiceInterface,
+)
+from app.application.services.graph.graph_stats_service.interfaces.graph_stats_service_interface import (
+    GraphStatsServiceInterface,
+)
+
+logger = logging.getLogger(__name__)
+
+_503 = status.HTTP_503_SERVICE_UNAVAILABLE
+
+
+def _unavailable(name: str) -> HTTPException:
+    logger.error("Service not registered on application state.", extra={"service": name})
+    return HTTPException(status_code=_503, detail=f"{name} is not available.")
+
+
+async def get_create_document_service(request: Request) -> CreateDocumentServiceInterface:
+    svc = getattr(request.app.state, "create_document_service", None)
+    if svc is None:
+        raise _unavailable("CreateDocumentService")
+    return svc
+
+
+async def get_delete_document_service(request: Request) -> DeleteDocumentServiceInterface:
+    svc = getattr(request.app.state, "delete_document_service", None)
+    if svc is None:
+        raise _unavailable("DeleteDocumentService")
+    return svc
+
+
+async def get_document_download_service(request: Request) -> DocumentDownloadServiceInterface:
+    svc = getattr(request.app.state, "document_download_service", None)
+    if svc is None:
+        raise _unavailable("DocumentDownloadService")
+    return svc
+
+
+async def get_document_ingestion_service(request: Request) -> DocumentIngestionServiceInterface:
+    svc = getattr(request.app.state, "document_ingestion_service", None)
+    if svc is None:
+        raise _unavailable("DocumentIngestionService")
+    return svc
+
+
+async def get_document_query_service(request: Request) -> DocumentQueryServiceInterface:
+    svc = getattr(request.app.state, "document_query_service", None)
+    if svc is None:
+        raise _unavailable("DocumentQueryService")
+    return svc
+
+
+async def get_document_search_service(request: Request) -> DocumentSearchServiceInterface:
+    svc = getattr(request.app.state, "document_search_service", None)
+    if svc is None:
+        raise _unavailable("DocumentSearchService")
+    return svc
+
+
+async def get_fragment_query_service(request: Request) -> FragmentQueryServiceInterface:
+    svc = getattr(request.app.state, "fragment_query_service", None)
+    if svc is None:
+        raise _unavailable("FragmentQueryService")
+    return svc
+
+
+async def get_graph_context_service(request: Request) -> GraphContextServiceInterface:
+    svc = getattr(request.app.state, "graph_context_service", None)
+    if svc is None:
+        raise _unavailable("GraphContextService")
+    return svc
+
+
+async def get_graph_entity_service(request: Request) -> GraphEntityServiceInterface:
+    svc = getattr(request.app.state, "graph_entity_service", None)
+    if svc is None:
+        raise _unavailable("GraphEntityService")
+    return svc
+
+
+async def get_graph_extraction_service(request: Request) -> GraphExtractionServiceInterface:
+    svc = getattr(request.app.state, "graph_extraction_service", None)
+    if svc is None:
+        raise _unavailable("GraphExtractionService")
+    return svc
+
+
+async def get_graph_ontology_service(request: Request) -> GraphOntologyServiceInterface:
+    svc = getattr(request.app.state, "graph_ontology_service", None)
+    if svc is None:
+        raise _unavailable("GraphOntologyService")
+    return svc
+
+
+async def get_graph_path_service(request: Request) -> GraphPathServiceInterface:
+    svc = getattr(request.app.state, "graph_path_service", None)
+    if svc is None:
+        raise _unavailable("GraphPathService")
+    return svc
+
+
+async def get_graph_query_service(request: Request) -> GraphQueryServiceInterface:
+    svc = getattr(request.app.state, "graph_query_service", None)
+    if svc is None:
+        raise _unavailable("GraphQueryService")
+    return svc
+
+
+async def get_graph_stats_service(request: Request) -> GraphStatsServiceInterface:
+    svc = getattr(request.app.state, "graph_stats_service", None)
+    if svc is None:
+        raise _unavailable("GraphStatsService")
+    return svc
+
+
+async def get_embedder_factory(request: Request) -> EmbedderFactory:
+    factory = getattr(request.app.state, "embedder_factory", None)
+    if factory is None:
+        raise _unavailable("EmbedderFactory")
+    return factory
+
+
+async def get_reader_factory(request: Request) -> ReaderFactory:
+    factory = getattr(request.app.state, "reader_factory", None)
+    if factory is None:
+        raise _unavailable("ReaderFactory")
+    return factory
+
+
+async def get_reranker_factory(request: Request) -> RerankerFactory:
+    factory = getattr(request.app.state, "reranker_factory", None)
+    if factory is None:
+        raise _unavailable("RerankerFactory")
+    return factory
+
+
+async def get_text_cleaner_factory(request: Request) -> TextCleanerFactory:
+    factory = getattr(request.app.state, "text_cleaner_factory", None)
+    if factory is None:
+        raise _unavailable("TextCleanerFactory")
+    return factory
+
+
+async def get_text_splitter_factory(request: Request) -> TextSplitterFactory:
+    factory = getattr(request.app.state, "text_splitter_factory", None)
+    if factory is None:
+        raise _unavailable("TextSplitterFactory")
+    return factory

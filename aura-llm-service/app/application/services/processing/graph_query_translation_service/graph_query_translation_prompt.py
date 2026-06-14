@@ -41,7 +41,6 @@ Estructura EXACTA del JSON:
 }
 """.strip()
 
-
 HUMAN_PROMPT = """
 Tipos de entidad disponibles (entity_types):
 {entity_types}
@@ -54,7 +53,6 @@ Pregunta del usuario:
 
 Devuelve únicamente el JSON solicitado.
 """.strip()
-
 
 REPAIR_PROMPT = """
 Tu respuesta anterior no pudo ser interpretada como JSON válido.

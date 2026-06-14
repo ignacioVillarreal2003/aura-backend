@@ -300,20 +300,6 @@ def test_update_member_self_pending_to_active(mocker):
     assert result.status == "active"
 
 
-def test_update_member_self_pending_to_inactive(mocker):
-    user = make_user(user_id=2)
-    chat = make_chat(chat_id=1, created_by=1)
-    membership = make_membership(member_id=2, chat_id=1, status="pending")
-    updated = make_membership(member_id=2, chat_id=1, status="inactive")
-    _patch_perms(mocker)
-    _patch_chat(mocker, chat)
-    _patch_atomic(mocker)
-    mocker.patch(f"{SVC}.membership_repository.get_by_chat_and_member_for_update", return_value=membership)
-    mocker.patch(f"{SVC}.membership_repository.update_status", return_value=updated)
-    result = service.update_member(user, chat_id=1, member_id=2, new_status="inactive")
-    assert result.status == "inactive"
-
-
 def test_update_member_non_self_raises_403(mocker):
     user = make_user(user_id=1)
     chat = make_chat(chat_id=1, created_by=1)
@@ -668,20 +654,6 @@ def test_add_members_no_one_created_skips_notification(mocker):
 # update_member — reactivation + WS broadcasts
 # ══════════════════════════════════════════════════════════════════════════════
 
-def test_update_member_inactive_to_active_reactivates(mocker):
-    user = make_user(user_id=2)
-    chat = make_chat(chat_id=1, created_by=1)
-    membership = make_membership(member_id=2, chat_id=1, status="inactive")
-    updated = make_membership(member_id=2, chat_id=1, status="active")
-    _patch_perms(mocker)
-    _patch_chat(mocker, chat)
-    _patch_atomic(mocker)
-    mocker.patch(f"{SVC}.membership_repository.get_by_chat_and_member_for_update", return_value=membership)
-    mocker.patch(f"{SVC}.membership_repository.update_status", return_value=updated)
-    result = service.update_member(user, chat_id=1, member_id=2, new_status="active")
-    assert result.status == "active"
-
-
 def test_update_member_active_status_broadcasts_member_joined(mocker):
     user = make_user(user_id=2)
     chat = make_chat(chat_id=1, created_by=1)
@@ -694,21 +666,6 @@ def test_update_member_active_status_broadcasts_member_joined(mocker):
     mocker.patch(f"{SVC}.membership_repository.update_status", return_value=updated)
     broadcast = mocker.patch(f"{SVC}._broadcast_member_joined")
     service.update_member(user, chat_id=1, member_id=2, new_status="active")
-    broadcast.assert_called_once_with(1, 2)
-
-
-def test_update_member_inactive_status_broadcasts_member_left(mocker):
-    user = make_user(user_id=2)
-    chat = make_chat(chat_id=1, created_by=1)
-    membership = make_membership(member_id=2, chat_id=1, status="active")
-    updated = make_membership(member_id=2, chat_id=1, status="inactive")
-    _patch_perms(mocker)
-    _patch_chat(mocker, chat)
-    _patch_atomic_run_oncommit(mocker)
-    mocker.patch(f"{SVC}.membership_repository.get_by_chat_and_member_for_update", return_value=membership)
-    mocker.patch(f"{SVC}.membership_repository.update_status", return_value=updated)
-    broadcast = mocker.patch(f"{SVC}._broadcast_member_left")
-    service.update_member(user, chat_id=1, member_id=2, new_status="inactive")
     broadcast.assert_called_once_with(1, 2)
 
 

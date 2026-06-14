@@ -1,58 +1,14 @@
-import concurrent.futures
-import datetime
 import html
-import io
 import logging
-from xhtml2pdf import pisa
 
+from core.export import pdf_export
 from apps.artifact.models.artifact import Artifact
 from apps.artifact_timeline.exceptions import TimelineExportException
 from apps.artifact_timeline.models import ArtifactTimeline
 
 logger = logging.getLogger(__name__)
 
-_PDF_TIMEOUT_SECONDS = 30
-
-_CSS = """
-@page {
-    size: A4;
-    margin: 2.5cm 2cm;
-}
-body {
-    font-family: Courier, monospace;
-    font-size: 9pt;
-    color: #111111;
-    line-height: 1.6;
-}
-.doc-header {
-    border-top: 3px solid #111111;
-    border-bottom: 3px solid #111111;
-    padding: 8px 0;
-    margin-bottom: 18px;
-    text-align: center;
-}
-.classification {
-    font-size: 11pt;
-    font-weight: bold;
-    letter-spacing: 3px;
-    text-transform: uppercase;
-    color: #000000;
-}
-.doc-footer {
-    border-top: 2px solid #111111;
-    padding-top: 4px;
-    margin-top: 18px;
-    text-align: center;
-    font-size: 7.5pt;
-    color: #333333;
-}
-.meta {
-    font-size: 8pt;
-    color: #555555;
-    margin-bottom: 14px;
-    font-family: Helvetica, Arial, sans-serif;
-}
-h1 { font-size: 13pt; margin: 6px 0; font-family: Courier, monospace; }
+_CSS = pdf_export.DOC_BASE_CSS + """
 .tl-event {
     margin: 6px 0;
     padding: 4px 0 4px 8px;
@@ -70,35 +26,15 @@ h1 { font-size: 13pt; margin: 6px 0; font-family: Courier, monospace; }
 
 
 def _fmt_dt(dt) -> str:
-    if dt is None:
-        return ""
-    utc = dt.astimezone(datetime.timezone.utc) if dt.tzinfo else dt
-    return utc.strftime("%Y-%m-%d %H:%M UTC")
+    return pdf_export.fmt_dt(dt)
 
 
 def _event_when(event) -> str:
-    if event.occurred_at is not None:
-        return _fmt_dt(event.occurred_at)
     return event.occurred_label or "—"
 
 
-def _build_pdf_sync(html_content: str) -> bytes:
-    buf = io.BytesIO()
-    result = pisa.CreatePDF(io.StringIO(html_content), dest=buf, encoding="utf-8")
-    if result.err:
-        logger.error("xhtml2pdf reported %d error(s) during timeline PDF generation", result.err)
-        raise TimelineExportException()
-    return buf.getvalue()
-
-
 def _build_pdf(html_content: str) -> bytes:
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(_build_pdf_sync, html_content)
-        try:
-            return future.result(timeout=_PDF_TIMEOUT_SECONDS)
-        except concurrent.futures.TimeoutError:
-            logger.error("ArtifactTimeline PDF generation timed out after %ds", _PDF_TIMEOUT_SECONDS)
-            raise TimelineExportException()
+    return pdf_export.build_pdf(html_content, exc_factory=TimelineExportException, label="timeline")
 
 
 def generate_timeline_pdf(timeline: ArtifactTimeline) -> bytes:
@@ -130,7 +66,7 @@ def generate_timeline_pdf(timeline: ArtifactTimeline) -> bytes:
   <div class="classification">CLASIFICACIÓN SEGÚN CONTENIDO</div>
 </div>
 <h1>LÍNEA DE TIEMPO</h1>
-<h2 style="border:none; margin-top:2px;">{html.escape(timeline.artifact.title)}</h2>
+<h2 style="border:none; margin-top:2px;">{html.escape(timeline.title)}</h2>
 <div class="meta">Generado: {created} &bull; Modo: {mode_label} &bull; {len(events)} eventos</div>
 {summary_html}
 <hr/>
@@ -150,7 +86,7 @@ def generate_timeline_markdown(timeline: ArtifactTimeline) -> str:
     lines = [
         "# LÍNEA DE TIEMPO",
         "",
-        f"**{timeline.artifact.title}**",
+        f"**{timeline.title}**",
         "",
         f"*Generado: {_fmt_dt(timeline.created_at)}*",
         "",

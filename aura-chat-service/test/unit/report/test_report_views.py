@@ -13,11 +13,12 @@ Endpoints covered:
   GET    /api/v1/reports/manage/{id}/export/pdf/        export any PDF (admin)
   GET    /api/v1/reports/manage/{id}/export/markdown/   export any Markdown (admin)
 """
+import contextlib
 from unittest.mock import AsyncMock
 
 import pytest
 
-from apps.report.exceptions import (
+from apps.artifact_report.exceptions import (
     ReportAccessDeniedException,
     ReportExportException,
     ReportNotFoundException,
@@ -27,7 +28,21 @@ from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundExceptio
 from core.exceptions.base import InsufficientPermissionsException
 from test.conftest import make_report
 
-VIEW = "apps.report.views"
+VIEW = "apps.artifact_report.views"
+
+
+def _patch_generate_deps(mocker, *, is_contributor=True, rate_ok=True):
+    """The generate view now validates chat membership, rate limit and holds the AI
+    reply lock before calling the service. Patch those guards for happy-path tests."""
+    mocker.patch(f"{VIEW}.chat_repository.get_by_id", return_value=object())
+    mocker.patch(f"{VIEW}.membership_repository.is_active_contributor", return_value=is_contributor)
+    mocker.patch(f"{VIEW}.check_artifact_rate_limit", return_value=rate_ok)
+
+    @contextlib.asynccontextmanager
+    async def _noop_lock(chat_id):
+        yield
+
+    mocker.patch(f"{VIEW}.ai_reply_lock_guard", _noop_lock)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -36,7 +51,7 @@ VIEW = "apps.report.views"
 
 def test_list_reports_returns_200_paginated(api_client, mocker):
     mocker.patch(f"{VIEW}.report_service.list_reports", return_value=[make_report()])
-    response = api_client.get("/api/v1/reports/")
+    response = api_client.get("/api/v1/reports/?chat_id=5")
     assert response.status_code == 200
     assert "results" in response.data
     assert len(response.data["results"]) == 1
@@ -45,7 +60,7 @@ def test_list_reports_returns_200_paginated(api_client, mocker):
 
 def test_list_reports_empty_returns_200(api_client, mocker):
     mocker.patch(f"{VIEW}.report_service.list_reports", return_value=[])
-    response = api_client.get("/api/v1/reports/")
+    response = api_client.get("/api/v1/reports/?chat_id=5")
     assert response.status_code == 200
     assert response.data["results"] == []
     assert response.data["count"] == 0
@@ -58,30 +73,28 @@ def test_list_reports_passes_chat_id_to_service(api_client, mocker):
     assert kwargs["chat_id"] == 5
 
 
-def test_list_reports_ignores_non_numeric_chat_id(api_client, mocker):
-    svc = mocker.patch(f"{VIEW}.report_service.list_reports", return_value=[])
-    api_client.get("/api/v1/reports/?chat_id=abc")
-    _, kwargs = svc.call_args
-    assert kwargs["chat_id"] is None
+def test_list_reports_non_numeric_chat_id_returns_400(api_client, mocker):
+    mocker.patch(f"{VIEW}.report_service.list_reports", return_value=[])
+    response = api_client.get("/api/v1/reports/?chat_id=abc")
+    assert response.status_code == 400
 
 
-def test_list_reports_ignores_negative_chat_id(api_client, mocker):
-    svc = mocker.patch(f"{VIEW}.report_service.list_reports", return_value=[])
-    api_client.get("/api/v1/reports/?chat_id=-1")
-    _, kwargs = svc.call_args
-    assert kwargs["chat_id"] is None
+def test_list_reports_missing_chat_id_returns_400(api_client, mocker):
+    mocker.patch(f"{VIEW}.report_service.list_reports", return_value=[])
+    response = api_client.get("/api/v1/reports/")
+    assert response.status_code == 400
 
 
 def test_list_reports_passes_type_filter_to_service(api_client, mocker):
     svc = mocker.patch(f"{VIEW}.report_service.list_reports", return_value=[])
-    api_client.get("/api/v1/reports/?type=SITREP")
+    api_client.get("/api/v1/reports/?type=SITREP&chat_id=5")
     _, kwargs = svc.call_args
     assert kwargs["report_type"] == "SITREP"
 
 
 def test_list_reports_empty_type_param_passes_none(api_client, mocker):
     svc = mocker.patch(f"{VIEW}.report_service.list_reports", return_value=[])
-    api_client.get("/api/v1/reports/?type=")
+    api_client.get("/api/v1/reports/?type=&chat_id=5")
     _, kwargs = svc.call_args
     assert kwargs["report_type"] is None
 
@@ -100,7 +113,7 @@ def test_list_reports_not_chat_member_returns_403(api_client, mocker):
 
 def test_list_reports_no_permission_returns_403(api_client, mocker):
     mocker.patch(f"{VIEW}.report_service.list_reports", side_effect=InsufficientPermissionsException())
-    response = api_client.get("/api/v1/reports/")
+    response = api_client.get("/api/v1/reports/?chat_id=1")
     assert response.status_code == 403
 
 
@@ -112,7 +125,7 @@ def test_list_reports_unauthenticated_returns_401(anon_client):
 def test_list_reports_no_content_in_list_response(api_client, mocker):
     """List endpoint returns summary — content must NOT be included."""
     mocker.patch(f"{VIEW}.report_service.list_reports", return_value=[make_report()])
-    response = api_client.get("/api/v1/reports/")
+    response = api_client.get("/api/v1/reports/?chat_id=5")
     result = response.data["results"][0]
     assert "content" not in result
 
@@ -163,101 +176,6 @@ def test_get_report_no_permission_returns_403(api_client, mocker):
 
 def test_get_report_unauthenticated_returns_401(anon_client):
     response = anon_client.get("/api/v1/reports/1/")
-    assert response.status_code == 401
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# PATCH /api/v1/reports/{id}/
-# ══════════════════════════════════════════════════════════════════════════════
-
-def test_patch_title_only_returns_200(api_client, mocker):
-    mocker.patch(f"{VIEW}.report_service.update_report", return_value=make_report(title="Nuevo"))
-    response = api_client.patch("/api/v1/reports/1/", {"title": "Nuevo"}, format="json")
-    assert response.status_code == 200
-    assert response.data["title"] == "Nuevo"
-
-
-def test_patch_content_only_returns_200(api_client, mocker):
-    mocker.patch(f"{VIEW}.report_service.update_report", return_value=make_report(content="Actualizado"))
-    response = api_client.patch("/api/v1/reports/1/", {"content": "Actualizado"}, format="json")
-    assert response.status_code == 200
-
-
-def test_patch_title_and_content_returns_200(api_client, mocker):
-    mocker.patch(f"{VIEW}.report_service.update_report", return_value=make_report(title="T", content="C"))
-    response = api_client.patch(
-        "/api/v1/reports/1/",
-        {"title": "T", "content": "C"},
-        format="json",
-    )
-    assert response.status_code == 200
-
-
-def test_patch_forwards_validated_data_to_service(api_client, mocker):
-    svc = mocker.patch(f"{VIEW}.report_service.update_report", return_value=make_report())
-    api_client.patch(
-        "/api/v1/reports/3/",
-        {"title": "Mi título", "content": "Contenido actualizado"},
-        format="json",
-    )
-    _, kwargs = svc.call_args
-    assert kwargs["report_id"] == 3
-    assert kwargs["title"] == "Mi título"
-    assert kwargs["content"] == "Contenido actualizado"
-
-
-def test_patch_empty_body_returns_400(api_client, mocker):
-    mocker.patch(f"{VIEW}.report_service.update_report")
-    response = api_client.patch("/api/v1/reports/1/", {}, format="json")
-    assert response.status_code == 400
-
-
-def test_patch_blank_title_returns_400(api_client, mocker):
-    mocker.patch(f"{VIEW}.report_service.update_report")
-    response = api_client.patch("/api/v1/reports/1/", {"title": "   "}, format="json")
-    assert response.status_code == 400
-
-
-def test_patch_blank_content_returns_400(api_client, mocker):
-    mocker.patch(f"{VIEW}.report_service.update_report")
-    response = api_client.patch("/api/v1/reports/1/", {"content": ""}, format="json")
-    assert response.status_code == 400
-
-
-def test_patch_title_exactly_500_chars_is_valid(api_client, mocker):
-    mocker.patch(f"{VIEW}.report_service.update_report", return_value=make_report())
-    response = api_client.patch("/api/v1/reports/1/", {"title": "x" * 500}, format="json")
-    assert response.status_code == 200
-
-
-def test_patch_title_over_500_chars_returns_400(api_client, mocker):
-    mocker.patch(f"{VIEW}.report_service.update_report")
-    response = api_client.patch("/api/v1/reports/1/", {"title": "x" * 501}, format="json")
-    assert response.status_code == 400
-
-
-def test_patch_not_found_returns_404(api_client, mocker):
-    mocker.patch(f"{VIEW}.report_service.update_report", side_effect=ReportNotFoundException())
-    response = api_client.patch("/api/v1/reports/999/", {"title": "X"}, format="json")
-    assert response.status_code == 404
-    assert response.data["error"] == "report_not_found"
-
-
-def test_patch_access_denied_returns_403(api_client, mocker):
-    mocker.patch(f"{VIEW}.report_service.update_report", side_effect=ReportAccessDeniedException())
-    response = api_client.patch("/api/v1/reports/1/", {"title": "X"}, format="json")
-    assert response.status_code == 403
-    assert response.data["error"] == "report_access_denied"
-
-
-def test_patch_no_permission_returns_403(api_client, mocker):
-    mocker.patch(f"{VIEW}.report_service.update_report", side_effect=InsufficientPermissionsException())
-    response = api_client.patch("/api/v1/reports/1/", {"title": "X"}, format="json")
-    assert response.status_code == 403
-
-
-def test_patch_unauthenticated_returns_401(anon_client):
-    response = anon_client.patch("/api/v1/reports/1/", {"title": "X"}, format="json")
     assert response.status_code == 401
 
 
@@ -446,9 +364,10 @@ def test_generate_returns_201_with_report_messages_fragments(api_client, mocker)
         new_callable=AsyncMock,
         return_value=(make_report(), messages, fragments),
     )
+    _patch_generate_deps(mocker)
     response = api_client.post(
         "/api/v1/reports/generate/",
-        {"type": "SITREP", "mode": "direct", "message": "Genera un informe de situación"},
+        {"type": "SITREP", "mode": "direct", "message": "Genera un informe de situación", "chat_id": 1},
         format="json",
     )
     assert response.status_code == 201
@@ -465,9 +384,10 @@ def test_generate_rag_mode_accepted(api_client, mocker):
         new_callable=AsyncMock,
         return_value=(make_report(mode="rag"), [], []),
     )
+    _patch_generate_deps(mocker)
     response = api_client.post(
         "/api/v1/reports/generate/",
-        {"type": "INTSUM", "mode": "rag", "message": "Informe con documentos"},
+        {"type": "INTSUM", "mode": "rag", "message": "Informe con documentos", "chat_id": 1},
         format="json",
     )
     assert response.status_code == 201
@@ -480,9 +400,10 @@ def test_generate_all_report_types_accepted(api_client, mocker):
             new_callable=AsyncMock,
             return_value=(make_report(report_type=report_type), [], []),
         )
+        _patch_generate_deps(mocker)
         response = api_client.post(
             "/api/v1/reports/generate/",
-            {"type": report_type, "mode": "direct", "message": "Informe"},
+            {"type": report_type, "mode": "direct", "message": "Informe", "chat_id": 1},
             format="json",
         )
         assert response.status_code == 201, f"Expected 201 for type={report_type}"
@@ -494,6 +415,7 @@ def test_generate_with_chat_id_passes_it_to_service(api_client, mocker):
         new_callable=AsyncMock,
         return_value=(make_report(source_chat_id=7), [], []),
     )
+    _patch_generate_deps(mocker)
     api_client.post(
         "/api/v1/reports/generate/",
         {"type": "SITREP", "mode": "direct", "message": "Informe", "chat_id": 7},
@@ -579,20 +501,18 @@ def test_generate_message_exactly_4000_chars_is_valid(api_client, mocker):
         new_callable=AsyncMock,
         return_value=(make_report(), [], []),
     )
+    _patch_generate_deps(mocker)
     response = api_client.post(
         "/api/v1/reports/generate/",
-        {"type": "SITREP", "mode": "direct", "message": "x" * 4000},
+        {"type": "SITREP", "mode": "direct", "message": "x" * 4000, "chat_id": 1},
         format="json",
     )
     assert response.status_code == 201
 
 
 def test_generate_chat_not_found_returns_404(api_client, mocker):
-    mocker.patch(
-        f"{VIEW}.report_service.generate_report",
-        new_callable=AsyncMock,
-        side_effect=ChatNotFoundException(),
-    )
+    # The view looks the chat up itself before calling the service.
+    mocker.patch(f"{VIEW}.chat_repository.get_by_id", return_value=None)
     response = api_client.post(
         "/api/v1/reports/generate/",
         {"type": "SITREP", "mode": "direct", "message": "Informe", "chat_id": 999},
@@ -603,11 +523,7 @@ def test_generate_chat_not_found_returns_404(api_client, mocker):
 
 def test_generate_not_chat_contributor_returns_403(api_client, mocker):
     """Reader role cannot generate reports with a chat_id."""
-    mocker.patch(
-        f"{VIEW}.report_service.generate_report",
-        new_callable=AsyncMock,
-        side_effect=ChatAccessDeniedException(),
-    )
+    _patch_generate_deps(mocker, is_contributor=False)
     response = api_client.post(
         "/api/v1/reports/generate/",
         {"type": "SITREP", "mode": "direct", "message": "Informe", "chat_id": 1},
@@ -622,9 +538,10 @@ def test_generate_llm_failure_returns_502(api_client, mocker):
         new_callable=AsyncMock,
         side_effect=LLMServiceException(),
     )
+    _patch_generate_deps(mocker)
     response = api_client.post(
         "/api/v1/reports/generate/",
-        {"type": "SITREP", "mode": "direct", "message": "Informe"},
+        {"type": "SITREP", "mode": "direct", "message": "Informe", "chat_id": 1},
         format="json",
     )
     assert response.status_code == 502
@@ -637,9 +554,10 @@ def test_generate_no_permission_returns_403(api_client, mocker):
         new_callable=AsyncMock,
         side_effect=InsufficientPermissionsException(),
     )
+    _patch_generate_deps(mocker)
     response = api_client.post(
         "/api/v1/reports/generate/",
-        {"type": "SITREP", "mode": "direct", "message": "Informe"},
+        {"type": "SITREP", "mode": "direct", "message": "Informe", "chat_id": 1},
         format="json",
     )
     assert response.status_code == 403

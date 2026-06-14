@@ -68,6 +68,9 @@ class CrossEncoderReranker(RerankerInterface):
         async with cls._model_lock:
             cls._model = None
 
+    async def warmup(self) -> None:
+        await self._get_or_load_model(self._settings)
+
     async def rerank(
             self,
             query: str,

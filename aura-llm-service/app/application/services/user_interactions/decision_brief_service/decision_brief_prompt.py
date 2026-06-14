@@ -30,7 +30,6 @@ Analizar el problema o decisión planteada y producir un brief claro, objetivo y
   "options": [
     {{
       "title": "Título corto del curso de acción (máx. {settings.max_option_title_chars} caracteres)",
-      "description": "Descripción del curso de acción (máx. {settings.max_option_text_chars} caracteres)",
       "pros": "Ventajas (máx. {settings.max_option_text_chars} caracteres)",
       "cons": "Desventajas y limitaciones (máx. {settings.max_option_text_chars} caracteres)",
       "is_recommended": false

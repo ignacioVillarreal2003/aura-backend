@@ -1,23 +1,22 @@
-﻿from collections.abc import AsyncIterator
-from fastapi import APIRouter, Depends
+﻿from fastapi import APIRouter, Depends
 from starlette.responses import StreamingResponse
 
-from app.api.dependencies.idempotency import optional_idempotency_key
 from app.api.dependencies.rate_limiter import strict_rate_limit
 from app.api.controllers.user_interactions.document_action_controller.document_action_controller_interface import (
-    DocumentActionControllerInterface
+    DocumentActionControllerInterface,
 )
 from app.api.openapi.common import default_error_responses
+from app.api.sse import sse_response
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.application.services.user_interactions.document_action_service.document_action_service import get_document_action_service
+from app.api.dependencies.app_state_services import get_document_action_service
 from app.application.services.user_interactions.document_action_service.interfaces.document_action_service_interface import (
-    DocumentActionServiceInterface
+    DocumentActionServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.user_interactions.document_action.document_action_request import DocumentActionRequest
 from app.domain.dtos.user_interactions.document_action.document_action_response import DocumentActionResponse
-from app.domain.dtos.user_interactions.document_action.document_action_stream_events import DocumentActionStreamEvent
+
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 
 
@@ -27,7 +26,6 @@ class DocumentActionController(DocumentActionControllerInterface):
             document_action_request: DocumentActionRequest,
             document_action_service: DocumentActionServiceInterface = Depends(get_document_action_service),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
-            _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(strict_rate_limit),
     ) -> DocumentActionResponse:
         Authorizer.require_permissions(
@@ -36,7 +34,7 @@ class DocumentActionController(DocumentActionControllerInterface):
         )
         return await document_action_service.execute_document_action(
             document_action_request=document_action_request,
-            authenticated_user=authenticated_user
+            authenticated_user=authenticated_user,
         )
 
     async def execute_document_action_stream(
@@ -51,26 +49,12 @@ class DocumentActionController(DocumentActionControllerInterface):
             required_permissions=frozenset({Permissions.LLM_DOCUMENT_ACTION}),
         )
 
-        async def sse_bytes() -> AsyncIterator[bytes]:
-            async for event in document_action_service.execute_document_action_stream(
-                    document_action_request=document_action_request,
-                    authenticated_user=authenticated_user,
-            ):
-                yield _fmt(event)
-
-        return StreamingResponse(
-            sse_bytes(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
+        return sse_response(
+            document_action_service.execute_document_action_stream(
+                document_action_request=document_action_request,
+                authenticated_user=authenticated_user,
+            )
         )
-
-
-def _fmt(event: DocumentActionStreamEvent) -> bytes:
-    return f"data: {event.model_dump_json()}\n\n".encode("utf-8")
 
 
 router = APIRouter()

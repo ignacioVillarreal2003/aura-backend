@@ -9,8 +9,8 @@ logger = logging.getLogger(__name__)
 
 class MembershipRepository:
     @staticmethod
-    def create(member_id: int, chat_id: int, status: str, created_by: int, role: str = "editor") -> ChatMembership:
-        joined_at = timezone.now() if status == "active" else None
+    def create(member_id: int, chat_id: int, status: str, created_by: int, role: str = ChatMembership.Role.EDITOR) -> ChatMembership:
+        joined_at = timezone.now() if status == ChatMembership.Status.ACTIVE else None
         return ChatMembership.objects.create(
             member_id=member_id,
             chat_id=chat_id,
@@ -62,7 +62,7 @@ class MembershipRepository:
         return ChatMembership.objects.filter(
             chat_id=chat_id,
             member_id=member_id,
-            status="active",
+            status=ChatMembership.Status.ACTIVE,
         ).exists()
 
     @staticmethod
@@ -82,7 +82,7 @@ class MembershipRepository:
         membership.updated_by = updated_by
         membership.updated_at = timezone.now()
 
-        if new_status == "active" and membership.joined_at is None:
+        if new_status == ChatMembership.Status.ACTIVE and membership.joined_at is None:
             membership.joined_at = timezone.now()
 
         membership.save(
@@ -102,7 +102,7 @@ class MembershipRepository:
     def get_active_member_ids(chat_id: int) -> list[int]:
         return list(
             ChatMembership.objects
-            .filter(chat_id=chat_id, status="active")
+            .filter(chat_id=chat_id, status=ChatMembership.Status.ACTIVE)
             .values_list("member_id", flat=True)
         )
 
@@ -111,14 +111,14 @@ class MembershipRepository:
         ChatMembership.objects.filter(
             chat_id=chat_id,
             member_id=member_id,
-            status="active",
+            status=ChatMembership.Status.ACTIVE,
         ).update(last_read_at=timezone.now())
 
     @staticmethod
     def get_active_member_ids_in(chat_id: int, member_ids: list[int]) -> set[int]:
         return set(
             ChatMembership.objects
-            .filter(chat_id=chat_id, member_id__in=member_ids, status="active")
+            .filter(chat_id=chat_id, member_id__in=member_ids, status=ChatMembership.Status.ACTIVE)
             .values_list("member_id", flat=True)
         )
 
@@ -135,7 +135,7 @@ class MembershipRepository:
     def get_active_chat_ids_for_member(member_id: int, chat_ids: list[int]) -> set[int]:
         return set(
             ChatMembership.objects
-            .filter(member_id=member_id, chat_id__in=chat_ids, status="active")
+            .filter(member_id=member_id, chat_id__in=chat_ids, status=ChatMembership.Status.ACTIVE)
             .values_list("chat_id", flat=True)
         )
 
@@ -144,7 +144,7 @@ class MembershipRepository:
         membership = ChatMembership.objects.select_for_update().filter(
             chat_id=chat_id,
             member_id=member_id,
-            status="active",
+            status=ChatMembership.Status.ACTIVE,
         ).first()
         if membership is None:
             return None
@@ -159,7 +159,7 @@ class MembershipRepository:
         result = ChatMembership.objects.filter(
             chat_id=chat_id,
             member_id=member_id,
-            status="active",
+            status=ChatMembership.Status.ACTIVE,
         ).values_list("role", flat=True).first()
         return result
 
@@ -169,7 +169,7 @@ class MembershipRepository:
         return ChatMembership.objects.filter(
             chat_id=chat_id,
             member_id=member_id,
-            status="active",
+            status=ChatMembership.Status.ACTIVE,
             role__in=[ChatMembership.Role.OWNER, ChatMembership.Role.EDITOR],
         ).exists()
 
@@ -178,8 +178,8 @@ class MembershipRepository:
         return ChatMembership.objects.filter(
             chat_id=chat_id,
             member_id=member_id,
-            status="active",
-            role="owner",
+            status=ChatMembership.Status.ACTIVE,
+            role=ChatMembership.Role.OWNER,
         ).exists()
 
     @staticmethod
@@ -187,7 +187,7 @@ class MembershipRepository:
         ChatMembership.objects.filter(
             chat_id=chat_id,
             member_id=member_id,
-            status="active",
+            status=ChatMembership.Status.ACTIVE,
         ).update(pinned_at=timezone.now())
 
     @staticmethod
@@ -195,7 +195,7 @@ class MembershipRepository:
         ChatMembership.objects.filter(
             chat_id=chat_id,
             member_id=member_id,
-            status="active",
+            status=ChatMembership.Status.ACTIVE,
         ).update(pinned_at=None)
 
     @staticmethod
@@ -203,7 +203,7 @@ class MembershipRepository:
         return ChatMembership.objects.filter(
             chat_id__in=chat_ids,
             member_id=member_id,
-            status="active",
+            status=ChatMembership.Status.ACTIVE,
             archived_at__isnull=True,
         ).update(archived_at=timezone.now())
 
@@ -212,25 +212,9 @@ class MembershipRepository:
         return ChatMembership.objects.filter(
             chat_id__in=chat_ids,
             member_id=member_id,
-            status="active",
+            status=ChatMembership.Status.ACTIVE,
             archived_at__isnull=False,
         ).update(archived_at=None)
-
-    @staticmethod
-    def mute(chat_id: int, member_id: int, muted_until) -> None:
-        ChatMembership.objects.filter(
-            chat_id=chat_id,
-            member_id=member_id,
-            status="active",
-        ).update(muted_until=muted_until)
-
-    @staticmethod
-    def unmute(chat_id: int, member_id: int) -> None:
-        ChatMembership.objects.filter(
-            chat_id=chat_id,
-            member_id=member_id,
-            status="active",
-        ).update(muted_until=None)
 
     @staticmethod
     def soft_delete_by_chat(chat_id: int, deleted_by: int) -> None:

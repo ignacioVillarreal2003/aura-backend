@@ -18,17 +18,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY requirements/requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
 FROM dependencies AS runtime
 
-COPY . .
+ARG WHISPER_MODEL_SIZE=small
 
-RUN mkdir -p /app/.cache/huggingface
+RUN mkdir -p /app/.cache/huggingface \
+    && python -c "from faster_whisper.utils import download_model; download_model('${WHISPER_MODEL_SIZE}')" \
+    && chown app:app /app \
+    && chown -R app:app /app/.cache
 
-RUN chown -R app:app /app
+COPY --chown=app:app . .
 
 USER app
 

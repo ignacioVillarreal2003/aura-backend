@@ -1,13 +1,8 @@
-import concurrent.futures
-import datetime
 import html
-import io
 import logging
-import re
-import markdown as md_lib
 from django.utils import timezone
-from xhtml2pdf import pisa
 
+from core.export import pdf_export
 from apps.chat.models.chat import Chat
 from apps.artifact_message.exceptions import PDFGenerationException
 from apps.artifact_message.models import ArtifactMessage
@@ -98,48 +93,16 @@ blockquote {
 }
 """
 
-_DANGEROUS_TAGS_RE = re.compile(
-    r"<\s*/?\s*(script|style|iframe|object|embed|form|input|button|textarea|img|link|meta|base)\b[^>]*>",
-    re.IGNORECASE,
-)
-
-
-def _safe_link_callback(uri: str, rel: str) -> str:
-    return ""
-
-
 def _render_markdown(text: str) -> str:
-    raw_html = md_lib.markdown(text, extensions=["fenced_code", "tables", "nl2br"])
-    return _DANGEROUS_TAGS_RE.sub("", raw_html)
+    return pdf_export.render_markdown(text)
 
 
 def _fmt_dt(dt) -> str:
-    if dt is None:
-        return ""
-    utc = dt.astimezone(datetime.timezone.utc) if dt.tzinfo else dt
-    return utc.strftime("%Y-%m-%d %H:%M UTC")
-
-
-_PDF_TIMEOUT_SECONDS = 30
-
-
-def _build_pdf_sync(html_content: str) -> bytes:
-    buf = io.BytesIO()
-    result = pisa.CreatePDF(io.StringIO(html_content), dest=buf, encoding="utf-8", link_callback=_safe_link_callback)
-    if result.err:
-        logger.error("xhtml2pdf reported %d error(s) during PDF generation", result.err)
-        raise PDFGenerationException()
-    return buf.getvalue()
+    return pdf_export.fmt_dt(dt)
 
 
 def _build_pdf(html_content: str) -> bytes:
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(_build_pdf_sync, html_content)
-        try:
-            return future.result(timeout=_PDF_TIMEOUT_SECONDS)
-        except concurrent.futures.TimeoutError:
-            logger.error("PDF generation timed out after %ds", _PDF_TIMEOUT_SECONDS)
-            raise PDFGenerationException()
+    return pdf_export.build_pdf(html_content, exc_factory=PDFGenerationException, label="message")
 
 
 def generate_chat_pdf(chat: Chat, messages: list[ArtifactMessage]) -> bytes:

@@ -20,7 +20,6 @@ class ArtifactFeedback(models.Model):
         on_delete=models.CASCADE,
         related_name="feedback",
     )
-    user_id = models.BigIntegerField()
     value = models.SmallIntegerField(choices=Value.choices)
     reason = models.CharField(max_length=32, choices=Reason.choices, null=True, blank=True)
     comment = models.CharField(max_length=500, null=True, blank=True)
@@ -33,7 +32,7 @@ class ArtifactFeedback(models.Model):
         managed = False
         db_table = "artifact_feedback"
         constraints = [
-            models.UniqueConstraint(fields=["artifact", "user_id"], name="uq_artifact_feedback"),
+            models.UniqueConstraint(fields=["artifact", "created_by"], name="uq_artifact_feedback"),
             models.CheckConstraint(
                 condition=models.Q(value__in=[1, -1]),
                 name="chk_artifact_feedback_value",

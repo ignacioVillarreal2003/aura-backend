@@ -1,23 +1,22 @@
-﻿from collections.abc import AsyncIterator
-from fastapi import APIRouter, Depends
+﻿from fastapi import APIRouter, Depends
 from starlette.responses import StreamingResponse
 
-from app.api.dependencies.idempotency import optional_idempotency_key
-from app.api.dependencies.rate_limiter import default_rate_limit, strict_rate_limit
+from app.api.dependencies.rate_limiter import strict_rate_limit
 from app.api.controllers.user_interactions.document_summary_controller.document_summary_controller_interface import (
-    DocumentSummaryControllerInterface
+    DocumentSummaryControllerInterface,
 )
 from app.api.openapi.common import default_error_responses
+from app.api.sse import sse_response
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.application.services.user_interactions.document_summary_service.document_summary_service import get_document_summary_service
+from app.api.dependencies.app_state_services import get_document_summary_service
 from app.application.services.user_interactions.document_summary_service.interfaces.document_summary_service_interface import (
-    DocumentSummaryServiceInterface
+    DocumentSummaryServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.user_interactions.document_summary.document_summary_request import DocumentSummaryRequest
 from app.domain.dtos.user_interactions.document_summary.document_summary_response import DocumentSummaryResponse
-from app.domain.dtos.user_interactions.document_summary.document_summary_stream_events import DocumentSummaryStreamEvent
+
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 
 
@@ -27,13 +26,13 @@ class DocumentSummaryController(DocumentSummaryControllerInterface):
             document_summary_request: DocumentSummaryRequest,
             document_summary_service: DocumentSummaryServiceInterface = Depends(get_document_summary_service),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
-            _idemp: None = Depends(optional_idempotency_key),
             _rl: None = Depends(strict_rate_limit),
     ) -> DocumentSummaryResponse:
         Authorizer.require_permissions(
             authenticated_user=authenticated_user,
             required_permissions=frozenset({Permissions.LLM_DOCUMENT_SUMMARY}),
         )
+
         return await document_summary_service.execute_document_summary(
             document_summary_request=document_summary_request,
             authenticated_user=authenticated_user,
@@ -51,26 +50,12 @@ class DocumentSummaryController(DocumentSummaryControllerInterface):
             required_permissions=frozenset({Permissions.LLM_DOCUMENT_SUMMARY}),
         )
 
-        async def sse_bytes() -> AsyncIterator[bytes]:
-            async for event in document_summary_service.execute_document_summary_stream(
-                    document_summary_request=document_summary_request,
-                    authenticated_user=authenticated_user,
-            ):
-                yield _fmt(event)
-
-        return StreamingResponse(
-            sse_bytes(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
+        return sse_response(
+            document_summary_service.execute_document_summary_stream(
+                document_summary_request=document_summary_request,
+                authenticated_user=authenticated_user,
+            )
         )
-
-
-def _fmt(event: DocumentSummaryStreamEvent) -> bytes:
-    return f"data: {event.model_dump_json()}\n\n".encode("utf-8")
 
 
 router = APIRouter()

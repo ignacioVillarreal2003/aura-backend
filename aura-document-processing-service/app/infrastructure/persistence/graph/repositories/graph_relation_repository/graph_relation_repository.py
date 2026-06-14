@@ -4,7 +4,8 @@ from neo4j.exceptions import Neo4jError
 
 from app.domain.constants.graph.entity_type import EntityType
 from app.domain.dtos.graph.graph_entity.graph_relation_response import GraphRelationResponse
-from app.infrastructure.persistence.graph.neo4j_manager.neo4j_manager_interface import Neo4jManagerInterface
+from app.domain.dtos.graph.graph_extraction.graph_upsert_items import RelationUpsertItem
+from app.infrastructure.persistence.graph.neo4j_manager.interfaces.neo4j_manager_interface import Neo4jManagerInterface
 from app.infrastructure.persistence.graph.repositories.graph_record_mappers import (
     map_entity_node,
     map_relationship,
@@ -36,6 +37,30 @@ ON MATCH SET
     r.confidence_sum = coalesce(r.confidence_sum, r.confidence) + $confidence,
     r.confidence_count = coalesce(r.confidence_count, 1) + 1,
     r.confidence = (coalesce(r.confidence_sum, r.confidence) + $confidence) / (coalesce(r.confidence_count, 1) + 1),
+    r.updated_at = datetime()
+"""
+
+_UPSERT_RELATIONS_BATCH_CYPHER = """
+UNWIND $relations AS item
+MATCH (a:Entity {canonical_name: item.source_name, type: item.source_type})
+MATCH (b:Entity {canonical_name: item.target_name, type: item.target_type})
+MERGE (a)-[r:REL {type: item.relation_type}]->(b)
+ON CREATE SET
+    r.source_document_ids = [$document_id],
+    r.evidence_fragment_ids = [$fragment_id],
+    r.confidence = item.confidence,
+    r.confidence_sum = item.confidence,
+    r.confidence_count = 1,
+    r.created_at = datetime(),
+    r.updated_at = datetime()
+ON MATCH SET
+    r.source_document_ids = coalesce(r.source_document_ids, []) +
+                    CASE WHEN $document_id IN coalesce(r.source_document_ids, []) THEN [] ELSE [$document_id] END,
+    r.evidence_fragment_ids = coalesce(r.evidence_fragment_ids, []) +
+                    CASE WHEN $fragment_id IN coalesce(r.evidence_fragment_ids, []) THEN [] ELSE [$fragment_id] END,
+    r.confidence_sum = coalesce(r.confidence_sum, r.confidence) + item.confidence,
+    r.confidence_count = coalesce(r.confidence_count, 1) + 1,
+    r.confidence = (coalesce(r.confidence_sum, r.confidence) + item.confidence) / (coalesce(r.confidence_count, 1) + 1),
     r.updated_at = datetime()
 """
 
@@ -114,6 +139,46 @@ class GraphRelationRepository(GraphRelationRepositoryInterface):
             )
             raise GraphPersistenceException(
                 "Failed to upsert a relation in the knowledge graph."
+            ) from e
+
+    async def upsert_relations(
+            self,
+            *,
+            relations: list[RelationUpsertItem],
+            document_id: int,
+            fragment_id: int,
+    ) -> None:
+        if not relations:
+            return
+        params = {
+            "relations": [
+                {
+                    "source_name": item.source_canonical_name,
+                    "source_type": item.source_type.value,
+                    "target_name": item.target_canonical_name,
+                    "target_type": item.target_type.value,
+                    "relation_type": item.relation_type,
+                    "confidence": float(max(0.0, min(1.0, item.confidence))),
+                }
+                for item in relations
+            ],
+            "document_id": document_id,
+            "fragment_id": fragment_id,
+        }
+        try:
+            await self._neo4j_manager.execute_write(_UPSERT_RELATIONS_BATCH_CYPHER, params)
+        except Neo4jError as e:
+            logger.exception(
+                "Neo4j error while upserting a relation batch.",
+                extra={
+                    "batch_size": len(relations),
+                    "document_id": document_id,
+                    "fragment_id": fragment_id,
+                    "neo4j_code": getattr(e, "code", None),
+                },
+            )
+            raise GraphPersistenceException(
+                "Failed to upsert a relation batch in the knowledge graph."
             ) from e
 
     async def list_neighbors_of(

@@ -1,0 +1,9 @@
+models: []
+
+rails:
+  input:
+    flows:
+      - self check input
+  output:
+    flows:
+      - self check output

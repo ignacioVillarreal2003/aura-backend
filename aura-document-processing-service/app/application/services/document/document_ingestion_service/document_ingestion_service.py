@@ -2,7 +2,6 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
-from fastapi import HTTPException, Request, status
 import asyncio
 
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
@@ -11,6 +10,10 @@ from app.application.processors.text_cleaners.text_cleaner_factory import TextCl
 from app.application.processors.text_splitters.text_splitter_factory import TextSplitterFactory
 from app.application.services.document.document_ingestion_service.document_ingestion_service_settings import (
     DocumentIngestionServiceSettings
+)
+from app.domain.authentication.authenticated_user import AuthenticatedUser
+from app.infrastructure.messaging.rabbitmq.publisher.interfaces.document_enrichment_publisher_interface import (
+    DocumentEnrichmentPublisherInterface,
 )
 from app.application.services.document.document_ingestion_service.exceptions.document_ingestion_service_exception import (
     DocumentIngestionServiceCleanException,
@@ -54,6 +57,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             database_manager: DatabaseManagerInterface,
             document_ingestion_service_settings: Optional[DocumentIngestionServiceSettings] = None,
             graph_extraction_publisher: Optional[GraphExtractionPublisherInterface] = None,
+            document_enrichment_publisher: Optional[DocumentEnrichmentPublisherInterface] = None,
     ) -> None:
         self._document_repository = document_repository
         self._fragment_repository = fragment_repository
@@ -64,19 +68,25 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
         self._database_manager = database_manager
         self._settings = document_ingestion_service_settings or DocumentIngestionServiceSettings()
         self._graph_extraction_publisher = graph_extraction_publisher
+        self._document_enrichment_publisher = document_enrichment_publisher
 
     async def process_document(
             self,
             document: Document,
             local_file_path: Path,
-            prefer_docling: bool = False
+            user: AuthenticatedUser,
+            prefer_docling: bool = False,
+            post_process: bool = True,
+            post_process_graph: bool = True,
     ) -> None:
         logger.info(
             "Document ingestion was initiated.",
             extra={
                 "document_id": document.id,
                 "file_name": local_file_path.name,
-                "prefer_docling": prefer_docling
+                "prefer_docling": prefer_docling,
+                "post_process": post_process,
+                "post_process_graph": post_process_graph,
             }
         )
 
@@ -100,7 +110,11 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                 }
             )
 
-            await self._publish_graph_extraction_event(document)
+            if post_process:
+                await self._publish_document_enrichment_event(document, user)
+
+            if post_process_graph:
+                await self._publish_graph_extraction_event(document, user)
 
         except (
                 DocumentIngestionServiceReadException,
@@ -259,7 +273,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                 created_by=document.created_by,
                 created_at=now
             )
-            for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings))
+            for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings, strict=True))
         ]
 
         logger.debug(
@@ -365,28 +379,48 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                 }
             )
 
+    async def _publish_document_enrichment_event(
+            self,
+            document: Document,
+            user: AuthenticatedUser,
+    ) -> None:
+        if self._document_enrichment_publisher is None:
+            return
+        try:
+            await self._document_enrichment_publisher.publish(
+                document_id=int(document.id),
+                user=user,
+            )
+            logger.info(
+                "A document enrichment event was enqueued.",
+                extra={"document_id": document.id, "user_id": user.id},
+            )
+        except Exception:
+            logger.warning(
+                "Failed to enqueue document enrichment; document ingestion succeeded.",
+                extra={"document_id": document.id, "user_id": user.id},
+            )
+
     async def _publish_graph_extraction_event(
             self,
             document: Document,
+            user: AuthenticatedUser,
     ) -> None:
         if self._graph_extraction_publisher is None:
             return
         try:
-            await self._graph_extraction_publisher.publish_for_document_owner(
+            await self._graph_extraction_publisher.publish(
                 document_id=int(document.id),
-                owner_user_id=int(document.created_by),
+                user=user,
             )
             logger.info(
                 "A knowledge graph extraction event was enqueued.",
-                extra={"document_id": document.id},
+                extra={"document_id": document.id, "user_id": user.id},
             )
         except Exception:
             logger.warning(
                 "Failed to enqueue knowledge graph extraction; document ingestion succeeded.",
-                extra={
-                    "document_id": document.id,
-                    "owner_user_id": document.created_by,
-                },
+                extra={"document_id": document.id, "user_id": user.id},
             )
 
     @staticmethod
@@ -410,16 +444,3 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                     "exception_type": type(e).__name__
                 }
             )
-
-async def get_document_ingestion_service(
-        request: Request
-) -> DocumentIngestionServiceInterface:
-    try:
-        return request.app.state.document_ingestion_service
-    except AttributeError:
-        logger.error("DocumentIngestionService is not registered on the application state.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="DocumentIngestionService is not registered on the application state."
-        )
-

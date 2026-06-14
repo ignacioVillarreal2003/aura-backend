@@ -314,6 +314,11 @@ LOGGING = {
             "level": _LOG_LEVEL,
             "propagate": False,
         },
+        "daphne": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
     },
 }
 

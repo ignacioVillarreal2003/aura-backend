@@ -60,6 +60,7 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
+    'accounts.middleware.bearer_token_middleware.BearerTokenMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'accounts.middleware.elevation_middleware.ElevationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -198,7 +199,7 @@ SPECTACULAR_SETTINGS = {
 }
 
 # JWT Configuration
-JWT_ACCESS_LIFETIME_MINUTES = config('JWT_ACCESS_LIFETIME_MINUTES', default=15, cast=int)
+JWT_ACCESS_LIFETIME_MINUTES = config('JWT_ACCESS_LIFETIME_MINUTES', default=60, cast=int)
 JWT_ALGORITHM = config('JWT_ALGORITHM', default='HS256')
 # JWT_SIGNING_KEY must be set independently — never share with SECRET_KEY
 JWT_SIGNING_KEY = config('JWT_SIGNING_KEY', default=None)
@@ -297,7 +298,12 @@ LOGGING = {
     'loggers': {
         'django': {
             'handlers': ['console', 'file'],
-            'level': _LOG_LEVEL,
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'daphne': {
+            'handlers': ['console'],
+            'level': 'WARNING',
             'propagate': False,
         },
     },

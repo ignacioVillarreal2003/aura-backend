@@ -1,8 +1,7 @@
 import logging
 from collections.abc import AsyncIterator
-from fastapi import HTTPException, Request, status
 
-from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
+from app.application.authorization.exceptions.authorization_exceptions import UnauthorizedException
 from app.application.exceptions.app_exception import RequestValidationException
 from app.application.services.user_interactions.general_chat_service.general_chat_service_exceptions import (
     GeneralChatServiceException,
@@ -22,18 +21,20 @@ from app.application.services.generation_shared.generation_messages import (
     build_context_block,
     build_generation_messages,
 )
+from app.application.services.generation_shared.prompts.prompt_augmentation import augment_system_prompt
 from app.application.services.generation_shared.generation_settings import GenerationSettings
-from app.application.services.generation_shared.generation_state import GenerationState
-from app.application.services.generation_shared.processors.attached_documents_processor import (
+from app.configuration.tracing import trace_generation
+from app.application.services.generation_shared.state.generation_state import GenerationState
+from app.application.services.generation_shared.processors.attached_documents_processor.attached_documents_processor import (
     AttachedDocumentsProcessor,
 )
-from app.application.services.generation_shared.processors.context_reduction_processor import (
+from app.application.services.generation_shared.processors.context_reduction_processor.context_reduction_processor import (
     ContextReductionProcessor,
 )
-from app.application.services.generation_shared.processors.context_retrieval_processor import (
+from app.application.services.generation_shared.processors.context_retrieval_processor.context_retrieval_processor import (
     ContextRetrievalProcessor,
 )
-from app.application.services.generation_shared.processors.query_reformulation_processor import (
+from app.application.services.generation_shared.processors.query_reformulation_processor.query_reformulation_processor import (
     QueryReformulationProcessor,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
@@ -81,14 +82,10 @@ class GeneralChatService(GeneralChatServiceInterface):
         self._ollama_llm_streaming_invoker = ollama_llm_streaming_invoker
         self._generation_settings = generation_settings or GenerationSettings()
         self._general_chat_settings = general_chat_settings or GeneralChatSettings()
-        self._reformulation_processor = QueryReformulationProcessor(
-            self._generation_settings, ollama_llm_facade, ollama_llm_invoker
-        )
-        self._context_processor = ContextRetrievalProcessor(self._generation_settings, document_context_provider)
-        self._attached_processor = AttachedDocumentsProcessor(self._generation_settings, document_context_provider)
-        self._reduction_processor = ContextReductionProcessor(
-            self._generation_settings, ollama_llm_facade, ollama_llm_invoker
-        )
+        self._reformulation_processor = QueryReformulationProcessor(ollama_llm_facade, ollama_llm_invoker)
+        self._context_processor = ContextRetrievalProcessor(document_context_provider)
+        self._attached_processor = AttachedDocumentsProcessor(document_context_provider)
+        self._reduction_processor = ContextReductionProcessor(ollama_llm_facade, ollama_llm_invoker)
         logger.info("GeneralChatService initialized")
 
     def _build_state(
@@ -111,12 +108,22 @@ class GeneralChatService(GeneralChatServiceInterface):
             await self._context_processor.run(state, RAG_QUERIES)
         await self._reduction_processor.run(state, EXTRACTION_SYSTEM_PROMPT, EXTRACTION_HUMAN_PROMPT)
 
-    def _build_llm_messages(self, state: GenerationState, custom_system_prompt: str | None) -> list:
+    def _build_llm_messages(
+            self,
+            state: GenerationState,
+            custom_system_prompt: str | None,
+            response_style: str | None = None,
+    ) -> list:
         context_block = build_context_block(
             state, self._generation_settings.max_context_chars, self._generation_settings.attached_reserve_ratio
         )
+        system_prompt = augment_system_prompt(
+            build_system_prompt(self._general_chat_settings),
+            custom_system_prompt,
+            response_style,
+        )
         return build_generation_messages(
-            build_system_prompt(self._general_chat_settings, custom_system_prompt),
+            system_prompt,
             HUMAN_PROMPT,
             state,
             self._generation_settings.history_messages_window,
@@ -132,6 +139,7 @@ class GeneralChatService(GeneralChatServiceInterface):
             fragments=state.all_fragments,
         )
 
+    @trace_generation("general_chat")
     async def execute_general_chat(
             self,
             general_chat_request: GeneralChatRequest,
@@ -145,7 +153,9 @@ class GeneralChatService(GeneralChatServiceInterface):
             state = self._build_state(general_chat_request, authenticated_user)
             await self._gather_context(state)
 
-            llm_messages = self._build_llm_messages(state, general_chat_request.system_prompt)
+            llm_messages = self._build_llm_messages(
+                state, general_chat_request.system_prompt, general_chat_request.response_style
+            )
             llm = await self._ollama_llm_facade.get_llm_base()
             answer = (await self._ollama_llm_invoker.call_llm_content(llm=llm, llm_input=llm_messages)).strip()
             if not answer:
@@ -168,6 +178,7 @@ class GeneralChatService(GeneralChatServiceInterface):
                 "Error inesperado al procesar la solicitud de chat."
             ) from e
 
+    @trace_generation("general_chat_stream")
     async def execute_general_chat_stream(
             self,
             general_chat_request: GeneralChatRequest,
@@ -178,7 +189,9 @@ class GeneralChatService(GeneralChatServiceInterface):
 
             await self._gather_context(state)
 
-            llm_messages = self._build_llm_messages(state, general_chat_request.system_prompt)
+            llm_messages = self._build_llm_messages(
+                state, general_chat_request.system_prompt, general_chat_request.response_style
+            )
             llm = await self._ollama_llm_facade.get_llm_base()
 
             accumulated = ""
@@ -243,13 +256,3 @@ class GeneralChatService(GeneralChatServiceInterface):
                 code="GeneralChatStreamError",
             )
 
-
-async def get_general_chat_service(request: Request) -> GeneralChatServiceInterface:
-    try:
-        return request.app.state.general_chat_service
-    except AttributeError:
-        logger.error("GeneralChatService not found in application state")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="GeneralChatService is not available",
-        )

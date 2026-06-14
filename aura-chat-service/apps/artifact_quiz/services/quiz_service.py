@@ -7,18 +7,16 @@ from core.authorization.access import AccessControl
 from core.authorization import permissions as perms
 from core.clients.exceptions import HttpClientException
 from core.clients.llm_client import llm_client
-from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
+from apps.chat.exceptions import ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.artifact.models import Artifact
-from apps.artifact.repositories.artifact_repository import artifact_repository
 from apps.artifact_quiz.exceptions import QuizAccessDeniedException, QuizNotFoundException, LLMServiceException
 from apps.artifact_quiz.models import ArtifactQuiz
 from apps.artifact_quiz.repositories.quiz_repository import quiz_repository
-from apps.membership.repositories.membership_repository import membership_repository
-from apps.artifact.services.artifact_access import assert_detail_access
 from django.db import transaction
 from apps.artifact.broadcasting import broadcast_artifact_created, broadcast_artifact_progress
-from apps.artifact.services.artifact_service import create_artifact_for_content, _cleanup_artifact_interactions
+from apps.artifact.services.artifact_service import create_artifact_for_content
+from apps.artifact.services.artifact_crud_service import ArtifactCrudService
 from apps.artifact.llm_context import build_chat_history
 
 logger = logging.getLogger(__name__)
@@ -29,10 +27,6 @@ def _to_int_or_none(value) -> int | None:
         return int(value) if value is not None else None
     except (TypeError, ValueError):
         return None
-
-
-def _assert_quiz_access(user_id: int, quiz, *, require_contributor: bool = False) -> None:
-    assert_detail_access(user_id, quiz, QuizAccessDeniedException(), require_contributor=require_contributor)
 
 
 def _normalize_questions(questions: list) -> list:
@@ -67,6 +61,8 @@ def _persist_generated_quiz(
         *,
         user_id: int,
         title: str,
+        description: str,
+        query: str,
         mode: str,
         source_chat_id: int,
         instructions: str,
@@ -77,7 +73,6 @@ def _persist_generated_quiz(
     artifact = create_artifact_for_content(
         user_id=user_id,
         artifact_type=Artifact.Type.QUIZ,
-        title=title,
         mode=mode,
         source_chat_id=source_chat_id,
         fragments=fragments,
@@ -88,85 +83,44 @@ def _persist_generated_quiz(
         pass_score=pass_score,
         questions=questions,
         artifact_id=artifact.id,
+        title=title,
+        description=description,
+        query=query,
     )
     return artifact, quiz
 
 
-class QuizService:
+class QuizService(ArtifactCrudService):
+    repository = quiz_repository
+    not_found_exc = QuizNotFoundException
+    access_denied_exc = QuizAccessDeniedException
+    log_model = "ArtifactQuiz"
+    log_id_key = "quiz_id"
+    perm_list = perms.LIST_QUIZZES
+    perm_manage = perms.MANAGE_QUIZZES
+    perm_get = perms.GET_QUIZ
+    perm_export = perms.EXPORT_QUIZ
+    perm_manage_export = perms.MANAGE_EXPORT_QUIZ
+    perm_delete = perms.DELETE_QUIZ
+    logger = logger
+
     def list_quizzes(self, user: AuthenticatedUser, chat_id: int):
-        AccessControl.require_permissions(user, frozenset({perms.LIST_QUIZZES}))
-        if chat_repository.get_by_id(chat_id) is None:
-            raise ChatNotFoundException()
-        if not membership_repository.is_active_member(chat_id, user.id):
-            raise ChatAccessDeniedException()
-        return quiz_repository.list_by_chat(source_chat_id=chat_id)
+        return self._list_by_chat(user, chat_id)
 
     def list_all_quizzes(self, user: AuthenticatedUser):
-        AccessControl.require_permissions(user, frozenset({perms.MANAGE_QUIZZES}))
-        return quiz_repository.list_all()
+        return self._list_all(user)
 
     def get_quiz(self, user: AuthenticatedUser, quiz_id: int) -> ArtifactQuiz:
-        AccessControl.require_permissions(user, frozenset({perms.GET_QUIZ}))
-        quiz = quiz_repository.get_by_id(quiz_id)
-        if quiz is None:
-            raise QuizNotFoundException()
-        _assert_quiz_access(user.id, quiz)
-        return quiz
+        return self._get(user, quiz_id)
 
     def get_own_quiz(self, user: AuthenticatedUser, quiz_id: int) -> ArtifactQuiz:
-        AccessControl.require_permissions(user, frozenset({perms.EXPORT_QUIZ}))
-        quiz = quiz_repository.get_by_id(quiz_id)
-        if quiz is None:
-            raise QuizNotFoundException()
-        _assert_quiz_access(user.id, quiz)
-        return quiz
+        return self._get_own(user, quiz_id)
 
     def get_quiz_admin_export(self, user: AuthenticatedUser, quiz_id: int) -> ArtifactQuiz:
-        AccessControl.require_permissions(user, frozenset({perms.MANAGE_EXPORT_QUIZ}))
-        quiz = quiz_repository.get_by_id(quiz_id)
-        if quiz is None:
-            raise QuizNotFoundException()
-        return quiz
+        return self._get_admin_export(user, quiz_id)
 
-    @transaction.atomic
-    def update_quiz(
-            self,
-            user: AuthenticatedUser,
-            quiz_id: int,
-            title: Optional[str] = None,
-            instructions: Optional[str] = None,
-            pass_score: Optional[int] = None,
-            pass_score_provided: bool = False,
-            questions: Optional[list] = None,
-    ) -> ArtifactQuiz:
-        AccessControl.require_permissions(user, frozenset({perms.UPDATE_QUIZ}))
-        quiz = quiz_repository.get_by_id_for_update(quiz_id)
-        if quiz is None:
-            raise QuizNotFoundException()
-        _assert_quiz_access(user.id, quiz, require_contributor=True)
-        if title is not None:
-            artifact_repository.update(quiz.artifact, updated_by=user.id, title=title)
-        normalized = _normalize_questions(questions) if questions is not None else None
-        return quiz_repository.update(
-            quiz,
-            updated_by=user.id,
-            instructions=instructions,
-            pass_score=pass_score,
-            pass_score_provided=pass_score_provided,
-            questions=normalized,
-        )
-
-    @transaction.atomic
     def delete_quiz(self, user: AuthenticatedUser, quiz_id: int) -> None:
-        AccessControl.require_permissions(user, frozenset({perms.DELETE_QUIZ}))
-        quiz = quiz_repository.get_by_id_for_update(quiz_id)
-        if quiz is None:
-            raise QuizNotFoundException()
-        _assert_quiz_access(user.id, quiz, require_contributor=True)
-        quiz_repository.soft_delete(quiz, deleted_by=user.id)
-        _cleanup_artifact_interactions(quiz.artifact_id)
-        artifact_repository.soft_delete(quiz.artifact, deleted_by=user.id)
-        logger.info("ArtifactQuiz deleted", extra={"user_id": user.id, "quiz_id": quiz_id})
+        self._delete(user, quiz_id)
 
     async def generate_quiz(
             self,
@@ -180,6 +134,8 @@ class QuizService:
         chat = await sync_to_async(chat_repository.get_by_id)(chat_id)
         if chat is None:
             raise ChatNotFoundException()
+        system_prompt = chat.system_prompt if chat else None
+        response_style = chat.response_style if chat else None
         history = await sync_to_async(build_chat_history)(chat_id)
         messages = history + [{"role": "human", "content": message}]
         result_data: dict | None = None
@@ -189,6 +145,8 @@ class QuizService:
                     mode=mode,
                     user=user,
                     chat_id=chat_id,
+                    system_prompt=system_prompt,
+                    response_style=response_style,
             ):
                 et = event.get("type")
                 if et == "progress":
@@ -216,6 +174,7 @@ class QuizService:
             raise LLMServiceException()
 
         title = str(result_data.get("title", "")).strip()
+        description = str(result_data.get("description", "")).strip()
         raw_questions = result_data.get("questions") or []
         out_messages = result_data.get("messages") or []
         fragments = llm_client.normalize_fragments(result_data.get("fragments"))
@@ -233,6 +192,8 @@ class QuizService:
         artifact, quiz = await sync_to_async(_persist_generated_quiz)(
             user_id=user.id,
             title=title,
+            description=description,
+            query=message,
             mode=mode,
             source_chat_id=chat_id,
             instructions=instructions,

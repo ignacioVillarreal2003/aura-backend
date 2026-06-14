@@ -1,9 +1,5 @@
 import logging
 
-from fastapi import HTTPException, Request, status
-
-from app.application.authorization.authorizer import Authorizer
-from app.application.authorization.permissions import Permissions
 from app.application.services.graph.graph_stats_service.interfaces.graph_stats_service_interface import (
     GraphStatsServiceInterface,
 )
@@ -21,29 +17,12 @@ class GraphStatsService(GraphStatsServiceInterface):
             self,
             *,
             stats_repository: GraphStatsRepositoryInterface,
-            authorizer: Authorizer,
     ) -> None:
         self._stats_repository = stats_repository
-        self._authorizer = authorizer
 
     async def get_stats(
             self,
             *,
             authenticated_user: AuthenticatedUser,
     ) -> GraphStatsResponse:
-        self._authorizer.require_permissions(
-            authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.GRAPH_STATS}),
-        )
         return await self._stats_repository.get_stats()
-
-
-async def get_graph_stats_service(request: Request) -> GraphStatsServiceInterface:
-    service = getattr(request.app.state, "graph_stats_service", None)
-    if service is None:
-        logger.error("GraphStatsService is not registered on the application state.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Knowledge graph stats service is not available.",
-        )
-    return service

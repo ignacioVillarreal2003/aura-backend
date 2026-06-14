@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 
+from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.persistence.database.orm.document import Document
 
 
@@ -10,6 +11,9 @@ class DocumentIngestionServiceInterface(ABC):
             self,
             document: Document,
             local_file_path: Path,
-            prefer_docling: bool = False
+            user: AuthenticatedUser,
+            prefer_docling: bool = False,
+            post_process: bool = True,
+            post_process_graph: bool = True,
     ) -> None:
         pass

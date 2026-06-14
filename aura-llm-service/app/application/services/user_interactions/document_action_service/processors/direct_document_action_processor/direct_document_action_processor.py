@@ -13,6 +13,7 @@ from app.application.services.user_interactions.document_action_service.processo
     DIRECT_GUIDANCE_PROMPT,
     DEFAULT_GUIDANCE_PROMPT,
 )
+from app.application.services.generation_shared.prompts.prompt_augmentation import augment_system_prompt
 from app.domain.dtos.user_interactions.document_action.document_action_stream_events import DocumentActionStreamDelta
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface import OllamaLLMInvokerInterface
@@ -40,8 +41,13 @@ class DirectDocumentActionProcessor:
             if state.action
             else DEFAULT_GUIDANCE_PROMPT
         )
+        system_content = augment_system_prompt(
+            DIRECT_SYSTEM_PROMPT,
+            state.system_prompt,
+            state.response_style,
+        )
         return [
-            SystemMessage(content=DIRECT_SYSTEM_PROMPT),
+            SystemMessage(content=system_content),
             HumanMessage(
                 content=DIRECT_HUMAN_PROMPT.format(
                     action_guidance=action_guidance,

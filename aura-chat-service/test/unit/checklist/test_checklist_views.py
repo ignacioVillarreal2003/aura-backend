@@ -1,8 +1,9 @@
+import contextlib
 from unittest.mock import AsyncMock
 
 import pytest
 
-from apps.checklist.exceptions import (
+from apps.artifact_checklist.exceptions import (
     ChecklistAccessDeniedException,
     ChecklistExportException,
     ChecklistNotFoundException,
@@ -12,7 +13,22 @@ from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundExceptio
 from core.exceptions.base import InsufficientPermissionsException
 from test.conftest import make_checklist, make_checklist_section, make_checklist_item
 
-VIEW = "apps.checklist.views"
+VIEW = "apps.artifact_checklist.views"
+
+
+def _patch_generate_deps(mocker, *, is_contributor=True, rate_ok=True):
+    """The generate view validates chat membership, rate limit and holds the AI
+    reply lock before calling the service. Patch those guards for happy-path tests."""
+    mocker.patch(f"{VIEW}.chat_repository.get_by_id", return_value=object())
+    mocker.patch(f"{VIEW}.membership_repository.is_active_contributor", return_value=is_contributor)
+    mocker.patch(f"{VIEW}.check_artifact_rate_limit", return_value=rate_ok)
+
+    @contextlib.asynccontextmanager
+    async def _noop_lock(chat_id):
+        yield
+
+    mocker.patch(f"{VIEW}.ai_reply_lock_guard", _noop_lock)
+
 
 # ── Shared payload helpers ────────────────────────────────────────────────────
 
@@ -33,7 +49,7 @@ _VALID_SECTIONS = [
 
 def test_list_checklists_returns_200_paginated(api_client, mocker):
     mocker.patch(f"{VIEW}.checklist_service.list_checklists", return_value=[make_checklist()])
-    response = api_client.get("/api/v1/checklists/")
+    response = api_client.get("/api/v1/checklists/?chat_id=5")
     assert response.status_code == 200
     assert "results" in response.data
     assert len(response.data["results"]) == 1
@@ -42,7 +58,7 @@ def test_list_checklists_returns_200_paginated(api_client, mocker):
 
 def test_list_checklists_empty_returns_200(api_client, mocker):
     mocker.patch(f"{VIEW}.checklist_service.list_checklists", return_value=[])
-    response = api_client.get("/api/v1/checklists/")
+    response = api_client.get("/api/v1/checklists/?chat_id=5")
     assert response.status_code == 200
     assert response.data["results"] == []
     assert response.data["count"] == 0
@@ -55,19 +71,16 @@ def test_list_checklists_passes_chat_id_to_service(api_client, mocker):
     assert kwargs["chat_id"] == 5
 
 
-def test_list_checklists_ignores_non_numeric_chat_id(api_client, mocker):
-    svc = mocker.patch(f"{VIEW}.checklist_service.list_checklists", return_value=[])
-    api_client.get("/api/v1/checklists/?chat_id=abc")
-    _, kwargs = svc.call_args
-    assert kwargs["chat_id"] is None
+def test_list_checklists_non_numeric_chat_id_returns_400(api_client, mocker):
+    mocker.patch(f"{VIEW}.checklist_service.list_checklists", return_value=[])
+    response = api_client.get("/api/v1/checklists/?chat_id=abc")
+    assert response.status_code == 400
 
 
-def test_list_checklists_ignores_negative_chat_id(api_client, mocker):
-    # Negative numbers fail str.isdigit() → falls back to None
-    svc = mocker.patch(f"{VIEW}.checklist_service.list_checklists", return_value=[])
-    api_client.get("/api/v1/checklists/?chat_id=-1")
-    _, kwargs = svc.call_args
-    assert kwargs["chat_id"] is None
+def test_list_checklists_missing_chat_id_returns_400(api_client, mocker):
+    mocker.patch(f"{VIEW}.checklist_service.list_checklists", return_value=[])
+    response = api_client.get("/api/v1/checklists/?chat_id=-1")
+    assert response.status_code == 400
 
 
 def test_list_checklists_chat_not_found_returns_404(api_client, mocker):
@@ -84,7 +97,7 @@ def test_list_checklists_not_chat_member_returns_403(api_client, mocker):
 
 def test_list_checklists_no_permission_returns_403(api_client, mocker):
     mocker.patch(f"{VIEW}.checklist_service.list_checklists", side_effect=InsufficientPermissionsException())
-    response = api_client.get("/api/v1/checklists/")
+    response = api_client.get("/api/v1/checklists/?chat_id=1")
     assert response.status_code == 403
 
 
@@ -96,7 +109,7 @@ def test_list_checklists_unauthenticated_returns_401(anon_client):
 def test_list_checklists_response_includes_item_and_checked_counts(api_client, mocker):
     cl = make_checklist(item_count=5, checked_count=3)
     mocker.patch(f"{VIEW}.checklist_service.list_checklists", return_value=[cl])
-    response = api_client.get("/api/v1/checklists/")
+    response = api_client.get("/api/v1/checklists/?chat_id=5")
     result = response.data["results"][0]
     assert result["item_count"] == 5
     assert result["checked_count"] == 3
@@ -105,7 +118,7 @@ def test_list_checklists_response_includes_item_and_checked_counts(api_client, m
 def test_list_checklists_no_sections_in_list_response(api_client, mocker):
     """List endpoint returns summary — sections must NOT be included."""
     mocker.patch(f"{VIEW}.checklist_service.list_checklists", return_value=[make_checklist()])
-    response = api_client.get("/api/v1/checklists/")
+    response = api_client.get("/api/v1/checklists/?chat_id=5")
     result = response.data["results"][0]
     assert "sections" not in result
 
@@ -172,170 +185,6 @@ def test_get_checklist_no_permission_returns_403(api_client, mocker):
 
 def test_get_checklist_unauthenticated_returns_401(anon_client):
     response = anon_client.get("/api/v1/checklists/1/")
-    assert response.status_code == 401
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# PATCH /api/v1/checklists/{id}/
-# ══════════════════════════════════════════════════════════════════════════════
-
-def test_patch_title_only_returns_200(api_client, mocker):
-    mocker.patch(f"{VIEW}.checklist_service.update_checklist", return_value=make_checklist(title="Nuevo"))
-    response = api_client.patch("/api/v1/checklists/1/", {"title": "Nuevo"}, format="json")
-    assert response.status_code == 200
-    assert response.data["title"] == "Nuevo"
-
-
-def test_patch_sections_only_returns_200(api_client, mocker):
-    mocker.patch(f"{VIEW}.checklist_service.update_checklist", return_value=make_checklist())
-    response = api_client.patch("/api/v1/checklists/1/", {"sections": _VALID_SECTIONS}, format="json")
-    assert response.status_code == 200
-
-
-def test_patch_title_and_sections_returns_200(api_client, mocker):
-    mocker.patch(f"{VIEW}.checklist_service.update_checklist", return_value=make_checklist(title="Actualizado"))
-    response = api_client.patch(
-        "/api/v1/checklists/1/",
-        {"title": "Actualizado", "sections": _VALID_SECTIONS},
-        format="json",
-    )
-    assert response.status_code == 200
-
-
-def test_patch_forwards_validated_data_to_service(api_client, mocker):
-    svc = mocker.patch(f"{VIEW}.checklist_service.update_checklist", return_value=make_checklist())
-    api_client.patch(
-        "/api/v1/checklists/3/",
-        {"title": "Mi título", "sections": _VALID_SECTIONS},
-        format="json",
-    )
-    _, kwargs = svc.call_args
-    assert kwargs["checklist_id"] == 3
-    assert kwargs["title"] == "Mi título"
-    assert kwargs["sections"] is not None
-
-
-def test_patch_empty_body_returns_400(api_client, mocker):
-    mocker.patch(f"{VIEW}.checklist_service.update_checklist")
-    response = api_client.patch("/api/v1/checklists/1/", {}, format="json")
-    assert response.status_code == 400
-
-
-def test_patch_blank_title_returns_400(api_client, mocker):
-    mocker.patch(f"{VIEW}.checklist_service.update_checklist")
-    response = api_client.patch("/api/v1/checklists/1/", {"title": "   "}, format="json")
-    assert response.status_code == 400
-
-
-def test_patch_title_exactly_500_chars_is_valid(api_client, mocker):
-    mocker.patch(f"{VIEW}.checklist_service.update_checklist", return_value=make_checklist())
-    response = api_client.patch("/api/v1/checklists/1/", {"title": "x" * 500}, format="json")
-    assert response.status_code == 200
-
-
-def test_patch_title_over_500_chars_returns_400(api_client, mocker):
-    mocker.patch(f"{VIEW}.checklist_service.update_checklist")
-    response = api_client.patch("/api/v1/checklists/1/", {"title": "x" * 501}, format="json")
-    assert response.status_code == 400
-
-
-def test_patch_section_title_over_200_chars_returns_400(api_client, mocker):
-    mocker.patch(f"{VIEW}.checklist_service.update_checklist")
-    bad = [{"title": "A" * 201, "position": 0,
-            "items": [{"text": "ok", "is_checked": False, "notes": "", "position": 0}]}]
-    response = api_client.patch("/api/v1/checklists/1/", {"sections": bad}, format="json")
-    assert response.status_code == 400
-
-
-def test_patch_item_text_over_500_chars_returns_400(api_client, mocker):
-    mocker.patch(f"{VIEW}.checklist_service.update_checklist")
-    bad = [{"title": "S", "position": 0,
-            "items": [{"text": "x" * 501, "is_checked": False, "notes": "", "position": 0}]}]
-    response = api_client.patch("/api/v1/checklists/1/", {"sections": bad}, format="json")
-    assert response.status_code == 400
-
-
-def test_patch_item_negative_position_returns_400(api_client, mocker):
-    mocker.patch(f"{VIEW}.checklist_service.update_checklist")
-    bad = [{"title": "S", "position": 0,
-            "items": [{"text": "item", "is_checked": False, "notes": "", "position": -1}]}]
-    response = api_client.patch("/api/v1/checklists/1/", {"sections": bad}, format="json")
-    assert response.status_code == 400
-
-
-def test_patch_section_negative_position_returns_400(api_client, mocker):
-    mocker.patch(f"{VIEW}.checklist_service.update_checklist")
-    bad = [{"title": "S", "position": -1,
-            "items": [{"text": "item", "is_checked": False, "notes": "", "position": 0}]}]
-    response = api_client.patch("/api/v1/checklists/1/", {"sections": bad}, format="json")
-    assert response.status_code == 400
-
-
-def test_patch_exactly_200_items_is_valid(api_client, mocker):
-    mocker.patch(f"{VIEW}.checklist_service.update_checklist", return_value=make_checklist())
-    items = [{"text": f"Item {i}", "is_checked": False, "notes": "", "position": i} for i in range(200)]
-    response = api_client.patch(
-        "/api/v1/checklists/1/",
-        {"sections": [{"title": "S", "position": 0, "items": items}]},
-        format="json",
-    )
-    assert response.status_code == 200
-
-
-def test_patch_201_items_returns_400(api_client, mocker):
-    mocker.patch(f"{VIEW}.checklist_service.update_checklist")
-    items = [{"text": f"Item {i}", "is_checked": False, "notes": "", "position": i} for i in range(201)]
-    response = api_client.patch(
-        "/api/v1/checklists/1/",
-        {"sections": [{"title": "S", "position": 0, "items": items}]},
-        format="json",
-    )
-    assert response.status_code == 400
-
-
-def test_patch_items_split_across_sections_exceed_200_returns_400(api_client, mocker):
-    """201 items split across two sections still violates the 200-item limit."""
-    mocker.patch(f"{VIEW}.checklist_service.update_checklist")
-    items_a = [{"text": f"A{i}", "is_checked": False, "notes": "", "position": i} for i in range(101)]
-    items_b = [{"text": f"B{i}", "is_checked": False, "notes": "", "position": i} for i in range(100)]
-    sections = [
-        {"title": "A", "position": 0, "items": items_a},
-        {"title": "B", "position": 1, "items": items_b},
-    ]
-    response = api_client.patch("/api/v1/checklists/1/", {"sections": sections}, format="json")
-    assert response.status_code == 400
-
-
-def test_patch_item_blank_notes_is_allowed(api_client, mocker):
-    mocker.patch(f"{VIEW}.checklist_service.update_checklist", return_value=make_checklist())
-    sections = [{"title": "S", "position": 0,
-                 "items": [{"text": "tarea", "is_checked": False, "notes": "", "position": 0}]}]
-    response = api_client.patch("/api/v1/checklists/1/", {"sections": sections}, format="json")
-    assert response.status_code == 200
-
-
-def test_patch_not_found_returns_404(api_client, mocker):
-    mocker.patch(f"{VIEW}.checklist_service.update_checklist", side_effect=ChecklistNotFoundException())
-    response = api_client.patch("/api/v1/checklists/999/", {"title": "X"}, format="json")
-    assert response.status_code == 404
-    assert response.data["error"] == "checklist_not_found"
-
-
-def test_patch_access_denied_returns_403(api_client, mocker):
-    mocker.patch(f"{VIEW}.checklist_service.update_checklist", side_effect=ChecklistAccessDeniedException())
-    response = api_client.patch("/api/v1/checklists/1/", {"title": "X"}, format="json")
-    assert response.status_code == 403
-    assert response.data["error"] == "checklist_access_denied"
-
-
-def test_patch_no_permission_returns_403(api_client, mocker):
-    mocker.patch(f"{VIEW}.checklist_service.update_checklist", side_effect=InsufficientPermissionsException())
-    response = api_client.patch("/api/v1/checklists/1/", {"title": "X"}, format="json")
-    assert response.status_code == 403
-
-
-def test_patch_unauthenticated_returns_401(anon_client):
-    response = anon_client.patch("/api/v1/checklists/1/", {"title": "X"}, format="json")
     assert response.status_code == 401
 
 
@@ -511,9 +360,10 @@ def test_generate_returns_201_with_checklist_messages_fragments(api_client, mock
         new_callable=AsyncMock,
         return_value=(make_checklist(), messages, fragments),
     )
+    _patch_generate_deps(mocker)
     response = api_client.post(
         "/api/v1/checklists/generate/",
-        {"mode": "direct", "message": "Crea una checklist de mantenimiento"},
+        {"mode": "direct", "message": "Crea una checklist de mantenimiento", "chat_id": 1},
         format="json",
     )
     assert response.status_code == 201
@@ -530,9 +380,10 @@ def test_generate_rag_mode_accepted(api_client, mocker):
         new_callable=AsyncMock,
         return_value=(make_checklist(mode="rag"), [], []),
     )
+    _patch_generate_deps(mocker)
     response = api_client.post(
         "/api/v1/checklists/generate/",
-        {"mode": "rag", "message": "Checklist con documentos"},
+        {"mode": "rag", "message": "Checklist con documentos", "chat_id": 1},
         format="json",
     )
     assert response.status_code == 201
@@ -544,6 +395,7 @@ def test_generate_with_chat_id_passes_it_to_service(api_client, mocker):
         new_callable=AsyncMock,
         return_value=(make_checklist(source_chat_id=7), [], []),
     )
+    _patch_generate_deps(mocker)
     api_client.post(
         "/api/v1/checklists/generate/",
         {"mode": "direct", "message": "Checklist", "chat_id": 7},
@@ -609,20 +461,17 @@ def test_generate_message_exactly_4000_chars_is_valid(api_client, mocker):
         new_callable=AsyncMock,
         return_value=(make_checklist(), [], []),
     )
+    _patch_generate_deps(mocker)
     response = api_client.post(
         "/api/v1/checklists/generate/",
-        {"mode": "direct", "message": "x" * 4000},
+        {"mode": "direct", "message": "x" * 4000, "chat_id": 1},
         format="json",
     )
     assert response.status_code == 201
 
 
 def test_generate_chat_not_found_returns_404(api_client, mocker):
-    mocker.patch(
-        f"{VIEW}.checklist_service.generate_checklist",
-        new_callable=AsyncMock,
-        side_effect=ChatNotFoundException(),
-    )
+    mocker.patch(f"{VIEW}.chat_repository.get_by_id", return_value=None)
     response = api_client.post(
         "/api/v1/checklists/generate/",
         {"mode": "direct", "message": "Checklist", "chat_id": 999},
@@ -632,11 +481,7 @@ def test_generate_chat_not_found_returns_404(api_client, mocker):
 
 
 def test_generate_not_chat_member_returns_403(api_client, mocker):
-    mocker.patch(
-        f"{VIEW}.checklist_service.generate_checklist",
-        new_callable=AsyncMock,
-        side_effect=ChatAccessDeniedException(),
-    )
+    _patch_generate_deps(mocker, is_contributor=False)
     response = api_client.post(
         "/api/v1/checklists/generate/",
         {"mode": "direct", "message": "Checklist", "chat_id": 1},
@@ -651,9 +496,10 @@ def test_generate_llm_failure_returns_502(api_client, mocker):
         new_callable=AsyncMock,
         side_effect=LLMServiceException(),
     )
+    _patch_generate_deps(mocker)
     response = api_client.post(
         "/api/v1/checklists/generate/",
-        {"mode": "direct", "message": "Checklist"},
+        {"mode": "direct", "message": "Checklist", "chat_id": 1},
         format="json",
     )
     assert response.status_code == 502
@@ -666,9 +512,10 @@ def test_generate_no_permission_returns_403(api_client, mocker):
         new_callable=AsyncMock,
         side_effect=InsufficientPermissionsException(),
     )
+    _patch_generate_deps(mocker)
     response = api_client.post(
         "/api/v1/checklists/generate/",
-        {"mode": "direct", "message": "Checklist"},
+        {"mode": "direct", "message": "Checklist", "chat_id": 1},
         format="json",
     )
     assert response.status_code == 403

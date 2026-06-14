@@ -1,19 +1,16 @@
-import json
 import logging
 import tempfile
 import uuid
 from pathlib import Path
 from typing import Optional
-
-import aio_pika.abc
 import redis.asyncio as aioredis
-from pydantic import ValidationError
 
 from app.application.services.document.document_ingestion_service.interfaces.document_ingestion_service_interface import (
-    DocumentIngestionServiceInterface
+    DocumentIngestionServiceInterface,
 )
+from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.document.document_status import DocumentStatus
-from app.infrastructure.messaging.rabbitmq.consumer.consumer_utils import extract_retry_count
+from app.infrastructure.messaging.rabbitmq.consumer.base_consumer import BaseConsumer
 from app.infrastructure.messaging.rabbitmq.consumer.interfaces.document_ingestion_consumer_interface import (
     DocumentIngestionConsumerInterface,
 )
@@ -21,19 +18,25 @@ from app.infrastructure.messaging.rabbitmq.dtos.commands.document_ingestion_comm
 from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
 from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
 from app.infrastructure.persistence.database.database_manager.database_manager_interface import (
-    DatabaseManagerInterface
+    DatabaseManagerInterface,
 )
 from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
-    DocumentRepositoryInterface
+    DocumentRepositoryInterface,
 )
 from app.infrastructure.persistence.storages.document_storage.document_storage_interface import (
-    DocumentStorageInterface
+    DocumentStorageInterface,
 )
 
 logger = logging.getLogger(__name__)
 
+_RELEASE_LOCK_SCRIPT = (
+    "if redis.call('get', KEYS[1]) == ARGV[1] "
+    "then return redis.call('del', KEYS[1]) "
+    "else return 0 end"
+)
 
-class DocumentIngestionConsumer(DocumentIngestionConsumerInterface):
+
+class DocumentIngestionConsumer(BaseConsumer[DocumentIngestionCommand], DocumentIngestionConsumerInterface):
     def __init__(
             self,
             rabbitmq_manager: RabbitMQManagerInterface,
@@ -43,137 +46,22 @@ class DocumentIngestionConsumer(DocumentIngestionConsumerInterface):
             document_ingestion_service: DocumentIngestionServiceInterface,
             redis_client: aioredis.Redis,
     ) -> None:
-        self._manager = rabbitmq_manager
-        self._settings = rabbitmq_manager.settings
+        super().__init__(rabbitmq_manager)
         self._document_storage = document_storage
         self._database_manager = database_manager
         self._document_repository = document_repository
         self._document_ingestion_service = document_ingestion_service
         self._redis = redis_client
 
-    async def start(
-            self
-    ) -> None:
-        await self._manager.start_consumer(
-            queue_name=self._settings.document_ingestion_queue,
-            callback=self._handle_message
-        )
-        logger.info(
-            "The document ingestion consumer was registered on the queue.",
-            extra={
-                "queue": self._settings.document_ingestion_queue
-            }
-        )
+    @property
+    def _queue_name(self) -> str:
+        return self._settings.document_ingestion_queue
 
-    async def _handle_message(
-            self,
-            message: aio_pika.abc.AbstractIncomingMessage
-    ) -> None:
-        retry_count = extract_retry_count(message)
+    def _get_command_type(self) -> type[DocumentIngestionCommand]:
+        return DocumentIngestionCommand
 
-        if retry_count >= self._settings.max_delivery_attempts:
-            logger.error(
-                "A message exceeded the maximum delivery attempts and will be discarded.",
-                extra={
-                    "retry_count": retry_count,
-                    "max_delivery_attempts": self._settings.max_delivery_attempts,
-                    "message_id": (message.headers or {}).get("message_id", "unknown")
-                }
-            )
-            await message.nack(requeue=False)
-            return
-
-        body = message.body
-        body_len = len(body)
-        if body_len > self._settings.max_message_body_bytes:
-            logger.error(
-                "The message body exceeded the configured maximum size; discarding without requeue.",
-                extra={
-                    "message_id": (message.headers or {}).get("message_id", "unknown"),
-                    "body_bytes": body_len,
-                    "max_message_body_bytes": self._settings.max_message_body_bytes,
-                },
-            )
-            await message.nack(requeue=False)
-            return
-
-        try:
-            message_envelope = MessageEnvelope.from_bytes(
-                data=body,
-                command_type=DocumentIngestionCommand,
-                retry_count=retry_count
-            )
-        except UnicodeDecodeError as e:
-            logger.error(
-                "The message body was not valid UTF-8; discarding without requeue.",
-                extra={
-                    "message_id": (message.headers or {}).get("message_id", "unknown"),
-                    "error": type(e).__name__,
-                },
-            )
-            await message.nack(requeue=False)
-            return
-        except json.JSONDecodeError as e:
-            logger.error(
-                "The message body was not valid JSON; discarding without requeue.",
-                extra={
-                    "message_id": (message.headers or {}).get("message_id", "unknown"),
-                    "error": type(e).__name__,
-                },
-            )
-            await message.nack(requeue=False)
-            return
-        except ValidationError as e:
-            logger.error(
-                "The message envelope failed schema validation; discarding without requeue.",
-                extra={
-                    "message_id": (message.headers or {}).get("message_id", "unknown"),
-                    "error": type(e).__name__,
-                    "error_count": len(e.errors()),
-                },
-            )
-            await message.nack(requeue=False)
-            return
-        except (KeyError, ValueError) as e:
-            logger.error(
-                "The message envelope is missing required fields; discarding without requeue.",
-                extra={
-                    "message_id": (message.headers or {}).get("message_id", "unknown"),
-                    "error": type(e).__name__,
-                },
-            )
-            await message.nack(requeue=False)
-            return
-
-        try:
-            logger.debug(
-                "Dispatching a queue message to the ingestion handler.",
-                extra={
-                    "message_id": message_envelope.message_id,
-                    "document_id": message_envelope.command.document_id,
-                    "retry_count": retry_count
-                }
-            )
-            await self.handle(message_envelope)
-            await message.ack()
-            logger.info(
-                "The queue message was processed successfully.",
-                extra={
-                    "message_id": message_envelope.message_id,
-                    "document_id": message_envelope.command.document_id
-                }
-            )
-
-        except Exception:
-            logger.exception(
-                "The ingestion handler failed; the message will be negative-acknowledged for dead-letter retry.",
-                extra={
-                    "message_id": message_envelope.message_id,
-                    "document_id": message_envelope.command.document_id,
-                    "retry_count": retry_count
-                }
-            )
-            await message.nack(requeue=False)
+    async def _process(self, envelope: MessageEnvelope[DocumentIngestionCommand]) -> None:
+        await self.handle(envelope)
 
     async def handle(
             self,
@@ -213,7 +101,7 @@ class DocumentIngestionConsumer(DocumentIngestionConsumerInterface):
             return
 
         try:
-            temp_dir = Path(tempfile.gettempdir()) / "doc_ingestion"
+            temp_dir = Path(tempfile.gettempdir()) / self._settings.document_ingestion_temp_dir_name
             temp_dir.mkdir(parents=True, exist_ok=True)
             safe_name = Path(document_ingestion_command.filename).name
             temp_path = temp_dir / f"{uuid.uuid4().hex}_{safe_name}"
@@ -259,10 +147,14 @@ class DocumentIngestionConsumer(DocumentIngestionConsumerInterface):
                 )
                 return
 
+            user = AuthenticatedUser.model_validate(document_ingestion_command.user)
             await self._document_ingestion_service.process_document(
                 document=document,
                 local_file_path=temp_path,
-                prefer_docling=document_ingestion_command.prefer_docling
+                user=user,
+                prefer_docling=document_ingestion_command.prefer_docling,
+                post_process=document_ingestion_command.post_process,
+                post_process_graph=document_ingestion_command.post_process_graph,
             )
 
             logger.info(
@@ -288,10 +180,4 @@ class DocumentIngestionConsumer(DocumentIngestionConsumerInterface):
         return f"{self._settings.document_ingestion_lock_key_prefix}:document:{document_id}:lock"
 
     async def _release_document_lock(self, lock_key: str, lock_token: str) -> None:
-        await self._redis.execute_command(
-            "EVAL",
-            "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
-            1,
-            lock_key,
-            lock_token,
-        )
+        await self._redis.eval(_RELEASE_LOCK_SCRIPT, 1, lock_key, lock_token)

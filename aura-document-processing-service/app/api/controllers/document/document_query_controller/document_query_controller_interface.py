@@ -4,7 +4,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio.session import AsyncSession
 
 from app.application.services.document.document_query_service.interfaces.document_query_service_interface import (
-    DocumentQueryServiceInterface
+    DocumentQueryServiceInterface,
 )
 from app.domain.constants.document.document_type import DocumentType
 from app.domain.dtos.document.document_query.document_list_response import DocumentListResponse
@@ -44,9 +44,10 @@ class DocumentQueryControllerInterface(ABC):
     async def get_documents_by_chat(
             self,
             chat_id: int,
+            page: Optional[int],
+            size: Optional[int],
             document_query_service: DocumentQueryServiceInterface,
             database_session: AsyncSession,
             authenticated_user: AuthenticatedUser,
     ) -> DocumentListResponse:
         pass
-

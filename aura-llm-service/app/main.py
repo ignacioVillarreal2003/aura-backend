@@ -13,7 +13,12 @@ from app.configuration.dependencies import shutdown_dependencies, startup_depend
 from app.configuration.environment_variables import environment_variables
 from app.configuration.logging_configuration import configure_logging
 from app.configuration.middlewares.authentication_middleware import add_authentication_middleware
+from app.configuration.middlewares.body_size_limit_middleware import add_body_size_limit_middleware
+from app.configuration.middlewares.guardrails_middleware import add_guardrails_middleware
 from app.configuration.middlewares.logging_middleware import add_logging_middleware
+from app.configuration.middlewares.output_guardrails_middleware import add_output_guardrails_middleware
+from app.configuration.metrics import patch_instrumentator_routing
+from app.configuration.tracing import setup_tracing
 
 _root_log_level = getattr(
     logging,
@@ -29,6 +34,7 @@ async def lifespan(
         app: FastAPI
 ):
     logger.info("Starting application")
+    setup_tracing()
     try:
         await startup_dependencies(
             app=app
@@ -67,6 +73,7 @@ def create_app() -> FastAPI:
     _include_routers(app)
     register_exception_handlers(app)
 
+    patch_instrumentator_routing()
     Instrumentator(
         should_group_status_codes=True,
         should_ignore_untemplated=True,
@@ -91,8 +98,11 @@ def create_app() -> FastAPI:
 def _add_middlewares(
         app: FastAPI
 ) -> None:
-    add_logging_middleware(app)
+    add_output_guardrails_middleware(app)
+    add_guardrails_middleware(app)
+    add_body_size_limit_middleware(app)
     add_authentication_middleware(app)
+    add_logging_middleware(app)
 
 
 def _include_routers(

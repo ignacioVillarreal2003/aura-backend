@@ -1,15 +1,11 @@
 import logging
 from typing import Any, Optional
-
-from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.authorization.authorizer import Authorizer
-from app.application.authorization.permissions import Permissions
 from app.application.services.graph.graph_query_service.interfaces.graph_query_service_interface import (
     GraphQueryServiceInterface,
 )
-from app.configuration.graph.knowledge_graph_settings import KnowledgeGraphSettings
+from app.application.services.graph.knowledge_graph_settings import KnowledgeGraphSettings
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.graph.entity_type import EntityType
 from app.domain.constants.graph.query_intent import QueryIntent
@@ -27,9 +23,6 @@ from app.infrastructure.http.llm_provider.llm_provider_interface import LlmProvi
 from app.infrastructure.http.document_collection_catalog.document_collection_catalog_client_interface import (
     DocumentCollectionCatalogClientInterface,
 )
-from app.infrastructure.persistence.database.repositories.document_collection_repository.document_collection_repository_interface import (
-    DocumentCollectionRepositoryInterface,
-)
 from app.infrastructure.persistence.graph.repositories.graph_entity_repository.graph_entity_repository_interface import (
     GraphEntityRepositoryInterface,
 )
@@ -44,16 +37,6 @@ logger = logging.getLogger(__name__)
 
 
 class GraphQueryService(GraphQueryServiceInterface):
-    """Translates a natural-language question into a structured ``QueryIntent``
-    and dispatches to the corresponding parametrized Cypher query.
-
-    Anti-injection by construction: the LLM never returns Cypher. It returns
-    one of the well-known ``QueryIntent`` values plus a ``parameters`` dict.
-    Each branch in this service maps the intent to a hand-written Cypher
-    template inside the repository layer; the only LLM-controlled values
-    are typed parameters (entity names, types, depth, etc.).
-    """
-
     def __init__(
             self,
             *,
@@ -61,18 +44,14 @@ class GraphQueryService(GraphQueryServiceInterface):
             entity_repository: GraphEntityRepositoryInterface,
             relation_repository: GraphRelationRepositoryInterface,
             path_repository: Optional[GraphPathRepositoryInterface] = None,
-            document_collection_repository: DocumentCollectionRepositoryInterface,
             document_collection_catalog_client: DocumentCollectionCatalogClientInterface,
-            authorizer: Authorizer,
             knowledge_graph_settings: Optional[KnowledgeGraphSettings] = None,
     ) -> None:
         self._llm_provider = llm_provider
         self._entity_repository = entity_repository
         self._relation_repository = relation_repository
         self._path_repository = path_repository
-        self._document_collection_repository = document_collection_repository
         self._document_collection_catalog_client = document_collection_catalog_client
-        self._authorizer = authorizer
         self._settings = knowledge_graph_settings or KnowledgeGraphSettings()
 
     async def execute(
@@ -83,15 +62,8 @@ class GraphQueryService(GraphQueryServiceInterface):
             database_session: AsyncSession,
             authorization_header: str | None = None,
     ) -> GraphQueryResponse:
-        self._authorizer.require_permissions(
-            authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.GRAPH_QUERY}),
-        )
-
         accessible_ids = await self._resolve_accessible_ids(
             user_id=int(authenticated_user.id),
-            chat_id=request.chat_id,
-            database_session=database_session,
             authorization_header=authorization_header,
         )
         if not accessible_ids:
@@ -110,7 +82,7 @@ class GraphQueryService(GraphQueryServiceInterface):
         ontology = GraphOntology(
             entity_types=self._settings.resolve_allowed_entity_types(),
             relation_types=self._settings.resolve_allowed_relation_types()
-                          or list(DEFAULT_ALLOWED_RELATION_TYPES),
+                           or list(DEFAULT_ALLOWED_RELATION_TYPES),
         )
 
         translation = await self._llm_provider.translate_graph_query(
@@ -141,14 +113,33 @@ class GraphQueryService(GraphQueryServiceInterface):
                     "reason": str(e),
                 },
             )
+            fallback_entities = await self._fulltext_fallback(
+                question=request.question,
+                accessible_ids=accessible_ids,
+                max_results=max_results,
+            )
             return GraphQueryResponse(
                 intent=QueryIntent.UNKNOWN,
                 confidence=translation.confidence,
-                entities=[],
+                entities=fallback_entities,
                 relations=[],
-                nodes=[],
-                explanation="The query could not be answered with the structured intent.",
+                nodes=self._build_nodes(fallback_entities, []),
+                explanation=(
+                    "The structured intent could not be executed; results come from "
+                    "a fulltext entity search over the question."
+                    if fallback_entities
+                    else "The query could not be answered with the structured intent."
+                ),
             )
+
+        if not entities and not relations:
+            fallback_entities = await self._fulltext_fallback(
+                question=request.question,
+                accessible_ids=accessible_ids,
+                max_results=max_results,
+            )
+            if fallback_entities:
+                entities = fallback_entities
 
         nodes = self._build_nodes(entities, relations)
         has_more = (len(entities) + len(relations)) >= max_results
@@ -165,16 +156,32 @@ class GraphQueryService(GraphQueryServiceInterface):
             has_more=has_more,
         )
 
+    async def _fulltext_fallback(
+            self,
+            *,
+            question: str,
+            accessible_ids: list[int],
+            max_results: int,
+    ) -> list[GraphEntityResponse]:
+        try:
+            return await self._entity_repository.fulltext_search(
+                query_string=question,
+                entity_type=None,
+                accessible_document_ids=accessible_ids,
+                limit=max_results,
+            )
+        except Exception:
+            logger.warning(
+                "Fulltext fallback for the graph query failed (non-fatal).",
+                exc_info=True,
+            )
+            return []
+
     @staticmethod
     def _merge_llm_parameter_aliases(
             intent: QueryIntent,
             params: dict[str, Any],
     ) -> dict[str, Any]:
-        """Map keys the LLM prompt suggests (\"name\", \"type\", \"source\") to
-        repository parameter names expected by handlers (entity_name,
-        entity_type, source_name, …).
-
-        Keeps canonical keys when both are present."""
         merged: dict[str, Any] = dict(params)
 
         def copy_alias_if_blank(dst: str, src: str) -> None:
@@ -383,12 +390,6 @@ class GraphQueryService(GraphQueryServiceInterface):
             entities: list[GraphEntityResponse],
             relations: list[GraphRelationResponse],
     ) -> list[GraphEntityResponse]:
-        """Build a deduplicated list of graph nodes from entities and relation endpoints.
-
-        Combines explicit entity results with relation source/target endpoints so that
-        graph visualization libraries receive a unified nodes array without needing to
-        derive it from edges on the client side.
-        """
         seen: dict[tuple[str, str], GraphEntityResponse] = {}
 
         for entity in entities:
@@ -413,7 +414,6 @@ class GraphQueryService(GraphQueryServiceInterface):
             intent: QueryIntent,
             params: dict[str, Any],
     ) -> Optional[GraphQueryInterpretedAs]:
-        """Build a structured summary of the LLM-resolved query parameters."""
         if intent == QueryIntent.UNKNOWN:
             return None
 
@@ -450,21 +450,13 @@ class GraphQueryService(GraphQueryServiceInterface):
             self,
             *,
             user_id: int,
-            chat_id: Optional[int],
-            database_session: AsyncSession,
             authorization_header: str | None,
     ) -> list[int]:
-        collection_ids = await self._document_collection_catalog_client.fetch_all_accessible_collection_ids(
+        accessible = await self._document_collection_catalog_client.fetch_all_accessible_document_ids(
             user_id=user_id,
             authorization_header=authorization_header,
         )
-        return await self._document_collection_repository.list_all_accessible_document_ids(
-            user_id=user_id,
-            chat_id=chat_id,
-            accessible_collection_ids=collection_ids,
-            database_session=database_session,
-            limit=self._settings.accessible_documents_max,
-        )
+        return list(accessible)
 
     def _clamp_results(self, value: int) -> int:
         return max(1, min(int(value), self._settings.query_max_results))
@@ -528,16 +520,3 @@ class GraphQueryService(GraphQueryServiceInterface):
 
 class _GraphIntentParameterError(Exception):
     pass
-
-
-async def get_graph_query_service(
-        request: Request,
-) -> GraphQueryServiceInterface:
-    service = getattr(request.app.state, "graph_query_service", None)
-    if service is None:
-        logger.error("GraphQueryService is not registered on the application state.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Knowledge graph query service is not available.",
-        )
-    return service

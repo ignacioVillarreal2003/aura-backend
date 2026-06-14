@@ -4,8 +4,8 @@ from typing import Any, Optional, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
-from app.configuration.environment_variables import environment_variables
 from app.domain.authentication.authenticated_user import AuthenticatedUser
+from app.infrastructure.http.authentication_provider.request_token import get_request_token
 from app.infrastructure.http.http_client.http_client_exceptions import (
     HttpClientCircuitBreakerException,
     HttpClientConnectionException,
@@ -52,17 +52,11 @@ class LlmProvider(LlmProviderInterface):
         self._settings = llm_provider_settings or LlmProviderSettings()
 
     @staticmethod
-    def _build_headers(
-            authenticated_user: AuthenticatedUser
-    ) -> dict[str, str]:
-        headers: dict[str, str] = {
-            "X-Service-Api-Key": environment_variables.service_api_key,
-            "Accept": "application/json",
-            "X-User-Id": str(authenticated_user.id),
-            "X-User-Email": str(authenticated_user.email),
-            "X-User-Roles": ",".join(authenticated_user.roles),
-            "X-User-Permissions": ",".join(authenticated_user.permissions),
-        }
+    def _build_headers() -> dict[str, str]:
+        headers = {"Accept": "application/json"}
+        token = get_request_token()
+        if token:
+            headers["Authorization"] = token
         return headers
 
     def _raise_if_classify_payload_too_large(
@@ -187,7 +181,7 @@ class LlmProvider(LlmProviderInterface):
             response = await self._http_client.post(
                 url=url,
                 json=json_body,
-                headers=self._build_headers(authenticated_user),
+                headers=self._build_headers(),
                 timeout=timeout,
             )
             try:

@@ -17,7 +17,6 @@ class RedisClientSettings(BaseSettings):
     socket_timeout: float = Field(default=10.0, ge=0.5, le=60.0)
     health_check_interval: int = Field(default=30, ge=0, le=300)
     key_prefix: str = Field(default="aura:coordination", max_length=128)
-    post_process_job_lock_ttl_seconds: int = Field(default=86_400, ge=300, le=2_592_000)
     outbox_pending_ttl_seconds: int = Field(default=604_800, ge=60, le=2_592_000)
     outbox_published_marker_ttl_seconds: int = Field(default=604_800, ge=60, le=2_592_000)
     outbox_retry_batch_size: int = Field(default=100, ge=1, le=1000)

@@ -13,17 +13,15 @@ from apps.artifact_quiz.serializers import (
     QuizGenerateResponse,
     QuizListResponse,
     QuizResponse,
-    UpdateQuizRequest,
 )
 from apps.artifact_quiz.services.quiz_service import quiz_service
 from apps.artifact.audio import transcribe as _transcribe_audio
 from apps.artifact_quiz.services.export_service import generate_quiz_markdown, generate_quiz_pdf
 from apps.artifact.utils import safe_filename as _safe_filename
-from apps.chat.ai_reply_lock import release, try_acquire
-from apps.chat.exceptions import ChatAccessDeniedException, ChatAiReplyInProgressException, ChatNotFoundException
+from apps.chat.ai_lock_guard import ai_reply_lock_guard
+from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.chat.ws_rate_limit import check_artifact_rate_limit, check_transcribe_rate_limit
-from apps.artifact_message.services.message_service import broadcast_chat_ai_lock_change
 from apps.membership.repositories.membership_repository import membership_repository
 from rest_framework.exceptions import ValidationError
 from core.openapi.common import standard_error_responses
@@ -81,36 +79,6 @@ class QuizDetailView(APIView):
     )
     def get(self, request: Request, quiz_id: int) -> Response:
         quiz = quiz_service.get_quiz(user=request.user, quiz_id=quiz_id)
-        return Response(QuizResponse(quiz).data)
-
-    @extend_schema(
-        tags=["Quizzes"],
-        summary="Actualizar cuestionario",
-        description=(
-                "Actualiza el título, instrucciones, puntaje mínimo y/o las preguntas. "
-                "Enviá el array completo de preguntas con sus opciones. "
-                "Solo el creador o miembros del chat de origen pueden modificarlo."
-        ),
-        parameters=[_ID_PARAM],
-        request=UpdateQuizRequest,
-        responses={
-            200: QuizResponse,
-            **standard_error_responses(400, 401, 403, 404),
-        },
-    )
-    def patch(self, request: Request, quiz_id: int) -> Response:
-        serializer = UpdateQuizRequest(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        d = serializer.validated_data
-        quiz = quiz_service.update_quiz(
-            user=request.user,
-            quiz_id=quiz_id,
-            title=d.get("title"),
-            instructions=d.get("instructions"),
-            pass_score=d.get("pass_score"),
-            pass_score_provided="pass_score" in d,
-            questions=d.get("questions"),
-        )
         return Response(QuizResponse(quiz).data)
 
     @extend_schema(
@@ -193,21 +161,13 @@ class QuizGenerateView(APIView):
         else:
             message = d["message"]
 
-        lock_token = await sync_to_async(try_acquire)(chat_id)
-        if not lock_token:
-            raise ChatAiReplyInProgressException()
-
-        try:
-            await sync_to_async(broadcast_chat_ai_lock_change)(chat_id, True)
+        async with ai_reply_lock_guard(chat_id):
             quiz, messages, fragments = await quiz_service.generate_quiz(
                 user=request.user,
                 message=message,
                 mode=d["mode"],
                 chat_id=chat_id,
             )
-        finally:
-            await sync_to_async(release)(chat_id, lock_token)
-            await sync_to_async(broadcast_chat_ai_lock_change)(chat_id, False)
 
         return Response(
             QuizGenerateResponse({"quiz": quiz, "messages": messages, "fragments": fragments}).data,
@@ -232,7 +192,7 @@ class QuizExportPDFView(APIView):
             pdf = generate_quiz_pdf(quiz)
         except QuizExportException:
             raise
-        safe_title = _safe_filename(quiz.artifact.title)
+        safe_title = _safe_filename(quiz.title)
         response = HttpResponse(pdf, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="quiz_{safe_title}.pdf"'
         return response
@@ -252,7 +212,7 @@ class QuizExportMarkdownView(APIView):
     def get(self, request: Request, quiz_id: int) -> HttpResponse:
         quiz = quiz_service.get_own_quiz(user=request.user, quiz_id=quiz_id)
         content = generate_quiz_markdown(quiz)
-        safe_title = _safe_filename(quiz.artifact.title)
+        safe_title = _safe_filename(quiz.title)
         response = HttpResponse(content, content_type="text/markdown; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="quiz_{safe_title}.md"'
         return response
@@ -275,7 +235,7 @@ class QuizManageExportPDFView(APIView):
             pdf = generate_quiz_pdf(quiz)
         except QuizExportException:
             raise
-        safe_title = _safe_filename(quiz.artifact.title)
+        safe_title = _safe_filename(quiz.title)
         response = HttpResponse(pdf, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="quiz_{safe_title}.pdf"'
         return response
@@ -295,7 +255,7 @@ class QuizManageExportMarkdownView(APIView):
     def get(self, request: Request, quiz_id: int) -> HttpResponse:
         quiz = quiz_service.get_quiz_admin_export(user=request.user, quiz_id=quiz_id)
         content = generate_quiz_markdown(quiz)
-        safe_title = _safe_filename(quiz.artifact.title)
+        safe_title = _safe_filename(quiz.title)
         response = HttpResponse(content, content_type="text/markdown; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="quiz_{safe_title}.md"'
         return response

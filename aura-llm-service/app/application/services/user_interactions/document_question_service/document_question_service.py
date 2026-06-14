@@ -1,13 +1,13 @@
 import logging
 from collections.abc import AsyncIterator
 from typing import Optional
-from fastapi import HTTPException, Request, status
 
-from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
+from app.application.authorization.exceptions.authorization_exceptions import UnauthorizedException
 from app.application.exceptions.app_exception import RequestValidationException
 from app.application.services.user_interactions.document_question_service.document_question_settings import (
     DocumentQuestionServiceSettings,
 )
+from app.configuration.tracing import trace_generation
 from app.domain.field_limits import MAX_CONTENT_CHARS
 from app.application.services.user_interactions.document_question_service.document_question_state import DocumentQuestionState
 from app.application.services.user_interactions.document_question_service.exceptions.document_question_service_exceptions import (
@@ -95,6 +95,7 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
             ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
         )
 
+    @trace_generation("document_question")
     async def execute_document_question(
             self,
             document_question_request: DocumentQuestionRequest,
@@ -128,6 +129,7 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
                 "Unexpected error while processing the question"
             ) from e
 
+    @trace_generation("document_question_stream")
     async def execute_document_question_stream(
             self,
             document_question_request: DocumentQuestionRequest,
@@ -254,14 +256,6 @@ class DocumentQuestionService(DocumentQuestionServiceInterface):
         await self._answer_processor.run(state)
         if not state.answer.strip():
             state.answer = _STATIC_FALLBACK_MESSAGE
+        elif len(state.answer) > MAX_CONTENT_CHARS:
+            state.answer = state.answer[:MAX_CONTENT_CHARS]
 
-
-async def get_document_question_service(request: Request) -> DocumentQuestionServiceInterface:
-    try:
-        return request.app.state.document_question_service
-    except AttributeError:
-        logger.error("DocumentQuestionService not found in application state")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="DocumentQuestionService is not available",
-        )

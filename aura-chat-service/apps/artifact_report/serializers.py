@@ -43,18 +43,7 @@ class ReportGenerateResponse(serializers.Serializer):
         return ReportResponse(obj["report"]).data
 
 
-class UpdateReportRequest(serializers.Serializer):
-    title = serializers.CharField(max_length=500, allow_blank=False, required=False)
-    content = serializers.CharField(allow_blank=False, required=False)
-
-    def validate(self, data):
-        if not data:
-            raise serializers.ValidationError("Se requiere al menos un campo a actualizar.")
-        return data
-
-
 class ReportResponse(serializers.ModelSerializer):
-    title = serializers.SerializerMethodField()
     mode = serializers.SerializerMethodField()
     source_chat_id = serializers.SerializerMethodField()
 
@@ -65,18 +54,15 @@ class ReportResponse(serializers.ModelSerializer):
             "artifact_id",
             "type",
             "title",
+            "description",
+            "query",
             "content",
             "mode",
             "source_chat_id",
             "created_by",
             "created_at",
-            "updated_by",
-            "updated_at",
         ]
         read_only_fields = fields
-
-    def get_title(self, obj) -> str:
-        return obj.artifact.title if obj.artifact_id else ""
 
     def get_mode(self, obj) -> str:
         return obj.artifact.mode if obj.artifact_id else ""
@@ -86,7 +72,6 @@ class ReportResponse(serializers.ModelSerializer):
 
 
 class ReportListResponse(serializers.ModelSerializer):
-    title = serializers.SerializerMethodField()
     mode = serializers.SerializerMethodField()
     source_chat_id = serializers.SerializerMethodField()
 
@@ -103,9 +88,6 @@ class ReportListResponse(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
-
-    def get_title(self, obj) -> str:
-        return obj.artifact.title if obj.artifact_id else ""
 
     def get_mode(self, obj) -> str:
         return obj.artifact.mode if obj.artifact_id else ""

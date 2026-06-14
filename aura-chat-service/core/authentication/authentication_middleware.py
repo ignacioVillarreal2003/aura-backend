@@ -8,9 +8,9 @@ from core.authentication.authentication_exceptions import (
     AuthenticationProviderServiceUnavailableException,
     AuthenticationProviderUnauthorizedException,
     AuthenticationProviderUserNotFoundException,
-    ServiceAuthenticationRejected,
 )
 from core.authentication.authentication_provider import authentication_provider
+from core.authentication.request_token import reset_request_token, set_request_token
 from core.middleware.correlation_id import get_correlation_id
 
 logger = logging.getLogger(__name__)
@@ -30,22 +30,6 @@ class AuthenticationMiddleware:
 
         if self._is_excluded(request.path, excluded_paths):
             request.authenticated_user = None
-            return self.get_response(request)
-
-        try:
-            service_user = authentication_provider.evaluate_service_auth(request)
-        except ServiceAuthenticationRejected as e:
-            return JsonResponse(
-                {"detail": e.detail, "error": e.error, "correlation_id": get_correlation_id()},
-                status=e.status_code,
-            )
-
-        if service_user is not None:
-            request.authenticated_user = service_user
-            logger.debug(
-                "Request authenticated with service credentials.",
-                extra={"user_id": service_user.id, "path": request.path},
-            )
             return self.get_response(request)
 
         token = self._extract_token(request)
@@ -74,7 +58,11 @@ class AuthenticationMiddleware:
                 "Request authenticated with a valid bearer token.",
                 extra={"user_id": authenticated_user.id, "path": request.path},
             )
-            return self.get_response(request)
+            ctx = set_request_token(token)
+            try:
+                return self.get_response(request)
+            finally:
+                reset_request_token(ctx)
         except AuthenticationProviderInvalidTokenException as e:
             logger.warning(
                 "Bearer token is invalid or has expired.",

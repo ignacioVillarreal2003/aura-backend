@@ -28,3 +28,13 @@ class DeleteDocumentControllerInterface(ABC):
             authenticated_user: AuthenticatedUser,
     ) -> Response:
         pass
+
+    @abstractmethod
+    async def soft_delete_document_admin(
+            self,
+            document_id: int,
+            delete_document_service: DeleteDocumentServiceInterface,
+            database_session: AsyncSession,
+            authenticated_user: AuthenticatedUser,
+    ) -> Response:
+        pass

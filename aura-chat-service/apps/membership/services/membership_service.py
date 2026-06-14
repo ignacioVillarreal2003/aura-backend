@@ -1,13 +1,13 @@
 import logging
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
 from django.db import IntegrityError, transaction
 from django.db.transaction import on_commit
 from django.db.models import QuerySet
 
 from apps.chat.exceptions import ChatNotFoundException
+from apps.chat.models.chat import Chat
 from apps.chat.repositories.chat_repository import chat_repository
 from core.clients.notification_client import notification_client
+from apps.membership.dtos import ROLE_EDITOR, ROLE_OWNER, ROLE_READER, ChatMembershipCheck
 from apps.membership.exceptions import (
     CannotRemoveOwnerException,
     MembershipAlreadyExistsException,
@@ -17,6 +17,7 @@ from apps.membership.exceptions import (
 )
 from apps.membership.models.chat_membership import ChatMembership
 from apps.membership.repositories.membership_repository import membership_repository
+from core.ws.group_broadcast import send_to_chat_group
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization import AccessControl
 from core.authorization.permissions import ADD_MEMBER, LEAVE_CHAT, LIST_MEMBERS, LIST_MY_MEMBERSHIPS, MANAGE_MEMBERS, \
@@ -31,39 +32,17 @@ _VALID_TRANSITIONS: dict[str, set[str]] = {
 
 
 def _broadcast_member_joined(chat_id: int, member_id: int) -> None:
-    channel_layer = get_channel_layer()
-    if channel_layer is None:
-        return
-    try:
-        async_to_sync(channel_layer.group_send)(
-            f"chat_{chat_id}",
-            {"type": "member_joined", "member_id": member_id},
-        )
-    except Exception:
-        logger.warning(
-            "Failed to broadcast member_joined for chat %d member %d",
-            chat_id,
-            member_id,
-            exc_info=True,
-        )
+    send_to_chat_group(chat_id, {"type": "member_joined", "member_id": member_id})
 
 
 def _broadcast_member_left(chat_id: int, member_id: int) -> None:
-    channel_layer = get_channel_layer()
-    if channel_layer is None:
-        return
-    try:
-        async_to_sync(channel_layer.group_send)(
-            f"chat_{chat_id}",
-            {"type": "member_left", "member_id": member_id},
-        )
-    except Exception:
-        logger.warning(
-            "Failed to broadcast member_left for chat %d member %d",
-            chat_id,
-            member_id,
-            exc_info=True,
-        )
+    send_to_chat_group(chat_id, {"type": "member_left", "member_id": member_id})
+
+
+def _broadcast_membership_revoked(chat_id: int, member_id: int) -> None:
+    """Tell the chat group that ``member_id`` lost access so their own open
+    sockets can close instead of lingering subscribed to the group."""
+    send_to_chat_group(chat_id, {"type": "membership_revoked", "member_id": member_id})
 
 
 class MembershipService:
@@ -99,6 +78,58 @@ class MembershipService:
     ) -> QuerySet[ChatMembership]:
         AccessControl.require_permissions(user, frozenset({LIST_MY_MEMBERSHIPS}))
         return membership_repository.list_by_member(member_id=user.id, status=status)
+
+    def check_membership(
+            self,
+            caller: AuthenticatedUser,
+            chat_id: int,
+            user_id: int,
+    ) -> ChatMembershipCheck:
+        """Internal: report whether ``user_id`` belongs to ``chat_id`` and with
+        which role, so another service can authorize access to that chat's documents.
+
+        Read-only and idempotent. The role is resolved with a single indexed lookup
+        on ``(chat_id, member_id, status)``; the chat row is fetched by primary key
+        only to distinguish a missing/deleted chat (404) from a genuine non-member
+        (200, ``is_member=False``).
+        """
+        self._authorize_membership_check(caller, user_id)
+
+        chat = chat_repository.get_by_id(chat_id)
+        if chat is None:
+            raise ChatNotFoundException()
+
+        role = self._resolve_external_role(chat, user_id)
+        return ChatMembershipCheck(
+            chat_id=chat_id,
+            user_id=user_id,
+            is_member=role is not None,
+            role=role,
+        )
+
+    @staticmethod
+    def _authorize_membership_check(caller: AuthenticatedUser, user_id: int) -> None:
+        # Any user may always check their own membership.
+        if caller.id == user_id:
+            return
+        # Inspecting another user's membership is an administrative action.
+        AccessControl.require_permissions(caller, frozenset({MANAGE_MEMBERS}))
+
+    @staticmethod
+    def _resolve_external_role(chat: Chat, user_id: int) -> str | None:
+        # The chat creator is an implicit owner, even without a membership row.
+        if chat.created_by == user_id:
+            return ROLE_OWNER
+        role = membership_repository.get_role(chat.id, user_id)
+        if role is None:
+            return None
+        # Expose the granular role so callers can tell read-only readers apart
+        # from writers, not just ownership.
+        if role == ChatMembership.Role.OWNER:
+            return ROLE_OWNER
+        if role == ChatMembership.Role.READER:
+            return ROLE_READER
+        return ROLE_EDITOR
 
     @transaction.atomic
     def add_members(
@@ -154,14 +185,12 @@ class MembershipService:
             actor_id = user.id
             actor_name = user.username or user.email
             context = {"chat_id": chat_id, "chat_name": chat.name}
-            idem_key = f"chat-{chat_id}-invite-{'-'.join(str(i) for i in sorted(receiver_ids))}"
             on_commit(lambda: notification_client.emit_event(
                 event_type="chat.member.invited",
                 recipient_ids=receiver_ids,
                 actor_id=actor_id,
                 actor_name=actor_name,
                 context=context,
-                idempotency_key=idem_key,
             ))
 
         return created
@@ -243,6 +272,7 @@ class MembershipService:
 
         membership_repository.soft_delete(membership, deleted_by=user.id)
         on_commit(lambda: _broadcast_member_left(chat_id, member_id))
+        on_commit(lambda: _broadcast_membership_revoked(chat_id, member_id))
         actor_id = user.id
         actor_name = user.username or user.email
         on_commit(lambda m=member_id: notification_client.emit_event(
@@ -250,7 +280,7 @@ class MembershipService:
             recipient_ids=[m],
             actor_id=actor_id,
             actor_name=actor_name,
-            context={"chat_id": chat_id},
+            context={"chat_id": chat_id, "chat_name": chat.name},
         ))
         logger.info(
             "Member removed from chat.",
@@ -279,6 +309,7 @@ class MembershipService:
 
         membership_repository.soft_delete(membership, deleted_by=user.id)
         on_commit(lambda: _broadcast_member_left(chat_id, user.id))
+        on_commit(lambda: _broadcast_membership_revoked(chat_id, user.id))
         logger.info(
             "User left chat.",
             extra={"chat_id": chat_id, "user_id": user.id},

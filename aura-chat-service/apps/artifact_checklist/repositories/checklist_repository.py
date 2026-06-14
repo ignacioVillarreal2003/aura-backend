@@ -1,6 +1,5 @@
 import logging
 from typing import Optional
-from django.db import transaction
 from django.db.models import Count, Q
 from django.db.models.query import Prefetch
 
@@ -28,9 +27,9 @@ def _with_counts(qs):
     )
 
 
-def _bulk_create_sections(checklist_id: int, sections: list) -> None:
+def _bulk_create_sections(checklist_id: int, sections: list, created_by: int) -> None:
     section_objs = [
-        ArtifactChecklistSection(checklist_id=checklist_id, title=sec["title"], position=sec["position"])
+        ArtifactChecklistSection(checklist_id=checklist_id, title=sec["title"], position=sec["position"], created_by=created_by)
         for sec in sections
     ]
     created = ArtifactChecklistSection.objects.bulk_create(section_objs)
@@ -44,6 +43,7 @@ def _bulk_create_sections(checklist_id: int, sections: list) -> None:
                 is_checked=bool(item.get("is_checked", False)),
                 notes=str(item.get("notes", "")),
                 position=item["position"],
+                created_by=created_by,
             ))
     if item_objs:
         ArtifactChecklistItem.objects.bulk_create(item_objs)
@@ -56,12 +56,18 @@ class ChecklistRepository:
             user_id: int,
             sections: list,
             artifact_id: int,
+            title: str = "",
+            description: str = "",
+            query: str = "",
     ) -> ArtifactChecklist:
         checklist = ArtifactChecklist.objects.create(
             created_by=user_id,
             artifact_id=artifact_id,
+            title=title,
+            description=description,
+            query=query,
         )
-        _bulk_create_sections(checklist.id, sections)
+        _bulk_create_sections(checklist.id, sections, created_by=user_id)
         return _with_prefetch(ArtifactChecklist.objects.filter(id=checklist.id)).first()
 
     def get_by_id(self, checklist_id: int) -> Optional[ArtifactChecklist]:
@@ -78,21 +84,6 @@ class ChecklistRepository:
 
     def list_all(self):
         return _with_counts(ArtifactChecklist.objects.all())
-
-    @transaction.atomic
-    def update(
-            self,
-            checklist: ArtifactChecklist,
-            *,
-            updated_by: int,
-            sections: Optional[list] = None,
-    ) -> ArtifactChecklist:
-        if sections is not None:
-            ArtifactChecklistSection.objects.filter(checklist_id=checklist.id).delete()
-            _bulk_create_sections(checklist.id, sections)
-            checklist.updated_by = updated_by
-            checklist.save(update_fields=["updated_by"])
-        return _with_prefetch(ArtifactChecklist.objects.filter(id=checklist.id)).first()
 
     def soft_delete(self, checklist: ArtifactChecklist, deleted_by: int) -> None:
         checklist.delete(deleted_by=deleted_by)

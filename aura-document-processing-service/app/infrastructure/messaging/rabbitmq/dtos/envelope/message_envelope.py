@@ -2,7 +2,7 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Generic, Type, TypeVar
+from typing import Generic, TypeVar
 from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
@@ -19,7 +19,7 @@ class MessageEnvelope(Generic[T]):
     @classmethod
     def wrap(
             cls,
-            command: T
+            command: T,
     ) -> "MessageEnvelope[T]":
         return cls(
             message_id=str(uuid.uuid4()),
@@ -42,8 +42,8 @@ class MessageEnvelope(Generic[T]):
     def from_bytes(
             cls,
             data: bytes,
-            command_type: Type[T],
-            retry_count: int = 0
+            command_type: type[T],
+            retry_count: int = 0,
     ) -> "MessageEnvelope[T]":
         payload = json.loads(data.decode("utf-8"))
         return cls(
@@ -51,5 +51,5 @@ class MessageEnvelope(Generic[T]):
             command=command_type.model_validate(payload["command"]),
             published_at=datetime.fromisoformat(payload["published_at"]),
             version=payload.get("version", 1),
-            retry_count=retry_count
+            retry_count=retry_count,
         )

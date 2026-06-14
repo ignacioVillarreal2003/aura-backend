@@ -1,6 +1,6 @@
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
-from app.application.services.generation_shared.generation_state import GenerationState
+from app.application.services.generation_shared.state.generation_state import GenerationState
 from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.fragment.fragment_response import FragmentResponse
 

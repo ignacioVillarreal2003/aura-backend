@@ -4,6 +4,7 @@ import logging
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
+from apps.chat import presence
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.chat.ai_reply_lock import is_locked, refresh, release, try_acquire
 from apps.artifact_message.exceptions import LLMServiceException
@@ -20,6 +21,7 @@ from apps.chat.ws_rate_limit import (
     release_ws_connection,
 )
 from apps.membership.repositories.membership_repository import membership_repository
+from apps.membership.models.chat_membership import ChatMembership
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.exceptions import ServiceUnavailableException
 
@@ -29,6 +31,17 @@ _MAX_MESSAGE_LENGTH = 10_000
 
 _LOCK_REFRESH_INTERVAL_SECONDS = 30.0
 
+# Refresh the Redis connection/presence lease well within their TTL so that a
+# passive viewer (only receiving, never sending) does not have its slot reclaimed
+# while still connected.
+_LEASE_REFRESH_INTERVAL_SECONDS = 1800.0
+
+# Strong references to in-flight AI-reply tasks. asyncio only keeps weak refs to
+# tasks, so once the initiating consumer disconnects and drops its own handle the
+# task could be garbage-collected mid-stream. Keeping it here lets the reply
+# finish (and broadcast) for the remaining members of the chat.
+_BACKGROUND_AI_TASKS: set[asyncio.Task] = set()
+
 
 class ChatConsumer(AsyncJsonWebsocketConsumer):
     def __init__(self, *args, **kwargs):
@@ -37,6 +50,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.group_name: str | None = None
         self.user: AuthenticatedUser | None = None
         self._ai_reply_task: asyncio.Task | None = None
+        self._heartbeat_task: asyncio.Task | None = None
 
     async def connect(self):
         try:
@@ -70,8 +84,32 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             await self.close(code=4029)
             return
 
-        await self.channel_layer.group_add(self.group_name, self.channel_name)
-        await self.accept()
+        # Until accept() succeeds, disconnect() will not run, so any failure here
+        # must release the just-reserved connection slot to avoid leaking it for
+        # the whole lease TTL.
+        try:
+            await self.channel_layer.group_add(self.group_name, self.channel_name)
+            await self.accept()
+        except Exception:
+            await database_sync_to_async(release_ws_connection)(
+                self.user.id, self.channel_name
+            )
+            logger.exception(
+                "WebSocket accept failed; released connection slot.",
+                extra={"chat_id": self.chat_id, "user_id": self.user.id},
+            )
+            raise
+
+        is_first_presence = await database_sync_to_async(presence.join)(
+            self.chat_id, self.user.id, self.channel_name
+        )
+        if is_first_presence:
+            await self.channel_layer.group_send(
+                self.group_name,
+                {"type": "presence_joined", "member_id": self.user.id},
+            )
+
+        self._heartbeat_task = asyncio.create_task(self._run_heartbeat())
 
         locked = await database_sync_to_async(is_locked)(self.chat_id)
         await self.send_json({"type": "chat_ai_lock", "locked": locked})
@@ -81,18 +119,53 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             extra={"chat_id": self.chat_id, "user_id": self.user.id},
         )
 
+    async def _run_heartbeat(self) -> None:
+        try:
+            while True:
+                await asyncio.sleep(_LEASE_REFRESH_INTERVAL_SECONDS)
+                if self.user is None:
+                    return
+                await database_sync_to_async(refresh_ws_connection)(
+                    self.user.id, self.channel_name
+                )
+                if self.chat_id is not None:
+                    await database_sync_to_async(presence.refresh)(
+                        self.chat_id, self.user.id, self.channel_name
+                    )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.warning(
+                "WebSocket heartbeat loop failed.",
+                extra={"chat_id": self.chat_id, "user_id": getattr(self.user, "id", None)},
+                exc_info=True,
+            )
+
     async def disconnect(self, close_code):
+        # Stop the heartbeat for this connection. The in-flight AI reply task is
+        # intentionally NOT cancelled here: it keeps streaming to the rest of the
+        # chat group and is held alive by _BACKGROUND_AI_TASKS.
+        if self._heartbeat_task is not None:
+            self._heartbeat_task.cancel()
+            self._heartbeat_task = None
         self._ai_reply_task = None
 
-        if self.group_name and self.user is not None:
+        # Presence is reference-counted: only announce the user left when this was
+        # their last open connection in the chat (avoids ghosting a user who just
+        # closed one of several tabs).
+        if self.group_name and self.user is not None and self.chat_id is not None:
             try:
-                await self.channel_layer.group_send(
-                    self.group_name,
-                    {"type": "member_left", "member_id": self.user.id},
+                is_last_presence = await database_sync_to_async(presence.leave)(
+                    self.chat_id, self.user.id, self.channel_name
                 )
+                if is_last_presence:
+                    await self.channel_layer.group_send(
+                        self.group_name,
+                        {"type": "presence_left", "member_id": self.user.id},
+                    )
             except Exception:
                 logger.warning(
-                    "Failed to broadcast member_left on disconnect.",
+                    "Failed to update presence on disconnect.",
                     extra={"chat_id": self.chat_id, "user_id": self.user.id},
                 )
 
@@ -159,14 +232,65 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 pass
 
     async def _handle_chat_message(self, content: dict):
+        pre = await self._validate_send_preconditions(content)
+        if pre is None:
+            return
+        text, mode = pre
+
+        if not await self._enforce_rate_limit():
+            return
+
+        await self._cancel_previous_ai_reply()
+
+        lock_token = await self._acquire_ai_lock()
+        if lock_token is None:
+            return
+
+        if not await self._persist_user_message(text, lock_token):
+            return
+
+        self._spawn_ai_reply_task(mode, lock_token)
+
+    async def _validate_send_preconditions(self, content: dict) -> tuple[str, str] | None:
+        """Run all send guards. Returns (text, mode) or sends an error and returns None.
+
+        Validates membership/role BEFORE acquiring the AI lock so a reader (or a
+        member removed mid-session) gets a precise error and we don't broadcast a
+        spurious lock true->false flicker to the whole chat.
+        """
         chat_obj = await database_sync_to_async(chat_repository.get_by_id)(self.chat_id)
-        if chat_obj is not None and chat_obj.is_locked:
+        if chat_obj is None:
+            await self.send_json({
+                "type": "error",
+                "error_code": "chat_not_found",
+                "detail": "This chat no longer exists.",
+            })
+            return None
+        if chat_obj.is_locked:
             await self.send_json({
                 "type": "error",
                 "error_code": "chat_locked",
                 "detail": "This chat is locked and does not accept new messages.",
             })
-            return
+            return None
+
+        role = await database_sync_to_async(membership_repository.get_role)(
+            self.chat_id, self.user.id
+        )
+        if role is None:
+            await self.send_json({
+                "type": "error",
+                "error_code": "not_a_member",
+                "detail": "You are no longer a member of this chat.",
+            })
+            return None
+        if role == ChatMembership.Role.READER:
+            await self.send_json({
+                "type": "error",
+                "error_code": "reader_cannot_send",
+                "detail": "Readers cannot send messages in this chat.",
+            })
+            return None
 
         text = content.get("message", "").strip()
         if not text:
@@ -174,18 +298,19 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 "type": "error",
                 "detail": "Message cannot be empty",
             })
-            return
-
+            return None
         if len(text) > _MAX_MESSAGE_LENGTH:
             await self.send_json({
                 "type": "error",
                 "error_code": "message_too_long",
                 "detail": f"Message exceeds {_MAX_MESSAGE_LENGTH} characters.",
             })
-            return
+            return None
 
         mode = ChatAIMode.normalize(content.get("mode"))
+        return text, mode
 
+    async def _enforce_rate_limit(self) -> bool:
         allowed = await database_sync_to_async(check_message_rate_limit)(
             self.user.id, self.chat_id
         )
@@ -195,8 +320,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 "error_code": "rate_limit_exceeded",
                 "detail": "Too many messages. Please wait before sending more.",
             })
-            return
+            return False
+        return True
 
+    async def _cancel_previous_ai_reply(self) -> None:
         prev = self._ai_reply_task
         if prev is not None and not prev.done():
             prev.cancel()
@@ -205,6 +332,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             except asyncio.CancelledError:
                 pass
 
+    async def _acquire_ai_lock(self) -> str | None:
+        """Acquire the per-chat AI lock and broadcast the lock-on. Sends an error
+        and returns None when the lock can't be taken."""
         try:
             lock_token = await database_sync_to_async(try_acquire)(self.chat_id)
         except ServiceUnavailableException as e:
@@ -213,7 +343,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 "error_code": e.error_code,
                 "detail": e.detail,
             })
-            return
+            return None
 
         if not lock_token:
             await self.send_json({
@@ -221,12 +351,16 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 "error_code": "chat_ai_reply_in_progress",
                 "detail": "Wait until the assistant finishes the current reply.",
             })
-            return
+            return None
 
         await database_sync_to_async(broadcast_chat_ai_lock_change)(
             self.chat_id, True
         )
+        return lock_token
 
+    async def _persist_user_message(self, text: str, lock_token: str) -> bool:
+        """Persist the user message. On failure releases the lock, broadcasts
+        lock-off, sends an error and returns False."""
         try:
             await database_sync_to_async(message_service.send_message)(
                 self.user, self.chat_id, text
@@ -244,11 +378,17 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 "type": "error",
                 "detail": "Failed to save message. Please try again.",
             })
-            return
+            return False
+        return True
 
+    def _spawn_ai_reply_task(self, mode: str, lock_token: str) -> None:
         task = asyncio.create_task(self._run_ai_reply(mode, lock_token))
+        # Hold a process-level strong reference so the reply survives even if this
+        # consumer disconnects before the stream finishes.
+        _BACKGROUND_AI_TASKS.add(task)
 
         def _on_ai_reply_done(t: asyncio.Task) -> None:
+            _BACKGROUND_AI_TASKS.discard(t)
             if self._ai_reply_task is t:
                 self._ai_reply_task = None
             if t.cancelled():
@@ -441,19 +581,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             "type": "artifact_created",
             "artifact_id": event["artifact_id"],
             "artifact_type": event["artifact_type"],
-            "title": event["title"],
+            "title": event.get("title", ""),
             "created_by": event["created_by"],
             "created_at": event["created_at"],
-        })
-
-    async def artifact_updated(self, event):
-        await self.send_json({
-            "type": "artifact_updated",
-            "artifact_id": event["artifact_id"],
-            "artifact_type": event["artifact_type"],
-            "title": event["title"],
-            "updated_by": event.get("updated_by"),
-            "updated_at": event.get("updated_at"),
         })
 
     async def artifact_deleted(self, event):
@@ -468,3 +598,39 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             "type": "member_left",
             "member_id": event["member_id"],
         })
+
+    async def presence_joined(self, event):
+        await self.send_json({
+            "type": "presence_joined",
+            "member_id": event["member_id"],
+        })
+
+    async def presence_left(self, event):
+        await self.send_json({
+            "type": "presence_left",
+            "member_id": event["member_id"],
+        })
+
+    async def chat_content_cleared(self, event):
+        await self.send_json({
+            "type": "chat_content_cleared",
+            "by": event.get("by"),
+        })
+
+    async def chat_deleted(self, event):
+        # The chat is gone; notify this client and close its socket so it stops
+        # listening on a dead group.
+        await self.send_json({
+            "type": "chat_deleted",
+            "by": event.get("by"),
+        })
+        await self.close(code=4004)
+
+    async def membership_revoked(self, event):
+        # Only the member who lost access reacts; everyone else keeps the socket.
+        if self.user is not None and event.get("member_id") == self.user.id:
+            await self.send_json({
+                "type": "membership_revoked",
+                "member_id": event["member_id"],
+            })
+            await self.close(code=4003)

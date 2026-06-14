@@ -1,6 +1,7 @@
 import logging
 from typing import Optional
 from fastapi import Request, status, FastAPI
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import HTTPException, RequestValidationError
 
@@ -55,18 +56,19 @@ async def request_validation_exception_handler(
         exc: RequestValidationError
 ) -> JSONResponse:
     request_id = _get_request_id(request)
+    errors = jsonable_encoder(exc.errors())
     logger.warning(
         "Request validation failed",
         extra={
             "request_id": request_id,
-            "errors": exc.errors(),
+            "errors": errors,
             "path": request.url.path,
         },
     )
     content: dict = {
         "error": "ValidationError",
         "message": "Request validation failed",
-        "detail": exc.errors(),
+        "detail": errors,
     }
     if request_id:
         content["request_id"] = request_id

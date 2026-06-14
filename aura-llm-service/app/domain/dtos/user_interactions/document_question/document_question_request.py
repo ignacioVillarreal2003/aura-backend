@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.message import Message
-from app.domain.field_limits import MAX_HISTORY_MESSAGES, MAX_ID, MAX_MESSAGES_IN_REQUEST
+from app.domain.field_limits import MAX_HISTORY_MESSAGES, MAX_ID, MAX_INSTRUCTION_CHARS, MAX_MESSAGES_IN_REQUEST
 
 
 class DocumentQuestionRequest(BaseModel):
@@ -15,6 +15,18 @@ class DocumentQuestionRequest(BaseModel):
             "IDs de documentos a adjuntar como contexto prioritario. "
             "Se incluyen siempre en la respuesta además de los fragmentos RAG del chat."
         ),
+    )
+    system_prompt: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=MAX_INSTRUCTION_CHARS,
+        description="Instrucción de sistema personalizada del operador.",
+    )
+    response_style: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=MAX_INSTRUCTION_CHARS,
+        description="Estilo de respuesta esperado por el operador.",
     )
 
     @field_validator("document_ids")

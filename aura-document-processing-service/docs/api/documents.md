@@ -13,11 +13,14 @@ Este documento resume los **grupos de endpoints** relacionados con documentos. L
 
 La ingesta suele ser el punto de entrada del **pipeline** asíncrono; el estado del documento evoluciona en base de datos mientras avanzan las etapas.
 
-### Post-procesado de documentos (familia de rutas)
+### Post-procesado en la creación
 
-Endpoints bajo el prefijo **`/api/post-process-document`** permiten arrancar reprocesado masivo o por lista de IDs, consultar **estado** y **detener** trabajos. Los cuerpos (por ejemplo lista de identificadores de documento con límites de tamaño y unicidad) y las respuestas están descritos en OpenAPI.
+El post-procesado (clasificación del documento + enriquecimiento de fragmentos y extracción del grafo de conocimiento) ya no expone endpoints propios: se dispara **durante la ingesta** a partir de dos banderas del formulario de creación:
 
-Existen asimismo rutas análogas para **post-procesado de fragmentos** bajo otro prefijo; el contrato detallado es el mismo tipo de fuente: **OpenAPI**.
+- `post_process` (bool, default `true`): clasifica el documento (tipo/categoría/descripción) y enriquece sus fragmentos (resumen, entidades, temas).
+- `post_process_graph` (bool, default `true`): encola la extracción del grafo de conocimiento.
+
+Ambas se ejecutan de forma **best-effort** tras persistir los fragmentos; un fallo en el post-procesado no invalida la ingesta.
 
 ## Recuperación (consulta y descarga)
 
@@ -57,7 +60,7 @@ Las respuestas suelen ser **204** sin cuerpo cuando la operación concluye corre
 
 ## Resumen
 
-- **Ingesta:** `POST /api/create-document/` más, si aplica, **`/api/post-process-document/...`** para reprocesar.
+- **Ingesta:** `POST /api/create-document/` con banderas `post_process` y `post_process_graph` (default `true`) que disparan el post-procesado durante la ingesta.
 - **Retrieve:** `GET /api/document-query/...` y `GET /api/document-download/...`.
 - **Fragmentos para contexto:** `/api/fragment-query/...` (contrato en OpenAPI).
 - **Borrado:** `/api/delete-document/...` (soft/hard, por documento o por chat).

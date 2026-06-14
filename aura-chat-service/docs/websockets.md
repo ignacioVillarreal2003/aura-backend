@@ -4,7 +4,7 @@ Complementa el **REST** (`/api/v1/…`) para envío de mensajes, indicadores de 
 
 ## URL y handshake
 
-- **Patrón** (definido en [apps/message/routing.py](../apps/message/routing.py)): `ws/chat/{chat_id}/`
+- **Patrón** (definido en [apps/chat/routing.py](../apps/chat/routing.py)): `ws/chat/{chat_id}/`
 - Tras el despliegue, la URL completa depende del host y de si usas TLS (`wss://`). Ejemplo:
 
   `wss://<host>/ws/chat/42/?token=<JWT>`
@@ -31,19 +31,26 @@ Cualquier otro `type` recibe un mensaje `{"type":"error","detail":"Unknown messa
 
 ## Mensajes salientes (servidor → cliente)
 
-Tipos no exhaustivos (ver [apps/message/consumers/chat_consumer.py](../apps/message/consumers/chat_consumer.py)):
+Tipos no exhaustivos (ver [apps/chat/consumers/chat_consumer.py](../apps/chat/consumers/chat_consumer.py)):
 
 | `type` | Rol |
 |--------|-----|
-| `chat_ai_lock` | Estado del candado global de generación IA (`locked` boolean). |
-| `user_message` | Eco/confirmación relacionada con mensaje de usuario. |
-| `ai_meta`, `ai_context`, `ai_delta`, `ai_complete`, `ai_error` | Metadatos, contexto, fragmentos stream, finalización o error de la respuesta del modelo. |
+| `chat_ai_lock` | Estado del candado por-chat de generación IA (`locked` boolean). Una sola generación por chat; chats distintos generan en paralelo. |
+| `user_message` | Eco/confirmación relacionada con mensaje de usuario (se emite a toda la sala). |
+| `ai_meta`, `ai_context`, `ai_progress`, `ai_delta`, `ai_complete`, `ai_error` | Metadatos, contexto, progreso, fragmentos stream, finalización o error de la respuesta del modelo (se emite a toda la sala). |
 | `typing` | Otro usuario está escribiendo. |
 | `chat_locked_changed` | Cambió el estado de bloqueo del chat. |
-| `member_joined` / `member_left` | Presencia de miembros. |
+| `member_joined` / `member_left` | **Membresía**: alta (al aceptar invitación) / baja (removido o salida). |
+| `presence_joined` / `presence_left` | **Presencia** (conteo de referencias por usuario): el usuario abrió su primera conexión / cerró su última. Cerrar una de varias pestañas **no** emite `presence_left`. |
+| `membership_revoked` | El receptor perdió acceso (removido / dejó el chat). Su propio socket se cierra (código **4003**). |
+| `chat_content_cleared` | El dueño limpió el historial: el cliente debe vaciar mensajes y artefactos. |
+| `chat_deleted` | El chat fue eliminado; el socket se cierra (código **4004**). |
+| `artifact_created` / `artifact_deleted` | Un artefacto fue creado / eliminado en el chat (visible para todos). Los artefactos son inmutables: no hay evento de actualización. |
 | `error` | Errores genéricos o de negocio (`detail`, opcional `error_code`). |
 
-Los códigos de error en payload pueden incluir p. ej. `chat_locked`, `message_too_long`, `rate_limit_exceeded`, `chat_ai_reply_in_progress`, etc.
+Los códigos de error en payload pueden incluir p. ej. `chat_not_found`, `chat_locked`, `not_a_member`, `reader_cannot_send`, `message_too_long`, `rate_limit_exceeded`, `chat_ai_reply_in_progress`, etc.
+
+Códigos de cierre adicionales: **4004** (`chat_deleted`), **4029** (demasiadas conexiones concurrentes del usuario).
 
 ## Permisos REST vs WebSocket
 

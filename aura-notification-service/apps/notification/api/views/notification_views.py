@@ -31,22 +31,16 @@ logger = logging.getLogger(__name__)
 _NOTIFICATION_EXAMPLE = {
     "id": 123,
     "receiver_id": 42,
-    "title": "Nueva invitación",
-    "message": "Te invitaron al chat Proyecto X",
-    "type": "event",
     "event_type": "chat.member.invited",
-    "event_key": "chat-15-invite-42",
+    "message": "Te invitaron al chat Proyecto X",
     "data": {"chat_id": 15, "chat_name": "Proyecto X"},
     "severity": "info",
     "link_url": "https://app.ejemplo.com/chats/15",
-    "sender_name": "otro.usuario",
-    "target_scope": "individual",
-    "target_label": None,
+    "actor_name": "otro.usuario",
     "status": "unread",
     "read_at": None,
     "created_by": 7,
     "created_at": "2024-05-10T14:23:00Z",
-    "updated_at": "2024-05-10T14:23:00Z",
 }
 
 
@@ -66,7 +60,7 @@ class NotificationListView(APIView):
                 OpenApiTypes.STR,
                 description=(
                     "Filtra por estado. Repetible para múltiples valores: `?status=unread&status=read`. "
-                    "Valores: `unread`, `read`, `archived`."
+                    "Valores: `unread`, `read`."
                 ),
                 many=True,
             ),
@@ -74,11 +68,6 @@ class NotificationListView(APIView):
                 "event_type",
                 OpenApiTypes.STR,
                 description="Filtra por tipo de evento exacto (p. ej. `chat.member.invited`).",
-            ),
-            OpenApiParameter(
-                "type",
-                OpenApiTypes.STR,
-                description="Filtra por categoría de notificación: `system`, `admin`, `user`, `event`.",
             ),
             OpenApiParameter(
                 "since",
@@ -129,7 +118,6 @@ class NotificationListView(APIView):
 
         status_filter = request.query_params.getlist("status") or None
         event_type = request.query_params.get("event_type")
-        ntype = request.query_params.get("type")
 
         since = None
         since_str = request.query_params.get("since")
@@ -145,7 +133,6 @@ class NotificationListView(APIView):
             user.id,
             status_in=status_filter,
             event_type=event_type,
-            type=ntype,
             since=since,
         )
 
@@ -237,8 +224,8 @@ class NotificationDetailView(APIView):
                 request_only=True,
             ),
             OpenApiExample(
-                "Archivar",
-                value={"status": "archived"},
+                "Marcar como no leída",
+                value={"status": "unread"},
                 request_only=True,
             ),
             OpenApiExample(

@@ -120,7 +120,6 @@ class ChatRepository:
             .annotate(
                 member_count=_member_count_subquery(),
                 pinned_at=_membership_subquery(member_id, "pinned_at"),
-                muted_until=_membership_subquery(member_id, "muted_until"),
                 unread_count=_unread_count_subquery(member_id),
             )
             .distinct()
@@ -185,7 +184,6 @@ class ChatRepository:
                     ),
                 ),
                 pinned_at=_membership_subquery(user_id, "pinned_at"),
-                muted_until=_membership_subquery(user_id, "muted_until"),
                 unread_count=_unread_count_subquery(user_id),
             )
         )

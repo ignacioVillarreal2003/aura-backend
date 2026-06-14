@@ -1,12 +1,16 @@
 import logging
 from collections.abc import Awaitable, Callable
+from typing import Any
 from fastapi import FastAPI
 
-from app.application.services.user_interactions.document_action_service.document_action_service import DocumentActionService
-from app.application.services.user_interactions.document_summary_service.document_summary_service import DocumentSummaryService
-from app.application.services.user_interactions.agent_service.agent_service import AgentService
-from app.application.services.user_interactions.document_question_service.document_question_service import DocumentQuestionService
-from app.application.services.processing.document_classify_service.document_classify_service import DocumentClassifyService
+from app.application.services.user_interactions.document_action_service.document_action_service import \
+    DocumentActionService
+from app.application.services.user_interactions.document_summary_service.document_summary_service import \
+    DocumentSummaryService
+from app.application.services.user_interactions.document_question_service.document_question_service import \
+    DocumentQuestionService
+from app.application.services.processing.document_classify_service.document_classify_service import \
+    DocumentClassifyService
 from app.application.services.processing.fragment_enrich_service.fragment_enrich_service import FragmentEnrichService
 from app.application.services.processing.graph_extraction_service.graph_extraction_service import GraphExtractionService
 from app.application.services.processing.graph_query_translation_service.graph_query_translation_service import (
@@ -18,10 +22,14 @@ from app.application.services.user_interactions.report_service.report_service im
 from app.application.services.user_interactions.checklist_service.checklist_service import ChecklistService
 from app.application.services.user_interactions.timeline_service.timeline_service import TimelineService
 from app.application.services.user_interactions.quiz_service.quiz_service import QuizService
-from app.application.services.user_interactions.lessons_learned_service.lessons_learned_service import LessonsLearnedService
-from app.application.services.user_interactions.decision_brief_service.decision_brief_service import DecisionBriefService
+from app.application.services.user_interactions.lessons_learned_service.lessons_learned_service import \
+    LessonsLearnedService
+from app.application.services.user_interactions.decision_brief_service.decision_brief_service import \
+    DecisionBriefService
+from app.infrastructure.guardrails.nemo_guardrails_service import NemoGuardrailsService
 from app.infrastructure.http.authentication_provider.authentication_provider import AuthenticationProvider
 from app.infrastructure.http.document_context_provider.document_context_provider import DocumentContextProvider
+from app.infrastructure.http.graph_context_provider.graph_context_provider import GraphContextProvider
 from app.infrastructure.http.http_client.http_client import HttpClient
 from app.infrastructure.persistence.memory_database.redis_client.redis_client import RedisClient
 from app.infrastructure.llm.ollama_llm.ollama_llm_facade import OllamaLLMFacade
@@ -32,203 +40,129 @@ from app.infrastructure.llm.ollama_llm.ollama_llm_streaming_invoker import Ollam
 
 logger = logging.getLogger(__name__)
 
-
 _CleanupFn = Callable[[], Awaitable[None]]
 
 
-async def _rollback_partial_startup(
-        *,
-        cleanup_stack: list[tuple[str, _CleanupFn]],
-        app: FastAPI,
-) -> None:
-    while cleanup_stack:
-        name, fn = cleanup_stack.pop()
-        try:
-            await fn()
-        except Exception:
-            logger.exception(
-                "Startup rollback: cleanup step failed (continuing with remaining steps).",
-                extra={"resource": name},
-            )
+class _DependencyRegistry:
+    def __init__(self, app: FastAPI) -> None:
+        self._app = app
+        self._registered: list[str] = []
+        self._cleanups: list[tuple[str, _CleanupFn]] = []
 
-    to_clear = [
-        "decision_brief_service",
-        "lessons_learned_service",
-        "quiz_service",
-        "timeline_service",
-        "checklist_service",
-        "report_service",
-        "general_chat_service",
-        "rag_agent_service",
-        "agent_service",
-        "graph_query_translation_service",
-        "graph_extraction_service",
-        "fragment_enrich_service",
-        "document_classify_service",
-        "document_action_service",
-        "document_summary_service",
-        "document_question_service",
-        "ollama_llm_facade",
-        "document_context_provider",
-        "authentication_provider",
-        "http_client",
-        "redis_client",
-    ]
-    for attr in to_clear:
-        if hasattr(app.state, attr):
-            delattr(app.state, attr)
+    def register(self, name: str, instance: Any, cleanup: _CleanupFn | None = None) -> None:
+        setattr(self._app.state, name, instance)
+        self._registered.append(name)
+        if cleanup is not None:
+            self._cleanups.append((name, cleanup))
+
+    def commit(self) -> None:
+        self._registered.clear()
+        self._cleanups.clear()
+
+    async def rollback(self) -> None:
+        while self._cleanups:
+            name, cleanup = self._cleanups.pop()
+            try:
+                await cleanup()
+            except Exception:
+                logger.exception(
+                    "Startup rollback: cleanup step failed (continuing with remaining steps).",
+                    extra={"resource": name},
+                )
+
+        for name in reversed(self._registered):
+            if hasattr(self._app.state, name):
+                delattr(self._app.state, name)
+        self._registered.clear()
 
 
 async def startup_dependencies(app: FastAPI) -> None:
-    cleanup_stack: list[tuple[str, _CleanupFn]] = []
+    registry = _DependencyRegistry(app)
 
     try:
         logger.info("Starting up dependencies")
 
         http_client = HttpClient()
         await http_client.start()
-        app.state.http_client = http_client
-        cleanup_stack.append(("http_client", http_client.stop))
+        registry.register("http_client", http_client, cleanup=http_client.stop)
 
         redis_client = RedisClient()
         await redis_client.initialize()
-        app.state.redis_client = redis_client
-        cleanup_stack.append(("redis_client", redis_client.dispose))
+        registry.register("redis_client", redis_client, cleanup=redis_client.dispose)
 
-        authentication_provider = AuthenticationProvider(
-            http_client=http_client,
-            redis_client=redis_client.client,
+        registry.register(
+            "authentication_provider",
+            AuthenticationProvider(http_client=http_client, redis_client=redis_client.client),
         )
-        app.state.authentication_provider = authentication_provider
 
         document_context_provider = DocumentContextProvider(http_client=http_client)
-        app.state.document_context_provider = document_context_provider
+        registry.register("document_context_provider", document_context_provider)
 
-        ollama_settings = OllamaLLMFacadeSettings()
-        ollama_facade = OllamaLLMFacade(ollama_llm_facade_settings=ollama_settings)
+        graph_context_provider = GraphContextProvider(http_client=http_client)
+        registry.register("graph_context_provider", graph_context_provider)
+
+        ollama_facade = OllamaLLMFacade(ollama_llm_facade_settings=OllamaLLMFacadeSettings())
         await ollama_facade.initialize()
-        app.state.ollama_llm_facade = ollama_facade
+        registry.register("ollama_llm_facade", ollama_facade)
+
+        nemo_guardrails = NemoGuardrailsService(ollama_llm_facade=ollama_facade)
+        registry.register("nemo_guardrails", nemo_guardrails)
+        await nemo_guardrails.warmup()
 
         invoker_settings = OllamaLLMInvokerSettings()
         ollama_llm_invoker = OllamaLLMInvoker(settings=invoker_settings)
         ollama_llm_streaming_invoker = OllamaLLMStreamingInvoker(settings=invoker_settings)
 
-        document_question_service = DocumentQuestionService(
-            ollama_llm_facade=ollama_facade,
-            ollama_llm_invoker=ollama_llm_invoker,
-            ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
-            document_context_provider=document_context_provider,
-        )
-        app.state.document_question_service = document_question_service
+        streaming_service_kwargs = {
+            "ollama_llm_facade": ollama_facade,
+            "ollama_llm_invoker": ollama_llm_invoker,
+            "ollama_llm_streaming_invoker": ollama_llm_streaming_invoker,
+            "document_context_provider": document_context_provider,
+        }
+        generation_service_kwargs = {
+            "ollama_llm_facade": ollama_facade,
+            "ollama_llm_invoker": ollama_llm_invoker,
+            "document_context_provider": document_context_provider,
+        }
+        processing_service_kwargs = {
+            "ollama_llm_facade": ollama_facade,
+            "ollama_llm_invoker": ollama_llm_invoker,
+        }
 
-        document_summary_service = DocumentSummaryService(
-            ollama_llm_facade=ollama_facade,
-            ollama_llm_invoker=ollama_llm_invoker,
-            ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
-            document_context_provider=document_context_provider,
-        )
-        app.state.document_summary_service = document_summary_service
+        registry.register("document_question_service", DocumentQuestionService(**streaming_service_kwargs))
+        registry.register("document_summary_service", DocumentSummaryService(**streaming_service_kwargs))
+        registry.register("document_action_service", DocumentActionService(**streaming_service_kwargs))
+        registry.register("general_chat_service", GeneralChatService(**streaming_service_kwargs))
 
-        document_action_service = DocumentActionService(
-            ollama_llm_facade=ollama_facade,
-            ollama_llm_invoker=ollama_llm_invoker,
-            ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
-            document_context_provider=document_context_provider,
+        registry.register("document_classify_service", DocumentClassifyService(**processing_service_kwargs))
+        registry.register("fragment_enrich_service", FragmentEnrichService(**processing_service_kwargs))
+        registry.register("graph_extraction_service", GraphExtractionService(**processing_service_kwargs))
+        registry.register(
+            "graph_query_translation_service", GraphQueryTranslationService(**processing_service_kwargs)
         )
-        app.state.document_action_service = document_action_service
 
-        document_classify_service = DocumentClassifyService(
-            ollama_llm_facade=ollama_facade,
-            ollama_llm_invoker=ollama_llm_invoker,
+        registry.register(
+            "rag_agent_service",
+            RagAgentService(
+                ollama_llm_facade=ollama_facade,
+                document_context_provider=document_context_provider,
+                graph_context_provider=graph_context_provider,
+            ),
         )
-        app.state.document_classify_service = document_classify_service
 
-        fragment_enrich_service = FragmentEnrichService(
-            ollama_llm_facade=ollama_facade,
-            ollama_llm_invoker=ollama_llm_invoker,
-        )
-        app.state.fragment_enrich_service = fragment_enrich_service
-
-        graph_extraction_service = GraphExtractionService(
-            ollama_llm_facade=ollama_facade,
-            ollama_llm_invoker=ollama_llm_invoker,
-        )
-        app.state.graph_extraction_service = graph_extraction_service
-
-        graph_query_translation_service = GraphQueryTranslationService(
-            ollama_llm_facade=ollama_facade,
-            ollama_llm_invoker=ollama_llm_invoker,
-        )
-        app.state.graph_query_translation_service = graph_query_translation_service
-
-        agent_service = AgentService(
-            ollama_llm_facade=ollama_facade,
-            document_context_provider=document_context_provider,
-        )
-        app.state.agent_service = agent_service
-
-        rag_agent_service = RagAgentService(
-            ollama_llm_facade=ollama_facade,
-            document_context_provider=document_context_provider,
-        )
-        app.state.rag_agent_service = rag_agent_service
-
-        general_chat_service = GeneralChatService(
-            ollama_llm_facade=ollama_facade,
-            ollama_llm_invoker=ollama_llm_invoker,
-            ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
-            document_context_provider=document_context_provider,
-        )
-        app.state.general_chat_service = general_chat_service
-
-        report_service = ReportService(
-            ollama_llm_facade=ollama_facade,
-            ollama_llm_invoker=ollama_llm_invoker,
-            document_context_provider=document_context_provider,
-        )
-        app.state.report_service = report_service
-
-        checklist_service = ChecklistService(
-            ollama_llm_facade=ollama_facade,
-            ollama_llm_invoker=ollama_llm_invoker,
-            document_context_provider=document_context_provider,
-        )
-        app.state.checklist_service = checklist_service
-
-        timeline_service = TimelineService(
-            ollama_llm_facade=ollama_facade,
-            ollama_llm_invoker=ollama_llm_invoker,
-            document_context_provider=document_context_provider,
-        )
-        app.state.timeline_service = timeline_service
-
-        quiz_service = QuizService(
-            ollama_llm_facade=ollama_facade,
-            ollama_llm_invoker=ollama_llm_invoker,
-            document_context_provider=document_context_provider,
-        )
-        app.state.quiz_service = quiz_service
-
-        lessons_learned_service = LessonsLearnedService(
-            ollama_llm_facade=ollama_facade,
-            ollama_llm_invoker=ollama_llm_invoker,
-            document_context_provider=document_context_provider,
-        )
-        app.state.lessons_learned_service = lessons_learned_service
-
-        decision_brief_service = DecisionBriefService(
-            ollama_llm_facade=ollama_facade,
-            ollama_llm_invoker=ollama_llm_invoker,
-            document_context_provider=document_context_provider,
-        )
-        app.state.decision_brief_service = decision_brief_service
+        registry.register("report_service", ReportService(**generation_service_kwargs))
+        registry.register("checklist_service", ChecklistService(**generation_service_kwargs))
+        registry.register("timeline_service", TimelineService(**generation_service_kwargs))
+        registry.register("quiz_service", QuizService(**generation_service_kwargs))
+        registry.register("lessons_learned_service", LessonsLearnedService(**generation_service_kwargs))
+        registry.register("decision_brief_service", DecisionBriefService(**generation_service_kwargs))
 
         logger.info("All dependencies started successfully")
-        cleanup_stack.clear()
+        registry.commit()
 
     except Exception:
         logger.critical("Error during dependency startup; rolling back started resources in reverse order.")
-        await _rollback_partial_startup(cleanup_stack=cleanup_stack, app=app)
+        await registry.rollback()
         raise
 
 

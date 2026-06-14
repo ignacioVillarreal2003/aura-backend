@@ -20,6 +20,7 @@ class DocumentActionRepository:
             action: Optional[str],
             result: str,
             artifact_id: int,
+            title: str = "",
     ) -> ArtifactDocumentAction:
         obj = ArtifactDocumentAction.objects.create(
             created_by=user_id,
@@ -28,6 +29,7 @@ class DocumentActionRepository:
             action=action,
             result=result,
             artifact_id=artifact_id,
+            title=title,
         )
         return _with_related(ArtifactDocumentAction.objects.filter(id=obj.id)).first()
 
@@ -48,25 +50,6 @@ class DocumentActionRepository:
 
     def list_all(self):
         return _with_related(ArtifactDocumentAction.objects.all())
-
-    def update(
-            self,
-            obj: ArtifactDocumentAction,
-            *,
-            updated_by: int,
-            result: Optional[str] = None,
-            instruction: Optional[str] = None,
-    ) -> ArtifactDocumentAction:
-        update_fields = []
-        for field_name, value in (("result", result), ("instruction", instruction)):
-            if value is not None:
-                setattr(obj, field_name, value)
-                update_fields.append(field_name)
-        if update_fields:
-            obj.updated_by = updated_by
-            update_fields.append("updated_by")
-            obj.save(update_fields=update_fields)
-        return _with_related(ArtifactDocumentAction.objects.filter(id=obj.id)).first()
 
     def soft_delete(self, obj: ArtifactDocumentAction, deleted_by: int) -> None:
         obj.delete(deleted_by=deleted_by)

@@ -122,30 +122,72 @@ class LLMClient:
         await self._stream_client.aclose()
         await self._http_client.aclose()
 
+    @staticmethod
+    def _apply_prompt_overrides(
+            payload: dict,
+            system_prompt: str | None,
+            response_style: str | None,
+    ) -> dict:
+        for key, value in (("system_prompt", system_prompt), ("response_style", response_style)):
+            if value:
+                stripped = value.strip()
+                if stripped:
+                    payload[key] = stripped
+        return payload
+
+    async def _generate(
+            self,
+            *,
+            url: str,
+            context: str,
+            payload: dict,
+            user: AuthenticatedUser,
+            log_extra: dict[str, Any],
+    ) -> dict[str, Any]:
+        logger.debug(
+            "Calling LLM %s.",
+            context,
+            extra={"user_id": user.id, "url": url, **log_extra},
+        )
+        return await self._post_json(url=url, payload=payload, user=user, context=context)
+
+    async def _generate_stream(
+            self,
+            *,
+            url: str,
+            context: str,
+            payload: dict,
+            user: AuthenticatedUser,
+            log_extra: dict[str, Any],
+    ) -> AsyncIterator[dict[str, Any]]:
+        logger.debug(
+            "Calling LLM %s.",
+            context,
+            extra={"user_id": user.id, **log_extra},
+        )
+        async for event in self._stream_sse_events(
+                url=url, payload=payload, user=user, context=context,
+        ):
+            yield event
+
     async def document_question(
             self,
             messages: list[dict[str, str]],
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> DocumentQuestionResult:
-        payload: dict = {"messages": messages, "chat_id": chat_id}
-
-        logger.debug(
-            "Calling LLM document-question.",
-            extra={
-                "user_id": user.id,
-                "message_count": len(messages),
-                "url": settings.LLM_DOCUMENT_QUESTION_URL,
-            },
+        payload = self._apply_prompt_overrides(
+            {"messages": messages, "chat_id": chat_id}, system_prompt, response_style,
         )
-
-        data = await self._post_json(
+        data = await self._generate(
             url=settings.LLM_DOCUMENT_QUESTION_URL,
+            context="document-question",
             payload=payload,
             user=user,
-            context="document-question",
+            log_extra={"message_count": len(messages)},
         )
-
         return DocumentQuestionResult(
             question=str(data.get("question", "")),
             answer=str(data.get("answer", "")),
@@ -157,19 +199,18 @@ class LLMClient:
             messages: list[dict[str, str]],
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload: dict = {"messages": messages, "chat_id": chat_id}
-
-        logger.debug(
-            "Calling LLM document-question stream.",
-            extra={"user_id": user.id, "message_count": len(messages)},
+        payload = self._apply_prompt_overrides(
+            {"messages": messages, "chat_id": chat_id}, system_prompt, response_style,
         )
-
-        async for event in self._stream_sse_events(
+        async for event in self._generate_stream(
                 url=settings.LLM_DOCUMENT_QUESTION_STREAM_URL,
+                context="document-question-stream",
                 payload=payload,
                 user=user,
-                context="document-question-stream",
+                log_extra={"message_count": len(messages)},
         ):
             yield event
 
@@ -180,29 +221,18 @@ class LLMClient:
             chat_id: int,
             mode: str = "direct",
             system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> GeneralChatResult:
-        payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
-        if system_prompt is not None:
-            stripped = system_prompt.strip()
-            if stripped:
-                payload["system_prompt"] = stripped
-
-        logger.debug(
-            "Calling LLM general-chat.",
-            extra={
-                "user_id": user.id,
-                "message_count": len(messages),
-                "url": settings.LLM_GENERAL_CHAT_URL,
-            },
+        payload = self._apply_prompt_overrides(
+            {"messages": messages, "mode": mode, "chat_id": chat_id}, system_prompt, response_style,
         )
-
-        data = await self._post_json(
+        data = await self._generate(
             url=settings.LLM_GENERAL_CHAT_URL,
+            context="general-chat",
             payload=payload,
             user=user,
-            context="general-chat",
+            log_extra={"message_count": len(messages)},
         )
-
         return GeneralChatResult(
             answer=str(data.get("answer", "")),
             messages=data.get("messages") or [],
@@ -215,23 +245,17 @@ class LLMClient:
             chat_id: int,
             mode: str = "direct",
             system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
-        if system_prompt is not None:
-            stripped = system_prompt.strip()
-            if stripped:
-                payload["system_prompt"] = stripped
-
-        logger.debug(
-            "Calling LLM general-chat stream.",
-            extra={"user_id": user.id, "message_count": len(messages)},
+        payload = self._apply_prompt_overrides(
+            {"messages": messages, "mode": mode, "chat_id": chat_id}, system_prompt, response_style,
         )
-
-        async for event in self._stream_sse_events(
+        async for event in self._generate_stream(
                 url=settings.LLM_GENERAL_CHAT_STREAM_URL,
+                context="general-chat-stream",
                 payload=payload,
                 user=user,
-                context="general-chat-stream",
+                log_extra={"message_count": len(messages)},
         ):
             yield event
 
@@ -240,23 +264,18 @@ class LLMClient:
             messages: list[dict[str, str]],
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> AgentRunResult:
-        payload: dict = {"messages": messages, "chat_id": chat_id}
-
-        logger.debug(
-            "Calling LLM rag-agent.",
-            extra={
-                "user_id": user.id,
-                "message_count": len(messages),
-                "url": settings.LLM_RAG_AGENT_URL,
-            },
+        payload = self._apply_prompt_overrides(
+            {"messages": messages, "chat_id": chat_id}, system_prompt, response_style,
         )
-
-        data = await self._post_json(
+        data = await self._generate(
             url=settings.LLM_RAG_AGENT_URL,
+            context="rag-agent",
             payload=payload,
             user=user,
-            context="rag-agent",
+            log_extra={"message_count": len(messages)},
         )
         return self._build_agent_result(data)
 
@@ -265,65 +284,18 @@ class LLMClient:
             messages: list[dict[str, str]],
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload: dict = {"messages": messages, "chat_id": chat_id}
-
-        logger.debug(
-            "Calling LLM rag-agent stream.",
-            extra={"user_id": user.id, "message_count": len(messages)},
+        payload = self._apply_prompt_overrides(
+            {"messages": messages, "chat_id": chat_id}, system_prompt, response_style,
         )
-
-        async for event in self._stream_sse_events(
+        async for event in self._generate_stream(
                 url=settings.LLM_RAG_AGENT_STREAM_URL,
-                payload=payload,
-                user=user,
                 context="rag-agent-stream",
-        ):
-            yield event
-
-    async def agent(
-            self,
-            messages: list[dict[str, str]],
-            user: AuthenticatedUser,
-            chat_id: int,
-    ) -> AgentRunResult:
-        payload: dict = {"messages": messages, "chat_id": chat_id}
-
-        logger.debug(
-            "Calling LLM agent.",
-            extra={
-                "user_id": user.id,
-                "message_count": len(messages),
-                "url": settings.LLM_AGENT_URL,
-            },
-        )
-
-        data = await self._post_json(
-            url=settings.LLM_AGENT_URL,
-            payload=payload,
-            user=user,
-            context="agent",
-        )
-        return self._build_agent_result(data)
-
-    async def agent_stream_events(
-            self,
-            messages: list[dict[str, str]],
-            user: AuthenticatedUser,
-            chat_id: int,
-    ) -> AsyncIterator[dict[str, Any]]:
-        payload: dict = {"messages": messages, "chat_id": chat_id}
-
-        logger.debug(
-            "Calling LLM agent stream.",
-            extra={"user_id": user.id, "message_count": len(messages)},
-        )
-
-        async for event in self._stream_sse_events(
-                url=settings.LLM_AGENT_STREAM_URL,
                 payload=payload,
                 user=user,
-                context="agent-stream",
+                log_extra={"message_count": len(messages)},
         ):
             yield event
 
@@ -333,25 +305,19 @@ class LLMClient:
             mode: str,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> ChecklistGenerateResult:
-        payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
-
-        logger.debug(
-            "Calling LLM checklist-generate.",
-            extra={
-                "user_id": user.id,
-                "message_count": len(messages),
-                "url": settings.LLM_CHECKLIST_GENERATE_URL,
-            },
+        payload = self._apply_prompt_overrides(
+            {"messages": messages, "mode": mode, "chat_id": chat_id}, system_prompt, response_style,
         )
-
-        data = await self._post_json(
+        data = await self._generate(
             url=settings.LLM_CHECKLIST_GENERATE_URL,
+            context="checklist-generate",
             payload=payload,
             user=user,
-            context="checklist-generate",
+            log_extra={"message_count": len(messages)},
         )
-
         return ChecklistGenerateResult(
             title=str(data.get("title", "")),
             items=data.get("items") or [],
@@ -365,19 +331,18 @@ class LLMClient:
             mode: str,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
-
-        logger.debug(
-            "Calling LLM checklist-generate stream.",
-            extra={"user_id": user.id, "message_count": len(messages)},
+        payload = self._apply_prompt_overrides(
+            {"messages": messages, "mode": mode, "chat_id": chat_id}, system_prompt, response_style,
         )
-
-        async for event in self._stream_sse_events(
+        async for event in self._generate_stream(
                 url=settings.LLM_CHECKLIST_GENERATE_STREAM_URL,
+                context="checklist-generate-stream",
                 payload=payload,
                 user=user,
-                context="checklist-generate-stream",
+                log_extra={"message_count": len(messages)},
         ):
             yield event
 
@@ -388,26 +353,20 @@ class LLMClient:
             report_type: str,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> ReportGenerateResult:
-        payload: dict = {"messages": messages, "mode": mode, "report_type": report_type, "chat_id": chat_id}
-
-        logger.debug(
-            "Calling LLM report-generate.",
-            extra={
-                "user_id": user.id,
-                "message_count": len(messages),
-                "report_type": report_type,
-                "url": settings.LLM_REPORT_GENERATE_URL,
-            },
+        payload = self._apply_prompt_overrides(
+            {"messages": messages, "mode": mode, "report_type": report_type, "chat_id": chat_id},
+            system_prompt, response_style,
         )
-
-        data = await self._post_json(
+        data = await self._generate(
             url=settings.LLM_REPORT_GENERATE_URL,
+            context="report-generate",
             payload=payload,
             user=user,
-            context="report-generate",
+            log_extra={"message_count": len(messages), "report_type": report_type},
         )
-
         return ReportGenerateResult(
             report_type=str(data.get("report_type", report_type)),
             content=str(data.get("content", "")),
@@ -422,19 +381,19 @@ class LLMClient:
             report_type: str,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload: dict = {"messages": messages, "mode": mode, "report_type": report_type, "chat_id": chat_id}
-
-        logger.debug(
-            "Calling LLM report-generate stream.",
-            extra={"user_id": user.id, "message_count": len(messages), "report_type": report_type},
+        payload = self._apply_prompt_overrides(
+            {"messages": messages, "mode": mode, "report_type": report_type, "chat_id": chat_id},
+            system_prompt, response_style,
         )
-
-        async for event in self._stream_sse_events(
+        async for event in self._generate_stream(
                 url=settings.LLM_REPORT_GENERATE_STREAM_URL,
+                context="report-generate-stream",
                 payload=payload,
                 user=user,
-                context="report-generate-stream",
+                log_extra={"message_count": len(messages), "report_type": report_type},
         ):
             yield event
 
@@ -444,25 +403,19 @@ class LLMClient:
             mode: str,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> TimelineGenerateResult:
-        payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
-
-        logger.debug(
-            "Calling LLM timeline-generate.",
-            extra={
-                "user_id": user.id,
-                "message_count": len(messages),
-                "url": settings.LLM_TIMELINE_GENERATE_URL,
-            },
+        payload = self._apply_prompt_overrides(
+            {"messages": messages, "mode": mode, "chat_id": chat_id}, system_prompt, response_style,
         )
-
-        data = await self._post_json(
+        data = await self._generate(
             url=settings.LLM_TIMELINE_GENERATE_URL,
+            context="timeline-generate",
             payload=payload,
             user=user,
-            context="timeline-generate",
+            log_extra={"message_count": len(messages)},
         )
-
         return TimelineGenerateResult(
             title=str(data.get("title", "")),
             summary=str(data.get("summary", "")),
@@ -477,19 +430,18 @@ class LLMClient:
             mode: str,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
-
-        logger.debug(
-            "Calling LLM timeline-generate stream.",
-            extra={"user_id": user.id, "message_count": len(messages)},
+        payload = self._apply_prompt_overrides(
+            {"messages": messages, "mode": mode, "chat_id": chat_id}, system_prompt, response_style,
         )
-
-        async for event in self._stream_sse_events(
+        async for event in self._generate_stream(
                 url=settings.LLM_TIMELINE_GENERATE_STREAM_URL,
+                context="timeline-generate-stream",
                 payload=payload,
                 user=user,
-                context="timeline-generate-stream",
+                log_extra={"message_count": len(messages)},
         ):
             yield event
 
@@ -499,25 +451,19 @@ class LLMClient:
             mode: str,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> QuizGenerateResult:
-        payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
-
-        logger.debug(
-            "Calling LLM quiz-generate.",
-            extra={
-                "user_id": user.id,
-                "message_count": len(messages),
-                "url": settings.LLM_QUIZ_GENERATE_URL,
-            },
+        payload = self._apply_prompt_overrides(
+            {"messages": messages, "mode": mode, "chat_id": chat_id}, system_prompt, response_style,
         )
-
-        data = await self._post_json(
+        data = await self._generate(
             url=settings.LLM_QUIZ_GENERATE_URL,
+            context="quiz-generate",
             payload=payload,
             user=user,
-            context="quiz-generate",
+            log_extra={"message_count": len(messages)},
         )
-
         return QuizGenerateResult(
             title=str(data.get("title", "")),
             instructions=str(data.get("instructions", "")),
@@ -533,19 +479,18 @@ class LLMClient:
             mode: str,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
-
-        logger.debug(
-            "Calling LLM quiz-generate stream.",
-            extra={"user_id": user.id, "message_count": len(messages)},
+        payload = self._apply_prompt_overrides(
+            {"messages": messages, "mode": mode, "chat_id": chat_id}, system_prompt, response_style,
         )
-
-        async for event in self._stream_sse_events(
+        async for event in self._generate_stream(
                 url=settings.LLM_QUIZ_GENERATE_STREAM_URL,
+                context="quiz-generate-stream",
                 payload=payload,
                 user=user,
-                context="quiz-generate-stream",
+                log_extra={"message_count": len(messages)},
         ):
             yield event
 
@@ -555,25 +500,19 @@ class LLMClient:
             mode: str,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> LessonsLearnedGenerateResult:
-        payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
-
-        logger.debug(
-            "Calling LLM lessons-learned-generate.",
-            extra={
-                "user_id": user.id,
-                "message_count": len(messages),
-                "url": settings.LLM_LESSONS_LEARNED_GENERATE_URL,
-            },
+        payload = self._apply_prompt_overrides(
+            {"messages": messages, "mode": mode, "chat_id": chat_id}, system_prompt, response_style,
         )
-
-        data = await self._post_json(
+        data = await self._generate(
             url=settings.LLM_LESSONS_LEARNED_GENERATE_URL,
+            context="lessons-learned-generate",
             payload=payload,
             user=user,
-            context="lessons-learned-generate",
+            log_extra={"message_count": len(messages)},
         )
-
         return LessonsLearnedGenerateResult(
             title=str(data.get("title", "")),
             context=str(data.get("context", "")),
@@ -588,19 +527,18 @@ class LLMClient:
             mode: str,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
-
-        logger.debug(
-            "Calling LLM lessons-learned-generate stream.",
-            extra={"user_id": user.id, "message_count": len(messages)},
+        payload = self._apply_prompt_overrides(
+            {"messages": messages, "mode": mode, "chat_id": chat_id}, system_prompt, response_style,
         )
-
-        async for event in self._stream_sse_events(
+        async for event in self._generate_stream(
                 url=settings.LLM_LESSONS_LEARNED_GENERATE_STREAM_URL,
+                context="lessons-learned-generate-stream",
                 payload=payload,
                 user=user,
-                context="lessons-learned-generate-stream",
+                log_extra={"message_count": len(messages)},
         ):
             yield event
 
@@ -610,25 +548,19 @@ class LLMClient:
             mode: str,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> DecisionBriefGenerateResult:
-        payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
-
-        logger.debug(
-            "Calling LLM decision-brief-generate.",
-            extra={
-                "user_id": user.id,
-                "message_count": len(messages),
-                "url": settings.LLM_DECISION_BRIEF_GENERATE_URL,
-            },
+        payload = self._apply_prompt_overrides(
+            {"messages": messages, "mode": mode, "chat_id": chat_id}, system_prompt, response_style,
         )
-
-        data = await self._post_json(
+        data = await self._generate(
             url=settings.LLM_DECISION_BRIEF_GENERATE_URL,
+            context="decision-brief-generate",
             payload=payload,
             user=user,
-            context="decision-brief-generate",
+            log_extra={"message_count": len(messages)},
         )
-
         return DecisionBriefGenerateResult(
             title=str(data.get("title", "")),
             problem=str(data.get("problem", "")),
@@ -645,25 +577,19 @@ class LLMClient:
             document_ids: list[int],
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> DocumentSummaryResult:
-        payload: dict = {"document_ids": document_ids}
-
-        logger.debug(
-            "Calling LLM document-summary.",
-            extra={
-                "user_id": user.id,
-                "document_count": len(document_ids),
-                "url": settings.LLM_DOCUMENT_SUMMARY_URL,
-            },
+        payload = self._apply_prompt_overrides(
+            {"document_ids": document_ids, "chat_id": chat_id}, system_prompt, response_style,
         )
-
-        data = await self._post_json(
+        data = await self._generate(
             url=settings.LLM_DOCUMENT_SUMMARY_URL,
+            context="document-summary",
             payload=payload,
             user=user,
-            context="document-summary",
+            log_extra={"document_count": len(document_ids)},
         )
-
         return DocumentSummaryResult(
             document_ids=data.get("document_ids") or document_ids,
             summary=str(data.get("summary", "")),
@@ -675,19 +601,18 @@ class LLMClient:
             document_ids: list[int],
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload: dict = {"document_ids": document_ids}
-
-        logger.debug(
-            "Calling LLM document-summary stream.",
-            extra={"user_id": user.id, "document_count": len(document_ids)},
+        payload = self._apply_prompt_overrides(
+            {"document_ids": document_ids, "chat_id": chat_id}, system_prompt, response_style,
         )
-
-        async for event in self._stream_sse_events(
+        async for event in self._generate_stream(
                 url=settings.LLM_DOCUMENT_SUMMARY_STREAM_URL,
+                context="document-summary-stream",
                 payload=payload,
                 user=user,
-                context="document-summary-stream",
+                log_extra={"document_count": len(document_ids)},
         ):
             yield event
 
@@ -698,27 +623,20 @@ class LLMClient:
             action: str | None,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> DocumentActionResult:
-        payload: dict = {"document_ids": document_ids, "instruction": instruction}
+        payload: dict = {"document_ids": document_ids, "instruction": instruction, "chat_id": chat_id}
         if action is not None:
             payload["action"] = action
-
-        logger.debug(
-            "Calling LLM document-action.",
-            extra={
-                "user_id": user.id,
-                "document_count": len(document_ids),
-                "url": settings.LLM_DOCUMENT_ACTION_URL,
-            },
-        )
-
-        data = await self._post_json(
+        self._apply_prompt_overrides(payload, system_prompt, response_style)
+        data = await self._generate(
             url=settings.LLM_DOCUMENT_ACTION_URL,
+            context="document-action",
             payload=payload,
             user=user,
-            context="document-action",
+            log_extra={"document_count": len(document_ids)},
         )
-
         return DocumentActionResult(
             result=str(data.get("result", "")),
             document_ids=data.get("document_ids") or document_ids,
@@ -734,21 +652,19 @@ class LLMClient:
             action: str | None,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload: dict = {"document_ids": document_ids, "instruction": instruction}
+        payload: dict = {"document_ids": document_ids, "instruction": instruction, "chat_id": chat_id}
         if action is not None:
             payload["action"] = action
-
-        logger.debug(
-            "Calling LLM document-action stream.",
-            extra={"user_id": user.id, "document_count": len(document_ids)},
-        )
-
-        async for event in self._stream_sse_events(
+        self._apply_prompt_overrides(payload, system_prompt, response_style)
+        async for event in self._generate_stream(
                 url=settings.LLM_DOCUMENT_ACTION_STREAM_URL,
+                context="document-action-stream",
                 payload=payload,
                 user=user,
-                context="document-action-stream",
+                log_extra={"document_count": len(document_ids)},
         ):
             yield event
 
@@ -758,19 +674,18 @@ class LLMClient:
             mode: str,
             user: AuthenticatedUser,
             chat_id: int,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload: dict = {"messages": messages, "mode": mode, "chat_id": chat_id}
-
-        logger.debug(
-            "Calling LLM decision-brief-generate stream.",
-            extra={"user_id": user.id, "message_count": len(messages)},
+        payload = self._apply_prompt_overrides(
+            {"messages": messages, "mode": mode, "chat_id": chat_id}, system_prompt, response_style,
         )
-
-        async for event in self._stream_sse_events(
+        async for event in self._generate_stream(
                 url=settings.LLM_DECISION_BRIEF_GENERATE_STREAM_URL,
+                context="decision-brief-generate-stream",
                 payload=payload,
                 user=user,
-                context="decision-brief-generate-stream",
+                log_extra={"message_count": len(messages)},
         ):
             yield event
 

@@ -1,8 +1,9 @@
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.domain.dtos.fragment.fragment_response import FragmentResponse
 from app.domain.dtos.message import Message
 from app.domain.field_limits import MAX_CONTENT_CHARS, MAX_MESSAGES_IN_REQUEST
+from app.domain.validation import stripped_non_blank
 
 
 class GeneralChatResponse(BaseModel):
@@ -13,13 +14,9 @@ class GeneralChatResponse(BaseModel):
         description="Fragmentos documentales utilizados como contexto.",
     )
 
-    @model_validator(mode="after")
-    def validate_response(self) -> "GeneralChatResponse":
-        answer = self.answer.strip()
-        if not answer:
-            raise ValueError("Answer must not be blank.")
-        if answer != self.answer:
-            return self.model_copy(update={"answer": answer})
-        return self
+    @field_validator("answer")
+    @classmethod
+    def _strip_answer(cls, value: str) -> str:
+        return stripped_non_blank(value, "Answer must not be blank.")
 
     model_config = {"from_attributes": True}

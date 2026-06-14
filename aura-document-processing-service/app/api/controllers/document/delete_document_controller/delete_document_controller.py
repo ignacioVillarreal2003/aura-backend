@@ -6,16 +6,17 @@ from app.api.controllers.document.delete_document_controller.delete_document_con
 )
 from app.api.dependencies.rate_limiter import strict_rate_limit
 from app.api.openapi.common import default_error_responses
-from app.application.services.document.delete_document_service.delete_document_service import (
-    get_delete_document_service,
-)
+from app.application.authorization.authorizer import Authorizer
+from app.application.authorization.permissions import Permissions
 from app.application.services.document.delete_document_service.interfaces.delete_document_service_interface import (
     DeleteDocumentServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
-
+from app.api.dependencies.services import (
+    get_delete_document_service,
+)
 
 class DeleteDocumentController(DeleteDocumentControllerInterface):
     async def soft_delete_document(
@@ -26,6 +27,11 @@ class DeleteDocumentController(DeleteDocumentControllerInterface):
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
             _rl: None = Depends(strict_rate_limit),
     ) -> Response:
+        Authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.SOFT_DELETE_DOCUMENT}),
+        )
+
         await delete_document_service.soft_delete_document(
             document_id=document_id,
             database_session=database_session,
@@ -41,6 +47,11 @@ class DeleteDocumentController(DeleteDocumentControllerInterface):
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
             _rl: None = Depends(strict_rate_limit),
     ) -> Response:
+        Authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.SOFT_DELETE_DOCUMENTS_BY_CHAT}),
+        )
+
         await delete_document_service.soft_delete_documents_by_chat(
             chat_id=chat_id,
             database_session=database_session,
@@ -48,6 +59,25 @@ class DeleteDocumentController(DeleteDocumentControllerInterface):
         )
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+    async def soft_delete_document_admin(
+            self,
+            document_id: int,
+            delete_document_service: DeleteDocumentServiceInterface = Depends(get_delete_document_service),
+            database_session: AsyncSession = Depends(get_database_session),
+            authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
+            _rl: None = Depends(strict_rate_limit),
+    ) -> Response:
+        Authorizer.require_permissions(
+            authenticated_user=authenticated_user,
+            required_permissions=frozenset({Permissions.SOFT_DELETE_DOCUMENT_ADMIN}),
+        )
+
+        await delete_document_service.soft_delete_document_admin(
+            document_id=document_id,
+            database_session=database_session,
+            authenticated_user=authenticated_user,
+        )
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 router = APIRouter()
 delete_document_controller = DeleteDocumentController()
@@ -85,5 +115,20 @@ router.add_api_route(
     operation_id="softDeleteDocumentsByChat",
     summary="Eliminar documentos por chat",
     description="Marca como eliminados los documentos de un chat y responde 204.",
+    responses=_response,
+)
+router.add_api_route(
+    "/admin/soft/document/{document_id}",
+    delete_document_controller.soft_delete_document_admin,
+    methods=["DELETE"],
+    response_class=Response,
+    response_model=None,
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="softDeleteDocumentAdmin",
+    summary="Eliminar documento (admin)",
+    description=(
+        "Marca como eliminado cualquier documento sin restricción de pertenencia al chat "
+        "y responde 204. Requiere permiso de administrador."
+    ),
     responses=_response,
 )

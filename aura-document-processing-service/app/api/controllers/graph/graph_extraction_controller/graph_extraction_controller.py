@@ -1,5 +1,4 @@
 import logging
-
 from fastapi import APIRouter, Depends, Path
 
 from app.api.controllers.graph.graph_extraction_controller.graph_extraction_controller_interface import (
@@ -9,9 +8,7 @@ from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.application.services.graph.graph_extraction_service.graph_extraction_service import (
-    get_graph_extraction_service,
-)
+from app.api.dependencies.services import get_graph_extraction_service
 from app.application.services.graph.graph_extraction_service.interfaces.graph_extraction_service_interface import (
     GraphExtractionServiceInterface,
 )
@@ -47,6 +44,7 @@ class GraphExtractionController(GraphExtractionControllerInterface):
             authenticated_user=authenticated_user,
             required_permissions=frozenset({Permissions.GRAPH_EXTRACTION_PROGRESS}),
         )
+
         return await graph_extraction_service.get_progress(document_id=document_id)
 
     async def reextract(
@@ -66,15 +64,6 @@ class GraphExtractionController(GraphExtractionControllerInterface):
             document_id=request.document_id,
             user=authenticated_user,
             force=request.force,
-        )
-        logger.info(
-            "Graph re-extraction command published via HTTP.",
-            extra={
-                "document_id": request.document_id,
-                "force": request.force,
-                "user_id": authenticated_user.id,
-                "message_id": message_id,
-            },
         )
         return GraphReextractResponse(
             document_id=request.document_id,

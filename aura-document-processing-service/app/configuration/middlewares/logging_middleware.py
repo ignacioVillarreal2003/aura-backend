@@ -1,17 +1,23 @@
 import logging
 import time
 import uuid
-from typing import Any, Optional
+from collections.abc import Awaitable, Callable
+from typing import Optional
 from fastapi import FastAPI, Request
+from fastapi.responses import Response
 
 logger = logging.getLogger(__name__)
 
 _X_REQUEST_ID = "X-Request-ID"
+_SKIP_PATHS = frozenset({"/metrics", "/api/v1/health", "/api/v1/ready"})
 
 
 def add_logging_middleware(app: FastAPI) -> None:
     @app.middleware("http")
-    async def log_requests(request: Request, call_next) -> Any:
+    async def log_requests(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+        if request.url.path in _SKIP_PATHS:
+            return await call_next(request)
+
         incoming = request.headers.get(_X_REQUEST_ID)
         request_id = incoming.strip() if incoming and incoming.strip() else str(uuid.uuid4())
         request.state.request_id = request_id

@@ -24,12 +24,28 @@ def _cfg(name: str, default: int) -> int:
     return int(getattr(settings, name, default))
 
 
+def _fail_open() -> bool:
+    """Decision used when Redis is unreachable. True lets traffic through
+    (availability); False blocks it (abuse protection). Configurable via
+    WS_RATE_LIMIT_FAIL_OPEN."""
+    return bool(getattr(settings, "WS_RATE_LIMIT_FAIL_OPEN", True))
+
+
+# Atomically increment the window counter and set the TTL only on the first hit,
+# so the window does not slide (resetting EXPIRE on every call would let the
+# counter live forever under sustained traffic and over-block the user).
+_RATE_LIMIT_SCRIPT = """
+local current = redis.call('incr', KEYS[1])
+if current == 1 then
+    redis.call('expire', KEYS[1], ARGV[1])
+end
+return current
+"""
+
+
 def _fixed_window_allows(key: str, window: int, limit: int) -> bool:
-    pipe = _redis().pipeline()
-    pipe.incr(key)
-    pipe.expire(key, window)
-    count, _ = pipe.execute()
-    return count <= limit
+    count = _redis().eval(_RATE_LIMIT_SCRIPT, 1, key, window)
+    return int(count) <= limit
 
 
 def check_message_rate_limit(user_id: int, chat_id: int) -> bool:
@@ -41,11 +57,13 @@ def check_message_rate_limit(user_id: int, chat_id: int) -> bool:
             _cfg("WS_MESSAGE_RATE_LIMIT_MAX", 10),
         )
     except redis.RedisError:
+        allow = _fail_open()
         logger.warning(
-            "Redis error checking message rate limit, failing open.",
+            "Redis error checking message rate limit; failing %s.",
+            "open" if allow else "closed",
             extra={"user_id": user_id, "chat_id": chat_id},
         )
-        return True
+        return allow
 
 
 def check_typing_rate_limit(user_id: int) -> bool:
@@ -57,11 +75,13 @@ def check_typing_rate_limit(user_id: int) -> bool:
             _cfg("WS_TYPING_RATE_LIMIT_MAX", 20),
         )
     except redis.RedisError:
+        allow = _fail_open()
         logger.warning(
-            "Redis error checking typing rate limit, failing open.",
+            "Redis error checking typing rate limit; failing %s.",
+            "open" if allow else "closed",
             extra={"user_id": user_id},
         )
-        return True
+        return allow
 
 
 def _ws_connections_key(user_id: int) -> str:
@@ -114,11 +134,13 @@ def check_artifact_rate_limit(user_id: int, chat_id: int) -> bool:
             _cfg("WS_ARTIFACT_RATE_LIMIT_MAX", 5),
         )
     except redis.RedisError:
+        allow = _fail_open()
         logger.warning(
-            "Redis error checking artifact rate limit, failing open.",
+            "Redis error checking artifact rate limit; failing %s.",
+            "open" if allow else "closed",
             extra={"user_id": user_id, "chat_id": chat_id},
         )
-        return True
+        return allow
 
 
 def check_transcribe_rate_limit(user_id: int) -> bool:
@@ -130,11 +152,13 @@ def check_transcribe_rate_limit(user_id: int) -> bool:
             _cfg("WS_TRANSCRIBE_RATE_LIMIT_MAX", 5),
         )
     except redis.RedisError:
+        allow = _fail_open()
         logger.warning(
-            "Redis error checking transcription rate limit, failing open.",
+            "Redis error checking transcription rate limit; failing %s.",
+            "open" if allow else "closed",
             extra={"user_id": user_id},
         )
-        return True
+        return allow
 
 
 def release_ws_connection(user_id: int, conn_id: str) -> None:

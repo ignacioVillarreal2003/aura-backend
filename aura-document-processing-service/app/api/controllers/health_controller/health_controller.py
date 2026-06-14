@@ -1,8 +1,13 @@
 import logging
+from collections.abc import Awaitable, Callable
+from typing import Any
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from app.api.openapi.common import ErrorBodyApp
+from app.infrastructure.persistence.memory_database.redis_client.interfaces.redis_client_interface import (
+    RedisClientInterface,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -12,29 +17,28 @@ class HealthController:
         return JSONResponse({"status": "ok"})
 
     async def readiness(self, request: Request) -> JSONResponse:
+        state = request.app.state
         checks: dict[str, object] = {}
         overall_ok = True
 
-        redis_client = getattr(request.app.state, "redis_client", None)
-        if redis_client is not None:
-            try:
-                await redis_client.client.ping()
-                checks["redis"] = {"status": "ok"}
-            except Exception as exc:
-                logger.warning("Redis health check failed", exc_info=exc)
-                checks["redis"] = {"status": "error"}
+        for name, attr, probe in self._critical_probes():
+            dependency = getattr(state, attr, None)
+            if dependency is None:
+                # A critical dependency that is not registered means startup did
+                # not complete; report it explicitly instead of silently passing.
+                logger.error("Readiness: critical dependency not registered", extra={"dependency": name})
+                checks[name] = {"status": "not_registered"}
                 overall_ok = False
-
-        db_manager = getattr(request.app.state, "db_manager", None)
-        if db_manager is not None:
+                continue
             try:
-                result = await db_manager.health_check()
-                checks["database"] = result
-                if result.get("status") != "healthy":
-                    overall_ok = False
+                ok = await probe(dependency)
             except Exception as exc:
-                logger.warning("Database health check failed", exc_info=exc)
-                checks["database"] = {"status": "error"}
+                logger.warning("%s health check failed", name, exc_info=exc)
+                checks[name] = {"status": "error"}
+                overall_ok = False
+                continue
+            checks[name] = {"status": "ok" if ok else "error"}
+            if not ok:
                 overall_ok = False
 
         http_status = 200 if overall_ok else 503
@@ -42,6 +46,23 @@ class HealthController:
             {"status": "ok" if overall_ok else "degraded", "checks": checks},
             status_code=http_status,
         )
+
+    @staticmethod
+    def _critical_probes() -> list[tuple[str, str, Callable[[Any], Awaitable[bool]]]]:
+        async def _probe_redis(client: RedisClientInterface) -> bool:
+            await client.client.ping()
+            return True
+
+        async def _probe_healthy(manager: Any) -> bool:
+            result = await manager.health_check()
+            return result.get("status") == "healthy"
+
+        return [
+            ("redis", "redis_client", _probe_redis),
+            ("database", "db_manager", _probe_healthy),
+            ("rabbitmq", "rabbitmq_manager", _probe_healthy),
+            ("object_storage", "minio_manager", _probe_healthy),
+        ]
 
 
 router = APIRouter()

@@ -102,16 +102,6 @@ class TestNotificationListView:
             _, kwargs = svc.list_for_user.call_args
             assert kwargs["event_type"] == "chat.member.invited"
 
-    def test_filters_by_type_passed_to_service(self, api_client, auth_headers):
-        with patch(_SVC) as svc:
-            svc.list_for_user.return_value = _mock_qs()
-            api_client.get(
-                f"{self.URL}?type=system",
-                **auth_headers(permissions=[NOTIFICATION_INBOX_LIST]),
-            )
-            _, kwargs = svc.list_for_user.call_args
-            assert kwargs["type"] == "system"
-
     def test_valid_since_param_is_parsed_and_forwarded(self, api_client, auth_headers):
         with patch(_SVC) as svc:
             svc.list_for_user.return_value = _mock_qs()
@@ -276,18 +266,6 @@ class TestNotificationDetailPatchView:
         assert response.status_code == 200
         assert response.data["status"] == "unread"
         assert response.data["read_at"] is None
-
-    def test_archives_notification(self, api_client, auth_headers, make_notification):
-        updated = make_notification(id=1, status="archived")
-        with patch(_SVC) as svc:
-            svc.update_status.return_value = updated
-            response = api_client.patch(
-                self.url(1), {"status": "archived"}, format="json",
-                **auth_headers(permissions=[NOTIFICATION_STATUS_PATCH]),
-            )
-
-        assert response.status_code == 200
-        assert response.data["status"] == "archived"
 
     def test_invalid_status_value_returns_400(self, api_client, auth_headers):
         with patch(_SVC):

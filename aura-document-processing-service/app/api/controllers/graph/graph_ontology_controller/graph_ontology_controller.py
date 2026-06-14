@@ -1,23 +1,26 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 
+from app.api.controllers.graph.graph_ontology_controller.graph_ontology_controller_interface import (
+    GraphOntologyControllerInterface,
+)
 from app.api.dependencies.rate_limiter import default_rate_limit
 from app.api.openapi.common import default_error_responses
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.configuration.graph.knowledge_graph_settings import KnowledgeGraphSettings
+from app.application.services.graph.graph_ontology_service.interfaces.graph_ontology_service_interface import (
+    GraphOntologyServiceInterface,
+)
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.graph.graph_ontology.graph_ontology_response import GraphOntologyResponse
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
+from app.api.dependencies.services import (
+    get_graph_ontology_service,
+)
 
-
-def _get_knowledge_graph_settings(request: Request) -> KnowledgeGraphSettings:
-    return getattr(request.app.state, "knowledge_graph_settings", KnowledgeGraphSettings())
-
-
-class GraphOntologyController:
+class GraphOntologyController(GraphOntologyControllerInterface):
     async def get_ontology(
             self,
-            kg_settings: KnowledgeGraphSettings = Depends(_get_knowledge_graph_settings),
+            graph_ontology_service: GraphOntologyServiceInterface = Depends(get_graph_ontology_service),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
             _rl: None = Depends(default_rate_limit),
     ) -> GraphOntologyResponse:
@@ -26,13 +29,9 @@ class GraphOntologyController:
             required_permissions=frozenset({Permissions.GRAPH_ONTOLOGY}),
         )
 
-        return GraphOntologyResponse(
-            entity_types=kg_settings.resolve_allowed_entity_types(),
-            relation_types=kg_settings.resolve_allowed_relation_types(),
-            query_max_results=kg_settings.query_max_results,
-            query_max_depth=kg_settings.query_max_neighbor_depth,
+        return await graph_ontology_service.get_ontology(
+            authenticated_user=authenticated_user,
         )
-
 
 router = APIRouter()
 graph_ontology_controller = GraphOntologyController()

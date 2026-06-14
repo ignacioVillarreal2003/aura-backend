@@ -2,9 +2,8 @@ import logging
 from collections.abc import AsyncIterator
 from typing import Optional
 
-from fastapi import HTTPException, Request, status
 
-from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
+from app.application.authorization.exceptions.authorization_exceptions import UnauthorizedException
 from app.application.exceptions.app_exception import RequestValidationException
 from app.application.services.user_interactions.document_action_service.constants.processing_strategy import ProcessingStrategy
 from app.application.services.user_interactions.document_action_service.document_action_settings import DocumentActionServiceSettings
@@ -26,9 +25,11 @@ from app.application.services.user_interactions.document_action_service.processo
 from app.application.services.user_interactions.document_action_service.processors.reduce_document_action_processor.reduce_document_action_processor import (
     ReduceDocumentActionProcessor,
 )
+from app.configuration.tracing import trace_generation
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.document_action_type import DocumentActionType
 from app.domain.dtos.user_interactions.document_action.document_action_request import DocumentActionRequest
+from app.domain.field_limits import MAX_CONTENT_CHARS
 from app.domain.dtos.user_interactions.document_action.document_action_response import DocumentActionResponse
 from app.domain.dtos.user_interactions.document_action.document_action_stream_events import (
     DocumentActionStreamComplete,
@@ -100,6 +101,7 @@ class DocumentActionService(DocumentActionServiceInterface):
             ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
         )
 
+    @trace_generation("document_action")
     async def execute_document_action(
             self,
             document_action_request: DocumentActionRequest,
@@ -138,6 +140,7 @@ class DocumentActionService(DocumentActionServiceInterface):
                 "Unexpected error while processing the document action"
             ) from e
 
+    @trace_generation("document_action_stream")
     async def execute_document_action_stream(
             self,
             document_action_request: DocumentActionRequest,
@@ -209,6 +212,8 @@ class DocumentActionService(DocumentActionServiceInterface):
             state.result = state.result.strip()
             if not state.result:
                 state.result = _STATIC_FALLBACK_MESSAGE
+            elif len(state.result) > MAX_CONTENT_CHARS:
+                state.result = state.result[:MAX_CONTENT_CHARS]
 
             yield DocumentActionStreamComplete(
                 result=DocumentActionResponse(
@@ -243,14 +248,6 @@ class DocumentActionService(DocumentActionServiceInterface):
         await self._reduce_processor.run(state)
         if not state.result.strip():
             state.result = _STATIC_FALLBACK_MESSAGE
+        elif len(state.result) > MAX_CONTENT_CHARS:
+            state.result = state.result[:MAX_CONTENT_CHARS]
 
-
-async def get_document_action_service(request: Request) -> DocumentActionServiceInterface:
-    try:
-        return request.app.state.document_action_service
-    except AttributeError:
-        logger.error("DocumentActionService not found in application state")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="DocumentActionService is not available",
-        )

@@ -4,7 +4,7 @@ from typing import Optional
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 
-from apps.artifact.broadcasting import broadcast_artifact_deleted, broadcast_artifact_updated
+from apps.artifact.broadcasting import broadcast_artifact_deleted
 from apps.artifact.exceptions import (
     ArtifactAccessDeniedException,
     ArtifactCreationFailedException,
@@ -14,7 +14,6 @@ from apps.artifact.exceptions import (
 from apps.artifact.models import Artifact, ArtifactBookmark, ArtifactFeedback, ArtifactPin, ArtifactThreadReply
 from apps.artifact.registry import is_known_type
 from apps.artifact.repositories.artifact_repository import artifact_repository
-from apps.artifact.repositories.artifact_version_repository import artifact_version_repository
 from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.membership.repositories.membership_repository import membership_repository
@@ -33,6 +32,8 @@ _DETAIL_RELATIONS = {
     Artifact.Type.TIMELINE: "timeline_content",
     Artifact.Type.LESSONS_LEARNED: "lessons_learned_content",
     Artifact.Type.DECISION_BRIEF: "decision_brief_content",
+    Artifact.Type.DOCUMENT_SUMMARY: "document_summary_content",
+    Artifact.Type.DOCUMENT_ACTION: "document_action_content",
 }
 
 
@@ -146,36 +147,6 @@ class ArtifactService:
         return artifact
 
     @transaction.atomic
-    def update_artifact(
-            self,
-            user: AuthenticatedUser,
-            artifact_id: int,
-            *,
-            title: Optional[str] = None,
-            description: Optional[str] = None,
-            status: Optional[str] = None,
-            change_summary: str = "",
-    ) -> Artifact:
-        AccessControl.require_permissions(user, frozenset({perms.UPDATE_ARTIFACT}))
-        artifact = artifact_repository.get_by_id_for_update(artifact_id)
-        if artifact is None:
-            raise ArtifactNotFoundException()
-        _assert_artifact_access(user.id, artifact, require_contributor=True)
-        artifact = artifact_repository.update(
-            artifact,
-            updated_by=user.id,
-            title=title,
-            description=description,
-            status=status,
-            change_summary=change_summary,
-        )
-        if artifact.source_chat_id:
-            chat_id = artifact.source_chat_id
-            artifact_snapshot = artifact
-            transaction.on_commit(lambda: broadcast_artifact_updated(chat_id, artifact_snapshot))
-        return artifact
-
-    @transaction.atomic
     def delete_artifact(self, user: AuthenticatedUser, artifact_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({perms.DELETE_ARTIFACT}))
         artifact = artifact_repository.get_by_id(artifact_id)
@@ -188,15 +159,9 @@ class ArtifactService:
         artifact_repository.soft_delete(artifact, deleted_by=user.id)
         logger.info("Artifact deleted", extra={"user_id": user.id, "artifact_id": artifact_id})
         if chat_id:
-            broadcast_artifact_deleted(chat_id, artifact_id, deleted_by=user.id)
-
-    def list_versions(self, user: AuthenticatedUser, artifact_id: int):
-        AccessControl.require_permissions(user, frozenset({perms.LIST_ARTIFACT_VERSIONS}))
-        artifact = artifact_repository.get_by_id(artifact_id)
-        if artifact is None:
-            raise ArtifactNotFoundException()
-        _assert_artifact_access(user.id, artifact)
-        return artifact_version_repository.list_for_artifact(artifact_id)
+            transaction.on_commit(
+                lambda: broadcast_artifact_deleted(chat_id, artifact_id, deleted_by=user.id)
+            )
 
 
 artifact_service = ArtifactService()
@@ -206,7 +171,6 @@ def create_artifact_for_content(
         *,
         user_id: int,
         artifact_type: str,
-        title: str,
         mode: str,
         source_chat_id: int,
         fragments=None,
@@ -215,8 +179,6 @@ def create_artifact_for_content(
         artifact = artifact_repository.create(
             user_id=user_id,
             type=artifact_type,
-            title=title,
-            status=Artifact.Status.FINAL,
             mode=mode,
             source_chat_id=source_chat_id,
             fragments=fragments,
@@ -240,6 +202,8 @@ def clear_chat_artifacts(chat_id: int, deleted_by: int) -> None:
     from apps.artifact_timeline.models import ArtifactTimeline
     from apps.artifact_lessons_learned.models import ArtifactLessonsLearned
     from apps.artifact_decision_brief.models import ArtifactDecisionBrief
+    from apps.artifact_document_summary.models import ArtifactDocumentSummary
+    from apps.artifact_document_action.models import ArtifactDocumentAction
 
     for content_model in (
             ArtifactMessage,
@@ -249,6 +213,8 @@ def clear_chat_artifacts(chat_id: int, deleted_by: int) -> None:
             ArtifactTimeline,
             ArtifactLessonsLearned,
             ArtifactDecisionBrief,
+            ArtifactDocumentSummary,
+            ArtifactDocumentAction,
     ):
         content_model.objects.filter(artifact__source_chat_id=chat_id).delete(deleted_by=deleted_by)
 

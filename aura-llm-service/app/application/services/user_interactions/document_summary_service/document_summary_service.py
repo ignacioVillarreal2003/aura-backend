@@ -1,13 +1,15 @@
 import logging
 from collections.abc import AsyncIterator
 from typing import Optional
-from fastapi import HTTPException, Request, status
 
-from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
+from app.application.authorization.exceptions.authorization_exceptions import UnauthorizedException
 from app.application.exceptions.app_exception import RequestValidationException
-from app.application.services.user_interactions.document_summary_service.constants.summarization_strategy import SummarizationStrategy
-from app.application.services.user_interactions.document_summary_service.document_summary_settings import DocumentSummaryServiceSettings
-from app.application.services.user_interactions.document_summary_service.document_summary_state import DocumentSummaryState
+from app.application.services.user_interactions.document_summary_service.constants.summarization_strategy import \
+    SummarizationStrategy
+from app.application.services.user_interactions.document_summary_service.document_summary_settings import \
+    DocumentSummaryServiceSettings
+from app.application.services.user_interactions.document_summary_service.document_summary_state import \
+    DocumentSummaryState
 from app.application.services.user_interactions.document_summary_service.exceptions.document_summary_service_exceptions import (
     DocumentSummaryServiceException,
 )
@@ -26,8 +28,10 @@ from app.application.services.user_interactions.document_summary_service.process
 from app.application.services.user_interactions.document_summary_service.processors.reduce_document_summary_processor.reduce_document_summary_processor import (
     ReduceDocumentSummaryProcessor,
 )
+from app.configuration.tracing import trace_generation
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.user_interactions.document_summary.document_summary_request import DocumentSummaryRequest
+from app.domain.field_limits import MAX_CONTENT_CHARS
 from app.domain.dtos.user_interactions.document_summary.document_summary_response import DocumentSummaryResponse
 from app.domain.dtos.user_interactions.document_summary.document_summary_stream_events import (
     DocumentSummaryStreamComplete,
@@ -89,6 +93,7 @@ class DocumentSummaryService(DocumentSummaryServiceInterface):
             ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
         )
 
+    @trace_generation("document_summary")
     async def execute_document_summary(
             self,
             document_summary_request: DocumentSummaryRequest,
@@ -121,6 +126,7 @@ class DocumentSummaryService(DocumentSummaryServiceInterface):
                 "Unexpected error while processing the document summary"
             ) from e
 
+    @trace_generation("document_summary_stream")
     async def execute_document_summary_stream(
             self,
             document_summary_request: DocumentSummaryRequest,
@@ -188,6 +194,8 @@ class DocumentSummaryService(DocumentSummaryServiceInterface):
             state.summary = state.summary.strip()
             if not state.summary:
                 state.summary = _STATIC_FALLBACK_MESSAGE
+            elif len(state.summary) > MAX_CONTENT_CHARS:
+                state.summary = state.summary[:MAX_CONTENT_CHARS]
 
             yield DocumentSummaryStreamComplete(
                 result=DocumentSummaryResponse(
@@ -220,14 +228,5 @@ class DocumentSummaryService(DocumentSummaryServiceInterface):
         await self._reduce_processor.run(state)
         if not state.summary.strip():
             state.summary = _STATIC_FALLBACK_MESSAGE
-
-
-async def get_document_summary_service(request: Request) -> DocumentSummaryServiceInterface:
-    try:
-        return request.app.state.document_summary_service
-    except AttributeError:
-        logger.error("DocumentSummaryService not found in application state")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="DocumentSummaryService is not available",
-        )
+        elif len(state.summary) > MAX_CONTENT_CHARS:
+            state.summary = state.summary[:MAX_CONTENT_CHARS]

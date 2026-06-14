@@ -11,5 +11,4 @@ class PostProcessFragmentServiceSettings(BaseSettings):
         extra="ignore"
     )
 
-    fragment_page_size: int = Field(default=50, ge=1, le=500)
-    max_document_ids: int = Field(default=500, ge=1, le=10000)
+    concurrency: int = Field(default=4, ge=1, le=32)

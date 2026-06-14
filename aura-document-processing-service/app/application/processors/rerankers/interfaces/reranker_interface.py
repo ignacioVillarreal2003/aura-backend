@@ -11,4 +11,3 @@ class RerankerInterface(ABC):
     ) -> list[int]:
         """Score each candidate against the query and return the indices of the
         top_n most relevant candidates sorted by descending score."""
-        pass

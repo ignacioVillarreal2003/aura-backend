@@ -3,7 +3,7 @@ import logging
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor, TimeoutError, as_completed
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional
 import pypdf
 import pytesseract
 from pdf2image import convert_from_path
@@ -21,8 +21,8 @@ from app.application.processors.readers.reader_settings import ReaderSettings
 logger = logging.getLogger(__name__)
 
 def _ocr_page_worker(
-        args: Tuple[bytes, int, str, int, str],
-) -> Tuple[int, str, Optional[str]]:
+        args: tuple[bytes, int, str, int, str],
+) -> tuple[int, str, Optional[str]]:
     import io
     import pytesseract
     from PIL import Image
@@ -245,7 +245,7 @@ class ScannedPDFReader(BaseReader):
                     try:
                         buf = io.BytesIO()
                         page.save(buf, format="PNG")
-                        payload: Tuple[bytes, int, str, int, str] = (
+                        payload: tuple[bytes, int, str, int, str] = (
                             buf.getvalue(),
                             next_page_to_submit,
                             self._settings.tesseract_lang,

@@ -10,7 +10,6 @@ from rest_framework.views import APIView
 
 from apps.artifact.audio import transcribe as _transcribe
 from apps.artifact_message.exceptions import (
-    ChatAiReplyInProgressException,
     LLMServiceException,
     MessageAccessDeniedException,
     MessageNotFoundException,
@@ -26,10 +25,9 @@ from apps.artifact_message.serializers import (
 )
 from apps.artifact_message.services.message_service import (
     ChatAIMode,
-    broadcast_chat_ai_lock_change,
     message_service,
 )
-from apps.chat.ai_reply_lock import release, try_acquire
+from apps.chat.ai_lock_guard import ai_reply_lock_guard
 from apps.chat.exceptions import ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.chat.ws_rate_limit import check_message_rate_limit, check_transcribe_rate_limit
@@ -134,8 +132,7 @@ class MessageGenerateView(APIView):
         chat_id = serializer.validated_data["chat_id"]
         mode = serializer.validated_data.get("mode", "document_question")
 
-        chat_obj = await sync_to_async(message_service.assert_send_access)(request.user, chat_id)
-        is_ephemeral = chat_obj.is_ephemeral
+        await sync_to_async(message_service.assert_send_access)(request.user, chat_id)
 
         if not await sync_to_async(check_message_rate_limit)(request.user.id, chat_id):
             return Response(
@@ -158,65 +155,27 @@ class MessageGenerateView(APIView):
         else:
             text = serializer.validated_data["message"]
 
-        lock_token = await sync_to_async(try_acquire)(chat_id)
-        if not lock_token:
-            raise ChatAiReplyInProgressException()
-
-        await sync_to_async(broadcast_chat_ai_lock_change)(chat_id, True)
         assistant = None
         assistant_error = None
         msg_data = None
-        try:
-            if is_ephemeral:
-                msg_data = {
-                    "id": None,
-                    "artifact_id": None,
-                    "chat_id": chat_id,
-                    "message": text,
-                    "sender_type": ArtifactMessage.SenderType.USER,
-                    "created_by": request.user.id,
-                    "created_at": None,
-                    "is_bookmarked": False,
-                    "user_feedback": None,
-                    "user_feedback_reason": None,
-                    "user_feedback_comment": None,
-                    "thread_reply_count": 0,
-                    "fragments": None,
-                }
-                try:
-                    turn = await message_service.run_ephemeral_ai_reply(
-                        mode, request.user, chat_id, text
-                    )
-                    assistant = {"question": turn.question, "answer": turn.answer, "fragments": turn.fragments}
-                except LLMServiceException as e:
-                    assistant_error = {"detail": e.detail}
-                except Exception:
-                    logger.exception(
-                        "Unexpected error running ephemeral AI reply.",
-                        extra={"chat_id": chat_id, "user_id": request.user.id, "mode": mode},
-                    )
-                    assistant_error = {"detail": "AI service encountered an unexpected error."}
-            else:
-                msg = await sync_to_async(message_service.send_message)(
-                    user=request.user,
-                    chat_id=chat_id,
-                    text=text,
+        async with ai_reply_lock_guard(chat_id):
+            msg = await sync_to_async(message_service.send_message)(
+                user=request.user,
+                chat_id=chat_id,
+                text=text,
+            )
+            msg_data = MessageResponse(msg).data
+            try:
+                turn = await message_service.run_ai_reply(mode, request.user, chat_id)
+                assistant = {"question": turn.question, "answer": turn.answer, "fragments": turn.fragments}
+            except LLMServiceException as e:
+                assistant_error = {"detail": e.detail}
+            except Exception:
+                logger.exception(
+                    "Unexpected error running AI reply.",
+                    extra={"chat_id": chat_id, "user_id": request.user.id, "mode": mode},
                 )
-                msg_data = MessageResponse(msg).data
-                try:
-                    turn = await message_service.run_ai_reply(mode, request.user, chat_id)
-                    assistant = {"question": turn.question, "answer": turn.answer, "fragments": turn.fragments}
-                except LLMServiceException as e:
-                    assistant_error = {"detail": e.detail}
-                except Exception:
-                    logger.exception(
-                        "Unexpected error running AI reply.",
-                        extra={"chat_id": chat_id, "user_id": request.user.id, "mode": mode},
-                    )
-                    assistant_error = {"detail": "AI service encountered an unexpected error."}
-        finally:
-            await sync_to_async(release)(chat_id, lock_token)
-            await sync_to_async(broadcast_chat_ai_lock_change)(chat_id, False)
+                assistant_error = {"detail": "AI service encountered an unexpected error."}
 
         return Response(
             {

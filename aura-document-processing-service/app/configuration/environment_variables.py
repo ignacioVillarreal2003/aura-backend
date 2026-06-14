@@ -4,6 +4,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
+_PRODUCTION_ENVIRONMENT_NAMES = frozenset({"production", "prod"})
+
 
 class EnvironmentVariables(BaseSettings):
     model_config = SettingsConfigDict(
@@ -22,7 +24,6 @@ class EnvironmentVariables(BaseSettings):
     log_level: str = Field(default="INFO")
     cors_origins: list[str] = Field(default=["*"])
     environment: str = Field(default="development")
-    service_api_key: str = Field(default="service_api_key")
 
     @field_validator(
         "log_level"
@@ -67,13 +68,12 @@ class EnvironmentVariables(BaseSettings):
     def is_development(
             self
     ) -> bool:
-        return (self.app_reload or
-                self.log_level == "DEBUG")
+        return not self.is_production()
 
     def is_production(
             self
     ) -> bool:
-        return not self.is_development()
+        return self.environment.strip().lower() in _PRODUCTION_ENVIRONMENT_NAMES
 
 
 environment_variables = EnvironmentVariables()

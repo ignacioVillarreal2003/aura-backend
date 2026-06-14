@@ -1,4 +1,3 @@
-from collections.abc import AsyncIterator
 from fastapi import APIRouter, Depends
 from starlette.responses import StreamingResponse
 
@@ -7,14 +6,14 @@ from app.api.controllers.user_interactions.report_controller.report_controller_i
 )
 from app.api.dependencies.rate_limiter import default_rate_limit, strict_rate_limit
 from app.api.openapi.common import default_error_responses
+from app.api.sse import sse_response
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.application.services.user_interactions.report_service.report_service import get_report_service
+from app.api.dependencies.app_state_services import get_report_service
 from app.application.services.user_interactions.report_service.report_service_interface import ReportServiceInterface
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.user_interactions.report.report_request import ReportGenerateRequest
 from app.domain.dtos.user_interactions.report.report_response import ReportGenerateResponse
-from app.domain.dtos.user_interactions.report.report_stream_events import ReportStreamEvent
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 
 
@@ -30,6 +29,7 @@ class ReportController(ReportControllerInterface):
             authenticated_user=authenticated_user,
             required_permissions=frozenset({Permissions.LLM_REPORT_GENERATE}),
         )
+
         return await report_service.generate(
             request=report_request,
             authenticated_user=authenticated_user,
@@ -47,22 +47,12 @@ class ReportController(ReportControllerInterface):
             required_permissions=frozenset({Permissions.LLM_REPORT_GENERATE}),
         )
 
-        async def sse_bytes() -> AsyncIterator[bytes]:
-            async for event in report_service.generate_stream(
-                    request=report_request,
-                    authenticated_user=authenticated_user,
-            ):
-                yield _fmt(event)
-
-        return StreamingResponse(
-            sse_bytes(),
-            media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+        return sse_response(
+            report_service.generate_stream(
+                request=report_request,
+                authenticated_user=authenticated_user,
+            )
         )
-
-
-def _fmt(event: ReportStreamEvent) -> bytes:
-    return f"data: {event.model_dump_json()}\n\n".encode("utf-8")
 
 
 router = APIRouter()

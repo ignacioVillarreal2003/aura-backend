@@ -1,9 +1,8 @@
 import logging
-
 from neo4j.exceptions import Neo4jError
 
 from app.domain.dtos.graph.graph_stats.graph_stats_response import GraphStatsResponse
-from app.infrastructure.persistence.graph.neo4j_manager.neo4j_manager_interface import Neo4jManagerInterface
+from app.infrastructure.persistence.graph.neo4j_manager.interfaces.neo4j_manager_interface import Neo4jManagerInterface
 from app.infrastructure.persistence.graph.repositories.graph_repository_exceptions import GraphPersistenceException
 from app.infrastructure.persistence.graph.repositories.graph_stats_repository.graph_stats_repository_interface import (
     GraphStatsRepositoryInterface,
@@ -35,16 +34,9 @@ class GraphStatsRepository(GraphStatsRepositoryInterface):
 
     async def get_stats(self) -> GraphStatsResponse:
         try:
-            async with self._neo4j_manager.session() as session:
-                by_type_result = await session.run(_COUNT_ENTITIES_BY_TYPE_CYPHER)
-                by_type_records = await by_type_result.data()
-
-                relations_result = await session.run(_COUNT_RELATIONS_CYPHER)
-                relations_record = await relations_result.single()
-
-                docs_result = await session.run(_COUNT_INDEXED_DOCUMENTS_CYPHER)
-                docs_record = await docs_result.single()
-
+            by_type_records = await self._neo4j_manager.execute_read(_COUNT_ENTITIES_BY_TYPE_CYPHER)
+            relations_records = await self._neo4j_manager.execute_read(_COUNT_RELATIONS_CYPHER)
+            docs_records = await self._neo4j_manager.execute_read(_COUNT_INDEXED_DOCUMENTS_CYPHER)
         except Neo4jError as exc:
             raise GraphPersistenceException(
                 "Failed to fetch knowledge graph statistics."
@@ -58,8 +50,8 @@ class GraphStatsRepository(GraphStatsRepositoryInterface):
             entities_by_type[entity_type] = count
             total_entities += count
 
-        total_relations = int(relations_record["total"]) if relations_record else 0
-        total_documents_indexed = int(docs_record["total"]) if docs_record else 0
+        total_relations = int(relations_records[0]["total"]) if relations_records else 0
+        total_documents_indexed = int(docs_records[0]["total"]) if docs_records else 0
 
         return GraphStatsResponse(
             total_entities=total_entities,

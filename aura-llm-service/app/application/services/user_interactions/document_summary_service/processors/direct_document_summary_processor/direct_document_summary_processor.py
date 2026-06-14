@@ -11,6 +11,7 @@ from app.application.services.user_interactions.document_summary_service.process
     DIRECT_HUMAN_PROMPT,
     DIRECT_SYSTEM_PROMPT,
 )
+from app.application.services.generation_shared.prompts.prompt_augmentation import augment_system_prompt
 from app.domain.dtos.user_interactions.document_summary.document_summary_stream_events import DocumentSummaryStreamDelta
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface import OllamaLLMInvokerInterface
@@ -37,8 +38,13 @@ class DirectDocumentSummaryProcessor:
             f"Fragmento de contexto {idx + 1}:\n{fragment.content}"
             for idx, fragment in enumerate(document_summary_state.fragments)
         )
+        system_content = augment_system_prompt(
+            DIRECT_SYSTEM_PROMPT,
+            document_summary_state.system_prompt,
+            document_summary_state.response_style,
+        )
         return [
-            SystemMessage(content=DIRECT_SYSTEM_PROMPT),
+            SystemMessage(content=system_content),
             HumanMessage(content=DIRECT_HUMAN_PROMPT.format(fragments=fragments_joined)),
         ]
 

@@ -14,7 +14,7 @@ class LessonsLearnedServiceInterface(ABC):
             request: LessonsLearnedGenerateRequest,
             authenticated_user: AuthenticatedUser,
     ) -> LessonsLearnedGenerateResponse:
-        ...
+        pass
 
     @abstractmethod
     async def generate_stream(
@@ -22,4 +22,4 @@ class LessonsLearnedServiceInterface(ABC):
             request: LessonsLearnedGenerateRequest,
             authenticated_user: AuthenticatedUser,
     ) -> AsyncIterator[LessonsLearnedStreamEvent]:
-        ...
+        pass

@@ -1,5 +1,4 @@
 from datetime import datetime
-from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from apps.chat.models.chat import Chat
@@ -8,7 +7,6 @@ from apps.chat.models.chat import Chat
 class ChatResponse(serializers.ModelSerializer):
     is_pinned = serializers.SerializerMethodField()
     archived_at = serializers.SerializerMethodField()
-    is_muted = serializers.SerializerMethodField()
 
     class Meta:
         model = Chat
@@ -18,11 +16,9 @@ class ChatResponse(serializers.ModelSerializer):
             "system_prompt",
             "response_style",
             "tags",
-            "is_ephemeral",
             "is_locked",
             "is_pinned",
             "archived_at",
-            "is_muted",
             "last_message_at",
             "created_by",
             "created_at",
@@ -38,13 +34,6 @@ class ChatResponse(serializers.ModelSerializer):
     def get_archived_at(self, obj) -> datetime | None:
         return getattr(obj, "archived_at", None)
 
-    @extend_schema_field(serializers.BooleanField())
-    def get_is_muted(self, obj) -> bool:
-        muted_until = getattr(obj, "muted_until", None)
-        if muted_until is None:
-            return False
-        return muted_until > timezone.now()
-
 
 class ChatListResponse(serializers.ModelSerializer):
     member_count = serializers.IntegerField(
@@ -57,7 +46,6 @@ class ChatListResponse(serializers.ModelSerializer):
     )
     is_pinned = serializers.SerializerMethodField()
     archived_at = serializers.SerializerMethodField()
-    is_muted = serializers.SerializerMethodField()
 
     class Meta:
         model = Chat
@@ -65,7 +53,6 @@ class ChatListResponse(serializers.ModelSerializer):
             "id",
             "name",
             "tags",
-            "is_ephemeral",
             "is_locked",
             "last_message_at",
             "created_by",
@@ -74,7 +61,6 @@ class ChatListResponse(serializers.ModelSerializer):
             "unread_count",
             "is_pinned",
             "archived_at",
-            "is_muted",
         ]
 
     @extend_schema_field(serializers.BooleanField(help_text="True if this chat is pinned for the current user."))
@@ -90,17 +76,6 @@ class ChatListResponse(serializers.ModelSerializer):
     def get_archived_at(self, obj) -> datetime | None:
         return getattr(obj, "archived_at", None)
 
-    @extend_schema_field(
-        serializers.BooleanField(
-            help_text="True if `muted_until` is set and still in the future for this user.",
-        )
-    )
-    def get_is_muted(self, obj) -> bool:
-        muted_until = getattr(obj, "muted_until", None)
-        if muted_until is None:
-            return False
-        return muted_until > timezone.now()
-
 
 class ChatManageListResponse(serializers.ModelSerializer):
     member_count = serializers.IntegerField(
@@ -114,7 +89,6 @@ class ChatManageListResponse(serializers.ModelSerializer):
             "id",
             "name",
             "tags",
-            "is_ephemeral",
             "is_locked",
             "last_message_at",
             "created_by",

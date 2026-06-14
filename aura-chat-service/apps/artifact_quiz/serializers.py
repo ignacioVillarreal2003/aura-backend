@@ -49,7 +49,6 @@ class QuizQuestionResponse(serializers.ModelSerializer):
 
 class QuizResponse(serializers.ModelSerializer):
     questions = QuizQuestionResponse(many=True)
-    title = serializers.SerializerMethodField()
     mode = serializers.SerializerMethodField()
     source_chat_id = serializers.SerializerMethodField()
 
@@ -59,6 +58,7 @@ class QuizResponse(serializers.ModelSerializer):
             "id",
             "artifact_id",
             "title",
+            "query",
             "instructions",
             "pass_score",
             "mode",
@@ -66,13 +66,8 @@ class QuizResponse(serializers.ModelSerializer):
             "source_chat_id",
             "created_by",
             "created_at",
-            "updated_by",
-            "updated_at",
         ]
         read_only_fields = fields
-
-    def get_title(self, obj) -> str:
-        return obj.artifact.title if obj.artifact_id else ""
 
     def get_mode(self, obj) -> str:
         return obj.artifact.mode if obj.artifact_id else ""
@@ -90,40 +85,8 @@ class QuizGenerateResponse(serializers.Serializer):
         return QuizResponse(obj["quiz"]).data
 
 
-class _UpdateOptionRequest(serializers.Serializer):
-    text = serializers.CharField(max_length=500)
-    is_correct = serializers.BooleanField(default=False)
-    position = serializers.IntegerField(min_value=0)
-
-
-class _UpdateQuestionRequest(serializers.Serializer):
-    text = serializers.CharField(max_length=2000)
-    kind = serializers.ChoiceField(choices=ArtifactQuizQuestion.Kind.choices)
-    explanation = serializers.CharField(default="", allow_blank=True)
-    position = serializers.IntegerField(min_value=0)
-    options = _UpdateOptionRequest(many=True, required=False, default=list)
-
-
-class UpdateQuizRequest(serializers.Serializer):
-    title = serializers.CharField(max_length=500, allow_blank=False, required=False)
-    instructions = serializers.CharField(allow_blank=True, required=False)
-    pass_score = serializers.IntegerField(min_value=0, max_value=100, required=False, allow_null=True)
-    questions = _UpdateQuestionRequest(many=True, required=False)
-
-    def validate(self, data):
-        if not data:
-            raise serializers.ValidationError("Se requiere al menos un campo a actualizar.")
-        return data
-
-    def validate_questions(self, value):
-        if len(value) > 200:
-            raise serializers.ValidationError("El cuestionario no puede superar las 200 preguntas.")
-        return value
-
-
 class QuizListResponse(serializers.ModelSerializer):
     question_count = serializers.SerializerMethodField()
-    title = serializers.SerializerMethodField()
     mode = serializers.SerializerMethodField()
     source_chat_id = serializers.SerializerMethodField()
 
@@ -141,9 +104,6 @@ class QuizListResponse(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
-
-    def get_title(self, obj) -> str:
-        return obj.artifact.title if obj.artifact_id else ""
 
     def get_mode(self, obj) -> str:
         return obj.artifact.mode if obj.artifact_id else ""

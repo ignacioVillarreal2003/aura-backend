@@ -1,14 +1,21 @@
 import logging
 from django.db import transaction
 from django.db.models import QuerySet
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
 
 from apps.chat.ai_reply_lock import release as _release_ai_lock
-from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
+from apps.chat.ai_reply_lock import try_acquire as _try_acquire_ai_lock
+from apps.chat.exceptions import (
+    ChatAccessDeniedException,
+    ChatAiReplyInProgressException,
+    ChatNotFoundException,
+)
 from apps.chat.models.chat import Chat
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.membership.repositories.membership_repository import membership_repository
+from apps.membership.models.chat_membership import ChatMembership
+from core.ws.group_broadcast import send_to_chat_group
+from core.clients.document_processing_client import document_processing_client
+from core.clients.notification_client import notification_client
 from apps.chat.repositories.share_link_repository import share_link_repository
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization import AccessControl
@@ -24,7 +31,6 @@ from core.authorization.permissions import (
     LOCK_CHAT,
     MANAGE_CHATS,
     MARK_CHAT_AS_READ,
-    MUTE_CHAT,
     PIN_CHAT,
     UNARCHIVE_CHAT,
     UPDATE_CHAT,
@@ -34,20 +40,18 @@ logger = logging.getLogger(__name__)
 
 
 def _broadcast_chat_locked_changed(chat_id: int, is_locked: bool, by: int) -> None:
-    channel_layer = get_channel_layer()
-    if channel_layer is None:
-        return
-    try:
-        async_to_sync(channel_layer.group_send)(
-            f"chat_{chat_id}",
-            {"type": "chat_locked_changed", "is_locked": is_locked, "by": by},
-        )
-    except Exception:
-        logger.warning(
-            "Failed to broadcast lock change for chat %d",
-            chat_id,
-            exc_info=True,
-        )
+    send_to_chat_group(
+        chat_id,
+        {"type": "chat_locked_changed", "is_locked": is_locked, "by": by},
+    )
+
+
+def _broadcast_chat_content_cleared(chat_id: int, by: int) -> None:
+    send_to_chat_group(chat_id, {"type": "chat_content_cleared", "by": by})
+
+
+def _broadcast_chat_deleted(chat_id: int, by: int) -> None:
+    send_to_chat_group(chat_id, {"type": "chat_deleted", "by": by})
 
 
 class ChatService:
@@ -67,8 +71,8 @@ class ChatService:
         membership_repository.create(
             member_id=user.id,
             chat_id=chat.id,
-            status="active",
-            role="owner",
+            status=ChatMembership.Status.ACTIVE,
+            role=ChatMembership.Role.OWNER,
             created_by=user.id,
         )
 
@@ -87,7 +91,6 @@ class ChatService:
 
         setattr(chat, "pinned_at", membership.pinned_at)
         setattr(chat, "archived_at", membership.archived_at)
-        setattr(chat, "muted_until", membership.muted_until)
 
         return chat
 
@@ -163,7 +166,15 @@ class ChatService:
         membership_repository.soft_delete_by_chat(chat_id, deleted_by=user.id)
         clear_chat_artifacts(chat_id, deleted_by=user.id)
         chat_repository.soft_delete(chat, deleted_by=user.id)
+        # The documents uploaded to this chat live in the document-processing
+        # service; ask it to soft-delete them once our own deletion commits.
+        transaction.on_commit(
+            lambda: document_processing_client.delete_documents_by_chat(chat_id, user)
+        )
         transaction.on_commit(lambda: _release_ai_lock(chat_id))
+        # Tell every connected member the chat is gone so their sockets can close
+        # instead of lingering subscribed to a dead group.
+        transaction.on_commit(lambda: _broadcast_chat_deleted(chat_id, user.id))
         logger.info("Chat deleted.", extra={"chat_id": chat_id, "user_id": user.id})
 
     def list_archived_chats(
@@ -230,6 +241,19 @@ class ChatService:
             self._require_owner_or_creator(chat, user, "lock")
             chat_repository.update(chat, updated_by=user.id, is_locked=True)
         _broadcast_chat_locked_changed(chat_id, is_locked=True, by=user.id)
+        recipient_ids = [
+            member_id
+            for member_id in membership_repository.get_active_member_ids(chat_id)
+            if member_id != user.id
+        ]
+        if recipient_ids:
+            notification_client.emit_event(
+                event_type="chat.locked",
+                recipient_ids=recipient_ids,
+                actor_id=user.id,
+                actor_name=user.username or user.email,
+                context={"chat_id": chat_id, "chat_name": chat.name},
+            )
         logger.info("Chat locked.", extra={"chat_id": chat_id, "user_id": user.id})
 
     def unlock_chat(self, user: AuthenticatedUser, chat_id: int) -> None:
@@ -243,27 +267,6 @@ class ChatService:
         _broadcast_chat_locked_changed(chat_id, is_locked=False, by=user.id)
         logger.info("Chat unlocked.", extra={"chat_id": chat_id, "user_id": user.id})
 
-    def mute_chat(self, user: AuthenticatedUser, chat_id: int, muted_until) -> None:
-        AccessControl.require_permissions(user, frozenset({MUTE_CHAT}))
-        chat = chat_repository.get_by_id(chat_id)
-        if chat is None:
-            raise ChatNotFoundException()
-        if not membership_repository.is_active_member(chat_id=chat_id, member_id=user.id):
-            raise ChatAccessDeniedException()
-        membership_repository.mute(chat_id=chat_id, member_id=user.id, muted_until=muted_until)
-        logger.info("Chat muted.", extra={"chat_id": chat_id, "user_id": user.id})
-
-    def unmute_chat(self, user: AuthenticatedUser, chat_id: int) -> None:
-        AccessControl.require_permissions(user, frozenset({MUTE_CHAT}))
-        chat = chat_repository.get_by_id(chat_id)
-        if chat is None:
-            raise ChatNotFoundException()
-        if not membership_repository.is_active_member(chat_id=chat_id, member_id=user.id):
-            raise ChatAccessDeniedException()
-        membership_repository.unmute(chat_id=chat_id, member_id=user.id)
-        logger.info("Chat unmuted.", extra={"chat_id": chat_id, "user_id": user.id})
-
-    @transaction.atomic
     def clear_content(self, user: AuthenticatedUser, chat_id: int) -> None:
         from apps.artifact.services.artifact_service import clear_chat_artifacts
 
@@ -274,7 +277,22 @@ class ChatService:
         if not membership_repository.is_chat_owner(chat_id, user.id):
             from apps.artifact_message.exceptions import NotChatOwnerException
             raise NotChatOwnerException()
-        clear_chat_artifacts(chat_id, deleted_by=user.id)
+
+        # Hold the per-chat AI reply lock while clearing so an in-flight
+        # generation cannot re-create a message right after we wipe the history.
+        lock_token = _try_acquire_ai_lock(chat_id)
+        if not lock_token:
+            raise ChatAiReplyInProgressException(
+                detail="Cannot clear history while the assistant is replying. Try again shortly."
+            )
+        try:
+            with transaction.atomic():
+                clear_chat_artifacts(chat_id, deleted_by=user.id)
+                transaction.on_commit(
+                    lambda: _broadcast_chat_content_cleared(chat_id, user.id)
+                )
+        finally:
+            _release_ai_lock(chat_id, lock_token)
         logger.info("Chat content cleared.", extra={"chat_id": chat_id, "user_id": user.id})
 
     def mark_as_read(self, user: AuthenticatedUser, chat_id: int) -> None:

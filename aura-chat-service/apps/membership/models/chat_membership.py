@@ -28,7 +28,6 @@ class ChatMembership(AuditModel, SoftDeleteModel):
     pinned_at = models.DateTimeField(null=True, blank=True)
     archived_at = models.DateTimeField(null=True, blank=True)
     last_read_at = models.DateTimeField(null=True, blank=True)
-    muted_until = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         managed = False

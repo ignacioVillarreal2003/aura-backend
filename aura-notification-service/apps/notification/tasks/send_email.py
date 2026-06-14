@@ -8,7 +8,7 @@ from django.core.mail import EmailMultiAlternatives
 from django.utils import timezone
 
 from apps.notification.events import get_event
-from apps.notification.models import DispatchStatus, NotificationDispatch
+from apps.notification.models import EmailDispatch, EmailDispatchStatus
 from apps.notification.services.auth_lookup import lookup_recipient
 from apps.notification.services.template_service import template_service
 
@@ -35,15 +35,15 @@ def send_email_dispatch(
     receiver_id: int,
     context: dict,
 ):
-    dispatch = NotificationDispatch.objects.filter(pk=dispatch_id).first()
+    dispatch = EmailDispatch.objects.filter(pk=dispatch_id).first()
     if dispatch is None:
-        logger.error("Dispatch row %s vanished before send.", dispatch_id)
+        logger.error("Email dispatch row %s vanished before send.", dispatch_id)
         return "missing_dispatch_row"
 
-    if dispatch.status in (DispatchStatus.SENT, DispatchStatus.FAILED):
+    if dispatch.status in (EmailDispatchStatus.SENT, EmailDispatchStatus.FAILED):
         return f"already_{dispatch.status}"
 
-    NotificationDispatch.objects.filter(pk=dispatch_id).update(
+    EmailDispatch.objects.filter(pk=dispatch_id).update(
         attempt=(dispatch.attempt or 0) + 1,
     )
 
@@ -82,8 +82,8 @@ def send_email_dispatch(
             is_last_attempt,
             exc,
         )
-        NotificationDispatch.objects.filter(pk=dispatch_id).update(
-            status=DispatchStatus.FAILED if is_last_attempt else DispatchStatus.PENDING,
+        EmailDispatch.objects.filter(pk=dispatch_id).update(
+            status=EmailDispatchStatus.FAILED if is_last_attempt else EmailDispatchStatus.PENDING,
             error=str(exc)[:500] if is_last_attempt else None,
         )
         raise
@@ -93,14 +93,14 @@ def send_email_dispatch(
             dispatch_id,
             exc,
         )
-        NotificationDispatch.objects.filter(pk=dispatch_id).update(
-            status=DispatchStatus.FAILED,
+        EmailDispatch.objects.filter(pk=dispatch_id).update(
+            status=EmailDispatchStatus.FAILED,
             error=str(exc)[:500],
         )
         raise
 
-    NotificationDispatch.objects.filter(pk=dispatch_id).update(
-        status=DispatchStatus.SENT,
+    EmailDispatch.objects.filter(pk=dispatch_id).update(
+        status=EmailDispatchStatus.SENT,
         sent_at=timezone.now(),
         error=None,
     )
@@ -108,7 +108,7 @@ def send_email_dispatch(
 
 
 def _mark_failed(dispatch_id: int, reason: str) -> None:
-    NotificationDispatch.objects.filter(pk=dispatch_id).update(
-        status=DispatchStatus.FAILED,
+    EmailDispatch.objects.filter(pk=dispatch_id).update(
+        status=EmailDispatchStatus.FAILED,
         error=reason,
     )

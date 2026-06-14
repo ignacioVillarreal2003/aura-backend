@@ -10,17 +10,14 @@ Extended **Spanish** API guide (architecture, auth modes, endpoints, producers, 
 ## Capabilities
 
 - REST API under `/api/v1/`.
-- Per-user inbox: list / mark read / archive / soft delete / unread
-  count / mark-all-read.
-- Per-user preferences: global mute, mute-until, quiet hours and a
-  per `(event_type, channel)` opt-in/opt-out matrix.
+- Per-user inbox: list / mark read / soft delete / unread count /
+  mark-all-read.
+- Per-user preferences: global in-app/email toggles and mute-until.
 - Catalogue of supported event types (publicly readable so the frontend
   can render the preferences screen without hard-coding metadata).
 - Internal `POST /api/v1/internal/events/` used by other services.
 - Back-compat `POST /api/internal/notification/admin-create/` kept so
   `aura-auth-service` keeps working without changes.
-- Idempotency via `event_key` (partial unique index on
-  `(receiver_id, event_key)` for active rows).
 - Email rendering through Django templates per event type
   (`apps/notification/templates/notifications/<template_id>/`).
 - Email dispatch via Celery + RabbitMQ with exponential-backoff retries.
@@ -38,7 +35,7 @@ producer (chat / auth / docs)
         ▼
   aura-notification-service (gunicorn)
         │ resolves preferences + templates
-        ├──► Postgres aura_db (notification, dispatch, preferences)
+        ├──► Postgres aura_db (notification, email_dispatch, notification_preference)
         ├──► Redis pub/sub (notif:user:{id})  ──► SSE stream  ──► Frontend
         └──► RabbitMQ ──► Celery worker ──► SMTP
 ```
@@ -52,14 +49,12 @@ producer (chat / auth / docs)
 | GET    | `/api/v1/notifications/` | Paginated inbox |
 | GET    | `/api/v1/notifications/unread-count/` | `{count}` |
 | GET    | `/api/v1/notifications/{id}/` | Detail |
-| PATCH  | `/api/v1/notifications/{id}/` | `{status: read | unread | archived}` |
+| PATCH  | `/api/v1/notifications/{id}/` | `{status: read | unread}` |
 | DELETE | `/api/v1/notifications/{id}/` | Soft delete |
 | POST   | `/api/v1/notifications/mark-all-read/` | `{until_id?: int}` |
 | GET    | `/api/v1/notifications/stream/` | SSE stream |
 | GET    | `/api/v1/me/notification-preferences/` | Global preferences |
 | PUT    | `/api/v1/me/notification-preferences/` | Update global prefs |
-| GET    | `/api/v1/me/notification-preferences/event-types/` | Event-type matrix |
-| PUT    | `/api/v1/me/notification-preferences/event-types/{event_type}/` | Toggle channel(s) |
 
 ### Public (no auth)
 
@@ -87,7 +82,6 @@ and template files under `apps/notification/templates/notifications/<template_id
 | ---------------------------------- | ---------------- | ----------- | ----------- |
 | `chat.member.invited`              | inapp            | yes         | `chat_member_invited` |
 | `chat.member.removed`              | inapp            | yes         | `chat_member_removed` |
-| `chat.message.mentioned`           | inapp            | yes         | `chat_message_mentioned` |
 | `chat.locked`                      | inapp            | yes         | `chat_locked` |
 | `auth.password.changed`            | inapp + email    | **no**      | `auth_password_changed` |
 | `auth.new_login`                   | email            | yes         | `auth_new_login` |
@@ -116,7 +110,6 @@ X-Internal-Token: dev-notification-internal-token
     "chat_name": "Operación X",
     "recipient_email": "lopez@faa.mil.ar"
   },
-  "idempotency_key": "chat-42-invite-12-2026-05-09",
   "link_url": "https://app.local/chats/42"
 }
 ```
@@ -129,17 +122,8 @@ to look it up.
 ## Schema
 
 The Django models are `managed = False`; the schema lives in
-[`sql/schema.sql`](sql/schema.sql) and is **idempotent** (`IF NOT EXISTS`
-everywhere). Apply it once on the existing database:
-
-```bash
-psql -h 127.0.0.1 -U aura_root -d aura_db \
-     -f aura-notification-service/sql/schema.sql
-```
-
-For brand-new clusters the same delta is captured here too — you can
-either re-run this file after `docker compose up -d aura_db`, or eventually
-fold it back into `docker/database/aura-db/init.sql` (separate PR).
+[`docker/database/aura-db/notification.sql`](../docker/database/aura-db/notification.sql).
+Apply it on the existing database as part of the aura-db init scripts.
 
 ## Local dev
 
@@ -150,8 +134,8 @@ cd aura-notification-service
 python -m venv .venv && .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 
-# 2. apply the schema
-psql -h 127.0.0.1 -U aura_root -d aura_db -f sql/schema.sql
+# 2. apply the schema (from repo root)
+psql -h 127.0.0.1 -U aura_root -d aura_db -f docker/database/aura-db/notification.sql
 
 # 3. run the API
 python manage.py runserver 0.0.0.0:8004
@@ -215,4 +199,4 @@ The notification tables span service boundaries (read by
 `aura-auth-service` admin) and the project chose a single source of
 truth in SQL. `MIGRATION_MODULES` disables Django migrations for the
 local app and every model declares `managed = False`. The accompanying
-[`sql/schema.sql`](sql/schema.sql) is the operational source of truth.
+[`docker/database/aura-db/notification.sql`](../docker/database/aura-db/notification.sql) is the operational source of truth.

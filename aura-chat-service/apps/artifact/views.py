@@ -12,8 +12,6 @@ from apps.artifact.serializers import (
     ArtifactListResponse,
     ArtifactResponse,
     ArtifactSummaryResponse,
-    ArtifactVersionResponse,
-    UpdateArtifactRequest,
 )
 from apps.artifact.services.artifact_service import artifact_service
 from core.openapi.common import standard_error_responses
@@ -145,28 +143,6 @@ class ArtifactDetailView(APIView):
 
     @extend_schema(
         tags=["Artifacts"],
-        summary="Actualizar artefacto",
-        description="Actualiza título/descripción/estado. Cada cambio incrementa la versión y agrega una entrada al historial.",
-        parameters=[_ID_PARAM],
-        request=UpdateArtifactRequest,
-        responses={200: ArtifactResponse, **standard_error_responses(400, 401, 403, 404)},
-    )
-    def patch(self, request: Request, artifact_id: int) -> Response:
-        serializer = UpdateArtifactRequest(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        d = serializer.validated_data
-        artifact = artifact_service.update_artifact(
-            user=request.user,
-            artifact_id=artifact_id,
-            title=d.get("title"),
-            description=d.get("description"),
-            status=d.get("status"),
-            change_summary=d.get("change_summary", ""),
-        )
-        return Response(ArtifactResponse(artifact).data)
-
-    @extend_schema(
-        tags=["Artifacts"],
         summary="Eliminar artefacto",
         description="Elimina suavemente el artefacto. Solo el creador o un miembro activo con rol owner/editor del chat de origen.",
         parameters=[_ID_PARAM],
@@ -175,17 +151,3 @@ class ArtifactDetailView(APIView):
     def delete(self, request: Request, artifact_id: int) -> Response:
         artifact_service.delete_artifact(user=request.user, artifact_id=artifact_id)
         return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-class ArtifactVersionsView(APIView):
-    @extend_schema(
-        tags=["Artifacts"],
-        summary="Listar versiones de un artefacto",
-        parameters=[_ID_PARAM],
-        responses={200: ArtifactVersionResponse(many=True), **standard_error_responses(401, 403, 404)},
-    )
-    def get(self, request: Request, artifact_id: int) -> Response:
-        queryset = artifact_service.list_versions(user=request.user, artifact_id=artifact_id)
-        paginator = StandardPagination()
-        page = paginator.paginate_queryset(queryset, request)
-        return paginator.get_paginated_response(ArtifactVersionResponse(page, many=True).data)

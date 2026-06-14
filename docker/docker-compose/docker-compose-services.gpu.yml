@@ -108,7 +108,7 @@ services:
     ports:
       - "8003:8000"
     env_file:
-      - ../../aura-chat-service/.env.docker
+      - ../../aura-chat-service/env/.env.docker
     environment:
       HF_TOKEN: ${HF_TOKEN:-}
     depends_on:
@@ -123,7 +123,7 @@ services:
       start_period: 300s
     restart: on-failure
     volumes:
-      - chat_hf_cache:/app/.cache/huggingface
+      - huggingface_cache:/app/.cache/huggingface
 
   aura-notification-service:
     build: ../../aura-notification-service
@@ -206,11 +206,14 @@ services:
       NVIDIA_VISIBLE_DEVICES: all
       OLLAMA_GPU_OVERHEAD: 0
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434"]
-      interval: 60s
-      timeout: 10s
+      # healthcheck.sh also verifies the required models are present, so
+      # dependent services wait until models finish pulling. The long
+      # start_period covers the first-ever pull on a slow connection.
+      test: ["CMD", "/healthcheck.sh"]
+      interval: 30s
+      timeout: 15s
       retries: 10
-      start_period: 30s
+      start_period: 1800s
 
   neo4j:
     image: neo4j:5-community
@@ -241,4 +244,3 @@ volumes:
   neo4j_data:
   neo4j_logs:
   huggingface_cache:
-  chat_hf_cache:

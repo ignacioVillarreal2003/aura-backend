@@ -18,7 +18,7 @@ def standard_error_responses(*status_codes: int) -> dict[int, OpenApiResponse]:
         401: "Not authenticated: missing or invalid credentials.",
         403: "Forbidden: authenticated but lacking permissions.",
         404: "Resource not found.",
-        409: "Conflict (e.g. duplicate idempotency key).",
+        409: "Conflict.",
         429: "Too many requests — rate limit exceeded.",
         503: "Dependency service temporarily unavailable.",
     }

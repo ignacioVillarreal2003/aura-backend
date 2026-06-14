@@ -4,7 +4,7 @@ from neo4j.exceptions import Neo4jError
 
 from app.domain.constants.graph.entity_type import EntityType
 from app.domain.dtos.graph.graph_path.graph_path_response import GraphPath
-from app.infrastructure.persistence.graph.neo4j_manager.neo4j_manager_interface import Neo4jManagerInterface
+from app.infrastructure.persistence.graph.neo4j_manager.interfaces.neo4j_manager_interface import Neo4jManagerInterface
 from app.infrastructure.persistence.graph.repositories.graph_path_repository.graph_path_repository_interface import (
     GraphPathRepositoryInterface,
 )

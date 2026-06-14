@@ -1,11 +1,10 @@
 import json
 import logging
 from typing import Optional
-from fastapi import HTTPException, Request, status
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
 
-from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
+from app.application.authorization.exceptions.authorization_exceptions import UnauthorizedException
 from app.application.exceptions.app_exception import RequestValidationException
 from app.application.services.processing.graph_query_translation_service.exceptions.graph_query_translation_service_exceptions import (
     GraphQueryTranslationServiceException,
@@ -55,7 +54,7 @@ class GraphQueryTranslationService(GraphQueryTranslationServiceInterface):
         self._ollama_llm_facade = ollama_llm_facade
         self._ollama_llm_invoker = ollama_llm_invoker
         self._graph_query_translation_settings = (
-            graph_query_translation_service_settings or GraphQueryTranslationServiceSettings()
+                graph_query_translation_service_settings or GraphQueryTranslationServiceSettings()
         )
 
     async def translate_graph_query(
@@ -176,11 +175,11 @@ class GraphQueryTranslationService(GraphQueryTranslationServiceInterface):
         return raw, llm_input
 
     async def _invoke_repair(
-        self,
-        original_llm_input: list,
-        malformed_output: str,
-        parse_error: str,
-        user_id: int,
+            self,
+            original_llm_input: list,
+            malformed_output: str,
+            parse_error: str,
+            user_id: int,
     ) -> str:
         repair_message = HumanMessage(
             content=REPAIR_PROMPT.format(
@@ -227,14 +226,3 @@ class GraphQueryTranslationService(GraphQueryTranslationServiceInterface):
                 "La respuesta del modelo no tiene el formato JSON esperado.",
                 status_code=502,
             ) from e
-
-
-async def get_graph_query_translation_service(request: Request) -> GraphQueryTranslationServiceInterface:
-    try:
-        return request.app.state.graph_query_translation_service
-    except AttributeError:
-        logger.error("GraphQueryTranslationService not found in application state")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="GraphQueryTranslationService is not available",
-        )

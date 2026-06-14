@@ -1,0 +1,4 @@
+target-version = "py313"
+[lint.per-file-ignores]
+"aura_chat_service/settings/*" = ["F403", "F405"]
+"aura_chat_service/asgi.py" = ["E402"]

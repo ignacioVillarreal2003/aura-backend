@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.message import Message
 from app.domain.field_limits import MAX_HISTORY_MESSAGES, MAX_ID, MAX_INSTRUCTION_CHARS, MAX_MESSAGES_IN_REQUEST
+from app.domain.validation import stripped_non_blank
 
 
 class GeneralChatMode(StrEnum):
@@ -47,6 +48,12 @@ class GeneralChatRequest(BaseModel):
         max_length=MAX_INSTRUCTION_CHARS,
         description="System prompt personalizado. Si no se provee se usa el prompt por defecto de AURA.",
     )
+    response_style: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        max_length=MAX_INSTRUCTION_CHARS,
+        description="Estilo de respuesta esperado por el operador.",
+    )
 
     @field_validator("document_ids")
     @classmethod
@@ -55,6 +62,13 @@ class GeneralChatRequest(BaseModel):
             raise ValueError("Cada document_id debe ser un entero positivo.")
         return value
 
+    @field_validator("system_prompt")
+    @classmethod
+    def _strip_system_prompt(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        return stripped_non_blank(value, "system_prompt no puede estar vacío si se provee.")
+
     @model_validator(mode="after")
     def validate_request(self) -> "GeneralChatRequest":
         if self.messages[-1].role != MessageRole.human:
@@ -62,12 +76,6 @@ class GeneralChatRequest(BaseModel):
         history_count = len(self.messages) - 1
         if history_count > MAX_HISTORY_MESSAGES:
             raise ValueError(f"El historial no puede superar {MAX_HISTORY_MESSAGES} mensajes.")
-        if self.system_prompt is not None:
-            stripped = self.system_prompt.strip()
-            if not stripped:
-                raise ValueError("system_prompt no puede estar vacío si se provee.")
-            if stripped != self.system_prompt:
-                return self.model_copy(update={"system_prompt": stripped})
         return self
 
     model_config = {"frozen": True}

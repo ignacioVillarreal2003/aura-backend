@@ -1,6 +1,5 @@
 import logging
 from typing import Optional
-from django.db import transaction
 from django.db.models import Count
 from django.db.models.query import Prefetch
 
@@ -19,16 +18,16 @@ def _with_counts(qs):
     return qs.select_related("artifact").annotate(option_count=Count("options", distinct=True))
 
 
-def _bulk_create_options(decision_brief_id: int, options: list) -> None:
+def _bulk_create_options(decision_brief_id: int, options: list, created_by: int) -> None:
     option_objs = [
         ArtifactDecisionBriefOption(
             decision_brief_id=decision_brief_id,
             title=opt["title"],
-            description=str(opt.get("description", "")),
             pros=str(opt.get("pros", "")),
             cons=str(opt.get("cons", "")),
             is_recommended=bool(opt.get("is_recommended", False)),
             position=opt["position"],
+            created_by=created_by,
         )
         for opt in options
     ]
@@ -47,6 +46,8 @@ class DecisionBriefRepository:
             risks: str = "",
             recommendation: str = "",
             artifact_id: int,
+            title: str = "",
+            query: str = "",
     ) -> ArtifactDecisionBrief:
         brief = ArtifactDecisionBrief.objects.create(
             created_by=user_id,
@@ -55,8 +56,10 @@ class DecisionBriefRepository:
             risks=risks,
             recommendation=recommendation,
             artifact_id=artifact_id,
+            title=title,
+            query=query,
         )
-        _bulk_create_options(brief.id, options)
+        _bulk_create_options(brief.id, options, created_by=user_id)
         return _with_prefetch(ArtifactDecisionBrief.objects.filter(id=brief.id)).first()
 
     def get_by_id(self, decision_brief_id: int) -> Optional[ArtifactDecisionBrief]:
@@ -74,40 +77,6 @@ class DecisionBriefRepository:
 
     def list_all(self):
         return _with_counts(ArtifactDecisionBrief.objects.all())
-
-    @transaction.atomic
-    def update(
-            self,
-            brief: ArtifactDecisionBrief,
-            *,
-            updated_by: int,
-            problem: Optional[str] = None,
-            context: Optional[str] = None,
-            risks: Optional[str] = None,
-            recommendation: Optional[str] = None,
-            options: Optional[list] = None,
-    ) -> ArtifactDecisionBrief:
-        update_fields = []
-        for field, value in (
-                ("problem", problem),
-                ("context", context),
-                ("risks", risks),
-                ("recommendation", recommendation),
-        ):
-            if value is not None:
-                setattr(brief, field, value)
-                update_fields.append(field)
-        if options is not None:
-            ArtifactDecisionBriefOption.objects.filter(decision_brief_id=brief.id).delete()
-            _bulk_create_options(brief.id, options)
-        if update_fields:
-            brief.updated_by = updated_by
-            update_fields.append("updated_by")
-            brief.save(update_fields=update_fields)
-        elif options is not None:
-            brief.updated_by = updated_by
-            brief.save(update_fields=["updated_by"])
-        return _with_prefetch(ArtifactDecisionBrief.objects.filter(id=brief.id)).first()
 
     def soft_delete(self, brief: ArtifactDecisionBrief, deleted_by: int) -> None:
         brief.delete(deleted_by=deleted_by)

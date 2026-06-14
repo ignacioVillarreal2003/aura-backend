@@ -1,15 +1,11 @@
 """
 Tests for user preference endpoints:
   GET /PUT /api/v1/me/notification-preferences/
-  GET     /api/v1/me/notification-preferences/event-types/
-  PUT     /api/v1/me/notification-preferences/event-types/<event_type>/
 """
 import pytest
 from unittest.mock import patch
 
 from core.authorization.permissions import (
-    NOTIFICATION_PREFERENCES_EVENT_TYPE_PUT,
-    NOTIFICATION_PREFERENCES_EVENT_TYPES_GET,
     NOTIFICATION_PREFERENCES_GLOBAL_GET,
     NOTIFICATION_PREFERENCES_GLOBAL_PUT,
 )
@@ -42,7 +38,6 @@ class TestGlobalPreferenceGetView:
         assert response.data["mute_until"] is None
 
     def test_returns_defaults_when_user_has_no_saved_preferences(self, api_client, auth_headers, make_preference):
-        # Service returns an unsaved model instance with defaults
         defaults = make_preference(inapp_enabled=True, email_enabled=True, mute_until=None)
         with patch(_PREFS_SVC) as svc:
             svc.get_global.return_value = defaults
@@ -149,192 +144,3 @@ class TestGlobalPreferencePutView:
             )
 
         assert response.status_code == 200
-
-
-class TestEventPreferenceListView:
-    URL = "/api/v1/me/notification-preferences/event-types/"
-
-    def test_returns_401_without_auth(self, api_client):
-        assert api_client.get(self.URL).status_code == 401
-
-    def test_returns_403_when_permission_missing(self, api_client, auth_headers):
-        response = api_client.get(self.URL, **auth_headers(permissions=["WRONG_PERM"]))
-        assert response.status_code == 403
-
-    def test_returns_full_event_catalogue_with_channel_states(self, api_client, auth_headers):
-        catalogue = [
-            {
-                "event_type": "chat.member.invited",
-                "type": "event",
-                "severity": "info",
-                "description": "You were invited to a chat.",
-                "default_channels": ["inapp"],
-                "available_channels": ["inapp", "email"],
-                "is_silenceable": True,
-                "channels": {"inapp": True, "email": False},
-            }
-        ]
-        with patch(_PREFS_SVC) as svc:
-            svc.event_catalogue_for.return_value = catalogue
-            response = api_client.get(
-                self.URL,
-                **auth_headers(user_id=42, permissions=[NOTIFICATION_PREFERENCES_EVENT_TYPES_GET]),
-            )
-
-        assert response.status_code == 200
-        assert len(response.data) == 1
-        entry = response.data[0]
-        assert entry["event_type"] == "chat.member.invited"
-        assert "channels" in entry
-        svc.event_catalogue_for.assert_called_once_with(42)
-
-    def test_returns_all_registered_events_when_no_overrides(self, api_client, auth_headers):
-        from apps.notification.events import iter_events
-        expected_count = sum(1 for _ in iter_events())
-
-        with patch(_PREFS_SVC) as svc:
-            # Use the real catalogue builder without mocking (no DB, just registry)
-            from apps.notification.services.preference_service import PreferenceService
-            real_svc = PreferenceService()
-            svc.event_catalogue_for.side_effect = lambda uid: real_svc.event_catalogue_for.__func__(
-                real_svc, uid
-            )
-            # Override event_override_map to return empty (no DB)
-            with patch.object(real_svc, "event_override_map", return_value={}):
-                svc.event_catalogue_for.side_effect = lambda uid: real_svc.event_catalogue_for(uid)
-                with patch(
-                    "apps.notification.services.preference_service.PreferenceService.event_override_map",
-                    return_value={},
-                ):
-                    # Simplest: just patch the service to use a real call
-                    pass
-
-        # Simpler version: just verify the service is called and response is a list
-        with patch(_PREFS_SVC) as svc:
-            svc.event_catalogue_for.return_value = [{}] * expected_count
-            response = api_client.get(
-                self.URL,
-                **auth_headers(permissions=[NOTIFICATION_PREFERENCES_EVENT_TYPES_GET]),
-            )
-
-        assert response.status_code == 200
-        assert len(response.data) == expected_count
-
-
-class TestEventPreferenceDetailView:
-    def url(self, event_type="chat.member.invited"):
-        return f"/api/v1/me/notification-preferences/event-types/{event_type}/"
-
-    def test_returns_401_without_auth(self, api_client):
-        assert api_client.put(self.url(), {"inapp_enabled": True}, format="json").status_code == 401
-
-    def test_returns_403_when_permission_missing(self, api_client, auth_headers):
-        response = api_client.put(
-            self.url(), {"inapp_enabled": True}, format="json",
-            **auth_headers(permissions=["WRONG_PERM"]),
-        )
-        assert response.status_code == 403
-
-    def test_unknown_event_type_returns_404(self, api_client, auth_headers):
-        response = api_client.put(
-            self.url("totally.unknown.event"),
-            {"inapp_enabled": False},
-            format="json",
-            **auth_headers(permissions=[NOTIFICATION_PREFERENCES_EVENT_TYPE_PUT]),
-        )
-
-        assert response.status_code == 404
-        assert response.data["error"] == "event_type_not_found"
-
-    def test_no_field_provided_returns_400(self, api_client, auth_headers):
-        with patch(_PREFS_SVC):
-            response = api_client.put(
-                self.url(), {}, format="json",
-                **auth_headers(permissions=[NOTIFICATION_PREFERENCES_EVENT_TYPE_PUT]),
-            )
-
-        assert response.status_code == 400
-
-    def test_disables_inapp_for_specific_event(self, api_client, auth_headers):
-        import types as t
-        from unittest.mock import MagicMock
-        mock_row = MagicMock()
-
-        with patch(_PREFS_SVC) as svc:
-            svc.set_event_preference.return_value = mock_row
-            svc.event_override_map.return_value = {("chat.member.invited", "inapp"): False}
-            response = api_client.put(
-                self.url("chat.member.invited"),
-                {"inapp_enabled": False},
-                format="json",
-                **auth_headers(user_id=42, permissions=[NOTIFICATION_PREFERENCES_EVENT_TYPE_PUT]),
-            )
-
-        assert response.status_code == 200
-        # service called with the correct channel and enabled flag
-        svc.set_event_preference.assert_called_once_with(
-            user_id=42,
-            event_type="chat.member.invited",
-            channel="inapp",
-            enabled=False,
-            updated_by=42,
-        )
-
-    def test_enables_email_for_specific_event(self, api_client, auth_headers):
-        from unittest.mock import MagicMock
-        mock_row = MagicMock()
-
-        with patch(_PREFS_SVC) as svc:
-            svc.set_event_preference.return_value = mock_row
-            svc.event_override_map.return_value = {("chat.member.invited", "email"): True}
-            response = api_client.put(
-                self.url("chat.member.invited"),
-                {"email_enabled": True},
-                format="json",
-                **auth_headers(user_id=42, permissions=[NOTIFICATION_PREFERENCES_EVENT_TYPE_PUT]),
-            )
-
-        assert response.status_code == 200
-        svc.set_event_preference.assert_called_once_with(
-            user_id=42,
-            event_type="chat.member.invited",
-            channel="email",
-            enabled=True,
-            updated_by=42,
-        )
-
-    def test_updates_both_channels_at_once(self, api_client, auth_headers):
-        from unittest.mock import MagicMock, call
-
-        with patch(_PREFS_SVC) as svc:
-            svc.set_event_preference.return_value = MagicMock()
-            svc.event_override_map.return_value = {}
-            response = api_client.put(
-                self.url("chat.member.invited"),
-                {"inapp_enabled": True, "email_enabled": False},
-                format="json",
-                **auth_headers(user_id=42, permissions=[NOTIFICATION_PREFERENCES_EVENT_TYPE_PUT]),
-            )
-
-        assert response.status_code == 200
-        assert svc.set_event_preference.call_count == 2
-
-    def test_response_includes_effective_channel_states(self, api_client, auth_headers):
-        from unittest.mock import MagicMock
-
-        with patch(_PREFS_SVC) as svc:
-            svc.set_event_preference.return_value = MagicMock()
-            # User disabled email for this event
-            svc.event_override_map.return_value = {
-                ("chat.member.invited", "email"): False,
-            }
-            response = api_client.put(
-                self.url("chat.member.invited"),
-                {"email_enabled": False},
-                format="json",
-                **auth_headers(permissions=[NOTIFICATION_PREFERENCES_EVENT_TYPE_PUT]),
-            )
-
-        assert response.status_code == 200
-        assert "channels" in response.data
-        assert response.data["channels"]["email"] is False

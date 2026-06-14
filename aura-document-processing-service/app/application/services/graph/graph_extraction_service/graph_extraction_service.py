@@ -4,8 +4,6 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from fastapi import HTTPException, Request, status
-
 from app.application.services.graph.graph_extraction_service.exceptions.graph_extraction_service_exception import (
     GraphExtractionAlreadyRunningException,
     GraphExtractionDocumentNotFoundException,
@@ -14,8 +12,9 @@ from app.application.services.graph.graph_extraction_service.exceptions.graph_ex
 from app.application.services.graph.graph_extraction_service.interfaces.graph_extraction_service_interface import (
     GraphExtractionServiceInterface,
 )
-from app.configuration.graph.knowledge_graph_settings import KnowledgeGraphSettings
+from app.application.services.graph.knowledge_graph_settings import KnowledgeGraphSettings
 from app.domain.authentication.authenticated_user import AuthenticatedUser
+from app.domain.constants.processing_status import ProcessingStatus
 from app.domain.constants.graph.relation_type import normalize_relation_type
 from app.domain.dtos.graph.graph_field_limits import MAX_KG_ERROR_MESSAGE_CHARS
 from app.domain.dtos.graph.graph_extraction.extracted_entity import ExtractedEntity
@@ -23,6 +22,10 @@ from app.domain.dtos.graph.graph_extraction.extracted_relation import ExtractedR
 from app.domain.dtos.graph.graph_extraction.graph_extraction_progress import (
     GraphExtractionError,
     GraphExtractionProgressResponse,
+)
+from app.domain.dtos.graph.graph_extraction.graph_upsert_items import (
+    EntityUpsertItem,
+    RelationUpsertItem,
 )
 from app.infrastructure.http.llm_provider.llm_provider_interface import LlmProviderInterface
 from app.infrastructure.persistence.database.database_manager.database_manager_interface import (
@@ -49,23 +52,6 @@ logger = logging.getLogger(__name__)
 
 
 class GraphExtractionService(GraphExtractionServiceInterface):
-    """Coordinates per-document extraction of entities and relations.
-
-    Flow per document:
-        1. Acquire a Redis-backed lock keyed by ``document_id`` (idempotent).
-        2. Fetch fragments from Postgres in a single read session.
-        3. For each fragment, call ``LlmProvider.extract_entities_relations``
-           in parallel (bounded by ``extraction_concurrency``).
-        4. Canonicalise entities (lowercase, strip), normalise relation types,
-           and ``MERGE`` everything into Neo4j via the dedicated repositories.
-        5. Update the Redis progress snapshot incrementally.
-
-    Idempotency: ``MERGE`` plus ``apoc.coll.toSet`` ensure re-runs only
-    union the source-document/fragment id arrays. The lock prevents
-    concurrent runs for the same document; a Redis snapshot keyed by
-    ``document_id`` allows the API and the caller to observe progress.
-    """
-
     def __init__(
             self,
             *,
@@ -133,6 +119,10 @@ class GraphExtractionService(GraphExtractionServiceInterface):
                 document_id=document_id,
                 user=user,
             )
+            await self._set_graph_status(document_id, ProcessingStatus.processed)
+        except Exception:
+            await self._set_graph_status(document_id, ProcessingStatus.failed)
+            raise
         finally:
             await self._job_progress_store.complete_job(
                 job_id=job_id,
@@ -141,6 +131,35 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             await self._job_progress_store.release_extraction_lock(
                 document_id=document_id,
                 job_id=job_id,
+            )
+
+    async def _set_graph_status(
+            self,
+            document_id: int,
+            status: ProcessingStatus,
+    ) -> None:
+        try:
+            async def _operation(session):
+                document = await self._document_repository.get_document_by_id(
+                    document_id=document_id,
+                    database_session=session,
+                )
+                if document is None:
+                    return
+                document.graph_status = status
+                await self._document_repository.update_document(
+                    document=document,
+                    database_session=session,
+                )
+
+            await self._database_manager.run_write_transaction_with_retry(
+                _operation,
+                operation_name="graph_extraction.set_graph_status",
+            )
+        except Exception:
+            logger.warning(
+                "Failed to update the document graph status.",
+                extra={"document_id": document_id, "graph_status": status.value},
             )
 
     async def get_progress(
@@ -329,15 +348,17 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             )
             return self._content_tail(fragment.content)
 
-        entities_count = 0
+        entity_items, relation_items = self._build_upsert_batches(
+            entities=response.entities,
+            relations=response.relations,
+        )
+
         try:
-            for entity in response.entities:
-                await self._upsert_entity(
-                    entity=entity,
-                    document_id=document_id,
-                    fragment_id=fragment_id,
-                )
-                entities_count += 1
+            await self._entity_repository.upsert_entities(
+                entities=entity_items,
+                document_id=document_id,
+                fragment_id=fragment_id,
+            )
         except Exception as e:
             await self._record_fragment_error(
                 job_id=job_id,
@@ -348,15 +369,12 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             )
             return self._content_tail(fragment.content)
 
-        relations_count = 0
         try:
-            for relation in response.relations:
-                if await self._upsert_relation(
-                        relation=relation,
-                        document_id=document_id,
-                        fragment_id=fragment_id,
-                ):
-                    relations_count += 1
+            await self._relation_repository.upsert_relations(
+                relations=relation_items,
+                document_id=document_id,
+                fragment_id=fragment_id,
+            )
         except Exception as e:
             await self._record_fragment_error(
                 job_id=job_id,
@@ -366,6 +384,9 @@ class GraphExtractionService(GraphExtractionServiceInterface):
                 stage="upsert_relation",
             )
             return self._content_tail(fragment.content)
+
+        entities_count = len(entity_items)
+        relations_count = len(relation_items)
 
         await self._job_progress_store.mark_progress(
             job_id=job_id,
@@ -396,73 +417,92 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             return ""
         return content[-window:] if len(content) > window else content
 
-    async def _upsert_entity(
+    def _build_upsert_batches(
             self,
             *,
-            entity: ExtractedEntity,
-            document_id: int,
-            fragment_id: int,
-    ) -> None:
-        canonical_name = self._canonicalize_name(entity.name)
-        if not canonical_name:
-            return
-        await self._entity_repository.upsert_entity(
-            canonical_name=canonical_name,
-            display_name=entity.name,
-            entity_type=entity.type,
-            aliases=list(entity.aliases),
-            description=entity.description,
-            document_id=document_id,
-            fragment_id=fragment_id,
-        )
+            entities: list[ExtractedEntity],
+            relations: list[ExtractedRelation],
+    ) -> tuple[list[EntityUpsertItem], list[RelationUpsertItem]]:
+        """Deduplicate the LLM output for a fragment into two write batches.
 
-    async def _upsert_relation(
-            self,
-            *,
-            relation: ExtractedRelation,
-            document_id: int,
-            fragment_id: int,
-    ) -> bool:
-        source_canonical = self._canonicalize_name(relation.source.name)
-        target_canonical = self._canonicalize_name(relation.target.name)
-        if not source_canonical or not target_canonical:
-            return False
-        if (
-                source_canonical == target_canonical
-                and relation.source.type == relation.target.type
-        ):
-            return False
+        Entities are keyed by ``(canonical_name, type)``; aliases are unioned
+        and the first non-empty description wins. Relation endpoints are added
+        to the entity batch so the relation MATCH always finds its nodes.
+        Relations are keyed by the full quintuple keeping the highest
+        confidence seen in the fragment.
+        """
+        entity_map: dict[tuple[str, str], EntityUpsertItem] = {}
 
-        normalized_relation_type = normalize_relation_type(relation.type)
-        await self._entity_repository.upsert_entity(
-            canonical_name=source_canonical,
-            display_name=relation.source.name,
-            entity_type=relation.source.type,
-            aliases=[],
-            description=None,
-            document_id=document_id,
-            fragment_id=fragment_id,
-        )
-        await self._entity_repository.upsert_entity(
-            canonical_name=target_canonical,
-            display_name=relation.target.name,
-            entity_type=relation.target.type,
-            aliases=[],
-            description=None,
-            document_id=document_id,
-            fragment_id=fragment_id,
-        )
-        await self._relation_repository.upsert_relation(
-            source_canonical_name=source_canonical,
-            source_type=relation.source.type,
-            target_canonical_name=target_canonical,
-            target_type=relation.target.type,
-            relation_type=normalized_relation_type,
-            confidence=relation.confidence,
-            document_id=document_id,
-            fragment_id=fragment_id,
-        )
-        return True
+        def add_entity(
+                name: str,
+                entity_type,
+                aliases: list[str],
+                description: Optional[str],
+        ) -> Optional[str]:
+            canonical = self._canonicalize_name(name)
+            if not canonical:
+                return None
+            key = (canonical, entity_type.value)
+            existing = entity_map.get(key)
+            if existing is None:
+                entity_map[key] = EntityUpsertItem(
+                    canonical_name=canonical,
+                    display_name=name,
+                    entity_type=entity_type,
+                    aliases=tuple(dict.fromkeys(a for a in aliases if a and a.strip())),
+                    description=description,
+                )
+            else:
+                merged_aliases = tuple(
+                    dict.fromkeys(
+                        [*existing.aliases, *(a for a in aliases if a and a.strip())]
+                    )
+                )
+                entity_map[key] = existing.model_copy(
+                    update={
+                        "aliases": merged_aliases,
+                        "description": existing.description or description,
+                    }
+                )
+            return canonical
+
+        for entity in entities:
+            add_entity(entity.name, entity.type, list(entity.aliases), entity.description)
+
+        relation_map: dict[tuple[str, str, str, str, str], RelationUpsertItem] = {}
+        for relation in relations:
+            source_canonical = self._canonicalize_name(relation.source.name)
+            target_canonical = self._canonicalize_name(relation.target.name)
+            if not source_canonical or not target_canonical:
+                continue
+            if (
+                    source_canonical == target_canonical
+                    and relation.source.type == relation.target.type
+            ):
+                continue
+            add_entity(relation.source.name, relation.source.type, [], None)
+            add_entity(relation.target.name, relation.target.type, [], None)
+            relation_type = normalize_relation_type(relation.type)
+            confidence = float(max(0.0, min(1.0, relation.confidence)))
+            key = (
+                source_canonical,
+                relation.source.type.value,
+                target_canonical,
+                relation.target.type.value,
+                relation_type,
+            )
+            existing_relation = relation_map.get(key)
+            if existing_relation is None or confidence > existing_relation.confidence:
+                relation_map[key] = RelationUpsertItem(
+                    source_canonical_name=source_canonical,
+                    source_type=relation.source.type,
+                    target_canonical_name=target_canonical,
+                    target_type=relation.target.type,
+                    relation_type=relation_type,
+                    confidence=confidence,
+                )
+
+        return list(entity_map.values()), list(relation_map.values())
 
     async def _record_fragment_error(
             self,
@@ -515,23 +555,3 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             except ValueError:
                 return None
         return None
-
-
-async def get_graph_extraction_service(
-        request: Request,
-) -> GraphExtractionServiceInterface:
-    service = getattr(request.app.state, "graph_extraction_service", None)
-    if service is None:
-        logger.error("GraphExtractionService is not registered on the application state.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Knowledge graph extraction service is not available.",
-        )
-    return service
-
-
-__all__ = [
-    "GraphExtractionService",
-    "GraphExtractionServiceException",
-    "get_graph_extraction_service",
-]

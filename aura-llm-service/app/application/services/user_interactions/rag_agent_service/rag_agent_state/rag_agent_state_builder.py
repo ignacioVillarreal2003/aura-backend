@@ -23,11 +23,17 @@ class RagAgentStateBuilder:
         return RagAgentState(
             authenticated_user=authenticated_user,
             messages=messages,
+            chat_id=agent_request.chat_id,
+            operator_system_prompt=agent_request.system_prompt,
+            response_style=agent_request.response_style,
             query="",
             keywords=[],
+            intent="",
             retrieved_fragments=[],
             context="",
+            graph_facts="",
             answer="",
+            guardrail_passed=True,
             fallback_triggered=False,
         )
 
