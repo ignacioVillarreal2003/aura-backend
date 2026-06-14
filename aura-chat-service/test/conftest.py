@@ -149,17 +149,23 @@ def make_checklist_section(sec_id=1, title="Preparación", position=0, items=Non
 
 
 def make_checklist(cl_id=1, title="Checklist de prueba", mode="direct",
-                   source_chat_id=None, sections=None, **overrides):
+                   source_chat_id=1, created_by=1, sections=None, **overrides):
     now = timezone.now()
+    artifact = make_artifact(
+        artifact_id=cl_id, type="CHECKLIST", mode=mode,
+        source_chat_id=source_chat_id, created_by=created_by,
+    )
     data = dict(
         id=cl_id,
+        artifact_id=cl_id,
+        artifact=artifact,
         title=title,
-        mode=mode,
-        source_chat_id=source_chat_id,
+        description="",
+        query="",
         sections=sections if sections is not None else [make_checklist_section()],
         item_count=1,
         checked_count=0,
-        created_by=1,
+        created_by=created_by,
         created_at=now,
         updated_by=None,
         updated_at=None,
@@ -191,16 +197,23 @@ def make_assistant(assistant_id=1, name="Asistente Alfa", description="Descripci
 
 def make_report(report_id=1, title="Informe de prueba", report_type="SITREP",
                 content="Contenido del informe", mode="direct",
-                source_chat_id=None, **overrides):
+                source_chat_id=1, created_by=1, **overrides):
     now = timezone.now()
+    # mode / source_chat_id now live on the linked Artifact, not the report row.
+    artifact = make_artifact(
+        artifact_id=report_id, type="REPORT", mode=mode,
+        source_chat_id=source_chat_id, created_by=created_by,
+    )
     data = dict(
         id=report_id,
+        artifact_id=report_id,
+        artifact=artifact,
         type=report_type,
         title=title,
+        description="",
+        query="",
         content=content,
-        mode=mode,
-        source_chat_id=source_chat_id,
-        created_by=1,
+        created_by=created_by,
         created_at=now,
         updated_by=None,
         updated_at=None,
@@ -211,7 +224,7 @@ def make_report(report_id=1, title="Informe de prueba", report_type="SITREP",
 
 def make_artifact(artifact_id=1, type="REPORT", title="Artefacto de prueba",
                   description="", status="draft", version=1, mode="direct",
-                  source_chat_id=1, created_by=1, **overrides):
+                  source_chat_id=1, created_by=1, fragments=None, **overrides):
     now = timezone.now()
     data = dict(
         id=artifact_id,
@@ -222,6 +235,7 @@ def make_artifact(artifact_id=1, type="REPORT", title="Artefacto de prueba",
         version=version,
         mode=mode,
         source_chat_id=source_chat_id,
+        fragments=fragments,
         created_by=created_by,
         created_at=now,
         updated_by=None,

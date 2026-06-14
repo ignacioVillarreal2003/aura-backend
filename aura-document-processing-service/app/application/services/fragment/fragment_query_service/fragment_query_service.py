@@ -28,6 +28,10 @@ from app.domain.dtos.fragment.fragment_query.question_context_fragments_request 
     QuestionContextFragmentsRequest,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
+from app.infrastructure.http.authentication_provider.request_token import get_request_token
+from app.infrastructure.http.chat_membership.chat_membership_provider_interface import (
+    ChatMembershipProviderInterface,
+)
 from app.infrastructure.http.document_collection_catalog.document_collection_catalog_client_interface import (
     DocumentCollectionCatalogClientInterface,
 )
@@ -71,6 +75,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             embedder_factory: EmbedderFactory,
             reranker_factory: RerankerFactory,
             document_collection_catalog_client: DocumentCollectionCatalogClientInterface,
+            chat_membership_provider: ChatMembershipProviderInterface,
             fragment_query_service_settings: Optional[FragmentQueryServiceSettings] = None,
     ) -> None:
         self._document_repository = document_repository
@@ -79,6 +84,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
         self._reranker_factory = reranker_factory
         self._settings = fragment_query_service_settings or FragmentQueryServiceSettings()
         self._document_collection_catalog_client = document_collection_catalog_client
+        self._chat_membership_provider = chat_membership_provider
 
     async def retrieve_context_fragments_by_question(
             self,
@@ -98,19 +104,44 @@ class FragmentQueryService(FragmentQueryServiceInterface):
         )
 
         try:
+            token = authorization_header or get_request_token()
+
             collection_doc_ids = await self._document_collection_catalog_client.fetch_all_accessible_document_ids(
                 user_id=int(authenticated_user.id),
-                authorization_header=authorization_header,
+                authorization_header=token,
             )
+            accessible_doc_set: set[int] = set(collection_doc_ids)
+
+            # Documents are reachable either through a document collection (MAC) or
+            # through chat membership. The collection catalog only covers the former,
+            # so for a chat-scoped question we must also include the chat's documents
+            # when the user is a member — otherwise the post-filter below drops every
+            # fragment and the search returns nothing.
+            chat_doc_count = 0
+            if question_context_fragments_request.chat_id is not None:
+                membership = await self._chat_membership_provider.get_membership(
+                    chat_id=int(question_context_fragments_request.chat_id),
+                    user_id=int(authenticated_user.id),
+                    authorization_header=token,
+                )
+                if membership.is_member:
+                    chat_documents = await self._document_repository.get_documents_by_chat_id(
+                        chat_id=int(question_context_fragments_request.chat_id),
+                        database_session=database_session,
+                    )
+                    chat_doc_ids = {int(doc.id) for doc in chat_documents}
+                    chat_doc_count = len(chat_doc_ids)
+                    accessible_doc_set |= chat_doc_ids
+
             logger.debug(
-                "Accessible document IDs fetched from collection service.",
+                "Accessible document IDs resolved.",
                 extra={
                     "user_id": authenticated_user.id,
                     "collection_doc_count": len(collection_doc_ids),
+                    "chat_doc_count": chat_doc_count,
                 },
             )
-            accessible_doc_ids = list(collection_doc_ids)
-            accessible_doc_set: set[int] = set(accessible_doc_ids)
+            accessible_doc_ids = list(accessible_doc_set)
 
             semantic_ranked_lists: list[list[Fragment]] = []
             if question_context_fragments_request.semantic_queries:

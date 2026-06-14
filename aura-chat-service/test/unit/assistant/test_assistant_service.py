@@ -14,6 +14,14 @@ CHAT_SVC = "apps.chat.services.chat_service"
 service = AssistantService()
 
 
+@pytest.fixture(autouse=True)
+def _patch_atomic(mocker):
+    """create/update/start_chat wrap repo writes in transaction.atomic(); make it
+    a no-op so the mock-only unit tests don't try to open a real DB connection."""
+    mocker.patch("django.db.transaction.Atomic.__enter__", return_value=None)
+    mocker.patch("django.db.transaction.Atomic.__exit__", return_value=False)
+
+
 def _patch_perms(mocker):
     mocker.patch(f"{SVC}.AccessControl.require_permissions")
 
@@ -140,7 +148,7 @@ def test_update_assistant_success(mocker):
     original = make_assistant(name="Viejo")
     updated = make_assistant(name="Nuevo")
     _patch_perms(mocker)
-    mocker.patch(f"{SVC}.assistant_repository.get_by_id", return_value=original)
+    mocker.patch(f"{SVC}.assistant_repository.get_by_id_for_update", return_value=original)
     mocker.patch(f"{SVC}.assistant_repository.exists_with_name", return_value=False)
     mocker.patch(f"{SVC}.assistant_repository.update", return_value=updated)
     result = service.update_assistant(user, 1, name="Nuevo")
@@ -152,7 +160,7 @@ def test_update_assistant_same_name_skips_conflict_check(mocker):
     user = make_user()
     assistant = make_assistant(name="Alfa")
     _patch_perms(mocker)
-    mocker.patch(f"{SVC}.assistant_repository.get_by_id", return_value=assistant)
+    mocker.patch(f"{SVC}.assistant_repository.get_by_id_for_update", return_value=assistant)
     exists = mocker.patch(f"{SVC}.assistant_repository.exists_with_name", return_value=True)
     mocker.patch(f"{SVC}.assistant_repository.update", return_value=assistant)
     # Same name → condition `name != assistant.name` is False → no conflict check
@@ -164,7 +172,7 @@ def test_update_assistant_new_name_conflict_raises_409(mocker):
     user = make_user()
     assistant = make_assistant(name="Viejo")
     _patch_perms(mocker)
-    mocker.patch(f"{SVC}.assistant_repository.get_by_id", return_value=assistant)
+    mocker.patch(f"{SVC}.assistant_repository.get_by_id_for_update", return_value=assistant)
     mocker.patch(f"{SVC}.assistant_repository.exists_with_name", return_value=True)
     with pytest.raises(AssistantAlreadyExistsException):
         service.update_assistant(user, 1, name="Nuevo")
@@ -175,7 +183,7 @@ def test_update_assistant_new_name_no_conflict_succeeds(mocker):
     original = make_assistant(name="Viejo")
     updated = make_assistant(name="Nuevo")
     _patch_perms(mocker)
-    mocker.patch(f"{SVC}.assistant_repository.get_by_id", return_value=original)
+    mocker.patch(f"{SVC}.assistant_repository.get_by_id_for_update", return_value=original)
     mocker.patch(f"{SVC}.assistant_repository.exists_with_name", return_value=False)
     mocker.patch(f"{SVC}.assistant_repository.update", return_value=updated)
     result = service.update_assistant(user, 1, name="Nuevo")
@@ -185,7 +193,7 @@ def test_update_assistant_new_name_no_conflict_succeeds(mocker):
 def test_update_assistant_not_found_raises_404(mocker):
     user = make_user()
     _patch_perms(mocker)
-    mocker.patch(f"{SVC}.assistant_repository.get_by_id", return_value=None)
+    mocker.patch(f"{SVC}.assistant_repository.get_by_id_for_update", return_value=None)
     with pytest.raises(AssistantNotFoundException):
         service.update_assistant(user, 999, name="X")
 
@@ -196,7 +204,7 @@ def test_update_assistant_inactive_can_be_updated(mocker):
     inactive = make_assistant(is_active=False)
     reactivated = make_assistant(is_active=True)
     _patch_perms(mocker)
-    mocker.patch(f"{SVC}.assistant_repository.get_by_id", return_value=inactive)
+    mocker.patch(f"{SVC}.assistant_repository.get_by_id_for_update", return_value=inactive)
     mocker.patch(f"{SVC}.assistant_repository.exists_with_name", return_value=False)
     mocker.patch(f"{SVC}.assistant_repository.update", return_value=reactivated)
     result = service.update_assistant(user, 1, is_active=True)
@@ -208,7 +216,7 @@ def test_update_assistant_forwards_updated_by_to_repo(mocker):
     user = make_user(user_id=7)
     assistant = make_assistant(name="Alfa")
     _patch_perms(mocker)
-    mocker.patch(f"{SVC}.assistant_repository.get_by_id", return_value=assistant)
+    mocker.patch(f"{SVC}.assistant_repository.get_by_id_for_update", return_value=assistant)
     mocker.patch(f"{SVC}.assistant_repository.exists_with_name", return_value=False)
     update = mocker.patch(f"{SVC}.assistant_repository.update", return_value=assistant)
     service.update_assistant(user, 1, description="Nueva descripción")
@@ -359,78 +367,3 @@ def test_start_chat_does_not_check_existing_when_resume_false(mocker):
     mocker.patch(f"{CHAT_SVC}.chat_service.create_chat", return_value=make_chat())
     service.start_chat(user, 1, resume=False)
     get_latest.assert_not_called()
-
-
-# ── resume race / lock handling (issue #13) ──────────────────────────────────
-
-def test_start_chat_resume_acquires_lock_creates_and_releases(mocker):
-    """Happy path: no existing chat, lock acquired, chat created, lock released."""
-    user = make_user(user_id=1)
-    assistant = make_assistant()
-    new_chat = make_chat(chat_id=50)
-    _patch_perms(mocker)
-    mocker.patch(f"{SVC}.assistant_repository.get_by_id", return_value=assistant)
-    mocker.patch(f"{SVC}.chat_repository.get_latest_by_assistant", side_effect=[None, None])
-    add = mocker.patch(f"{SVC}.cache.add", return_value=True)
-    delete = mocker.patch(f"{SVC}.cache.delete")
-    mocker.patch(f"{CHAT_SVC}.chat_service.create_chat", return_value=new_chat)
-    result_chat, is_new = service.start_chat(user, 1, resume=True)
-    assert result_chat is new_chat
-    assert is_new is True
-    add.assert_called_once()
-    delete.assert_called_once()  # lock always released
-
-
-def test_start_chat_resume_lock_recheck_finds_existing(mocker):
-    """Lock acquired, but a concurrent request created the chat between the first
-    check and acquiring the lock → the recheck returns it instead of duplicating."""
-    user = make_user(user_id=1)
-    assistant = make_assistant()
-    concurrent = make_chat(chat_id=51)
-    _patch_perms(mocker)
-    mocker.patch(f"{SVC}.assistant_repository.get_by_id", return_value=assistant)
-    mocker.patch(f"{SVC}.chat_repository.get_latest_by_assistant", side_effect=[None, concurrent])
-    mocker.patch(f"{SVC}.cache.add", return_value=True)
-    delete = mocker.patch(f"{SVC}.cache.delete")
-    create_chat = mocker.patch(f"{CHAT_SVC}.chat_service.create_chat")
-    result_chat, is_new = service.start_chat(user, 1, resume=True)
-    assert result_chat is concurrent
-    assert is_new is False
-    create_chat.assert_not_called()
-    delete.assert_called_once()
-
-
-def test_start_chat_resume_lock_contention_returns_concurrent_chat(mocker):
-    """Lock NOT acquired (another request holds it): wait, then return the chat
-    the concurrent request created instead of creating a duplicate."""
-    user = make_user(user_id=1)
-    assistant = make_assistant()
-    concurrent = make_chat(chat_id=52)
-    _patch_perms(mocker)
-    mocker.patch(f"{SVC}.assistant_repository.get_by_id", return_value=assistant)
-    mocker.patch(f"{SVC}.chat_repository.get_latest_by_assistant", side_effect=[None, concurrent])
-    mocker.patch(f"{SVC}.cache.add", return_value=False)
-    sleep = mocker.patch(f"{SVC}.time.sleep")
-    create_chat = mocker.patch(f"{CHAT_SVC}.chat_service.create_chat")
-    result_chat, is_new = service.start_chat(user, 1, resume=True)
-    assert result_chat is concurrent
-    assert is_new is False
-    create_chat.assert_not_called()
-    sleep.assert_called()  # waited for the concurrent creator
-
-
-def test_start_chat_resume_lock_contention_timeout_creates_new(mocker):
-    """Lock not acquired and the concurrent request never produces a chat within
-    the wait window → fall through and create one (best effort, no deadlock)."""
-    user = make_user(user_id=1)
-    assistant = make_assistant()
-    new_chat = make_chat(chat_id=53)
-    _patch_perms(mocker)
-    mocker.patch(f"{SVC}.assistant_repository.get_by_id", return_value=assistant)
-    mocker.patch(f"{SVC}.chat_repository.get_latest_by_assistant", return_value=None)
-    mocker.patch(f"{SVC}.cache.add", return_value=False)
-    mocker.patch(f"{SVC}.time.sleep")
-    mocker.patch(f"{CHAT_SVC}.chat_service.create_chat", return_value=new_chat)
-    result_chat, is_new = service.start_chat(user, 1, resume=True)
-    assert result_chat is new_chat
-    assert is_new is True

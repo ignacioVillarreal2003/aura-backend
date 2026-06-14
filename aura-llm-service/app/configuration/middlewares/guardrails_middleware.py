@@ -132,11 +132,51 @@ class GuardrailsMiddleware:
     @classmethod
     async def _send_blocked(cls, scope: Scope, send: Send, message: str) -> None:
         record_guardrails_block("input")
+        path = scope.get("path", "")
         logger.warning(
             "Request blocked by the guardrails input filter.",
-            extra={"path": scope.get("path"), "request_id": cls._request_id(scope)},
+            extra={"path": path, "request_id": cls._request_id(scope)},
         )
+        # Streaming endpoints (SSE) negotiate a `text/event-stream` body; answering
+        # with a plain 400 JSON breaks the client's stream parser. Instead, open a
+        # normal 200 stream and report the block through the same event protocol the
+        # endpoint uses, so the UI can show progress then a graceful error.
+        if path.endswith("/stream"):
+            await cls._send_blocked_sse(scope, send, message)
+            return
         await cls._send_json(scope, send, 400, "input_blocked_by_guardrails", message)
+
+    @classmethod
+    async def _send_blocked_sse(cls, scope: Scope, send: Send, message: str) -> None:
+        request_id = cls._request_id(scope)
+        progress = {
+            "type": "progress",
+            "step": "guardrails",
+            "message": "Estamos revisando tu consulta…",
+        }
+        error: dict = {
+            "type": "error",
+            "message": message,
+            "code": "input_blocked_by_guardrails",
+        }
+        if request_id:
+            error["request_id"] = request_id
+
+        def _frame(payload: dict) -> bytes:
+            return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n".encode("utf-8")
+
+        headers = [
+            (b"content-type", b"text/event-stream; charset=utf-8"),
+            (b"cache-control", b"no-cache"),
+            (b"connection", b"keep-alive"),
+            (b"x-accel-buffering", b"no"),
+        ]
+        if request_id:
+            headers.append((b"x-request-id", request_id.encode("latin-1")))
+
+        await send({"type": "http.response.start", "status": 200, "headers": headers})
+        await send({"type": "http.response.body", "body": _frame(progress), "more_body": True})
+        await send({"type": "http.response.body", "body": _frame(error), "more_body": False})
 
     @classmethod
     async def _send_unavailable(cls, scope: Scope, send: Send) -> None:

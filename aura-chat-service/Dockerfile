@@ -18,14 +18,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY requirements/requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
 FROM dependencies AS runtime
 
-# Whisper model baked into the image so transcription works without runtime
-# downloads. Must stay in sync with WHISPER_MODEL_SIZE in the environment.
 ARG WHISPER_MODEL_SIZE=small
 
 RUN mkdir -p /app/.cache/huggingface \

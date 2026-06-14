@@ -7,26 +7,20 @@ from core.authorization.access import AccessControl
 from core.authorization import permissions as perms
 from core.clients.exceptions import HttpClientException
 from core.clients.llm_client import llm_client
-from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
+from apps.chat.exceptions import ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.artifact.models import Artifact
-from apps.artifact.repositories.artifact_repository import artifact_repository
 from apps.artifact_timeline.exceptions import TimelineAccessDeniedException, TimelineNotFoundException, \
     LLMServiceException
 from apps.artifact_timeline.models import ArtifactTimeline
 from apps.artifact_timeline.repositories.timeline_repository import timeline_repository
-from apps.membership.repositories.membership_repository import membership_repository
-from apps.artifact.services.artifact_access import assert_detail_access
 from django.db import transaction
 from apps.artifact.broadcasting import broadcast_artifact_created, broadcast_artifact_progress
-from apps.artifact.services.artifact_service import create_artifact_for_content, _cleanup_artifact_interactions
+from apps.artifact.services.artifact_service import create_artifact_for_content
+from apps.artifact.services.artifact_crud_service import ArtifactCrudService
 from apps.artifact.llm_context import build_chat_history
 
 logger = logging.getLogger(__name__)
-
-
-def _assert_timeline_access(user_id: int, timeline, *, require_contributor: bool = False) -> None:
-    assert_detail_access(user_id, timeline, TimelineAccessDeniedException(), require_contributor=require_contributor)
 
 
 def _normalize_events(events: list) -> list:
@@ -71,53 +65,37 @@ def _persist_generated_timeline(
     return artifact, timeline
 
 
-class TimelineService:
+class TimelineService(ArtifactCrudService):
+    repository = timeline_repository
+    not_found_exc = TimelineNotFoundException
+    access_denied_exc = TimelineAccessDeniedException
+    log_model = "ArtifactTimeline"
+    log_id_key = "timeline_id"
+    perm_list = perms.LIST_TIMELINES
+    perm_manage = perms.MANAGE_TIMELINES
+    perm_get = perms.GET_TIMELINE
+    perm_export = perms.EXPORT_TIMELINE
+    perm_manage_export = perms.MANAGE_EXPORT_TIMELINE
+    perm_delete = perms.DELETE_TIMELINE
+    logger = logger
+
     def list_timelines(self, user: AuthenticatedUser, chat_id: int):
-        AccessControl.require_permissions(user, frozenset({perms.LIST_TIMELINES}))
-        if chat_repository.get_by_id(chat_id) is None:
-            raise ChatNotFoundException()
-        if not membership_repository.is_active_member(chat_id, user.id):
-            raise ChatAccessDeniedException()
-        return timeline_repository.list_by_chat(source_chat_id=chat_id)
+        return self._list_by_chat(user, chat_id)
 
     def list_all_timelines(self, user: AuthenticatedUser):
-        AccessControl.require_permissions(user, frozenset({perms.MANAGE_TIMELINES}))
-        return timeline_repository.list_all()
+        return self._list_all(user)
 
     def get_timeline(self, user: AuthenticatedUser, timeline_id: int) -> ArtifactTimeline:
-        AccessControl.require_permissions(user, frozenset({perms.GET_TIMELINE}))
-        timeline = timeline_repository.get_by_id(timeline_id)
-        if timeline is None:
-            raise TimelineNotFoundException()
-        _assert_timeline_access(user.id, timeline)
-        return timeline
+        return self._get(user, timeline_id)
 
     def get_own_timeline(self, user: AuthenticatedUser, timeline_id: int) -> ArtifactTimeline:
-        AccessControl.require_permissions(user, frozenset({perms.EXPORT_TIMELINE}))
-        timeline = timeline_repository.get_by_id(timeline_id)
-        if timeline is None:
-            raise TimelineNotFoundException()
-        _assert_timeline_access(user.id, timeline)
-        return timeline
+        return self._get_own(user, timeline_id)
 
     def get_timeline_admin_export(self, user: AuthenticatedUser, timeline_id: int) -> ArtifactTimeline:
-        AccessControl.require_permissions(user, frozenset({perms.MANAGE_EXPORT_TIMELINE}))
-        timeline = timeline_repository.get_by_id(timeline_id)
-        if timeline is None:
-            raise TimelineNotFoundException()
-        return timeline
+        return self._get_admin_export(user, timeline_id)
 
-    @transaction.atomic
     def delete_timeline(self, user: AuthenticatedUser, timeline_id: int) -> None:
-        AccessControl.require_permissions(user, frozenset({perms.DELETE_TIMELINE}))
-        timeline = timeline_repository.get_by_id_for_update(timeline_id)
-        if timeline is None:
-            raise TimelineNotFoundException()
-        _assert_timeline_access(user.id, timeline, require_contributor=True)
-        timeline_repository.soft_delete(timeline, deleted_by=user.id)
-        _cleanup_artifact_interactions(timeline.artifact_id)
-        artifact_repository.soft_delete(timeline.artifact, deleted_by=user.id)
-        logger.info("ArtifactTimeline deleted", extra={"user_id": user.id, "timeline_id": timeline_id})
+        self._delete(user, timeline_id)
 
     async def generate_timeline(
             self,

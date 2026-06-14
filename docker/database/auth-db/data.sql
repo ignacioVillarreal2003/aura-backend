@@ -251,6 +251,8 @@ FROM role r
                                          'LLM_DOCUMENT_SUMMARY',
                                          'LLM_DOCUMENT_ACTION',
                                          'LLM_AGENT',
+                                         'LLM_DOCUMENT_CLASSIFY',
+                                         'LLM_FRAGMENT_ENRICH',
                                          'LLM_GRAPH_EXTRACTION',
                                          'LLM_GRAPH_QUERY_TRANSLATION',
                                          'LLM_GENERAL_CHAT',

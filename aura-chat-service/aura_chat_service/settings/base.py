@@ -163,6 +163,11 @@ WS_ARTIFACT_RATE_LIMIT_WINDOW = config("WS_ARTIFACT_RATE_LIMIT_WINDOW", default=
 WS_TRANSCRIBE_RATE_LIMIT_MAX = config("WS_TRANSCRIBE_RATE_LIMIT_MAX", default=5, cast=int)
 WS_TRANSCRIBE_RATE_LIMIT_WINDOW = config("WS_TRANSCRIBE_RATE_LIMIT_WINDOW", default=60, cast=int)
 
+# When Redis is unreachable the rate-limit checks fall back to this decision.
+# True (default) favours availability (let traffic through); set False to fail
+# closed and block on Redis errors instead (favours abuse protection).
+WS_RATE_LIMIT_FAIL_OPEN = config("WS_RATE_LIMIT_FAIL_OPEN", default=True, cast=bool)
+
 AUTHENTICATION_EXCLUDED_PATHS = [
     "/api/v1/health*",
     "/metrics",
@@ -191,13 +196,13 @@ SPECTACULAR_SETTINGS = {
     "TAGS": [
         {
             "name": "Health",
-            "description": "Liveness/readiness: database and Redis checks (`GET /api/v1/health`).",
+            "description": "Liveness/readiness: chequeos de base de datos y Redis (`GET /api/v1/health`).",
         },
         {
             "name": "Chats",
             "description": (
-                "Create and manage chats: listing, CRUD, pin, archive, lock; "
-                "includes `me` and `archived` collections."
+                "Creación y gestión de chats: listado, CRUD, fijar, archivar, bloquear; "
+                "incluye las colecciones `me` y `archived`."
             ),
         },
         {
@@ -211,13 +216,13 @@ SPECTACULAR_SETTINGS = {
         },
         {
             "name": "Memberships",
-            "description": "List/update members, invite users, roles, leave chat.",
+            "description": "Listar/actualizar miembros, invitar usuarios, roles, abandonar chat.",
         },
         {
             "name": "Share Links",
             "description": (
-                "Authenticated management of share tokens; **public** read-only message list uses "
-                "`GET /api/v1/share/{token}/messages/` (AllowAny)."
+                "Gestión autenticada de tokens de compartición; el listado de mensajes **público** "
+                "de solo lectura usa `GET /api/v1/share/{token}/messages/` (AllowAny)."
             ),
         },
         {
@@ -237,7 +242,7 @@ SPECTACULAR_SETTINGS = {
         {
             "name": "Assistants",
             "description": (
-                "Asistentes especializados configurables (Custom GPTs equivalent). "
+                "Asistentes especializados configurables (equivalente a Custom GPTs). "
                 "Los admins crean asistentes con system prompts fijos; "
                 "los usuarios inician sesiones de chat pre-configuradas."
             ),
@@ -303,8 +308,8 @@ SPECTACULAR_SETTINGS = {
                 "scheme": "bearer",
                 "bearerFormat": "JWT",
                 "description": (
-                    "Use Authorization Bearer with the JWT from your identity provider. "
-                    "Claims must include application permission strings required by each operation (e.g. LIST_CHATS)."
+                    "Usá Authorization Bearer con el JWT de tu proveedor de identidad. "
+                    "Los claims deben incluir los permisos de aplicación requeridos por cada operación (p. ej. LIST_CHATS)."
                 ),
             },
         },

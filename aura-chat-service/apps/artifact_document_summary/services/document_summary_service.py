@@ -6,10 +6,9 @@ from core.authorization.access import AccessControl
 from core.authorization import permissions as perms
 from core.clients.exceptions import HttpClientException
 from core.clients.llm_client import llm_client
-from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
+from apps.chat.exceptions import ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.artifact.models import Artifact
-from apps.artifact.repositories.artifact_repository import artifact_repository
 from apps.artifact_document_summary.exceptions import (
     DocumentSummaryAccessDeniedException,
     DocumentSummaryNotFoundException,
@@ -17,19 +16,14 @@ from apps.artifact_document_summary.exceptions import (
 )
 from apps.artifact_document_summary.models import ArtifactDocumentSummary
 from apps.artifact_document_summary.repositories.document_summary_repository import document_summary_repository
-from apps.membership.repositories.membership_repository import membership_repository
-from apps.artifact.services.artifact_access import assert_detail_access
 from django.db import transaction
 from apps.artifact.broadcasting import broadcast_artifact_created, broadcast_artifact_progress
-from apps.artifact.services.artifact_service import create_artifact_for_content, _cleanup_artifact_interactions
+from apps.artifact.services.artifact_service import create_artifact_for_content
+from apps.artifact.services.artifact_crud_service import ArtifactCrudService
 
 logger = logging.getLogger(__name__)
 
 _MAX_TITLE_CHARS = 200
-
-
-def _assert_access(user_id: int, obj, *, require_contributor: bool = False) -> None:
-    assert_detail_access(user_id, obj, DocumentSummaryAccessDeniedException(), require_contributor=require_contributor)
 
 
 def _derive_title(summary: str) -> str:
@@ -69,58 +63,39 @@ def _persist_generated_document_summary(
     return artifact, obj
 
 
-class DocumentSummaryService:
+class DocumentSummaryService(ArtifactCrudService):
+    repository = document_summary_repository
+    not_found_exc = DocumentSummaryNotFoundException
+    access_denied_exc = DocumentSummaryAccessDeniedException
+    log_model = "ArtifactDocumentSummary"
+    log_id_key = "document_summary_id"
+    perm_list = perms.LIST_DOCUMENT_SUMMARIES
+    perm_manage = perms.MANAGE_DOCUMENT_SUMMARIES
+    perm_get = perms.GET_DOCUMENT_SUMMARY
+    perm_export = perms.EXPORT_DOCUMENT_SUMMARY
+    perm_manage_export = perms.MANAGE_EXPORT_DOCUMENT_SUMMARY
+    perm_delete = perms.DELETE_DOCUMENT_SUMMARY
+    logger = logger
+
     def list_document_summaries(self, user: AuthenticatedUser, chat_id: int):
-        AccessControl.require_permissions(user, frozenset({perms.LIST_DOCUMENT_SUMMARIES}))
-        if chat_repository.get_by_id(chat_id) is None:
-            raise ChatNotFoundException()
-        if not membership_repository.is_active_member(chat_id, user.id):
-            raise ChatAccessDeniedException()
-        return document_summary_repository.list_by_chat(source_chat_id=chat_id)
+        return self._list_by_chat(user, chat_id)
 
     def list_all_document_summaries(self, user: AuthenticatedUser):
-        AccessControl.require_permissions(user, frozenset({perms.MANAGE_DOCUMENT_SUMMARIES}))
-        return document_summary_repository.list_all()
+        return self._list_all(user)
 
     def get_document_summary(self, user: AuthenticatedUser, document_summary_id: int) -> ArtifactDocumentSummary:
-        AccessControl.require_permissions(user, frozenset({perms.GET_DOCUMENT_SUMMARY}))
-        obj = document_summary_repository.get_by_id(document_summary_id)
-        if obj is None:
-            raise DocumentSummaryNotFoundException()
-        _assert_access(user.id, obj)
-        return obj
+        return self._get(user, document_summary_id)
 
     def get_own_document_summary(self, user: AuthenticatedUser, document_summary_id: int) -> ArtifactDocumentSummary:
-        AccessControl.require_permissions(user, frozenset({perms.EXPORT_DOCUMENT_SUMMARY}))
-        obj = document_summary_repository.get_by_id(document_summary_id)
-        if obj is None:
-            raise DocumentSummaryNotFoundException()
-        _assert_access(user.id, obj)
-        return obj
+        return self._get_own(user, document_summary_id)
 
     def get_document_summary_admin_export(
             self, user: AuthenticatedUser, document_summary_id: int
     ) -> ArtifactDocumentSummary:
-        AccessControl.require_permissions(user, frozenset({perms.MANAGE_EXPORT_DOCUMENT_SUMMARY}))
-        obj = document_summary_repository.get_by_id(document_summary_id)
-        if obj is None:
-            raise DocumentSummaryNotFoundException()
-        return obj
+        return self._get_admin_export(user, document_summary_id)
 
-    @transaction.atomic
     def delete_document_summary(self, user: AuthenticatedUser, document_summary_id: int) -> None:
-        AccessControl.require_permissions(user, frozenset({perms.DELETE_DOCUMENT_SUMMARY}))
-        obj = document_summary_repository.get_by_id_for_update(document_summary_id)
-        if obj is None:
-            raise DocumentSummaryNotFoundException()
-        _assert_access(user.id, obj, require_contributor=True)
-        document_summary_repository.soft_delete(obj, deleted_by=user.id)
-        _cleanup_artifact_interactions(obj.artifact_id)
-        artifact_repository.soft_delete(obj.artifact, deleted_by=user.id)
-        logger.info(
-            "ArtifactDocumentSummary deleted",
-            extra={"user_id": user.id, "document_summary_id": document_summary_id},
-        )
+        self._delete(user, document_summary_id)
 
     async def generate_document_summary(
             self,

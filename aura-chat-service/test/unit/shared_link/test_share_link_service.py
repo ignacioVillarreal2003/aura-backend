@@ -24,6 +24,19 @@ def _patch_chat(mocker, chat):
     mocker.patch(f"{SVC}.chat_repository.get_by_id", return_value=chat)
 
 
+def _patch_not_owner(mocker):
+    """Owner/creator gate now also consults membership; deny the membership path."""
+    mocker.patch(f"{SVC}.membership_repository.is_chat_owner", return_value=False)
+
+
+def _ordered_qs(mocker, messages):
+    """get_public_messages applies .order_by('created_at') on the repo result;
+    return a queryset-like whose order_by yields the given messages."""
+    qs = mocker.MagicMock()
+    qs.order_by.return_value = messages
+    return qs
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # create_link
 # ══════════════════════════════════════════════════════════════════════════════
@@ -59,6 +72,7 @@ def test_create_link_non_creator_raises_403(mocker):
     chat = make_chat(chat_id=10, created_by=1)
     _patch_perms(mocker)
     _patch_chat(mocker, chat)
+    _patch_not_owner(mocker)
     with pytest.raises(ChatAccessDeniedException):
         service.create_link(user, chat_id=10)
 
@@ -114,6 +128,7 @@ def test_list_links_non_creator_raises_403(mocker):
     chat = make_chat(chat_id=10, created_by=1)
     _patch_perms(mocker)
     _patch_chat(mocker, chat)
+    _patch_not_owner(mocker)
     with pytest.raises(ChatAccessDeniedException):
         service.list_links(user, chat_id=10)
 
@@ -157,6 +172,7 @@ def test_revoke_link_non_creator_raises_403(mocker):
     chat = make_chat(chat_id=10, created_by=1)
     _patch_perms(mocker)
     _patch_chat(mocker, chat)
+    _patch_not_owner(mocker)
     with pytest.raises(ChatAccessDeniedException):
         service.revoke_link(user, chat_id=10, link_id=5)
 
@@ -215,7 +231,7 @@ def test_get_public_messages_valid_active_link_returns_messages(mocker):
     link = make_share_link(is_active=True, expires_at=None)
     messages = [object(), object()]
     mocker.patch(f"{SVC}.share_link_repository.get_by_token", return_value=link)
-    mocker.patch(f"{SVC}.message_repository.get_messages_by_chat", return_value=messages)
+    mocker.patch(f"{SVC}.message_repository.get_messages_by_chat", return_value=_ordered_qs(mocker, messages))
     result = service.get_public_messages(token)
     assert result is messages
 
@@ -251,7 +267,7 @@ def test_get_public_messages_future_expiry_is_valid(mocker):
     link = make_share_link(is_active=True, expires_at=future)
     messages = []
     mocker.patch(f"{SVC}.share_link_repository.get_by_token", return_value=link)
-    mocker.patch(f"{SVC}.message_repository.get_messages_by_chat", return_value=messages)
+    mocker.patch(f"{SVC}.message_repository.get_messages_by_chat", return_value=_ordered_qs(mocker, messages))
     result = service.get_public_messages(token)
     assert result is messages
 
@@ -262,7 +278,7 @@ def test_get_public_messages_no_expiry_is_valid(mocker):
     link = make_share_link(is_active=True, expires_at=None)
     mocker.patch(f"{SVC}.share_link_repository.get_by_token", return_value=link)
     messages = []
-    mocker.patch(f"{SVC}.message_repository.get_messages_by_chat", return_value=messages)
+    mocker.patch(f"{SVC}.message_repository.get_messages_by_chat", return_value=_ordered_qs(mocker, messages))
     result = service.get_public_messages(token)
     assert result is messages
 
@@ -281,6 +297,8 @@ def test_get_public_messages_queries_correct_chat(mocker):
     token = uuid.uuid4()
     link = make_share_link(link_id=1, chat_id=42, is_active=True, expires_at=None)
     mocker.patch(f"{SVC}.share_link_repository.get_by_token", return_value=link)
-    get_messages = mocker.patch(f"{SVC}.message_repository.get_messages_by_chat", return_value=[])
+    get_messages = mocker.patch(
+        f"{SVC}.message_repository.get_messages_by_chat", return_value=_ordered_qs(mocker, [])
+    )
     service.get_public_messages(token)
     get_messages.assert_called_once_with(42)

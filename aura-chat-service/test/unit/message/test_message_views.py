@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from apps.chat.exceptions import ChatNotFoundException
-from apps.message.exceptions import (
+from apps.artifact_message.exceptions import (
     ChatAiReplyInProgressException,
     ExportTooLargeException,
     MessageAccessDeniedException,
@@ -27,16 +27,16 @@ from test.conftest import make_feedback, make_message, make_pin, make_thread_rep
 # ---------------------------------------------------------------------------
 # View module path constants for patching
 # ---------------------------------------------------------------------------
-MSG_VIEW = "apps.message.views.message_view"
-DEL_VIEW = "apps.message.views.message_delete_view"
-CLR_VIEW = "apps.message.views.clear_view"
-READ_VIEW = "apps.message.views.mark_read_view"
-REGEN_VIEW = "apps.message.views.regenerate_view"
-PIN_VIEW = "apps.message.views.pin_view"
-BKM_VIEW = "apps.message.views.bookmark_view"
-THR_VIEW = "apps.message.views.thread_view"
-FBK_VIEW = "apps.message.views.feedback_view"
-EXP_VIEW = "apps.message.views.export_view"
+MSG_VIEW = "apps.artifact_message.views.message_view"
+DEL_VIEW = "apps.artifact_message.views.message_delete_view"
+CLR_VIEW = "apps.artifact_message.views.clear_view"
+READ_VIEW = "apps.artifact_message.views.mark_read_view"
+REGEN_VIEW = "apps.artifact_message.views.regenerate_view"
+PIN_VIEW = "apps.artifact_message.views.pin_view"
+BKM_VIEW = "apps.artifact_message.views.bookmark_view"
+THR_VIEW = "apps.artifact_message.views.thread_view"
+FBK_VIEW = "apps.artifact_message.views.feedback_view"
+EXP_VIEW = "apps.artifact_message.views.export_view"
 
 
 # ===========================================================================

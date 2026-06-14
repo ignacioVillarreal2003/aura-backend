@@ -1,15 +1,16 @@
 import logging
 from collections.abc import AsyncIterator, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
-from asgiref.sync import async_to_sync, sync_to_async
-from channels.layers import get_channel_layer
+from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.db import transaction
 
 from apps.chat.exceptions import ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.membership.repositories.membership_repository import membership_repository
+from apps.membership.models.chat_membership import ChatMembership
+from core.ws.group_broadcast import send_to_chat_group
 from apps.artifact_message.exceptions import (
     ChatLockedException,
     LLMServiceException,
@@ -40,6 +41,16 @@ from core.clients.llm_client import (
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class _AiStreamState:
+    """Mutable accumulation state for a single AI SSE stream."""
+
+    accumulated_answer: str = ""
+    received_complete: bool = False
+    last_question: str = ""
+    last_fragments: list[Any] = field(default_factory=list)
+
+
 class ChatAIMode:
     DOCUMENT_QUESTION = "document_question"
     GENERAL_CHAT = "general_chat"
@@ -56,34 +67,12 @@ class ChatAIMode:
 
 
 def _broadcast_user_message_to_chat_group(chat_id: int, msg: ArtifactMessage) -> None:
-    channel_layer = get_channel_layer()
-    if channel_layer is None:
-        return
     payload = MessageResponse(msg).data
-    try:
-        async_to_sync(channel_layer.group_send)(
-            f"chat_{chat_id}",
-            {"type": "user_message", **payload},
-        )
-    except Exception:
-        logger.warning(
-            "Failed to broadcast user_message for chat %d", chat_id, exc_info=True
-        )
+    send_to_chat_group(chat_id, {"type": "user_message", **payload})
 
 
 def broadcast_chat_ai_lock_change(chat_id: int, locked: bool) -> None:
-    channel_layer = get_channel_layer()
-    if channel_layer is None:
-        return
-    try:
-        async_to_sync(channel_layer.group_send)(
-            f"chat_{chat_id}",
-            {"type": "chat_ai_lock_changed", "locked": locked},
-        )
-    except Exception:
-        logger.warning(
-            "Failed to broadcast ai_lock_change for chat %d", chat_id, exc_info=True
-        )
+    send_to_chat_group(chat_id, {"type": "chat_ai_lock_changed", "locked": locked})
 
 
 @dataclass
@@ -409,6 +398,81 @@ class MessageService:
         ):
             yield payload
 
+    @staticmethod
+    def _compose_complete_event(
+            answer: str,
+            question: str,
+            fragments: list[Any],
+            assistant_msg: "ArtifactMessage | None",
+    ) -> dict[str, Any]:
+        event: dict[str, Any] = {
+            "type": "ai_complete",
+            "message": answer,
+            "answer": answer,
+            "question": question,
+            "fragments": fragments,
+        }
+        if assistant_msg:
+            event["id"] = assistant_msg.id
+            event["sender_type"] = assistant_msg.sender_type
+            event["created_by"] = assistant_msg.created_by
+            event["created_at"] = assistant_msg.created_at.isoformat()
+        return event
+
+    async def _handle_stream_complete(
+            self,
+            chat_id: int,
+            user: AuthenticatedUser,
+            sse: dict[str, Any],
+            state: _AiStreamState,
+            complete_extractor: Callable[
+                [dict[str, Any], str, str, list[Any]], tuple[str, str, list[Any]]
+            ],
+    ) -> dict[str, Any]:
+        result = sse.get("result") or {}
+        if not isinstance(result, dict):
+            result = {}
+        question, answer, fragments = complete_extractor(
+            result, state.accumulated_answer, state.last_question, state.last_fragments
+        )
+        assistant_msg: ArtifactMessage | None = None
+        if answer:
+            assistant_msg = await sync_to_async(self._save_ai_message)(
+                chat_id, user.id, answer, fragments or None
+            )
+            logger.info(
+                "AI response saved (stream).",
+                extra={"chat_id": chat_id, "message_id": assistant_msg.id},
+            )
+        return self._compose_complete_event(answer, question, fragments, assistant_msg)
+
+    async def _build_fallback_complete_event(
+            self,
+            chat_id: int,
+            user: AuthenticatedUser,
+            state: _AiStreamState,
+    ) -> dict[str, Any] | None:
+        answer = state.accumulated_answer.strip()
+        if not answer:
+            return None
+        assistant_msg: ArtifactMessage | None = None
+        try:
+            assistant_msg = await sync_to_async(self._save_ai_message)(
+                chat_id, user.id, answer, state.last_fragments or None
+            )
+            logger.info(
+                "AI response saved (stream fallback).",
+                extra={"chat_id": chat_id, "message_id": assistant_msg.id},
+            )
+        except Exception:
+            logger.exception(
+                "Failed to save fallback AI message.",
+                extra={"chat_id": chat_id},
+            )
+        return self._compose_complete_event(
+            answer, state.last_question, state.last_fragments, assistant_msg
+        )
+
     async def _iter_ai_stream_group_payloads(
             self,
             *,
@@ -420,53 +484,17 @@ class MessageService:
             ],
             stream_url_setting_name: str,
     ) -> AsyncIterator[dict[str, Any]]:
-        accumulated_answer = ""
-        received_complete = False
-        last_question = ""
-        last_fragments: list[Any] = []
-
-        async def _build_and_save_complete() -> dict[str, Any] | None:
-            answer = accumulated_answer.strip()
-            if not answer:
-                return None
-            assistant_msg: ArtifactMessage | None = None
-            try:
-                assistant_msg = await sync_to_async(self._save_ai_message)(
-                    chat_id, user.id, answer, last_fragments or None
-                )
-                logger.info(
-                    "AI response saved (stream fallback).",
-                    extra={"chat_id": chat_id, "message_id": assistant_msg.id},
-                )
-            except Exception:
-                logger.exception(
-                    "Failed to save fallback AI message.",
-                    extra={"chat_id": chat_id},
-                )
-            event: dict[str, Any] = {
-                "type": "ai_complete",
-                "message": answer,
-                "answer": answer,
-                "question": last_question,
-                "fragments": last_fragments,
-            }
-            if assistant_msg:
-                event["id"] = assistant_msg.id
-                event["sender_type"] = assistant_msg.sender_type
-                event["created_by"] = assistant_msg.created_by
-                event["created_at"] = assistant_msg.created_at.isoformat()
-            return event
-
+        state = _AiStreamState()
         try:
             async for sse in sse_events:
                 et = sse.get("type")
                 if et == "meta":
-                    last_question = str(sse.get("question", ""))
-                    last_fragments = llm_client.normalize_fragments(sse.get("fragments"))
+                    state.last_question = str(sse.get("question", ""))
+                    state.last_fragments = llm_client.normalize_fragments(sse.get("fragments"))
                     yield {
                         "type": "ai_context",
-                        "question": last_question,
-                        "fragments": last_fragments,
+                        "question": state.last_question,
+                        "fragments": state.last_fragments,
                     }
                 elif et == "progress":
                     yield {
@@ -476,46 +504,13 @@ class MessageService:
                     }
                 elif et == "delta":
                     delta = str(sse.get("text", ""))
-                    accumulated_answer += delta
-                    yield {
-                        "type": "ai_delta",
-                        "delta": delta,
-                    }
+                    state.accumulated_answer += delta
+                    yield {"type": "ai_delta", "delta": delta}
                 elif et == "complete":
-                    received_complete = True
-                    result = sse.get("result") or {}
-                    if not isinstance(result, dict):
-                        result = {}
-                    q, answer, fragments = complete_extractor(
-                        result, accumulated_answer, last_question, last_fragments
+                    state.received_complete = True
+                    yield await self._handle_stream_complete(
+                        chat_id, user, sse, state, complete_extractor
                     )
-
-                    assistant_msg: ArtifactMessage | None = None
-                    if answer:
-                        assistant_msg = await sync_to_async(self._save_ai_message)(
-                            chat_id, user.id, answer, fragments or None
-                        )
-                        logger.info(
-                            "AI response saved (stream).",
-                            extra={
-                                "chat_id": chat_id,
-                                "message_id": assistant_msg.id,
-                            },
-                        )
-
-                    event: dict[str, Any] = {
-                        "type": "ai_complete",
-                        "message": answer,
-                        "answer": answer,
-                        "question": q,
-                        "fragments": fragments,
-                    }
-                    if assistant_msg:
-                        event["id"] = assistant_msg.id
-                        event["sender_type"] = assistant_msg.sender_type
-                        event["created_by"] = assistant_msg.created_by
-                        event["created_at"] = assistant_msg.created_at.isoformat()
-                    yield event
                 elif et == "error":
                     yield {
                         "type": "ai_error",
@@ -535,14 +530,14 @@ class MessageService:
                 },
                 exc_info=True,
             )
-            fallback = await _build_and_save_complete()
+            fallback = await self._build_fallback_complete_event(chat_id, user, state)
             if fallback:
                 yield fallback
                 return
             raise LLMServiceException() from e
 
-        if not received_complete:
-            fallback = await _build_and_save_complete()
+        if not state.received_complete:
+            fallback = await self._build_fallback_complete_event(chat_id, user, state)
             if fallback:
                 yield fallback
 
@@ -621,7 +616,7 @@ class MessageService:
         role = membership_repository.get_role(chat_id, user_id)
         if role is None:
             raise MessageAccessDeniedException()
-        if role == "reader":
+        if role == ChatMembership.Role.READER:
             raise ReaderCannotSendMessageException()
         if chat.is_locked:
             raise ChatLockedException()

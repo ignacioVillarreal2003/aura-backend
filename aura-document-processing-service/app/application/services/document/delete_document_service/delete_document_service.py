@@ -17,6 +17,7 @@ from app.application.services.document.delete_document_service.interfaces.delete
     DeleteDocumentServiceInterface
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
+from app.infrastructure.http.authentication_provider.request_token import get_request_token
 from app.infrastructure.http.chat_membership.chat_membership_provider_interface import (
     ChatMembershipProviderInterface,
 )
@@ -117,7 +118,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             membership = await self._chat_membership_provider.get_membership(
                 chat_id=chat_id,
                 user_id=int(authenticated_user.id),
-                authorization_header=None,
+                authorization_header=get_request_token(),
             )
             if not membership.is_owner:
                 logger.warning(
@@ -237,7 +238,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             membership = await self._chat_membership_provider.get_membership(
                 chat_id=int(document.chat_id),
                 user_id=int(authenticated_user.id),
-                authorization_header=None,
+                authorization_header=get_request_token(),
             )
             if membership.is_owner:
                 return

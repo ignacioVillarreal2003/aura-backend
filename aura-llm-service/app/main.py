@@ -17,6 +17,7 @@ from app.configuration.middlewares.body_size_limit_middleware import add_body_si
 from app.configuration.middlewares.guardrails_middleware import add_guardrails_middleware
 from app.configuration.middlewares.logging_middleware import add_logging_middleware
 from app.configuration.middlewares.output_guardrails_middleware import add_output_guardrails_middleware
+from app.configuration.metrics import patch_instrumentator_routing
 from app.configuration.tracing import setup_tracing
 
 _root_log_level = getattr(
@@ -72,6 +73,7 @@ def create_app() -> FastAPI:
     _include_routers(app)
     register_exception_handlers(app)
 
+    patch_instrumentator_routing()
     Instrumentator(
         should_group_status_codes=True,
         should_ignore_untemplated=True,

@@ -18,6 +18,7 @@ from app.application.services.document.document_download_service.interfaces.docu
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.document.document_status import DocumentStatus
+from app.infrastructure.http.authentication_provider.request_token import get_request_token
 from app.infrastructure.http.chat_membership.chat_membership_provider_interface import (
     ChatMembershipProviderInterface,
 )
@@ -163,9 +164,11 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
             document: Document,
             authenticated_user: AuthenticatedUser,
     ) -> None:
+        token = get_request_token()
+
         accessible_ids = await self._document_collection_catalog_client.fetch_all_accessible_document_ids(
             user_id=int(authenticated_user.id),
-            authorization_header=None,
+            authorization_header=token,
         )
         if int(document.id) in accessible_ids:
             return
@@ -174,7 +177,7 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
             membership = await self._chat_membership_provider.get_membership(
                 chat_id=int(document.chat_id),
                 user_id=int(authenticated_user.id),
-                authorization_header=None,
+                authorization_header=token,
             )
             if membership.is_member:
                 return

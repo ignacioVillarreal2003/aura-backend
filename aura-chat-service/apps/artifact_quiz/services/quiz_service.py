@@ -7,18 +7,16 @@ from core.authorization.access import AccessControl
 from core.authorization import permissions as perms
 from core.clients.exceptions import HttpClientException
 from core.clients.llm_client import llm_client
-from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
+from apps.chat.exceptions import ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.artifact.models import Artifact
-from apps.artifact.repositories.artifact_repository import artifact_repository
 from apps.artifact_quiz.exceptions import QuizAccessDeniedException, QuizNotFoundException, LLMServiceException
 from apps.artifact_quiz.models import ArtifactQuiz
 from apps.artifact_quiz.repositories.quiz_repository import quiz_repository
-from apps.membership.repositories.membership_repository import membership_repository
-from apps.artifact.services.artifact_access import assert_detail_access
 from django.db import transaction
 from apps.artifact.broadcasting import broadcast_artifact_created, broadcast_artifact_progress
-from apps.artifact.services.artifact_service import create_artifact_for_content, _cleanup_artifact_interactions
+from apps.artifact.services.artifact_service import create_artifact_for_content
+from apps.artifact.services.artifact_crud_service import ArtifactCrudService
 from apps.artifact.llm_context import build_chat_history
 
 logger = logging.getLogger(__name__)
@@ -29,10 +27,6 @@ def _to_int_or_none(value) -> int | None:
         return int(value) if value is not None else None
     except (TypeError, ValueError):
         return None
-
-
-def _assert_quiz_access(user_id: int, quiz, *, require_contributor: bool = False) -> None:
-    assert_detail_access(user_id, quiz, QuizAccessDeniedException(), require_contributor=require_contributor)
 
 
 def _normalize_questions(questions: list) -> list:
@@ -96,53 +90,37 @@ def _persist_generated_quiz(
     return artifact, quiz
 
 
-class QuizService:
+class QuizService(ArtifactCrudService):
+    repository = quiz_repository
+    not_found_exc = QuizNotFoundException
+    access_denied_exc = QuizAccessDeniedException
+    log_model = "ArtifactQuiz"
+    log_id_key = "quiz_id"
+    perm_list = perms.LIST_QUIZZES
+    perm_manage = perms.MANAGE_QUIZZES
+    perm_get = perms.GET_QUIZ
+    perm_export = perms.EXPORT_QUIZ
+    perm_manage_export = perms.MANAGE_EXPORT_QUIZ
+    perm_delete = perms.DELETE_QUIZ
+    logger = logger
+
     def list_quizzes(self, user: AuthenticatedUser, chat_id: int):
-        AccessControl.require_permissions(user, frozenset({perms.LIST_QUIZZES}))
-        if chat_repository.get_by_id(chat_id) is None:
-            raise ChatNotFoundException()
-        if not membership_repository.is_active_member(chat_id, user.id):
-            raise ChatAccessDeniedException()
-        return quiz_repository.list_by_chat(source_chat_id=chat_id)
+        return self._list_by_chat(user, chat_id)
 
     def list_all_quizzes(self, user: AuthenticatedUser):
-        AccessControl.require_permissions(user, frozenset({perms.MANAGE_QUIZZES}))
-        return quiz_repository.list_all()
+        return self._list_all(user)
 
     def get_quiz(self, user: AuthenticatedUser, quiz_id: int) -> ArtifactQuiz:
-        AccessControl.require_permissions(user, frozenset({perms.GET_QUIZ}))
-        quiz = quiz_repository.get_by_id(quiz_id)
-        if quiz is None:
-            raise QuizNotFoundException()
-        _assert_quiz_access(user.id, quiz)
-        return quiz
+        return self._get(user, quiz_id)
 
     def get_own_quiz(self, user: AuthenticatedUser, quiz_id: int) -> ArtifactQuiz:
-        AccessControl.require_permissions(user, frozenset({perms.EXPORT_QUIZ}))
-        quiz = quiz_repository.get_by_id(quiz_id)
-        if quiz is None:
-            raise QuizNotFoundException()
-        _assert_quiz_access(user.id, quiz)
-        return quiz
+        return self._get_own(user, quiz_id)
 
     def get_quiz_admin_export(self, user: AuthenticatedUser, quiz_id: int) -> ArtifactQuiz:
-        AccessControl.require_permissions(user, frozenset({perms.MANAGE_EXPORT_QUIZ}))
-        quiz = quiz_repository.get_by_id(quiz_id)
-        if quiz is None:
-            raise QuizNotFoundException()
-        return quiz
+        return self._get_admin_export(user, quiz_id)
 
-    @transaction.atomic
     def delete_quiz(self, user: AuthenticatedUser, quiz_id: int) -> None:
-        AccessControl.require_permissions(user, frozenset({perms.DELETE_QUIZ}))
-        quiz = quiz_repository.get_by_id_for_update(quiz_id)
-        if quiz is None:
-            raise QuizNotFoundException()
-        _assert_quiz_access(user.id, quiz, require_contributor=True)
-        quiz_repository.soft_delete(quiz, deleted_by=user.id)
-        _cleanup_artifact_interactions(quiz.artifact_id)
-        artifact_repository.soft_delete(quiz.artifact, deleted_by=user.id)
-        logger.info("ArtifactQuiz deleted", extra={"user_id": user.id, "quiz_id": quiz_id})
+        self._delete(user, quiz_id)
 
     async def generate_quiz(
             self,

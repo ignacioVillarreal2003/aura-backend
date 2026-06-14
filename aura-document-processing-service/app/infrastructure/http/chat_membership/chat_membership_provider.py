@@ -51,7 +51,10 @@ class ChatMembershipProvider(ChatMembershipProviderInterface):
             return _NOT_A_MEMBER
 
         base = self._settings.membership_url.rstrip("/")
-        url = f"{base}/internal/chats/{chat_id}/members/{user_id}"
+        # The chat service is a Django app that enforces trailing slashes; without
+        # it the request is 301-redirected and the (non-redirect-following) client
+        # would misread the empty body as "not a member".
+        url = f"{base}/internal/chats/{chat_id}/members/{user_id}/"
         timeout = self._settings.request_timeout_seconds
 
         try:

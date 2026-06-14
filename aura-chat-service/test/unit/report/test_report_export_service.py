@@ -9,9 +9,10 @@ import datetime
 
 import pytest
 
-from apps.report.exceptions import ReportExportException
-from apps.report.models import Report
-from apps.report.services.export_service import (
+from apps.artifact.models.artifact import Artifact
+from apps.artifact_report.exceptions import ReportExportException
+from apps.artifact_report.models import ArtifactReport
+from apps.artifact_report.services.export_service import (
     _TYPE_LABELS,
     _fmt_dt,
     _render_markdown,
@@ -20,7 +21,7 @@ from apps.report.services.export_service import (
 )
 from test.conftest import make_report
 
-EXPORT = "apps.report.services.export_service"
+EXPORT = "apps.artifact_report.services.export_service"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -86,9 +87,9 @@ def test_generate_markdown_includes_title_and_content():
 
 
 def test_generate_markdown_uses_human_type_label():
-    report = make_report(report_type=Report.Type.SITREP)
+    report = make_report(report_type=ArtifactReport.Type.SITREP)
     md = generate_report_markdown(report)
-    assert _TYPE_LABELS[Report.Type.SITREP] in md
+    assert _TYPE_LABELS[ArtifactReport.Type.SITREP] in md
 
 
 def test_generate_markdown_unknown_type_falls_back_to_raw_value():
@@ -118,7 +119,7 @@ def test_generate_pdf_returns_pdf_bytes():
 
 
 def test_generate_pdf_handles_rag_mode():
-    report = make_report(mode=Report.Mode.RAG, content="Contenido con contexto.")
+    report = make_report(mode=Artifact.Mode.RAG, content="Contenido con contexto.")
     pdf = generate_report_pdf(report)
     assert pdf[:4] == b"%PDF"
 
@@ -126,6 +127,6 @@ def test_generate_pdf_handles_rag_mode():
 def test_generate_pdf_raises_export_exception_on_pisa_error(mocker):
     """When xhtml2pdf reports rendering errors, a ReportExportException is raised."""
     report = make_report()
-    mocker.patch(f"{EXPORT}.pisa.CreatePDF", return_value=mocker.Mock(err=1))
+    mocker.patch("core.export.pdf_export.pisa.CreatePDF", return_value=mocker.Mock(err=1))
     with pytest.raises(ReportExportException):
         generate_report_pdf(report)

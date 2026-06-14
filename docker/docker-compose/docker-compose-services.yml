@@ -93,7 +93,7 @@ services:
     ports:
       - "8003:8000"
     env_file:
-      - ../../aura-chat-service/.env.docker
+      - ../../aura-chat-service/env/.env.docker
     environment:
       HF_TOKEN: ${HF_TOKEN:-}
     depends_on:

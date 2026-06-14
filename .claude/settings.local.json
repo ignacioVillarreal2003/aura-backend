@@ -80,7 +80,18 @@
       "Bash(grep -E '\\\\.py$')",
       "Bash(xargs wc -l)",
       "Bash(grep -c '\\\\.pyc$')",
-      "Bash(grep '\\\\.pyc$')"
+      "Bash(grep '\\\\.pyc$')",
+      "Read(//c/Users/ignac/Desktop/AURA/**)",
+      "Read(//c/Users/ignac/**)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(python -m py_compile app/configuration/metrics.py app/main.py)",
+      "Bash(python -m py_compile app/infrastructure/llm/ollama_llm/ollama_llm_facade_settings.py)",
+      "Bash(python -m py_compile aura-document-processing-service/app/application/services/document/document_query_service/document_query_service.py aura-document-processing-service/app/infrastructure/http/chat_membership/chat_membership_provider.py aura-auth-service/scripts/setup_db.py)",
+      "Bash(python -m py_compile app/api/schemas/document/create_document_form.py app/domain/dtos/document/create_document/create_document_request.py)",
+      "Bash(python -m py_compile /c/Users/ignac/Desktop/AURA/aura-backend/aura-llm-service/app/configuration/middlewares/guardrails_middleware.py /c/Users/ignac/Desktop/AURA/aura-backend/aura-llm-service/app/infrastructure/guardrails/nemo_guardrails_settings.py)",
+      "Bash(python *)"
     ]
   }
 }

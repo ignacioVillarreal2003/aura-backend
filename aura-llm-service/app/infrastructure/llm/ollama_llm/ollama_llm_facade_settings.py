@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import Optional, Union
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -28,7 +28,7 @@ class OllamaLLMFacadeSettings(BaseSettings):
     num_predict: Optional[int] = Field(default=None, le=32_768)
 
     request_timeout: Optional[float] = Field(default=600.0, gt=0, le=3600.0)
-    keep_alive: Optional[str] = Field(default=None)
+    keep_alive: Optional[Union[int, str]] = Field(default=None)
 
     @field_validator("model_name", mode="before")
     @classmethod
@@ -59,11 +59,23 @@ class OllamaLLMFacadeSettings(BaseSettings):
 
     @field_validator("keep_alive", mode="before")
     @classmethod
-    def validate_keep_alive(cls, v: Optional[str]) -> Optional[str]:
+    def validate_keep_alive(cls, v: Optional[Union[int, str]]) -> Optional[Union[int, str]]:
+        # Ollama treats keep_alive as a Go duration: a JSON number means seconds
+        # (-1 = keep loaded forever, 0 = unload immediately), while a string must
+        # carry a unit ("30m", "24h"). A bare "-1"/"300" string has no unit and
+        # makes Ollama fail with 'missing unit in duration', so coerce plain
+        # integers to int and leave true duration strings untouched.
         if v is None:
+            return None
+        if isinstance(v, int):
             return v
         v = str(v).strip()
-        return v if v else None
+        if not v:
+            return None
+        try:
+            return int(v)
+        except ValueError:
+            return v
 
     def get_chat_ollama_kwargs(self) -> dict:
         kwargs: dict = {

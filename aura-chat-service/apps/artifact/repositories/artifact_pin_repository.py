@@ -1,6 +1,7 @@
 from django.db.models import QuerySet
 
 from apps.artifact.models.artifact_pin import ArtifactPin
+from apps.artifact.repositories.artifact_repository import _CONTENT_RELATIONS
 
 
 class PinRepository:
@@ -23,7 +24,10 @@ class PinRepository:
                 artifact__source_chat_id=chat_id,
                 artifact__deleted_at__isnull=True,
             )
-            .select_related("artifact", "artifact__message_content")
+            .select_related(
+                "artifact",
+                *(f"artifact__{rel}" for rel in _CONTENT_RELATIONS),
+            )
             .order_by("created_at")
         )
 

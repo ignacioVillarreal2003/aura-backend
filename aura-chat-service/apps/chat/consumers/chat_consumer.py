@@ -21,6 +21,7 @@ from apps.chat.ws_rate_limit import (
     release_ws_connection,
 )
 from apps.membership.repositories.membership_repository import membership_repository
+from apps.membership.models.chat_membership import ChatMembership
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.exceptions import ServiceUnavailableException
 
@@ -231,6 +232,32 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 pass
 
     async def _handle_chat_message(self, content: dict):
+        pre = await self._validate_send_preconditions(content)
+        if pre is None:
+            return
+        text, mode = pre
+
+        if not await self._enforce_rate_limit():
+            return
+
+        await self._cancel_previous_ai_reply()
+
+        lock_token = await self._acquire_ai_lock()
+        if lock_token is None:
+            return
+
+        if not await self._persist_user_message(text, lock_token):
+            return
+
+        self._spawn_ai_reply_task(mode, lock_token)
+
+    async def _validate_send_preconditions(self, content: dict) -> tuple[str, str] | None:
+        """Run all send guards. Returns (text, mode) or sends an error and returns None.
+
+        Validates membership/role BEFORE acquiring the AI lock so a reader (or a
+        member removed mid-session) gets a precise error and we don't broadcast a
+        spurious lock true->false flicker to the whole chat.
+        """
         chat_obj = await database_sync_to_async(chat_repository.get_by_id)(self.chat_id)
         if chat_obj is None:
             await self.send_json({
@@ -238,18 +265,15 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 "error_code": "chat_not_found",
                 "detail": "This chat no longer exists.",
             })
-            return
+            return None
         if chat_obj.is_locked:
             await self.send_json({
                 "type": "error",
                 "error_code": "chat_locked",
                 "detail": "This chat is locked and does not accept new messages.",
             })
-            return
+            return None
 
-        # Validate membership/role BEFORE acquiring the AI lock so a reader (or a
-        # member removed mid-session) gets a precise error and we don't broadcast
-        # a spurious lock true->false flicker to the whole chat.
         role = await database_sync_to_async(membership_repository.get_role)(
             self.chat_id, self.user.id
         )
@@ -259,14 +283,14 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 "error_code": "not_a_member",
                 "detail": "You are no longer a member of this chat.",
             })
-            return
-        if role == "reader":
+            return None
+        if role == ChatMembership.Role.READER:
             await self.send_json({
                 "type": "error",
                 "error_code": "reader_cannot_send",
                 "detail": "Readers cannot send messages in this chat.",
             })
-            return
+            return None
 
         text = content.get("message", "").strip()
         if not text:
@@ -274,18 +298,19 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 "type": "error",
                 "detail": "Message cannot be empty",
             })
-            return
-
+            return None
         if len(text) > _MAX_MESSAGE_LENGTH:
             await self.send_json({
                 "type": "error",
                 "error_code": "message_too_long",
                 "detail": f"Message exceeds {_MAX_MESSAGE_LENGTH} characters.",
             })
-            return
+            return None
 
         mode = ChatAIMode.normalize(content.get("mode"))
+        return text, mode
 
+    async def _enforce_rate_limit(self) -> bool:
         allowed = await database_sync_to_async(check_message_rate_limit)(
             self.user.id, self.chat_id
         )
@@ -295,8 +320,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 "error_code": "rate_limit_exceeded",
                 "detail": "Too many messages. Please wait before sending more.",
             })
-            return
+            return False
+        return True
 
+    async def _cancel_previous_ai_reply(self) -> None:
         prev = self._ai_reply_task
         if prev is not None and not prev.done():
             prev.cancel()
@@ -305,6 +332,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             except asyncio.CancelledError:
                 pass
 
+    async def _acquire_ai_lock(self) -> str | None:
+        """Acquire the per-chat AI lock and broadcast the lock-on. Sends an error
+        and returns None when the lock can't be taken."""
         try:
             lock_token = await database_sync_to_async(try_acquire)(self.chat_id)
         except ServiceUnavailableException as e:
@@ -313,7 +343,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 "error_code": e.error_code,
                 "detail": e.detail,
             })
-            return
+            return None
 
         if not lock_token:
             await self.send_json({
@@ -321,12 +351,16 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 "error_code": "chat_ai_reply_in_progress",
                 "detail": "Wait until the assistant finishes the current reply.",
             })
-            return
+            return None
 
         await database_sync_to_async(broadcast_chat_ai_lock_change)(
             self.chat_id, True
         )
+        return lock_token
 
+    async def _persist_user_message(self, text: str, lock_token: str) -> bool:
+        """Persist the user message. On failure releases the lock, broadcasts
+        lock-off, sends an error and returns False."""
         try:
             await database_sync_to_async(message_service.send_message)(
                 self.user, self.chat_id, text
@@ -344,8 +378,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 "type": "error",
                 "detail": "Failed to save message. Please try again.",
             })
-            return
+            return False
+        return True
 
+    def _spawn_ai_reply_task(self, mode: str, lock_token: str) -> None:
         task = asyncio.create_task(self._run_ai_reply(mode, lock_token))
         # Hold a process-level strong reference so the reply survives even if this
         # consumer disconnects before the stream finishes.

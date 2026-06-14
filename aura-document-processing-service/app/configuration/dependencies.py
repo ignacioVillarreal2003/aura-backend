@@ -266,6 +266,7 @@ async def startup_dependencies(app: FastAPI) -> None:
             embedder_factory=embedder_factory,
             reranker_factory=reranker_factory,
             document_collection_catalog_client=document_collection_catalog_client,
+            chat_membership_provider=chat_membership_provider,
         )
         app.state.fragment_query_service = fragment_query_service
 

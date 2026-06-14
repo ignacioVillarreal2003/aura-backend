@@ -64,3 +64,40 @@ def record_guardrails_block(stage: str) -> None:
         guardrails_blocked_total.labels(stage=stage).inc()
     except Exception:
         logger.debug("Failed to record guardrails block metric.", exc_info=True)
+
+
+def patch_instrumentator_routing() -> None:
+    """Make prometheus-fastapi-instrumentator tolerant of FastAPI's ``_IncludedRouter``.
+
+    Newer FastAPI versions append ``_IncludedRouter`` objects to ``app.routes`` when
+    ``include_router()`` is used. These objects match a request scope but expose no
+    ``.path`` attribute, so the instrumentator's route-name resolver crashes with
+    ``AttributeError: '_IncludedRouter' object has no attribute 'path'`` on every
+    request (the handler name is resolved before excluded handlers are checked).
+
+    We replace the resolver with a version that reads ``.path`` defensively and
+    recurses into any route exposing nested routes, mirroring the original Mount
+    handling. Safe to call once at startup; the upstream package has no fix yet.
+    """
+    from prometheus_fastapi_instrumentator import routing
+    from starlette.routing import Match
+
+    def _safe_get_route_name(scope, routes, route_name=None):
+        for route in routes:
+            match, child_scope = route.matches(scope)
+            if match == Match.FULL:
+                route_name = getattr(route, "path", "") or ""
+                child_scope = {**scope, **child_scope}
+                sub_routes = getattr(route, "routes", None) or getattr(
+                    getattr(route, "router", None), "routes", None
+                )
+                if sub_routes:
+                    child_route_name = _safe_get_route_name(child_scope, sub_routes, route_name)
+                    route_name = None if child_route_name is None else route_name + child_route_name
+                return route_name or None
+            if match == Match.PARTIAL and route_name is None:
+                route_name = getattr(route, "path", None)
+        return None
+
+    routing._get_route_name = _safe_get_route_name
+    logger.info("Patched prometheus-fastapi-instrumentator routing for _IncludedRouter compatibility.")

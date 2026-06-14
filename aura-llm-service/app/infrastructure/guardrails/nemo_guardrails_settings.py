@@ -29,7 +29,8 @@ class NemoGuardrailsSettings(BaseSettings):
 
     blocked_message: str = Field(
         default=(
-            "La consulta fue bloqueada por el filtro de seguridad. "
-            "Reformulá el mensaje en relación con los documentos o tareas del sistema."
+            "No se pudo procesar tu consulta porque no está relacionada con los "
+            "documentos o las tareas del sistema. Reformulá el mensaje en relación "
+            "con tus documentos e intentá nuevamente."
         )
     )

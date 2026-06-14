@@ -1,6 +1,4 @@
 import logging
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
 from django.db import IntegrityError, transaction
 from django.db.transaction import on_commit
 from django.db.models import QuerySet
@@ -19,6 +17,7 @@ from apps.membership.exceptions import (
 )
 from apps.membership.models.chat_membership import ChatMembership
 from apps.membership.repositories.membership_repository import membership_repository
+from core.ws.group_broadcast import send_to_chat_group
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authorization import AccessControl
 from core.authorization.permissions import ADD_MEMBER, LEAVE_CHAT, LIST_MEMBERS, LIST_MY_MEMBERSHIPS, MANAGE_MEMBERS, \
@@ -33,59 +32,17 @@ _VALID_TRANSITIONS: dict[str, set[str]] = {
 
 
 def _broadcast_member_joined(chat_id: int, member_id: int) -> None:
-    channel_layer = get_channel_layer()
-    if channel_layer is None:
-        return
-    try:
-        async_to_sync(channel_layer.group_send)(
-            f"chat_{chat_id}",
-            {"type": "member_joined", "member_id": member_id},
-        )
-    except Exception:
-        logger.warning(
-            "Failed to broadcast member_joined for chat %d member %d",
-            chat_id,
-            member_id,
-            exc_info=True,
-        )
+    send_to_chat_group(chat_id, {"type": "member_joined", "member_id": member_id})
 
 
 def _broadcast_member_left(chat_id: int, member_id: int) -> None:
-    channel_layer = get_channel_layer()
-    if channel_layer is None:
-        return
-    try:
-        async_to_sync(channel_layer.group_send)(
-            f"chat_{chat_id}",
-            {"type": "member_left", "member_id": member_id},
-        )
-    except Exception:
-        logger.warning(
-            "Failed to broadcast member_left for chat %d member %d",
-            chat_id,
-            member_id,
-            exc_info=True,
-        )
+    send_to_chat_group(chat_id, {"type": "member_left", "member_id": member_id})
 
 
 def _broadcast_membership_revoked(chat_id: int, member_id: int) -> None:
     """Tell the chat group that ``member_id`` lost access so their own open
     sockets can close instead of lingering subscribed to the group."""
-    channel_layer = get_channel_layer()
-    if channel_layer is None:
-        return
-    try:
-        async_to_sync(channel_layer.group_send)(
-            f"chat_{chat_id}",
-            {"type": "membership_revoked", "member_id": member_id},
-        )
-    except Exception:
-        logger.warning(
-            "Failed to broadcast membership_revoked for chat %d member %d",
-            chat_id,
-            member_id,
-            exc_info=True,
-        )
+    send_to_chat_group(chat_id, {"type": "membership_revoked", "member_id": member_id})
 
 
 class MembershipService:

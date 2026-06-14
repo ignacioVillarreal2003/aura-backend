@@ -13,15 +13,16 @@ from types import SimpleNamespace
 
 import pytest
 
-from apps.checklist.exceptions import ChecklistExportException
-from apps.checklist.models import Checklist
-from apps.checklist.services.export_service import (
-    _fmt_dt,
+from apps.artifact_checklist.exceptions import ChecklistExportException
+from apps.artifact_checklist.models import ArtifactChecklist
+from core.export.pdf_export import fmt_dt as _fmt_dt
+from apps.artifact.models.artifact import Artifact
+from apps.artifact_checklist.services.export_service import (
     generate_checklist_markdown,
     generate_checklist_pdf,
 )
 
-EXPORT = "apps.checklist.services.export_service"
+EXPORT = "apps.artifact_checklist.services.export_service"
 
 
 def _item(text="Item", is_checked=False, notes=""):
@@ -33,11 +34,11 @@ def _section(title="Sección", items=None):
     return SimpleNamespace(title=title, items=SimpleNamespace(all=lambda: items))
 
 
-def _checklist(title="Mi checklist", mode=Checklist.Mode.DIRECT, sections=None, created_at=None):
+def _checklist(title="Mi checklist", mode=Artifact.Mode.DIRECT, sections=None, created_at=None):
     sections = sections or []
     return SimpleNamespace(
         title=title,
-        mode=mode,
+        artifact=SimpleNamespace(mode=mode),
         created_at=created_at or datetime.datetime(2025, 3, 15, 9, 30, tzinfo=datetime.timezone.utc),
         sections=SimpleNamespace(all=lambda: sections),
     )
@@ -126,7 +127,7 @@ def test_pdf_returns_pdf_bytes():
 
 
 def test_pdf_handles_rag_mode():
-    cl = _checklist(mode=Checklist.Mode.RAG, sections=[_section("S", items=[_item("a")])])
+    cl = _checklist(mode=Artifact.Mode.RAG, sections=[_section("S", items=[_item("a")])])
     assert generate_checklist_pdf(cl)[:4] == b"%PDF"
 
 
@@ -135,6 +136,6 @@ def test_pdf_handles_empty_sections():
 
 
 def test_pdf_raises_export_exception_on_pisa_error(mocker):
-    mocker.patch(f"{EXPORT}.pisa.CreatePDF", return_value=mocker.Mock(err=1))
+    mocker.patch("core.export.pdf_export.pisa.CreatePDF", return_value=mocker.Mock(err=1))
     with pytest.raises(ChecklistExportException):
         generate_checklist_pdf(_checklist(sections=[_section("S", items=[_item("a")])]))

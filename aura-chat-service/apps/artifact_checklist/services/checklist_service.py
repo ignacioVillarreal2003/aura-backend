@@ -7,19 +7,17 @@ from core.authorization.access import AccessControl
 from core.authorization import permissions as perms
 from core.clients.exceptions import HttpClientException
 from core.clients.llm_client import llm_client
-from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
+from apps.chat.exceptions import ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.artifact.models import Artifact
-from apps.artifact.repositories.artifact_repository import artifact_repository
 from apps.artifact_checklist.exceptions import ChecklistAccessDeniedException, ChecklistNotFoundException, \
     LLMServiceException
 from apps.artifact_checklist.models import ArtifactChecklist
 from apps.artifact_checklist.repositories.checklist_repository import checklist_repository
-from apps.membership.repositories.membership_repository import membership_repository
-from apps.artifact.services.artifact_access import assert_detail_access
 from django.db import transaction
 from apps.artifact.broadcasting import broadcast_artifact_created, broadcast_artifact_progress
-from apps.artifact.services.artifact_service import create_artifact_for_content, _cleanup_artifact_interactions
+from apps.artifact.services.artifact_service import create_artifact_for_content
+from apps.artifact.services.artifact_crud_service import ArtifactCrudService
 from apps.artifact.llm_context import build_chat_history
 
 logger = logging.getLogger(__name__)
@@ -43,10 +41,6 @@ def _persist_generated_checklist(*, user_id, title, description, query, mode, so
         query=query,
     )
     return artifact, checklist
-
-
-def _assert_checklist_access(user_id: int, checklist, *, require_contributor: bool = False) -> None:
-    assert_detail_access(user_id, checklist, ChecklistAccessDeniedException(), require_contributor=require_contributor)
 
 
 def _items_to_sections(items: list) -> list:
@@ -78,53 +72,37 @@ def _items_to_sections(items: list) -> list:
     return sections
 
 
-class ChecklistService:
+class ChecklistService(ArtifactCrudService):
+    repository = checklist_repository
+    not_found_exc = ChecklistNotFoundException
+    access_denied_exc = ChecklistAccessDeniedException
+    log_model = "ArtifactChecklist"
+    log_id_key = "checklist_id"
+    perm_list = perms.LIST_CHECKLISTS
+    perm_manage = perms.MANAGE_CHECKLISTS
+    perm_get = perms.GET_CHECKLIST
+    perm_export = perms.EXPORT_CHECKLIST
+    perm_manage_export = perms.MANAGE_EXPORT_CHECKLIST
+    perm_delete = perms.DELETE_CHECKLIST
+    logger = logger
+
     def list_checklists(self, user: AuthenticatedUser, chat_id: int):
-        AccessControl.require_permissions(user, frozenset({perms.LIST_CHECKLISTS}))
-        if chat_repository.get_by_id(chat_id) is None:
-            raise ChatNotFoundException()
-        if not membership_repository.is_active_member(chat_id, user.id):
-            raise ChatAccessDeniedException()
-        return checklist_repository.list_by_chat(source_chat_id=chat_id)
+        return self._list_by_chat(user, chat_id)
 
     def list_all_checklists(self, user: AuthenticatedUser):
-        AccessControl.require_permissions(user, frozenset({perms.MANAGE_CHECKLISTS}))
-        return checklist_repository.list_all()
+        return self._list_all(user)
 
     def get_checklist(self, user: AuthenticatedUser, checklist_id: int) -> ArtifactChecklist:
-        AccessControl.require_permissions(user, frozenset({perms.GET_CHECKLIST}))
-        checklist = checklist_repository.get_by_id(checklist_id)
-        if checklist is None:
-            raise ChecklistNotFoundException()
-        _assert_checklist_access(user.id, checklist)
-        return checklist
+        return self._get(user, checklist_id)
 
     def get_own_checklist(self, user: AuthenticatedUser, checklist_id: int) -> ArtifactChecklist:
-        AccessControl.require_permissions(user, frozenset({perms.EXPORT_CHECKLIST}))
-        checklist = checklist_repository.get_by_id(checklist_id)
-        if checklist is None:
-            raise ChecklistNotFoundException()
-        _assert_checklist_access(user.id, checklist)
-        return checklist
+        return self._get_own(user, checklist_id)
 
     def get_checklist_admin_export(self, user: AuthenticatedUser, checklist_id: int) -> ArtifactChecklist:
-        AccessControl.require_permissions(user, frozenset({perms.MANAGE_EXPORT_CHECKLIST}))
-        checklist = checklist_repository.get_by_id(checklist_id)
-        if checklist is None:
-            raise ChecklistNotFoundException()
-        return checklist
+        return self._get_admin_export(user, checklist_id)
 
-    @transaction.atomic
     def delete_checklist(self, user: AuthenticatedUser, checklist_id: int) -> None:
-        AccessControl.require_permissions(user, frozenset({perms.DELETE_CHECKLIST}))
-        checklist = checklist_repository.get_by_id_for_update(checklist_id)
-        if checklist is None:
-            raise ChecklistNotFoundException()
-        _assert_checklist_access(user.id, checklist, require_contributor=True)
-        checklist_repository.soft_delete(checklist, deleted_by=user.id)
-        _cleanup_artifact_interactions(checklist.artifact_id)
-        artifact_repository.soft_delete(checklist.artifact, deleted_by=user.id)
-        logger.info("ArtifactChecklist deleted", extra={"user_id": user.id, "checklist_id": checklist_id})
+        self._delete(user, checklist_id)
 
     async def generate_checklist(
             self,

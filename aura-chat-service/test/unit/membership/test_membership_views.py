@@ -285,19 +285,6 @@ def test_update_member_status_returns_200(api_client, mocker):
     assert response.data["status"] == "active"
 
 
-def test_update_member_status_inactive_returns_200(api_client, mocker):
-    mocker.patch(
-        f"{MEMBER_VIEW}.membership_service.update_member",
-        return_value=make_membership(status="inactive"),
-    )
-    response = api_client.patch(
-        "/api/v1/chats/1/members/2/",
-        {"status": "inactive"},
-        format="json",
-    )
-    assert response.status_code == 200
-
-
 def test_update_member_status_invalid_value_returns_400(api_client, mocker):
     mocker.patch(f"{MEMBER_VIEW}.membership_service.update_member")
     response = api_client.patch(
@@ -321,7 +308,7 @@ def test_update_member_status_invalid_transition_returns_400(api_client, mocker)
     )
     response = api_client.patch(
         "/api/v1/chats/1/members/2/",
-        {"status": "pending"},
+        {"status": "active"},
         format="json",
     )
     assert response.status_code == 400
@@ -349,7 +336,7 @@ def test_update_member_status_owner_cannot_change_own_returns_403(api_client, mo
     )
     response = api_client.patch(
         "/api/v1/chats/1/members/1/",
-        {"status": "inactive"},
+        {"status": "active"},
         format="json",
     )
     assert response.status_code == 403

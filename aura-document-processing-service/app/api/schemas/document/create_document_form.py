@@ -10,8 +10,8 @@ from app.domain.types import ChatId
 def parse_create_document_request(
         chat_id: Optional[int] = Form(None),
         prefer_docling: bool = Form(False),
-        post_process: bool = Form(True),
-        post_process_graph: bool = Form(True),
+        post_process: bool = Form(False),
+        post_process_graph: bool = Form(False),
         name: Optional[str] = Form(None),
         description: Optional[str] = Form(None),
 ) -> CreateDocumentRequest:

@@ -1,0 +1,75 @@
+name: aura-chat-service CI
+
+# First CI pipeline for the monorepo. Scope: aura-chat-service only.
+# Other services (auth, llm, document-*, notification, gateway) are not gated
+# yet — extend this file with sibling jobs as their suites are ready.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "aura-chat-service/**"
+      - ".github/workflows/aura-chat-service.yml"
+  pull_request:
+    paths:
+      - "aura-chat-service/**"
+      - ".github/workflows/aura-chat-service.yml"
+
+jobs:
+  chat-service:
+    name: aura-chat-service (check + unit tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: aura-chat-service
+    env:
+      # Test settings (in-memory channels, dummy cache, no throttling). Overrides
+      # the value baked into .env.docker (which selects development).
+      DJANGO_SETTINGS_MODULE: aura_chat_service.settings.test
+      # Skip the background Whisper preload; the transcription deps are not
+      # installed in CI (see install step), so loading the model would only log
+      # a caught error.
+      WHISPER_PRELOAD: "False"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            aura-chat-service/requirements.txt
+            aura-chat-service/requirements-test.txt
+
+      - name: Install dependencies (without faster-whisper)
+        # faster-whisper pulls a heavy ML stack and would trigger a model
+        # download at app startup. It is import-guarded in app code, so skipping
+        # it keeps CI fast; the unit tests mock transcription anyway.
+        run: |
+          grep -v '^faster-whisper' requirements.txt > requirements.ci.txt
+          python -m pip install --upgrade pip
+          pip install -r requirements.ci.txt -r requirements-test.txt
+
+      - name: Provide environment (decouple reads .env)
+        # .env.docker carries every required setting (SECRET_KEY, DB_*, REDIS_URL,
+        # service URLs). The DB host is never contacted: unit tests are pure mocks
+        # and `manage.py check` does not open a connection.
+        run: cp env/.env.docker .env
+
+      - name: Django system check
+        run: python manage.py check
+
+      - name: Unit tests (repaired packages)
+        # These packages have been reconciled with the current architecture.
+        # Remaining legacy packages (message, artifact, top-level test/*.py and
+        # the DB-backed integration suite) are tracked for follow-up; add them
+        # here as they are fixed.
+        run: >
+          python -m pytest -q
+          test/unit/chat
+          test/unit/membership
+          test/unit/assistant
+          test/unit/shared_link
+          test/unit/report
+          test/unit/checklist

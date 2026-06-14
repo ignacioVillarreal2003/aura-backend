@@ -7,10 +7,9 @@ from core.authorization.access import AccessControl
 from core.authorization import permissions as perms
 from core.clients.exceptions import HttpClientException
 from core.clients.llm_client import llm_client
-from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
+from apps.chat.exceptions import ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.artifact.models import Artifact
-from apps.artifact.repositories.artifact_repository import artifact_repository
 from apps.artifact_lessons_learned.exceptions import (
     LessonsLearnedAccessDeniedException,
     LessonsLearnedNotFoundException,
@@ -18,18 +17,13 @@ from apps.artifact_lessons_learned.exceptions import (
 )
 from apps.artifact_lessons_learned.models import ArtifactLessonsLearned, ArtifactLessonsLearnedItem
 from apps.artifact_lessons_learned.repositories.lessons_learned_repository import lessons_learned_repository
-from apps.membership.repositories.membership_repository import membership_repository
-from apps.artifact.services.artifact_access import assert_detail_access
 from django.db import transaction
 from apps.artifact.broadcasting import broadcast_artifact_created, broadcast_artifact_progress
-from apps.artifact.services.artifact_service import create_artifact_for_content, _cleanup_artifact_interactions
+from apps.artifact.services.artifact_service import create_artifact_for_content
+from apps.artifact.services.artifact_crud_service import ArtifactCrudService
 from apps.artifact.llm_context import build_chat_history
 
 logger = logging.getLogger(__name__)
-
-
-def _assert_access(user_id: int, ll, *, require_contributor: bool = False) -> None:
-    assert_detail_access(user_id, ll, LessonsLearnedAccessDeniedException(), require_contributor=require_contributor)
 
 
 def _normalize_items(items: list) -> list:
@@ -79,55 +73,38 @@ def _persist_generated_lessons_learned(
     return artifact, ll
 
 
-class LessonsLearnedService:
+class LessonsLearnedService(ArtifactCrudService):
+    repository = lessons_learned_repository
+    not_found_exc = LessonsLearnedNotFoundException
+    access_denied_exc = LessonsLearnedAccessDeniedException
+    log_model = "ArtifactLessonsLearned"
+    log_id_key = "lessons_learned_id"
+    perm_list = perms.LIST_LESSONS_LEARNED
+    perm_manage = perms.MANAGE_LESSONS_LEARNED
+    perm_get = perms.GET_LESSONS_LEARNED
+    perm_export = perms.EXPORT_LESSONS_LEARNED
+    perm_manage_export = perms.MANAGE_EXPORT_LESSONS_LEARNED
+    perm_delete = perms.DELETE_LESSONS_LEARNED
+    logger = logger
+
     def list_lessons_learned(self, user: AuthenticatedUser, chat_id: int):
-        AccessControl.require_permissions(user, frozenset({perms.LIST_LESSONS_LEARNED}))
-        if chat_repository.get_by_id(chat_id) is None:
-            raise ChatNotFoundException()
-        if not membership_repository.is_active_member(chat_id, user.id):
-            raise ChatAccessDeniedException()
-        return lessons_learned_repository.list_by_chat(source_chat_id=chat_id)
+        return self._list_by_chat(user, chat_id)
 
     def list_all_lessons_learned(self, user: AuthenticatedUser):
-        AccessControl.require_permissions(user, frozenset({perms.MANAGE_LESSONS_LEARNED}))
-        return lessons_learned_repository.list_all()
+        return self._list_all(user)
 
     def get_lessons_learned(self, user: AuthenticatedUser, lessons_learned_id: int) -> ArtifactLessonsLearned:
-        AccessControl.require_permissions(user, frozenset({perms.GET_LESSONS_LEARNED}))
-        ll = lessons_learned_repository.get_by_id(lessons_learned_id)
-        if ll is None:
-            raise LessonsLearnedNotFoundException()
-        _assert_access(user.id, ll)
-        return ll
+        return self._get(user, lessons_learned_id)
 
     def get_own_lessons_learned(self, user: AuthenticatedUser, lessons_learned_id: int) -> ArtifactLessonsLearned:
-        AccessControl.require_permissions(user, frozenset({perms.EXPORT_LESSONS_LEARNED}))
-        ll = lessons_learned_repository.get_by_id(lessons_learned_id)
-        if ll is None:
-            raise LessonsLearnedNotFoundException()
-        _assert_access(user.id, ll)
-        return ll
+        return self._get_own(user, lessons_learned_id)
 
     def get_lessons_learned_admin_export(self, user: AuthenticatedUser,
                                          lessons_learned_id: int) -> ArtifactLessonsLearned:
-        AccessControl.require_permissions(user, frozenset({perms.MANAGE_EXPORT_LESSONS_LEARNED}))
-        ll = lessons_learned_repository.get_by_id(lessons_learned_id)
-        if ll is None:
-            raise LessonsLearnedNotFoundException()
-        return ll
+        return self._get_admin_export(user, lessons_learned_id)
 
-    @transaction.atomic
     def delete_lessons_learned(self, user: AuthenticatedUser, lessons_learned_id: int) -> None:
-        AccessControl.require_permissions(user, frozenset({perms.DELETE_LESSONS_LEARNED}))
-        ll = lessons_learned_repository.get_by_id_for_update(lessons_learned_id)
-        if ll is None:
-            raise LessonsLearnedNotFoundException()
-        _assert_access(user.id, ll, require_contributor=True)
-        lessons_learned_repository.soft_delete(ll, deleted_by=user.id)
-        _cleanup_artifact_interactions(ll.artifact_id)
-        artifact_repository.soft_delete(ll.artifact, deleted_by=user.id)
-        logger.info("ArtifactLessonsLearned deleted",
-                    extra={"user_id": user.id, "lessons_learned_id": lessons_learned_id})
+        self._delete(user, lessons_learned_id)
 
     async def generate_lessons_learned(
             self,

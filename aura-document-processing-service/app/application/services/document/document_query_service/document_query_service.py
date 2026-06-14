@@ -23,6 +23,7 @@ from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.chat_membership.chat_membership_provider_interface import (
     ChatMembershipProviderInterface,
 )
+from app.infrastructure.http.authentication_provider.request_token import get_request_token
 from app.infrastructure.http.document_collection_catalog.document_collection_catalog_client_interface import (
     DocumentCollectionCatalogClientInterface,
 )
@@ -232,7 +233,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             membership = await self._chat_membership_provider.get_membership(
                 chat_id=chat_id,
                 user_id=int(authenticated_user.id),
-                authorization_header=None,
+                authorization_header=get_request_token(),
             )
             if not membership.is_member:
                 logger.warning(
@@ -291,9 +292,14 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             document: Document,
             authenticated_user: AuthenticatedUser,
     ) -> None:
+        # Service-to-service calls authenticate by forwarding the caller's bearer
+        # token, so the downstream services derive identity and permissions from
+        # it (the user is allowed to check their own access).
+        authorization_header = get_request_token()
+
         accessible_ids = await self._document_collection_catalog_client.fetch_all_accessible_document_ids(
             user_id=int(authenticated_user.id),
-            authorization_header=None,
+            authorization_header=authorization_header,
         )
         if int(document.id) in accessible_ids:
             return
@@ -302,7 +308,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             membership = await self._chat_membership_provider.get_membership(
                 chat_id=int(document.chat_id),
                 user_id=int(authenticated_user.id),
-                authorization_header=None,
+                authorization_header=authorization_header,
             )
             if membership.is_member:
                 return

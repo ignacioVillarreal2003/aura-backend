@@ -48,6 +48,13 @@ def _patch_no_broadcast(mocker):
     mocker.patch(f"{SVC}._broadcast_chat_locked_changed")
 
 
+def _patch_lock_notifications(mocker):
+    """lock_chat notifies the other active members after locking. Stub the member
+    lookup (otherwise it hits the real DB) and the outbound notification client."""
+    mocker.patch(f"{SVC}.membership_repository.get_active_member_ids", return_value=[])
+    mocker.patch(f"{SVC}.notification_client.emit_event")
+
+
 def _patch_delete_side_effects(mocker):
     """delete_chat fans out via ``transaction.on_commit``; run those callbacks
     immediately and stub the ones that touch Redis / channels / other services.
@@ -372,6 +379,7 @@ def test_lock_chat_creator_can_lock(mocker):
     _patch_atomic(mocker)
     _patch_chat_for_update(mocker, chat)
     _patch_no_broadcast(mocker)
+    _patch_lock_notifications(mocker)
     repo = mocker.patch(f"{SVC}.chat_repository.update", return_value=chat)
     service.lock_chat(user, chat_id=1)
     _, kwargs = repo.call_args
@@ -385,6 +393,7 @@ def test_lock_chat_owner_member_can_lock(mocker):
     _patch_atomic(mocker)
     _patch_chat_for_update(mocker, chat)
     _patch_no_broadcast(mocker)
+    _patch_lock_notifications(mocker)
     mocker.patch(f"{SVC}.membership_repository.is_chat_owner", return_value=True)
     repo = mocker.patch(f"{SVC}.chat_repository.update", return_value=chat)
     service.lock_chat(user, chat_id=1)
@@ -421,6 +430,7 @@ def test_lock_chat_broadcasts_locked_state(mocker):
     _patch_perms(mocker)
     _patch_atomic(mocker)
     _patch_chat_for_update(mocker, chat)
+    _patch_lock_notifications(mocker)
     mocker.patch(f"{SVC}.chat_repository.update", return_value=chat)
     broadcast = mocker.patch(f"{SVC}._broadcast_chat_locked_changed")
     service.lock_chat(user, chat_id=1)
@@ -502,7 +512,7 @@ def test_archive_chats_returns_count(mocker):
     assert service.archive_chats(user, chat_ids=[1, 2]) == 2
 
 
-def test_archive_chats_inaccessible_id_raises_404(mocker):
+def test_archive_chats_inaccessible_id_raises_403(mocker):
     user = make_user(user_id=2)
     _patch_perms(mocker)
     mocker.patch(
@@ -510,7 +520,7 @@ def test_archive_chats_inaccessible_id_raises_404(mocker):
         return_value={1},
     )
     archive = mocker.patch(f"{SVC}.membership_repository.archive_chats")
-    with pytest.raises(ChatNotFoundException):
+    with pytest.raises(ChatAccessDeniedException):
         service.archive_chats(user, chat_ids=[1, 2])
     archive.assert_not_called()
 
@@ -526,14 +536,14 @@ def test_unarchive_chats_returns_count(mocker):
     assert service.unarchive_chats(user, chat_ids=[1]) == 1
 
 
-def test_unarchive_chats_inaccessible_id_raises_404(mocker):
+def test_unarchive_chats_inaccessible_id_raises_403(mocker):
     user = make_user(user_id=2)
     _patch_perms(mocker)
     mocker.patch(
         f"{SVC}.membership_repository.get_active_chat_ids_for_member",
         return_value=set(),
     )
-    with pytest.raises(ChatNotFoundException):
+    with pytest.raises(ChatAccessDeniedException):
         service.unarchive_chats(user, chat_ids=[5])
 
 

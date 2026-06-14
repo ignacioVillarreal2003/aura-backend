@@ -1,4 +1,4 @@
-from sqlalchemy import Column, BigInteger, String, DateTime, Text, Integer, ForeignKey
+from sqlalchemy import Column, BigInteger, String, DateTime, Text, Integer
 from sqlalchemy.sql import func
 
 from app.domain.constants.processing_status import ProcessingStatus
@@ -11,14 +11,11 @@ class Document(Base):
 
     id = Column(BigInteger, primary_key=True, index=True)
 
-    chat_id = Column(
-        BigInteger,
-        ForeignKey(
-            "chat.id",
-            ondelete="CASCADE"
-        ),
-        nullable=True
-    )
+    # The `chat` table lives in another service's domain; its ORM model is no
+    # longer registered in this service's metadata. The foreign key still exists
+    # at the database level, but declaring it here makes SQLAlchemy fail to
+    # resolve the (absent) `chat` table during flush. Keep it as a plain column.
+    chat_id = Column(BigInteger, nullable=True, index=True)
 
     name = Column(String(MAX_NAME_CHARS), nullable=False)
     description = Column(Text, nullable=True)

@@ -1,8 +1,6 @@
 import logging
 from django.db import transaction
 from django.db.models import QuerySet
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
 
 from apps.chat.ai_reply_lock import release as _release_ai_lock
 from apps.chat.ai_reply_lock import try_acquire as _try_acquire_ai_lock
@@ -14,6 +12,8 @@ from apps.chat.exceptions import (
 from apps.chat.models.chat import Chat
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.membership.repositories.membership_repository import membership_repository
+from apps.membership.models.chat_membership import ChatMembership
+from core.ws.group_broadcast import send_to_chat_group
 from core.clients.document_processing_client import document_processing_client
 from core.clients.notification_client import notification_client
 from apps.chat.repositories.share_link_repository import share_link_repository
@@ -39,34 +39,19 @@ from core.authorization.permissions import (
 logger = logging.getLogger(__name__)
 
 
-def _broadcast_to_chat(chat_id: int, payload: dict) -> None:
-    channel_layer = get_channel_layer()
-    if channel_layer is None:
-        return
-    try:
-        async_to_sync(channel_layer.group_send)(f"chat_{chat_id}", payload)
-    except Exception:
-        logger.warning(
-            "Failed to broadcast %s for chat %d",
-            payload.get("type", "event"),
-            chat_id,
-            exc_info=True,
-        )
-
-
 def _broadcast_chat_locked_changed(chat_id: int, is_locked: bool, by: int) -> None:
-    _broadcast_to_chat(
+    send_to_chat_group(
         chat_id,
         {"type": "chat_locked_changed", "is_locked": is_locked, "by": by},
     )
 
 
 def _broadcast_chat_content_cleared(chat_id: int, by: int) -> None:
-    _broadcast_to_chat(chat_id, {"type": "chat_content_cleared", "by": by})
+    send_to_chat_group(chat_id, {"type": "chat_content_cleared", "by": by})
 
 
 def _broadcast_chat_deleted(chat_id: int, by: int) -> None:
-    _broadcast_to_chat(chat_id, {"type": "chat_deleted", "by": by})
+    send_to_chat_group(chat_id, {"type": "chat_deleted", "by": by})
 
 
 class ChatService:
@@ -86,8 +71,8 @@ class ChatService:
         membership_repository.create(
             member_id=user.id,
             chat_id=chat.id,
-            status="active",
-            role="owner",
+            status=ChatMembership.Status.ACTIVE,
+            role=ChatMembership.Role.OWNER,
             created_by=user.id,
         )
 

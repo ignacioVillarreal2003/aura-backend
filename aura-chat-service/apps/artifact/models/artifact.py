@@ -6,15 +6,15 @@ from core.models.soft_delete import SoftDeleteModel
 
 class Artifact(AuditModel, SoftDeleteModel):
     class Type(models.TextChoices):
-        MESSAGE = "MESSAGE", "Message"
-        REPORT = "REPORT", "ArtifactReport"
-        CHECKLIST = "CHECKLIST", "ArtifactChecklist"
-        QUIZ = "QUIZ", "ArtifactQuiz"
-        TIMELINE = "TIMELINE", "ArtifactTimeline"
-        LESSONS_LEARNED = "LESSONS_LEARNED", "Lessons Learned"
-        DECISION_BRIEF = "DECISION_BRIEF", "Decision Brief"
-        DOCUMENT_SUMMARY = "DOCUMENT_SUMMARY", "Document Summary"
-        DOCUMENT_ACTION = "DOCUMENT_ACTION", "Document Action"
+        MESSAGE = "MESSAGE", "Mensaje"
+        REPORT = "REPORT", "Informe"
+        CHECKLIST = "CHECKLIST", "Checklist"
+        QUIZ = "QUIZ", "Cuestionario"
+        TIMELINE = "TIMELINE", "Línea de tiempo"
+        LESSONS_LEARNED = "LESSONS_LEARNED", "Lecciones aprendidas"
+        DECISION_BRIEF = "DECISION_BRIEF", "Brief de decisión"
+        DOCUMENT_SUMMARY = "DOCUMENT_SUMMARY", "Resumen de documento"
+        DOCUMENT_ACTION = "DOCUMENT_ACTION", "Acción sobre documento"
 
     class Mode(models.TextChoices):
         DIRECT = "direct", "Directo"
