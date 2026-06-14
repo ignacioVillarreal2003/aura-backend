@@ -120,7 +120,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
                 user_id=int(authenticated_user.id),
                 authorization_header=get_request_token(),
             )
-            if not membership.is_owner:
+            if not membership.can_modify:
                 logger.warning(
                     "Unauthorized soft delete by chat attempt.",
                     extra={
@@ -240,7 +240,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
                 user_id=int(authenticated_user.id),
                 authorization_header=get_request_token(),
             )
-            if membership.is_owner:
+            if membership.can_modify:
                 return
 
         logger.warning(

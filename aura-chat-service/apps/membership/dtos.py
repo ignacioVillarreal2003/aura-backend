@@ -1,13 +1,15 @@
 from dataclasses import dataclass
 from typing import Literal
 
-# External membership roles exposed to other services. The internal
-# owner/editor/reader model collapses to owner vs member, because callers only
-# branch on ownership (e.g. bulk delete is owner-only).
+# External membership roles exposed to other services. We expose the granular
+# owner/editor/reader role (instead of collapsing to owner vs member) so callers
+# can distinguish read-only readers from writers — e.g. document deletion is
+# allowed for any member that is not a reader.
 ROLE_OWNER = "owner"
-ROLE_MEMBER = "member"
+ROLE_EDITOR = "editor"
+ROLE_READER = "reader"
 
-ExternalMembershipRole = Literal["owner", "member"]
+ExternalMembershipRole = Literal["owner", "editor", "reader"]
 
 
 @dataclass(frozen=True)

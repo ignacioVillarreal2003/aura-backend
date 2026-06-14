@@ -53,14 +53,14 @@ def test_active_owner_membership_maps_to_owner(mocker):
 
 
 @pytest.mark.parametrize("internal_role", ["editor", "reader"])
-def test_active_non_owner_membership_maps_to_member(mocker, internal_role):
+def test_active_non_owner_membership_exposes_granular_role(mocker, internal_role):
     caller = make_user(user_id=2)
     _patch_chat(mocker, make_chat(chat_id=1, created_by=1))
     _patch_role(mocker, internal_role)
 
     result = service.check_membership(caller=caller, chat_id=1, user_id=2)
 
-    assert (result.is_member, result.role) == (True, "member")
+    assert (result.is_member, result.role) == (True, internal_role)
 
 
 def test_non_member_returns_is_member_false_and_null_role(mocker):

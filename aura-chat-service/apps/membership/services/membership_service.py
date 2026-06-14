@@ -7,7 +7,7 @@ from apps.chat.exceptions import ChatNotFoundException
 from apps.chat.models.chat import Chat
 from apps.chat.repositories.chat_repository import chat_repository
 from core.clients.notification_client import notification_client
-from apps.membership.dtos import ROLE_MEMBER, ROLE_OWNER, ChatMembershipCheck
+from apps.membership.dtos import ROLE_EDITOR, ROLE_OWNER, ROLE_READER, ChatMembershipCheck
 from apps.membership.exceptions import (
     CannotRemoveOwnerException,
     MembershipAlreadyExistsException,
@@ -123,7 +123,13 @@ class MembershipService:
         role = membership_repository.get_role(chat.id, user_id)
         if role is None:
             return None
-        return ROLE_OWNER if role == ChatMembership.Role.OWNER else ROLE_MEMBER
+        # Expose the granular role so callers can tell read-only readers apart
+        # from writers, not just ownership.
+        if role == ChatMembership.Role.OWNER:
+            return ROLE_OWNER
+        if role == ChatMembership.Role.READER:
+            return ROLE_READER
+        return ROLE_EDITOR
 
     @transaction.atomic
     def add_members(

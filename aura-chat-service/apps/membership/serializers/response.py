@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.membership.dtos import ROLE_MEMBER, ROLE_OWNER
+from apps.membership.dtos import ROLE_EDITOR, ROLE_OWNER, ROLE_READER
 from apps.membership.models.chat_membership import ChatMembership
 
 
@@ -13,7 +13,7 @@ class ChatMembershipCheckResponse(serializers.Serializer):
     chat_id = serializers.IntegerField()
     user_id = serializers.IntegerField()
     is_member = serializers.BooleanField()
-    role = serializers.ChoiceField(choices=[ROLE_OWNER, ROLE_MEMBER], allow_null=True)
+    role = serializers.ChoiceField(choices=[ROLE_OWNER, ROLE_EDITOR, ROLE_READER], allow_null=True)
 
 
 class MembershipResponse(serializers.ModelSerializer):
