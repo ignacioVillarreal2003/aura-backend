@@ -42,6 +42,17 @@ class NemoGuardrailsService:
     def settings(self) -> NemoGuardrailsSettings:
         return self._settings
 
+    async def warmup(self) -> None:
+        if not self.is_active:
+            return
+        try:
+            await self._ensure_rails()
+        except Exception:
+            logger.warning(
+                "Guardrails warmup failed; rails will initialize on first use.",
+                exc_info=True,
+            )
+
     async def check_input(self, text: str) -> GuardrailsVerdict:
         if not self.is_active or not text or not text.strip():
             return GuardrailsVerdict(allowed=True)
@@ -55,6 +66,24 @@ class NemoGuardrailsService:
             if self._settings.fail_open:
                 logger.warning(
                     "Guardrails check failed; allowing request (fail-open).",
+                    exc_info=True,
+                )
+                return GuardrailsVerdict(allowed=True)
+            raise
+
+    async def check_output(self, text: str) -> GuardrailsVerdict:
+        if not self._settings.check_output or not self.is_active or not text or not text.strip():
+            return GuardrailsVerdict(allowed=True)
+
+        try:
+            rails = await self._ensure_rails()
+            if rails is None:
+                return GuardrailsVerdict(allowed=True)
+            return await self._run_output_rails(rails, text)
+        except Exception:
+            if self._settings.fail_open:
+                logger.warning(
+                    "Guardrails output check failed; allowing response (fail-open).",
                     exc_info=True,
                 )
                 return GuardrailsVerdict(allowed=True)
@@ -77,6 +106,30 @@ class NemoGuardrailsService:
             logger.warning(
                 "Guardrails blocked user input.",
                 extra={"rail": reason, "input_preview": truncated[:200]},
+            )
+            return GuardrailsVerdict(allowed=False, reason=reason)
+        return GuardrailsVerdict(allowed=True)
+
+    async def _run_output_rails(self, rails: Any, text: str) -> GuardrailsVerdict:
+        from nemoguardrails.rails.llm.options import GenerationOptions
+
+        truncated = text[: self._settings.max_output_chars]
+        options = GenerationOptions(rails=["output"], log={"activated_rails": True})
+        result = await rails.generate_async(
+            messages=[
+                {"role": "user", "content": ""},
+                {"role": "assistant", "content": truncated},
+            ],
+            options=options,
+        )
+
+        activated = (result.log.activated_rails or []) if result.log else []
+        stopped = [rail for rail in activated if getattr(rail, "stop", False)]
+        if stopped:
+            reason = stopped[0].name or "output rail"
+            logger.warning(
+                "Guardrails blocked LLM output.",
+                extra={"rail": reason},
             )
             return GuardrailsVerdict(allowed=False, reason=reason)
         return GuardrailsVerdict(allowed=True)

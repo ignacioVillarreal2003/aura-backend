@@ -108,7 +108,7 @@ services:
       start_period: 300s
     restart: on-failure
     volumes:
-      - chat_hf_cache:/app/.cache/huggingface
+      - huggingface_cache:/app/.cache/huggingface
 
   aura-notification-service:
     build: ../../aura-notification-service
@@ -242,4 +242,3 @@ volumes:
   neo4j_data:
   neo4j_logs:
   huggingface_cache:
-  chat_hf_cache:

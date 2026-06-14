@@ -1,5 +1,3 @@
-from types import SimpleNamespace
-
 from app.application.services.user_interactions.document_question_service.document_question_settings import (
     DocumentQuestionServiceSettings,
 )

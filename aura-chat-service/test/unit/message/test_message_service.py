@@ -573,34 +573,6 @@ class TestMessageServiceRunAIModes:
         save.assert_called_once_with(1, 1, "resp", [{"id": 5}])
 
     @pytest.mark.asyncio
-    async def test_run_agent_saves_answer(self, mocker):
-        self._patch_access_ok(mocker)
-        mocker.patch(
-            f"{MSG_SVC}.llm_client.agent",
-            new_callable=AsyncMock,
-            return_value=AgentRunResult(answer="tool-answer", messages=[], fragments=[]),
-        )
-        save = mocker.patch.object(
-            MessageService, "_save_ai_message", return_value=_msg(sender_type="system")
-        )
-        out = await MessageService().run_agent(_user(), chat_id=1)
-        assert out.answer == "tool-answer"
-        save.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_run_agent_empty_answer_skips_save(self, mocker):
-        self._patch_access_ok(mocker)
-        mocker.patch(
-            f"{MSG_SVC}.llm_client.agent",
-            new_callable=AsyncMock,
-            return_value=AgentRunResult(answer="   ", messages=[], fragments=[]),
-        )
-        save = mocker.patch.object(MessageService, "_save_ai_message")
-        out = await MessageService().run_agent(_user(), chat_id=1)
-        assert out.assistant_message is None
-        save.assert_not_called()
-
-    @pytest.mark.asyncio
     async def test_run_general_chat_http_error_raises_llm_exception(self, mocker):
         self._patch_access_ok(mocker)
         mocker.patch(
@@ -612,24 +584,12 @@ class TestMessageServiceRunAIModes:
             await MessageService().run_general_chat(_user(), chat_id=1)
 
     @pytest.mark.asyncio
-    async def test_run_agent_http_error_raises_llm_exception(self, mocker):
-        self._patch_access_ok(mocker)
-        mocker.patch(
-            f"{MSG_SVC}.llm_client.agent",
-            new_callable=AsyncMock,
-            side_effect=HttpClientException("boom", status_code=500),
-        )
-        with pytest.raises(LLMServiceException):
-            await MessageService().run_agent(_user(), chat_id=1)
-
-    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "mode,target",
         [
             (ChatAIMode.DOCUMENT_QUESTION, "run_document_question"),
             (ChatAIMode.GENERAL_CHAT, "run_general_chat"),
             (ChatAIMode.RAG_AGENT, "run_rag_agent"),
-            (ChatAIMode.AGENT, "run_agent"),
         ],
     )
     async def test_run_ai_reply_dispatches_by_mode(self, mocker, mode, target):

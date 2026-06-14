@@ -1,0 +1,12 @@
+# Lint configuration. Keeps Ruff's default rule set (pyflakes + a subset of
+# pycodestyle) to avoid churn; this establishes the lint gate the project lacked.
+target-version = "py313"
+
+[lint.per-file-ignores]
+# Django settings use the `from .base import *` idiom, which Ruff flags as
+# F403 (star import) / F405 (name may be undefined). That pattern is intentional
+# and scoped to the settings package only.
+"aura_chat_service/settings/*" = ["F403", "F405"]
+# Django's ASGI entrypoint must call get_asgi_application() before importing app
+# modules (routing/middleware), so those imports are intentionally not at the top.
+"aura_chat_service/asgi.py" = ["E402"]

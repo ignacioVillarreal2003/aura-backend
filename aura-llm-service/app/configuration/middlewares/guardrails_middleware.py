@@ -3,6 +3,8 @@ import logging
 from fastapi import FastAPI
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app.configuration.metrics import record_guardrails_block
+
 logger = logging.getLogger(__name__)
 
 _EXCLUDED_PATH_PREFIXES = (
@@ -80,7 +82,7 @@ class GuardrailsMiddleware:
                         return
             except Exception:
                 logger.exception("Guardrails check failed with fail-open disabled.")
-                await self._send_unavailable(send)
+                await self._send_unavailable(scope, send)
                 return
 
         await self.app(scope, replay_receive, send)
@@ -108,47 +110,43 @@ class GuardrailsMiddleware:
         return extract_user_texts(payload)
 
     @staticmethod
-    async def _send_blocked(scope: Scope, send: Send, message: str) -> None:
-        logger.warning(
-            "Request blocked by the guardrails input filter.",
-            extra={"path": scope.get("path")},
-        )
-        body = json.dumps(
-            {"detail": message, "error": "input_blocked_by_guardrails"},
-            ensure_ascii=False,
-        ).encode("utf-8")
-        await send(
-            {
-                "type": "http.response.start",
-                "status": 400,
-                "headers": [
-                    (b"content-type", b"application/json"),
-                    (b"content-length", str(len(body)).encode("latin-1")),
-                ],
-            }
-        )
+    def _request_id(scope: Scope) -> str | None:
+        return (scope.get("state") or {}).get("request_id")
+
+    @classmethod
+    async def _send_json(cls, scope: Scope, send: Send, status: int, error: str, message: str) -> None:
+        request_id = cls._request_id(scope)
+        content: dict = {"error": error, "message": message}
+        if request_id:
+            content["request_id"] = request_id
+        body = json.dumps(content, ensure_ascii=False).encode("utf-8")
+        headers = [
+            (b"content-type", b"application/json"),
+            (b"content-length", str(len(body)).encode("latin-1")),
+        ]
+        if request_id:
+            headers.append((b"x-request-id", request_id.encode("latin-1")))
+        await send({"type": "http.response.start", "status": status, "headers": headers})
         await send({"type": "http.response.body", "body": body})
 
-    @staticmethod
-    async def _send_unavailable(send: Send) -> None:
-        body = json.dumps(
-            {
-                "detail": "El filtro de seguridad no está disponible.",
-                "error": "guardrails_unavailable",
-            },
-            ensure_ascii=False,
-        ).encode("utf-8")
-        await send(
-            {
-                "type": "http.response.start",
-                "status": 503,
-                "headers": [
-                    (b"content-type", b"application/json"),
-                    (b"content-length", str(len(body)).encode("latin-1")),
-                ],
-            }
+    @classmethod
+    async def _send_blocked(cls, scope: Scope, send: Send, message: str) -> None:
+        record_guardrails_block("input")
+        logger.warning(
+            "Request blocked by the guardrails input filter.",
+            extra={"path": scope.get("path"), "request_id": cls._request_id(scope)},
         )
-        await send({"type": "http.response.body", "body": body})
+        await cls._send_json(scope, send, 400, "input_blocked_by_guardrails", message)
+
+    @classmethod
+    async def _send_unavailable(cls, scope: Scope, send: Send) -> None:
+        await cls._send_json(
+            scope,
+            send,
+            503,
+            "guardrails_unavailable",
+            "El filtro de seguridad no está disponible.",
+        )
 
 
 def add_guardrails_middleware(app: FastAPI) -> None:

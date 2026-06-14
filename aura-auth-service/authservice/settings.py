@@ -199,7 +199,7 @@ SPECTACULAR_SETTINGS = {
 }
 
 # JWT Configuration
-JWT_ACCESS_LIFETIME_MINUTES = config('JWT_ACCESS_LIFETIME_MINUTES', default=15, cast=int)
+JWT_ACCESS_LIFETIME_MINUTES = config('JWT_ACCESS_LIFETIME_MINUTES', default=60, cast=int)
 JWT_ALGORITHM = config('JWT_ALGORITHM', default='HS256')
 # JWT_SIGNING_KEY must be set independently — never share with SECRET_KEY
 JWT_SIGNING_KEY = config('JWT_SIGNING_KEY', default=None)

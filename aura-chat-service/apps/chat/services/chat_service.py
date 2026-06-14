@@ -14,6 +14,7 @@ from apps.chat.exceptions import (
 from apps.chat.models.chat import Chat
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.membership.repositories.membership_repository import membership_repository
+from core.clients.document_processing_client import document_processing_client
 from core.clients.notification_client import notification_client
 from apps.chat.repositories.share_link_repository import share_link_repository
 from core.authentication.authenticated_user import AuthenticatedUser
@@ -180,6 +181,11 @@ class ChatService:
         membership_repository.soft_delete_by_chat(chat_id, deleted_by=user.id)
         clear_chat_artifacts(chat_id, deleted_by=user.id)
         chat_repository.soft_delete(chat, deleted_by=user.id)
+        # The documents uploaded to this chat live in the document-processing
+        # service; ask it to soft-delete them once our own deletion commits.
+        transaction.on_commit(
+            lambda: document_processing_client.delete_documents_by_chat(chat_id, user)
+        )
         transaction.on_commit(lambda: _release_ai_lock(chat_id))
         # Tell every connected member the chat is gone so their sockets can close
         # instead of lingering subscribed to a dead group.

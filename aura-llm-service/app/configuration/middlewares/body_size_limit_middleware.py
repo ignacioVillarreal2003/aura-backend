@@ -60,20 +60,25 @@ class BodySizeLimitMiddleware:
                 "max_body_bytes": self.max_body_bytes,
             },
         )
-        body = json.dumps(
-            {
-                "error": "RequestBodyTooLarge",
-                "message": "Request body exceeds the maximum allowed size.",
-            }
-        ).encode("utf-8")
+        request_id = (scope.get("state") or {}).get("request_id")
+        content: dict = {
+            "error": "RequestBodyTooLarge",
+            "message": "Request body exceeds the maximum allowed size.",
+        }
+        if request_id:
+            content["request_id"] = request_id
+        body = json.dumps(content).encode("utf-8")
+        headers = [
+            (b"content-type", b"application/json"),
+            (b"content-length", str(len(body)).encode("latin-1")),
+        ]
+        if request_id:
+            headers.append((b"x-request-id", request_id.encode("latin-1")))
         await send(
             {
                 "type": "http.response.start",
                 "status": 413,
-                "headers": [
-                    (b"content-type", b"application/json"),
-                    (b"content-length", str(len(body)).encode("latin-1")),
-                ],
+                "headers": headers,
             }
         )
         await send({"type": "http.response.body", "body": body})

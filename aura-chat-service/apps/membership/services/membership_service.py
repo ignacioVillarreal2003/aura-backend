@@ -6,8 +6,10 @@ from django.db.transaction import on_commit
 from django.db.models import QuerySet
 
 from apps.chat.exceptions import ChatNotFoundException
+from apps.chat.models.chat import Chat
 from apps.chat.repositories.chat_repository import chat_repository
 from core.clients.notification_client import notification_client
+from apps.membership.dtos import ROLE_MEMBER, ROLE_OWNER, ChatMembershipCheck
 from apps.membership.exceptions import (
     CannotRemoveOwnerException,
     MembershipAlreadyExistsException,
@@ -119,6 +121,52 @@ class MembershipService:
     ) -> QuerySet[ChatMembership]:
         AccessControl.require_permissions(user, frozenset({LIST_MY_MEMBERSHIPS}))
         return membership_repository.list_by_member(member_id=user.id, status=status)
+
+    def check_membership(
+            self,
+            caller: AuthenticatedUser,
+            chat_id: int,
+            user_id: int,
+    ) -> ChatMembershipCheck:
+        """Internal: report whether ``user_id`` belongs to ``chat_id`` and with
+        which role, so another service can authorize access to that chat's documents.
+
+        Read-only and idempotent. The role is resolved with a single indexed lookup
+        on ``(chat_id, member_id, status)``; the chat row is fetched by primary key
+        only to distinguish a missing/deleted chat (404) from a genuine non-member
+        (200, ``is_member=False``).
+        """
+        self._authorize_membership_check(caller, user_id)
+
+        chat = chat_repository.get_by_id(chat_id)
+        if chat is None:
+            raise ChatNotFoundException()
+
+        role = self._resolve_external_role(chat, user_id)
+        return ChatMembershipCheck(
+            chat_id=chat_id,
+            user_id=user_id,
+            is_member=role is not None,
+            role=role,
+        )
+
+    @staticmethod
+    def _authorize_membership_check(caller: AuthenticatedUser, user_id: int) -> None:
+        # Any user may always check their own membership.
+        if caller.id == user_id:
+            return
+        # Inspecting another user's membership is an administrative action.
+        AccessControl.require_permissions(caller, frozenset({MANAGE_MEMBERS}))
+
+    @staticmethod
+    def _resolve_external_role(chat: Chat, user_id: int) -> str | None:
+        # The chat creator is an implicit owner, even without a membership row.
+        if chat.created_by == user_id:
+            return ROLE_OWNER
+        role = membership_repository.get_role(chat.id, user_id)
+        if role is None:
+            return None
+        return ROLE_OWNER if role == ChatMembership.Role.OWNER else ROLE_MEMBER
 
     @transaction.atomic
     def add_members(

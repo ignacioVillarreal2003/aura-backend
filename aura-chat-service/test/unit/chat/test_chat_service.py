@@ -48,6 +48,19 @@ def _patch_no_broadcast(mocker):
     mocker.patch(f"{SVC}._broadcast_chat_locked_changed")
 
 
+def _patch_delete_side_effects(mocker):
+    """delete_chat fans out via ``transaction.on_commit``; run those callbacks
+    immediately and stub the ones that touch Redis / channels / other services.
+
+    Returns the mock for the cross-service document cleanup so callers can
+    assert the chat deletion forwards the right chat id and acting user.
+    """
+    mocker.patch("django.db.transaction.on_commit", side_effect=lambda fn, *a, **k: fn())
+    mocker.patch(f"{SVC}._release_ai_lock")
+    mocker.patch(f"{SVC}._broadcast_chat_deleted")
+    return mocker.patch(f"{SVC}.document_processing_client.delete_documents_by_chat")
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # create_chat
 # ══════════════════════════════════════════════════════════════════════════════
@@ -276,15 +289,18 @@ def test_delete_chat_creator_soft_deletes_everything(mocker):
     _patch_perms(mocker)
     _patch_atomic(mocker)
     _patch_chat_for_update(mocker, chat)
+    mocker.patch(f"{SVC}.share_link_repository.deactivate_by_chat")
     del_members = mocker.patch(f"{SVC}.membership_repository.soft_delete_by_chat")
-    del_messages = mocker.patch(f"{SVC}.message_repository.soft_delete_by_chat")
+    clear_artifacts = mocker.patch("apps.artifact.services.artifact_service.clear_chat_artifacts")
     del_chat = mocker.patch(f"{SVC}.chat_repository.soft_delete")
+    doc_cleanup = _patch_delete_side_effects(mocker)
 
     service.delete_chat(user, chat_id=1)
 
     del_members.assert_called_once_with(1, deleted_by=1)
-    del_messages.assert_called_once_with(1, deleted_by=1)
+    clear_artifacts.assert_called_once_with(1, deleted_by=1)
     del_chat.assert_called_once_with(chat, deleted_by=1)
+    doc_cleanup.assert_called_once_with(1, user)
 
 
 def test_delete_chat_owner_member_can_delete(mocker):
@@ -294,11 +310,33 @@ def test_delete_chat_owner_member_can_delete(mocker):
     _patch_atomic(mocker)
     _patch_chat_for_update(mocker, chat)
     mocker.patch(f"{SVC}.membership_repository.is_chat_owner", return_value=True)
+    mocker.patch(f"{SVC}.share_link_repository.deactivate_by_chat")
     mocker.patch(f"{SVC}.membership_repository.soft_delete_by_chat")
-    mocker.patch(f"{SVC}.message_repository.soft_delete_by_chat")
+    mocker.patch("apps.artifact.services.artifact_service.clear_chat_artifacts")
     del_chat = mocker.patch(f"{SVC}.chat_repository.soft_delete")
+    _patch_delete_side_effects(mocker)
     service.delete_chat(user, chat_id=1)
     del_chat.assert_called_once()
+
+
+def test_delete_chat_triggers_document_cleanup_in_other_service(mocker):
+    """Deleting a chat must ask the document-processing service to drop that
+    chat's documents, forwarding the acting user so its bearer token can be
+    used downstream."""
+    user = make_user(user_id=1)
+    chat = make_chat(chat_id=42, created_by=1)
+    _patch_perms(mocker)
+    _patch_atomic(mocker)
+    _patch_chat_for_update(mocker, chat)
+    mocker.patch(f"{SVC}.share_link_repository.deactivate_by_chat")
+    mocker.patch(f"{SVC}.membership_repository.soft_delete_by_chat")
+    mocker.patch("apps.artifact.services.artifact_service.clear_chat_artifacts")
+    mocker.patch(f"{SVC}.chat_repository.soft_delete")
+    doc_cleanup = _patch_delete_side_effects(mocker)
+
+    service.delete_chat(user, chat_id=42)
+
+    doc_cleanup.assert_called_once_with(42, user)
 
 
 def test_delete_chat_regular_member_raises_403(mocker):

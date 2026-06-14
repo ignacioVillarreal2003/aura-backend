@@ -236,22 +236,10 @@ class DocumentContextProvider(DocumentContextProviderInterface):
     def _log_fragments(self, fragments: FragmentListResponse) -> None:
         if not self._settings.log_payloads:
             return
-        max_chars = self._settings.log_payload_max_chars
-        for fragment in fragments.fragments:
-            preview = fragment.content[:max_chars]
-            if len(fragment.content) > max_chars:
-                preview += f"... [+{len(fragment.content) - max_chars} chars]"
-            logger.info(
-                "Retrieved fragment",
-                extra={
-                    "fragment_id": fragment.id,
-                    "document_id": fragment.document_id,
-                    "document_name": fragment.document.name,
-                    "fragment_index": fragment.fragment_index,
-                    "fragment_chars": len(fragment.content),
-                    "fragment_preview": preview,
-                },
-            )
+        logger.info(
+            "Retrieved fragments",
+            extra={"fragment_count": len(fragments.fragments)},
+        )
 
     def _build_headers(
             self,

@@ -1,23 +1,19 @@
 import hashlib
 import json
 import logging
-import secrets
 import threading
 from functools import lru_cache
 from typing import Optional
 import httpx
 import redis
 from django.conf import settings
-from django.http import HttpRequest
 
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authentication.authentication_exceptions import (
-    AuthenticationProviderException,
     AuthenticationProviderInvalidTokenException,
     AuthenticationProviderServiceUnavailableException,
     AuthenticationProviderUnauthorizedException,
     AuthenticationProviderUserNotFoundException,
-    ServiceAuthenticationRejected,
 )
 
 logger = logging.getLogger(__name__)
@@ -100,46 +96,25 @@ def _cache_user(token: str, user: AuthenticatedUser) -> None:
         logger.warning("Redis token cache write failed; token will not be cached.", exc_info=True)
 
 
-_HEADER_SERVICE_API_KEY = "X-Service-Api-Key"
-
-
 def build_service_user_headers(user: Optional["AuthenticatedUser"] = None) -> dict[str, str]:
+    """Auth headers for an outbound service-to-service call.
+
+    Inter-service calls forward the caller's own JWT (held in a ContextVar by the
+    auth middleware) so the downstream service validates it and acts with the real
+    user's identity and permissions. ``user`` is accepted only for call-site
+    compatibility and is unused — identity is derived downstream from the token.
+    Returns an empty mapping when no token is in context (e.g. a background job
+    with no originating request); the downstream then responds 401.
+    """
     from core.authentication.request_token import get_request_token
 
     token = get_request_token()
     if token:
         return {"Authorization": _format_bearer_token(token)}
-
-    # Without a user JWT the request authenticates with the service key and
-    # must forward the acting user's identity, roles and permissions so the
-    # downstream service can authorize and rate-limit on the real user.
-    headers = {_HEADER_SERVICE_API_KEY: str(settings.SERVICE_API_KEY)}
-    if user is not None:
-        headers["X-User-Id"] = str(user.id)
-        headers["X-User-Email"] = str(user.email)
-        if user.roles:
-            headers["X-User-Roles"] = ",".join(user.roles)
-        if user.permissions:
-            headers["X-User-Permissions"] = ",".join(user.permissions)
-    return headers
+    return {}
 
 
 class AuthenticationProvider:
-    def evaluate_service_auth(self, request: HttpRequest) -> Optional[AuthenticatedUser]:
-        raw_key = request.headers.get(_HEADER_SERVICE_API_KEY)
-        if raw_key is None:
-            return None
-
-        api_key = raw_key.strip()
-        if not api_key:
-            raise ServiceAuthenticationRejected(401, "missing_service_key", "Service API key required")
-
-        if not secrets.compare_digest(api_key, settings.SERVICE_API_KEY):
-            raise ServiceAuthenticationRejected(403, "invalid_service_key", "Invalid service API key")
-
-        logger.debug("Service-to-service request authenticated.", extra={"path": request.path})
-        return AuthenticatedUser(id=0, email="service@internal", roles=(), permissions=())
-
     def validate_token(self, token: str) -> AuthenticatedUser:
         cached = _get_cached_user(token)
         if cached is not None:

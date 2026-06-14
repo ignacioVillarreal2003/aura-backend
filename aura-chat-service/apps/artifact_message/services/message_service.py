@@ -44,10 +44,9 @@ class ChatAIMode:
     DOCUMENT_QUESTION = "document_question"
     GENERAL_CHAT = "general_chat"
     RAG_AGENT = "rag_agent"
-    AGENT = "agent"
 
     DEFAULT = DOCUMENT_QUESTION
-    ALL = frozenset({DOCUMENT_QUESTION, GENERAL_CHAT, RAG_AGENT, AGENT})
+    ALL = frozenset({DOCUMENT_QUESTION, GENERAL_CHAT, RAG_AGENT})
 
     @classmethod
     def normalize(cls, value: Any) -> str:
@@ -233,8 +232,6 @@ class MessageService:
             return await self.run_general_chat(user, chat_id)
         if mode == ChatAIMode.RAG_AGENT:
             return await self.run_rag_agent(user, chat_id)
-        if mode == ChatAIMode.AGENT:
-            return await self.run_agent(user, chat_id)
         return await self.run_document_question(user, chat_id)
 
     async def run_general_chat(
@@ -282,19 +279,6 @@ class MessageService:
             caller=llm_client.rag_agent,
             url_setting_name="LLM_RAG_AGENT_URL",
             label="rag-agent",
-        )
-
-    async def run_agent(
-            self,
-            user: AuthenticatedUser,
-            chat_id: int,
-    ) -> DocumentQuestionRunResult:
-        return await self._run_agent_flow(
-            user=user,
-            chat_id=chat_id,
-            caller=llm_client.agent,
-            url_setting_name="LLM_AGENT_URL",
-            label="agent",
         )
 
     async def _run_agent_flow(
@@ -366,8 +350,6 @@ class MessageService:
             return self.iter_general_chat_stream_group_payloads(user, chat_id)
         if mode == ChatAIMode.RAG_AGENT:
             return self.iter_rag_agent_stream_group_payloads(user, chat_id)
-        if mode == ChatAIMode.AGENT:
-            return self.iter_agent_stream_group_payloads(user, chat_id)
         return self.iter_document_question_stream_group_payloads(user, chat_id)
 
     async def iter_document_question_stream_group_payloads(
@@ -424,25 +406,6 @@ class MessageService:
                 ),
                 complete_extractor=self._extract_agent_complete,
                 stream_url_setting_name="LLM_RAG_AGENT_STREAM_URL",
-        ):
-            yield payload
-
-    async def iter_agent_stream_group_payloads(
-            self,
-            user: AuthenticatedUser,
-            chat_id: int,
-    ) -> AsyncIterator[dict[str, Any]]:
-        messages = await self._build_llm_messages(chat_id)
-        system_prompt, response_style = await self._get_chat_prompt_style(chat_id)
-        async for payload in self._iter_ai_stream_group_payloads(
-                chat_id=chat_id,
-                user=user,
-                sse_events=llm_client.agent_stream_events(
-                    messages, user, chat_id=chat_id,
-                    system_prompt=system_prompt, response_style=response_style,
-                ),
-                complete_extractor=self._extract_agent_complete,
-                stream_url_setting_name="LLM_AGENT_STREAM_URL",
         ):
             yield payload
 

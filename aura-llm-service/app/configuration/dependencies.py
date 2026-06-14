@@ -105,7 +105,9 @@ async def startup_dependencies(app: FastAPI) -> None:
         await ollama_facade.initialize()
         registry.register("ollama_llm_facade", ollama_facade)
 
-        registry.register("nemo_guardrails", NemoGuardrailsService(ollama_llm_facade=ollama_facade))
+        nemo_guardrails = NemoGuardrailsService(ollama_llm_facade=ollama_facade)
+        registry.register("nemo_guardrails", nemo_guardrails)
+        await nemo_guardrails.warmup()
 
         invoker_settings = OllamaLLMInvokerSettings()
         ollama_llm_invoker = OllamaLLMInvoker(settings=invoker_settings)

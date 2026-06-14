@@ -16,6 +16,7 @@ from app.configuration.middlewares.authentication_middleware import add_authenti
 from app.configuration.middlewares.body_size_limit_middleware import add_body_size_limit_middleware
 from app.configuration.middlewares.guardrails_middleware import add_guardrails_middleware
 from app.configuration.middlewares.logging_middleware import add_logging_middleware
+from app.configuration.middlewares.output_guardrails_middleware import add_output_guardrails_middleware
 from app.configuration.tracing import setup_tracing
 
 _root_log_level = getattr(
@@ -95,11 +96,7 @@ def create_app() -> FastAPI:
 def _add_middlewares(
         app: FastAPI
 ) -> None:
-    # Order matters: the LAST added middleware is the OUTERMOST. Guardrails is
-    # added first (innermost) so it runs after auth and the body size limit;
-    # then the body size limit, then auth, and logging last (outer) so that
-    # request_id / X-Request-ID is established before auth runs and every
-    # request — including early rejections — is logged.
+    add_output_guardrails_middleware(app)
     add_guardrails_middleware(app)
     add_body_size_limit_middleware(app)
     add_authentication_middleware(app)

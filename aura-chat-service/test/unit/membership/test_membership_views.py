@@ -11,8 +11,6 @@ Endpoints covered:
     PATCH  /api/v1/chats/{chat_id}/members/{member_id}/role/ RoleUpdateView.patch
     GET    /api/v1/memberships/me/                           MyMembershipsView.get
 """
-import pytest
-
 from apps.chat.exceptions import ChatNotFoundException
 from apps.membership.exceptions import (
     CannotRemoveOwnerException,

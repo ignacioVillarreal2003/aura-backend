@@ -15,7 +15,17 @@ class NemoGuardrailsSettings(BaseSettings):
 
     fail_open: bool = Field(default=True)
 
+    check_output: bool = Field(default=False)
+
     max_input_chars: int = Field(default=8_000, ge=200, le=100_000)
+    max_output_chars: int = Field(default=8_000, ge=200, le=100_000)
+
+    blocked_output_message: str = Field(
+        default=(
+            "La respuesta fue retenida por el filtro de seguridad. "
+            "Reformulá la consulta en relación con los documentos o tareas del sistema."
+        )
+    )
 
     blocked_message: str = Field(
         default=(

@@ -1,5 +1,9 @@
 INSERT INTO permission (name, description)
-VALUES ('INGEST_DOCUMENT', 'Ingerir o subir un documento al pipeline (carga e ingesta)'),
+VALUES
+       -- ============================================================
+       -- aura-document-processing-service
+       -- ============================================================
+       ('INGEST_DOCUMENT', 'Ingerir o subir un documento al pipeline (carga e ingesta)'),
        ('GET_DOCUMENT', 'Ver el detalle de un documento'),
        ('LIST_DOCUMENTS', 'Listar documentos en general'),
        ('LIST_DOCUMENTS_BY_CHAT', 'Listar documentos asociados a un chat'),
@@ -22,6 +26,10 @@ VALUES ('INGEST_DOCUMENT', 'Ingerir o subir un documento al pipeline (carga e in
        ('GRAPH_QUERY', 'Consulta sobre grafos derivados'),
        ('GRAPH_ENTITY', 'Operaciones de entidad sobre grafo'),
        ('GRAPH_PATH', 'Consulta de rutas en grafo'),
+
+       -- ============================================================
+       -- aura-document-collection-service
+       -- ============================================================
        ('LIST_DOCUMENT_COLLECTIONS', 'Listar colecciones documentales MAC'),
        ('CREATE_DOCUMENT_COLLECTION', 'Crear colección documental'),
        ('GET_DOCUMENT_COLLECTION', 'Ver detalle de colección documental'),
@@ -48,6 +56,10 @@ VALUES ('INGEST_DOCUMENT', 'Ingerir o subir un documento al pipeline (carga e in
        ('REMOVE_USER_COMPARTMENT', 'Quitar compartimento del usuario'),
        ('GET_USER_ACCESSIBLE_COLLECTIONS', 'Listar colecciones documentales accesibles para el usuario'),
        ('GET_USER_ACCESSIBLE_DOCUMENTS', 'Listar documentos accesibles para el usuario según su perfil MAC'),
+
+       -- ============================================================
+       -- aura-llm-service
+       -- ============================================================
        ('LLM_DOCUMENT_QUESTION', 'Pregunta LLM contra documentación'),
        ('LLM_DOCUMENT_SUMMARY', 'Resumen de documento mediante LLM'),
        ('LLM_DOCUMENT_ACTION', 'Acción automatizada sobre documento'),
@@ -65,6 +77,10 @@ VALUES ('INGEST_DOCUMENT', 'Ingerir o subir un documento al pipeline (carga e in
        ('LLM_DECISION_BRIEF_GENERATE', 'Generación de decision brief mediante LLM'),
        ('LLM_DOCUMENT_SUMMARY_GENERATE', 'Generación de resumen de documentos mediante LLM'),
        ('LLM_DOCUMENT_ACTION_GENERATE', 'Generación de acción sobre documentos mediante LLM'),
+
+       -- ============================================================
+       -- aura-chat-service
+       -- ============================================================
        ('MANAGE_CHATS', 'Listar todos los chats (admin)'),
        ('LIST_CHATS', 'Listar chats'),
        ('LIST_MY_CHATS', 'Listar chats creados por el usuario'),
@@ -182,6 +198,10 @@ VALUES ('INGEST_DOCUMENT', 'Ingerir o subir un documento al pipeline (carga e in
        ('UPDATE_ASSISTANT', 'Actualizar asistente'),
        ('DELETE_ASSISTANT', 'Eliminar asistente'),
        ('MANAGE_ASSISTANTS', 'Gestión general de asistentes'),
+
+       -- ============================================================
+       -- aura-notification-service
+       -- ============================================================
        ('NOTIFICATION_INBOX_LIST', 'Listar bandeja de notificaciones del propio usuario'),
        ('NOTIFICATION_UNREAD_COUNT_GET', 'Consultar contador de notificaciones no leídas'),
        ('NOTIFICATION_STREAM_SUBSCRIBE', 'Suscribirse al stream SSE de notificaciones del propio usuario'),
