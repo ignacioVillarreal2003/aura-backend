@@ -205,6 +205,10 @@ services:
     environment:
       NVIDIA_VISIBLE_DEVICES: all
       OLLAMA_GPU_OVERHEAD: 0
+      # Parallel generation slots per loaded model on a single Ollama instance.
+      # Keep aligned with the app-side LLM_MAX_CONCURRENCY (the lower of the two
+      # caps wins). Override from docker/docker-compose/.env.
+      OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-4}
     healthcheck:
       # healthcheck.sh also verifies the required models are present, so
       # dependent services wait until models finish pulling. The long

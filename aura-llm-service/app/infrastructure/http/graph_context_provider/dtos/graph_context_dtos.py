@@ -3,8 +3,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class GraphContextProviderRequest(BaseModel):
-    """Payload sent to the document-processing /graph/context endpoint."""
-
     model_config = ConfigDict(frozen=True)
 
     question: Optional[str] = None
@@ -22,9 +20,6 @@ class GraphContextFact(BaseModel):
 
 
 class GraphContextResult(BaseModel):
-    """Lenient view of the graph context response: only the fields the RAG
-    flow consumes are parsed; structured entities/relations are ignored."""
-
     model_config = ConfigDict(extra="ignore")
 
     context_text: str = ""

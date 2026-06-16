@@ -62,9 +62,6 @@ class OllamaLLMStreamingInvoker(OllamaLLMStreamingInvokerInterface):
         first_chunk: Any = _STREAM_EMPTY
 
         try:
-            # Hold a concurrency slot for stream establishment (prompt eval +
-            # first token) — the most contended phase on Ollama — and release it
-            # before the client-paced consume so a slow reader can't pin a slot.
             async with llm_slot():
                 async for attempt in AsyncRetrying(
                         stop=stop_after_attempt(self._settings.max_retry_attempts),
@@ -144,8 +141,6 @@ class OllamaLLMStreamingInvoker(OllamaLLMStreamingInvokerInterface):
             )
             raise LLMInvocationError("LLM could not process the streaming request.") from e
         finally:
-            # Record usage even on early close (client disconnect) and always
-            # release the upstream generator to avoid leaking the Ollama stream.
             record_llm_usage(
                 model=model_name_of(llm),
                 input_tokens=usage[0],
@@ -165,8 +160,6 @@ class OllamaLLMStreamingInvoker(OllamaLLMStreamingInvokerInterface):
             current: tuple[Optional[int], Optional[int]],
             chunk: Any,
     ) -> tuple[Optional[int], Optional[int]]:
-        """Keep the largest token counts seen across chunks. Ollama reports
-        cumulative usage on its final streamed chunk via ``usage_metadata``."""
         chunk_in, chunk_out = usage_tokens(chunk)
         cur_in, cur_out = current
         merged_in = chunk_in if chunk_in is not None and (cur_in is None or chunk_in > cur_in) else cur_in

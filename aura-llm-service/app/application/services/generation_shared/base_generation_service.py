@@ -66,9 +66,6 @@ class GenerationRequest(Protocol):
     document_ids: list[int]
     system_prompt: Optional[str]
     response_style: Optional[str]
-    # Context flags (optional on the DTO; None -> the service default applies):
-    #   retrieve_context: bool | None  -> corpus retrieval
-    #   process_documents: bool | None -> attached-document processing
 
 class BaseGenerationService(ABC):
     label: ClassVar[str]
@@ -76,8 +73,6 @@ class BaseGenerationService(ABC):
     unexpected_error_message: ClassVar[str]
     generation_step_message: ClassVar[str] = ""
 
-    # Default for each context flag when the request omits it (field is None).
-    # Override per subclass to configure the service's out-of-the-box behaviour.
     default_retrieve_context: ClassVar[bool] = False
     default_process_documents: ClassVar[bool] = False
 
@@ -115,10 +110,6 @@ class BaseGenerationService(ABC):
         self._attached_processor = AttachedDocumentsProcessor(
             document_context_provider, attached_documents_settings
         )
-        # Single source for the context budget: when the caller doesn't pass
-        # explicit reduction settings, the reduction target follows the
-        # generation context budget so both stages stay aligned (M6). Other
-        # CONTEXT_REDUCTION_* knobs still come from the environment.
         if context_reduction_settings is None:
             context_reduction_settings = ContextReductionSettings(
                 max_context_chars=self._generation_settings.max_context_chars
@@ -153,14 +144,9 @@ class BaseGenerationService(ABC):
         return default if value is None else bool(value)
 
     def _request_messages(self, request: Any) -> list[Message]:
-        """Conversation that seeds the state. Chat-based services use the
-        request's messages; document-oriented services (summary/action) override
-        this to build a synthetic instruction message from their own fields."""
         return list(request.messages)
 
     def _build_state(self, request: Any, authenticated_user: AuthenticatedUser) -> GenerationState:
-        # Flag-driven only: the request must carry the flag to opt in. When the
-        # field is absent/None the subclass-configured default applies.
         retrieve_context = self._resolve_flag(request, "retrieve_context", self.default_retrieve_context)
         process_documents = self._resolve_flag(request, "process_documents", self.default_process_documents)
         return GenerationState.create(
@@ -193,9 +179,6 @@ class BaseGenerationService(ABC):
     )
 
     def _degraded_stages(self, state: GenerationState) -> list[str]:
-        """Stages whose dependency failed and silently fell back during this
-        request. Surfaced on the response so the client can tell a partial
-        answer (a dependency was down) from a genuine "no information"."""
         return [
             flag[: -len("_degraded")]
             for flag in self._DEGRADATION_FLAGS
