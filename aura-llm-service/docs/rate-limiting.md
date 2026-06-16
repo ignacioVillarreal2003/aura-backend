@@ -8,8 +8,8 @@ Rate limiting is enforced per-user (authenticated) or per-IP (unauthenticated) u
 
 | Tier | Requests / window (default) | Applied to |
 |---|---|---|
-| Default | 60 | `/document-question`, `/document-classify`, `/fragment-enrich`, `/graph-extraction`, `/graph-query-translation` |
-| Strict | 20 | `/document-question/stream`, `/document-summary`, `/document-action`, `/agent`, `/rag-agent` |
+| Default | 60 | base (non-stream) endpoints: `/document-question`, `/document-classify`, `/fragment-enrich`, `/graph-extraction`, `/graph-query-translation`, `/general-chat`, and the structured-generation endpoints (`/report-generate`, `/checklist-generate`, `/timeline-generate`, `/quiz-generate`, `/lessons-learned-generate`, `/decision-brief-generate`) |
+| Strict | 20 | every `…/stream` variant, plus `/document-summary`, `/document-action` and `/rag-agent` |
 
 Window size and per-tier limits are configurable via `RATE_LIMIT_WINDOW_SECONDS`, `RATE_LIMIT_DEFAULT_PER_WINDOW` and `RATE_LIMIT_STRICT_PER_WINDOW` (see [getting-started](getting-started.md)).
 
@@ -44,7 +44,11 @@ The `test/conftest.py` noop lifespan skips Redis initialisation. Rate-limit depe
 
 ## Idempotency Keys
 
-Endpoints that trigger LLM calls support optional idempotency via the `Idempotency-Key` header.
+> **Status: not yet implemented.** The `Idempotency-Key` behaviour below is the
+> intended design; the current code does not yet deduplicate requests by key.
+> Sending the header today has no effect. Tracked as future work.
+
+Endpoints that trigger LLM calls are intended to support optional idempotency via the `Idempotency-Key` header.
 
 ```http
 POST /api/v1/document-summary
@@ -68,15 +72,7 @@ idempotency_key = str(uuid.uuid4())  # generate once per operation, reuse on ret
 
 ### Covered endpoints
 
-| Endpoint | Idempotency supported |
-|---|---|
-| `POST /document-question` | yes |
-| `POST /document-question/stream` | no |
-| `POST /document-summary` | yes |
-| `POST /document-action` | yes |
-| `POST /document-classify` | yes |
-| `POST /fragment-enrich` | yes |
-| `POST /graph-extraction` | yes |
-| `POST /graph-query-translation` | yes |
-| `POST /agent` | yes |
-| `POST /rag-agent` | yes |
+Once implemented, idempotency is intended for the non-streaming JSON endpoints
+that trigger LLM calls (e.g. `/document-question`, `/document-summary`,
+`/document-action`, `/general-chat`, `/rag-agent` and the structured-generation
+endpoints). Streaming (`…/stream`) responses are not idempotent.

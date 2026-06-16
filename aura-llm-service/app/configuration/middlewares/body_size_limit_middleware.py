@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from app.configuration.environment_variables import environment_variables
+from app.configuration.environment_variables import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -97,5 +97,5 @@ class BodySizeLimitMiddleware:
 def add_body_size_limit_middleware(app: FastAPI) -> None:
     app.add_middleware(
         BodySizeLimitMiddleware,
-        max_body_bytes=environment_variables.max_request_body_bytes,
+        max_body_bytes=get_settings().max_request_body_bytes,
     )

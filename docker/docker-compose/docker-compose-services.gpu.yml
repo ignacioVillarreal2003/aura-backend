@@ -188,7 +188,7 @@ services:
       dockerfile: Dockerfile
     container_name: llm
     env_file:
-      - ../../aura-llm-service/.env.docker.gpu
+      - ../../aura-llm-service/env/.env.docker.gpu
       - ../../aura-document-processing-service/.env.docker.gpu
     ports:
       - "11434:11434"

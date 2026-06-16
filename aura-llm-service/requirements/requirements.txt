@@ -1,35 +1,51 @@
 # ============================================
+# Versiones pineadas (==) para builds reproducibles.
+# Las mismas versiones se usan en dev y en la imagen Docker/prod.
+# ============================================
+
+# ============================================
 # Web Framework & Server
 # ============================================
-# Minimums are pinned to the currently installed, test-verified versions
-# (floor only, kept as >= so upgrades are still allowed).
-fastapi>=0.136.3
-uvicorn>=0.49.0
+fastapi==0.136.3
+uvicorn==0.49.0
 
 # ============================================
 # LangChain & IA
 # ============================================
-langchain-core>=1.4.6
-langgraph>=1.2.4
-langchain-ollama>=1.1.0
+langchain-core==1.4.6
+langgraph==1.2.4
+langchain-ollama==1.1.0
 
 # ============================================
 # Servicios Externos
 # ============================================
-httpx>=0.28.1
-redis[asyncio]>=8.0.0
+httpx==0.28.1
+redis[asyncio]==8.0.0
 
 # ============================================
 # Utilidades
 # ============================================
-pydantic>=2.13.4
-pydantic-settings>=2.14.1
-python-dotenv>=1.2.2
-tenacity>=9.1.4
-aiobreaker>=1.2.0
+pydantic==2.13.4
+pydantic-settings==2.14.1
+python-dotenv==1.2.2
+tenacity==9.1.4
+aiobreaker==1.2.0
 
 # ============================================
 # Monitoreo
 # ============================================
-prometheus-fastapi-instrumentator>=8.0.0
-python-json-logger>=4.1.0
+prometheus-fastapi-instrumentator==8.0.0
+python-json-logger==4.1.0
+
+# ============================================
+# Observabilidad (tracing — se importa de forma perezosa,
+# desactivado por defecto vía TRACING_ENABLED)
+# ============================================
+openinference-instrumentation-langchain==0.1.66
+arize-phoenix-otel==0.16.1
+
+# ============================================
+# Guardrails (se importa de forma perezosa,
+# desactivado por defecto)
+# ============================================
+nemoguardrails==0.22.0

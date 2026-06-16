@@ -1,6 +1,8 @@
 @llmBase = http://localhost:8001/api/v1
 @authToken = user_token_123
+@chatId = 1
 
+### Acción sobre documento — summarize (POST /api/v1/document-action)
 # @timeout 600
 POST {{llmBase}}/document-action
 Accept: application/json
@@ -10,14 +12,27 @@ Authorization: Bearer {{authToken}}
 {
   "document_ids": [10],
   "instruction": "Resumime el contenido de este documento",
-  "action": "summarize"
+  "action": "summarize",
+  "chat_id": {{chatId}}
 }
 
 
-###
-
-
+### Acción sobre documento — Streaming SSE (POST /api/v1/document-action/stream)
 # @timeout 600
+POST {{llmBase}}/document-action/stream
+Accept: text/event-stream
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "document_ids": [10],
+  "instruction": "Resumime el contenido de este documento",
+  "action": "summarize",
+  "chat_id": {{chatId}}
+}
+
+
+### key_points
 POST {{llmBase}}/document-action
 Accept: application/json
 Content-Type: application/json
@@ -26,14 +41,12 @@ Authorization: Bearer {{authToken}}
 {
   "document_ids": [10],
   "instruction": "Dame los puntos más importantes de este documento",
-  "action": "key_points"
+  "action": "key_points",
+  "chat_id": {{chatId}}
 }
 
 
-###
-
-
-# @timeout 600
+### explain
 POST {{llmBase}}/document-action
 Accept: application/json
 Content-Type: application/json
@@ -42,14 +55,12 @@ Authorization: Bearer {{authToken}}
 {
   "document_ids": [10],
   "instruction": "Explicame este documento de forma sencilla",
-  "action": "explain"
+  "action": "explain",
+  "chat_id": {{chatId}}
 }
 
 
-###
-
-
-# @timeout 600
+### essay
 POST {{llmBase}}/document-action
 Accept: application/json
 Content-Type: application/json
@@ -58,14 +69,12 @@ Authorization: Bearer {{authToken}}
 {
   "document_ids": [10],
   "instruction": "Escribí un ensayo basado en el contenido de este documento",
-  "action": "essay"
+  "action": "essay",
+  "chat_id": {{chatId}}
 }
 
 
-###
-
-
-# @timeout 600
+### Sin action explícito (se infiere de la instrucción)
 POST {{llmBase}}/document-action
 Accept: application/json
 Content-Type: application/json
@@ -73,14 +82,12 @@ Authorization: Bearer {{authToken}}
 
 {
   "document_ids": [10],
-  "instruction": "Haceme una lista de todas las obligaciones y responsabilidades mencionadas en este documento"
+  "instruction": "Haceme una lista de todas las obligaciones y responsabilidades mencionadas en este documento",
+  "chat_id": {{chatId}}
 }
 
 
-###
-
-
-# @timeout 600
+### compare (dos documentos)
 POST {{llmBase}}/document-action
 Accept: application/json
 Content-Type: application/json
@@ -89,14 +96,12 @@ Authorization: Bearer {{authToken}}
 {
   "document_ids": [10, 11],
   "instruction": "Compará estos dos documentos e identificá similitudes y diferencias",
-  "action": "compare"
+  "action": "compare",
+  "chat_id": {{chatId}}
 }
 
 
-###
-
-
-# @timeout 600
+### report
 POST {{llmBase}}/document-action
 Accept: application/json
 Content-Type: application/json
@@ -105,14 +110,12 @@ Authorization: Bearer {{authToken}}
 {
   "document_ids": [10],
   "instruction": "Generá un reporte formal sobre el contenido de este documento",
-  "action": "report"
+  "action": "report",
+  "chat_id": {{chatId}}
 }
 
 
-###
-
-
-# @timeout 600
+### analyze
 POST {{llmBase}}/document-action
 Accept: application/json
 Content-Type: application/json
@@ -121,8 +124,6 @@ Authorization: Bearer {{authToken}}
 {
   "document_ids": [10],
   "instruction": "Hacé un análisis detallado de este documento",
-  "action": "analyze"
+  "action": "analyze",
+  "chat_id": {{chatId}}
 }
-
-
-###

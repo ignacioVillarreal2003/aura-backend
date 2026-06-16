@@ -1,4 +1,5 @@
 import logging
+from functools import lru_cache
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -80,7 +81,11 @@ class EnvironmentVariables(BaseSettings):
         return not self.is_production()
 
 
-environment_variables = EnvironmentVariables()
+@lru_cache
+def get_settings() -> EnvironmentVariables:
+    """Return the cached settings instance.
 
-if environment_variables.is_development():
-    environment_variables.log_configuration()
+    Settings are built lazily on first call (not at import time) so that tests
+    can override the environment and clear the cache via ``get_settings.cache_clear()``.
+    """
+    return EnvironmentVariables()

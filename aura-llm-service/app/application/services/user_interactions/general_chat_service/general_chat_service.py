@@ -11,10 +11,10 @@ from app.application.services.user_interactions.general_chat_service.general_cha
     REDUCE_SYSTEM_PROMPT,
     build_system_prompt,
 )
-from app.application.services.user_interactions.general_chat_service.general_chat_service_exceptions import (
+from app.application.services.user_interactions.general_chat_service.exceptions.general_chat_service_exceptions import (
     GeneralChatServiceException,
 )
-from app.application.services.user_interactions.general_chat_service.general_chat_service_interface import (
+from app.application.services.user_interactions.general_chat_service.interfaces.general_chat_service_interface import (
     GeneralChatServiceInterface,
 )
 from app.application.services.user_interactions.general_chat_service.general_chat_settings import GeneralChatSettings
@@ -44,12 +44,6 @@ class GeneralChatService(
     StreamingGenerationService[GeneralChatRequest, GeneralChatResponse],
     GeneralChatServiceInterface,
 ):
-    """General conversational assistant with real token streaming.
-
-    Plain chat by default: corpus retrieval and attached-document processing are
-    both opt-in via the request flags (``retrieve_context`` / ``process_documents``).
-    """
-
     label = "general_chat"
     exception_cls = GeneralChatServiceException
     unexpected_error_message = "Error inesperado al procesar la solicitud de chat."
@@ -86,8 +80,6 @@ class GeneralChatService(
         )
 
     def _system_prompt(self, request: GeneralChatRequest) -> str:
-        # Operator system_prompt/response_style are layered on by the base via
-        # augment_system_prompt; here we return only the base AURA prompt.
         return build_system_prompt(self._general_chat_settings)
 
     def _request_log_extra(self, request: GeneralChatRequest) -> dict:
@@ -113,7 +105,6 @@ class GeneralChatService(
             degraded_stages=self._degraded_stages(state),
         )
 
-    # ── interface adapters ──────────────────────────────────────────────────────
     async def execute_general_chat(
             self,
             general_chat_request: GeneralChatRequest,

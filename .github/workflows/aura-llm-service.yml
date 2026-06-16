@@ -34,7 +34,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements/requirements.txt
-          pip install pytest pytest-asyncio pytest-cov ruff
+          pip install -r requirements/requirements-dev.txt
 
       - name: Lint (ruff)
         run: ruff check .
@@ -45,4 +45,32 @@ jobs:
           AUTHENTICATION_PROVIDER_AUTHENTICATION_URL: http://auth.test/validate
           DOCUMENT_CONTEXT_PROVIDER_QUESTION_CONTEXT_FRAGMENTS_URL: http://docs.test/by-question
           DOCUMENT_CONTEXT_PROVIDER_DOCUMENT_CONTEXT_FRAGMENTS_URL: http://docs.test/by-document
-        run: pytest -q --cov=app --cov-report=term-missing --cov-fail-under=70
+        # Fail the build below 75% branch coverage. Critical paths (error handlers,
+        # rate limiting, http_client circuit breaker, DI startup/rollback) are
+        # covered by dedicated unit tests; keep this floor at or below actual so
+        # the gate catches regressions without flaking on unrelated changes.
+        run: |
+          pytest -q \
+            --cov=app \
+            --cov-branch \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-fail-under=75
+
+      - name: Coverage summary
+        if: ${{ always() }}
+        run: |
+          if [ -f coverage.xml ]; then
+            read -r line_rate branch_rate <<< "$(python -c "import xml.etree.ElementTree as ET; r=ET.parse('coverage.xml').getroot(); print(round(float(r.get('line-rate'))*100,2), round(float(r.get('branch-rate'))*100,2))")"
+            echo "### aura-llm-service coverage (combined floor: 75%)" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Lines: ${line_rate}%" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Branches: ${branch_rate}%" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload coverage report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-aura-llm-service
+          path: aura-llm-service/coverage.xml
+          if-no-files-found: ignore

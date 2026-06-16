@@ -114,17 +114,34 @@ All variables are read by `app/configuration/environment_variables.py` via `pyda
 
 ```
 GET /api/v1/health   →  200 OK  (always, no auth)
-GET /api/v1/ready    →  200 OK if Ollama + HTTP client are available, else 503
+GET /api/v1/ready    →  200 OK if HTTP client + Ollama + Redis are healthy, else 503
 ```
 
-Use `/ready` in Docker `HEALTHCHECK` and Kubernetes `readinessProbe`.
+`/ready` checks each dependency with a short per-dependency timeout, so a hung
+dependency yields a fast `503` instead of stalling the probe. The response body
+includes a `checks` object with the per-dependency status. Use `/ready` in
+Docker `HEALTHCHECK` and Kubernetes `readinessProbe`.
 
 ---
 
 ## Running Tests
 
 ```bash
-pytest test/ -v
+pytest -q
 ```
 
 Tests use `starlette.TestClient` with a noop lifespan (no Ollama or external services required). All services are replaced with `AsyncMock` fixtures defined in `test/conftest.py`.
+
+### Coverage
+
+CI runs the suite with branch coverage and fails below a **75 %** combined floor
+(critical paths — error handlers, rate limiting, the `http_client` circuit
+breaker and DI startup/rollback — have dedicated unit tests). To reproduce the
+gate locally:
+
+```bash
+pytest -q --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=75
+```
+
+The test environment must provide the required settings (e.g. `CORS_ORIGINS`
+and the provider URLs); CI sets these in the workflow.

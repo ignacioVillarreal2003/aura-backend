@@ -69,20 +69,29 @@ All endpoints are **internal-only** — they require either a service-to-service
 
 ## Endpoints at a Glance
 
+Most user-interaction endpoints also expose a `POST …/stream` variant
+(`text/event-stream`); the streaming variant is rate-limited at 20 / min and
+requires the same permission as its base endpoint.
+
 | Method | Path | Permission | Rate limit |
 |---|---|---|---|
 | GET | `/api/v1/health` | — | — |
 | GET | `/api/v1/ready` | — | — |
-| POST | `/api/v1/document-question` | `LLM_DOCUMENT_QUESTION` | 60 / min |
-| POST | `/api/v1/document-question/stream` | `LLM_DOCUMENT_QUESTION_STREAM` | 20 / min |
-| POST | `/api/v1/document-summary` | `LLM_DOCUMENT_SUMMARY` | 20 / min |
-| POST | `/api/v1/document-action` | `LLM_DOCUMENT_ACTION` | 20 / min |
+| POST | `/api/v1/document-question` (`/stream`) | `LLM_DOCUMENT_QUESTION` | 60 / min |
+| POST | `/api/v1/document-summary` (`/stream`) | `LLM_DOCUMENT_SUMMARY` | 20 / min |
+| POST | `/api/v1/document-action` (`/stream`) | `LLM_DOCUMENT_ACTION` | 20 / min |
 | POST | `/api/v1/document-classify` | `LLM_DOCUMENT_CLASSIFY` | 60 / min |
 | POST | `/api/v1/fragment-enrich` | `LLM_FRAGMENT_ENRICH` | 60 / min |
 | POST | `/api/v1/graph-extraction` | `LLM_GRAPH_EXTRACTION` | 60 / min |
 | POST | `/api/v1/graph-query-translation` | `LLM_GRAPH_QUERY_TRANSLATION` | 60 / min |
-| POST | `/api/v1/agent` | `LLM_AGENT` | 20 / min |
-| POST | `/api/v1/rag-agent` | `LLM_RAG_AGENT` | 20 / min |
+| POST | `/api/v1/general-chat` (`/stream`) | `LLM_GENERAL_CHAT` | 60 / min |
+| POST | `/api/v1/rag-agent` (`/stream`) | `LLM_AGENT` | 20 / min |
+| POST | `/api/v1/report-generate` (`/stream`) | `LLM_REPORT_GENERATE` | 60 / min |
+| POST | `/api/v1/checklist-generate` (`/stream`) | `LLM_CHECKLIST_GENERATE` | 60 / min |
+| POST | `/api/v1/timeline-generate` (`/stream`) | `LLM_TIMELINE_GENERATE` | 60 / min |
+| POST | `/api/v1/quiz-generate` (`/stream`) | `LLM_QUIZ_GENERATE` | 60 / min |
+| POST | `/api/v1/lessons-learned-generate` (`/stream`) | `LLM_LESSONS_LEARNED_GENERATE` | 60 / min |
+| POST | `/api/v1/decision-brief-generate` (`/stream`) | `LLM_DECISION_BRIEF_GENERATE` | 60 / min |
 
 ---
 

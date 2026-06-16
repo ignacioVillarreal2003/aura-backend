@@ -1,0 +1,61 @@
+@llmBase = http://localhost:8001/api/v1
+@authToken = user_token_123
+@chatId = 1
+
+### Generar informe — SITREP, JSON (POST /api/v1/report-generate)
+# report_type: SITREP | INTSUM | OPORD
+# @timeout 600
+POST {{llmBase}}/report-generate
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "report_type": "SITREP",
+  "messages": [
+    {
+      "role": "human",
+      "content": "Patrulla en sector norte sin novedad entre 0600 y 1200. Dos vehículos detectados, identificados como propios."
+    }
+  ],
+  "chat_id": {{chatId}}
+}
+
+
+### Generar informe — Streaming SSE (POST /api/v1/report-generate/stream)
+# @timeout 600
+POST {{llmBase}}/report-generate/stream
+Accept: text/event-stream
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "report_type": "INTSUM",
+  "messages": [
+    {
+      "role": "human",
+      "content": "Resumen de inteligencia de las últimas 24h sobre el sector asignado."
+    }
+  ],
+  "chat_id": {{chatId}}
+}
+
+
+### Modo RAG: con documentos como contexto adicional
+POST {{llmBase}}/report-generate
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "report_type": "OPORD",
+  "messages": [
+    {
+      "role": "human",
+      "content": "Redactá la orden de operaciones basada en el plan adjunto."
+    }
+  ],
+  "chat_id": {{chatId}},
+  "document_ids": [10, 11],
+  "retrieve_context": true
+}

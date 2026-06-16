@@ -48,7 +48,7 @@ def setup_tracing(settings: Optional[TracingSettings] = None) -> bool:
     except ImportError:
         logger.warning(
             "TRACING_ENABLED is set but tracing dependencies are not installed. "
-            "Run: pip install -r requirements/requirements-observability.txt"
+            "Run: pip install -r requirements/requirements.txt"
         )
         return False
 

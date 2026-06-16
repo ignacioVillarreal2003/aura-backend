@@ -1,0 +1,40 @@
+@llmBase = http://localhost:8001/api/v1
+@authToken = user_token_123
+@chatId = 1
+
+### Generar cuestionario — JSON (POST /api/v1/quiz-generate)
+# @timeout 600
+POST {{llmBase}}/quiz-generate
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "messages": [
+    {
+      "role": "human",
+      "content": "Generá un cuestionario de 5 preguntas sobre los procedimientos de seguridad de la aviación civil."
+    }
+  ],
+  "chat_id": {{chatId}}
+}
+
+
+### Generar cuestionario — Streaming SSE (POST /api/v1/quiz-generate/stream)
+# @timeout 600
+POST {{llmBase}}/quiz-generate/stream
+Accept: text/event-stream
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "messages": [
+    {
+      "role": "human",
+      "content": "Creá una evaluación a partir del material de capacitación adjunto."
+    }
+  ],
+  "chat_id": {{chatId}},
+  "document_ids": [10],
+  "retrieve_context": true
+}

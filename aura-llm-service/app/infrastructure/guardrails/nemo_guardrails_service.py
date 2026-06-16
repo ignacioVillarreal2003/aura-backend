@@ -146,7 +146,7 @@ class NemoGuardrailsService:
                 self._unavailable = True
                 logger.warning(
                     "nemoguardrails is not installed; the input filter is disabled. "
-                    "Install requirements/requirements-guardrails.txt to enable it."
+                    "Install requirements/requirements.txt to enable it."
                 )
                 return None
 

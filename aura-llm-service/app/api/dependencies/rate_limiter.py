@@ -6,13 +6,9 @@ from typing import Callable
 import redis.exceptions as redis_exceptions
 from fastapi import HTTPException, Request, status
 
-from app.configuration.environment_variables import environment_variables
+from app.configuration.environment_variables import get_settings
 
 logger = logging.getLogger(__name__)
-
-_WINDOW_SECONDS = environment_variables.rate_limit_window_seconds
-_STRICT_RATE = environment_variables.rate_limit_strict_per_window
-_DEFAULT_RATE = environment_variables.rate_limit_default_per_window
 
 _RATE_LIMIT_SCRIPT = """
 local key = KEYS[1]
@@ -39,6 +35,8 @@ async def _check_rate_limit(request: Request, limit: int) -> None:
     if redis_client is None:
         return
 
+    window_seconds = get_settings().rate_limit_window_seconds
+
     auth_user = getattr(request.state, "authenticated_user", None)
     identity = (
         str(auth_user.id)
@@ -54,10 +52,10 @@ async def _check_rate_limit(request: Request, limit: int) -> None:
             1,
             key,
             now,
-            _WINDOW_SECONDS,
+            window_seconds,
             limit,
             str(uuid.uuid4()),
-            _WINDOW_SECONDS * 2,
+            window_seconds * 2,
         )
     except (redis_exceptions.RedisError, OSError):
         logger.warning(
@@ -74,7 +72,7 @@ async def _check_rate_limit(request: Request, limit: int) -> None:
         oldest = float(oldest_score)
     except (TypeError, ValueError):
         oldest = now
-    retry_after = max(1, math.ceil(oldest + _WINDOW_SECONDS - now))
+    retry_after = max(1, math.ceil(oldest + window_seconds - now))
     raise HTTPException(
         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
         detail="Rate limit exceeded. Please retry later.",
@@ -82,12 +80,22 @@ async def _check_rate_limit(request: Request, limit: int) -> None:
     )
 
 
-def make_rate_limiter(limit: int) -> Callable:
+def make_rate_limiter(kind: str) -> Callable:
+    """Build a FastAPI dependency that enforces the ``kind`` ("strict"/"default")
+    rate limit. The numeric limit and window are read from settings per-request
+    (not bound at import time), so configuration stays overridable in tests."""
+
     async def _limiter(request: Request) -> None:
+        settings = get_settings()
+        limit = (
+            settings.rate_limit_strict_per_window
+            if kind == "strict"
+            else settings.rate_limit_default_per_window
+        )
         await _check_rate_limit(request, limit=limit)
 
     return _limiter
 
 
-strict_rate_limit = make_rate_limiter(_STRICT_RATE)
-default_rate_limit = make_rate_limiter(_DEFAULT_RATE)
+strict_rate_limit = make_rate_limiter("strict")
+default_rate_limit = make_rate_limiter("default")

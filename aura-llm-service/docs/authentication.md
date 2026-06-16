@@ -87,18 +87,25 @@ Helper methods:
 
 Each endpoint requires a specific permission. The caller must include this permission in `X-User-Permissions` (API-key mode) or have it granted by the auth provider (Bearer mode).
 
+A `/stream` variant requires the same permission as its base endpoint.
+
 | Endpoint | Required Permission |
 |---|---|
-| `POST /document-question` | `LLM_DOCUMENT_QUESTION` |
-| `POST /document-question/stream` | `LLM_DOCUMENT_QUESTION_STREAM` |
-| `POST /document-summary` | `LLM_DOCUMENT_SUMMARY` |
-| `POST /document-action` | `LLM_DOCUMENT_ACTION` |
+| `POST /document-question` (`/stream`) | `LLM_DOCUMENT_QUESTION` |
+| `POST /document-summary` (`/stream`) | `LLM_DOCUMENT_SUMMARY` |
+| `POST /document-action` (`/stream`) | `LLM_DOCUMENT_ACTION` |
 | `POST /document-classify` | `LLM_DOCUMENT_CLASSIFY` |
 | `POST /fragment-enrich` | `LLM_FRAGMENT_ENRICH` |
 | `POST /graph-extraction` | `LLM_GRAPH_EXTRACTION` |
 | `POST /graph-query-translation` | `LLM_GRAPH_QUERY_TRANSLATION` |
-| `POST /agent` | `LLM_AGENT` |
-| `POST /rag-agent` | `LLM_RAG_AGENT` |
+| `POST /general-chat` (`/stream`) | `LLM_GENERAL_CHAT` |
+| `POST /rag-agent` (`/stream`) | `LLM_AGENT` |
+| `POST /report-generate` (`/stream`) | `LLM_REPORT_GENERATE` |
+| `POST /checklist-generate` (`/stream`) | `LLM_CHECKLIST_GENERATE` |
+| `POST /timeline-generate` (`/stream`) | `LLM_TIMELINE_GENERATE` |
+| `POST /quiz-generate` (`/stream`) | `LLM_QUIZ_GENERATE` |
+| `POST /lessons-learned-generate` (`/stream`) | `LLM_LESSONS_LEARNED_GENERATE` |
+| `POST /decision-brief-generate` (`/stream`) | `LLM_DECISION_BRIEF_GENERATE` |
 
 Missing or wrong permission → `403 Forbidden`.
 
