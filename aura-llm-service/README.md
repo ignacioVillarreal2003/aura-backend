@@ -1,29 +1,4 @@
-# AURA LLM Service — Informe de Auditoría y Plan de Producción
 
-> Backend de servicios LLM (FastAPI + LangGraph + Ollama) para la plataforma AURA.
-> Este documento es el **informe de auditoría** (no se han realizado cambios de código).
-> Fecha: 2026-06-15 · Alcance: 324 módulos Python (~19.5K LOC).
-
----
-
-## 0. Resumen ejecutivo
-
-**Este no es un proyecto greenfield desordenado.** Es un servicio con Clean Architecture ya
-aplicada y un nivel de madurez de producción **alto**: DI con rollback, logging estructurado,
-circuit breaker por host, retries, rate-limiting atómico, métricas Prometheus, tracing OTel,
-guardrails de entrada/salida, healthchecks, Docker no-root y build reproducible desde lock.
-
-El trabajo pendiente para "listo para producción" es **acotado**: no requiere reescritura, sino
-cerrar huecos puntuales de seguridad operativa, consistencia y verificación. La auditoría se
-calibra en consecuencia.
-
-> ⚠️ **Estado del repositorio al momento de auditar:** hay un **refactor grande sin commitear**
-> (decenas de archivos `D`/`R` en `git status`). Se verificó estáticamente que **no quedaron
-> imports colgando** a los módulos borrados y que las rutas renombradas a `interfaces/` +
-> `exceptions/` son consistentes. **No fue posible ejecutar la test suite** en el entorno de
-> auditoría (sin venv; `uvicorn` y dependencias no instaladas).
-
----
 
 ## 1. Lo que ya está bien hecho (verificado en código)
 
