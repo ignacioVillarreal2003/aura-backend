@@ -10,6 +10,7 @@ from app.application.services.user_interactions.rag_agent_service.rag_agent_sett
 from app.application.services.user_interactions.rag_agent_service.rag_agent_state.rag_agent_state import RagAgentState
 from app.application.services.generation_shared.prompts.prompt_augmentation import augment_system_prompt
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
+from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface import OllamaLLMInvokerInterface
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +24,11 @@ class AnswerSynthesizerNode(RagNodeInterface):
     def __init__(
             self,
             ollama_llm_facade: OllamaLLMFacadeInterface,
+            ollama_llm_invoker: OllamaLLMInvokerInterface,
             settings: AnswerSynthesizerSettings,
     ) -> None:
         self._ollama_llm_facade = ollama_llm_facade
+        self._ollama_llm_invoker = ollama_llm_invoker
         self._settings = settings
         self._llm: Optional[Runnable] = None
         self._llm_lock = asyncio.Lock()
@@ -90,8 +93,7 @@ class AnswerSynthesizerNode(RagNodeInterface):
             ),
             HumanMessage(content=user_content),
         ]
-        response = await self._llm.ainvoke(prompt)
-        return (response.content if hasattr(response, "content") else str(response)).strip()
+        return (await self._ollama_llm_invoker.call_llm_content(llm=self._llm, llm_input=prompt)).strip()
 
     async def _ensure_llm_initialized(self) -> None:
         if self._llm is not None:

@@ -10,7 +10,7 @@ from app.api.sse import sse_response
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
 from app.api.dependencies.app_state_services import get_report_service
-from app.application.services.user_interactions.report_service.report_service_interface import ReportServiceInterface
+from app.application.services.user_interactions.report_service.interfaces.report_service_interface import ReportServiceInterface
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.user_interactions.report.report_request import ReportGenerateRequest
 from app.domain.dtos.user_interactions.report.report_response import ReportGenerateResponse

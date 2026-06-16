@@ -1,4 +1,5 @@
 import logging
+import time
 from collections.abc import AsyncIterator
 from typing import Any, List, Optional
 import httpx
@@ -6,6 +7,8 @@ from langchain_core.messages import BaseMessage
 from langchain_core.runnables import Runnable
 from tenacity import AsyncRetrying, before_sleep_log, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+from app.configuration.metrics import model_name_of, record_llm_usage, usage_tokens
+from app.infrastructure.llm.ollama_llm.llm_concurrency import llm_slot
 from app.infrastructure.llm.ollama_llm.exceptions.ollama_llm_invoker_exceptions import LLMInvocationError
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_streaming_invoker_interface import (
     OllamaLLMStreamingInvokerInterface,
@@ -54,23 +57,28 @@ class OllamaLLMStreamingInvoker(OllamaLLMStreamingInvokerInterface):
         if self._settings.log_payloads:
             log_llm_input(logger, llm_input, self._settings.log_payload_max_chars)
 
+        started = time.perf_counter()
         gen: AsyncIterator[Any] | None = None
         first_chunk: Any = _STREAM_EMPTY
 
         try:
-            async for attempt in AsyncRetrying(
-                    stop=stop_after_attempt(self._settings.max_retry_attempts),
-                    wait=wait_exponential(
-                        min=self._settings.retry_min_wait,
-                        max=self._settings.retry_max_wait,
-                    ),
-                    retry=retry_if_exception_type(_RETRYABLE_EXCEPTIONS),
-                    before_sleep=before_sleep_log(logger, logging.WARNING),
-                    reraise=True,
-            ):
-                with attempt:
-                    gen = llm.astream(llm_input)
-                    first_chunk = await anext(gen, _STREAM_EMPTY)
+            # Hold a concurrency slot for stream establishment (prompt eval +
+            # first token) — the most contended phase on Ollama — and release it
+            # before the client-paced consume so a slow reader can't pin a slot.
+            async with llm_slot():
+                async for attempt in AsyncRetrying(
+                        stop=stop_after_attempt(self._settings.max_retry_attempts),
+                        wait=wait_exponential(
+                            min=self._settings.retry_min_wait,
+                            max=self._settings.retry_max_wait,
+                        ),
+                        retry=retry_if_exception_type(_RETRYABLE_EXCEPTIONS),
+                        before_sleep=before_sleep_log(logger, logging.WARNING),
+                        reraise=True,
+                ):
+                    with attempt:
+                        gen = llm.astream(llm_input)
+                        first_chunk = await anext(gen, _STREAM_EMPTY)
 
         except LLMInvocationError:
             raise
@@ -96,7 +104,9 @@ class OllamaLLMStreamingInvoker(OllamaLLMStreamingInvokerInterface):
         total_chars = 0
         payload_buffer: list[str] = []
         payload_buffered_chars = 0
+        usage: tuple[Optional[int], Optional[int]] = (None, None)
         try:
+            usage = self._merge_usage(usage, first_chunk)
             text = self._chunk_to_text(first_chunk)
             if text:
                 total_chars += len(text)
@@ -108,6 +118,7 @@ class OllamaLLMStreamingInvoker(OllamaLLMStreamingInvokerInterface):
                 yield text
 
             async for chunk in gen:
+                usage = self._merge_usage(usage, chunk)
                 text = self._chunk_to_text(chunk)
                 if text:
                     total_chars += len(text)
@@ -132,11 +143,35 @@ class OllamaLLMStreamingInvoker(OllamaLLMStreamingInvokerInterface):
                 extra={"error_type": type(e).__name__},
             )
             raise LLMInvocationError("LLM could not process the streaming request.") from e
+        finally:
+            # Record usage even on early close (client disconnect) and always
+            # release the upstream generator to avoid leaking the Ollama stream.
+            record_llm_usage(
+                model=model_name_of(llm),
+                input_tokens=usage[0],
+                output_tokens=usage[1],
+                duration_seconds=time.perf_counter() - started,
+            )
+            if gen is not None:
+                await gen.aclose()
 
         if self._settings.log_payloads:
             log_llm_output(logger, "".join(payload_buffer), self._settings.log_payload_max_chars)
 
         logger.debug("LLM streaming completed successfully", extra={"total_chars": total_chars})
+
+    @staticmethod
+    def _merge_usage(
+            current: tuple[Optional[int], Optional[int]],
+            chunk: Any,
+    ) -> tuple[Optional[int], Optional[int]]:
+        """Keep the largest token counts seen across chunks. Ollama reports
+        cumulative usage on its final streamed chunk via ``usage_metadata``."""
+        chunk_in, chunk_out = usage_tokens(chunk)
+        cur_in, cur_out = current
+        merged_in = chunk_in if chunk_in is not None and (cur_in is None or chunk_in > cur_in) else cur_in
+        merged_out = chunk_out if chunk_out is not None and (cur_out is None or chunk_out > cur_out) else cur_out
+        return merged_in, merged_out
 
     @staticmethod
     def _chunk_to_text(chunk: Any) -> str:

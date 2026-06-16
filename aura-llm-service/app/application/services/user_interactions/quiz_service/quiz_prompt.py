@@ -68,7 +68,7 @@ HUMAN_PROMPT = """
 Generá el cuestionario en JSON, respetando el esquema y las reglas del sistema. Apoyate en el contexto documental para construir preguntas y respuestas fieles al material. Si hay DOCUMENTOS ADJUNTOS, tratalos como la fuente prioritaria y el contexto recuperado como complementario.
 """.strip()
 
-EXTRACTION_SYSTEM_PROMPT = """
+MAP_SYSTEM_PROMPT = """
 Sos AURA (Fuerza Aérea Uruguaya). Estás procesando por partes fragmentos de documentos extensos para diseñar luego un cuestionario de evaluación.
 
 En ESTA pasada NO generes el cuestionario final. Tu única tarea es EXTRAER y CONDENSAR los puntos evaluables del material: conceptos clave, definiciones, procedimientos, datos y cifras, criterios, y errores/precauciones frecuentes.
@@ -80,10 +80,10 @@ Reglas:
 - Salida en texto plano, concisa, un punto evaluable por línea. Sin JSON ni markdown.
 """.strip()
 
-EXTRACTION_HUMAN_PROMPT = """
+MAP_HUMAN_PROMPT = """
 # Consigna del usuario
 
-{input}
+{query}
 
 ---
 
@@ -96,10 +96,29 @@ EXTRACTION_HUMAN_PROMPT = """
 # Puntos evaluables extraídos (concisos, uno por línea)
 """.strip()
 
-RAG_QUERIES = [
-    "conceptos clave definiciones del material",
-    "procedimientos pasos importantes a evaluar",
-    "datos relevantes cifras criterios",
-    "objetivos de aprendizaje competencias",
-    "errores comunes precauciones advertencias",
-]
+REDUCE_SYSTEM_PROMPT = """
+Sos AURA (Fuerza Aérea Uruguaya). Estás consolidando puntos evaluables ya extraídos de un documento extenso en pasadas anteriores.
+
+En ESTA pasada NO generes el resultado final. Tu tarea es UNIFICAR y CONDENSAR el material ya extraído: eliminá duplicados y redundancias y preservá todo lo relevante para la consigna del usuario.
+
+Reglas:
+- No inventes información que no esté en el material extraído.
+- No descartes contenido relevante solo para acortar.
+- Salida en texto plano, concisa, un punto evaluable por línea. Sin JSON ni markdown.
+""".strip()
+
+REDUCE_HUMAN_PROMPT = """
+# Consigna del usuario
+
+{query}
+
+---
+
+# Material extraído a consolidar
+
+{fragments}
+
+---
+
+# Puntos evaluables consolidados (uno por línea)
+""".strip()

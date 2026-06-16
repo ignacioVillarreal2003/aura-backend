@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from starlette.responses import StreamingResponse
 
-from app.application.services.user_interactions.decision_brief_service.decision_brief_service_interface import (
+from app.application.services.user_interactions.decision_brief_service.interfaces.decision_brief_service_interface import (
     DecisionBriefServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser

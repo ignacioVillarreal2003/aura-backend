@@ -7,6 +7,7 @@ from langchain_core.runnables import Runnable
 from tenacity import AsyncRetrying, before_sleep_log, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from app.configuration.metrics import model_name_of, record_llm_usage, usage_tokens
+from app.infrastructure.llm.ollama_llm.llm_concurrency import llm_slot
 from app.infrastructure.llm.ollama_llm.exceptions.ollama_llm_invoker_exceptions import LLMInvocationError
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface import OllamaLLMInvokerInterface
 from app.infrastructure.llm.ollama_llm.llm_payload_logging import log_llm_input, log_llm_output
@@ -53,7 +54,8 @@ class OllamaLLMInvoker(OllamaLLMInvokerInterface):
                     reraise=True,
             ):
                 with attempt:
-                    response = await llm.ainvoke(llm_input)
+                    async with llm_slot():
+                        response = await llm.ainvoke(llm_input)
 
         except LLMInvocationError:
             raise

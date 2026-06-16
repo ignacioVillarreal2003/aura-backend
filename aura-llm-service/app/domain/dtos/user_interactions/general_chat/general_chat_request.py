@@ -1,4 +1,3 @@
-from enum import StrEnum
 from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -9,19 +8,7 @@ from app.domain.field_limits import MAX_HISTORY_MESSAGES, MAX_ID, MAX_INSTRUCTIO
 from app.domain.validation import stripped_non_blank
 
 
-class GeneralChatMode(StrEnum):
-    DIRECT = "direct"
-    RAG = "rag"
-
-
 class GeneralChatRequest(BaseModel):
-    mode: GeneralChatMode = Field(
-        ...,
-        description=(
-            "direct: responde solo con el historial y los documentos adjuntos. "
-            "rag: enriquece adicionalmente con fragmentos de los documentos del usuario."
-        ),
-    )
     messages: list[Message] = Field(
         ...,
         min_length=1,
@@ -53,6 +40,15 @@ class GeneralChatRequest(BaseModel):
         min_length=1,
         max_length=MAX_INSTRUCTION_CHARS,
         description="Estilo de respuesta esperado por el operador.",
+    )
+
+    retrieve_context: bool | None = Field(
+        default=None,
+        description="Recuperar contexto de la base de conocimiento. None: usa el default del servicio.",
+    )
+    process_documents: bool | None = Field(
+        default=None,
+        description="Procesar el contenido completo de los documentos adjuntos. None: usa el default del servicio.",
     )
 
     @field_validator("document_ids")

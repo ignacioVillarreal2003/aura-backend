@@ -9,6 +9,7 @@ from app.application.services.user_interactions.rag_agent_service.interfaces.rag
 from app.application.services.user_interactions.rag_agent_service.rag_agent_settings import GuardrailsSettings
 from app.application.services.user_interactions.rag_agent_service.rag_agent_state.rag_agent_state import RagAgentState
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
+from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface import OllamaLLMInvokerInterface
 
 logger = logging.getLogger(__name__)
 
@@ -28,9 +29,11 @@ class GuardrailsNode(RagNodeInterface):
     def __init__(
             self,
             ollama_llm_facade: OllamaLLMFacadeInterface,
+            ollama_llm_invoker: OllamaLLMInvokerInterface,
             settings: GuardrailsSettings,
     ) -> None:
         self._ollama_llm_facade = ollama_llm_facade
+        self._ollama_llm_invoker = ollama_llm_invoker
         self._settings = settings
         self._llm: Optional[Runnable] = None
         self._llm_lock = asyncio.Lock()
@@ -83,8 +86,7 @@ class GuardrailsNode(RagNodeInterface):
                 SystemMessage(content=self._settings.redaction_prompt),
                 HumanMessage(content=answer),
             ]
-            response = await self._llm.ainvoke(prompt)
-            raw = (response.content if hasattr(response, "content") else str(response)).strip()
+            raw = (await self._ollama_llm_invoker.call_llm_content(llm=self._llm, llm_input=prompt)).strip()
 
             if "CANNOT_REDACT" in raw.upper():
                 logger.warning("LLM declared answer cannot be redacted")
@@ -97,8 +99,7 @@ class GuardrailsNode(RagNodeInterface):
 
     async def _llm_check(self, answer: str, context: str, query: str) -> bool:
         prompt = self._build_validation_prompt(answer, context, query)
-        response = await self._llm.ainvoke(prompt)
-        raw = response.content if hasattr(response, "content") else str(response)
+        raw = await self._ollama_llm_invoker.call_llm_content(llm=self._llm, llm_input=prompt)
         return self._parse_result(raw)
 
     def _build_validation_prompt(self, answer: str, context: str, query: str) -> List[BaseMessage]:

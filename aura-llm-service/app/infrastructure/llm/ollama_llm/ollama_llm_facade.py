@@ -21,8 +21,6 @@ from app.infrastructure.llm.ollama_llm.ollama_tool_manager import OllamaToolMana
 
 logger = logging.getLogger(__name__)
 
-_CIRCUIT_RECOVERY_COOLDOWN: float = 30.0
-_CIRCUIT_FAILURE_THRESHOLD: int = 1
 _PROBE_TIMEOUT: float = 10.0
 
 
@@ -113,8 +111,9 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
             match self._circuit_state:
                 case _CircuitState.OPEN:
                     elapsed = time.monotonic() - self._opened_at
-                    if elapsed < _CIRCUIT_RECOVERY_COOLDOWN:
-                        remaining = _CIRCUIT_RECOVERY_COOLDOWN - elapsed
+                    cooldown = self._settings.circuit_recovery_cooldown_seconds
+                    if elapsed < cooldown:
+                        remaining = cooldown - elapsed
                         raise LLMNotConfiguredError(
                             f"OllamaLLMFacade circuit is open — initialization failed. "
                             f"Recovery attempt in {remaining:.0f}s."
@@ -290,14 +289,14 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
     def _cleanup_on_failure(self) -> None:
         self._initialized = False
         self._consecutive_failures += 1
-        if self._consecutive_failures >= _CIRCUIT_FAILURE_THRESHOLD:
+        if self._consecutive_failures >= self._settings.circuit_failure_threshold:
             self._circuit_state = _CircuitState.OPEN
             self._opened_at = time.monotonic()
             logger.warning(
                 "Circuit opened after initialization failure",
                 extra={
                     "consecutive_failures": self._consecutive_failures,
-                    "recovery_in_seconds": _CIRCUIT_RECOVERY_COOLDOWN,
+                    "recovery_in_seconds": self._settings.circuit_recovery_cooldown_seconds,
                 },
             )
         self._tools_bound = False

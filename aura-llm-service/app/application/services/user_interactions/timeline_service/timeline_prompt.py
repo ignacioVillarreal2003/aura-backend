@@ -60,7 +60,7 @@ HUMAN_PROMPT = """
 Generá la línea de tiempo en JSON, respetando el esquema y las reglas del sistema. Apoyate en el contexto documental para precisar hechos y referencias temporales. Si hay DOCUMENTOS ADJUNTOS, tratalos como la fuente prioritaria y el contexto recuperado como complementario.
 """.strip()
 
-EXTRACTION_SYSTEM_PROMPT = """
+MAP_SYSTEM_PROMPT = """
 Sos AURA (Fuerza Aérea Uruguaya). Estás procesando por partes fragmentos de documentos extensos para construir luego una línea de tiempo.
 
 En ESTA pasada NO generes la cronología final. Tu única tarea es EXTRAER y CONDENSAR todos los hechos con valor temporal: qué ocurrió, su fecha/hora exacta (en ISO 8601 si está disponible) o su referencia temporal en lenguaje natural, y el actor o unidad involucrada.
@@ -72,10 +72,10 @@ Reglas:
 - Salida en texto plano, concisa, un hecho por línea con su marca temporal. Sin JSON ni markdown.
 """.strip()
 
-EXTRACTION_HUMAN_PROMPT = """
+MAP_HUMAN_PROMPT = """
 # Consigna del usuario
 
-{input}
+{query}
 
 ---
 
@@ -88,10 +88,30 @@ EXTRACTION_HUMAN_PROMPT = """
 # Hechos datables extraídos (concisos, uno por línea)
 """.strip()
 
-RAG_QUERIES = [
-    "cronología de eventos operacionales",
-    "secuencia temporal de hechos incidente",
-    "fechas hitos actividades operaciones",
-    "registro de eventos por fecha y hora",
-    "historial de actividades servicio misión",
-]
+
+REDUCE_SYSTEM_PROMPT = """
+Sos AURA (Fuerza Aérea Uruguaya). Estás consolidando hechos datables ya extraídos de un documento extenso en pasadas anteriores.
+
+En ESTA pasada NO generes el resultado final. Tu tarea es UNIFICAR y CONDENSAR el material ya extraído: eliminá duplicados y redundancias y preservá todo lo relevante para la consigna del usuario.
+
+Reglas:
+- No inventes información que no esté en el material extraído.
+- No descartes contenido relevante solo para acortar.
+- Salida en texto plano, concisa, un hecho por línea con su marca temporal. Sin JSON ni markdown.
+""".strip()
+
+REDUCE_HUMAN_PROMPT = """
+# Consigna del usuario
+
+{query}
+
+---
+
+# Material extraído a consolidar
+
+{fragments}
+
+---
+
+# Hechos datables consolidados (uno por línea)
+""".strip()

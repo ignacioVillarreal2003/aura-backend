@@ -21,6 +21,15 @@ class AgentRequest(BaseModel):
         description="Estilo de respuesta esperado por el operador.",
     )
 
+    retrieve_context: bool | None = Field(
+        default=None,
+        description="Recuperar contexto de la base de conocimiento. None: usa el default del servicio.",
+    )
+    process_documents: bool | None = Field(
+        default=None,
+        description="Procesar el contenido completo de los documentos adjuntos. None: usa el default del servicio.",
+    )
+
     @model_validator(mode="after")
     def validate_request(self) -> "AgentRequest":
         if self.messages[-1].role != MessageRole.human:

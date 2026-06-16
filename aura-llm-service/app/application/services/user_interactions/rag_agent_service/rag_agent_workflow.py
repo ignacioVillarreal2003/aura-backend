@@ -33,6 +33,7 @@ from app.infrastructure.http.graph_context_provider.interfaces.graph_context_pro
     GraphContextProviderInterface,
 )
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
+from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface import OllamaLLMInvokerInterface
 
 logger = logging.getLogger(__name__)
 
@@ -60,11 +61,13 @@ class RagAgentWorkflow:
     def __init__(
             self,
             ollama_llm_facade: OllamaLLMFacadeInterface,
+            ollama_llm_invoker: OllamaLLMInvokerInterface,
             document_context_provider: DocumentContextProviderInterface,
             settings: RagAgentServiceSettings,
             graph_context_provider: Optional[GraphContextProviderInterface] = None,
     ) -> None:
         self._ollama_llm_facade = ollama_llm_facade
+        self._ollama_llm_invoker = ollama_llm_invoker
         self._document_context_provider = document_context_provider
         self._graph_context_provider = graph_context_provider
         self._settings = settings
@@ -128,6 +131,7 @@ class RagAgentWorkflow:
 
         self._query_analyzer_node = QueryAnalyzerNode(
             ollama_llm_facade=self._ollama_llm_facade,
+            ollama_llm_invoker=self._ollama_llm_invoker,
             settings=s.query_analyzer,
         )
         self._graph_context_retriever_node = GraphContextRetrieverNode(
@@ -144,10 +148,12 @@ class RagAgentWorkflow:
         )
         self._answer_synthesizer_node = AnswerSynthesizerNode(
             ollama_llm_facade=self._ollama_llm_facade,
+            ollama_llm_invoker=self._ollama_llm_invoker,
             settings=s.answer_synthesizer,
         )
         self._guardrails_node = GuardrailsNode(
             ollama_llm_facade=self._ollama_llm_facade,
+            ollama_llm_invoker=self._ollama_llm_invoker,
             settings=s.guardrails,
         )
         self._fallback_node = FallbackNode()

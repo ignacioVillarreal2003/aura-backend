@@ -1,13 +1,14 @@
 import logging
 
-from app.application.services.user_interactions.report_service.report_service_exceptions import ReportServiceException
-from app.application.services.user_interactions.report_service.report_service_interface import ReportServiceInterface
+from app.application.services.user_interactions.report_service.exceptions.report_service_exceptions import ReportServiceException
+from app.application.services.user_interactions.report_service.interfaces.report_service_interface import ReportServiceInterface
 from app.application.services.user_interactions.report_service.report_settings import ReportSettings
 from app.application.services.user_interactions.report_service.report_prompt import (
-    EXTRACTION_HUMAN_PROMPT,
-    EXTRACTION_SYSTEM_PROMPT,
+    MAP_HUMAN_PROMPT,
+    MAP_SYSTEM_PROMPT,
+    REDUCE_HUMAN_PROMPT,
+    REDUCE_SYSTEM_PROMPT,
     HUMAN_PROMPT,
-    RAG_QUERIES,
     build_system_prompt,
 )
 from app.application.services.generation_shared.generation_settings import GenerationSettings
@@ -47,9 +48,14 @@ class ReportService(
     stream_complete_event = ReportStreamComplete
     stream_error_event = ReportStreamError
 
+    default_process_documents = True
+    default_retrieve_context = False
+
     human_prompt = HUMAN_PROMPT
-    extraction_system_prompt = EXTRACTION_SYSTEM_PROMPT
-    extraction_human_prompt = EXTRACTION_HUMAN_PROMPT
+    map_system_prompt = MAP_SYSTEM_PROMPT
+    map_human_prompt = MAP_HUMAN_PROMPT
+    reduce_system_prompt = REDUCE_SYSTEM_PROMPT
+    reduce_human_prompt = REDUCE_HUMAN_PROMPT
 
     uses_json_mode = False
 
@@ -67,9 +73,6 @@ class ReportService(
     def _system_prompt(self, request: ReportGenerateRequest) -> str:
         return build_system_prompt(request.report_type)
 
-    def _rag_queries(self, request: ReportGenerateRequest) -> list[str]:
-        return RAG_QUERIES[request.report_type]
-
     def _postprocess_raw(self, raw: str) -> str:
         return raw[:self._report_settings.max_content_chars]
 
@@ -77,7 +80,7 @@ class ReportService(
         return _REPORT_GENERATION_MESSAGES[request.report_type]
 
     def _request_log_extra(self, request: ReportGenerateRequest) -> dict:
-        return {"mode": request.mode, "report_type": request.report_type}
+        return {"report_type": request.report_type}
 
     def _parse_output(self, raw: str, request: ReportGenerateRequest) -> str:
         return raw
@@ -94,4 +97,5 @@ class ReportService(
             content=parsed,
             messages=self._conversation_with_answer(state, parsed),
             fragments=state.all_fragments,
+            degraded_stages=self._degraded_stages(state),
         )

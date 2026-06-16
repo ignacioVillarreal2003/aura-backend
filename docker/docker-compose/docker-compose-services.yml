@@ -63,7 +63,7 @@ services:
     ports:
       - "8001:8000"
     env_file:
-      - ../../aura-llm-service/.env.docker
+      - ../../aura-llm-service/env/.env.docker
     depends_on:
       llm:
         condition: service_healthy

@@ -1,44 +1,38 @@
-import logging
 from collections.abc import AsyncIterator
 from typing import Optional
 
-from app.application.authorization.exceptions.authorization_exceptions import UnauthorizedException
-from app.application.exceptions.app_exception import RequestValidationException
-from app.application.services.user_interactions.document_summary_service.constants.summarization_strategy import \
-    SummarizationStrategy
-from app.application.services.user_interactions.document_summary_service.document_summary_settings import \
-    DocumentSummaryServiceSettings
-from app.application.services.user_interactions.document_summary_service.document_summary_state import \
-    DocumentSummaryState
+from app.application.services.generation_shared.state.generation_state import GenerationState
+from app.application.services.generation_shared.streaming_generation_service import StreamingGenerationService
+from app.application.services.user_interactions.document_summary_service.document_summary_prompts import (
+    ANSWER_HUMAN_PROMPT,
+    ANSWER_SYSTEM_PROMPT,
+    MAP_HUMAN_PROMPT,
+    MAP_SYSTEM_PROMPT,
+    REDUCE_HUMAN_PROMPT,
+    REDUCE_SYSTEM_PROMPT,
+)
+from app.application.services.user_interactions.document_summary_service.document_summary_settings import (
+    DocumentSummaryServiceSettings,
+)
 from app.application.services.user_interactions.document_summary_service.exceptions.document_summary_service_exceptions import (
     DocumentSummaryServiceException,
 )
 from app.application.services.user_interactions.document_summary_service.interfaces.document_summary_service_interface import (
     DocumentSummaryServiceInterface,
 )
-from app.application.services.user_interactions.document_summary_service.processors.context_document_summary_processor.context_document_summary_processor import (
-    ContextDocumentSummaryProcessor,
-)
-from app.application.services.user_interactions.document_summary_service.processors.direct_document_summary_processor.direct_document_summary_processor import (
-    DirectDocumentSummaryProcessor,
-)
-from app.application.services.user_interactions.document_summary_service.processors.chunk_document_summary_processor.chunk_document_summary_processor import (
-    ChunkDocumentSummaryProcessor,
-)
-from app.application.services.user_interactions.document_summary_service.processors.reduce_document_summary_processor.reduce_document_summary_processor import (
-    ReduceDocumentSummaryProcessor,
-)
-from app.configuration.tracing import trace_generation
 from app.domain.authentication.authenticated_user import AuthenticatedUser
+from app.domain.constants.message_role import MessageRole
+from app.domain.dtos.message import Message
 from app.domain.dtos.user_interactions.document_summary.document_summary_request import DocumentSummaryRequest
-from app.domain.field_limits import MAX_CONTENT_CHARS
 from app.domain.dtos.user_interactions.document_summary.document_summary_response import DocumentSummaryResponse
 from app.domain.dtos.user_interactions.document_summary.document_summary_stream_events import (
     DocumentSummaryStreamComplete,
+    DocumentSummaryStreamDelta,
     DocumentSummaryStreamError,
     DocumentSummaryStreamEvent,
     DocumentSummaryStreamProgress,
 )
+from app.domain.field_limits import MAX_SUMMARY_CHARS
 from app.infrastructure.http.document_context_provider.interfaces.document_context_provider_interface import (
     DocumentContextProviderInterface,
 )
@@ -48,21 +42,32 @@ from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_streaming_invoker_i
     OllamaLLMStreamingInvokerInterface,
 )
 
-logger = logging.getLogger(__name__)
-
-_STATIC_FALLBACK_MESSAGE = (
-    "No se encontró información suficiente en el documento para generar un resumen. "
-    "Verifique que el documento esté correctamente cargado en el sistema o contacte al administrador."
-)
-
-_KNOWN_EXCEPTIONS = (
-    RequestValidationException,
-    DocumentSummaryServiceException,
-    UnauthorizedException,
-)
+_SUMMARY_INSTRUCTION = "Generá un resumen estructurado, completo y fiel del documento adjunto."
 
 
-class DocumentSummaryService(DocumentSummaryServiceInterface):
+class DocumentSummaryService(
+    StreamingGenerationService[DocumentSummaryRequest, DocumentSummaryResponse],
+    DocumentSummaryServiceInterface,
+):
+    label = "document_summary"
+    exception_cls = DocumentSummaryServiceException
+    unexpected_error_message = "Ocurrió un error inesperado al generar el resumen del documento."
+    generation_step_message = "Analizando y resumiendo el documento..."
+
+    default_process_documents = True
+    default_retrieve_context = False
+
+    human_prompt = ANSWER_HUMAN_PROMPT
+    map_system_prompt = MAP_SYSTEM_PROMPT
+    map_human_prompt = MAP_HUMAN_PROMPT
+    reduce_system_prompt = REDUCE_SYSTEM_PROMPT
+    reduce_human_prompt = REDUCE_HUMAN_PROMPT
+
+    stream_progress_event = DocumentSummaryStreamProgress
+    stream_complete_event = DocumentSummaryStreamComplete
+    stream_error_event = DocumentSummaryStreamError
+    stream_delta_event = DocumentSummaryStreamDelta
+
     def __init__(
             self,
             ollama_llm_facade: OllamaLLMFacadeInterface,
@@ -71,162 +76,57 @@ class DocumentSummaryService(DocumentSummaryServiceInterface):
             document_context_provider: DocumentContextProviderInterface,
             document_summary_settings: Optional[DocumentSummaryServiceSettings] = None,
     ) -> None:
-        self._document_summary_settings = document_summary_settings or DocumentSummaryServiceSettings()
-
-        self._context_processor = ContextDocumentSummaryProcessor(
-            document_summary_service_settings=self._document_summary_settings,
+        settings = document_summary_settings or DocumentSummaryServiceSettings()
+        super().__init__(
+            ollama_llm_facade=ollama_llm_facade,
+            ollama_llm_invoker=ollama_llm_invoker,
+            ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
             document_context_provider=document_context_provider,
-        )
-        self._direct_processor = DirectDocumentSummaryProcessor(
-            ollama_llm_facade=ollama_llm_facade,
-            ollama_llm_invoker=ollama_llm_invoker,
-            ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
-        )
-        self._map_chunks_processor = ChunkDocumentSummaryProcessor(
-            document_summary_service_settings=self._document_summary_settings,
-            ollama_llm_facade=ollama_llm_facade,
-            ollama_llm_invoker=ollama_llm_invoker,
-        )
-        self._reduce_processor = ReduceDocumentSummaryProcessor(
-            ollama_llm_facade=ollama_llm_facade,
-            ollama_llm_invoker=ollama_llm_invoker,
-            ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
+            generation_settings=settings.to_generation_settings(),
+            attached_documents_settings=settings.to_attached_settings(),
+            context_reduction_settings=settings.to_reduction_settings(),
         )
 
-    @trace_generation("document_summary")
+    def _request_messages(self, request: DocumentSummaryRequest) -> list[Message]:
+        return [Message(role=MessageRole.human, content=_SUMMARY_INSTRUCTION)]
+
+    def _system_prompt(self, request: DocumentSummaryRequest) -> str:
+        return ANSWER_SYSTEM_PROMPT
+
+    def _request_log_extra(self, request: DocumentSummaryRequest) -> dict:
+        return {
+            "document_count": len(request.document_ids),
+            "retrieve_context": request.retrieve_context,
+            "process_documents": request.process_documents,
+        }
+
+    def _postprocess_answer(self, answer: str) -> str:
+        return answer[:MAX_SUMMARY_CHARS]
+
+    def _build_response(
+            self,
+            state: GenerationState,
+            request: DocumentSummaryRequest,
+            answer: str,
+    ) -> DocumentSummaryResponse:
+        return DocumentSummaryResponse(
+            document_ids=request.document_ids,
+            summary=answer,
+            fragments=state.all_fragments,
+            degraded_stages=self._degraded_stages(state),
+        )
+
     async def execute_document_summary(
             self,
             document_summary_request: DocumentSummaryRequest,
             authenticated_user: AuthenticatedUser,
     ) -> DocumentSummaryResponse:
-        logger.info(
-            "Document summary execution initiated",
-            extra={"user_id": authenticated_user.id, "document_ids": document_summary_request.document_ids},
-        )
-        try:
-            state = DocumentSummaryState.from_request(document_summary_request, authenticated_user)
-            await self._run_pipeline(state)
-            logger.info(
-                "Document summary execution completed",
-                extra={"user_id": authenticated_user.id, "document_ids": document_summary_request.document_ids},
-            )
-            return DocumentSummaryResponse(
-                document_ids=state.document_ids,
-                summary=state.summary,
-                fragments=state.fragments,
-            )
-        except _KNOWN_EXCEPTIONS:
-            raise
-        except Exception as e:
-            logger.exception(
-                "Unexpected error during document summary execution",
-                extra={"user_id": authenticated_user.id, "error_type": type(e).__name__},
-            )
-            raise DocumentSummaryServiceException(
-                "Unexpected error while processing the document summary"
-            ) from e
+        return await self.generate(document_summary_request, authenticated_user)
 
-    @trace_generation("document_summary_stream")
     async def execute_document_summary_stream(
             self,
             document_summary_request: DocumentSummaryRequest,
             authenticated_user: AuthenticatedUser,
     ) -> AsyncIterator[DocumentSummaryStreamEvent]:
-        try:
-            state = DocumentSummaryState.from_request(document_summary_request, authenticated_user)
-
-            yield DocumentSummaryStreamProgress(
-                step="context_retrieval",
-                message="Leyendo el contenido del documento...",
-            )
-            await self._context_processor.run(state)
-
-            if state.strategy == SummarizationStrategy.direct:
-                yield DocumentSummaryStreamProgress(
-                    step="summarization",
-                    message="Analizando y resumiendo el documento...",
-                )
-                try:
-                    async for delta in self._direct_processor.stream(state):
-                        yield delta
-                except DocumentSummaryServiceException as e:
-                    yield DocumentSummaryStreamError(message=e.message, code=e.code)
-                    return
-                except Exception as e:
-                    logger.exception(
-                        "Error during direct summary streaming",
-                        extra={"error_type": type(e).__name__},
-                    )
-                    yield DocumentSummaryStreamError(
-                        message="Error invoking the language model",
-                        code="StreamSummaryError",
-                    )
-                    return
-
-            elif state.strategy == SummarizationStrategy.map_reduce:
-                yield DocumentSummaryStreamProgress(
-                    step="chunk_processing",
-                    message="Procesando el documento por secciones...",
-                )
-                await self._map_chunks_processor.run(state)
-
-                yield DocumentSummaryStreamProgress(
-                    step="reducing",
-                    message="Integrando las secciones en el resumen final...",
-                )
-                try:
-                    async for delta in self._reduce_processor.stream(state):
-                        yield delta
-                except DocumentSummaryServiceException as e:
-                    yield DocumentSummaryStreamError(message=e.message, code=e.code)
-                    return
-                except Exception as e:
-                    logger.exception(
-                        "Error during reduce summary streaming",
-                        extra={"error_type": type(e).__name__},
-                    )
-                    yield DocumentSummaryStreamError(
-                        message="Error invoking the language model",
-                        code="StreamSummaryError",
-                    )
-                    return
-
-            state.summary = state.summary.strip()
-            if not state.summary:
-                state.summary = _STATIC_FALLBACK_MESSAGE
-            elif len(state.summary) > MAX_CONTENT_CHARS:
-                state.summary = state.summary[:MAX_CONTENT_CHARS]
-
-            yield DocumentSummaryStreamComplete(
-                result=DocumentSummaryResponse(
-                    document_ids=state.document_ids,
-                    summary=state.summary,
-                    fragments=state.fragments,
-                ),
-            )
-
-        except _KNOWN_EXCEPTIONS as e:
-            logger.warning(
-                "Known error during document summary stream",
-                extra={"error_type": type(e).__name__},
-            )
-            yield DocumentSummaryStreamError(message=str(e), code=type(e).__name__)
-        except Exception as e:
-            logger.exception(
-                "Unexpected error during document summary stream",
-                extra={"error_type": type(e).__name__},
-            )
-            yield DocumentSummaryStreamError(
-                message="Unexpected error while processing the document summary",
-                code="DocumentSummaryStreamError",
-            )
-
-    async def _run_pipeline(self, state: DocumentSummaryState) -> None:
-        await self._context_processor.run(state)
-        await self._direct_processor.run(state)
-        await self._map_chunks_processor.run(state)
-        await self._reduce_processor.run(state)
-        if not state.summary.strip():
-            state.summary = _STATIC_FALLBACK_MESSAGE
-        elif len(state.summary) > MAX_CONTENT_CHARS:
-            state.summary = state.summary[:MAX_CONTENT_CHARS]
+        async for event in self.generate_stream(document_summary_request, authenticated_user):
+            yield event

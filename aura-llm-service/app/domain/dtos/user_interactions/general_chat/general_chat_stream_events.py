@@ -5,6 +5,14 @@ from app.domain.dtos.user_interactions.general_chat.general_chat_response import
 from app.domain.field_limits import MAX_CONTENT_CHARS
 
 
+class GeneralChatStreamProgress(BaseModel):
+    type: Literal["progress"] = "progress"
+    step: str = Field(..., min_length=1)
+    message: str = Field(..., min_length=1)
+
+    model_config = {"from_attributes": True}
+
+
 class GeneralChatStreamDelta(BaseModel):
     type: Literal["delta"] = "delta"
     text: str = Field(..., min_length=1, max_length=MAX_CONTENT_CHARS)
@@ -28,6 +36,7 @@ class GeneralChatStreamError(BaseModel):
 
 
 GeneralChatStreamEvent = Union[
+    GeneralChatStreamProgress,
     GeneralChatStreamDelta,
     GeneralChatStreamComplete,
     GeneralChatStreamError,

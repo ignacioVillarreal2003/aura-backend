@@ -65,7 +65,7 @@ HUMAN_PROMPT = """
 Generá las lecciones aprendidas en JSON, respetando el esquema y las reglas del sistema. Apoyate en el contexto documental para sustentar los hallazgos y las recomendaciones. Si hay DOCUMENTOS ADJUNTOS, tratalos como la fuente prioritaria y el contexto recuperado como complementario.
 """.strip()
 
-EXTRACTION_SYSTEM_PROMPT = """
+MAP_SYSTEM_PROMPT = """
 Sos AURA (Fuerza Aérea Uruguaya). Estás procesando por partes fragmentos de documentos extensos para construir luego un análisis de lecciones aprendidas.
 
 En ESTA pasada NO generes el análisis final. Tu única tarea es EXTRAER y CONDENSAR hallazgos concretos: prácticas que funcionaron (sustain), fallas o deficiencias (improve) y recomendaciones, junto con la evidencia o el contexto que los respalda.
@@ -77,10 +77,10 @@ Reglas:
 - Salida en texto plano, concisa, un hallazgo por línea, indicando si es sustain/improve/recomendación. Sin JSON ni markdown.
 """.strip()
 
-EXTRACTION_HUMAN_PROMPT = """
+MAP_HUMAN_PROMPT = """
 # Consigna del usuario
 
-{input}
+{query}
 
 ---
 
@@ -93,10 +93,30 @@ EXTRACTION_HUMAN_PROMPT = """
 # Hallazgos extraídos (concisos, uno por línea)
 """.strip()
 
-RAG_QUERIES = [
-    "resultado de la operación ejercicio desempeño",
-    "problemas dificultades fallas detectadas",
-    "aciertos buenas prácticas que funcionaron",
-    "recomendaciones mejoras acciones correctivas",
-    "coordinación comunicaciones logística mando y control",
-]
+
+REDUCE_SYSTEM_PROMPT = """
+Sos AURA (Fuerza Aérea Uruguaya). Estás consolidando hallazgos ya extraídos de un documento extenso en pasadas anteriores.
+
+En ESTA pasada NO generes el resultado final. Tu tarea es UNIFICAR y CONDENSAR el material ya extraído: eliminá duplicados y redundancias y preservá todo lo relevante para la consigna del usuario.
+
+Reglas:
+- No inventes información que no esté en el material extraído.
+- No descartes contenido relevante solo para acortar.
+- Salida en texto plano, concisa, un hallazgo por línea, indicando si es sustain/improve/recomendación. Sin JSON ni markdown.
+""".strip()
+
+REDUCE_HUMAN_PROMPT = """
+# Consigna del usuario
+
+{query}
+
+---
+
+# Material extraído a consolidar
+
+{fragments}
+
+---
+
+# Hallazgos consolidados (uno por línea)
+""".strip()

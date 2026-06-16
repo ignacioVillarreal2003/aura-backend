@@ -10,7 +10,7 @@ from app.api.sse import sse_response
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
 from app.api.dependencies.app_state_services import get_checklist_service
-from app.application.services.user_interactions.checklist_service.checklist_service_interface import (
+from app.application.services.user_interactions.checklist_service.interfaces.checklist_service_interface import (
     ChecklistServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser

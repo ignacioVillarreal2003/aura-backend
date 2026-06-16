@@ -31,7 +31,7 @@ HUMAN_PROMPT = """
 Redactá el informe en el formato exacto definido en las instrucciones del sistema. Integrá el contexto documental en las secciones pertinentes y respetá todas las reglas. Si hay DOCUMENTOS ADJUNTOS, tratalos como la fuente prioritaria y el contexto recuperado como complementario.
 """.strip()
 
-EXTRACTION_SYSTEM_PROMPT = """
+MAP_SYSTEM_PROMPT = """
 Eres AURA (Fuerza Aérea Uruguaya). Estás procesando por partes fragmentos de documentos extensos para redactar luego un informe militar (SITREP, INTSUM u OPORD).
 
 En ESTA pasada NO redactes el informe final. Tu única tarea es EXTRAER y CONDENSAR los datos operacionales relevantes presentes en los fragmentos: situación y fuerzas (propias y enemigas), misión y tareas, terreno y meteorología, inteligencia (capacidades, vulnerabilidades, actividad), logística (bajas, abastecimiento, mantenimiento, transporte), y mando y comunicaciones.
@@ -43,10 +43,10 @@ Reglas:
 - Salida en texto plano, concisa, agrupada por tema. Sin markdown.
 """.strip()
 
-EXTRACTION_HUMAN_PROMPT = """
+MAP_HUMAN_PROMPT = """
 # Consigna del usuario
 
-{input}
+{query}
 
 ---
 
@@ -58,30 +58,6 @@ EXTRACTION_HUMAN_PROMPT = """
 
 # Datos operacionales extraídos (concisos, agrupados por tema)
 """.strip()
-
-RAG_QUERIES: dict[ReportType, list[str]] = {
-    ReportType.SITREP: [
-        "situación fuerzas enemigas composición despliegue actividad",
-        "misión unidad objetivo tarea asignada",
-        "condiciones meteorológicas terreno",
-        "estado logístico bajas munición combustible",
-        "mando comunicaciones puesto de mando",
-    ],
-    ReportType.INTSUM: [
-        "actividad enemiga reciente amenaza indicios advertencia",
-        "capacidades enemigas vulnerabilidades cursos de acción",
-        "terreno puntos críticos avenidas de aproximación obstáculos",
-        "condiciones meteorológicas visibilidad observación",
-        "análisis inteligencia conclusiones recomendaciones",
-    ],
-    ReportType.OPORD: [
-        "plan operaciones concepto maniobra",
-        "situación enemiga capacidades amenaza curso acción probable",
-        "fuegos apoyo artillería coordinación",
-        "logística abastecimiento mantenimiento transporte apoyo médico",
-        "mando control puesto mando comunicaciones frecuencias",
-    ],
-}
 
 _SITREP_SYSTEM = (
         "Eres AURA, asistente de la Fuerza Aérea Uruguaya (FAU) que asiste a oficiales de estado mayor "
@@ -217,3 +193,31 @@ _SYSTEM_PROMPTS: dict[ReportType, str] = {
 
 def build_system_prompt(report_type: ReportType) -> str:
     return _SYSTEM_PROMPTS[report_type]
+
+
+REDUCE_SYSTEM_PROMPT = """
+Sos AURA (Fuerza Aérea Uruguaya). Estás consolidando datos operacionales ya extraídos de un documento extenso en pasadas anteriores.
+
+En ESTA pasada NO generes el resultado final. Tu tarea es UNIFICAR y CONDENSAR el material ya extraído: eliminá duplicados y redundancias y preservá todo lo relevante para la consigna del usuario.
+
+Reglas:
+- No inventes información que no esté en el material extraído.
+- No descartes contenido relevante solo para acortar.
+- Salida en texto plano, concisa, agrupados por tema. Sin JSON ni markdown.
+""".strip()
+
+REDUCE_HUMAN_PROMPT = """
+# Consigna del usuario
+
+{query}
+
+---
+
+# Material extraído a consolidar
+
+{fragments}
+
+---
+
+# Datos operacionales consolidados (agrupados por tema)
+""".strip()

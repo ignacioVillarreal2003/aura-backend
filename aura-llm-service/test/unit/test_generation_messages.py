@@ -18,7 +18,7 @@ def _state(messages=None) -> GenerationState:
             Message(role=MessageRole.human, content="pregunta actual"),
         ],
         chat_id=1,
-        is_rag=True,
+        retrieve_context=True,
         authenticated_user=None,
     )
 

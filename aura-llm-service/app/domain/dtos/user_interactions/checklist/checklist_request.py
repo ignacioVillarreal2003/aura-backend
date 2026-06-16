@@ -1,4 +1,3 @@
-from enum import StrEnum
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.domain.constants.message_role import MessageRole
@@ -6,19 +5,7 @@ from app.domain.dtos.message import Message
 from app.domain.field_limits import MAX_ID, MAX_MESSAGES_IN_REQUEST, MAX_INSTRUCTION_CHARS
 
 
-class ChecklistMode(StrEnum):
-    DIRECT = "direct"
-    RAG = "rag"
-
-
 class ChecklistGenerateRequest(BaseModel):
-    mode: ChecklistMode = Field(
-        ...,
-        description=(
-            "direct: genera la checklist solo con el texto de procedimiento provisto. "
-            "rag: enriquece con fragmentos de los documentos del usuario."
-        ),
-    )
     messages: list[Message] = Field(
         ...,
         min_length=1,
@@ -54,6 +41,15 @@ class ChecklistGenerateRequest(BaseModel):
         min_length=1,
         max_length=MAX_INSTRUCTION_CHARS,
         description="Estilo de respuesta esperado por el operador.",
+    )
+
+    retrieve_context: bool | None = Field(
+        default=None,
+        description="Recuperar contexto de la base de conocimiento. None: usa el default del servicio.",
+    )
+    process_documents: bool | None = Field(
+        default=None,
+        description="Procesar el contenido completo de los documentos adjuntos. None: usa el default del servicio.",
     )
 
     @field_validator("document_ids")

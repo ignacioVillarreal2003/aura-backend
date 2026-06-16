@@ -24,6 +24,15 @@ class DocumentSummaryRequest(BaseModel):
         description="Estilo de respuesta esperado por el operador.",
     )
 
+    retrieve_context: bool | None = Field(
+        default=None,
+        description="Recuperar contexto de la base de conocimiento. None: usa el default del servicio.",
+    )
+    process_documents: bool | None = Field(
+        default=None,
+        description="Procesar el contenido completo de los documentos adjuntos. None: usa el default del servicio.",
+    )
+
     @model_validator(mode="after")
     def validate_document_ids(self) -> "DocumentSummaryRequest":
         if any(doc_id <= 0 or doc_id > MAX_ID for doc_id in self.document_ids):

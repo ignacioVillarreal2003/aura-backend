@@ -26,6 +26,8 @@ from app.application.services.user_interactions.lessons_learned_service.lessons_
     LessonsLearnedService
 from app.application.services.user_interactions.decision_brief_service.decision_brief_service import \
     DecisionBriefService
+from app.application.services.generation_shared.generation_settings import GenerationSettings
+from app.configuration.context_budget import validate_context_budget
 from app.infrastructure.guardrails.nemo_guardrails_service import NemoGuardrailsService
 from app.infrastructure.http.authentication_provider.authentication_provider import AuthenticationProvider
 from app.infrastructure.http.document_context_provider.document_context_provider import DocumentContextProvider
@@ -101,7 +103,9 @@ async def startup_dependencies(app: FastAPI) -> None:
         graph_context_provider = GraphContextProvider(http_client=http_client)
         registry.register("graph_context_provider", graph_context_provider)
 
-        ollama_facade = OllamaLLMFacade(ollama_llm_facade_settings=OllamaLLMFacadeSettings())
+        ollama_facade_settings = OllamaLLMFacadeSettings()
+        validate_context_budget(ollama_facade_settings, GenerationSettings())
+        ollama_facade = OllamaLLMFacade(ollama_llm_facade_settings=ollama_facade_settings)
         await ollama_facade.initialize()
         registry.register("ollama_llm_facade", ollama_facade)
 
@@ -145,6 +149,7 @@ async def startup_dependencies(app: FastAPI) -> None:
             "rag_agent_service",
             RagAgentService(
                 ollama_llm_facade=ollama_facade,
+                ollama_llm_invoker=ollama_llm_invoker,
                 document_context_provider=document_context_provider,
                 graph_context_provider=graph_context_provider,
             ),

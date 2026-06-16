@@ -10,7 +10,7 @@ from app.api.sse import sse_response
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
 from app.api.dependencies.app_state_services import get_timeline_service
-from app.application.services.user_interactions.timeline_service.timeline_service_interface import (
+from app.application.services.user_interactions.timeline_service.interfaces.timeline_service_interface import (
     TimelineServiceInterface
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser

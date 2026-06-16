@@ -1,4 +1,6 @@
-_BULLET_PREFIX_CHARS = "•-*0123456789.) "
+import re
+
+_BULLET_PREFIX = re.compile(r"^\s*(?:[•\-*]+|\d+[.)])(?:\s+|$)")
 
 
 def clean_text(value: object, limit: int) -> str:
@@ -6,9 +8,9 @@ def clean_text(value: object, limit: int) -> str:
 
 
 def fallback_lines(raw: str) -> list[str]:
-    return [
-        stripped
-        for line in raw.splitlines()
-        if line.strip()
-        if (stripped := line.strip().lstrip(_BULLET_PREFIX_CHARS))
-    ]
+    lines: list[str] = []
+    for line in raw.splitlines():
+        stripped = _BULLET_PREFIX.sub("", line.strip(), count=1).strip()
+        if stripped:
+            lines.append(stripped)
+    return lines

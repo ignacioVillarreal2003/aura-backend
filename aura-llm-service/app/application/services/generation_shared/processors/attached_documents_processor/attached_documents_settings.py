@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -11,4 +12,6 @@ class AttachedDocumentsSettings(BaseSettings):
         extra="ignore",
     )
 
-    max_attached_fragments: int = Field(default=60, ge=1, le=200)
+    max_fragments: int = Field(default=60, ge=1, le=200)
+    max_chars: Optional[int] = Field(default=None, ge=500, le=2_000_000)
+    fair_distribution: bool = Field(default=True)

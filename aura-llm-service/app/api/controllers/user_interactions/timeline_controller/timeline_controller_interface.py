@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from starlette.responses import StreamingResponse
 
-from app.application.services.user_interactions.timeline_service.timeline_service_interface import (
+from app.application.services.user_interactions.timeline_service.interfaces.timeline_service_interface import (
     TimelineServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser

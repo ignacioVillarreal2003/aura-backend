@@ -11,7 +11,7 @@ def _state(**overrides) -> GenerationState:
             Message(role=MessageRole.human, content="actual"),
         ],
         chat_id=1,
-        is_rag=True,
+        retrieve_context=True,
         authenticated_user=None,
     )
     defaults.update(overrides)

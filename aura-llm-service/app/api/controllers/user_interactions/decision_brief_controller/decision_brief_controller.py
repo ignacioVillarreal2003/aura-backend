@@ -10,7 +10,7 @@ from app.api.sse import sse_response
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
 from app.api.dependencies.app_state_services import get_decision_brief_service
-from app.application.services.user_interactions.decision_brief_service.decision_brief_service_interface import (
+from app.application.services.user_interactions.decision_brief_service.interfaces.decision_brief_service_interface import (
     DecisionBriefServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser

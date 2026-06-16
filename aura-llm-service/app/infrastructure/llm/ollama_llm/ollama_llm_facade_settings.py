@@ -1,6 +1,6 @@
 import logging
 from typing import Optional, Union
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -24,8 +24,28 @@ class OllamaLLMFacadeSettings(BaseSettings):
     repeat_penalty: Optional[float] = Field(default=1.1, ge=0.0, le=2.0)
     seed: Optional[int] = Field(default=None, ge=0)
 
-    num_ctx: Optional[int] = Field(default=None, ge=512, le=131_072)
+    # Context window sent to Ollama. Always explicit: leaving it unset makes
+    # Ollama fall back to a small model default (often 2048-4096) and silently
+    # left-truncate any prompt that overflows it, dropping the system prompt or
+    # context with no error. See validate_context_budget at startup.
+    num_ctx: int = Field(default=8_192, ge=512, le=131_072)
     num_predict: Optional[int] = Field(default=None, le=32_768)
+
+    # Token reserve used by the startup context-budget check (C1):
+    #   required = context_tokens + prompt_overhead_tokens + output_reserve_tokens
+    # prompt_overhead covers the system prompt, history and prompt scaffolding;
+    # output_reserve is num_predict when set, else this value.
+    prompt_overhead_tokens: int = Field(default=2_048, ge=0, le=32_768)
+    output_reserve_tokens: int = Field(default=1_024, ge=1, le=32_768)
+    # When True, a num_ctx smaller than the required budget aborts startup;
+    # when False it only logs a warning (safe default for staged rollouts).
+    fail_on_insufficient_context: bool = Field(default=False)
+
+    # Initialization circuit breaker: open only after this many consecutive init
+    # failures (a single transient probe failure must not lock the facade for the
+    # whole cooldown), and stay open for the cooldown before retrying.
+    circuit_failure_threshold: int = Field(default=3, ge=1, le=20)
+    circuit_recovery_cooldown_seconds: float = Field(default=30.0, gt=0, le=600.0)
 
     request_timeout: Optional[float] = Field(default=600.0, gt=0, le=3600.0)
     keep_alive: Optional[Union[int, str]] = Field(default=None)
@@ -76,6 +96,24 @@ class OllamaLLMFacadeSettings(BaseSettings):
             return int(v)
         except ValueError:
             return v
+
+    def output_reserve(self) -> int:
+        """Tokens reserved for the model's output, used by the budget check.
+        Uses a positive num_predict when configured, else output_reserve_tokens
+        (num_predict <= 0 means unlimited/fill, so fall back to the reserve)."""
+        if self.num_predict is not None and self.num_predict > 0:
+            return self.num_predict
+        return self.output_reserve_tokens
+
+    @model_validator(mode="after")
+    def validate_window_fits_output(self) -> "OllamaLLMFacadeSettings":
+        reserve = self.output_reserve()
+        if self.num_ctx <= reserve:
+            raise ValueError(
+                f"num_ctx ({self.num_ctx}) must be greater than the output reserve "
+                f"({reserve} tokens); the prompt would have no room left."
+            )
+        return self
 
     def get_chat_ollama_kwargs(self) -> dict:
         kwargs: dict = {

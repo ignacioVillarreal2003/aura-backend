@@ -39,3 +39,10 @@ class ChecklistGenerateResponse(BaseModel):
         default_factory=list,
         description="Fragmentos documentales utilizados como contexto (solo en modo rag).",
     )
+    degraded_stages: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Etapas del pipeline de contexto que se degradaron (una dependencia falló y se "
+            "continuó sin ella). Si no está vacío, la respuesta puede ser parcial."
+        ),
+    )
