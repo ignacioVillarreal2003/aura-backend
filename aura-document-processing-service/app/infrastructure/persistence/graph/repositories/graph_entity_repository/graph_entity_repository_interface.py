@@ -32,6 +32,14 @@ class GraphEntityRepositoryInterface(ABC):
         pass
 
     @abstractmethod
+    async def delete_document_entities(
+            self,
+            *,
+            document_id: int,
+    ) -> int:
+        pass
+
+    @abstractmethod
     async def find_by_name(
             self,
             *,

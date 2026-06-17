@@ -28,6 +28,9 @@ from app.infrastructure.persistence.database.repositories.document_repository.do
 from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository_interface import (
     FragmentRepositoryInterface
 )
+from app.infrastructure.messaging.rabbitmq.publisher.interfaces.document_purge_publisher_interface import (
+    DocumentPurgePublisherInterface
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +41,13 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             document_repository: DocumentRepositoryInterface,
             fragment_repository: FragmentRepositoryInterface,
             chat_membership_provider: ChatMembershipProviderInterface,
+            document_purge_publisher: Optional[DocumentPurgePublisherInterface] = None,
             delete_document_service_settings: Optional[DeleteDocumentServiceSettings] = None
     ) -> None:
         self._document_repository = document_repository
         self._fragment_repository = fragment_repository
         self._chat_membership_provider = chat_membership_provider
+        self._document_purge_publisher = document_purge_publisher
         self._settings = delete_document_service_settings or DeleteDocumentServiceSettings()
 
     async def soft_delete_document(
@@ -69,6 +74,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
 
             await self._soft_delete_fragments(document.id, authenticated_user.id, database_session)
             await self._soft_delete_document(document.id, authenticated_user.id, database_session)
+            await self._request_purge(document, authenticated_user)
 
             logger.info(
                 "The document was soft deleted successfully.",
@@ -150,6 +156,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             for document in documents:
                 await self._soft_delete_fragments(document.id, authenticated_user.id, database_session)
                 await self._soft_delete_document(document.id, authenticated_user.id, database_session)
+                await self._request_purge(document, authenticated_user)
 
             logger.info(
                 "Documents in the chat were soft deleted successfully.",
@@ -201,6 +208,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
 
             await self._soft_delete_fragments(document.id, authenticated_user.id, database_session)
             await self._soft_delete_document(document.id, authenticated_user.id, database_session)
+            await self._request_purge(document, authenticated_user)
 
             logger.info(
                 "The document was soft deleted successfully by an admin.",
@@ -280,6 +288,34 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             chat_id=chat_id,
             database_session=database_session
         )
+
+    async def _request_purge(
+            self,
+            document: Document,
+            authenticated_user: AuthenticatedUser,
+    ) -> None:
+        """Schedule reclamation of the document's external footprint (MinIO/Neo4j).
+
+        Best-effort and non-fatal: the soft delete has already succeeded, so a
+        failure to enqueue must not fail the request. The purge consumer re-checks
+        that the document is soft-deleted before acting, so a spurious enqueue is
+        harmless. Postgres rows stay soft-deleted; only MinIO and Neo4j are purged.
+        """
+        if self._document_purge_publisher is None:
+            return
+        try:
+            await self._document_purge_publisher.publish(
+                document_id=int(document.id),
+                storage_url=document.storage_url,
+                user=authenticated_user,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to enqueue the document-purge command; external footprint "
+                "(MinIO/Neo4j) was not scheduled for reclamation.",
+                extra={"document_id": document.id},
+                exc_info=True,
+            )
 
     async def _soft_delete_fragments(
             self,

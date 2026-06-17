@@ -5,7 +5,7 @@ from typing import Optional
 from sqlalchemy import and_, or_, select, text, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import load_only
+from sqlalchemy.orm import defer, load_only
 
 from app.domain.field_limits import MAX_FRAGMENTS_IN_LIST
 from app.domain.dtos.document.document_search.document_similarity_hit import DocumentSimilarityHit
@@ -138,11 +138,16 @@ class FragmentRepository(FragmentRepositoryInterface):
                 SELECT id,
                        document_id,
                        content,
-                       vector,
                        fragment_index,
                        summary,
                        entities,
                        topics,
+                       page_number,
+                       section_path,
+                       heading,
+                       char_start,
+                       char_end,
+                       bbox,
                        created_by,
                        created_at,
                        updated_by,
@@ -151,11 +156,10 @@ class FragmentRepository(FragmentRepositoryInterface):
                        deleted_at,
                        1 - (vector <=> :query_vector) AS cosine_similarity
                 FROM fragment
-                WHERE vector IS NOT NULL
-                  AND deleted_at IS NULL
+                WHERE deleted_at IS NULL
                   AND 1 - (vector <=> :query_vector) >= :threshold
                   {doc_id_clause}
-                ORDER BY cosine_similarity DESC
+                ORDER BY vector <=> :query_vector
                 LIMIT :k
                 """
             )
@@ -176,11 +180,16 @@ class FragmentRepository(FragmentRepositoryInterface):
                     id=row.id,
                     document_id=row.document_id,
                     content=row.content,
-                    vector=row.vector,
                     fragment_index=row.fragment_index,
                     summary=row.summary,
                     entities=row.entities,
                     topics=row.topics,
+                    page_number=row.page_number,
+                    section_path=row.section_path,
+                    heading=row.heading,
+                    char_start=row.char_start,
+                    char_end=row.char_end,
+                    bbox=row.bbox,
                     created_by=row.created_by,
                     created_at=row.created_at,
                     updated_by=row.updated_by,
@@ -265,7 +274,7 @@ class FragmentRepository(FragmentRepositoryInterface):
                       AND deleted_at IS NULL
                       AND 1 - (vector <=> :query_vector) >= :threshold
                       {doc_id_clause}
-                    ORDER BY cosine_similarity DESC
+                    ORDER BY vector <=> :query_vector
                     LIMIT :pool_size
                 ) AS top_fragments
                 GROUP BY document_id
@@ -346,11 +355,16 @@ class FragmentRepository(FragmentRepositoryInterface):
                 SELECT id,
                        document_id,
                        content,
-                       vector,
                        fragment_index,
                        summary,
                        entities,
                        topics,
+                       page_number,
+                       section_path,
+                       heading,
+                       char_start,
+                       char_end,
+                       bbox,
                        created_by,
                        created_at,
                        updated_by,
@@ -382,11 +396,16 @@ class FragmentRepository(FragmentRepositoryInterface):
                     id=row.id,
                     document_id=row.document_id,
                     content=row.content,
-                    vector=row.vector,
                     fragment_index=row.fragment_index,
                     summary=row.summary,
                     entities=row.entities,
                     topics=row.topics,
+                    page_number=row.page_number,
+                    section_path=row.section_path,
+                    heading=row.heading,
+                    char_start=row.char_start,
+                    char_end=row.char_end,
+                    bbox=row.bbox,
                     created_by=row.created_by,
                     created_at=row.created_at,
                     updated_by=row.updated_by,
@@ -427,6 +446,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             for chunk in chunked_ids(document_ids):
                 result = await database_session.execute(
                     select(Fragment)
+                    .options(defer(Fragment.vector))
                     .where(
                         Fragment.document_id.in_(chunk),
                         Fragment.deleted_at.is_(None)
@@ -476,6 +496,7 @@ class FragmentRepository(FragmentRepositoryInterface):
 
             stmt = (
                 select(Fragment)
+                .options(defer(Fragment.vector))
                 .where(
                     Fragment.deleted_at.is_(None),
                     Fragment.id.not_in(exclude_ids) if exclude_ids else True,

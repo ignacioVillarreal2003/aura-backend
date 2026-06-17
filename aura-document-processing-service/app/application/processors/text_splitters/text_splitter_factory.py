@@ -86,6 +86,27 @@ class TextSplitterFactory:
     ) -> TextSplitterType:
         return self._active_type
 
+    def get_classic_splitter(
+            self
+    ) -> TextSplitterInterface:
+        """Return the flat-text splitter to use.
+
+        For a registered flat-text active type this is that splitter. When the active
+        type is docling_hybrid (handled by the structural chunker), this returns the
+        configured fallback splitter for files the structural path cannot process.
+        """
+        if self._active_type in _TEXT_SPLITTER_REGISTRY:
+            return self.splitter
+        return self.get_by_type(self._settings.structured_fallback_type)
+
+    def get_classic_type(
+            self
+    ) -> TextSplitterType:
+        """The flat-text splitter type backing get_classic_splitter()."""
+        if self._active_type in _TEXT_SPLITTER_REGISTRY:
+            return self._active_type
+        return self._settings.structured_fallback_type
+
     def is_supported(
             self,
             splitter_type: TextSplitterType

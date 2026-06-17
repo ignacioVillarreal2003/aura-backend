@@ -19,6 +19,10 @@ class TextSplitterSettings(BaseSettings):
 
     active_type: TextSplitterType = Field(default=TextSplitterType.recursive)
 
+    # Splitter used for the flat-text path when active_type is docling_hybrid but the
+    # structural chunker cannot run (Docling unavailable or unsupported file format).
+    structured_fallback_type: TextSplitterType = Field(default=TextSplitterType.huggingface)
+
     max_text_length: int = Field(default=10_000_000, gt=0)
     min_chunk_chars: int = Field(default=150, ge=0)
 
@@ -53,9 +57,16 @@ class TextSplitterSettings(BaseSettings):
             self
     ) -> "TextSplitterSettings":
         self._validate_common()
-        if self.active_type == TextSplitterType.recursive:
+        if self.structured_fallback_type == TextSplitterType.docling_hybrid:
+            raise ValueError("structured_fallback_type must be a flat-text splitter, not docling_hybrid.")
+        effective_type = (
+            self.structured_fallback_type
+            if self.active_type == TextSplitterType.docling_hybrid
+            else self.active_type
+        )
+        if effective_type == TextSplitterType.recursive:
             self._validate_recursive()
-        elif self.active_type == TextSplitterType.huggingface:
+        elif effective_type == TextSplitterType.huggingface:
             self._validate_huggingface()
         return self
 

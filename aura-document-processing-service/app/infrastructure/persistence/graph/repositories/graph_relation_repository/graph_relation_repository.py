@@ -64,6 +64,18 @@ ON MATCH SET
     r.updated_at = datetime()
 """
 
+_DELETE_DOCUMENT_RELATIONS_CYPHER = """
+MATCH ()-[r:REL]->()
+WHERE $document_id IN coalesce(r.source_document_ids, [])
+WITH r, [d IN coalesce(r.source_document_ids, []) WHERE d <> $document_id] AS remaining_docs
+SET r.source_document_ids = remaining_docs,
+    r.updated_at = datetime()
+WITH r, remaining_docs
+WHERE size(remaining_docs) = 0
+DELETE r
+RETURN count(r) AS deleted_count
+"""
+
 _LIST_BY_DOCUMENT_CYPHER = """
 MATCH (source:Entity)-[r:REL]->(target:Entity)
 WHERE $document_id IN coalesce(r.source_document_ids, [])
@@ -179,6 +191,37 @@ class GraphRelationRepository(GraphRelationRepositoryInterface):
             )
             raise GraphPersistenceException(
                 "Failed to upsert a relation batch in the knowledge graph."
+            ) from e
+
+    async def delete_document_relations(
+            self,
+            *,
+            document_id: int,
+    ) -> int:
+        """Remove a document's footprint from the relation graph.
+
+        The document id is dropped from every relation's ``source_document_ids``.
+        Relations left with no remaining source document are orphaned and removed.
+        Run this before deleting entities so relation provenance is corrected even
+        for relations whose endpoint entities survive. Idempotent.
+        """
+        try:
+            records = await self._neo4j_manager.execute_write(
+                _DELETE_DOCUMENT_RELATIONS_CYPHER, {"document_id": document_id}
+            )
+            deleted_count = int(records[0]["deleted_count"]) if records else 0
+            logger.info(
+                "Document footprint removed from the relation graph.",
+                extra={"document_id": document_id, "orphaned_relations_deleted": deleted_count},
+            )
+            return deleted_count
+        except Neo4jError as e:
+            logger.exception(
+                "Neo4j error while deleting a document's relations.",
+                extra={"document_id": document_id, "neo4j_code": getattr(e, "code", None)},
+            )
+            raise GraphPersistenceException(
+                "Failed to delete a document's relations from the knowledge graph."
             ) from e
 
     async def list_neighbors_of(

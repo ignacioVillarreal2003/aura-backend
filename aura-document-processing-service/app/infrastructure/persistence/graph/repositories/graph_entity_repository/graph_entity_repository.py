@@ -96,6 +96,18 @@ ORDER BY e.canonical_name ASC
 LIMIT $limit
 """
 
+_DELETE_DOCUMENT_ENTITIES_CYPHER = """
+MATCH (e:Entity)
+WHERE $document_id IN coalesce(e.source_document_ids, [])
+WITH e, [d IN coalesce(e.source_document_ids, []) WHERE d <> $document_id] AS remaining_docs
+SET e.source_document_ids = remaining_docs,
+    e.updated_at = datetime()
+WITH e, remaining_docs
+WHERE size(remaining_docs) = 0
+DETACH DELETE e
+RETURN count(e) AS deleted_count
+"""
+
 _LUCENE_SPECIAL_CHARS_PATTERN = re.compile(r'[+\-!(){}\[\]^"~*?:\\/]|&&|\|\|')
 _MIN_PREFIX_TOKEN_LENGTH = 3
 
@@ -201,6 +213,37 @@ class GraphEntityRepository(GraphEntityRepositoryInterface):
             )
             raise GraphPersistenceException(
                 "Failed to upsert an entity batch in the knowledge graph."
+            ) from e
+
+    async def delete_document_entities(
+            self,
+            *,
+            document_id: int,
+    ) -> int:
+        """Remove a document's footprint from the entity graph.
+
+        The document id is dropped from every entity's ``source_document_ids``.
+        Entities left with no remaining source document are orphaned and removed
+        (``DETACH DELETE`` also clears their relationships). Idempotent: a second
+        call for the same document matches nothing and deletes nothing.
+        """
+        try:
+            records = await self._neo4j_manager.execute_write(
+                _DELETE_DOCUMENT_ENTITIES_CYPHER, {"document_id": document_id}
+            )
+            deleted_count = int(records[0]["deleted_count"]) if records else 0
+            logger.info(
+                "Document footprint removed from the entity graph.",
+                extra={"document_id": document_id, "orphaned_entities_deleted": deleted_count},
+            )
+            return deleted_count
+        except Neo4jError as e:
+            logger.exception(
+                "Neo4j error while deleting a document's entities.",
+                extra={"document_id": document_id, "neo4j_code": getattr(e, "code", None)},
+            )
+            raise GraphPersistenceException(
+                "Failed to delete a document's entities from the knowledge graph."
             ) from e
 
     async def find_by_name(

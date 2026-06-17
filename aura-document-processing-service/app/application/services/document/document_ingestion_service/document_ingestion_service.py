@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -6,7 +7,15 @@ import asyncio
 
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
 from app.application.processors.readers.reader_factory import ReaderFactory
+from app.application.processors.structured_chunkers.dtos.document_chunk import DocumentChunk
+from app.application.processors.structured_chunkers.exceptions.structured_chunker_exception import (
+    StructuredChunkerException,
+)
+from app.application.processors.structured_chunkers.structured_chunker_factory import (
+    StructuredChunkerFactory,
+)
 from app.application.processors.text_cleaners.text_cleaner_factory import TextCleanerFactory
+from app.application.processors.text_splitters.constants.text_splitter_type import TextSplitterType
 from app.application.processors.text_splitters.text_splitter_factory import TextSplitterFactory
 from app.application.services.document.document_ingestion_service.document_ingestion_service_settings import (
     DocumentIngestionServiceSettings
@@ -45,6 +54,16 @@ from app.infrastructure.persistence.database.repositories.fragment_repository.fr
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class _ChunkingOutcome:
+    """Result of the chunking stage, carrying provenance for persistence."""
+    chunks: list[DocumentChunk]
+    splitter_type: str
+    cleaner_type: Optional[str]
+    chunk_size: Optional[int]
+    chunk_overlap: Optional[int]
+
+
 class DocumentIngestionService(DocumentIngestionServiceInterface):
     def __init__(
             self,
@@ -58,6 +77,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             document_ingestion_service_settings: Optional[DocumentIngestionServiceSettings] = None,
             graph_extraction_publisher: Optional[GraphExtractionPublisherInterface] = None,
             document_enrichment_publisher: Optional[DocumentEnrichmentPublisherInterface] = None,
+            structured_chunker_factory: Optional[StructuredChunkerFactory] = None,
     ) -> None:
         self._document_repository = document_repository
         self._fragment_repository = fragment_repository
@@ -69,6 +89,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
         self._settings = document_ingestion_service_settings or DocumentIngestionServiceSettings()
         self._graph_extraction_publisher = graph_extraction_publisher
         self._document_enrichment_publisher = document_enrichment_publisher
+        self._structured_chunker_factory = structured_chunker_factory
 
     async def process_document(
             self,
@@ -91,22 +112,22 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
         )
 
         try:
-            raw_text = await self._read_document(
+            outcome = await self._produce_chunks(
                 document,
                 local_file_path,
-                prefer_docling=prefer_docling
+                prefer_docling=prefer_docling,
             )
-            clean_text = await self._clean_text(document, raw_text)
-            chunks = await self._split_text(document, clean_text)
-            embeddings = await self._embed_chunks(document, chunks)
-            fragments = self._build_fragments(document, chunks, embeddings)
-            await self._persist_fragments_and_update_document(document, fragments)
+            texts = [chunk.text for chunk in outcome.chunks]
+            embeddings = await self._embed_chunks(document, texts)
+            fragments = self._build_fragments(document, outcome.chunks, embeddings)
+            await self._persist_fragments_and_update_document(document, fragments, outcome)
 
             logger.info(
                 "Document ingestion completed successfully.",
                 extra={
                     "document_id": document.id,
-                    "fragment_count": len(fragments)
+                    "fragment_count": len(fragments),
+                    "splitter_type": outcome.splitter_type,
                 }
             )
 
@@ -138,6 +159,92 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
 
         finally:
             await self._cleanup_temp_file(local_file_path)
+
+    async def _produce_chunks(
+            self,
+            document: Document,
+            local_file_path: Path,
+            *,
+            prefer_docling: bool,
+    ) -> _ChunkingOutcome:
+        active_type = self._splitter_factory.get_active_type()
+
+        if active_type == TextSplitterType.docling_hybrid and self._structured_chunker_factory is not None:
+            # Building the chunker loads heavy Docling/tokenizer models on first use;
+            # offload it so the event loop is not blocked.
+            chunker = await asyncio.to_thread(self._structured_chunker_factory.get_chunker)
+            if chunker is not None and chunker.supports(local_file_path):
+                try:
+                    return await self._produce_chunks_structural(document, local_file_path, chunker)
+                except StructuredChunkerException:
+                    logger.warning(
+                        "Structural chunking failed; falling back to the flat-text splitter.",
+                        exc_info=True,
+                        extra={"document_id": document.id},
+                    )
+
+        return await self._produce_chunks_classic(
+            document, local_file_path, prefer_docling=prefer_docling
+        )
+
+    async def _produce_chunks_structural(
+            self,
+            document: Document,
+            local_file_path: Path,
+            chunker,
+    ) -> _ChunkingOutcome:
+        chunks: list[DocumentChunk] = await asyncio.to_thread(chunker.chunk_file, local_file_path)
+
+        if len(chunks) < self._settings.min_chunks_required:
+            raise DocumentIngestionServiceSplitException("The document did not produce enough text segments.")
+
+        chunk_size, chunk_overlap = chunker.get_chunk_params()
+        logger.info(
+            "Structural chunking completed.",
+            extra={"document_id": document.id, "chunk_count": len(chunks)},
+        )
+        return _ChunkingOutcome(
+            chunks=chunks,
+            splitter_type=TextSplitterType.docling_hybrid.value,
+            cleaner_type=None,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+        )
+
+    async def _produce_chunks_classic(
+            self,
+            document: Document,
+            local_file_path: Path,
+            *,
+            prefer_docling: bool,
+    ) -> _ChunkingOutcome:
+        raw_text = await self._read_document(document, local_file_path, prefer_docling=prefer_docling)
+        clean_text = await self._clean_text(document, raw_text)
+
+        splitter = self._splitter_factory.get_classic_splitter()
+        try:
+            str_chunks: list[str] = await asyncio.to_thread(splitter.split_text, clean_text)
+        except DocumentIngestionServiceSplitException:
+            raise
+        except Exception as e:
+            raise DocumentIngestionServiceSplitException("Failed to split the document text.") from e
+
+        chunks = [DocumentChunk(text=c) for c in str_chunks if c and c.strip()]
+        if len(chunks) < self._settings.min_chunks_required:
+            raise DocumentIngestionServiceSplitException("The document did not produce enough text segments.")
+
+        chunk_size, chunk_overlap = splitter.get_chunk_params()
+        logger.info(
+            "Text splitting completed.",
+            extra={"document_id": document.id, "chunk_count": len(chunks)},
+        )
+        return _ChunkingOutcome(
+            chunks=chunks,
+            splitter_type=self._splitter_factory.get_classic_type().value,
+            cleaner_type=self._cleaner_factory.get_active_type().value,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+        )
 
     async def _read_document(
             self,
@@ -201,32 +308,6 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
         except Exception as e:
             raise DocumentIngestionServiceCleanException("Failed to clean the document text.") from e
 
-    async def _split_text(
-            self,
-            document: Document,
-            clean_text: str
-    ) -> list[str]:
-        try:
-            splitter = self._splitter_factory.splitter
-            chunks: list[str] = await asyncio.to_thread(splitter.split_text, clean_text)
-
-            if len(chunks) < self._settings.min_chunks_required:
-                raise DocumentIngestionServiceSplitException("The document did not produce enough text segments.")
-
-            logger.info(
-                "Text splitting completed.",
-                extra={
-                    "document_id": document.id,
-                    "chunk_count": len(chunks)
-                }
-            )
-            return chunks
-
-        except DocumentIngestionServiceSplitException:
-            raise
-        except Exception as e:
-            raise DocumentIngestionServiceSplitException("Failed to split the document text.") from e
-
     async def _embed_chunks(
             self,
             document: Document,
@@ -259,7 +340,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
     def _build_fragments(
             self,
             document: Document,
-            chunks: list[str],
+            chunks: list[DocumentChunk],
             embeddings: list[list[float]]
     ) -> list[Fragment]:
         now = datetime.now(timezone.utc)
@@ -267,9 +348,15 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
         fragments = [
             Fragment(
                 document_id=document.id,
-                content=chunk,
+                content=chunk.text,
                 vector=embedding,
                 fragment_index=idx,
+                page_number=chunk.page_number,
+                section_path=chunk.section_path,
+                heading=chunk.heading,
+                char_start=chunk.char_start,
+                char_end=chunk.char_end,
+                bbox=chunk.bbox,
                 created_by=document.created_by,
                 created_at=now
             )
@@ -288,7 +375,8 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
     async def _persist_fragments_and_update_document(
             self,
             document: Document,
-            fragments: list[Fragment]
+            fragments: list[Fragment],
+            outcome: "_ChunkingOutcome",
     ) -> None:
         try:
             async def _operation(database_session):
@@ -297,9 +385,11 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                     database_session=database_session
                 )
 
-                document.text_cleaner_type = self._cleaner_factory.get_active_type().value
-                document.text_splitter_type = self._splitter_factory.get_active_type().value
+                document.text_cleaner_type = outcome.cleaner_type
+                document.text_splitter_type = outcome.splitter_type
                 document.embedder_type = self._embedder_factory.get_active_type().value
+                document.split_size = outcome.chunk_size
+                document.split_overlap = outcome.chunk_overlap
                 current_status = (
                     document.status
                     if isinstance(document.status, DocumentStatus)

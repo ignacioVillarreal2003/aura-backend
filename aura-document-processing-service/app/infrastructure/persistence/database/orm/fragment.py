@@ -36,6 +36,16 @@ class Fragment(Base):
     entities = Column(JSONB, nullable=True)
     topics = Column(ARRAY(Text), nullable=True)
 
+    # Structural chunk metadata (populated by the Docling hybrid chunker; NULL for
+    # fragments produced by the flat-text fallback splitters). Enables provenance
+    # citations such as "page 14, section 3".
+    page_number = Column(Integer, nullable=True)
+    section_path = Column(Text, nullable=True)
+    heading = Column(Text, nullable=True)
+    char_start = Column(Integer, nullable=True)
+    char_end = Column(Integer, nullable=True)
+    bbox = Column(JSONB, nullable=True)
+
     enrichment_status = Column(
         String(32), nullable=False, server_default=ProcessingStatus.pending.value
     )

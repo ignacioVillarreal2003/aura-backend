@@ -49,6 +49,12 @@ CREATE TABLE fragment
     summary        TEXT,
     entities       JSONB,
     topics         TEXT[],
+    page_number    INT,
+    section_path   TEXT,
+    heading        TEXT,
+    char_start     INT,
+    char_end       INT,
+    bbox           JSONB,
     enrichment_status VARCHAR(32) NOT NULL DEFAULT 'pending'
         CONSTRAINT chk_fragment_enrichment_status
             CHECK (enrichment_status IN ('pending', 'processed', 'failed', 'not_required')),

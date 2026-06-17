@@ -35,6 +35,9 @@ from app.infrastructure.http.chat_membership.chat_membership_provider_interface 
 from app.infrastructure.http.document_collection_catalog.document_collection_catalog_client_interface import (
     DocumentCollectionCatalogClientInterface,
 )
+from app.infrastructure.persistence.database.database_manager.database_manager_interface import (
+    DatabaseManagerInterface,
+)
 from app.infrastructure.persistence.database.orm.document import Document
 from app.infrastructure.persistence.database.orm.fragment import Fragment
 from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
@@ -76,6 +79,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             reranker_factory: RerankerFactory,
             document_collection_catalog_client: DocumentCollectionCatalogClientInterface,
             chat_membership_provider: ChatMembershipProviderInterface,
+            database_manager: DatabaseManagerInterface,
             fragment_query_service_settings: Optional[FragmentQueryServiceSettings] = None,
     ) -> None:
         self._document_repository = document_repository
@@ -85,6 +89,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
         self._settings = fragment_query_service_settings or FragmentQueryServiceSettings()
         self._document_collection_catalog_client = document_collection_catalog_client
         self._chat_membership_provider = chat_membership_provider
+        self._database_manager = database_manager
 
     async def retrieve_context_fragments_by_question(
             self,
@@ -106,32 +111,42 @@ class FragmentQueryService(FragmentQueryServiceInterface):
         try:
             token = authorization_header or get_request_token()
 
-            collection_doc_ids = await self._document_collection_catalog_client.fetch_all_accessible_document_ids(
-                user_id=int(authenticated_user.id),
-                authorization_header=token,
-            )
-            accessible_doc_set: set[int] = set(collection_doc_ids)
-
             # Documents are reachable either through a document collection (MAC) or
             # through chat membership. The collection catalog only covers the former,
             # so for a chat-scoped question we must also include the chat's documents
             # when the user is a member — otherwise the post-filter below drops every
-            # fragment and the search returns nothing.
-            chat_doc_count = 0
+            # fragment and the search returns nothing. The catalog and membership
+            # lookups hit independent services, so resolve them concurrently.
             if question_context_fragments_request.chat_id is not None:
-                membership = await self._chat_membership_provider.get_membership(
-                    chat_id=int(question_context_fragments_request.chat_id),
+                collection_doc_ids, membership = await asyncio.gather(
+                    self._document_collection_catalog_client.fetch_all_accessible_document_ids(
+                        user_id=int(authenticated_user.id),
+                        authorization_header=token,
+                    ),
+                    self._chat_membership_provider.get_membership(
+                        chat_id=int(question_context_fragments_request.chat_id),
+                        user_id=int(authenticated_user.id),
+                        authorization_header=token,
+                    ),
+                )
+            else:
+                collection_doc_ids = await self._document_collection_catalog_client.fetch_all_accessible_document_ids(
                     user_id=int(authenticated_user.id),
                     authorization_header=token,
                 )
-                if membership.is_member:
-                    chat_documents = await self._document_repository.get_documents_by_chat_id(
-                        chat_id=int(question_context_fragments_request.chat_id),
-                        database_session=database_session,
-                    )
-                    chat_doc_ids = {int(doc.id) for doc in chat_documents}
-                    chat_doc_count = len(chat_doc_ids)
-                    accessible_doc_set |= chat_doc_ids
+                membership = None
+
+            accessible_doc_set: set[int] = set(collection_doc_ids)
+
+            chat_doc_count = 0
+            if membership is not None and membership.is_member:
+                chat_documents = await self._document_repository.get_documents_by_chat_id(
+                    chat_id=int(question_context_fragments_request.chat_id),
+                    database_session=database_session,
+                )
+                chat_doc_ids = {int(doc.id) for doc in chat_documents}
+                chat_doc_count = len(chat_doc_ids)
+                accessible_doc_set |= chat_doc_ids
 
             logger.debug(
                 "Accessible document IDs resolved.",
@@ -143,48 +158,63 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             )
             accessible_doc_ids = list(accessible_doc_set)
 
-            semantic_ranked_lists: list[list[Fragment]] = []
-            if question_context_fragments_request.semantic_queries:
+            # Each retrieval query runs on its own database session because a single
+            # AsyncSession cannot be used concurrently. A per-request semaphore bounds
+            # how many pooled connections one request can hold while fanning out.
+            semantic_queries = question_context_fragments_request.semantic_queries
+            bm25_queries = question_context_fragments_request.bm25_queries
+            retrieval_semaphore = asyncio.Semaphore(self._settings.max_retrieval_concurrency)
+
+            vectors: list[list[float]] = []
+            if semantic_queries:
                 vectors = await asyncio.gather(*[
-                    self._get_query_embedding(q.text) for q in question_context_fragments_request.semantic_queries
+                    self._get_query_embedding(q.text) for q in semantic_queries
                 ])
-                fragment_lists: list[list[Fragment]] = []
-                for q, vector in zip(question_context_fragments_request.semantic_queries, vectors, strict=True):
-                    fragment_lists.append(
-                        await self._retrieve_similar_fragments(
-                            database_session=database_session,
-                            query_vector=vector,
-                            k=q.max_fragments,
-                            document_ids=accessible_doc_ids,
-                        )
-                    )
-                semantic_ranked_lists = fragment_lists
+
+            semantic_coros = [
+                self._retrieve_similar_isolated(
+                    query_vector=vector,
+                    k=q.max_fragments,
+                    document_ids=accessible_doc_ids,
+                    semaphore=retrieval_semaphore,
+                )
+                for q, vector in zip(semantic_queries, vectors, strict=True)
+            ]
+            bm25_coros = [
+                self._retrieve_bm25_isolated(
+                    query_text=q.text,
+                    k=q.max_fragments,
+                    document_ids=accessible_doc_ids,
+                    semaphore=retrieval_semaphore,
+                )
+                for q in bm25_queries
+            ]
+
+            # Run all semantic and BM25 queries concurrently. Semantic failures
+            # propagate (the request cannot answer without its vector pool); BM25 is
+            # best-effort, so its failures are captured and degrade to vector-only.
+            semantic_ranked_lists, bm25_results = await asyncio.gather(
+                asyncio.gather(*semantic_coros),
+                asyncio.gather(*bm25_coros, return_exceptions=True),
+            )
 
             bm25_ranked_lists: list[list[Fragment]] = []
             bm25_used = False
-            if question_context_fragments_request.bm25_queries:
-                try:
-                    bm25_results: list[list[Fragment]] = []
-                    for q in question_context_fragments_request.bm25_queries:
-                        bm25_results.append(
-                            await self._retrieve_bm25_fragments(
-                                database_session=database_session,
-                                query_text=q.text,
-                                k=q.max_fragments,
-                                document_ids=accessible_doc_ids,
-                            )
-                        )
-                    bm25_ranked_lists = bm25_results
-                    bm25_used = True
-                except FragmentQueryRetrievalException:
-                    await database_session.rollback()
+            if bm25_coros:
+                bm25_failure = next(
+                    (r for r in bm25_results if isinstance(r, BaseException)), None
+                )
+                if bm25_failure is not None:
                     logger.warning(
                         "BM25 retrieval failed; falling back to vector-only pool.",
-                        exc_info=True,
+                        exc_info=bm25_failure,
                         extra={"user_id": authenticated_user.id},
                     )
+                else:
+                    bm25_ranked_lists = list(bm25_results)
+                    bm25_used = True
 
-            all_ranked_lists = semantic_ranked_lists + bm25_ranked_lists
+            all_ranked_lists = list(semantic_ranked_lists) + bm25_ranked_lists
             if len(all_ranked_lists) > 1:
                 fragments: list[Fragment] = _reciprocal_rank_fusion(
                     ranked_lists=all_ranked_lists,
@@ -393,6 +423,12 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                         "summary": fragment.summary,
                         "entities": fragment.entities,
                         "topics": list(fragment.topics) if fragment.topics else None,
+                        "page_number": fragment.page_number,
+                        "section_path": fragment.section_path,
+                        "heading": fragment.heading,
+                        "char_start": fragment.char_start,
+                        "char_end": fragment.char_end,
+                        "bbox": fragment.bbox,
                         "document": {
                             "id": doc.id,
                             "name": doc.name,
@@ -470,6 +506,42 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             )
         except Exception as e:
             raise FragmentQueryRetrievalException("Failed to retrieve BM25-ranked fragments.") from e
+
+    async def _retrieve_similar_isolated(
+            self,
+            *,
+            query_vector: list[float],
+            k: int,
+            document_ids: list[int] | None,
+            semaphore: asyncio.Semaphore,
+    ) -> list[Fragment]:
+        # Own session so this query can run concurrently with the others; the
+        # semaphore caps the request's total in-flight connections.
+        async with semaphore:
+            async with self._database_manager.session() as session:
+                return await self._retrieve_similar_fragments(
+                    database_session=session,
+                    query_vector=query_vector,
+                    k=k,
+                    document_ids=document_ids,
+                )
+
+    async def _retrieve_bm25_isolated(
+            self,
+            *,
+            query_text: str,
+            k: int,
+            document_ids: list[int] | None,
+            semaphore: asyncio.Semaphore,
+    ) -> list[Fragment]:
+        async with semaphore:
+            async with self._database_manager.session() as session:
+                return await self._retrieve_bm25_fragments(
+                    database_session=session,
+                    query_text=query_text,
+                    k=k,
+                    document_ids=document_ids,
+                )
 
     async def _retrieve_documents_fragments(
             self,

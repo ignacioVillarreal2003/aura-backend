@@ -17,6 +17,14 @@ class DocumentRepositoryInterface(ABC):
         pass
 
     @abstractmethod
+    async def get_document_by_id_including_deleted(
+            self,
+            document_id: int,
+            database_session: AsyncSession
+    ) -> Optional[Document]:
+        pass
+
+    @abstractmethod
     async def get_documents_by_chat_id(
             self,
             chat_id: int,

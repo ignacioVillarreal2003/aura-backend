@@ -63,6 +63,16 @@ class FragmentResponse(BaseModel):
     entities: Optional[dict[str, object]] = Field(default=None)
     topics: Optional[list[str]] = Field(default=None, max_length=MAX_TOPICS)
     enrichment_status: str = Field(default="pending", min_length=1, max_length=32)
+
+    # Structural provenance (NULL for flat-text fallback fragments). Enables
+    # citations such as "page 14, section 3".
+    page_number: Optional[int] = Field(default=None, ge=1)
+    section_path: Optional[str] = Field(default=None)
+    heading: Optional[str] = Field(default=None)
+    char_start: Optional[int] = Field(default=None, ge=0)
+    char_end: Optional[int] = Field(default=None, ge=0)
+    bbox: Optional[dict] = Field(default=None)
+
     document: _Document = Field(...)
 
     @field_validator("content", mode="before")

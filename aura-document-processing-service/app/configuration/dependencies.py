@@ -8,6 +8,9 @@ from app.application.processors.readers.reader_factory import ReaderFactory
 from app.application.processors.rerankers.reranker_factory import RerankerFactory
 from app.application.processors.text_cleaners.text_cleaner_factory import TextCleanerFactory
 from app.application.processors.text_splitters.text_splitter_factory import TextSplitterFactory
+from app.application.processors.structured_chunkers.structured_chunker_factory import (
+    StructuredChunkerFactory,
+)
 from app.application.services.document.create_document_service.create_document_service import CreateDocumentService
 from app.application.services.document.document_download_service.document_download_service import (
     DocumentDownloadService,
@@ -46,12 +49,16 @@ from app.infrastructure.http.http_client.http_client import HttpClient
 from app.infrastructure.http.llm_provider.llm_provider import LlmProvider
 from app.infrastructure.messaging.rabbitmq.consumer.document_ingestion_consumer import DocumentIngestionConsumer
 from app.infrastructure.messaging.rabbitmq.consumer.document_enrichment_consumer import DocumentEnrichmentConsumer
+from app.infrastructure.messaging.rabbitmq.consumer.document_purge_consumer import DocumentPurgeConsumer
 from app.infrastructure.messaging.rabbitmq.consumer.graph_extraction_consumer import GraphExtractionConsumer
 from app.infrastructure.messaging.rabbitmq.publisher.graph_extraction_publisher import (
     GraphExtractionPublisher,
 )
 from app.infrastructure.messaging.rabbitmq.publisher.document_enrichment_publisher import (
     DocumentEnrichmentPublisher,
+)
+from app.infrastructure.messaging.rabbitmq.publisher.document_purge_publisher import (
+    DocumentPurgePublisher,
 )
 from app.infrastructure.messaging.rabbitmq.reliable_publish.outbox_lite_worker import OutboxLiteWorker
 from app.infrastructure.messaging.rabbitmq.reliable_publish.redis_outbox_lite import RedisOutboxLite
@@ -108,6 +115,8 @@ async def _rollback_partial_startup(
                 extra={"resource": name},
             )
     to_clear = [
+        "document_purge_consumer",
+        "document_purge_publisher",
         "graph_ontology_service",
         "graph_stats_service",
         "graph_stats_repository",
@@ -244,8 +253,14 @@ async def startup_dependencies(app: FastAPI) -> None:
         app.state.text_cleaner_factory = text_cleaner_factory
 
         text_splitter_factory = TextSplitterFactory()
-        await asyncio.to_thread(lambda: text_splitter_factory.splitter)
+        # Warm the flat-text splitter (the classic path / docling_hybrid fallback). The
+        # active type may be docling_hybrid, which is not a flat-text splitter, so warm
+        # the effective classic splitter rather than the active one.
+        await asyncio.to_thread(text_splitter_factory.get_classic_splitter)
         app.state.text_splitter_factory = text_splitter_factory
+
+        structured_chunker_factory = StructuredChunkerFactory()
+        app.state.structured_chunker_factory = structured_chunker_factory
 
         document_query_service = DocumentQueryService(
             document_repository=document_repository,
@@ -267,6 +282,7 @@ async def startup_dependencies(app: FastAPI) -> None:
             reranker_factory=reranker_factory,
             document_collection_catalog_client=document_collection_catalog_client,
             chat_membership_provider=chat_membership_provider,
+            database_manager=database_manager,
         )
         app.state.fragment_query_service = fragment_query_service
 
@@ -288,6 +304,12 @@ async def startup_dependencies(app: FastAPI) -> None:
             rabbitmq_manager=rabbitmq_manager,
         )
         app.state.outbox_lite = outbox_lite
+
+        document_purge_publisher = DocumentPurgePublisher(
+            rabbitmq_manager=rabbitmq_manager,
+            outbox_lite=outbox_lite,
+        )
+        app.state.document_purge_publisher = document_purge_publisher
 
         knowledge_graph_settings = KnowledgeGraphSettings()
         app.state.knowledge_graph_settings = knowledge_graph_settings
@@ -346,6 +368,7 @@ async def startup_dependencies(app: FastAPI) -> None:
             embedder_factory=embedder_factory,
             graph_extraction_publisher=graph_extraction_publisher,
             document_enrichment_publisher=document_enrichment_publisher,
+            structured_chunker_factory=structured_chunker_factory,
         )
         app.state.document_ingestion_service = document_ingestion_service
 
@@ -381,6 +404,7 @@ async def startup_dependencies(app: FastAPI) -> None:
             document_repository=document_repository,
             fragment_repository=fragment_repository,
             chat_membership_provider=chat_membership_provider,
+            document_purge_publisher=document_purge_publisher,
         )
         app.state.delete_document_service = delete_document_service
 
@@ -415,6 +439,20 @@ async def startup_dependencies(app: FastAPI) -> None:
             )
         else:
             logger.info("Knowledge graph module is disabled (KNOWLEDGE_GRAPH_ENABLED=false); skipping Neo4j bootstrap.")
+
+        # Registered after the knowledge-graph wiring so the purge consumer can pick
+        # up the graph repositories when present; it falls back to MinIO-only cleanup
+        # when Neo4j is disabled or unavailable.
+        document_purge_consumer = DocumentPurgeConsumer(
+            rabbitmq_manager=rabbitmq_manager,
+            database_manager=database_manager,
+            document_repository=document_repository,
+            document_storage=document_storage,
+            graph_entity_repository=getattr(app.state, "graph_entity_repository", None),
+            graph_relation_repository=getattr(app.state, "graph_relation_repository", None),
+        )
+        await document_purge_consumer.start()
+        app.state.document_purge_consumer = document_purge_consumer
 
         logger.info("All dependencies started successfully")
         cleanup_stack.clear()

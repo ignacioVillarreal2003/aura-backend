@@ -39,6 +39,9 @@ class RecursiveTextSplitter(BaseTextSplitter):
             logger.exception("Failed to initialize the recursive text splitter.")
             raise TextSplitterInitializationException("Failed to initialize the recursive text splitter.") from e
 
+    def get_chunk_params(self) -> tuple[int | None, int | None]:
+        return self._settings.recursive_split_size, self._settings.recursive_split_overlap
+
     def split_text(
             self,
             text: str

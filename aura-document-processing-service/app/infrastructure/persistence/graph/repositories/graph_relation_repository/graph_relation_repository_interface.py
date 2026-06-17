@@ -33,6 +33,14 @@ class GraphRelationRepositoryInterface(ABC):
         pass
 
     @abstractmethod
+    async def delete_document_relations(
+            self,
+            *,
+            document_id: int,
+    ) -> int:
+        pass
+
+    @abstractmethod
     async def list_neighbors_of(
             self,
             *,

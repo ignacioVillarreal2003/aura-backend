@@ -59,6 +59,29 @@ class DocumentRepository(DocumentRepositoryInterface):
             )
             raise DatabaseException("Failed to fetch the document.") from e
 
+    async def get_document_by_id_including_deleted(
+            self,
+            document_id: int,
+            database_session: AsyncSession
+    ) -> Optional[Document]:
+        """Fetch a document by ID regardless of its soft-delete state.
+
+        Used by the purge flow to confirm a document is actually soft-deleted
+        before reclaiming its external footprint (MinIO/Neo4j), guarding against
+        a purge enqueued for a delete whose transaction later rolled back.
+        """
+        try:
+            result = await database_session.execute(
+                select(Document).where(Document.id == document_id)
+            )
+            return result.scalars().first()
+        except SQLAlchemyError as e:
+            logger.exception(
+                "Database error while fetching the document (including deleted).",
+                extra={"document_id": document_id},
+            )
+            raise DatabaseException("Failed to fetch the document.") from e
+
     async def get_documents_by_chat_id(
             self,
             chat_id: int,

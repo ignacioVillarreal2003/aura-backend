@@ -68,6 +68,12 @@ class HuggingFaceTextSplitter(BaseTextSplitter):
                 "Failed to initialize the Hugging Face semantic text splitter."
             ) from e
 
+    def get_chunk_params(self) -> tuple[int | None, int | None]:
+        return (
+            self._settings.huggingface_max_chunk_tokens,
+            self._settings.huggingface_chunk_token_overlap,
+        )
+
     def split_text(self, text: str) -> list[str]:
         if not text or not text.strip():
             logger.debug("split_text received empty text; returning an empty list.")
