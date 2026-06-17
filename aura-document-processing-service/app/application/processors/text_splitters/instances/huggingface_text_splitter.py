@@ -89,12 +89,16 @@ class HuggingFaceTextSplitter(BaseTextSplitter):
             }
         )
 
+        splitter = self._splitter
+        if splitter is None:
+            raise TextSplitterExecutionException("The semantic splitter is not initialized.")
+
         try:
             segments = self._pre_segment(text)
 
             raw_chunks: list[str] = []
             for segment in segments:
-                raw_chunks.extend(self._splitter.split_text(segment))
+                raw_chunks.extend(splitter.split_text(segment))
 
             splits = self._enforce_token_limit(raw_chunks)
             splits = self._merge_short_chunks(splits)

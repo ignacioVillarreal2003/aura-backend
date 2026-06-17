@@ -13,11 +13,19 @@ from app.api.controllers.document.document_query_controller.document_query_contr
 from app.api.controllers.document.document_search_controller.document_search_controller import (
     router as document_search_router,
 )
+from app.api.controllers.document.document_reembed_controller.document_reembed_controller import (
+    router as document_reembed_router,
+)
+from app.api.controllers.document.document_reprocess_controller.document_reprocess_controller import (
+    router as document_reprocess_router,
+)
 
 __all__ = [
     "create_document_router",
     "delete_document_router",
     "document_download_router",
     "document_query_router",
+    "document_reembed_router",
+    "document_reprocess_router",
     "document_search_router",
 ]

@@ -1,273 +1,246 @@
- AUDITORÍA TÉCNICA — aura-document-processing-service
 
-  Modo: solo lectura · Alcance: repositorio completo (362 archivos versionados, ~26.437 LOC Python) · Fecha: 2026-06-14
-  Metodología: inspección directa de código y configuración. Toda conclusión se basa en evidencia citada (archivo:línea). Donde falta contexto verificable, se indica
-  explícitamente.
-
-  ▎ Nota de honestidad metodológica: revisé en profundidad las capas de configuración, seguridad, persistencia (SQL + Cypher), almacenamiento, mensajería,
-  ▎ autenticación/autorización, controladores representativos y el flujo de ingesta. No abrí exhaustivamente los ~80 archivos de procesadores (readers/embedders/splitters) ni cada
-  ▎ servicio de grafo; las conclusiones sobre esos módulos se marcan como “no verificado en detalle”.
 
   ---
-  FASE 1 — INVENTARIO Y ARQUITECTURA
+Hallazgos Críticos
 
-  1.1 Estructura (resumen)
 
-  app/
-  ├── api/              # Capa de entrada: controllers (1 carpeta/endpoint + interface), schemas, handlers, dependencies, openapi
-  ├── application/      # Casos de uso: services/, processors/ (readers, embedders, splitters, rerankers, cleaners), authorization/
-  ├── domain/           # DTOs, constants, field_limits, types, authenticated_user  (núcleo sin dependencias de framework)
-  └── infrastructure/   # http/ (providers + http_client), messaging/rabbitmq (consumers, publishers, outbox), persistence/ (database, graph/neo4j, memory_database/redis,
-  storages/minio)
 
-  Soporte: test/ (15 archivos), docs/, http/ (REST client), scripts/download_models.py, requirements/, Dockerfile/DockerfileGPU, test_documents/ (PDFs/DOCX binarios versionados).
 
-  1.2 Arquitectura
 
-  - Estilo: Arquitectura limpia / hexagonal por capas (api → application → domain ← infrastructure), con interfaces explícitas por componente e inyección de dependencias vía
-  app.state resuelta en dependencies.py.
-  - Patrones: Repository, Factory (*_factory.py), Provider/Adapter (HTTP, storage), Transactional Outbox “lite” sobre Redis (redis_outbox_lite.py) con worker de reconciliación,
-  Circuit Breaker (aiobreaker) + retries (tenacity), DLQ por reintentos en consumidores.
-  - Flujo de datos (ingesta): POST /document → validación/upload a MinIO + fila en Postgres (status=uploaded) → publica DocumentIngestionCommand (vía outbox) →
-  DocumentIngestionConsumer lee, descarga, parsea, limpia, fragmenta, embebe → persiste fragmentos → publica enrichment/graph-extraction. Reconciliación de documentos “colgados”
-  vía get_stale_uploaded_documents + OutboxLiteWorker.
-  - Cohesión: alta a nivel módulo. Acoplamiento: bajo entre capas; el punto de acoplamiento fuerte es dependencies.py (orquestador único, ~390 líneas). No detecté dependencias
-  circulares de import.
 
-  1.3 Dependencias (evaluación)
+Problemas de Arquitectura
 
-  ┌─────────────────────────────────────────────────────┬────────────────────────────────────────┬───────────────────────────────────────────────────────────────────────────┐
-  │                     Dependencia                     │               Propósito                │                                Observación                                │
-  ├─────────────────────────────────────────────────────┼────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────┤
-  │ fastapi/uvicorn/pydantic(-settings)                 │ Web + settings                         │ Uso correcto y central                                                    │
-  ├─────────────────────────────────────────────────────┼────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────┤
-  │ sqlalchemy[async]/asyncpg/pgvector                  │ Persistencia + vectores                │ Correcto; ver hallazgos de índices                                        │
-  ├─────────────────────────────────────────────────────┼────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────┤
-  │ neo4j                                               │ Grafo de conocimiento                  │ Bien encapsulado; opcional vía flag                                       │
-  ├─────────────────────────────────────────────────────┼────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────┤
-  │ redis                                               │ Cache token, rate-limit, outbox, locks │ Uso intensivo y correcto                                                  │
-  ├─────────────────────────────────────────────────────┼────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────┤
-  │ aio-pika                                            │ RabbitMQ                               │ Consumers con DLQ                                                         │
-  ├─────────────────────────────────────────────────────┼────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────┤
-  │ torch(+cpu)/sentence-transformers/docling/tesseract │ ML/lectura                             │ Pesadas; horneadas en imagen                                              │
-  ├─────────────────────────────────────────────────────┼────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────┤
-  │ httpx + aiobreaker + tenacity                       │ HTTP saliente resiliente               │ Buen patrón                                                               │
-  ├─────────────────────────────────────────────────────┼────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────┤
-  │ Todas (salvo torch)                                 │ —                                      │ Sin pin exacto (>=) ni lockfile/hashes → builds no reproducibles (ver C2) │
-  └─────────────────────────────────────────────────────┴────────────────────────────────────────┴───────────────────────────────────────────────────────────────────────────┘
+- accessible_doc_ids materializa TODOS los ids accesibles (fetch_all_accessible_document_ids) y los pasa como ANY(:
+  array). Un usuario con acceso a 500k docs → array de 500k
+  enteros por query. Esto no escala; debería ser un join/RLS del lado DB.
+
+
 
   ---
-  FASE 2 — AUDITORÍA TÉCNICA (hallazgos por dominio)
+Problemas de Retrieval
 
-  Seguridad — aspectos POSITIVOS (verificados)
-
-  - SQL parametrizado vía ORM en todo document_repository.py (sin concatenación). Igual para Cypher: parámetros $x en todos los repos de grafo; la única interpolación de string es
-  depth y está forzada a int y acotada (graph_relation_repository.py:196-197).
-  - Validación de upload robusta: path traversal (..,/,\, null bytes), longitud, content-type permitido, magic numbers, y doble verificación de tamaño antes/después de stream
-  (create_document_service.py:257-307).
-  - Autorización fail-closed: ante error/JSON inválido/timeout, chat_membership_provider y document_collection_catalog_client devuelven “sin acceso” (:89-100, :102-113) — diseño
-  correcto.
-  - Manejo de errores sin fuga: handlers devuelven mensajes genéricos; stacktraces y cause_chain van solo a logs (exception_handlers.py).
-  - Token de auth cacheado por hash SHA-256, no en claro como clave (authentication_provider.py:38-39); longitud máxima de bearer validada.
-
-  Seguridad — HALLAZGOS
-
-  - S1 [ALTO] — .env con credenciales versionado en git. .env, .env.docker, .env.docker.gpu están en git ls-files y .gitignore no excluye .env (.gitignore:1-52). El archivo
-  contiene DATABASE_MANAGER_PASSWORD=aura_password, MINIO_MANAGER_SECRET_KEY=aura_password, RABBITMQ_..._password, NEO4J_MANAGER_PASSWORD=aura_password (.env:67-108). Aunque son
-  defaults de desarrollo, (a) son secretos en el control de versiones y (b) se reutiliza la misma password en todos los servicios. Riesgo de que el patrón se arrastre a producción.
-  - S2 [ALTO] — Bearer token del usuario propagado y persistido fuera de la request. El token se inyecta en DocumentIngestionCommand.auth_token (create_document_service.py:188),
-  viaja por RabbitMQ y, si falla la publicación, se persiste en Redis en claro dentro del outbox (redis_outbox_lite.py:96-114). El consumidor lo re-establece para actuar como el
-  usuario (base_consumer.py:122-126). Implica token en tránsito por el broker y token at-rest en Redis durante el TTL del outbox. Si los tokens son de larga duración, amplía la
-  ventana de robo/replay.
-  - S3 [MEDIO] — /metrics sin autenticación. Está en _EXCLUDED_PATHS del middleware (authentication_middleware.py:14) y expuesto por el instrumentator. Exposición de métricas
-  internas (latencias, rutas, conteos) a cualquiera con acceso de red.
-  - S4 [MEDIO] — Rate limiting fail-open. Si redis_client no está en app.state, _check_rate_limit retorna sin aplicar límite (rate_limiter.py:42-44). Una caída de Redis desactiva
-  silenciosamente la protección. Además, para usuarios sin identidad cae a request.client.host (:46-51): tras un proxy/ingress todos comparten IP, colapsando el límite.
-  - S5 [BAJO] — CORS por defecto ["*"] en .env:7 y default del settings (environment_variables.py:25). Mitigado porque configure_cors desactiva allow_credentials cuando hay *
-  (cors_configuration.py:9), pero requiere disciplina en prod.
-  - S6 [BAJO] — X-Request-ID aceptado del cliente sin límite de longitud y reflejado en cabecera de respuesta y logs (logging_middleware.py:21-29). Riesgo bajo de
-  log-bloat/inyección (Starlette mitiga saltos de línea).
-
-  Arquitectura — HALLAZGOS
-
-  - A1 [ALTO] — Base de datos compartida / FK cross-service. El ORM declara Document.chat_id → ForeignKey("chat.id") (orm/document.py:14-21) y Fragment.document_id → document.id,
-  pero la tabla chat no existe en este servicio. Igual, created_by/deleted_by son ids de usuario de otro servicio. Esto implica una BD compartida con FKs entre dominios, violando
-  database-per-service y creando acoplamiento de datos y de despliegue (migraciones coordinadas).
-  - A2 [MEDIO] — No hay gestión de migraciones. No existe Alembic ni carpeta de migraciones (git ls-files no devuelve nada). El esquema vive parcialmente como ORM, pero su
-  creación/evolución no está versionada en este repo → riesgo de schema drift y de que los índices necesarios no existan (ver D1/D2).
-  - A3 [MEDIO] — Idempotencia muerta/incompleta. optional_idempotency_key solo aparece en su propio archivo y en docs (grep), no está cableada en ningún controlador. La creación de
-  documentos no deduplica, por lo que un reintento del cliente (o del navegador) puede crear documentos duplicados. La función promete una garantía que el sistema no cumple.
-  - A4 [BAJO] — startup_dependencies monolítico (~390 líneas, dependencies.py:184-424): difícil de testear unitariamente y de razonar; concentra todo el grafo de objetos.
-
-  Base de datos / Performance — HALLAZGOS
-
-  - D1 [ALTO] — Ausencia de índices secundarios en columnas de filtrado frecuente (según el esquema en código). Todas las consultas filtran Document.deleted_at y ordenan por
-  created_at; se filtra por chat_id, status y se unen fragmentos por Fragment.document_id — ninguna tiene índice declarado (orm/document.py, orm/fragment.py). Caveat: al no haber
-  migraciones, no puedo verificar si existen índices en la BD real; debe confirmarse.
-  - D2 [ALTO] — Sin índice ANN para el vector de embeddings. Fragment.vector = VECTOR(dim=…) no declara índice HNSW/IVFFlat (orm/fragment.py:32). Sin un índice ANN en pgvector, la
-  búsqueda por similitud degrada a KNN exacto (scan completo), inaceptable para un servicio RAG a escala. Confirmar en la BD/migración externa.
-  - D3 [BAJO] — index=True en la PK (document.py:12, fragment.py:20) es redundante: la clave primaria ya está indexada.
-
-  API / Contratos
-
-  - Endpoints REST consistentes y versionados (/api/v1), operation_id por ruta, responses OpenAPI por código, separación controller/interface. Validación vía Pydantic en
-  formularios (create_document_form.py).
-  - Endpoint admin (/admin/document/{id}/download) correctamente protegido por permiso DOWNLOAD_DOCUMENT_ADMIN y separado de la ruta de usuario
-  (document_download_controller.py:49-73). Bien.
-
-  Observabilidad — HALLAZGOS
-
-  - POSITIVO: logging estructurado con extra, request_id propagado a respuestas y handlers, URLs/credenciales redactadas (url_safe, uri_safe, endpoint_safe), logging de claves de
-  objeto solo por sufijo, readiness con sondas reales de Redis/DB/RabbitMQ/MinIO (health_controller.py:50-65).
-  - O1 [MEDIO] — Sin tracing distribuido. No hay OpenTelemetry; request_id no se propaga a llamadas HTTP downstream ni a mensajes (los comandos llevan message_id, no contexto de
-  traza) → correlación end-to-end limitada en un sistema multi-servicio asíncrono.
-  - O2 [BAJO] — Sin métricas de negocio (documentos ingeridos/fallidos, profundidad de cola, fallos de extracción de grafo); solo métricas HTTP genéricas del instrumentator.
-
-  Testing — HALLAZGOS
-
-  - T1 [ALTO] — Cobertura muy baja. 15 archivos / 1.150 LOC de test vs ~26.437 LOC de app (~4%). Los tests cubren controladores, autenticación, authorizer, chat-membership y un
-  repo de stats. No hay tests de los servicios núcleo (create/ingestion/enrichment/extraction/search/query), repositorios (document/fragment/grafo), procesadores, http_client,
-  minio_manager, database_manager, outbox ni consumidores.
-  - T2 [MEDIO] — Sin CI/CD en el repo. No hay .github/, GitLab CI, etc. Los quality gates (ruff/mypy/pytest están definidos en pyproject.toml) no se ejecutan automáticamente;
-  dependen de disciplina local.
-
-  Calidad de código
-
-  - POSITIVO: estilo consistente, type hints amplios, jerarquías de excepciones por módulo, sin print()/breakpoint(), solo 4 TODO/FIXME, ejecución como usuario no-root en Docker,
-  HEALTHCHECK, base slim, sin secretos en la imagen.
-  - C1 [BAJO] — DRY: _normalize_bearer y _build_request_headers están duplicados literalmente en chat_membership_provider.py y document_collection_catalog_client.py.
-  - C2 [BAJO] — Dependencias sin fijar + sin lockfile/hashes (requirements.txt, Dockerfile:22 pip install --upgrade) → builds no reproducibles y riesgo de cadena de suministro.
-  - C3 [BAJO] — Inconsistencia de autorización: document_download_service consulta el catálogo con authorization_header=None (usa token de servicio/fallback) (:166-178), mientras
-  graph_query_service propaga el header del usuario. Comportamiento divergente, confuso y no documentado.
+- 
+- Post‑filtro de permisos después de fusionar/rerankear (:236): se recuperan k por query, se fusiona, y luego se
+  descartan los no accesibles → se puede devolver menos de k
+  resultados (o cero) aunque existan fragmentos accesibles relevantes más abajo. El filtro de permisos debería ir dentro
+  del SQL siempre (ya se pasa doc_ids, pero el post‑filtro
+  indica desconfianza del propio filtro).
+- Re‑ranking solo sobre content (:246), sin título/heading/section_path. El cross‑encoder corre sobre todo el pool
+  fusionado (latencia O(candidatos)); no hay cap defensivo del
+  pool antes del reranker.
+- adjacent_chunks (:253‑263) añade vecinos después del rerank → los vecinos no pasan por scoring y diluyen el top‑k
+  rerankeado.
 
   ---
-  FASE 3 — MATRIZ DE HALLAZGOS
+Problemas de Chunking
 
-  ┌─────┬────────────────┬───────────────────────┬──────────────────────────────────────────────────┬───────────────────────────┬──────────────────────────┬───────┬───────────┐
-  │ ID  │   Categoría    │       Problema        │                    Ubicación                     │         Evidencia         │         Impacto          │ Prob. │ Severidad │
-  ├─────┼────────────────┼───────────────────────┼──────────────────────────────────────────────────┼───────────────────────────┼──────────────────────────┼───────┼───────────┤
-  │ S1  │ Seguridad      │ .env con secretos     │ .env, .gitignore                                 │ passwords en claro; no    │ Fuga de credenciales /   │ Alta  │ Alto      │
-  │     │                │ versionado            │                                                  │ ignorado                  │ reuso en prod            │       │           │
-  ├─────┼────────────────┼───────────────────────┼──────────────────────────────────────────────────┼───────────────────────────┼──────────────────────────┼───────┼───────────┤
-  │     │                │ Bearer token en       │ create_document_service.py:188,                  │ auth_token                │                          │       │           │
-  │ S2  │ Seguridad      │ mensajes y Redis      │ redis_outbox_lite.py:96-114,                     │ serializado/persistido    │ Robo/replay de tokens    │ Media │ Alto      │
-  │     │                │ (at-rest)             │ base_consumer.py:122-126                         │                           │                          │       │           │
-  ├─────┼────────────────┼───────────────────────┼──────────────────────────────────────────────────┼───────────────────────────┼──────────────────────────┼───────┼───────────┤
-  │ A1  │ Arquitectura   │ BD compartida + FK    │ orm/document.py:14-21                            │ FK a chat.id inexistente  │ Acoplamiento de          │ Alta  │ Alto      │
-  │     │                │ cross-service         │                                                  │ aquí                      │ datos/despliegue         │       │           │
-  ├─────┼────────────────┼───────────────────────┼──────────────────────────────────────────────────┼───────────────────────────┼──────────────────────────┼───────┼───────────┤
-  │ D1  │ BD/Perf        │ Faltan índices en     │ orm/document.py, orm/fragment.py                 │ sin index/migraciones     │ Degradación de consultas │ Alta  │ Alto      │
-  │     │                │ columnas de filtro    │                                                  │                           │                          │       │           │
-  ├─────┼────────────────┼───────────────────────┼──────────────────────────────────────────────────┼───────────────────────────┼──────────────────────────┼───────┼───────────┤
-  │ D2  │ BD/Perf        │ Sin índice ANN para   │ orm/fragment.py:32                               │ VECTOR sin HNSW/IVFFlat   │ KNN exacto = no escala   │ Alta  │ Alto      │
-  │     │                │ vector                │                                                  │                           │                          │       │           │
-  ├─────┼────────────────┼───────────────────────┼──────────────────────────────────────────────────┼───────────────────────────┼──────────────────────────┼───────┼───────────┤
-  │ T1  │ Testing        │ Cobertura ~4%         │ test/ (1150 LOC)                                 │ 15 archivos vs 26k LOC    │ Regresiones no           │ Alta  │ Alto      │
-  │     │                │                       │                                                  │                           │ detectadas               │       │           │
-  ├─────┼────────────────┼───────────────────────┼──────────────────────────────────────────────────┼───────────────────────────┼──────────────────────────┼───────┼───────────┤
-  │ S3  │ Seguridad      │ /metrics sin auth     │ authentication_middleware.py:14                  │ path excluido             │ Exposición de métricas   │ Media │ Medio     │
-  ├─────┼────────────────┼───────────────────────┼──────────────────────────────────────────────────┼───────────────────────────┼──────────────────────────┼───────┼───────────┤
-  │ S4  │ Seguridad      │ Rate limit fail-open  │ rate_limiter.py:42-51                            │ retorno sin límite si no  │ Abuso/DoS si Redis cae   │ Media │ Medio     │
-  │     │                │                       │                                                  │ hay Redis                 │                          │       │           │
-  ├─────┼────────────────┼───────────────────────┼──────────────────────────────────────────────────┼───────────────────────────┼──────────────────────────┼───────┼───────────┤
-  │ A2  │ Arquitectura   │ Sin migraciones       │ repo                                             │ no Alembic                │ Schema drift             │ Alta  │ Medio     │
-  ├─────┼────────────────┼───────────────────────┼──────────────────────────────────────────────────┼───────────────────────────┼──────────────────────────┼───────┼───────────┤
-  │ A3  │ Arquitectura   │ Idempotencia no       │ idempotency.py + grep                            │ sin uso en controllers    │ Documentos duplicados    │ Media │ Medio     │
-  │     │                │ cableada              │                                                  │                           │                          │       │           │
-  ├─────┼────────────────┼───────────────────────┼──────────────────────────────────────────────────┼───────────────────────────┼──────────────────────────┼───────┼───────────┤
-  │ O1  │ Observabilidad │ Sin tracing           │ global                                           │ no OTel/propagación       │ Difícil diagnóstico E2E  │ Media │ Medio     │
-  │     │                │ distribuido           │                                                  │                           │                          │       │           │
-  ├─────┼────────────────┼───────────────────────┼──────────────────────────────────────────────────┼───────────────────────────┼──────────────────────────┼───────┼───────────┤
-  │ T2  │ Testing        │ Sin CI/CD             │ repo                                             │ sin pipelines             │ Gates no aplicados       │ Alta  │ Medio     │
-  ├─────┼────────────────┼───────────────────────┼──────────────────────────────────────────────────┼───────────────────────────┼──────────────────────────┼───────┼───────────┤
-  │ C3  │ Calidad        │ Authz inconsistente   │ document_download_service.py:166                 │ divergencia               │ Confusión/errores        │ Media │ Medio     │
-  │     │                │ (header vs fallback)  │                                                  │                           │ futuros                  │       │           │
-  ├─────┼────────────────┼───────────────────────┼──────────────────────────────────────────────────┼───────────────────────────┼──────────────────────────┼───────┼───────────┤
-  │ S5  │ Seguridad      │ CORS * por defecto    │ .env:7, cors_configuration.py                    │ default amplio            │ Riesgo si mal config     │ Baja  │ Bajo      │
-  ├─────┼────────────────┼───────────────────────┼──────────────────────────────────────────────────┼───────────────────────────┼──────────────────────────┼───────┼───────────┤
-  │ S6  │ Seguridad      │ X-Request-ID sin      │ logging_middleware.py:21                         │ reflejo en header/log     │ Log-bloat                │ Baja  │ Bajo      │
-  │     │                │ límite                │                                                  │                           │                          │       │           │
-  ├─────┼────────────────┼───────────────────────┼──────────────────────────────────────────────────┼───────────────────────────┼──────────────────────────┼───────┼───────────┤
-  │ D3  │ BD             │ index=True redundante │ document.py:12                                   │ duplicado                 │ Cosmético                │ Baja  │ Bajo      │
-  │     │                │  en PK                │                                                  │                           │                          │       │           │
-  ├─────┼────────────────┼───────────────────────┼──────────────────────────────────────────────────┼───────────────────────────┼──────────────────────────┼───────┼───────────┤
-  │ A4  │ Arquitectura   │ startup monolítico    │ dependencies.py:184                              │ ~390 líneas               │ Mantenibilidad/test      │ Media │ Bajo      │
-  ├─────┼────────────────┼───────────────────────┼──────────────────────────────────────────────────┼───────────────────────────┼──────────────────────────┼───────┼───────────┤
-  │ O2  │ Observabilidad │ Sin métricas de       │ global                                           │ solo HTTP                 │ Visibilidad limitada     │ Media │ Bajo      │
-  │     │                │ negocio               │                                                  │                           │                          │       │           │
-  ├─────┼────────────────┼───────────────────────┼──────────────────────────────────────────────────┼───────────────────────────┼──────────────────────────┼───────┼───────────┤
-  │ C1  │ Calidad        │ Duplicación de        │ 2 providers                                      │ código idéntico           │ DRY                      │ Baja  │ Bajo      │
-  │     │                │ helpers bearer        │                                                  │                           │                          │       │           │
-  ├─────┼────────────────┼───────────────────────┼──────────────────────────────────────────────────┼───────────────────────────┼──────────────────────────┼───────┼───────────┤
-  │ C2  │ Calidad        │ Deps sin pin / sin    │ requirements.txt                                 │ >=                        │ Builds no reproducibles  │ Media │ Bajo      │
-  │     │                │ lock                  │                                                  │                           │                          │       │           │
-  └─────┴────────────────┴───────────────────────┴──────────────────────────────────────────────────┴───────────────────────────┴──────────────────────────┴───────┴───────────┘
+- Sí hay provenance estructural (fragment tiene page_number, section_path, heading, char_start/end, bbox) — fortaleza
+  real para citaciones.
+- Pero el fallback clásico produce fragmentos sin metadata estructural (NULL), y no hay señal en la respuesta de qué
+  fragmentos son "ricos" vs "planos".
+- _build_fragments asume zip(chunks, embeddings, strict=True) (:363) — correcto, pero si un chunk queda vacío tras
+  limpieza se filtra antes (:232), lo que puede desalinear
+  fragment_index respecto del documento fuente (los índices son posicionales sobre la lista filtrada, no sobre el
+  documento original).
 
   ---
-  FASE 4 — DEUDA TÉCNICA
+Problemas de Embeddings
 
-  - Arquitectónica: BD compartida con FKs entre dominios (A1) y ausencia de migraciones (A2). Causa: arranque rápido sobre una BD común. Consecuencia: despliegues acoplados,
-  imposibilidad de evolucionar el esquema de forma independiente. Riesgo futuro: un cambio en el servicio de chat rompe este servicio; migraciones manuales propensas a drift.
-  - De código: duplicación de helpers (C1), startup monolítico (A4). Consecuencia: fricción de mantenimiento. Riesgo bajo.
-  - Operativa: sin CI/CD (T2), sin tracing (O1), sin lockfile (C2). Consecuencia: despliegues sin red de seguridad automatizada y diagnóstico E2E difícil. Riesgo: defectos llegan a
-  prod; incidentes lentos de resolver.
-  - De seguridad: secretos en VCS (S1), token de usuario at-rest/en broker (S2), rate-limit fail-open (S3/S4). Riesgo: compromiso de credenciales/tokens, abuso de API.
-  - De testing: ~4% de cobertura (T1) concentrada en controllers; el núcleo de negocio (ingesta, embeddings, grafo, outbox) carece de pruebas. Riesgo: regresiones silenciosas en la
-  lógica más crítica y compleja.
-
-  ---
-  FASE 5 — PLAN DE MEJORA PRIORIZADO
-
-  1) Críticos inmediatos
-
-  1. Sacar .env* del control de versiones (S1): añadir a .gitignore, rotar todas las credenciales comprometidas, mover a gestor de secretos. Beneficio: elimina fuga directa.
-  Complejidad: baja. Riesgo de no hacerlo: compromiso de toda la malla de servicios.
-  2. Confirmar/crear índices (D1, D2): verificar en la BD real la existencia de índices en document(chat_id, deleted_at, status, created_at), fragment(document_id) y un índice
-  HNSW/IVFFlat sobre fragment.vector. Beneficio: rendimiento y escalabilidad del RAG. Complejidad: media.
-  3. Reducir exposición del token de usuario (S2): cifrar el auth_token en el outbox o sustituir por un token de servicio de corta vida / patrón de delegación; minimizar TTL.
-  Complejidad: media-alta.
-
-  2) Corto plazo
-
-  4. Introducir CI/CD que ejecute ruff+mypy+pytest y escaneo de dependencias (T2, C2 con lockfile/hashes).
-  5. Proteger /metrics (red interna o auth) y endurecer rate limiting (fail-closed o degradación controlada; clave basada en identidad autenticada) (S3, S4).
-  6. Cablear idempotencia real en POST /document usando la clave + marcador en Redis (A3).
-
-  3) Medio plazo
-
-  7. Adoptar Alembic y versionar el esquema (A2).
-  8. Tests del núcleo (servicios de ingesta/grafo, repos, outbox, consumers) hasta un umbral (p. ej. ≥60%) (T1).
-  9. Tracing distribuido (OpenTelemetry) propagando contexto por HTTP y mensajes (O1) + métricas de negocio (O2).
-
-  4) Largo plazo
-
-  10. Resolver el acoplamiento de BD (A1): separar el esquema por servicio o sustituir FKs cross-service por referencias lógicas + verificación por API/eventos.
-  11. Refactor de dependencies.py en módulos de bootstrap por subsistema (A4) y unificar helpers bearer (C1, C3).
+- Se embeben todos los chunks de un documento en una sola llamada aembed_documents(chunks) (
+  document_ingestion_service.py:318) sin cap de cantidad a este nivel. Un documento de
+  50k chunks → batch gigante en memoria + riesgo de timeout/OOM. Un único fallo aborta todo el documento (sin reintento
+  parcial por lote).
+- Sin versión de modelo por fragmento (ver C‑2). No se puede responder "¿qué fragmentos hay que re‑embeber?".
+- Soporte de embeddings asimétricos existe (huggingface_query_instruction, aembed_query) — bien — pero por defecto
+  vacío (embedder_settings.py:70), así que con HF queda simétrico
+  salvo configuración explícita.
 
   ---
-  FASE 6 — EVALUACIÓN FINAL
+Problemas del Grafo
 
-  ┌────────────────┬────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │   Dimensión    │ Score  │                                                         Justificación basada en evidencia                                                         │
-  ├────────────────┼────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ Arquitectura   │ 78/100 │ Hexagonal limpia, interfaces, DI, outbox+reconciliación, circuit breaker. Penaliza BD compartida con FKs cross-service (A1), ausencia de          │
-  │                │        │ migraciones (A2) e idempotencia muerta (A3).                                                                                                      │
-  ├────────────────┼────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ Seguridad      │ 62/100 │ Bases sólidas (SQL/Cypher parametrizados, validación de upload, authz fail-closed, sin fuga en errores). Penaliza secretos en VCS (S1), token     │
-  │                │        │ at-rest/en broker (S2), /metrics abierto (S3) y rate-limit fail-open (S4).                                                                        │
-  ├────────────────┼────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ Mantenibilidad │ 72/100 │ Código consistente, tipado, excepciones por módulo, sin artefactos de debug. Penaliza ~4% de tests (T1), duplicación (C1), inconsistencias (C3) y │
-  │                │        │  startup monolítico (A4).                                                                                                                         │
-  ├────────────────┼────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ Escalabilidad  │ 58/100 │ Async, pooling, prefetch, paginación acotada, outbox. Penaliza fuerte la incertidumbre/ausencia de índices ANN y secundarios (D1, D2) en un       │
-  │                │        │ servicio vector-intensivo, y la BD compartida.                                                                                                    │
-  ├────────────────┼────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ Observabilidad │ 70/100 │ Logging estructurado con redacción, request_id, readiness con sondas reales, Prometheus. Penaliza falta de tracing (O1) y de métricas de negocio  │
-  │                │        │ (O2).                                                                                                                                             │
-  ├────────────────┼────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ Calidad        │ 72/100 │ Ingeniería de buen nivel y patrones maduros, lastrada por testing insuficiente, gaps operativos (CI/CD, secretos) y dudas de rendimiento en la    │
-  │ general        │        │ capa de datos.                                                                                                                                    │
-  └────────────────┴────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+- Bien resuelto el borrado de entidades compartidas: delete_document_entities quita el document_id de
+  source_document_ids y solo borra entidades huérfanas
+  (graph_entity_repository.py:218‑226). No hay sobre‑borrado. Fortaleza.
+- Escalabilidad de extracción: la extracción usa LLM por documento con lock Redis; con millones de documentos el costo
+  LLM y la concurrencia (extraction_concurrency) son el
+  límite. Falta backpressure visible entre ingesta y extracción más allá de la cola.
+- Deduplicación de entidades por canonical_name — riesgo de colisión (entidades homónimas distintas) o fragmentación (
+  misma entidad, nombre distinto) sin entity resolution
+  robusto. Riesgo de calidad de grafo a escala.
 
-  Veredicto para puesta en producción empresarial: el servicio tiene fundamentos de ingeniería de buena calidad, pero no está listo para producción sin antes resolver los críticos:
-  secretos fuera de VCS + rotación (S1), confirmación de índices (incl. ANN) (D1/D2), manejo del token de usuario (S2) y un mínimo de CI + pruebas del núcleo (T2/T1).
+  ---
+Problemas de Consistencia
+
+- Saga creación↔ingesta: la creación commitea el documento y publica vía outbox (bien). Pero si la ingesta falla
+  definitivamente, el documento queda failed y el objeto sigue en
+  MinIO; no veo reconciliación que lo purgue → objetos huérfanos en storage para ingestas fallidas (la purga solo se
+  dispara en delete).
+- get_stale_uploaded_documents reconcilia uploaded viejos (bien), pero no hay equivalente para failed ni para fragmentos
+  huérfanos.
+- Mezcla de modelos (C‑2) puede dejar la tabla en estado donde unas queries fallan y otras no, según qué docs toquen.
+
+  ---
+Problemas de Escalabilidad
+
+┌───────────┬──────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ Escala │ Comportamiento esperado │
+├───────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ 100k docs │ Retrieval ya degradado (full scan vectorial); aceptable solo con pocas QPS. │
+├───────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ 1M docs │ Búsqueda semántica en segundos; Postgres CPU‑bound; ANY(:doc_ids) enorme para usuarios con mucho acceso. │
+├───────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ 10M docs │ Inoperable sin ANN index, partición y hard‑delete. │
+└───────────┴──────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+Límites arquitectónicos: (1) sin ANN, (2) sin sharding/partición de fragment, (3) autorización por arrays gigantes, (4)
+extracción de grafo LLM‑bound, (5) bloat por soft‑delete
+perpetuo.
+
+  ---
+Problemas de Seguridad
+
+- C‑5 (multi‑tenant en app‑layer, sin RLS) es el principal.
+- Dependencia total de servicios externos para autorización en cada query (fail‑open si el catálogo devuelve de más).
+- [FIX en sesión] CORS permisivo (A‑2) y endurecimiento de producción/credenciales (A‑3) ya corregidos.
+- BM25 sanitiza input (fragment_repository.py:25‑33) y el vector se serializa a string interpolado (:132) —
+  interpolación de string en SQL para el vector; aunque los valores son
+  floats validados, es un patrón frágil (preferir binding nativo de pgvector).
+- Sin cifrado a nivel de campo ni clasificación documental (ver sección final).
+
+  ---
+Problemas de Performance
+
+- Hot path retrieval: full scan vectorial (C‑1) + post‑filtro en memoria + reranker sobre todo el pool.
+- Distancia coseno calculada 3 veces por fila en la query semántica (SELECT, WHERE, ORDER BY) — :157,160,162. Sin
+  índice, se paga el cómputo completo.
+- N+1 potencial en _build_fragment_responses y en la resolución de documentos (revisar; usa get_documents_by_ids por
+  lote, lo cual es correcto).
+- Embedding de query es sincrónico bloqueante envuelto en to_thread para HF (huggingface_embedder.py:131) — ok, pero
+  añade latencia por query.
+
+  ---
+Bugs Potenciales
+
+1. Desalineación de fragment_index tras filtrar chunks vacíos (document_ingestion_service.py:232,363).
+2. accessible_doc_ids vacío cuando el catálogo falla → la query semántica con ANY([]) o sin cláusula puede devolver de
+   más o de menos según rama; el post‑filtro lo salva, pero
+   confirma que el SQL no es la barrera real.
+3. Mezcla de dimensiones de vector → error en runtime en <=> (C‑2).
+4. Objetos MinIO huérfanos en ingestas failed (sin purga).
+5. BM25 min_score=0 inunda el RRF con ruido.
+6. Reranker top_n fallback or len(
+   fragments) — [introducido en M‑3, correcto por el validador, pero si algún día se permite max_fragments=0 cambia semántica].
+
+  ---
+Refactors Recomendados
+
+Quick Wins (bajo esfuerzo / alto impacto)
+
+- Crear índice HNSW sobre fragment.vector (requiere fijar dimensión primero). El mayor ROI del repo.
+- Fijar dimensión: vector VECTOR(768) (o la del modelo activo) en el DDL.
+- Workflow de CI para este servicio (copiar aura-chat-service.yml): ruff + mypy + pytest + build imagen + gate de
+  cobertura. (Confirmado: existe el patrón para los hermanos,
+  falta aquí.)
+- min_score BM25 > 0 por defecto y cap del pool antes del reranker.
+- Filtrar permisos siempre en SQL y eliminar dependencia del post‑filtro como barrera.
+
+Medium Refactors
+
+- Hard‑delete / retención de fragmentos soft‑deleted (job batch + partición por fecha).
+- RRF ponderado + normalización de scores entre modalidades; exponer pesos configurables.
+- Columna embedding_model/dim por fragmento + tabla de migración de embeddings.
+- Embedding por lotes (respetar max_batch_size) con reintento parcial por lote.
+- Tests de servicio + testcontainers (CreateDocumentService compensaciones, OutboxLiteWorker, consumers) — el objetivo
+  de M‑4.
+
+Major Refactors
+
+- RLS / columna tenant en Postgres y Neo4j; mover autorización al data layer.
+- Re‑ingest/reindex pipeline (update documento, migración de modelo).
+- Sharding/partición de fragment y posible externalización del vector store (o pgvector particionado) para 10M+.
+- Entity resolution robusto en el grafo.
+
+  ---
+Plan de Mejoras Priorizado
+
+┌───────────┬──────────────────────────────────┬───────────────────────┬──────────┬──────────────────────────────────────┐
+│ Prioridad │ Hallazgo │ Impacto │ Esfuerzo │ Recomendación │
+├───────────┼──────────────────────────────────┼───────────────────────┼──────────┼──────────────────────────────────────┤
+│ P0 │ C‑1 Sin índice ANN │ Crítico (perf/escala) │ M │ Fijar dim + HNSW (vector_cosine_ops) │
+├───────────┼──────────────────────────────────┼───────────────────────┼──────────┼──────────────────────────────────────┤
+│ P0 │ C‑2 Vector sin dimensión │ Crítico (corrupción)  │ S │ VECTOR(n) + columna modelo │
+├───────────┼──────────────────────────────────┼───────────────────────┼──────────┼──────────────────────────────────────┤
+│ P0 │ C‑5 Multi‑tenant app‑layer │ Crítico (seguridad)   │ L │ RLS + columna tenant │
+├───────────┼──────────────────────────────────┼───────────────────────┼──────────┼──────────────────────────────────────┤
+│ P1 │ C‑3 Sin hard‑delete │ Alto (bloat)          │ M │ Job retención + partición │
+├───────────┼──────────────────────────────────┼───────────────────────┼──────────┼──────────────────────────────────────┤
+│ P1 │ C‑4 Sin reindex/update │ Alto (operabilidad)   │ L │ Pipeline re‑embed/update │
+├───────────┼──────────────────────────────────┼───────────────────────┼──────────┼──────────────────────────────────────┤
+│ P1 │ Sin CI │ Alto (regresiones)    │ S │ Workflow ruff+mypy+pytest+build │
+├───────────┼──────────────────────────────────┼───────────────────────┼──────────┼──────────────────────────────────────┤
+│ P1 │ RRF sin pesos + BM25 min_score=0 │ Alto (calidad)        │ S │ Fusión ponderada + umbral BM25 │
+├───────────┼──────────────────────────────────┼───────────────────────┼──────────┼──────────────────────────────────────┤
+│ P2 │ Embedding sin batching/cap │ Medio (OOM)           │ M │ Lotes + reintento parcial │
+├───────────┼──────────────────────────────────┼───────────────────────┼──────────┼──────────────────────────────────────┤
+│ P2 │ Objetos MinIO huérfanos (failed) │ Medio (storage)       │ S │ Reconciliador de failed │
+├───────────┼──────────────────────────────────┼───────────────────────┼──────────┼──────────────────────────────────────┤
+│ P2 │ Post‑filtro de permisos │ Medio (recall/seg)    │ S │ Filtro en SQL │
+├───────────┼──────────────────────────────────┼───────────────────────┼──────────┼──────────────────────────────────────┤
+│ P3 │ Tests servicio/integración │ Medio (calidad)       │ L │ testcontainers (M‑4)                 │
+├───────────┼──────────────────────────────────┼───────────────────────┼──────────┼──────────────────────────────────────┤
+│ P3 │ Entity resolution grafo │ Medio (calidad KG)    │ L │ Dedup/canonicalización │
+└───────────┴──────────────────────────────────┴───────────────────────┴──────────┴──────────────────────────────────────┘
+
+  ---
+Score Final (1‑10)
+
+┌─────────────────────────────┬───────┬───────────────────────────────────────────────────────────────────────────────────┐
+│ Dimensión │ Score │ Nota │
+├─────────────────────────────┼───────┼───────────────────────────────────────────────────────────────────────────────────┤
+│ Arquitectura │ 6 │ Hexagonal limpia, outbox/saga; lastrada por autorización en hot path y ORM legacy │
+├─────────────────────────────┼───────┼───────────────────────────────────────────────────────────────────────────────────┤
+│ Retrieval │ 3 │ Sin ANN, RRF rank‑only, umbrales asimétricos │
+├─────────────────────────────┼───────┼───────────────────────────────────────────────────────────────────────────────────┤
+│ Calidad RAG │ 5 │ Buena provenance/chunking estructural; fusión y reranking flojos │
+├─────────────────────────────┼───────┼───────────────────────────────────────────────────────────────────────────────────┤
+│ Escalabilidad │ 2 │ Full scan vectorial + bloat + arrays de permisos │
+├─────────────────────────────┼───────┼───────────────────────────────────────────────────────────────────────────────────┤
+│ Performance │ 3 │ Hot path dominado por seq scan exacto │
+├─────────────────────────────┼───────┼───────────────────────────────────────────────────────────────────────────────────┤
+│ Seguridad │ 4 │ Multi‑tenant solo en app; sin RLS; mejoras A‑2/A‑3 ya aplicadas │
+├─────────────────────────────┼───────┼───────────────────────────────────────────────────────────────────────────────────┤
+│ Observabilidad │ 5 │ Logs estructurados + request_id; faltan métricas de dominio y tracing │
+├─────────────────────────────┼───────┼───────────────────────────────────────────────────────────────────────────────────┤
+│ Mantenibilidad │ 6 │ Factories/interfaces, tipado mejorado (M‑3); ORM legacy pendiente │
+├─────────────────────────────┼───────┼───────────────────────────────────────────────────────────────────────────────────┤
+│ Calidad de código │ 6 │ Consistente, defensivo; métodos largos en parte refactorizados (M‑2)              │
+├─────────────────────────────┼───────┼───────────────────────────────────────────────────────────────────────────────────┤
+│ Preparación para producción │ 3 │ No apto a escala sin P0/P1 │
+└─────────────────────────────┴───────┴───────────────────────────────────────────────────────────────────────────────────┘
+
+  ---
+Riesgos para una Implementación Militar / Institucional
+
+1. Sin control de acceso por rangos/clasificación. No hay columna de clearance level ni classification (
+   CONFIDENTIAL/SECRET/…) en document/fragment. La autorización es binaria
+   (accesible o no) y delegada a servicios externos. No se puede imponer need‑to‑know por rango.
+2. Aislamiento multi‑tenant sin garantía de DB (C‑5). Cualquier bug en el catálogo o en el filtro de aplicación expone
+   documentos cruzados. En entorno clasificado esto es una
+   brecha de confidencialidad. Exige RLS y, idealmente, bases/segmentos físicos por nivel.
+3. Trazabilidad/auditoría insuficiente. Hay created_by/updated_by/deleted_by y logs con request_id, pero no hay un audit
+   log inmutable de accesos de lectura/recuperación (quién
+   recuperó qué fragmento clasificado y cuándo). Imprescindible para auditoría institucional.
+4. Recuperación segura comprometida por el post‑filtro. Que los permisos se apliquen parcialmente en memoria (:236) tras
+   traer datos de la DB significa que datos potencialmente
+   no autorizados ya salieron del store hacia el proceso antes de filtrarse. Debe filtrarse en origen, sin excepción.
+5. Borrado no garantizado (derecho al olvido / sanitización). Soft‑delete perpetuo en Postgres (C‑3): un documento "
+   eliminado" sigue físicamente presente y es escaneado en cada
+   query. Para sanitización clasificada se requiere hard delete verificable y purga de respaldos/índices.
+6. Sin cifrado a nivel de campo ni gestión de claves visible para contenido/embeddings en reposo (más allá de lo que
+   provea la infra).
+7. Mezcla de modelos/dimensiones (C‑2) puede degradar silenciosamente la recuperación de inteligencia crítica sin
+   alarma.
+
+Conclusión institucional: en su estado actual no es apto para datos clasificados. Requiere, como mínimo: RLS +
+clasificación por rango, filtrado de permisos 100% en el data
+layer, audit log inmutable de recuperaciones, y hard‑delete verificable.

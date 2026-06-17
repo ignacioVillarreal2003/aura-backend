@@ -87,6 +87,21 @@ class EmbedderFactory:
     ) -> EmbedderType:
         return self._active_type
 
+    def get_active_model_name(
+            self
+    ) -> str:
+        return self._settings.active_model_name
+
+    def get_vector_dimension(
+            self
+    ) -> int:
+        # EmbedderSettings' validator resolves and guarantees this is non-None on
+        # construction; guard keeps the return type sound for static analysis.
+        dimension = self._settings.vector_dimension
+        if dimension is None:
+            raise EmbedderInitializationException("The embedder vector dimension is not configured.")
+        return int(dimension)
+
     def is_supported(
             self,
             embedder_type: EmbedderType

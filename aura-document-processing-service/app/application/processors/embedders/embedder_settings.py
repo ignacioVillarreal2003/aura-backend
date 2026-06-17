@@ -70,6 +70,20 @@ class EmbedderSettings(BaseSettings):
     huggingface_query_instruction: str = Field(default="")
     huggingface_embed_instruction: str = Field(default="")
 
+    @property
+    def active_model_name(self) -> str:
+        """The model name of the currently-active embedder.
+
+        Persisted per fragment (see Fragment.embedding_model) so the row records
+        exactly which model produced its vector — enabling audit and selective
+        re-embedding when the embedding model changes.
+        """
+        if self.active_type == EmbedderType.ollama:
+            return self.ollama_model
+        if self.active_type == EmbedderType.huggingface:
+            return self.huggingface_model
+        return str(self.active_type)
+
     @model_validator(
         mode="after"
     )
@@ -98,7 +112,7 @@ class EmbedderSettings(BaseSettings):
 
     def _validate_all(
             self
-    ):
+    ) -> None:
         if self.retry_max_delay < self.retry_delay:
             raise ValueError("The maximum retry delay must be greater than or equal to the initial retry delay.")
         if self.max_batch_size > 1 and self.max_text_length < 32:

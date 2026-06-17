@@ -1,7 +1,15 @@
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.application.processors.embedders.embedder_settings import EmbedderSettings
 
 
 class EmbedderInterface(ABC):
+    @abstractmethod
+    def __init__(self, embedder_settings: "EmbedderSettings") -> None:
+        ...
+
     @abstractmethod
     def embed_documents(
             self,

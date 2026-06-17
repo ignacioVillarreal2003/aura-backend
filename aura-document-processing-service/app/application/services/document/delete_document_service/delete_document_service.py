@@ -239,7 +239,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
 
     async def _require_document_access(
             self,
-            document,
+            document: Document,
             authenticated_user: AuthenticatedUser,
     ) -> None:
         if document.chat_id is not None:

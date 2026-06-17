@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from typing import Optional
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.services.fragment.post_process_fragment_service.interfaces.post_process_fragment_processor_interface import (
     PostProcessFragmentProcessorInterface,
@@ -93,7 +94,7 @@ class PostProcessFragmentProcessor(PostProcessFragmentProcessorInterface):
                 authenticated_user=user,
             )
 
-            async def _operation(session):
+            async def _operation(session: AsyncSession) -> None:
                 db_fragment = await self._fragment_repository.get_fragment_by_id(
                     fragment_id=fragment_id,
                     database_session=session,
@@ -126,7 +127,7 @@ class PostProcessFragmentProcessor(PostProcessFragmentProcessorInterface):
 
     async def _mark_fragment_failed(self, fragment_id: int) -> None:
         try:
-            async def _operation(session):
+            async def _operation(session: AsyncSession) -> None:
                 db_fragment = await self._fragment_repository.get_fragment_by_id(
                     fragment_id=fragment_id,
                     database_session=session,

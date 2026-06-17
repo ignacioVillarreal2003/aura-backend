@@ -56,6 +56,12 @@ known-first-party = ["app"]
 [tool.mypy]
 python_version = "3.13"
 files = ["app"]
+# `app` is a namespace package (no __init__.py); without these, mypy resolves
+# e.g. app/domain/types.py as the stdlib `types` and bails out before checking
+# anything. Anchoring the package base at the project root fixes module names.
+mypy_path = "."
+namespace_packages = true
+explicit_package_bases = true
 # Heavy ML/LLM deps (torch, langchain, docling, sentence-transformers...) ship
 # without complete stubs; silence those so mypy reports OUR types, not theirs.
 ignore_missing_imports = true
@@ -64,6 +70,20 @@ no_implicit_optional = true
 warn_redundant_casts = true
 warn_unused_ignores = false
 check_untyped_defs = true
+
+# Incremental strictness, hardened per module (see audit M-3). `domain/` and
+# `application/` are fully typed and enforced strict. The ORM models use SQLAlchemy 2.x
+# typed mappings (Mapped[...]/mapped_column), so instance attributes resolve to their
+# real types (int, str, ...) instead of Column[T] — which is what unblocked strict here.
+[[tool.mypy.overrides]]
+module = "app.domain.*"
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+[[tool.mypy.overrides]]
+module = "app.application.*"
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
 
 # ----------------------------------------------------------------------------
 # Pytest — async test suite (replaces the missing pytest.ini)

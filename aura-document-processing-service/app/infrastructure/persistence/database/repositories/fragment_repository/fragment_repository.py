@@ -138,6 +138,8 @@ class FragmentRepository(FragmentRepositoryInterface):
                 SELECT id,
                        document_id,
                        content,
+                       embedding_model,
+                       embedding_dim,
                        fragment_index,
                        summary,
                        entities,
@@ -180,6 +182,8 @@ class FragmentRepository(FragmentRepositoryInterface):
                     id=row.id,
                     document_id=row.document_id,
                     content=row.content,
+                    embedding_model=row.embedding_model,
+                    embedding_dim=row.embedding_dim,
                     fragment_index=row.fragment_index,
                     summary=row.summary,
                     entities=row.entities,
@@ -355,6 +359,8 @@ class FragmentRepository(FragmentRepositoryInterface):
                 SELECT id,
                        document_id,
                        content,
+                       embedding_model,
+                       embedding_dim,
                        fragment_index,
                        summary,
                        entities,
@@ -396,6 +402,8 @@ class FragmentRepository(FragmentRepositoryInterface):
                     id=row.id,
                     document_id=row.document_id,
                     content=row.content,
+                    embedding_model=row.embedding_model,
+                    embedding_dim=row.embedding_dim,
                     fragment_index=row.fragment_index,
                     summary=row.summary,
                     entities=row.entities,
@@ -637,3 +645,68 @@ class FragmentRepository(FragmentRepositoryInterface):
                 extra={"document_id": document_id, "user_id": user_id},
             )
             raise DatabaseException("Failed to soft-delete fragments.") from e
+
+    async def get_fragments_for_reembedding(
+            self,
+            document_id: int,
+            database_session: AsyncSession,
+    ) -> list[Fragment]:
+        try:
+            result = await database_session.execute(
+                select(Fragment)
+                .options(
+                    load_only(
+                        Fragment.id,
+                        Fragment.content,
+                        Fragment.embedding_model,
+                        Fragment.fragment_index,
+                    )
+                )
+                .where(
+                    Fragment.document_id == document_id,
+                    Fragment.deleted_at.is_(None),
+                )
+                .order_by(Fragment.fragment_index)
+                .limit(MAX_FRAGMENTS_IN_LIST)
+            )
+            return list(result.scalars().all())
+        except SQLAlchemyError as e:
+            logger.exception(
+                "Failed to fetch fragments for re-embedding.",
+                extra={"document_id": document_id},
+            )
+            raise DatabaseException("Failed to fetch fragments for re-embedding.") from e
+
+    async def update_fragment_embedding(
+            self,
+            *,
+            fragment_id: int,
+            vector: list[float],
+            embedding_model: str,
+            embedding_dim: int,
+            user_id: int,
+            database_session: AsyncSession,
+    ) -> None:
+        try:
+            now = datetime.now(timezone.utc)
+            await database_session.execute(
+                update(Fragment)
+                .where(
+                    Fragment.id == fragment_id,
+                    Fragment.deleted_at.is_(None),
+                )
+                .values(
+                    vector=vector,
+                    embedding_model=embedding_model,
+                    embedding_dim=embedding_dim,
+                    updated_by=user_id,
+                    updated_at=now,
+                )
+            )
+            await database_session.flush()
+        except SQLAlchemyError as e:
+            logger.exception(
+                "Failed to update the fragment embedding.",
+                extra={"fragment_id": fragment_id},
+            )
+            raise DatabaseException("Failed to update the fragment embedding.") from e

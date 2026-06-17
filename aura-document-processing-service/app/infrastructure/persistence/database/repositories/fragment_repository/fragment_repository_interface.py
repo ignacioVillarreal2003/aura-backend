@@ -101,3 +101,24 @@ class FragmentRepositoryInterface(ABC):
             database_session: AsyncSession,
     ) -> int:
         pass
+
+    @abstractmethod
+    async def get_fragments_for_reembedding(
+            self,
+            document_id: int,
+            database_session: AsyncSession,
+    ) -> list[Fragment]:
+        pass
+
+    @abstractmethod
+    async def update_fragment_embedding(
+            self,
+            *,
+            fragment_id: int,
+            vector: list[float],
+            embedding_model: str,
+            embedding_dim: int,
+            user_id: int,
+            database_session: AsyncSession,
+    ) -> None:
+        pass

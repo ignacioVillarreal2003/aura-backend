@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Optional, Protocol, TypeVar
+from typing import Any, Optional, Protocol, TypeVar
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
@@ -51,7 +51,9 @@ logger = logging.getLogger(__name__)
 
 
 class _HasId(Protocol):
-    id: int
+    # `Any` so ORM rows (whose `id` is typed as Column[int] under the legacy
+    # mapping) satisfy the protocol; at runtime the attribute is the int value.
+    id: Any
 
 
 _T = TypeVar("_T", bound=_HasId)
@@ -139,7 +141,11 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             accessible_doc_set: set[int] = set(collection_doc_ids)
 
             chat_doc_count = 0
-            if membership is not None and membership.is_member:
+            if (
+                membership is not None
+                and membership.is_member
+                and question_context_fragments_request.chat_id is not None
+            ):
                 chat_documents = await self._document_repository.get_documents_by_chat_id(
                     chat_id=int(question_context_fragments_request.chat_id),
                     database_session=database_session,
@@ -211,7 +217,9 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                         extra={"user_id": authenticated_user.id},
                     )
                 else:
-                    bm25_ranked_lists = list(bm25_results)
+                    # No failure in this branch; filter narrows away the BaseException
+                    # arm left by gather(return_exceptions=True).
+                    bm25_ranked_lists = [r for r in bm25_results if not isinstance(r, BaseException)]
                     bm25_used = True
 
             all_ranked_lists = list(semantic_ranked_lists) + bm25_ranked_lists
@@ -230,7 +238,9 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             rerank_applied = False
             if question_context_fragments_request.rerank.enabled and fragments:
                 rerank_query = self._build_rerank_query(question_context_fragments_request)
-                top_n = question_context_fragments_request.rerank.max_fragments
+                # `rerank.enabled` guarantees max_fragments is set (model validator);
+                # fall back to all fragments to keep the type sound either way.
+                top_n = question_context_fragments_request.rerank.max_fragments or len(fragments)
                 indices = await self._reranker_factory.reranker.rerank(
                     query=rerank_query,
                     candidates=[f.content for f in fragments],
@@ -313,8 +323,11 @@ class FragmentQueryService(FragmentQueryServiceInterface):
         )
 
         try:
+            # DocumentId is a NewType over int; the repository layer works in plain
+            # ints, so normalize once at this boundary.
+            requested_ids: list[int] = [int(d) for d in documents_context_fragments_request.document_ids]
             documents = await self._get_documents_by_ids_or_raise(
-                document_ids=documents_context_fragments_request.document_ids,
+                document_ids=requested_ids,
                 database_session=database_session,
             )
             collection_doc_ids = await self._document_collection_catalog_client.fetch_all_accessible_document_ids(
@@ -341,7 +354,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
 
             fragments = await self._retrieve_documents_fragments(
                 database_session=database_session,
-                document_ids=documents_context_fragments_request.document_ids,
+                document_ids=requested_ids,
             )
 
             docs_by_id = {doc.id: doc for doc in documents}

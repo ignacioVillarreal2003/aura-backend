@@ -9,6 +9,8 @@ from app.api.controllers.document import (
     document_download_router,
     document_query_router,
     document_search_router,
+    document_reembed_router,
+    document_reprocess_router,
 )
 from app.api.controllers.graph import (
     graph_context_router,
@@ -57,6 +59,18 @@ router.include_router(
     document_search_router,
     prefix="/document-search",
     tags=["document-search"],
+)
+
+router.include_router(
+    document_reembed_router,
+    prefix="/document-reembed",
+    tags=["document-reembed"],
+)
+
+router.include_router(
+    document_reprocess_router,
+    prefix="/document-reprocess",
+    tags=["document-reprocess"],
 )
 
 router.include_router(

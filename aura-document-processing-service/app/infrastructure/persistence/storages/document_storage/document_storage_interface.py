@@ -38,12 +38,16 @@ class DocumentStorageInterface(ABC):
         pass
 
     @abstractmethod
-    async def download_document_stream(
+    def download_document_stream(
             self,
             object_name: str,
             chunk_size: int,
     ) -> AsyncIterator[bytes]:
-        pass
+        # Async generator: callers iterate with `async for` (no await on the call).
+        # Declared as a plain `def` returning AsyncIterator so the calling convention
+        # matches the async-generator implementation (an `async def` here would type
+        # the call as a Coroutine that must be awaited, which it must not).
+        ...
 
     @abstractmethod
     async def download_document_to_file(

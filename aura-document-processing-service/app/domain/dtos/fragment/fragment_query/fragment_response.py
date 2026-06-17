@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.domain.field_limits import (
@@ -21,9 +21,9 @@ from app.domain.types import DocumentId, FragmentId
 class _Document(BaseModel):
     id: DocumentId = Field(..., gt=0, le=MAX_ID)
     name: str = Field(..., min_length=1, max_length=MAX_NAME_CHARS)
-    description: Optional[str] = Field(default=None, min_length=1, max_length=MAX_DESCRIPTION_CHARS)
-    type: Optional[str] = Field(default=None, max_length=64)
-    category: Optional[str] = Field(default=None, min_length=1, max_length=MAX_CATEGORY_CHARS)
+    description: str | None = Field(default=None, min_length=1, max_length=MAX_DESCRIPTION_CHARS)
+    type: str | None = Field(default=None, max_length=64)
+    category: str | None = Field(default=None, min_length=1, max_length=MAX_CATEGORY_CHARS)
 
     @field_validator("name", mode="after")
     @classmethod
@@ -59,19 +59,19 @@ class FragmentResponse(BaseModel):
     id: FragmentId = Field(..., gt=0, le=MAX_ID)
     content: str = Field(..., min_length=1, max_length=MAX_FRAGMENT_CONTENT_CHARS)
     fragment_index: int = Field(..., ge=0, le=MAX_FRAGMENT_INDEX)
-    summary: Optional[str] = Field(default=None, min_length=1, max_length=MAX_FRAGMENT_SUMMARY_CHARS)
-    entities: Optional[dict[str, object]] = Field(default=None)
-    topics: Optional[list[str]] = Field(default=None, max_length=MAX_TOPICS)
+    summary: str | None = Field(default=None, min_length=1, max_length=MAX_FRAGMENT_SUMMARY_CHARS)
+    entities: dict[str, object] | None = Field(default=None)
+    topics: list[str] | None = Field(default=None, max_length=MAX_TOPICS)
     enrichment_status: str = Field(default="pending", min_length=1, max_length=32)
 
     # Structural provenance (NULL for flat-text fallback fragments). Enables
     # citations such as "page 14, section 3".
-    page_number: Optional[int] = Field(default=None, ge=1)
-    section_path: Optional[str] = Field(default=None)
-    heading: Optional[str] = Field(default=None)
-    char_start: Optional[int] = Field(default=None, ge=0)
-    char_end: Optional[int] = Field(default=None, ge=0)
-    bbox: Optional[dict] = Field(default=None)
+    page_number: int | None = Field(default=None, ge=1)
+    section_path: str | None = Field(default=None)
+    heading: str | None = Field(default=None)
+    char_start: int | None = Field(default=None, ge=0)
+    char_end: int | None = Field(default=None, ge=0)
+    bbox: dict[str, Any] | None = Field(default=None)
 
     document: _Document = Field(...)
 
@@ -87,7 +87,7 @@ class FragmentResponse(BaseModel):
 
     @field_validator("summary", mode="before")
     @classmethod
-    def sanitize_summary(cls, v: object) -> Optional[str]:
+    def sanitize_summary(cls, v: object) -> Any:
         if not isinstance(v, str):
             return v
         summary = v.strip()
@@ -95,7 +95,7 @@ class FragmentResponse(BaseModel):
 
     @field_validator("topics", mode="before")
     @classmethod
-    def sanitize_topics(cls, v: object) -> Optional[list[str]]:
+    def sanitize_topics(cls, v: object) -> Any:
         if not isinstance(v, list):
             return v
         cleaned = [t.strip()[:MAX_TOPIC_CHARS] for t in v if isinstance(t, str) and t.strip()]

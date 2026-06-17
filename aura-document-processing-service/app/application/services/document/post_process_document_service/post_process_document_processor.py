@@ -1,5 +1,6 @@
 import logging
 from typing import Optional
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.services.document.post_process_document_service.interfaces.post_process_document_processor_interface import (
     PostProcessDocumentProcessorInterface,
@@ -25,7 +26,7 @@ from app.infrastructure.persistence.database.repositories.fragment_repository.fr
 logger = logging.getLogger(__name__)
 
 
-def _safe_fragment_index(fragment) -> int:
+def _safe_fragment_index(fragment: Fragment) -> int:
     try:
         return int(fragment.fragment_index)
     except (TypeError, ValueError):
@@ -46,7 +47,10 @@ class PostProcessDocumentProcessor(PostProcessDocumentProcessorInterface):
         self._document_repository = document_repository
         self._fragment_repository = fragment_repository
         self._llm_provider = llm_provider
-        self._llm_settings = llm_provider_settings or LlmProviderSettings()
+        # LlmProviderSettings is a pydantic BaseSettings whose required fields are
+        # populated from the environment at runtime; mypy can't model that (and the
+        # pydantic mypy plugin is incompatible with the pinned mypy here).
+        self._llm_settings = llm_provider_settings or LlmProviderSettings()  # type: ignore[call-arg]
         self._settings = post_process_document_service_settings or PostProcessDocumentServiceSettings()
 
     async def process_document_metadata(
@@ -76,7 +80,7 @@ class PostProcessDocumentProcessor(PostProcessDocumentProcessorInterface):
             authenticated_user=user,
         )
 
-        async def _operation(session):
+        async def _operation(session: AsyncSession) -> None:
             document = await self._document_repository.get_document_by_id(
                 document_id=document_id,
                 database_session=session,

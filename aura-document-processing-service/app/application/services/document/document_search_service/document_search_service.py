@@ -170,7 +170,7 @@ class DocumentSearchService(DocumentSearchServiceInterface):
             document_ids=[hit.document_id for hit in hits],
             database_session=database_session,
         )
-        docs_by_id = {doc.id: doc for doc in documents}
+        docs_by_id = {int(doc.id): doc for doc in documents}
 
         results: list[DocumentSearchResultResponse] = []
         for hit in hits:

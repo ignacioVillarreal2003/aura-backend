@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
+from typing import Any
 from fastapi import FastAPI
 
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
@@ -24,6 +25,10 @@ from app.application.services.document.document_enrichment_service.document_enri
 from app.application.services.document.delete_document_service.delete_document_service import DeleteDocumentService
 from app.application.services.document.document_query_service.document_query_service import DocumentQueryService
 from app.application.services.document.document_search_service.document_search_service import DocumentSearchService
+from app.application.services.document.reembed_document_service.reembed_document_service import ReembedDocumentService
+from app.application.services.document.reprocess_document_service.reprocess_document_service import (
+    ReprocessDocumentService,
+)
 from app.application.services.document.post_process_document_service.post_process_document_processor import (
     PostProcessDocumentProcessor,
 )
@@ -50,6 +55,8 @@ from app.infrastructure.http.llm_provider.llm_provider import LlmProvider
 from app.infrastructure.messaging.rabbitmq.consumer.document_ingestion_consumer import DocumentIngestionConsumer
 from app.infrastructure.messaging.rabbitmq.consumer.document_enrichment_consumer import DocumentEnrichmentConsumer
 from app.infrastructure.messaging.rabbitmq.consumer.document_purge_consumer import DocumentPurgeConsumer
+from app.infrastructure.messaging.rabbitmq.consumer.document_reembed_consumer import DocumentReembedConsumer
+from app.infrastructure.messaging.rabbitmq.consumer.document_reprocess_consumer import DocumentReprocessConsumer
 from app.infrastructure.messaging.rabbitmq.consumer.graph_extraction_consumer import GraphExtractionConsumer
 from app.infrastructure.messaging.rabbitmq.publisher.graph_extraction_publisher import (
     GraphExtractionPublisher,
@@ -59,6 +66,12 @@ from app.infrastructure.messaging.rabbitmq.publisher.document_enrichment_publish
 )
 from app.infrastructure.messaging.rabbitmq.publisher.document_purge_publisher import (
     DocumentPurgePublisher,
+)
+from app.infrastructure.messaging.rabbitmq.publisher.document_reembed_publisher import (
+    DocumentReembedPublisher,
+)
+from app.infrastructure.messaging.rabbitmq.publisher.document_reprocess_publisher import (
+    DocumentReprocessPublisher,
 )
 from app.infrastructure.messaging.rabbitmq.reliable_publish.outbox_lite_worker import OutboxLiteWorker
 from app.infrastructure.messaging.rabbitmq.reliable_publish.redis_outbox_lite import RedisOutboxLite
@@ -100,80 +113,78 @@ logger = logging.getLogger(__name__)
 _CleanupFn = Callable[[], Awaitable[None]]
 
 
-async def _rollback_partial_startup(
-        *,
-        cleanup_stack: list[tuple[str, _CleanupFn]],
-        app: FastAPI,
-) -> None:
-    while cleanup_stack:
-        name, fn = cleanup_stack.pop()
+class DependencyContainer:
+    """Lightweight wiring container for application startup.
+
+    Every component is published through :meth:`register`, which:
+      * stores it on ``app.state`` under the given name (the lookup key the rest of
+        the app uses), and
+      * records the name so :meth:`rollback` can remove *exactly* what was created,
+        without a hand-maintained list, and
+      * optionally records an async teardown callback for resources that must be
+        released on a failed startup.
+
+    Already-registered components are read back as plain attributes
+    (``container.http_client``), so builders can declare their dependencies by name.
+    """
+
+    def __init__(self, app: FastAPI) -> None:
+        self._app = app
+        self._cleanup_stack: list[tuple[str, _CleanupFn]] = []
+        self._state_keys: list[str] = []
+
+    @property
+    def app(self) -> FastAPI:
+        return self._app
+
+    def register(self, name: str, value: Any, *, cleanup: _CleanupFn | None = None) -> Any:
+        setattr(self._app.state, name, value)
+        self._state_keys.append(name)
+        if cleanup is not None:
+            self._cleanup_stack.append((name, cleanup))
+        return value
+
+    def get(self, name: str, default: Any = None) -> Any:
+        return getattr(self._app.state, name, default)
+
+    def __getattr__(self, name: str) -> Any:
+        # Only reached for names that are not real instance/class attributes; resolve
+        # them against the components published on app.state.
+        if name.startswith("_"):
+            raise AttributeError(name)
         try:
-            await fn()
-        except Exception:
-            logger.exception(
-                "Startup rollback: cleanup step failed (continuing with remaining steps).",
-                extra={"resource": name},
-            )
-    to_clear = [
-        "document_purge_consumer",
-        "document_purge_publisher",
-        "graph_ontology_service",
-        "graph_stats_service",
-        "graph_stats_repository",
-        "graph_path_service",
-        "graph_context_service",
-        "graph_entity_service",
-        "graph_query_service",
-        "graph_extraction_service",
-        "graph_extraction_consumer",
-        "graph_extraction_publisher",
-        "graph_path_repository",
-        "graph_relation_repository",
-        "graph_entity_repository",
-        "graph_extraction_job_progress_store",
-        "neo4j_manager",
-        "knowledge_graph_settings",
-        "document_download_service",
-        "create_document_service",
-        "delete_document_service",
-        "document_enrichment_consumer",
-        "document_enrichment_publisher",
-        "document_enrichment_service",
-        "post_process_fragment_processor",
-        "post_process_document_processor",
-        "outbox_lite_worker",
-        "llm_provider",
-        "document_ingestion_consumer",
-        "outbox_lite",
-        "rabbitmq_manager",
-        "redis_client",
-        "document_ingestion_service",
-        "document_search_service",
-        "fragment_query_service",
-        "document_query_service",
-        "text_splitter_factory",
-        "text_cleaner_factory",
-        "reader_factory",
-        "embedder_factory",
-        "chat_membership_provider",
-        "fragment_repository",
-        "document_repository",
-        "authentication_provider",
-        "authentication_provider_settings",
-        "http_client",
-        "document_storage",
-        "minio_manager",
-        "db_manager",
-    ]
-    for key in to_clear:
-        if hasattr(app.state, key):
+            return getattr(self._app.state, name)
+        except AttributeError as e:
+            raise AttributeError(
+                f"Dependency '{name}' has not been registered yet."
+            ) from e
+
+    def mark_started(self) -> None:
+        # Startup succeeded: drop the teardown callbacks so a later error cannot
+        # trigger a rollback of a fully-started app.
+        self._cleanup_stack.clear()
+
+    async def rollback(self) -> None:
+        while self._cleanup_stack:
+            name, fn = self._cleanup_stack.pop()
             try:
-                delattr(app.state, key)
+                await fn()
             except Exception:
-                logger.warning(
-                    "Startup rollback: could not remove app.state attribute.",
-                    extra={"key": key},
+                logger.exception(
+                    "Startup rollback: cleanup step failed (continuing with remaining steps).",
+                    extra={"resource": name},
                 )
+
+        for key in reversed(self._state_keys):
+            if hasattr(self._app.state, key):
+                try:
+                    delattr(self._app.state, key)
+                except Exception:
+                    logger.warning(
+                        "Startup rollback: could not remove app.state attribute.",
+                        extra={"key": key},
+                    )
+        self._state_keys.clear()
 
 
 async def _warmup_reranker(reranker_factory: RerankerFactory) -> None:
@@ -190,292 +201,372 @@ async def _warmup_reranker(reranker_factory: RerankerFactory) -> None:
         )
 
 
+async def _build_persistence(c: DependencyContainer) -> None:
+    database_manager = DatabaseManager()
+    await database_manager.initialize()
+    c.register("db_manager", database_manager, cleanup=database_manager.dispose)
+
+    minio_manager = MinioManager()
+    await minio_manager.start()
+    c.register("minio_manager", minio_manager, cleanup=minio_manager.stop)
+
+    document_storage = DocumentStorage(minio_manager=minio_manager)
+    await document_storage.start()
+    c.register("document_storage", document_storage)
+
+    http_client = HttpClient()
+    await http_client.start()
+    c.register("http_client", http_client, cleanup=http_client.stop)
+
+    redis_client: RedisClientInterface = RedisClient()
+    await redis_client.initialize()
+    c.register("redis_client", redis_client, cleanup=redis_client.dispose)
+
+
+def _build_clients_and_repositories(c: DependencyContainer) -> None:
+    http_client = c.http_client
+    redis_client = c.redis_client
+
+    c.register(
+        "authentication_provider",
+        AuthenticationProvider(
+            http_client=http_client,
+            redis_client=redis_client.client,
+        ),
+    )
+
+    c.register(
+        "document_collection_catalog_client",
+        DocumentCollectionCatalogClient(http_client=http_client),
+    )
+
+    c.register(
+        "chat_membership_provider",
+        ChatMembershipProvider(http_client=http_client),
+    )
+
+    c.register("document_repository", DocumentRepository())
+    c.register("fragment_repository", FragmentRepository())
+
+
+async def _build_processors_and_read_services(c: DependencyContainer) -> None:
+    embedder_factory = EmbedderFactory()
+    await asyncio.to_thread(lambda: embedder_factory.embedder)
+    c.register("embedder_factory", embedder_factory)
+
+    c.register("reader_factory", ReaderFactory())
+
+    text_cleaner_factory = TextCleanerFactory()
+    _ = text_cleaner_factory.cleaner
+    c.register("text_cleaner_factory", text_cleaner_factory)
+
+    text_splitter_factory = TextSplitterFactory()
+    # Warm the flat-text splitter (the classic path / docling_hybrid fallback). The
+    # active type may be docling_hybrid, which is not a flat-text splitter, so warm
+    # the effective classic splitter rather than the active one.
+    await asyncio.to_thread(text_splitter_factory.get_classic_splitter)
+    c.register("text_splitter_factory", text_splitter_factory)
+
+    c.register("structured_chunker_factory", StructuredChunkerFactory())
+
+    c.register(
+        "document_query_service",
+        DocumentQueryService(
+            document_repository=c.document_repository,
+            document_collection_catalog_client=c.document_collection_catalog_client,
+            chat_membership_provider=c.chat_membership_provider,
+        ),
+    )
+
+    reranker_factory = RerankerFactory()
+    c.register("reranker_factory", reranker_factory)
+    c.register(
+        "reranker_warmup_task",
+        asyncio.create_task(_warmup_reranker(reranker_factory)),
+    )
+
+    c.register(
+        "fragment_query_service",
+        FragmentQueryService(
+            document_repository=c.document_repository,
+            fragment_repository=c.fragment_repository,
+            embedder_factory=c.embedder_factory,
+            reranker_factory=reranker_factory,
+            document_collection_catalog_client=c.document_collection_catalog_client,
+            chat_membership_provider=c.chat_membership_provider,
+            database_manager=c.db_manager,
+        ),
+    )
+
+    c.register(
+        "document_search_service",
+        DocumentSearchService(
+            document_repository=c.document_repository,
+            fragment_repository=c.fragment_repository,
+            embedder_factory=c.embedder_factory,
+            document_collection_catalog_client=c.document_collection_catalog_client,
+        ),
+    )
+
+
+async def _build_messaging(c: DependencyContainer) -> None:
+    rabbitmq_manager = RabbitMQManager()
+    await rabbitmq_manager.start()
+    c.register("rabbitmq_manager", rabbitmq_manager, cleanup=rabbitmq_manager.stop)
+
+    outbox_lite = RedisOutboxLite(
+        redis_client=c.redis_client.client,
+        rabbitmq_manager=rabbitmq_manager,
+    )
+    c.register("outbox_lite", outbox_lite)
+
+    c.register(
+        "document_purge_publisher",
+        DocumentPurgePublisher(
+            rabbitmq_manager=rabbitmq_manager,
+            outbox_lite=outbox_lite,
+        ),
+    )
+
+    knowledge_graph_settings = KnowledgeGraphSettings()
+    c.register("knowledge_graph_settings", knowledge_graph_settings)
+
+    if knowledge_graph_settings.enabled:
+        c.register(
+            "graph_extraction_publisher",
+            GraphExtractionPublisher(
+                rabbitmq_manager=rabbitmq_manager,
+                outbox_lite=outbox_lite,
+            ),
+        )
+        logger.info(
+            "Knowledge graph extraction publisher was registered.",
+            extra={"queue": rabbitmq_manager.settings.graph_extraction_queue},
+        )
+
+
+async def _build_document_services(c: DependencyContainer) -> None:
+    rabbitmq_manager = c.rabbitmq_manager
+    outbox_lite = c.outbox_lite
+    database_manager = c.db_manager
+    document_repository = c.document_repository
+    fragment_repository = c.fragment_repository
+
+    c.register("llm_provider", LlmProvider(http_client=c.http_client))
+
+    c.register(
+        "post_process_document_processor",
+        PostProcessDocumentProcessor(
+            database_manager=database_manager,
+            document_repository=document_repository,
+            fragment_repository=fragment_repository,
+            llm_provider=c.llm_provider,
+        ),
+    )
+
+    c.register(
+        "post_process_fragment_processor",
+        PostProcessFragmentProcessor(
+            database_manager=database_manager,
+            fragment_repository=fragment_repository,
+            llm_provider=c.llm_provider,
+        ),
+    )
+
+    c.register(
+        "document_enrichment_service",
+        DocumentEnrichmentService(
+            post_process_document_processor=c.post_process_document_processor,
+            post_process_fragment_processor=c.post_process_fragment_processor,
+            database_manager=database_manager,
+            document_repository=document_repository,
+        ),
+    )
+
+    c.register(
+        "document_enrichment_publisher",
+        DocumentEnrichmentPublisher(
+            rabbitmq_manager=rabbitmq_manager,
+            outbox_lite=outbox_lite,
+        ),
+    )
+
+    c.register(
+        "document_ingestion_service",
+        DocumentIngestionService(
+            database_manager=database_manager,
+            document_repository=document_repository,
+            fragment_repository=fragment_repository,
+            reader_factory=c.reader_factory,
+            text_cleaner_factory=c.text_cleaner_factory,
+            text_splitter_factory=c.text_splitter_factory,
+            embedder_factory=c.embedder_factory,
+            graph_extraction_publisher=c.get("graph_extraction_publisher"),
+            document_enrichment_publisher=c.document_enrichment_publisher,
+            structured_chunker_factory=c.structured_chunker_factory,
+        ),
+    )
+
+    document_ingestion_consumer = DocumentIngestionConsumer(
+        rabbitmq_manager=rabbitmq_manager,
+        document_storage=c.document_storage,
+        database_manager=database_manager,
+        document_repository=document_repository,
+        document_ingestion_service=c.document_ingestion_service,
+        redis_client=c.redis_client.client,
+    )
+    await document_ingestion_consumer.start()
+    c.register("document_ingestion_consumer", document_ingestion_consumer)
+
+    document_enrichment_consumer = DocumentEnrichmentConsumer(
+        rabbitmq_manager=rabbitmq_manager,
+        document_enrichment_service=c.document_enrichment_service,
+    )
+    await document_enrichment_consumer.start()
+    c.register("document_enrichment_consumer", document_enrichment_consumer)
+
+    outbox_lite_worker = OutboxLiteWorker(
+        outbox=outbox_lite,
+        database_manager=database_manager,
+        document_repository=document_repository,
+        rabbitmq_settings=rabbitmq_manager.settings,
+    )
+    await outbox_lite_worker.start()
+    c.register("outbox_lite_worker", outbox_lite_worker, cleanup=outbox_lite_worker.stop)
+
+    c.register(
+        "delete_document_service",
+        DeleteDocumentService(
+            document_repository=document_repository,
+            fragment_repository=fragment_repository,
+            chat_membership_provider=c.chat_membership_provider,
+            document_purge_publisher=c.document_purge_publisher,
+        ),
+    )
+
+    c.register(
+        "create_document_service",
+        CreateDocumentService(
+            document_repository=document_repository,
+            document_storage=c.document_storage,
+            rabbitmq_manager=rabbitmq_manager,
+            outbox_lite=outbox_lite,
+        ),
+    )
+
+    c.register(
+        "document_download_service",
+        DocumentDownloadService(
+            document_repository=document_repository,
+            document_storage=c.document_storage,
+            document_collection_catalog_client=c.document_collection_catalog_client,
+            chat_membership_provider=c.chat_membership_provider,
+        ),
+    )
+
+    await _build_maintenance_pipelines(c)
+
+
+async def _build_maintenance_pipelines(c: DependencyContainer) -> None:
+    # C-4 maintenance flows: re-embed existing fragments with the current model
+    # (model migration) and full reprocess (re-chunk + re-embed) from the stored
+    # object. Both are async (queue + consumer) and reuse the existing pipeline.
+    rabbitmq_manager = c.rabbitmq_manager
+    outbox_lite = c.outbox_lite
+
+    c.register(
+        "document_reembed_publisher",
+        DocumentReembedPublisher(rabbitmq_manager=rabbitmq_manager, outbox_lite=outbox_lite),
+    )
+    c.register(
+        "document_reprocess_publisher",
+        DocumentReprocessPublisher(rabbitmq_manager=rabbitmq_manager, outbox_lite=outbox_lite),
+    )
+
+    c.register(
+        "reembed_document_service",
+        ReembedDocumentService(
+            document_repository=c.document_repository,
+            fragment_repository=c.fragment_repository,
+            embedder_factory=c.embedder_factory,
+            database_manager=c.db_manager,
+        ),
+    )
+    c.register(
+        "reprocess_document_service",
+        ReprocessDocumentService(
+            document_repository=c.document_repository,
+            fragment_repository=c.fragment_repository,
+            document_storage=c.document_storage,
+            document_ingestion_service=c.document_ingestion_service,
+            database_manager=c.db_manager,
+        ),
+    )
+
+    document_reembed_consumer = DocumentReembedConsumer(
+        rabbitmq_manager=rabbitmq_manager,
+        reembed_document_service=c.reembed_document_service,
+        redis_client=c.redis_client.client,
+    )
+    await document_reembed_consumer.start()
+    c.register("document_reembed_consumer", document_reembed_consumer)
+
+    document_reprocess_consumer = DocumentReprocessConsumer(
+        rabbitmq_manager=rabbitmq_manager,
+        reprocess_document_service=c.reprocess_document_service,
+        redis_client=c.redis_client.client,
+    )
+    await document_reprocess_consumer.start()
+    c.register("document_reprocess_consumer", document_reprocess_consumer)
+
+
+async def _build_purge_consumer(c: DependencyContainer) -> None:
+    # Registered after the knowledge-graph wiring so the purge consumer can pick
+    # up the graph repositories when present; it falls back to MinIO-only cleanup
+    # when Neo4j is disabled or unavailable.
+    document_purge_consumer = DocumentPurgeConsumer(
+        rabbitmq_manager=c.rabbitmq_manager,
+        database_manager=c.db_manager,
+        document_repository=c.document_repository,
+        document_storage=c.document_storage,
+        graph_entity_repository=c.get("graph_entity_repository"),
+        graph_relation_repository=c.get("graph_relation_repository"),
+    )
+    await document_purge_consumer.start()
+    c.register("document_purge_consumer", document_purge_consumer)
+
+
 async def startup_dependencies(app: FastAPI) -> None:
-    cleanup_stack: list[tuple[str, _CleanupFn]] = []
+    container = DependencyContainer(app)
     try:
         logger.info("Starting up dependencies")
 
-        database_manager = DatabaseManager()
-        await database_manager.initialize()
-        app.state.db_manager = database_manager
-        cleanup_stack.append(("database_manager", database_manager.dispose))
+        await _build_persistence(container)
+        _build_clients_and_repositories(container)
+        await _build_processors_and_read_services(container)
+        await _build_messaging(container)
+        await _build_document_services(container)
 
-        minio_manager = MinioManager()
-        await minio_manager.start()
-        app.state.minio_manager = minio_manager
-        cleanup_stack.append(("minio_manager", minio_manager.stop))
-
-        document_storage = DocumentStorage(minio_manager=minio_manager)
-        await document_storage.start()
-        app.state.document_storage = document_storage
-
-        http_client = HttpClient()
-        await http_client.start()
-        app.state.http_client = http_client
-        cleanup_stack.append(("http_client", http_client.stop))
-
-        redis_client: RedisClientInterface = RedisClient()
-        await redis_client.initialize()
-        app.state.redis_client = redis_client
-        cleanup_stack.append(("redis_client", redis_client.dispose))
-
-        authentication_provider = AuthenticationProvider(
-            http_client=http_client,
-            redis_client=redis_client.client,
-        )
-        app.state.authentication_provider = authentication_provider
-
-        document_collection_catalog_client = DocumentCollectionCatalogClient(
-            http_client=http_client,
-        )
-        app.state.document_collection_catalog_client = document_collection_catalog_client
-
-        chat_membership_provider = ChatMembershipProvider(
-            http_client=http_client,
-        )
-        app.state.chat_membership_provider = chat_membership_provider
-
-        document_repository: DocumentRepository = DocumentRepository()
-        app.state.document_repository = document_repository
-
-        fragment_repository: FragmentRepository = FragmentRepository()
-        app.state.fragment_repository = fragment_repository
-
-        embedder_factory = EmbedderFactory()
-        await asyncio.to_thread(lambda: embedder_factory.embedder)
-        app.state.embedder_factory = embedder_factory
-
-        reader_factory = ReaderFactory()
-        app.state.reader_factory = reader_factory
-
-        text_cleaner_factory = TextCleanerFactory()
-        _ = text_cleaner_factory.cleaner
-        app.state.text_cleaner_factory = text_cleaner_factory
-
-        text_splitter_factory = TextSplitterFactory()
-        # Warm the flat-text splitter (the classic path / docling_hybrid fallback). The
-        # active type may be docling_hybrid, which is not a flat-text splitter, so warm
-        # the effective classic splitter rather than the active one.
-        await asyncio.to_thread(text_splitter_factory.get_classic_splitter)
-        app.state.text_splitter_factory = text_splitter_factory
-
-        structured_chunker_factory = StructuredChunkerFactory()
-        app.state.structured_chunker_factory = structured_chunker_factory
-
-        document_query_service = DocumentQueryService(
-            document_repository=document_repository,
-            document_collection_catalog_client=document_collection_catalog_client,
-            chat_membership_provider=chat_membership_provider,
-        )
-        app.state.document_query_service = document_query_service
-
-        reranker_factory = RerankerFactory()
-        app.state.reranker_factory = reranker_factory
-        app.state.reranker_warmup_task = asyncio.create_task(
-            _warmup_reranker(reranker_factory)
-        )
-
-        fragment_query_service = FragmentQueryService(
-            document_repository=document_repository,
-            fragment_repository=fragment_repository,
-            embedder_factory=embedder_factory,
-            reranker_factory=reranker_factory,
-            document_collection_catalog_client=document_collection_catalog_client,
-            chat_membership_provider=chat_membership_provider,
-            database_manager=database_manager,
-        )
-        app.state.fragment_query_service = fragment_query_service
-
-        document_search_service = DocumentSearchService(
-            document_repository=document_repository,
-            fragment_repository=fragment_repository,
-            embedder_factory=embedder_factory,
-            document_collection_catalog_client=document_collection_catalog_client,
-        )
-        app.state.document_search_service = document_search_service
-
-        rabbitmq_manager = RabbitMQManager()
-        await rabbitmq_manager.start()
-        app.state.rabbitmq_manager = rabbitmq_manager
-        cleanup_stack.append(("rabbitmq_manager", rabbitmq_manager.stop))
-
-        outbox_lite = RedisOutboxLite(
-            redis_client=redis_client.client,
-            rabbitmq_manager=rabbitmq_manager,
-        )
-        app.state.outbox_lite = outbox_lite
-
-        document_purge_publisher = DocumentPurgePublisher(
-            rabbitmq_manager=rabbitmq_manager,
-            outbox_lite=outbox_lite,
-        )
-        app.state.document_purge_publisher = document_purge_publisher
-
-        knowledge_graph_settings = KnowledgeGraphSettings()
-        app.state.knowledge_graph_settings = knowledge_graph_settings
-
-        graph_extraction_publisher = None
+        knowledge_graph_settings = container.knowledge_graph_settings
         if knowledge_graph_settings.enabled:
-            graph_extraction_publisher = GraphExtractionPublisher(
-                rabbitmq_manager=rabbitmq_manager,
-                outbox_lite=outbox_lite,
-            )
-            app.state.graph_extraction_publisher = graph_extraction_publisher
-            logger.info(
-                "Knowledge graph extraction publisher was registered.",
-                extra={"queue": rabbitmq_manager.settings.graph_extraction_queue},
-            )
-
-        llm_provider = LlmProvider(http_client=http_client)
-        app.state.llm_provider = llm_provider
-
-        post_process_document_processor = PostProcessDocumentProcessor(
-            database_manager=database_manager,
-            document_repository=document_repository,
-            fragment_repository=fragment_repository,
-            llm_provider=llm_provider,
-        )
-        app.state.post_process_document_processor = post_process_document_processor
-
-        post_process_fragment_processor = PostProcessFragmentProcessor(
-            database_manager=database_manager,
-            fragment_repository=fragment_repository,
-            llm_provider=llm_provider,
-        )
-        app.state.post_process_fragment_processor = post_process_fragment_processor
-
-        document_enrichment_service = DocumentEnrichmentService(
-            post_process_document_processor=post_process_document_processor,
-            post_process_fragment_processor=post_process_fragment_processor,
-            database_manager=database_manager,
-            document_repository=document_repository,
-        )
-        app.state.document_enrichment_service = document_enrichment_service
-
-        document_enrichment_publisher = DocumentEnrichmentPublisher(
-            rabbitmq_manager=rabbitmq_manager,
-            outbox_lite=outbox_lite,
-        )
-        app.state.document_enrichment_publisher = document_enrichment_publisher
-
-        document_ingestion_service = DocumentIngestionService(
-            database_manager=database_manager,
-            document_repository=document_repository,
-            fragment_repository=fragment_repository,
-            reader_factory=reader_factory,
-            text_cleaner_factory=text_cleaner_factory,
-            text_splitter_factory=text_splitter_factory,
-            embedder_factory=embedder_factory,
-            graph_extraction_publisher=graph_extraction_publisher,
-            document_enrichment_publisher=document_enrichment_publisher,
-            structured_chunker_factory=structured_chunker_factory,
-        )
-        app.state.document_ingestion_service = document_ingestion_service
-
-        document_ingestion_consumer = DocumentIngestionConsumer(
-            rabbitmq_manager=rabbitmq_manager,
-            document_storage=document_storage,
-            database_manager=database_manager,
-            document_repository=document_repository,
-            document_ingestion_service=document_ingestion_service,
-            redis_client=redis_client.client,
-        )
-        await document_ingestion_consumer.start()
-        app.state.document_ingestion_consumer = document_ingestion_consumer
-
-        document_enrichment_consumer = DocumentEnrichmentConsumer(
-            rabbitmq_manager=rabbitmq_manager,
-            document_enrichment_service=document_enrichment_service,
-        )
-        await document_enrichment_consumer.start()
-        app.state.document_enrichment_consumer = document_enrichment_consumer
-
-        outbox_lite_worker = OutboxLiteWorker(
-            outbox=outbox_lite,
-            database_manager=database_manager,
-            document_repository=document_repository,
-            rabbitmq_settings=rabbitmq_manager.settings,
-        )
-        await outbox_lite_worker.start()
-        app.state.outbox_lite_worker = outbox_lite_worker
-        cleanup_stack.append(("outbox_lite_worker", outbox_lite_worker.stop))
-
-        delete_document_service = DeleteDocumentService(
-            document_repository=document_repository,
-            fragment_repository=fragment_repository,
-            chat_membership_provider=chat_membership_provider,
-            document_purge_publisher=document_purge_publisher,
-        )
-        app.state.delete_document_service = delete_document_service
-
-        create_document_service = CreateDocumentService(
-            document_repository=document_repository,
-            document_storage=document_storage,
-            rabbitmq_manager=rabbitmq_manager,
-            outbox_lite=outbox_lite,
-        )
-        app.state.create_document_service = create_document_service
-
-        document_download_service = DocumentDownloadService(
-            document_repository=document_repository,
-            document_storage=document_storage,
-            document_collection_catalog_client=document_collection_catalog_client,
-            chat_membership_provider=chat_membership_provider,
-        )
-        app.state.document_download_service = document_download_service
-
-        if knowledge_graph_settings.enabled:
-            await _wire_knowledge_graph_module(
-                app=app,
-                cleanup_stack=cleanup_stack,
-                knowledge_graph_settings=knowledge_graph_settings,
-                rabbitmq_manager=rabbitmq_manager,
-                redis_client=redis_client,
-                database_manager=database_manager,
-                document_repository=document_repository,
-                fragment_repository=fragment_repository,
-                document_collection_catalog_client=document_collection_catalog_client,
-                llm_provider=llm_provider,
-            )
+            await _wire_knowledge_graph_module(container)
         else:
             logger.info("Knowledge graph module is disabled (KNOWLEDGE_GRAPH_ENABLED=false); skipping Neo4j bootstrap.")
 
-        # Registered after the knowledge-graph wiring so the purge consumer can pick
-        # up the graph repositories when present; it falls back to MinIO-only cleanup
-        # when Neo4j is disabled or unavailable.
-        document_purge_consumer = DocumentPurgeConsumer(
-            rabbitmq_manager=rabbitmq_manager,
-            database_manager=database_manager,
-            document_repository=document_repository,
-            document_storage=document_storage,
-            graph_entity_repository=getattr(app.state, "graph_entity_repository", None),
-            graph_relation_repository=getattr(app.state, "graph_relation_repository", None),
-        )
-        await document_purge_consumer.start()
-        app.state.document_purge_consumer = document_purge_consumer
+        await _build_purge_consumer(container)
 
         logger.info("All dependencies started successfully")
-        cleanup_stack.clear()
+        container.mark_started()
 
     except Exception:
         logger.critical("Error during dependency starting up; rolling back started resources in reverse order.")
-        await _rollback_partial_startup(cleanup_stack=cleanup_stack, app=app)
+        await container.rollback()
         raise
 
 
-async def _wire_knowledge_graph_module(
-        *,
-        app: FastAPI,
-        cleanup_stack: list[tuple[str, _CleanupFn]],
-        knowledge_graph_settings: KnowledgeGraphSettings,
-        rabbitmq_manager: RabbitMQManager,
-        redis_client: RedisClientInterface,
-        database_manager: DatabaseManager,
-        document_repository: DocumentRepository,
-        fragment_repository: FragmentRepository,
-        document_collection_catalog_client: DocumentCollectionCatalogClient,
-        llm_provider: LlmProvider,
-) -> None:
+async def _wire_knowledge_graph_module(c: DependencyContainer) -> None:
+    knowledge_graph_settings = c.knowledge_graph_settings
+
     logger.info(
         "Bootstrapping the knowledge graph module.",
         extra={
@@ -492,90 +583,99 @@ async def _wire_knowledge_graph_module(
             extra={"uri": neo4j_manager.settings.uri_safe},
         )
         return
-    app.state.neo4j_manager = neo4j_manager
-    cleanup_stack.append(("neo4j_manager", neo4j_manager.dispose))
+    c.register("neo4j_manager", neo4j_manager, cleanup=neo4j_manager.dispose)
 
-    graph_entity_repository = GraphEntityRepository(neo4j_manager=neo4j_manager)
-    app.state.graph_entity_repository = graph_entity_repository
+    c.register("graph_entity_repository", GraphEntityRepository(neo4j_manager=neo4j_manager))
 
-    graph_relation_repository = GraphRelationRepository(
-        neo4j_manager=neo4j_manager,
-        max_depth=knowledge_graph_settings.query_max_neighbor_depth,
+    c.register(
+        "graph_relation_repository",
+        GraphRelationRepository(
+            neo4j_manager=neo4j_manager,
+            max_depth=knowledge_graph_settings.query_max_neighbor_depth,
+        ),
     )
-    app.state.graph_relation_repository = graph_relation_repository
 
-    graph_path_repository = GraphPathRepository(neo4j_manager=neo4j_manager)
-    app.state.graph_path_repository = graph_path_repository
+    c.register("graph_path_repository", GraphPathRepository(neo4j_manager=neo4j_manager))
 
-    graph_extraction_job_progress_store = GraphExtractionJobProgressStore(
-        redis_client=redis_client.client,
-        lock_ttl_seconds=knowledge_graph_settings.extraction_lock_ttl_seconds,
-        snapshot_ttl_seconds=knowledge_graph_settings.extraction_snapshot_ttl_seconds,
+    c.register(
+        "graph_extraction_job_progress_store",
+        GraphExtractionJobProgressStore(
+            redis_client=c.redis_client.client,
+            lock_ttl_seconds=knowledge_graph_settings.extraction_lock_ttl_seconds,
+            snapshot_ttl_seconds=knowledge_graph_settings.extraction_snapshot_ttl_seconds,
+        ),
     )
-    app.state.graph_extraction_job_progress_store = graph_extraction_job_progress_store
 
-    graph_extraction_service = GraphExtractionService(
-        database_manager=database_manager,
-        document_repository=document_repository,
-        fragment_repository=fragment_repository,
-        llm_provider=llm_provider,
-        entity_repository=graph_entity_repository,
-        relation_repository=graph_relation_repository,
-        job_progress_store=graph_extraction_job_progress_store,
-        knowledge_graph_settings=knowledge_graph_settings,
+    c.register(
+        "graph_extraction_service",
+        GraphExtractionService(
+            database_manager=c.db_manager,
+            document_repository=c.document_repository,
+            fragment_repository=c.fragment_repository,
+            llm_provider=c.llm_provider,
+            entity_repository=c.graph_entity_repository,
+            relation_repository=c.graph_relation_repository,
+            job_progress_store=c.graph_extraction_job_progress_store,
+            knowledge_graph_settings=knowledge_graph_settings,
+        ),
     )
-    app.state.graph_extraction_service = graph_extraction_service
 
     graph_extraction_consumer = GraphExtractionConsumer(
-        rabbitmq_manager=rabbitmq_manager,
-        graph_extraction_service=graph_extraction_service,
+        rabbitmq_manager=c.rabbitmq_manager,
+        graph_extraction_service=c.graph_extraction_service,
     )
     await graph_extraction_consumer.start()
-    app.state.graph_extraction_consumer = graph_extraction_consumer
+    c.register("graph_extraction_consumer", graph_extraction_consumer)
 
-    graph_query_service = GraphQueryService(
-        llm_provider=llm_provider,
-        entity_repository=graph_entity_repository,
-        relation_repository=graph_relation_repository,
-        path_repository=graph_path_repository,
-        document_collection_catalog_client=document_collection_catalog_client,
-        knowledge_graph_settings=knowledge_graph_settings,
+    c.register(
+        "graph_query_service",
+        GraphQueryService(
+            llm_provider=c.llm_provider,
+            entity_repository=c.graph_entity_repository,
+            relation_repository=c.graph_relation_repository,
+            path_repository=c.graph_path_repository,
+            document_collection_catalog_client=c.document_collection_catalog_client,
+            knowledge_graph_settings=knowledge_graph_settings,
+        ),
     )
-    app.state.graph_query_service = graph_query_service
 
-    graph_entity_service = GraphEntityService(
-        entity_repository=graph_entity_repository,
-        relation_repository=graph_relation_repository,
-        document_collection_catalog_client=document_collection_catalog_client,
-        knowledge_graph_settings=knowledge_graph_settings,
+    c.register(
+        "graph_entity_service",
+        GraphEntityService(
+            entity_repository=c.graph_entity_repository,
+            relation_repository=c.graph_relation_repository,
+            document_collection_catalog_client=c.document_collection_catalog_client,
+            knowledge_graph_settings=knowledge_graph_settings,
+        ),
     )
-    app.state.graph_entity_service = graph_entity_service
 
-    graph_context_service = GraphContextService(
-        entity_repository=graph_entity_repository,
-        relation_repository=graph_relation_repository,
-        document_collection_catalog_client=document_collection_catalog_client,
-        knowledge_graph_settings=knowledge_graph_settings,
+    c.register(
+        "graph_context_service",
+        GraphContextService(
+            entity_repository=c.graph_entity_repository,
+            relation_repository=c.graph_relation_repository,
+            document_collection_catalog_client=c.document_collection_catalog_client,
+            knowledge_graph_settings=knowledge_graph_settings,
+        ),
     )
-    app.state.graph_context_service = graph_context_service
 
-    graph_path_service = GraphPathService(
-        path_repository=graph_path_repository,
-        document_collection_catalog_client=document_collection_catalog_client,
-        knowledge_graph_settings=knowledge_graph_settings,
+    c.register(
+        "graph_path_service",
+        GraphPathService(
+            path_repository=c.graph_path_repository,
+            document_collection_catalog_client=c.document_collection_catalog_client,
+            knowledge_graph_settings=knowledge_graph_settings,
+        ),
     )
-    app.state.graph_path_service = graph_path_service
 
-    graph_stats_repository = GraphStatsRepository(neo4j_manager=neo4j_manager)
-    app.state.graph_stats_repository = graph_stats_repository
+    c.register("graph_stats_repository", GraphStatsRepository(neo4j_manager=neo4j_manager))
 
-    graph_stats_service = GraphStatsService(
-        stats_repository=graph_stats_repository,
+    c.register(
+        "graph_stats_service",
+        GraphStatsService(stats_repository=c.graph_stats_repository),
     )
-    app.state.graph_stats_service = graph_stats_service
 
-    graph_ontology_service = GraphOntologyService()
-    app.state.graph_ontology_service = graph_ontology_service
+    c.register("graph_ontology_service", GraphOntologyService())
 
     logger.info("The knowledge graph module was bootstrapped successfully.")
 

@@ -2,12 +2,12 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.services.graph.graph_extraction_service.exceptions.graph_extraction_service_exception import (
     GraphExtractionAlreadyRunningException,
     GraphExtractionDocumentNotFoundException,
-    GraphExtractionServiceException,
 )
 from app.application.services.graph.graph_extraction_service.interfaces.graph_extraction_service_interface import (
     GraphExtractionServiceInterface,
@@ -139,7 +139,7 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             status: ProcessingStatus,
     ) -> None:
         try:
-            async def _operation(session):
+            async def _operation(session: AsyncSession) -> None:
                 document = await self._document_repository.get_document_by_id(
                     document_id=document_id,
                     database_session=session,
@@ -435,7 +435,7 @@ class GraphExtractionService(GraphExtractionServiceInterface):
 
         def add_entity(
                 name: str,
-                entity_type,
+                entity_type: Any,
                 aliases: list[str],
                 description: Optional[str],
         ) -> Optional[str]:

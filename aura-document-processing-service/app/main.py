@@ -14,6 +14,7 @@ from app.configuration.environment_variables import environment_variables
 from app.configuration.logging_configuration import configure_logging
 from app.configuration.middlewares.authentication_middleware import add_authentication_middleware
 from app.configuration.middlewares.logging_middleware import add_logging_middleware
+from app.configuration.production_invariants import assert_production_invariants
 
 _root_log_level = getattr(
     logging,
@@ -50,6 +51,9 @@ async def lifespan(
 
 
 def create_app() -> FastAPI:
+    # Fail fast before any resource is wired if the production configuration is unsafe.
+    assert_production_invariants()
+
     app = FastAPI(
         title=environment_variables.app_name,
         version=environment_variables.app_version,

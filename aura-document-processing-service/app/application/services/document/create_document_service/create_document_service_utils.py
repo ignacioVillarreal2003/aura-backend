@@ -24,6 +24,9 @@ class CreateDocumentServiceUtils:
             raw_document: UploadFile
     ) -> DocumentMimeType:
         content_type = raw_document.content_type
+        if not content_type:
+            raise CreateDocumentUnsupportedTypeException("This content type is not supported.")
+
         doc_type_str = self._settings.get_document_type(content_type)
 
         if not doc_type_str:

@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
-from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator, Awaitable, Callable, TypeVar
+from contextlib import AbstractAsyncContextManager
+from typing import Any, Awaitable, Callable, TypeVar
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.persistence.database.database_manager.database_manager_settings import DatabaseManagerSettings
@@ -36,11 +36,10 @@ class DatabaseManagerInterface(ABC):
         pass
 
     @abstractmethod
-    @asynccontextmanager
-    async def session(
+    def session(
             self
-    ) -> AsyncIterator[AsyncSession]:
-        pass
+    ) -> AbstractAsyncContextManager[AsyncSession]:
+        ...
 
     @abstractmethod
     async def health_check(

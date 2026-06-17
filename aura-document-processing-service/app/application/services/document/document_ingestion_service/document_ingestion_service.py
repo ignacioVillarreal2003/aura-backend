@@ -2,8 +2,9 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 import asyncio
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
 from app.application.processors.readers.reader_factory import ReaderFactory
@@ -191,7 +192,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             self,
             document: Document,
             local_file_path: Path,
-            chunker,
+            chunker: Any,
     ) -> _ChunkingOutcome:
         chunks: list[DocumentChunk] = await asyncio.to_thread(chunker.chunk_file, local_file_path)
 
@@ -345,11 +346,18 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
     ) -> list[Fragment]:
         now = datetime.now(timezone.utc)
 
+        # Record which model/dimension produced these vectors so they can be audited
+        # and selectively re-embedded when the embedding model changes.
+        embedding_model = self._embedder_factory.get_active_model_name()
+        embedding_dim = self._embedder_factory.get_vector_dimension()
+
         fragments = [
             Fragment(
                 document_id=document.id,
                 content=chunk.text,
                 vector=embedding,
+                embedding_model=embedding_model,
+                embedding_dim=embedding_dim,
                 fragment_index=idx,
                 page_number=chunk.page_number,
                 section_path=chunk.section_path,
@@ -379,7 +387,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             outcome: "_ChunkingOutcome",
     ) -> None:
         try:
-            async def _operation(database_session):
+            async def _operation(database_session: AsyncSession) -> None:
                 await self._fragment_repository.create_fragments(
                     fragments=fragments,
                     database_session=database_session
@@ -429,7 +437,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             document: Document
     ) -> None:
         try:
-            async def _operation(database_session):
+            async def _operation(database_session: AsyncSession) -> None:
                 db_document = await self._document_repository.get_document_by_id(
                     document_id=document.id,
                     database_session=database_session

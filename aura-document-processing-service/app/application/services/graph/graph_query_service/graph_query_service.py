@@ -316,14 +316,14 @@ class GraphQueryService(GraphQueryServiceInterface):
                     seen_rels: set[tuple[str, str, str]] = set()
                     for path in paths:
                         for node in path.nodes:
-                            key = (node.canonical_name, node.type.value)
-                            if key not in seen_nodes:
-                                seen_nodes.add(key)
+                            node_key = (node.canonical_name, node.type.value)
+                            if node_key not in seen_nodes:
+                                seen_nodes.add(node_key)
                                 path_nodes.append(node)
                         for rel in path.relations:
-                            key = (rel.source.canonical_name, rel.target.canonical_name, rel.type)
-                            if key not in seen_rels:
-                                seen_rels.add(key)
+                            rel_key = (rel.source.canonical_name, rel.target.canonical_name, rel.type)
+                            if rel_key not in seen_rels:
+                                seen_rels.add(rel_key)
                                 path_rels.append(rel)
                     return path_nodes, path_rels
             except Exception:
@@ -362,7 +362,7 @@ class GraphQueryService(GraphQueryServiceInterface):
             accessible_ids: list[int],
             max_results: int,
     ) -> tuple[list[GraphEntityResponse], list[GraphRelationResponse]]:
-        raw = params.get("document_id")
+        raw: Any = params.get("document_id")
         try:
             document_id = int(raw)
             if document_id <= 0:

@@ -1,4 +1,3 @@
-from typing import Optional
 from pydantic import BaseModel, Field, model_validator, field_validator
 
 from app.domain.field_limits import (
@@ -36,7 +35,7 @@ class _BM25Query(_BaseQuery):
 
 class _RerankConfig(BaseModel):
     enabled: bool = False
-    max_fragments: Optional[int] = Field(default=None, ge=1, le=MAX_TOTAL_FRAGMENTS)
+    max_fragments: int | None = Field(default=None, ge=1, le=MAX_TOTAL_FRAGMENTS)
 
     @model_validator(mode="after")
     def validate_rerank_consistency(self) -> "_RerankConfig":
@@ -52,7 +51,7 @@ class _RerankConfig(BaseModel):
 
 
 class QuestionContextFragmentsRequest(BaseModel):
-    chat_id: Optional[ChatId] = Field(default=None, gt=0, le=MAX_ID)
+    chat_id: ChatId | None = Field(default=None, gt=0, le=MAX_ID)
 
     semantic_queries: list[_SemanticQuery] = Field(
         default_factory=list,
@@ -83,9 +82,12 @@ class QuestionContextFragmentsRequest(BaseModel):
                     + sum(q.max_fragments for q in self.bm25_queries)
             )
 
-            if self.rerank.max_fragments > pool:
+            # `validate_rerank_consistency` on _RerankConfig guarantees max_fragments
+            # is set whenever rerank is enabled; the None guard keeps mypy sound.
+            rerank_max = self.rerank.max_fragments
+            if rerank_max is not None and rerank_max > pool:
                 raise ValueError(
-                    f"rerank.max_fragments ({self.rerank.max_fragments}) "
+                    f"rerank.max_fragments ({rerank_max}) "
                     f"cannot exceed total retrieved fragments ({pool})."
                 )
 

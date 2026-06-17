@@ -63,6 +63,10 @@ class RabbitMQManagerSettings(BaseSettings):
     graph_extraction_queue: str = Field(default="graph.extraction")
     document_enrichment_queue: str = Field(default="document.enrichment")
     document_purge_queue: str = Field(default="document.purge")
+    # Maintenance pipelines (C-4): re-embed existing fragments with the current model
+    # (model migration) and full reprocess (re-chunk + re-embed) from the stored object.
+    document_reembed_queue: str = Field(default="document.reembed")
+    document_reprocess_queue: str = Field(default="document.reprocess")
 
     document_ingestion_lock_ttl_seconds: int = Field(default=1800, ge=60, le=86400)
     document_ingestion_lock_key_prefix: str = Field(default="aura:ingestion", max_length=128)
@@ -96,6 +100,8 @@ class RabbitMQManagerSettings(BaseSettings):
         "graph_extraction_queue",
         "document_enrichment_queue",
         "document_purge_queue",
+        "document_reembed_queue",
+        "document_reprocess_queue",
         "dlx_exchange",
         "dlq_queue",
         mode="before"

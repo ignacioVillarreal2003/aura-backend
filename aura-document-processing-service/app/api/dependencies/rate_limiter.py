@@ -1,6 +1,6 @@
 import time
 import uuid
-from typing import Callable, Optional
+from collections.abc import Awaitable, Callable
 from fastapi import HTTPException, Request, status
 
 from app.infrastructure.persistence.memory_database.redis_client.interfaces.redis_client_interface import (
@@ -39,7 +39,7 @@ return {1, 0}
 
 
 async def _check_rate_limit(request: Request, limit: int) -> None:
-    redis_client: Optional[RedisClientInterface] = getattr(request.app.state, "redis_client", None)
+    redis_client: RedisClientInterface | None = getattr(request.app.state, "redis_client", None)
     if redis_client is None:
         return
 
@@ -70,7 +70,7 @@ async def _check_rate_limit(request: Request, limit: int) -> None:
         )
 
 
-def make_rate_limiter(limit: int) -> Callable:
+def make_rate_limiter(limit: int) -> Callable[[Request], Awaitable[None]]:
     async def _limiter(request: Request) -> None:
         await _check_rate_limit(request, limit=limit)
 
