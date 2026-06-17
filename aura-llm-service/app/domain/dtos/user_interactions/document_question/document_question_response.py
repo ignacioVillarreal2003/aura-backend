@@ -11,6 +11,13 @@ class DocumentQuestionResponse(BaseModel):
     answer: str = Field(..., min_length=1, max_length=MAX_CONTENT_CHARS)
     messages: list[Message] = Field(..., min_length=1, max_length=MAX_MESSAGES_IN_REQUEST)
     fragments: list[FragmentResponse] = Field(default_factory=list)
+    degraded_stages: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Etapas del pipeline de contexto que se degradaron (una dependencia falló y se "
+            "continuó sin ella). Si no está vacío, la respuesta puede ser parcial."
+        ),
+    )
 
     @field_validator("question")
     @classmethod

@@ -11,7 +11,8 @@ class GenerationState:
     authenticated_user: AuthenticatedUser
     messages: list[Message]
     chat_id: int
-    is_rag: bool = False
+    retrieve_context: bool = False
+    process_documents: bool = False
     document_ids: list[int] = field(default_factory=list)
 
     attached_fragments: list[FragmentResponse] = field(default_factory=list)
@@ -23,20 +24,27 @@ class GenerationState:
 
     reduced_context: Optional[str] = None
 
+    reformulation_degraded: bool = False
+    retrieval_degraded: bool = False
+    reduction_degraded: bool = False
+    attached_degraded: bool = False
+
     @classmethod
     def create(
             cls,
             messages: list[Message],
             chat_id: int,
-            is_rag: bool,
             authenticated_user: AuthenticatedUser,
             document_ids: Optional[list[int]] = None,
+            retrieve_context: bool = False,
+            process_documents: bool = False,
     ) -> "GenerationState":
         return cls(
             authenticated_user=authenticated_user,
             messages=list(messages),
             chat_id=chat_id,
-            is_rag=is_rag,
+            retrieve_context=retrieve_context,
+            process_documents=process_documents,
             document_ids=list(document_ids or []),
         )
 

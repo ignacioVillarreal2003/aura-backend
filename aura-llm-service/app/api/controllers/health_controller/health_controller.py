@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
@@ -6,6 +7,11 @@ from app.api.controllers.health_controller.health_controller_interface import He
 from app.api.openapi.common import ErrorBodyApp
 
 logger = logging.getLogger(__name__)
+
+# Upper bound for each awaited dependency check so a single slow/hung dependency
+# (e.g. a Redis ping that never returns) cannot stall the readiness probe and
+# flap the pod out of rotation. Kept small: readiness must stay cheap.
+_DEPENDENCY_CHECK_TIMEOUT_SECONDS = 2.0
 
 
 class HealthController(HealthControllerInterface):
@@ -19,11 +25,14 @@ class HealthController(HealthControllerInterface):
         http_client = getattr(request.app.state, "http_client", None)
         if http_client is not None:
             try:
-                result = await http_client.health_check()
+                result = await asyncio.wait_for(
+                    http_client.health_check(),
+                    timeout=_DEPENDENCY_CHECK_TIMEOUT_SECONDS,
+                )
                 checks["http_client"] = result
                 if result.get("status") not in ("healthy", "degraded"):
                     overall_ok = False
-            except Exception as exc:
+            except (Exception, asyncio.TimeoutError) as exc:
                 logger.warning("HTTP client health check failed", exc_info=exc)
                 checks["http_client"] = {"status": "error"}
                 overall_ok = False
@@ -53,11 +62,14 @@ class HealthController(HealthControllerInterface):
         redis_client = getattr(request.app.state, "redis_client", None)
         if redis_client is not None:
             try:
-                redis_ok = await redis_client.health_check()
+                redis_ok = await asyncio.wait_for(
+                    redis_client.health_check(),
+                    timeout=_DEPENDENCY_CHECK_TIMEOUT_SECONDS,
+                )
                 checks["redis"] = {"status": "ok" if redis_ok else "error"}
                 if not redis_ok:
                     overall_ok = False
-            except Exception as exc:
+            except (Exception, asyncio.TimeoutError) as exc:
                 logger.warning("Redis health check failed", exc_info=exc)
                 checks["redis"] = {"status": "error"}
                 overall_ok = False

@@ -41,7 +41,6 @@ _MESSAGES = [
 ]
 
 _BASE_BODY = {
-    "mode": "direct",
     "messages": [{"role": "human", "content": "Genera el contenido solicitado."}],
     "chat_id": 1,
 }
@@ -210,11 +209,6 @@ class TestAuth:
 class TestValidation:
     def test_empty_body_returns_422(self, client, auth_headers, case, mocked_service):
         response = client.post(case.url, json={}, headers=auth_headers)
-        assert response.status_code == 422
-
-    def test_invalid_mode_returns_422(self, client, auth_headers, case, mocked_service):
-        body = {**case.valid_body, "mode": "invalid-mode"}
-        response = client.post(case.url, json=body, headers=auth_headers)
         assert response.status_code == 422
 
     def test_last_message_not_human_returns_422(self, client, auth_headers, case, mocked_service):

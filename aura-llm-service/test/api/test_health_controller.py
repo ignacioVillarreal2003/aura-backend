@@ -104,6 +104,48 @@ class TestReadinessEndpoint:
             elif hasattr(app.state, "redis_client"):
                 delattr(app.state, "redis_client")
 
+    def test_degraded_when_redis_unhealthy(self, app, client):
+        mock_redis = MagicMock()
+        mock_redis.health_check = AsyncMock(return_value=False)
+        original = getattr(app.state, "redis_client", None)
+        app.state.redis_client = mock_redis
+        try:
+            response = client.get(READY_URL)
+            assert response.status_code == 503
+            assert response.json()["checks"]["redis"]["status"] == "error"
+        finally:
+            if original is not None:
+                app.state.redis_client = original
+            elif hasattr(app.state, "redis_client"):
+                delattr(app.state, "redis_client")
+
+    def test_degraded_when_redis_check_times_out(self, app, client, monkeypatch):
+        # A dependency check that hangs must not stall the probe: the per-dependency
+        # timeout converts it into a fast 503 instead of blocking.
+        import asyncio
+
+        from app.api.controllers.health_controller import health_controller as hc
+
+        monkeypatch.setattr(hc, "_DEPENDENCY_CHECK_TIMEOUT_SECONDS", 0.05)
+
+        async def _never_returns():
+            await asyncio.sleep(60)
+            return True
+
+        mock_redis = MagicMock()
+        mock_redis.health_check = _never_returns
+        original = getattr(app.state, "redis_client", None)
+        app.state.redis_client = mock_redis
+        try:
+            response = client.get(READY_URL)
+            assert response.status_code == 503
+            assert response.json()["checks"]["redis"]["status"] == "error"
+        finally:
+            if original is not None:
+                app.state.redis_client = original
+            elif hasattr(app.state, "redis_client"):
+                delattr(app.state, "redis_client")
+
     def test_response_includes_checks_field(self, client):
         response = client.get(READY_URL)
         assert "checks" in response.json()

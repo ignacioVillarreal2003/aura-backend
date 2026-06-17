@@ -1,8 +1,7 @@
 import logging
-from collections.abc import Awaitable, Callable
-from typing import Any
 from fastapi import FastAPI
 
+from app.configuration.dependency_registry import DependencyRegistry
 from app.application.services.user_interactions.document_action_service.document_action_service import \
     DocumentActionService
 from app.application.services.user_interactions.document_summary_service.document_summary_service import \
@@ -26,6 +25,8 @@ from app.application.services.user_interactions.lessons_learned_service.lessons_
     LessonsLearnedService
 from app.application.services.user_interactions.decision_brief_service.decision_brief_service import \
     DecisionBriefService
+from app.application.services.generation_shared.generation_settings import GenerationSettings
+from app.configuration.context_budget import validate_context_budget
 from app.infrastructure.guardrails.nemo_guardrails_service import NemoGuardrailsService
 from app.infrastructure.http.authentication_provider.authentication_provider import AuthenticationProvider
 from app.infrastructure.http.document_context_provider.document_context_provider import DocumentContextProvider
@@ -40,44 +41,9 @@ from app.infrastructure.llm.ollama_llm.ollama_llm_streaming_invoker import Ollam
 
 logger = logging.getLogger(__name__)
 
-_CleanupFn = Callable[[], Awaitable[None]]
-
-
-class _DependencyRegistry:
-    def __init__(self, app: FastAPI) -> None:
-        self._app = app
-        self._registered: list[str] = []
-        self._cleanups: list[tuple[str, _CleanupFn]] = []
-
-    def register(self, name: str, instance: Any, cleanup: _CleanupFn | None = None) -> None:
-        setattr(self._app.state, name, instance)
-        self._registered.append(name)
-        if cleanup is not None:
-            self._cleanups.append((name, cleanup))
-
-    def commit(self) -> None:
-        self._registered.clear()
-        self._cleanups.clear()
-
-    async def rollback(self) -> None:
-        while self._cleanups:
-            name, cleanup = self._cleanups.pop()
-            try:
-                await cleanup()
-            except Exception:
-                logger.exception(
-                    "Startup rollback: cleanup step failed (continuing with remaining steps).",
-                    extra={"resource": name},
-                )
-
-        for name in reversed(self._registered):
-            if hasattr(self._app.state, name):
-                delattr(self._app.state, name)
-        self._registered.clear()
-
 
 async def startup_dependencies(app: FastAPI) -> None:
-    registry = _DependencyRegistry(app)
+    registry = DependencyRegistry(app)
 
     try:
         logger.info("Starting up dependencies")
@@ -101,7 +67,9 @@ async def startup_dependencies(app: FastAPI) -> None:
         graph_context_provider = GraphContextProvider(http_client=http_client)
         registry.register("graph_context_provider", graph_context_provider)
 
-        ollama_facade = OllamaLLMFacade(ollama_llm_facade_settings=OllamaLLMFacadeSettings())
+        ollama_facade_settings = OllamaLLMFacadeSettings()
+        validate_context_budget(ollama_facade_settings, GenerationSettings())
+        ollama_facade = OllamaLLMFacade(ollama_llm_facade_settings=ollama_facade_settings)
         await ollama_facade.initialize()
         registry.register("ollama_llm_facade", ollama_facade)
 
@@ -145,6 +113,7 @@ async def startup_dependencies(app: FastAPI) -> None:
             "rag_agent_service",
             RagAgentService(
                 ollama_llm_facade=ollama_facade,
+                ollama_llm_invoker=ollama_llm_invoker,
                 document_context_provider=document_context_provider,
                 graph_context_provider=graph_context_provider,
             ),

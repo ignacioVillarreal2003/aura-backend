@@ -60,7 +60,7 @@ HUMAN_PROMPT = """
 Generá la checklist de verificación en JSON, respetando el esquema y las reglas del sistema. Apoyate en el contexto documental cuando aporte pasos o requisitos verificables. Si hay DOCUMENTOS ADJUNTOS, tratalos como la fuente prioritaria y el contexto recuperado como complementario.
 """.strip()
 
-EXTRACTION_SYSTEM_PROMPT = """
+MAP_SYSTEM_PROMPT = """
 Sos AURA (Fuerza Aérea Uruguaya). Estás procesando por partes fragmentos de documentos extensos para construir luego una checklist de verificación.
 
 En ESTA pasada NO generes la checklist final. Tu única tarea es EXTRAER y CONDENSAR de los fragmentos todo paso, control, requisito o verificación accionable, indicando la fase o sección a la que pertenece cuando se pueda inferir.
@@ -72,10 +72,10 @@ Reglas:
 - Salida en texto plano, concisa, un paso por línea (con su fase si corresponde). Sin JSON ni markdown.
 """.strip()
 
-EXTRACTION_HUMAN_PROMPT = """
+MAP_HUMAN_PROMPT = """
 # Consigna del usuario
 
-{input}
+{query}
 
 ---
 
@@ -88,10 +88,29 @@ EXTRACTION_HUMAN_PROMPT = """
 # Pasos extraídos (concisos, uno por línea)
 """.strip()
 
-RAG_QUERIES = [
-    "pasos del procedimiento operacional verificación",
-    "lista de verificación preoperacional seguridad",
-    "secuencia de operación checklist",
-    "procedimiento estándar de operación vuelo",
-    "chequeo de sistemas equipos y mantenimiento",
-]
+REDUCE_SYSTEM_PROMPT = """
+Sos AURA (Fuerza Aérea Uruguaya). Estás consolidando pasos de verificación ya extraídos de un documento extenso en pasadas anteriores.
+
+En ESTA pasada NO generes el resultado final. Tu tarea es UNIFICAR y CONDENSAR el material ya extraído: eliminá duplicados y redundancias y preservá todo lo relevante para la consigna del usuario.
+
+Reglas:
+- No inventes información que no esté en el material extraído.
+- No descartes contenido relevante solo para acortar.
+- Salida en texto plano, concisa, un paso por línea (con su fase si corresponde). Sin JSON ni markdown.
+""".strip()
+
+REDUCE_HUMAN_PROMPT = """
+# Consigna del usuario
+
+{query}
+
+---
+
+# Material extraído a consolidar
+
+{fragments}
+
+---
+
+# Pasos consolidados (concisos, uno por línea)
+""".strip()

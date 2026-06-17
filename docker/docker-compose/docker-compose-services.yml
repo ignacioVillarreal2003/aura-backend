@@ -63,7 +63,7 @@ services:
     ports:
       - "8001:8000"
     env_file:
-      - ../../aura-llm-service/.env.docker
+      - ../../aura-llm-service/env/.env.docker
     depends_on:
       llm:
         condition: service_healthy
@@ -198,7 +198,7 @@ services:
       dockerfile: Dockerfile
     container_name: llm
     env_file:
-      - ../../aura-llm-service/.env.docker
+      - ../../aura-llm-service/env/.env.docker
       - ../../aura-document-processing-service/.env.docker
     volumes:
       - llm_data:/root/.ollama

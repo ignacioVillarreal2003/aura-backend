@@ -65,7 +65,7 @@ HUMAN_PROMPT = """
 Generá el brief de decisión en JSON, respetando el esquema y las reglas del sistema. Apoyate en el contexto documental para fundamentar el análisis y los cursos de acción. Si hay DOCUMENTOS ADJUNTOS, tratalos como la fuente prioritaria y el contexto recuperado como complementario.
 """.strip()
 
-EXTRACTION_SYSTEM_PROMPT = """
+MAP_SYSTEM_PROMPT = """
 Sos AURA (Fuerza Aérea Uruguaya). Estás procesando por partes fragmentos de documentos extensos para preparar luego un brief de decisión.
 
 En ESTA pasada NO generes el brief final. Tu única tarea es EXTRAER y CONDENSAR la información relevante para decidir: el problema o decisión en juego, antecedentes y situación, opciones o cursos de acción, ventajas y desventajas, riesgos, restricciones y recursos.
@@ -77,10 +77,10 @@ Reglas:
 - Salida en texto plano, concisa, agrupada por tema (problema / contexto / opciones / riesgos). Sin JSON ni markdown.
 """.strip()
 
-EXTRACTION_HUMAN_PROMPT = """
+MAP_HUMAN_PROMPT = """
 # Consigna del usuario
 
-{input}
+{query}
 
 ---
 
@@ -93,10 +93,30 @@ EXTRACTION_HUMAN_PROMPT = """
 # Información para la decisión (concisa, agrupada por tema)
 """.strip()
 
-RAG_QUERIES = [
-    "problema decisión a tomar objetivo",
-    "opciones alternativas cursos de acción posibles",
-    "ventajas desventajas costos beneficios",
-    "riesgos limitaciones restricciones implicancias",
-    "recomendación criterio recursos disponibles",
-]
+
+REDUCE_SYSTEM_PROMPT = """
+Sos AURA (Fuerza Aérea Uruguaya). Estás consolidando información para la decisión ya extraídos de un documento extenso en pasadas anteriores.
+
+En ESTA pasada NO generes el resultado final. Tu tarea es UNIFICAR y CONDENSAR el material ya extraído: eliminá duplicados y redundancias y preservá todo lo relevante para la consigna del usuario.
+
+Reglas:
+- No inventes información que no esté en el material extraído.
+- No descartes contenido relevante solo para acortar.
+- Salida en texto plano, concisa, agrupada por tema (problema / contexto / opciones / riesgos). Sin JSON ni markdown.
+""".strip()
+
+REDUCE_HUMAN_PROMPT = """
+# Consigna del usuario
+
+{query}
+
+---
+
+# Material extraído a consolidar
+
+{fragments}
+
+---
+
+# Información consolidada (agrupada por tema)
+""".strip()

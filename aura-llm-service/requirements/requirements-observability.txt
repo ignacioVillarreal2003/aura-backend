@@ -1,2 +1,0 @@
-openinference-instrumentation-langchain>=0.1.66
-arize-phoenix-otel>=0.16.1

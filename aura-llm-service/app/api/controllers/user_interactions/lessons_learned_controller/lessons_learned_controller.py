@@ -10,7 +10,7 @@ from app.api.sse import sse_response
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
 from app.api.dependencies.app_state_services import get_lessons_learned_service
-from app.application.services.user_interactions.lessons_learned_service.lessons_learned_service_interface import (
+from app.application.services.user_interactions.lessons_learned_service.interfaces.lessons_learned_service_interface import (
     LessonsLearnedServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser

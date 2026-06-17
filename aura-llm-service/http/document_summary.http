@@ -1,6 +1,8 @@
 @llmBase = http://localhost:8001/api/v1
 @authToken = user_token_123
+@chatId = 1
 
+### Resumen de documento — JSON (POST /api/v1/document-summary)
 # @timeout 600
 POST {{llmBase}}/document-summary
 Accept: application/json
@@ -8,8 +10,19 @@ Content-Type: application/json
 Authorization: Bearer {{authToken}}
 
 {
-  "document_id": 12
+  "document_ids": [12],
+  "chat_id": {{chatId}}
 }
 
 
-###
+### Resumen de documento — Streaming SSE (POST /api/v1/document-summary/stream)
+# @timeout 600
+POST {{llmBase}}/document-summary/stream
+Accept: text/event-stream
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "document_ids": [12, 13],
+  "chat_id": {{chatId}}
+}

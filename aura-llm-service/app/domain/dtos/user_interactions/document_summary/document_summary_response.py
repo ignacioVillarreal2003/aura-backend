@@ -9,6 +9,13 @@ class DocumentSummaryResponse(BaseModel):
     document_ids: list[int] = Field(..., min_length=1, max_length=MAX_DOCUMENT_IDS_PER_REQUEST)
     summary: str = Field(..., min_length=1, max_length=MAX_SUMMARY_CHARS)
     fragments: list[FragmentResponse] = Field(default_factory=list)
+    degraded_stages: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Etapas del pipeline de contexto que se degradaron (una dependencia falló y se "
+            "continuó sin ella). Si no está vacío, la respuesta puede ser parcial."
+        ),
+    )
 
     @field_validator("summary")
     @classmethod

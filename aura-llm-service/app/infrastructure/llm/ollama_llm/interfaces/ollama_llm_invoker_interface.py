@@ -9,7 +9,7 @@ class OllamaLLMInvokerInterface(ABC):
     async def call_llm(
             self,
             llm: Runnable,
-            llm_input: List[BaseMessage]
+            llm_input: List[BaseMessage],
     ) -> BaseMessage:
         pass
 
@@ -17,6 +17,6 @@ class OllamaLLMInvokerInterface(ABC):
     async def call_llm_content(
             self,
             llm: Runnable,
-            llm_input: List[BaseMessage]
+            llm_input: List[BaseMessage],
     ) -> str:
         pass

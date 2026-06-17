@@ -6,6 +6,10 @@ All endpoints except `/health` and `/ready` require authentication (see [authent
 Rate-limited endpoints return `429 Too Many Requests` with a `Retry-After` header when exceeded.  
 All request bodies are `application/json`.
 
+> **Note:** the `Idempotency-Key` header mentioned for some endpoints is a
+> planned feature and is **not yet implemented** — sending it currently has no
+> effect (see [rate-limiting.md](rate-limiting.md#idempotency-keys)).
+
 ---
 
 ## Health
@@ -25,16 +29,37 @@ Liveness probe. Always returns 200 while the process is running.
 
 ### GET /ready
 
-Readiness probe. Checks that the Ollama LLM and HTTP client are available.
+Readiness probe. Checks the shared HTTP client, the Ollama LLM and Redis. Each
+dependency check has a short per-dependency timeout, so a hung dependency turns
+into a fast `503` instead of stalling the probe.
 
 **No authentication required.**
 
-**Response 200**
+**Response 200** — every dependency healthy.
 ```json
-{ "status": "ready" }
+{
+  "status": "ok",
+  "checks": {
+    "http_client": { "status": "healthy" },
+    "ollama": { "status": "ok", "tools_bound": true },
+    "redis": { "status": "ok" }
+  }
+}
 ```
 
-**Response 503** — Ollama unreachable or tools not bound.
+**Response 503** — at least one dependency is unavailable (`status: "degraded"`).
+Each entry's `status` is one of `ok`/`healthy`, `error` (failed or timed out) or
+`not_configured` (not initialised at startup).
+```json
+{
+  "status": "degraded",
+  "checks": {
+    "http_client": { "status": "healthy" },
+    "ollama": { "status": "error", "tools_bound": false },
+    "redis": { "status": "ok" }
+  }
+}
+```
 
 ---
 
@@ -53,13 +78,18 @@ Answers a question based on retrieved document fragments.
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `messages` | `Message[]` | yes | 1–50 items; last message must have `role = "human"` |
-| `chat_id` | `int` | no | 1–2 147 483 647 |
+| `chat_id` | `int` | yes | 1–2 147 483 647 |
+| `document_ids` | `int[]` | no | max 20; attached as priority context |
+| `system_prompt` | `string` | no | 1–16 000 chars; overrides the default prompt |
+| `response_style` | `string` | no | 1–16 000 chars |
+| `retrieve_context` | `bool` | no | force RAG retrieval on/off; omit for service default |
+| `process_documents` | `bool` | no | process full attached documents; omit for service default |
 
 **Message object**
 
 | Field | Type | Constraints |
 |---|---|---|
-| `role` | `"human"` \| `"ai"` | required |
+| `role` | `"human"` \| `"assistant"` | required |
 | `content` | `string` | 1–16 000 chars, stripped, non-blank |
 
 **Example request**
@@ -86,8 +116,8 @@ Answers a question based on retrieved document fragments.
   "question": "¿Cuáles son las cláusulas de rescisión?",
   "answer": "Las cláusulas de rescisión establecen que...",
   "messages": [
-    { "role": "human", "content": "¿Cuáles son las cláusulas de rescisión?" },
-    { "role": "ai",    "content": "Las cláusulas de rescisión establecen que..." }
+    { "role": "human",     "content": "¿Cuáles son las cláusulas de rescisión?" },
+    { "role": "assistant", "content": "Las cláusulas de rescisión establecen que..." }
   ],
   "fragments": [{ "id": 12, "content": "...", "document_id": 3 }]
 }
@@ -99,7 +129,7 @@ Answers a question based on retrieved document fragments.
 
 Same as `/document-question` but streams the answer as [Server-Sent Events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events).
 
-**Permission:** `LLM_DOCUMENT_QUESTION_STREAM`  
+**Permission:** `LLM_DOCUMENT_QUESTION` (same as the base endpoint)  
 **Rate limit:** 20 / min  
 **Response content-type:** `text/event-stream`
 
@@ -144,11 +174,13 @@ Generates a summary of one or more documents identified by their IDs.
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `document_ids` | `int[]` | yes | 1–50 items; each ID 1–2 147 483 647; no duplicates |
+| `chat_id` | `int` | yes | 1–2 147 483 647 (informative; context comes from `document_ids`) |
 
 **Example request**
 ```json
 {
-  "document_ids": [1, 5, 12]
+  "document_ids": [1, 5, 12],
+  "chat_id": 7
 }
 ```
 
@@ -159,6 +191,9 @@ Generates a summary of one or more documents identified by their IDs.
 | `document_ids` | `int[]` | IDs that were summarised |
 | `summary` | `string` | Generated summary (1–10 000 chars) |
 | `fragments` | `FragmentResponse[]` | Source fragments used |
+
+A streaming variant `POST /document-summary/stream` (`text/event-stream`) emits
+the same SSE event types described under Document Question.
 
 ---
 
@@ -178,7 +213,8 @@ Executes a free-form or templated action over one or more documents (e.g. extrac
 |---|---|---|---|
 | `document_ids` | `int[]` | yes | 1–50 items; each ID 1–2 147 483 647; no duplicates |
 | `instruction` | `string` | yes | 1–10 000 chars, stripped, non-blank |
-| `action` | `DocumentActionType` | no | See values below |
+| `action` | `DocumentActionType` | no | See values below; inferred from the instruction if omitted |
+| `chat_id` | `int` | yes | 1–2 147 483 647 (informative; context comes from `document_ids`) |
 
 **DocumentActionType values**
 
@@ -197,7 +233,8 @@ Executes a free-form or templated action over one or more documents (e.g. extrac
 {
   "document_ids": [3, 7],
   "instruction": "Compara las cláusulas de confidencialidad de ambos contratos.",
-  "action": "compare"
+  "action": "compare",
+  "chat_id": 7
 }
 ```
 
@@ -209,6 +246,9 @@ Executes a free-form or templated action over one or more documents (e.g. extrac
 | `document_ids` | `int[]` | IDs processed |
 | `instruction` | `string` | Original instruction |
 | `action` | `DocumentActionType?` | Action type if provided |
+
+A streaming variant `POST /document-action/stream` (`text/event-stream`) emits
+the same SSE event types described under Document Question.
 
 ---
 
@@ -402,11 +442,45 @@ Translates a natural-language question into a structured graph query intent.
 
 ---
 
-## Agent
+## General Chat
 
-### POST /agent
+### POST /general-chat
 
-Executes a tool-enabled LLM agent. The agent can call document-question and document-summary tools internally to answer multi-step queries.
+General-purpose assistant chat. Unlike the RAG endpoints it does not run a
+retrieval pipeline by default — it answers from the conversation history (plus
+any explicitly attached documents).
+
+**Permission:** `LLM_GENERAL_CHAT`  
+**Rate limit:** 60 / min (`/general-chat`), 20 / min (`/general-chat/stream`)
+
+**Request body**
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `messages` | `Message[]` | yes | 1–50 items; last message must have `role = "human"` |
+| `chat_id` | `int` | yes | 1–2 147 483 647 |
+| `document_ids` | `int[]` | no | max 20; attached as priority context |
+| `system_prompt` | `string` | no | 1–16 000 chars |
+| `response_style` | `string` | no | 1–16 000 chars |
+| `retrieve_context` | `bool` | no | force RAG retrieval on/off |
+| `process_documents` | `bool` | no | process full attached documents |
+
+**Response 200**
+
+| Field | Type | Description |
+|---|---|---|
+| `messages` | `Message[]` | Full conversation history including the assistant's answer |
+
+A streaming variant `POST /general-chat/stream` (`text/event-stream`) emits
+`delta` / `complete` / `error` events.
+
+---
+
+## RAG Agent
+
+### POST /rag-agent
+
+Executes the full RAG (Retrieval-Augmented Generation) pipeline: analyses the query, retrieves document context, evaluates its sufficiency, reasons over the answer, and synthesises a final response.
 
 **Permission:** `LLM_AGENT`  
 **Rate limit:** 20 / min  
@@ -417,45 +491,70 @@ Executes a tool-enabled LLM agent. The agent can call document-question and docu
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `messages` | `Message[]` | yes | 1–50 items; last message must have `role = "human"` |
-
-**Example request**
-```json
-{
-  "messages": [
-    { "role": "human", "content": "Busca los contratos de Gamma Corp y resume sus penalidades." }
-  ]
-}
-```
+| `chat_id` | `int` | yes | 1–2 147 483 647 |
+| `system_prompt` | `string` | no | 1–16 000 chars |
+| `response_style` | `string` | no | 1–16 000 chars |
+| `retrieve_context` | `bool` | no | force RAG retrieval on/off |
+| `process_documents` | `bool` | no | process full attached documents |
 
 **Response 200**
 
 | Field | Type | Description |
 |---|---|---|
-| `messages` | `Message[]` | Full conversation history including agent's final answer |
+| `messages` | `Message[]` | Full conversation history including synthesised answer |
+
+A streaming variant `POST /rag-agent/stream` (`text/event-stream`) is also available.
 
 ---
 
-## RAG Agent
+## Structured Generation
 
-### POST /rag-agent
+Six endpoints turn an operational input into a structured military document.
+They share one request contract and differ only in the document they produce
+(and, for reports, a `report_type`). Each also exposes a `/stream` SSE variant.
 
-Executes the full RAG (Retrieval-Augmented Generation) pipeline: analyses the query, retrieves document context, evaluates its sufficiency, reasons over the answer, and synthesises a final response.
+| Endpoint | Produces | Permission |
+|---|---|---|
+| `POST /report-generate` | Standardised report (SITREP / INTSUM / OPORD) | `LLM_REPORT_GENERATE` |
+| `POST /checklist-generate` | Interactive checklist from a procedure | `LLM_CHECKLIST_GENERATE` |
+| `POST /timeline-generate` | Chronology of events from a narrative | `LLM_TIMELINE_GENERATE` |
+| `POST /quiz-generate` | Evaluation quiz from training material | `LLM_QUIZ_GENERATE` |
+| `POST /lessons-learned-generate` | After-action lessons-learned analysis | `LLM_LESSONS_LEARNED_GENERATE` |
+| `POST /decision-brief-generate` | Executive decision brief | `LLM_DECISION_BRIEF_GENERATE` |
 
-**Permission:** `LLM_RAG_AGENT`  
-**Rate limit:** 20 / min  
-**Idempotency-Key:** supported
+**Rate limit:** 60 / min (base endpoint), 20 / min (`/stream` variant)
 
-**Request body** — same as `/agent`
+**Shared request body**
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `messages` | `Message[]` | yes | 1–50 items; last message must have `role = "human"` |
+| `chat_id` | `int` | yes | 1–2 147 483 647 |
+| `report_type` | `"SITREP"` \| `"INTSUM"` \| `"OPORD"` | report only | required by `/report-generate` |
+| `document_ids` | `int[]` | no | max 20; attached as priority context |
+| `system_prompt` | `string` | no | 1–16 000 chars |
+| `response_style` | `string` | no | 1–16 000 chars |
+| `retrieve_context` | `bool` | no | force RAG retrieval on/off |
+| `process_documents` | `bool` | no | process full attached documents |
 
-**Response 200** — same shape as `/agent`
+**Example request** (`POST /report-generate`)
+```json
+{
+  "report_type": "SITREP",
+  "messages": [
+    { "role": "human", "content": "Patrulla en sector norte sin novedad entre 0600 y 1200." }
+  ],
+  "chat_id": 7
+}
+```
 
-| Field | Type | Description |
-|---|---|---|
-| `messages` | `Message[]` | Full conversation history including synthesised answer |
+**Response 200** — endpoint-specific. Reports return `report_type`, `content`
+(markdown), `messages`, `fragments` and `degraded_stages`; the other endpoints
+return their structured payload plus `messages`/`fragments`. See the Swagger UI
+(`/api/docs`) for the exact response model of each endpoint.
+
+**Streaming variants** (`/…-generate/stream`, `text/event-stream`) emit
+`progress` / `complete` / `error` events.
 
 ---
 

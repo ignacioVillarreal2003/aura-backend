@@ -18,7 +18,6 @@ CHAT_URL = "/api/v1/general-chat"
 VALID_CHAT_BODY = {
     "messages": [{"role": "human", "content": "hola, ¿qué dice el reglamento?"}],
     "chat_id": 1,
-    "mode": "rag",
     "document_ids": [],
 }
 

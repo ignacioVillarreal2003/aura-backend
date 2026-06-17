@@ -1,0 +1,67 @@
+@llmBase = http://localhost:8001/api/v1
+@authToken = user_token_123
+@chatId = 1
+
+### Chat general — JSON (POST /api/v1/general-chat)
+# Sin RAG ni contexto documental: solo el historial de conversación.
+# @timeout 600
+POST {{llmBase}}/general-chat
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "messages": [
+    {
+      "role": "human",
+      "content": "¿Qué tareas podés ayudarme a resolver?"
+    }
+  ],
+  "chat_id": {{chatId}}
+}
+
+
+### Chat general — Streaming SSE (POST /api/v1/general-chat/stream)
+# @timeout 600
+POST {{llmBase}}/general-chat/stream
+Accept: text/event-stream
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "messages": [
+    {
+      "role": "human",
+      "content": "Mi nombre es Ana."
+    },
+    {
+      "role": "assistant",
+      "content": "Hola Ana, ¿en qué puedo ayudarte?"
+    },
+    {
+      "role": "human",
+      "content": "¿Te acordás cómo me llamo?"
+    }
+  ],
+  "chat_id": {{chatId}}
+}
+
+
+### Con system_prompt y documentos adjuntos
+POST {{llmBase}}/general-chat
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "messages": [
+    {
+      "role": "human",
+      "content": "Explicá el contenido adjunto en lenguaje sencillo."
+    }
+  ],
+  "chat_id": {{chatId}},
+  "document_ids": [10],
+  "system_prompt": "Respondé como un instructor militar, claro y conciso.",
+  "process_documents": true
+}

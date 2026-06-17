@@ -12,20 +12,8 @@ class ReportType(StrEnum):
     OPORD = "OPORD"
 
 
-class ReportMode(StrEnum):
-    DIRECT = "direct"
-    RAG = "rag"
-
-
 class ReportGenerateRequest(BaseModel):
     report_type: ReportType = Field(..., description="Tipo de informe a generar.")
-    mode: ReportMode = Field(
-        ...,
-        description=(
-            "direct: genera el informe solo con el input del usuario. "
-            "rag: enriquece con fragmentos de los documentos del usuario."
-        ),
-    )
     messages: list[Message] = Field(
         ...,
         min_length=1,
@@ -61,6 +49,15 @@ class ReportGenerateRequest(BaseModel):
         min_length=1,
         max_length=MAX_INSTRUCTION_CHARS,
         description="Estilo de respuesta esperado por el operador.",
+    )
+
+    retrieve_context: bool | None = Field(
+        default=None,
+        description="Recuperar contexto de la base de conocimiento. None: usa el default del servicio.",
+    )
+    process_documents: bool | None = Field(
+        default=None,
+        description="Procesar el contenido completo de los documentos adjuntos. None: usa el default del servicio.",
     )
 
     @field_validator("document_ids")

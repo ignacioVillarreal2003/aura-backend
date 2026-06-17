@@ -12,6 +12,13 @@ class DocumentActionResponse(BaseModel):
     instruction: str = Field(..., min_length=1, max_length=MAX_INSTRUCTION_CHARS)
     action: Optional[DocumentActionType] = Field(default=None)
     fragments: list[FragmentResponse] = Field(default_factory=list)
+    degraded_stages: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Etapas del pipeline de contexto que se degradaron (una dependencia falló y se "
+            "continuó sin ella). Si no está vacío, la respuesta puede ser parcial."
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_response(self) -> "DocumentActionResponse":

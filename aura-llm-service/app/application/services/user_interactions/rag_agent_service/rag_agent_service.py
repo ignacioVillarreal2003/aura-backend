@@ -32,6 +32,7 @@ from app.infrastructure.http.graph_context_provider.interfaces.graph_context_pro
     GraphContextProviderInterface,
 )
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
+from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface import OllamaLLMInvokerInterface
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +83,7 @@ class RagAgentService(RagAgentServiceInterface):
     def __init__(
             self,
             ollama_llm_facade: OllamaLLMFacadeInterface,
+            ollama_llm_invoker: OllamaLLMInvokerInterface,
             document_context_provider: DocumentContextProviderInterface,
             rag_agent_settings: Optional[RagAgentServiceSettings] = None,
             graph_context_provider: Optional[GraphContextProviderInterface] = None,
@@ -90,6 +92,7 @@ class RagAgentService(RagAgentServiceInterface):
 
         self._workflow = RagAgentWorkflow(
             ollama_llm_facade=ollama_llm_facade,
+            ollama_llm_invoker=ollama_llm_invoker,
             document_context_provider=document_context_provider,
             settings=self._rag_agent_settings,
             graph_context_provider=graph_context_provider,

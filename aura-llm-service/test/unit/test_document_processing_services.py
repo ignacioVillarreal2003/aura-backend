@@ -1,0 +1,160 @@
+"""Tests for the document summary and action services after migration to the
+shared streaming base: default flags, synthetic instruction messages, response
+shape, action guidance, and reduction-prompt wiring."""
+
+import types
+
+import pytest
+
+from app.application.services.user_interactions.document_action_service.document_action_service import (
+    DocumentActionService,
+)
+from app.application.services.user_interactions.document_summary_service.document_summary_service import (
+    DocumentSummaryService,
+)
+from app.domain.constants.document_action_type import DocumentActionType
+from app.domain.dtos.user_interactions.document_action.document_action_request import DocumentActionRequest
+from app.domain.dtos.user_interactions.document_action.document_action_stream_events import (
+    DocumentActionStreamComplete,
+    DocumentActionStreamDelta,
+)
+from app.domain.dtos.user_interactions.document_summary.document_summary_request import DocumentSummaryRequest
+from app.domain.dtos.user_interactions.document_summary.document_summary_stream_events import (
+    DocumentSummaryStreamComplete,
+    DocumentSummaryStreamDelta,
+)
+
+
+class _LLM:
+    def bind(self, **_k):
+        return self
+
+
+class _Facade:
+    async def get_llm_base(self):
+        return _LLM()
+
+    async def get_llm_json(self):
+        return _LLM()
+
+
+class _Invoker:
+    async def call_llm_content(self, llm, llm_input):
+        return "# Resultado\nContenido generado."
+
+
+class _Stream:
+    def __init__(self, chunks):
+        self._chunks = chunks
+
+    async def stream_llm_content(self, llm, llm_input):
+        for c in self._chunks:
+            yield c
+
+
+def _frag(i, n=80):
+    from app.infrastructure.http.document_context_provider.dtos.fragment_response import FragmentResponse
+    return FragmentResponse(id=i, content="x" * n, fragment_index=i, document={"id": 1, "name": "D"})
+
+
+class _Provider:
+    def __init__(self, doc_frags):
+        self._doc = doc_frags
+
+    async def retrieve_context_fragments_by_question_request(self, authenticated_user, request):
+        return types.SimpleNamespace(fragments=[])
+
+    async def retrieve_context_fragments_by_document(self, authenticated_user, document_ids):
+        return types.SimpleNamespace(fragments=self._doc)
+
+
+_USER = types.SimpleNamespace(id=1)
+
+
+def _summary_svc(chunks=("Res", "umen"), frags=None):
+    return DocumentSummaryService(_Facade(), _Invoker(), _Stream(chunks), _Provider(frags or [_frag(1)]))
+
+
+def _action_svc(chunks=("Res", "ult"), frags=None):
+    return DocumentActionService(_Facade(), _Invoker(), _Stream(chunks), _Provider(frags or [_frag(1)]))
+
+
+class TestDefaults:
+    @pytest.mark.parametrize("cls", [DocumentSummaryService, DocumentActionService])
+    def test_process_documents_by_default(self, cls):
+        assert cls.default_process_documents is True
+        assert cls.default_retrieve_context is False
+
+    @pytest.mark.parametrize("cls", [DocumentSummaryService, DocumentActionService])
+    def test_four_reduction_prompts_with_placeholders(self, cls):
+        for attr in ("map_human_prompt", "reduce_human_prompt"):
+            v = getattr(cls, attr)
+            assert "{fragments}" in v and "{input}" not in v
+        assert "{context}" in cls.human_prompt
+
+
+class TestSummary:
+    def test_synthetic_instruction_message(self):
+        svc = _summary_svc()
+        req = DocumentSummaryRequest(document_ids=[1, 2], chat_id=1)
+        state = svc._build_state(req, _USER)
+        assert state.current_message.content  # synthetic instruction present
+        assert state.process_documents is True and state.retrieve_context is False
+
+    async def test_execute_returns_summary(self):
+        svc = _summary_svc(frags=[_frag(1), _frag(2)])
+        res = await svc.execute_document_summary(DocumentSummaryRequest(document_ids=[1, 2], chat_id=1), _USER)
+        assert res.summary == "# Resultado\nContenido generado."
+        assert res.document_ids == [1, 2] and len(res.fragments) == 2
+
+    async def test_stream_emits_deltas_and_complete(self):
+        svc = _summary_svc(chunks=("Hola", " resumen"))
+        events = [
+            e async for e in svc.execute_document_summary_stream(
+                DocumentSummaryRequest(document_ids=[1], chat_id=1), _USER
+            )
+        ]
+        deltas = [e.text for e in events if isinstance(e, DocumentSummaryStreamDelta)]
+        assert deltas == ["Hola", " resumen"]
+        assert any(isinstance(e, DocumentSummaryStreamComplete) for e in events)
+
+
+class TestAction:
+    def test_instruction_becomes_current_message(self):
+        svc = _action_svc()
+        req = DocumentActionRequest(document_ids=[1], instruction="Analiza esto", chat_id=1)
+        state = svc._build_state(req, _USER)
+        assert state.current_message.content == "Analiza esto"
+
+    def test_system_prompt_includes_action_guidance(self):
+        svc = _action_svc()
+        req = DocumentActionRequest(
+            document_ids=[1], instruction="x", action=DocumentActionType.compare, chat_id=1
+        )
+        assert "ACCIÓN: COMPARACIÓN" in svc._system_prompt(req)
+
+    def test_system_prompt_default_guidance_without_action(self):
+        svc = _action_svc()
+        req = DocumentActionRequest(document_ids=[1], instruction="x", chat_id=1)
+        assert "No se especificó una acción" in svc._system_prompt(req)
+
+    async def test_execute_returns_result_with_action(self):
+        svc = _action_svc(frags=[_frag(1)])
+        req = DocumentActionRequest(
+            document_ids=[1], instruction="Resume", action=DocumentActionType.summarize, chat_id=1
+        )
+        res = await svc.execute_document_action(req, _USER)
+        assert res.result == "# Resultado\nContenido generado."
+        assert res.action == DocumentActionType.summarize
+        assert res.instruction == "Resume" and res.document_ids == [1]
+
+    async def test_stream_emits_deltas_and_complete(self):
+        svc = _action_svc(chunks=("parte1", "parte2"))
+        events = [
+            e async for e in svc.execute_document_action_stream(
+                DocumentActionRequest(document_ids=[1], instruction="x", chat_id=1), _USER
+            )
+        ]
+        deltas = [e.text for e in events if isinstance(e, DocumentActionStreamDelta)]
+        assert deltas == ["parte1", "parte2"]
+        assert any(isinstance(e, DocumentActionStreamComplete) for e in events)

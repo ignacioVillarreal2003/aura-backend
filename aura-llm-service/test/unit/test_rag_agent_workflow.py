@@ -35,7 +35,9 @@ class TestRouting:
 
 class TestQueryAnalyzerParsing:
     def _parse(self, raw):
-        node = QueryAnalyzerNode(ollama_llm_facade=None, settings=QueryAnalyzerSettings())
+        node = QueryAnalyzerNode(
+            ollama_llm_facade=None, ollama_llm_invoker=None, settings=QueryAnalyzerSettings()
+        )
         return node._parse_response(raw, fallback_query="fallback")
 
     def test_valid_json_with_intent(self):

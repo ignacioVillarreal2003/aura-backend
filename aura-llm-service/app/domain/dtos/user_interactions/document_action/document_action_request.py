@@ -29,6 +29,15 @@ class DocumentActionRequest(BaseModel):
         description="Estilo de respuesta esperado por el operador.",
     )
 
+    retrieve_context: bool | None = Field(
+        default=None,
+        description="Recuperar contexto de la base de conocimiento. None: usa el default del servicio.",
+    )
+    process_documents: bool | None = Field(
+        default=None,
+        description="Procesar el contenido completo de los documentos adjuntos. None: usa el default del servicio.",
+    )
+
     @field_validator("instruction")
     @classmethod
     def _strip_instruction(cls, value: str) -> str:

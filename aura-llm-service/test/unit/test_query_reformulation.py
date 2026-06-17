@@ -35,7 +35,7 @@ def _retrieval_state(base_question=None, keyword_question=None) -> GenerationSta
     state = GenerationState.create(
         messages=[Message(role=MessageRole.human, content="pregunta original")],
         chat_id=7,
-        is_rag=True,
+        retrieve_context=True,
         authenticated_user=None,
     )
     state.base_question = base_question
@@ -44,28 +44,29 @@ def _retrieval_state(base_question=None, keyword_question=None) -> GenerationSta
 
 
 class TestContextRetrievalRequestBuilding:
-    def _build(self, state, queries=None, **settings_overrides):
+    def _build(self, state, **settings_overrides):
         settings = ContextRetrievalSettings(**settings_overrides)
         processor = ContextRetrievalProcessor(document_context_provider=None,
                                               context_retrieval_settings=settings)
-        return processor._build_request(state, queries or [])
+        return processor._build_request(state)
 
-    def test_semantic_lane_per_rag_query_plus_keywords(self):
+    def test_only_original_lane_when_no_base_or_keywords(self):
+        request = self._build(_retrieval_state())
+        assert [q.text for q in request.semantic_queries] == ["pregunta original"]
+        assert [q.text for q in request.bm25_queries] == ["pregunta original"]
+
+    def test_lanes_for_original_base_and_keywords(self):
         request = self._build(
-            _retrieval_state(keyword_question="kw1 kw2"),
-            queries=["tema A", "tema B"],
+            _retrieval_state(base_question="reformulada", keyword_question="kw1 kw2"),
         )
-        texts = [q.text for q in request.semantic_queries]
-        assert texts == ["pregunta original tema A", "pregunta original tema B", "kw1 kw2"]
+        expected = ["pregunta original", "reformulada", "kw1 kw2"]
+        assert [q.text for q in request.semantic_queries] == expected
+        assert [q.text for q in request.bm25_queries] == expected
 
-    def test_base_question_replaces_original_when_present(self):
-        request = self._build(_retrieval_state(base_question="reformulada"), queries=["q"])
-        assert request.semantic_queries[0].text == "reformulada q"
-        assert request.bm25_queries[0].text == "reformulada"
-
-    def test_bm25_adds_keywords_lane_when_different(self):
-        request = self._build(_retrieval_state(keyword_question="kw"))
-        assert [q.text for q in request.bm25_queries] == ["pregunta original", "kw"]
+    def test_deduplicates_when_base_equals_original(self):
+        request = self._build(_retrieval_state(base_question="pregunta original"))
+        assert [q.text for q in request.semantic_queries] == ["pregunta original"]
+        assert [q.text for q in request.bm25_queries] == ["pregunta original"]
 
     def test_rerank_capped_by_pool(self):
         request = self._build(

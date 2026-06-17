@@ -12,6 +12,7 @@ from app.application.services.user_interactions.rag_agent_service.interfaces.rag
 from app.application.services.user_interactions.rag_agent_service.rag_agent_settings import QueryAnalyzerSettings
 from app.application.services.user_interactions.rag_agent_service.rag_agent_state.rag_agent_state import RagAgentState
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
+from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface import OllamaLLMInvokerInterface
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +23,11 @@ class QueryAnalyzerNode(RagNodeInterface):
     def __init__(
             self,
             ollama_llm_facade: OllamaLLMFacadeInterface,
+            ollama_llm_invoker: OllamaLLMInvokerInterface,
             settings: QueryAnalyzerSettings,
     ) -> None:
         self._ollama_llm_facade = ollama_llm_facade
+        self._ollama_llm_invoker = ollama_llm_invoker
         self._settings = settings
         self._llm: Optional[Runnable] = None
         self._llm_lock = asyncio.Lock()
@@ -64,11 +67,13 @@ class QueryAnalyzerNode(RagNodeInterface):
             f"Historial de conversación:\n{history_text}\n\n" if history_text else ""
         ) + f"Consulta actual: {query}"
 
-        response = await self._llm.ainvoke([
-            SystemMessage(content=self._settings.system_prompt),
-            HumanMessage(content=user_content),
-        ])
-        raw = response.content if hasattr(response, "content") else str(response)
+        raw = await self._ollama_llm_invoker.call_llm_content(
+            llm=self._llm,
+            llm_input=[
+                SystemMessage(content=self._settings.system_prompt),
+                HumanMessage(content=user_content),
+            ],
+        )
         return self._parse_response(raw, query)
 
     def _parse_response(self, raw: str, fallback_query: str) -> Dict[str, Any]:

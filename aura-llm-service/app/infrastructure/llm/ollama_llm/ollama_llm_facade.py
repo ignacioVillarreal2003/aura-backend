@@ -21,19 +21,15 @@ from app.infrastructure.llm.ollama_llm.ollama_tool_manager import OllamaToolMana
 
 logger = logging.getLogger(__name__)
 
-_CIRCUIT_RECOVERY_COOLDOWN: float = 30.0
-_CIRCUIT_FAILURE_THRESHOLD: int = 1
 _PROBE_TIMEOUT: float = 10.0
 
 
-# Sampling params that Ollama only accepts inside the `options` payload.
 _OLLAMA_OPTION_KEYS = frozenset({
     "temperature", "top_p", "top_k", "seed", "repeat_penalty", "repeat_last_n",
     "num_ctx", "num_predict", "num_gpu", "num_thread",
     "mirostat", "mirostat_eta", "mirostat_tau", "tfs_z",
 })
 
-# OpenAI-style aliases callers may use, mapped to the Ollama option name.
 _OLLAMA_OPTION_ALIASES = {
     "max_tokens": "num_predict",
     "max_output_tokens": "num_predict",
@@ -41,11 +37,6 @@ _OLLAMA_OPTION_ALIASES = {
 
 
 class _ChatOllamaWithCallTimeOptions(ChatOllama):
-    """ChatOllama forwards unknown call-time kwargs verbatim to
-    ``AsyncClient.chat()``, which rejects sampling params like ``temperature``
-    (NeMo Guardrails passes one per self-check call). Fold them into
-    ``options`` instead."""
-
     def _chat_params(
             self,
             messages: Any,
@@ -113,8 +104,9 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
             match self._circuit_state:
                 case _CircuitState.OPEN:
                     elapsed = time.monotonic() - self._opened_at
-                    if elapsed < _CIRCUIT_RECOVERY_COOLDOWN:
-                        remaining = _CIRCUIT_RECOVERY_COOLDOWN - elapsed
+                    cooldown = self._settings.circuit_recovery_cooldown_seconds
+                    if elapsed < cooldown:
+                        remaining = cooldown - elapsed
                         raise LLMNotConfiguredError(
                             f"OllamaLLMFacade circuit is open — initialization failed. "
                             f"Recovery attempt in {remaining:.0f}s."
@@ -290,14 +282,14 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
     def _cleanup_on_failure(self) -> None:
         self._initialized = False
         self._consecutive_failures += 1
-        if self._consecutive_failures >= _CIRCUIT_FAILURE_THRESHOLD:
+        if self._consecutive_failures >= self._settings.circuit_failure_threshold:
             self._circuit_state = _CircuitState.OPEN
             self._opened_at = time.monotonic()
             logger.warning(
                 "Circuit opened after initialization failure",
                 extra={
                     "consecutive_failures": self._consecutive_failures,
-                    "recovery_in_seconds": _CIRCUIT_RECOVERY_COOLDOWN,
+                    "recovery_in_seconds": self._settings.circuit_recovery_cooldown_seconds,
                 },
             )
         self._tools_bound = False

@@ -1,42 +1,40 @@
-import logging
 from collections.abc import AsyncIterator
 from typing import Optional
 
-
-from app.application.authorization.exceptions.authorization_exceptions import UnauthorizedException
-from app.application.exceptions.app_exception import RequestValidationException
-from app.application.services.user_interactions.document_action_service.constants.processing_strategy import ProcessingStrategy
-from app.application.services.user_interactions.document_action_service.document_action_settings import DocumentActionServiceSettings
-from app.application.services.user_interactions.document_action_service.document_action_state import DocumentActionState
+from app.application.services.generation_shared.state.generation_state import GenerationState
+from app.application.services.generation_shared.streaming_generation_service import StreamingGenerationService
+from app.application.services.user_interactions.document_action_service.document_action_prompts import (
+    ANSWER_GUIDANCE,
+    ANSWER_HUMAN_PROMPT,
+    ANSWER_SYSTEM_PROMPT,
+    DEFAULT_ANSWER_GUIDANCE,
+    MAP_HUMAN_PROMPT,
+    MAP_SYSTEM_PROMPT,
+    REDUCE_HUMAN_PROMPT,
+    REDUCE_SYSTEM_PROMPT,
+)
+from app.application.services.user_interactions.document_action_service.document_action_settings import (
+    DocumentActionServiceSettings,
+)
 from app.application.services.user_interactions.document_action_service.exceptions.document_action_service_exceptions import (
     DocumentActionServiceException,
 )
 from app.application.services.user_interactions.document_action_service.interfaces.document_action_service_interface import (
     DocumentActionServiceInterface,
 )
-from app.application.services.user_interactions.document_action_service.processors.chunk_document_action_processor.chunk_document_action_processor import \
-    ChunkDocumentActionProcessor
-from app.application.services.user_interactions.document_action_service.processors.context_document_action_processor.context_document_action_processor import (
-    ContextDocumentActionProcessor,
-)
-from app.application.services.user_interactions.document_action_service.processors.direct_document_action_processor.direct_document_action_processor import (
-    DirectDocumentActionProcessor,
-)
-from app.application.services.user_interactions.document_action_service.processors.reduce_document_action_processor.reduce_document_action_processor import (
-    ReduceDocumentActionProcessor,
-)
-from app.configuration.tracing import trace_generation
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.constants.document_action_type import DocumentActionType
+from app.domain.constants.message_role import MessageRole
+from app.domain.dtos.message import Message
 from app.domain.dtos.user_interactions.document_action.document_action_request import DocumentActionRequest
-from app.domain.field_limits import MAX_CONTENT_CHARS
 from app.domain.dtos.user_interactions.document_action.document_action_response import DocumentActionResponse
 from app.domain.dtos.user_interactions.document_action.document_action_stream_events import (
     DocumentActionStreamComplete,
+    DocumentActionStreamDelta,
     DocumentActionStreamError,
     DocumentActionStreamEvent,
     DocumentActionStreamProgress,
 )
+from app.domain.field_limits import MAX_CONTENT_CHARS
 from app.infrastructure.http.document_context_provider.interfaces.document_context_provider_interface import (
     DocumentContextProviderInterface,
 )
@@ -46,31 +44,30 @@ from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_streaming_invoker_i
     OllamaLLMStreamingInvokerInterface,
 )
 
-logger = logging.getLogger(__name__)
 
-_ACTION_DIRECT_MESSAGES: dict[DocumentActionType, str] = {
-    DocumentActionType.summarize: "Generando el resumen del documento...",
-    DocumentActionType.essay: "Redactando el ensayo...",
-    DocumentActionType.key_points: "Extrayendo los puntos clave del documento...",
-    DocumentActionType.compare: "Comparando los documentos...",
-    DocumentActionType.analyze: "Analizando el contenido del documento...",
-    DocumentActionType.explain: "Elaborando la explicación del contenido...",
-    DocumentActionType.report: "Redactando el reporte del documento...",
-}
+class DocumentActionService(
+    StreamingGenerationService[DocumentActionRequest, DocumentActionResponse],
+    DocumentActionServiceInterface,
+):
+    label = "document_action"
+    exception_cls = DocumentActionServiceException
+    unexpected_error_message = "Ocurrió un error inesperado al ejecutar la acción sobre el documento."
+    generation_step_message = "Ejecutando la instrucción sobre el documento..."
 
-_STATIC_FALLBACK_MESSAGE = (
-    "No se encontró información suficiente en los documentos para generar una respuesta. "
-    "Verifique que los documentos estén correctamente cargados en el sistema o contacte al administrador."
-)
+    default_process_documents = True
+    default_retrieve_context = False
 
-_KNOWN_EXCEPTIONS = (
-    RequestValidationException,
-    DocumentActionServiceException,
-    UnauthorizedException,
-)
+    human_prompt = ANSWER_HUMAN_PROMPT
+    map_system_prompt = MAP_SYSTEM_PROMPT
+    map_human_prompt = MAP_HUMAN_PROMPT
+    reduce_system_prompt = REDUCE_SYSTEM_PROMPT
+    reduce_human_prompt = REDUCE_HUMAN_PROMPT
 
+    stream_progress_event = DocumentActionStreamProgress
+    stream_complete_event = DocumentActionStreamComplete
+    stream_error_event = DocumentActionStreamError
+    stream_delta_event = DocumentActionStreamDelta
 
-class DocumentActionService(DocumentActionServiceInterface):
     def __init__(
             self,
             ollama_llm_facade: OllamaLLMFacadeInterface,
@@ -79,175 +76,65 @@ class DocumentActionService(DocumentActionServiceInterface):
             document_context_provider: DocumentContextProviderInterface,
             document_action_settings: Optional[DocumentActionServiceSettings] = None,
     ) -> None:
-        self._document_action_settings = document_action_settings or DocumentActionServiceSettings()
-
-        self._context_processor = ContextDocumentActionProcessor(
-            document_action_service_settings=self._document_action_settings,
+        settings = document_action_settings or DocumentActionServiceSettings()
+        super().__init__(
+            ollama_llm_facade=ollama_llm_facade,
+            ollama_llm_invoker=ollama_llm_invoker,
+            ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
             document_context_provider=document_context_provider,
-        )
-        self._direct_processor = DirectDocumentActionProcessor(
-            ollama_llm_facade=ollama_llm_facade,
-            ollama_llm_invoker=ollama_llm_invoker,
-            ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
-        )
-        self._chunk_processor = ChunkDocumentActionProcessor(
-            document_action_service_settings=self._document_action_settings,
-            ollama_llm_facade=ollama_llm_facade,
-            ollama_llm_invoker=ollama_llm_invoker,
-        )
-        self._reduce_processor = ReduceDocumentActionProcessor(
-            ollama_llm_facade=ollama_llm_facade,
-            ollama_llm_invoker=ollama_llm_invoker,
-            ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
+            generation_settings=settings.to_generation_settings(),
+            attached_documents_settings=settings.to_attached_settings(),
+            context_reduction_settings=settings.to_reduction_settings(),
         )
 
-    @trace_generation("document_action")
+    def _request_messages(self, request: DocumentActionRequest) -> list[Message]:
+        return [Message(role=MessageRole.human, content=request.instruction)]
+
+    def _system_prompt(self, request: DocumentActionRequest) -> str:
+        guidance = ANSWER_GUIDANCE.get(request.action, DEFAULT_ANSWER_GUIDANCE) if request.action \
+            else DEFAULT_ANSWER_GUIDANCE
+        return f"{ANSWER_SYSTEM_PROMPT}\n\n{guidance}"
+
+    def _generation_progress_message(self, request: DocumentActionRequest) -> str:
+        return self.generation_step_message
+
+    def _request_log_extra(self, request: DocumentActionRequest) -> dict:
+        return {
+            "document_count": len(request.document_ids),
+            "action": request.action.value if request.action else None,
+            "retrieve_context": request.retrieve_context,
+            "process_documents": request.process_documents,
+        }
+
+    def _postprocess_answer(self, answer: str) -> str:
+        return answer[:MAX_CONTENT_CHARS]
+
+    def _build_response(
+            self,
+            state: GenerationState,
+            request: DocumentActionRequest,
+            answer: str,
+    ) -> DocumentActionResponse:
+        return DocumentActionResponse(
+            result=answer,
+            document_ids=request.document_ids,
+            instruction=request.instruction,
+            action=request.action,
+            fragments=state.all_fragments,
+            degraded_stages=self._degraded_stages(state),
+        )
+
     async def execute_document_action(
             self,
             document_action_request: DocumentActionRequest,
             authenticated_user: AuthenticatedUser,
     ) -> DocumentActionResponse:
-        logger.info(
-            "Document action execution initiated",
-            extra={
-                "user_id": authenticated_user.id,
-                "document_ids": document_action_request.document_ids,
-                "action": document_action_request.action.value if document_action_request.action else None,
-            },
-        )
-        try:
-            state = DocumentActionState.from_request(document_action_request, authenticated_user)
-            await self._run_pipeline(state)
-            logger.info(
-                "Document action execution completed",
-                extra={"user_id": authenticated_user.id, "document_ids": document_action_request.document_ids},
-            )
-            return DocumentActionResponse(
-                result=state.result,
-                document_ids=state.document_ids,
-                instruction=state.instruction,
-                action=state.action,
-                fragments=state.all_fragments,
-            )
-        except _KNOWN_EXCEPTIONS:
-            raise
-        except Exception as e:
-            logger.exception(
-                "Unexpected error during document action execution",
-                extra={"user_id": authenticated_user.id, "error_type": type(e).__name__},
-            )
-            raise DocumentActionServiceException(
-                "Unexpected error while processing the document action"
-            ) from e
+        return await self.generate(document_action_request, authenticated_user)
 
-    @trace_generation("document_action_stream")
     async def execute_document_action_stream(
             self,
             document_action_request: DocumentActionRequest,
             authenticated_user: AuthenticatedUser,
     ) -> AsyncIterator[DocumentActionStreamEvent]:
-        try:
-            state = DocumentActionState.from_request(document_action_request, authenticated_user)
-
-            yield DocumentActionStreamProgress(
-                step="context_retrieval",
-                message="Leyendo el contenido del documento...",
-            )
-            await self._context_processor.run(state)
-
-            if state.strategy == ProcessingStrategy.direct:
-                action_message = _ACTION_DIRECT_MESSAGES.get(
-                    document_action_request.action,
-                    "Ejecutando la instrucción sobre el documento...",
-                )
-                yield DocumentActionStreamProgress(
-                    step="action_execution",
-                    message=action_message,
-                )
-                try:
-                    async for delta in self._direct_processor.stream(state):
-                        yield delta
-                except DocumentActionServiceException as e:
-                    yield DocumentActionStreamError(message=e.message, code=e.code)
-                    return
-                except Exception as e:
-                    logger.exception(
-                        "Error during direct action streaming",
-                        extra={"error_type": type(e).__name__},
-                    )
-                    yield DocumentActionStreamError(
-                        message="Error invoking the language model",
-                        code="StreamActionError",
-                    )
-                    return
-
-            elif state.strategy == ProcessingStrategy.map_reduce:
-                yield DocumentActionStreamProgress(
-                    step="chunk_processing",
-                    message="Procesando el documento por secciones...",
-                )
-                await self._chunk_processor.run(state)
-
-                yield DocumentActionStreamProgress(
-                    step="reducing",
-                    message="Integrando los resultados en la respuesta final...",
-                )
-                try:
-                    async for delta in self._reduce_processor.stream(state):
-                        yield delta
-                except DocumentActionServiceException as e:
-                    yield DocumentActionStreamError(message=e.message, code=e.code)
-                    return
-                except Exception as e:
-                    logger.exception(
-                        "Error during reduce action streaming",
-                        extra={"error_type": type(e).__name__},
-                    )
-                    yield DocumentActionStreamError(
-                        message="Error invoking the language model",
-                        code="StreamActionError",
-                    )
-                    return
-
-            state.result = state.result.strip()
-            if not state.result:
-                state.result = _STATIC_FALLBACK_MESSAGE
-            elif len(state.result) > MAX_CONTENT_CHARS:
-                state.result = state.result[:MAX_CONTENT_CHARS]
-
-            yield DocumentActionStreamComplete(
-                result=DocumentActionResponse(
-                    result=state.result,
-                    document_ids=state.document_ids,
-                    instruction=state.instruction,
-                    action=state.action,
-                    fragments=state.all_fragments,
-                ),
-            )
-
-        except _KNOWN_EXCEPTIONS as e:
-            logger.warning(
-                "Known error during document action stream",
-                extra={"error_type": type(e).__name__},
-            )
-            yield DocumentActionStreamError(message=str(e), code=type(e).__name__)
-        except Exception as e:
-            logger.exception(
-                "Unexpected error during document action stream",
-                extra={"error_type": type(e).__name__},
-            )
-            yield DocumentActionStreamError(
-                message="Unexpected error while processing the document action",
-                code="DocumentActionStreamError",
-            )
-
-    async def _run_pipeline(self, state: DocumentActionState) -> None:
-        await self._context_processor.run(state)
-        await self._direct_processor.run(state)
-        await self._chunk_processor.run(state)
-        await self._reduce_processor.run(state)
-        if not state.result.strip():
-            state.result = _STATIC_FALLBACK_MESSAGE
-        elif len(state.result) > MAX_CONTENT_CHARS:
-            state.result = state.result[:MAX_CONTENT_CHARS]
-
+        async for event in self.generate_stream(document_action_request, authenticated_user):
+            yield event

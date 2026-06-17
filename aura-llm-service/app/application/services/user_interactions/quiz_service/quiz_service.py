@@ -3,14 +3,17 @@ import logging
 
 from app.application.utils.llm_json_parser import parse_json_object
 from app.application.services.user_interactions.quiz_service.quiz_prompt import (
-    EXTRACTION_HUMAN_PROMPT,
-    EXTRACTION_SYSTEM_PROMPT,
+    MAP_HUMAN_PROMPT,
+    MAP_SYSTEM_PROMPT,
+    REDUCE_HUMAN_PROMPT,
+    REDUCE_SYSTEM_PROMPT,
     HUMAN_PROMPT,
-    RAG_QUERIES,
     build_system_prompt,
 )
-from app.application.services.user_interactions.quiz_service.quiz_service_exceptions import QuizServiceException
-from app.application.services.user_interactions.quiz_service.quiz_service_interface import QuizServiceInterface
+from app.application.services.user_interactions.quiz_service.exceptions.quiz_service_exceptions import \
+    QuizServiceException
+from app.application.services.user_interactions.quiz_service.interfaces.quiz_service_interface import \
+    QuizServiceInterface
 from app.application.services.user_interactions.quiz_service.quiz_settings import QuizSettings
 from app.application.services.generation_shared.generation_settings import GenerationSettings
 from app.application.services.generation_shared.state.generation_state import GenerationState
@@ -122,10 +125,14 @@ class QuizService(
     stream_complete_event = QuizStreamComplete
     stream_error_event = QuizStreamError
 
+    default_process_documents = True
+    default_retrieve_context = False
+
     human_prompt = HUMAN_PROMPT
-    extraction_system_prompt = EXTRACTION_SYSTEM_PROMPT
-    extraction_human_prompt = EXTRACTION_HUMAN_PROMPT
-    rag_queries = RAG_QUERIES
+    map_system_prompt = MAP_SYSTEM_PROMPT
+    map_human_prompt = MAP_HUMAN_PROMPT
+    reduce_system_prompt = REDUCE_SYSTEM_PROMPT
+    reduce_human_prompt = REDUCE_HUMAN_PROMPT
 
     def __init__(
             self,
@@ -167,4 +174,5 @@ class QuizService(
             questions=questions,
             messages=self._conversation_with_answer(state, raw),
             fragments=state.all_fragments,
+            degraded_stages=self._degraded_stages(state),
         )

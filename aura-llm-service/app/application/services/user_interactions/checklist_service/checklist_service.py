@@ -3,16 +3,19 @@ import logging
 
 from app.application.utils.llm_json_parser import parse_json_object
 from app.application.services.user_interactions.checklist_service.checklist_prompt import (
-    EXTRACTION_HUMAN_PROMPT,
-    EXTRACTION_SYSTEM_PROMPT,
+    MAP_HUMAN_PROMPT,
+    MAP_SYSTEM_PROMPT,
+    REDUCE_HUMAN_PROMPT,
+    REDUCE_SYSTEM_PROMPT,
     HUMAN_PROMPT,
-    RAG_QUERIES,
     build_system_prompt,
 )
-from app.application.services.user_interactions.checklist_service.checklist_service_exceptions import \
-    ChecklistServiceException
-from app.application.services.user_interactions.checklist_service.checklist_service_interface import \
-    ChecklistServiceInterface
+from app.application.services.user_interactions.checklist_service.exceptions.checklist_service_exceptions import (
+    ChecklistServiceException,
+)
+from app.application.services.user_interactions.checklist_service.interfaces.checklist_service_interface import (
+    ChecklistServiceInterface,
+)
 from app.application.services.user_interactions.checklist_service.checklist_settings import ChecklistSettings
 from app.application.services.generation_shared.generation_settings import GenerationSettings
 from app.application.services.generation_shared.state.generation_state import GenerationState
@@ -96,10 +99,14 @@ class ChecklistService(
     stream_complete_event = ChecklistStreamComplete
     stream_error_event = ChecklistStreamError
 
+    default_process_documents = True
+    default_retrieve_context = False
+
     human_prompt = HUMAN_PROMPT
-    extraction_system_prompt = EXTRACTION_SYSTEM_PROMPT
-    extraction_human_prompt = EXTRACTION_HUMAN_PROMPT
-    rag_queries = RAG_QUERIES
+    map_system_prompt = MAP_SYSTEM_PROMPT
+    map_human_prompt = MAP_HUMAN_PROMPT
+    reduce_system_prompt = REDUCE_SYSTEM_PROMPT
+    reduce_human_prompt = REDUCE_HUMAN_PROMPT
 
     def __init__(
             self,
@@ -139,4 +146,5 @@ class ChecklistService(
             items=items,
             messages=self._conversation_with_answer(state, raw),
             fragments=state.all_fragments,
+            degraded_stages=self._degraded_stages(state),
         )

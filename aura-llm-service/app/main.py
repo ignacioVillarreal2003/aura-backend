@@ -10,7 +10,7 @@ from app.api.openapi.descriptions import openapi_tags_metadata, root_api_descrip
 from app.api.openapi.swagger_bearer import install_openapi_bearer
 from app.configuration.cors_configuration import configure_cors
 from app.configuration.dependencies import shutdown_dependencies, startup_dependencies
-from app.configuration.environment_variables import environment_variables
+from app.configuration.environment_variables import get_settings
 from app.configuration.logging_configuration import configure_logging
 from app.configuration.middlewares.authentication_middleware import add_authentication_middleware
 from app.configuration.middlewares.body_size_limit_middleware import add_body_size_limit_middleware
@@ -20,9 +20,10 @@ from app.configuration.middlewares.output_guardrails_middleware import add_outpu
 from app.configuration.metrics import patch_instrumentator_routing
 from app.configuration.tracing import setup_tracing
 
+_settings = get_settings()
 _root_log_level = getattr(
     logging,
-    environment_variables.log_level,
+    _settings.log_level,
     logging.INFO,
 )
 configure_logging(level=_root_log_level)
@@ -34,6 +35,9 @@ async def lifespan(
         app: FastAPI
 ):
     logger.info("Starting application")
+    settings = get_settings()
+    if settings.is_development():
+        settings.log_configuration()
     setup_tracing()
     try:
         await startup_dependencies(
@@ -57,8 +61,8 @@ async def lifespan(
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title=environment_variables.app_name,
-        version=environment_variables.app_version,
+        title=_settings.app_name,
+        version=_settings.app_version,
         description=root_api_description(),
         openapi_tags=openapi_tags_metadata(),
         lifespan=lifespan,
@@ -116,8 +120,8 @@ app = create_app()
 if __name__ == "__main__":
     uvicorn.run(
         "app.main:app",
-        host=environment_variables.app_host,
-        port=environment_variables.app_port,
-        reload=environment_variables.app_reload,
-        log_level=environment_variables.log_level.lower(),
+        host=_settings.app_host,
+        port=_settings.app_port,
+        reload=_settings.app_reload,
+        log_level=_settings.log_level.lower(),
     )

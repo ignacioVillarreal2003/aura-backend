@@ -4,14 +4,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class GraphContextProviderSettings(BaseSettings):
-    """Settings for the knowledge-graph context client.
-
-    The provider is active only when ``enabled`` is true AND ``url`` points
-    to the document-processing service's ``/graph/context`` endpoint. With
-    no URL configured the RAG flow silently skips graph enrichment, so the
-    service boots fine in deployments without Neo4j.
-    """
-
     model_config = SettingsConfigDict(
         env_prefix="GRAPH_CONTEXT_PROVIDER_",
         env_file=".env",

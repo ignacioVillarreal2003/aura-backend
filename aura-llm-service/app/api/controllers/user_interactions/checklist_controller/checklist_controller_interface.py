@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from starlette.responses import StreamingResponse
 
-from app.application.services.user_interactions.checklist_service.checklist_service_interface import (
+from app.application.services.user_interactions.checklist_service.interfaces.checklist_service_interface import (
     ChecklistServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser

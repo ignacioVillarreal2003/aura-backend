@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from starlette.responses import StreamingResponse
 
-from app.application.services.user_interactions.lessons_learned_service.lessons_learned_service_interface import (
+from app.application.services.user_interactions.lessons_learned_service.interfaces.lessons_learned_service_interface import (
     LessonsLearnedServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser

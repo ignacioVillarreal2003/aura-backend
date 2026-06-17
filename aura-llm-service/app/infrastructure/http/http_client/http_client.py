@@ -29,6 +29,15 @@ def _circuit_breaker_ignore_upstream_client_errors(exc: BaseException) -> bool:
     return isinstance(exc, HttpClientException) and 400 <= exc.status_code < 500
 
 
+def _inject_trace_context(headers: dict[str, str]) -> None:
+    try:
+        from opentelemetry.propagate import inject
+
+        inject(headers)
+    except Exception:
+        pass
+
+
 class HttpClient(HttpClientInterface):
     def __init__(
             self,
@@ -37,7 +46,7 @@ class HttpClient(HttpClientInterface):
         self._settings = http_client_settings or HttpClientSettings()
 
         self._client: Optional[httpx.AsyncClient] = None
-        self._breaker: Optional[CircuitBreaker] = None
+        self._breakers: dict[str, CircuitBreaker] = {}
         self._attempt_with_retry: Optional[_AttemptFn] = None
         self._is_started: bool = False
 
@@ -54,6 +63,21 @@ class HttpClient(HttpClientInterface):
             "http_host": parsed.netloc or None,
             "path": parsed.path if parsed.path else "/"
         }
+
+    def _breaker_for(self, url: str) -> CircuitBreaker:
+        host = urlparse(url).netloc or "default"
+        breaker = self._breakers.get(host)
+        if breaker is None:
+            breaker = CircuitBreaker(
+                fail_max=self._settings.circuit_breaker_failure_threshold,
+                timeout_duration=timedelta(
+                    seconds=self._settings.circuit_breaker_recovery_timeout_seconds
+                ),
+                name=f"HttpClient[{host}]",
+                exclude=[_circuit_breaker_ignore_upstream_client_errors],
+            )
+            self._breakers[host] = breaker
+        return breaker
 
     async def start(
             self
@@ -76,14 +100,7 @@ class HttpClient(HttpClientInterface):
             )
 
             try:
-                self._breaker = CircuitBreaker(
-                    fail_max=self._settings.circuit_breaker_failure_threshold,
-                    timeout_duration=timedelta(
-                        seconds=self._settings.circuit_breaker_recovery_timeout_seconds
-                    ),
-                    name="HttpClient",
-                    exclude=[_circuit_breaker_ignore_upstream_client_errors],
-                )
+                self._breakers = {}
 
                 self._client = httpx.AsyncClient(
                     timeout=httpx.Timeout(
@@ -171,15 +188,14 @@ class HttpClient(HttpClientInterface):
             timeout: Optional[float] = None,
             **kwargs
     ) -> httpx.Response:
-        if not self._is_started or not self._client or not self._breaker:
-            raise HttpClientNotStartedException("The HTTP client is not started; call start() first.")
-        if not self._attempt_with_retry:
+        if not self._is_started or not self._client or not self._attempt_with_retry:
             raise HttpClientNotStartedException("The HTTP client is not started; call start() first.")
 
         merged_headers = dict(headers) if headers is not None else {}
         request_id = get_request_id()
         if request_id and not any(k.lower() == "x-request-id" for k in merged_headers):
             merged_headers["X-Request-ID"] = request_id
+        _inject_trace_context(merged_headers)
         if merged_headers:
             kwargs["headers"] = merged_headers
         if timeout is not None:
@@ -193,7 +209,7 @@ class HttpClient(HttpClientInterface):
         )
 
         try:
-            return await self._breaker.call_async(
+            return await self._breaker_for(url).call_async(
                 runner,
                 method,
                 url,
@@ -271,24 +287,27 @@ class HttpClient(HttpClientInterface):
     async def health_check(
             self
     ) -> dict[str, Any]:
-        if not self._is_started or not self._client or not self._breaker:
+        if not self._is_started or not self._client:
             return {
                 "status": "unhealthy",
                 "started": False,
                 "error": "HTTP client not started"
             }
 
-        breaker_state = str(self._breaker.current_state)
-        is_healthy = breaker_state == "closed"
+        breakers = {
+            host: {
+                "state": str(breaker.current_state),
+                "failure_count": breaker.fail_counter,
+            }
+            for host, breaker in self._breakers.items()
+        }
+        is_healthy = all(b["state"] == "closed" for b in breakers.values())
 
         return {
             "status": "healthy" if is_healthy else "degraded",
             "started": True,
-            "circuit_breaker": {
-                "state": breaker_state,
-                "failure_count": self._breaker.fail_counter,
-                "failure_threshold": self._settings.circuit_breaker_failure_threshold
-            },
+            "circuit_breakers": breakers,
+            "circuit_breaker_failure_threshold": self._settings.circuit_breaker_failure_threshold,
             "settings": {
                 "timeout_seconds": self._settings.timeout_seconds,
                 "retry_max_attempts": self._settings.retry_max_attempts,
@@ -324,7 +343,7 @@ class HttpClient(HttpClientInterface):
                 logger.exception("An error occurred while closing HTTP client connections.")
 
         self._client = None
-        self._breaker = None
+        self._breakers = {}
         self._attempt_with_retry = None
         self._is_started = False
 

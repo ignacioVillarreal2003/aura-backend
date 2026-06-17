@@ -4,9 +4,6 @@ from fastapi import HTTPException, Request, status
 
 from app.configuration.tracing import record_retrieved_documents, retrieval_span
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.infrastructure.http.document_context_provider.document_context_provider_request_builders import (
-    build_legacy_question_retrieval_request,
-)
 from app.infrastructure.http.document_context_provider.document_context_provider_settings import (
     DocumentContextProviderSettings,
 )
@@ -124,53 +121,6 @@ class DocumentContextProvider(DocumentContextProviderInterface):
             raise DocumentContextProviderError(
                 "Unexpected error while retrieving fragments from the external service."
             ) from e
-
-    async def retrieve_context_fragments_by_question(
-            self,
-            authenticated_user: AuthenticatedUser,
-            question: str,
-            question_max_fragments: int,
-            use_keywords: Optional[bool] = None,
-            keywords: Optional[str] = None,
-            keywords_max_fragments: Optional[int] = None,
-            use_rerank: Optional[bool] = None,
-            rerank_max_fragments: Optional[int] = None,
-            chat_id: Optional[int] = None,
-    ) -> FragmentListResponse:
-        logger.info(
-            "Retrieving context fragments by question.",
-            extra={
-                "user_id": authenticated_user.id,
-                "use_rerank": bool(use_rerank),
-                "use_keywords": bool(use_keywords),
-            },
-        )
-
-        try:
-            request_body = build_legacy_question_retrieval_request(
-                question=question,
-                question_max_fragments=question_max_fragments,
-                use_keywords=use_keywords,
-                keywords=keywords,
-                keywords_max_fragments=keywords_max_fragments,
-                use_rerank=use_rerank,
-                rerank_max_fragments=rerank_max_fragments,
-                chat_id=chat_id,
-            )
-        except Exception as e:
-            logger.error(
-                "Invalid question request parameters.",
-                extra={"error": str(e)},
-            )
-            raise DocumentContextProviderError(
-                f"The request parameters are invalid: {e}",
-                status_code=400,
-            ) from e
-
-        return await self.retrieve_context_fragments_by_question_request(
-            authenticated_user=authenticated_user,
-            request=request_body,
-        )
 
     async def retrieve_context_fragments_by_document(
             self,
