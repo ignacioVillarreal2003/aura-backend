@@ -83,9 +83,4 @@ class EnvironmentVariables(BaseSettings):
 
 @lru_cache
 def get_settings() -> EnvironmentVariables:
-    """Return the cached settings instance.
-
-    Settings are built lazily on first call (not at import time) so that tests
-    can override the environment and clear the cache via ``get_settings.cache_clear()``.
-    """
     return EnvironmentVariables()

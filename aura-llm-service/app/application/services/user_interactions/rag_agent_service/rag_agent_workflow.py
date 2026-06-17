@@ -178,7 +178,6 @@ class RagAgentWorkflow:
             RagNodeName.graph_context_retriever.value,
         )
 
-        # Branch by intent: full-document lookup vs relevance-based retrieval
         self._graph.add_conditional_edges(
             RagNodeName.graph_context_retriever.value,
             _route_after_graph_retriever,
@@ -188,7 +187,6 @@ class RagAgentWorkflow:
             },
         )
 
-        # Both retrieval branches converge: synthesize if there is any context
         for retrieval_node in (RagNodeName.context_retriever.value, RagNodeName.document_fetcher.value):
             self._graph.add_conditional_edges(
                 retrieval_node,

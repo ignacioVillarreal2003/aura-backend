@@ -7,8 +7,6 @@ _log() {
 	echo "[entrypoint] $*"
 }
 
-# Models the stack needs: the LLM facade model plus, when the document
-# processing service embeds through Ollama, its embedding model.
 _required_models() {
 	raw="${OLLAMA_LLM_FACADE_MODEL_NAME:-}"
 	active_type=$(printf '%s' "${EMBEDDER_ACTIVE_TYPE:-}" | tr '[:upper:]' '[:lower:]')

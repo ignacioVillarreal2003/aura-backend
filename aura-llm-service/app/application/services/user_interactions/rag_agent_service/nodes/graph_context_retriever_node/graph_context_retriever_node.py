@@ -13,14 +13,6 @@ logger = logging.getLogger(__name__)
 
 
 class GraphContextRetrieverNode(RagNodeInterface):
-    """Enriches the RAG state with knowledge-graph facts for the query.
-
-    Runs right after the query analyzer so it can reuse the extracted
-    keywords as entity lookup terms. Always degrades gracefully: when the
-    provider is missing/inactive or the call fails, the state simply gets
-    an empty ``graph_facts`` and the flow continues on vector retrieval.
-    """
-
     def __init__(
             self,
             graph_context_provider: Optional[GraphContextProviderInterface],

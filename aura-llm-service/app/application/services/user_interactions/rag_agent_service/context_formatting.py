@@ -5,11 +5,6 @@ from app.infrastructure.http.document_context_provider.dtos.fragment_response im
 
 
 def build_document_context(fragments: List[FragmentResponse], max_context_chars: int) -> str:
-    """Render fragments grouped per document, in fragment order, within a char budget.
-
-    Section headers carry both the document id and its name so the synthesizer
-    can produce verifiable [Documento #ID] citations.
-    """
     if not fragments:
         return ""
 

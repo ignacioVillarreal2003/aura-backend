@@ -1,15 +1,3 @@
-"""Startup context-budget validation (C1).
-
-Ensures the model's context window (``num_ctx``) is large enough to hold the
-assembled prompt plus the reserved output, so Ollama never silently
-left-truncates the system prompt or retrieved context.
-
-    required = context_tokens + prompt_overhead_tokens + output_reserve_tokens
-
-``context_tokens`` comes from the generation settings (the context block budget),
-the overhead and output reserve from the LLM facade settings.
-"""
-
 import logging
 from dataclasses import dataclass
 
@@ -20,8 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 class InsufficientContextWindowError(RuntimeError):
-    """Raised at startup when num_ctx cannot hold the configured prompt budget
-    and strict checking is enabled."""
+    pass
 
 
 @dataclass(frozen=True)
@@ -70,9 +57,6 @@ def validate_context_budget(
         facade_settings: OllamaLLMFacadeSettings,
         generation_settings: GenerationSettings,
 ) -> ContextBudget:
-    """Validate the budget and surface the outcome. Raises
-    InsufficientContextWindowError only when the budget does not fit and the
-    facade is configured with ``fail_on_insufficient_context``."""
     budget = compute_context_budget(facade_settings, generation_settings)
 
     if budget.fits:

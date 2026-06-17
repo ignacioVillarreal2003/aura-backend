@@ -4,7 +4,6 @@ import json
 import logging
 from contextlib import contextmanager, nullcontext
 from typing import Any, Iterator, Optional
-
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

@@ -1,19 +1,3 @@
-"""Prompts for the document question service.
-
-Two concerns, named to match how they are consumed:
-
-* ``ANSWER_*``          — final answer synthesis (the service's system + human
-  prompt). The human prompt uses the ``{context}`` / ``{input}`` placeholders
-  expected by ``generation_messages.build_generation_messages``.
-* ``MAP_*`` / ``REDUCE_*`` — the two stages of the shared context reduction
-  (only runs when the gathered context is too large):
-    - MAP    extracts, from raw fragments, the passages relevant to the question.
-    - REDUCE merges those partial extractions into a tighter set.
-  Both reduction human prompts use the ``{query}`` / ``{fragments}`` placeholders
-  expected by ``ContextReductionProcessor``.
-"""
-
-# ── Final answer synthesis ────────────────────────────────────────────────────
 ANSWER_SYSTEM_PROMPT = """
 Eres AURA, un asistente especializado en documentación técnica, normativa e institucional.
 
@@ -114,7 +98,6 @@ Si la información es insuficiente:
 # Respuesta
 """.strip()
 
-# ── Context reduction · MAP (extract from raw fragments) ──────────────────────
 MAP_SYSTEM_PROMPT = """
 Eres un asistente especializado en extracción de información relevante.
 Dado un conjunto de fragmentos de un documento y una pregunta, extrae ÚNICAMENTE los pasajes y datos directamente útiles para responder esa pregunta.
@@ -136,7 +119,6 @@ Fragmentos del documento:
 Extrae los pasajes directamente relevantes para la pregunta (copia el texto original):
 """.strip()
 
-# ── Context reduction · REDUCE (merge partial extractions) ────────────────────
 REDUCE_SYSTEM_PROMPT = """
 Eres un asistente especializado en consolidación de información extraída.
 Recibes pasajes ya extraídos de un documento (en pasadas anteriores) y una pregunta. Tu tarea es combinarlos en un conjunto más compacto, sin redundancias, preservando todo lo relevante para responder la pregunta.

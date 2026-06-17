@@ -2,14 +2,18 @@ import logging
 from fastapi import FastAPI
 
 from app.configuration.dependency_registry import DependencyRegistry
-from app.application.services.user_interactions.document_action_service.document_action_service import \
-    DocumentActionService
-from app.application.services.user_interactions.document_summary_service.document_summary_service import \
-    DocumentSummaryService
-from app.application.services.user_interactions.document_question_service.document_question_service import \
-    DocumentQuestionService
-from app.application.services.processing.document_classify_service.document_classify_service import \
-    DocumentClassifyService
+from app.application.services.user_interactions.document_action_service.document_action_service import (
+    DocumentActionService,
+)
+from app.application.services.user_interactions.document_summary_service.document_summary_service import (
+    DocumentSummaryService,
+)
+from app.application.services.user_interactions.document_question_service.document_question_service import (
+    DocumentQuestionService,
+)
+from app.application.services.processing.document_classify_service.document_classify_service import (
+    DocumentClassifyService,
+)
 from app.application.services.processing.fragment_enrich_service.fragment_enrich_service import FragmentEnrichService
 from app.application.services.processing.graph_extraction_service.graph_extraction_service import GraphExtractionService
 from app.application.services.processing.graph_query_translation_service.graph_query_translation_service import (
@@ -21,10 +25,12 @@ from app.application.services.user_interactions.report_service.report_service im
 from app.application.services.user_interactions.checklist_service.checklist_service import ChecklistService
 from app.application.services.user_interactions.timeline_service.timeline_service import TimelineService
 from app.application.services.user_interactions.quiz_service.quiz_service import QuizService
-from app.application.services.user_interactions.lessons_learned_service.lessons_learned_service import \
-    LessonsLearnedService
-from app.application.services.user_interactions.decision_brief_service.decision_brief_service import \
-    DecisionBriefService
+from app.application.services.user_interactions.lessons_learned_service.lessons_learned_service import (
+    LessonsLearnedService,
+)
+from app.application.services.user_interactions.decision_brief_service.decision_brief_service import (
+    DecisionBriefService,
+)
 from app.application.services.generation_shared.generation_settings import GenerationSettings
 from app.configuration.context_budget import validate_context_budget
 from app.infrastructure.guardrails.nemo_guardrails_service import NemoGuardrailsService

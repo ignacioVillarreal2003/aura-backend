@@ -21,18 +21,6 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentFetcherNode(RagNodeInterface):
-    """Serves document_lookup intent: returns whole documents, not loose fragments.
-
-    Strategy:
-      1. Discovery search (semantic + BM25 over keywords) to find which
-         documents the user is referring to.
-      2. Fetch every fragment of the top matching documents so the
-         synthesizer sees their full content.
-
-    Always degrades gracefully: any failure yields an empty result and the
-    workflow falls back.
-    """
-
     def __init__(
             self,
             document_context_provider: DocumentContextProviderInterface,

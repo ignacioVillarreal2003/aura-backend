@@ -52,7 +52,7 @@ services:
     healthcheck:
       <<: *healthcheck-api-v1
       start_period: 600s
-    restart: on-failure
+    restart: unless-stopped
     volumes:
       - huggingface_cache:/root/.cache/huggingface
     deploy:
@@ -76,7 +76,7 @@ services:
     healthcheck:
       <<: *healthcheck-api-v1
       start_period: 60s
-    restart: on-failure
+    restart: unless-stopped
     deploy:
       resources:
         reservations:
@@ -100,7 +100,7 @@ services:
       aura_db:
         condition: service_healthy
     healthcheck: *healthcheck-metrics
-    restart: on-failure
+    restart: unless-stopped
 
   aura-chat-service:
     build: ../../aura-chat-service
@@ -121,7 +121,7 @@ services:
     healthcheck:
       <<: *healthcheck-api-v1
       start_period: 300s
-    restart: on-failure
+    restart: unless-stopped
     volumes:
       - huggingface_cache:/app/.cache/huggingface
 
@@ -142,7 +142,7 @@ services:
       aura-auth-service:
         condition: service_healthy
     healthcheck: *healthcheck-api-v1
-    restart: on-failure
+    restart: unless-stopped
 
   aura-notification-worker:
     build: ../../aura-notification-service
@@ -167,7 +167,7 @@ services:
       aura-notification-service:
         condition: service_healthy
     healthcheck: *healthcheck-celery-worker
-    restart: on-failure
+    restart: unless-stopped
 
   aura-document-collection-service:
     build: ../../aura-document-collection-service
@@ -180,7 +180,7 @@ services:
       aura_db:
         condition: service_healthy
     healthcheck: *healthcheck-api-v1
-    restart: on-failure
+    restart: unless-stopped
 
   llm:
     build:
@@ -205,14 +205,8 @@ services:
     environment:
       NVIDIA_VISIBLE_DEVICES: all
       OLLAMA_GPU_OVERHEAD: 0
-      # Parallel generation slots per loaded model on a single Ollama instance.
-      # Keep aligned with the app-side LLM_MAX_CONCURRENCY (the lower of the two
-      # caps wins). Override from docker/docker-compose/.env.
-      OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-4}
+      OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-2}
     healthcheck:
-      # healthcheck.sh also verifies the required models are present, so
-      # dependent services wait until models finish pulling. The long
-      # start_period covers the first-ever pull on a slow connection.
       test: ["CMD", "/healthcheck.sh"]
       interval: 30s
       timeout: 15s

@@ -17,15 +17,6 @@ _CONTEXT_PREVIEW_CHARS = 600
 
 
 class GuardrailsNode(RagNodeInterface):
-    """Validates the synthesized answer before it reaches the user.
-
-    Two stages:
-      1. Rule-based check (fast, no LLM): minimum length and sensitive
-         patterns; on failure attempts an LLM redaction pass.
-      2. LLM grounding check: approves or rejects the answer against the
-         retrieved context. Fails open (approved) if the check itself errors.
-    """
-
     def __init__(
             self,
             ollama_llm_facade: OllamaLLMFacadeInterface,

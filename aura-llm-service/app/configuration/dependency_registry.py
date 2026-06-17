@@ -9,11 +9,6 @@ _CleanupFn = Callable[[], Awaitable[None]]
 
 
 class DependencyRegistry:
-    """Tracks dependencies registered on ``app.state`` during startup so that a
-    failure partway through can be rolled back: cleanups run in reverse order and
-    state attributes are removed. ``commit`` hands ownership to the app, after
-    which ``rollback`` is a no-op."""
-
     def __init__(self, app: FastAPI) -> None:
         self._app = app
         self._registered: list[str] = []

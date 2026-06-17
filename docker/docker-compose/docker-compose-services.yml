@@ -53,7 +53,7 @@ services:
     healthcheck:
       <<: *healthcheck-api-v1
       start_period: 600s
-    restart: on-failure
+    restart: unless-stopped
     volumes:
       - huggingface_cache:/root/.cache/huggingface
 
@@ -70,7 +70,7 @@ services:
     healthcheck:
       <<: *healthcheck-api-v1
       start_period: 60s
-    restart: on-failure
+    restart: unless-stopped
 
   aura-auth-service:
     build: ../../aura-auth-service
@@ -85,7 +85,7 @@ services:
       aura_db:
         condition: service_healthy
     healthcheck: *healthcheck-metrics
-    restart: on-failure
+    restart: unless-stopped
 
   aura-chat-service:
     build: ../../aura-chat-service
@@ -106,7 +106,7 @@ services:
     healthcheck:
       <<: *healthcheck-api-v1
       start_period: 300s
-    restart: on-failure
+    restart: unless-stopped
     volumes:
       - huggingface_cache:/app/.cache/huggingface
 
@@ -127,7 +127,7 @@ services:
       aura-auth-service:
         condition: service_healthy
     healthcheck: *healthcheck-api-v1
-    restart: on-failure
+    restart: unless-stopped
 
   aura-notification-worker:
     build: ../../aura-notification-service
@@ -137,7 +137,7 @@ services:
       - -A
       - aura_notification_service
       - worker
-      - --loglevel=debug
+      - --loglevel=info
       - --concurrency=2
       - --queues=notifications
     env_file:
@@ -152,7 +152,7 @@ services:
       aura-notification-service:
         condition: service_healthy
     healthcheck: *healthcheck-celery-worker
-    restart: on-failure
+    restart: unless-stopped
 
   aura-document-collection-service:
     build: ../../aura-document-collection-service
@@ -165,7 +165,7 @@ services:
       aura_db:
         condition: service_healthy
     healthcheck: *healthcheck-api-v1
-    restart: on-failure
+    restart: unless-stopped
 
   aura-gateway:
     build: ../../aura-gateway
@@ -190,7 +190,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
-    restart: on-failure
+    restart: unless-stopped
 
   llm:
     build:
@@ -204,9 +204,6 @@ services:
       - llm_data:/root/.ollama
     restart: unless-stopped
     healthcheck:
-      # healthcheck.sh also verifies the required models are present, so
-      # dependent services wait until models finish pulling. The long
-      # start_period covers the first-ever pull on a slow connection.
       test: ["CMD", "/healthcheck.sh"]
       interval: 30s
       timeout: 15s

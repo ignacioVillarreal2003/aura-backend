@@ -1,9 +1,4 @@
 # ============================================
-# Versiones pineadas (==) para builds reproducibles.
-# Las mismas versiones se usan en dev y en la imagen Docker/prod.
-# ============================================
-
-# ============================================
 # Web Framework & Server
 # ============================================
 fastapi==0.136.3
@@ -38,14 +33,12 @@ prometheus-fastapi-instrumentator==8.0.0
 python-json-logger==4.1.0
 
 # ============================================
-# Observabilidad (tracing — se importa de forma perezosa,
-# desactivado por defecto vía TRACING_ENABLED)
+# Observabilidad
 # ============================================
 openinference-instrumentation-langchain==0.1.66
 arize-phoenix-otel==0.16.1
 
 # ============================================
-# Guardrails (se importa de forma perezosa,
-# desactivado por defecto)
+# Guardrails
 # ============================================
 nemoguardrails==0.22.0

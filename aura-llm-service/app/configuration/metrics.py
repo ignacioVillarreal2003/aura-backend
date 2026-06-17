@@ -67,18 +67,6 @@ def record_guardrails_block(stage: str) -> None:
 
 
 def patch_instrumentator_routing() -> None:
-    """Make prometheus-fastapi-instrumentator tolerant of FastAPI's ``_IncludedRouter``.
-
-    Newer FastAPI versions append ``_IncludedRouter`` objects to ``app.routes`` when
-    ``include_router()`` is used. These objects match a request scope but expose no
-    ``.path`` attribute, so the instrumentator's route-name resolver crashes with
-    ``AttributeError: '_IncludedRouter' object has no attribute 'path'`` on every
-    request (the handler name is resolved before excluded handlers are checked).
-
-    We replace the resolver with a version that reads ``.path`` defensively and
-    recurses into any route exposing nested routes, mirroring the original Mount
-    handling. Safe to call once at startup; the upstream package has no fix yet.
-    """
     from prometheus_fastapi_instrumentator import routing
     from starlette.routing import Match
 

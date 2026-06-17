@@ -48,14 +48,6 @@ class DocumentQuestionService(
     StreamingGenerationService[DocumentQuestionRequest, DocumentQuestionResponse],
     DocumentQuestionServiceInterface,
 ):
-    """Answers questions over the user's documents with real token streaming.
-
-    The whole context pipeline (reformulation, corpus retrieval, attached
-    documents, reduction) is delegated to the shared streaming base. This is the
-    most-used interaction, so corpus retrieval is on by default; attached
-    documents are processed when the request opts in via ``process_documents``.
-    """
-
     label = "document_question"
     exception_cls = DocumentQuestionServiceException
     unexpected_error_message = "Ocurrió un error inesperado al procesar la consulta."
