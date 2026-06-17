@@ -1,6 +1,9 @@
 # IDE / editors
 .idea/
 .vscode/
+*.swp
+*.swo
+*~
 
 # Claude Code
 .claude/
@@ -12,33 +15,63 @@ Thumbs.db
 # Python
 __pycache__/
 *.py[cod]
+*$py.class
 *.pyo
 *.pyd
+*.so
 .Python
+*.egg
 *.egg-info/
+.eggs/
 dist/
 build/
-.eggs/
-.mypy_cache/
-.ruff_cache/
-.pytest_cache/
-.coverage
-htmlcov/
+develop-eggs/
+eggs/
+sdist/
+wheels/
+parts/
+var/
+lib/
+lib64/
+.installed.cfg
 
 # Virtual environments
 .venv/
 venv/
-env/
 
-# Docker
-*.env
-.env.local
-.env.*.local
+# Testing / coverage
+.pytest_cache/
+.cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+
+# Type checkers / linters
+.mypy_cache/
+.ruff_cache/
+.dmypy.json
+dmypy.json
+
+# Django / DB
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+*.sqlite3
+*.sqlite
+*.sql
+staticfiles/
+mediafiles/
+media/
 
 # Node
 node_modules/
 npm-debug.log*
 yarn-error.log*
+
+# Docker / runtime
+*.pid
+*.tar
 
 # Logs
 *.log
