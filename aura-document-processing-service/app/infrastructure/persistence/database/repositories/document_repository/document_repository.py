@@ -372,6 +372,62 @@ class DocumentRepository(DocumentRepositoryInterface):
             )
             raise DatabaseException("Failed to soft-delete the document.") from e
 
+    async def restore_document_by_id(
+            self,
+            document_id: int,
+            user_id: int,
+            database_session: AsyncSession
+    ) -> Optional[Document]:
+        try:
+            logger.debug(
+                "Restoring the document.",
+                extra={
+                    "document_id": document_id,
+                    "user_id": user_id
+                }
+            )
+
+            result = await database_session.execute(
+                select(Document).where(
+                    Document.id == document_id,
+                    Document.deleted_at.is_not(None)
+                )
+            )
+            document = result.scalars().first()
+
+            if document is None:
+                logger.warning(
+                    "No soft-deleted document was found for restore.",
+                    extra={
+                        "document_id": document_id
+                    }
+                )
+                return None
+
+            document.deleted_by = None
+            document.deleted_at = None
+            document.updated_by = user_id
+            document.updated_at = datetime.now(timezone.utc)
+
+            await database_session.flush()
+            await database_session.refresh(document)
+
+            logger.info(
+                "The document was restored successfully.",
+                extra={
+                    "document_id": document_id,
+                    "user_id": user_id
+                }
+            )
+            return document
+
+        except SQLAlchemyError as e:
+            logger.exception(
+                "Failed to restore the document.",
+                extra={"document_id": document_id, "user_id": user_id},
+            )
+            raise DatabaseException("Failed to restore the document.") from e
+
     async def get_stale_uploaded_documents(
             self,
             created_before: datetime,

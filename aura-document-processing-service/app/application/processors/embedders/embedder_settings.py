@@ -84,6 +84,31 @@ class EmbedderSettings(BaseSettings):
             return self.huggingface_model
         return str(self.active_type)
 
+    @property
+    def active_embedding_identity(self) -> str:
+        """Stable identity of the active embedding configuration.
+
+        Cosine similarity is only meaningful between vectors produced by the *same*
+        configuration. This identity is persisted per fragment (Fragment.embedding_identity)
+        and matched at query time, so a partially re-embedded corpus never mixes
+        incompatible vector spaces, and a re-embed treats a config change as stale.
+
+        It captures every input that shifts the vector space: backend type, model,
+        dimension, normalization and the query/document instruction prefixes — an
+        instruction change silently moves the space, so it must invalidate old vectors.
+        The ``v1`` prefix lets the format evolve without colliding with stored values.
+        """
+        parts = [
+            f"type={self.active_type.value}",
+            f"model={self.active_model_name}",
+            f"dim={self.vector_dimension}",
+        ]
+        if self.active_type == EmbedderType.huggingface:
+            parts.append(f"norm={int(self.huggingface_normalize_embeddings)}")
+            parts.append(f"qi={self.huggingface_query_instruction}")
+            parts.append(f"di={self.huggingface_embed_instruction}")
+        return "v1|" + "|".join(parts)
+
     @model_validator(
         mode="after"
     )

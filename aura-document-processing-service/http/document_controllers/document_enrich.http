@@ -1,0 +1,46 @@
+@dpsBase = http://localhost:8000/api/v1
+@authToken = user_token_123
+
+### Enriquecer un documento (aditivo, sin borrar ni re-chunkear)
+POST {{dpsBase}}/document-enrich
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "selector": { "document_ids": [1] }
+}
+
+
+### Enriquecer varios documentos
+POST {{dpsBase}}/document-enrich
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "selector": { "document_ids": [1, 2, 3] }
+}
+
+
+### Enriquecer TODA la base (de a poco)
+POST {{dpsBase}}/document-enrich
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "selector": { "all_documents": true }
+}
+
+
+### Estado del job de enriquecimiento
+GET {{dpsBase}}/document-enrich/status
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Detener el job en curso
+DELETE {{dpsBase}}/document-enrich/stop
+Accept: application/json
+Authorization: Bearer {{authToken}}

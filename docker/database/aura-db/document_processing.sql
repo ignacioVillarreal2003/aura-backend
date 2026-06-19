@@ -59,6 +59,13 @@ CREATE TABLE fragment
     embedding_model VARCHAR(255) NOT NULL,
     embedding_dim   INT          NOT NULL DEFAULT 1024
         CONSTRAINT chk_fragment_embedding_dim CHECK (embedding_dim = 1024),
+    -- Full identity of the embedding configuration that produced the vector:
+    -- backend type, model, dimension, normalization and the query/document
+    -- instruction prefixes (see EmbedderSettings.active_embedding_identity).
+    -- Cosine similarity is only meaningful between vectors of the same identity,
+    -- so retrieval filters on it (embedding_model alone misses instruction/
+    -- normalization drift). A change here marks existing vectors stale for re-embed.
+    embedding_identity TEXT      NOT NULL,
     fragment_index INT         NOT NULL,
     summary        TEXT,
     entities       JSONB,
@@ -118,6 +125,12 @@ CREATE INDEX idx_document_category_trgm
 
 CREATE INDEX idx_fragment_document_id ON fragment (document_id);
 CREATE INDEX idx_fragment_deleted_at ON fragment (deleted_at);
+
+-- Retrieval filters semantic queries by embedding_identity so query and corpus
+-- vectors always share one vector space (matters while a corpus is partially
+-- re-embedded). Partial on active rows to match the `deleted_at IS NULL` filter.
+CREATE INDEX idx_fragment_embedding_identity
+    ON fragment (embedding_identity) WHERE (deleted_at IS NULL);
 CREATE UNIQUE INDEX idx_fragment_doc_index_active
     ON fragment (document_id, fragment_index) WHERE (deleted_at IS NULL);
 

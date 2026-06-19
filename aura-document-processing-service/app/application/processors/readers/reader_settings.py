@@ -27,6 +27,7 @@ class ReaderSettings(BaseSettings):
     docling_enabled: bool = Field(default=False)
     docling_device: Literal["cpu", "cuda", "mps", "auto"] = "auto"
     docling_num_threads: int = Field(default=4, ge=1, le=16)
+    docling_artifacts_path: Optional[str] = Field(default=None)
 
     @model_validator(
         mode="after"
@@ -36,12 +37,18 @@ class ReaderSettings(BaseSettings):
     ) -> "ReaderSettings":
         self.tesseract_path = self._normalize_optional_path(self.tesseract_path)
         self.poppler_path = self._normalize_optional_path(self.poppler_path)
+        self.docling_artifacts_path = self._normalize_optional_path(self.docling_artifacts_path)
 
         if self.tesseract_path is not None:
             self._validate_existing_path(self.tesseract_path, "tesseract_path", should_be_file=True)
 
         if self.poppler_path is not None:
             self._validate_existing_path(self.poppler_path, "poppler_path", should_be_file=False)
+
+        if self.docling_artifacts_path is not None:
+            self._validate_existing_path(
+                self.docling_artifacts_path, "docling_artifacts_path", should_be_file=False
+            )
 
         if self.pdf_use_parallel and self.pdf_max_workers == 1:
             self.pdf_use_parallel = False

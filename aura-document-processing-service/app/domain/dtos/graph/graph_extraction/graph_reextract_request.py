@@ -1,17 +1,16 @@
 from pydantic import BaseModel, Field
 
-from app.domain.field_limits import MAX_ID
+from app.domain.dtos.document.bulk.document_selector import DocumentSelector
 
 
 class GraphReextractRequest(BaseModel):
-    document_id: int = Field(..., ge=1, le=MAX_ID, description="ID del documento a re-extraer.")
-    force: bool = Field(
-        default=False,
-        description=(
-            "Si True, fuerza la extracción aunque ya exista un job en curso, "
-            "liberando el lock previo. Las entidades y relaciones existentes "
-            "se fusionan idempotentemente mediante MERGE."
-        ),
-    )
+    """Extract the knowledge graph for the selected documents (additive merge).
+
+    The selector chooses one document, several, or the whole corpus. Existing entities
+    and relations are merged idempotently (MERGE), so nothing is deleted. With
+    ``force=True`` any active extraction lock is released before enqueuing.
+    """
+    selector: DocumentSelector = Field(...)
+    force: bool = Field(default=False)
 
     model_config = {"extra": "forbid"}

@@ -83,6 +83,15 @@ class DocumentRepositoryInterface(ABC):
         pass
 
     @abstractmethod
+    async def restore_document_by_id(
+            self,
+            document_id: int,
+            user_id: int,
+            database_session: AsyncSession
+    ) -> Optional[Document]:
+        pass
+
+    @abstractmethod
     async def get_stale_uploaded_documents(
             self,
             created_before: datetime,

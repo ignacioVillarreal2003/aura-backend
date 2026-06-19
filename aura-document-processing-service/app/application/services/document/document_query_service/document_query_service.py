@@ -19,6 +19,7 @@ from app.application.services.document.document_query_service.interfaces.documen
 )
 from app.domain.dtos.document.document_query.document_list_response import DocumentListResponse
 from app.domain.dtos.document.document_query.document_response import DocumentResponse
+from app.domain.dtos.document.document_query.document_status_response import DocumentStatusResponse
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.chat_membership.chat_membership_provider_interface import (
     ChatMembershipProviderInterface,
@@ -48,7 +49,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
         self._chat_membership_provider = chat_membership_provider
         self._settings = document_query_service_settings or DocumentQueryServiceSettings()
 
-    async def get_document(
+    async def get_document_manage(
             self,
             document_id: int,
             database_session: AsyncSession,
@@ -67,8 +68,6 @@ class DocumentQueryService(DocumentQueryServiceInterface):
                 raise DocumentQueryInvalidRequestException("The document identifier must be a positive number.")
 
             document = await self._get_document_or_raise(document_id, database_session)
-
-            await self._require_document_access(document, authenticated_user)
 
             logger.info(
                 "The document was fetched successfully.",
@@ -94,7 +93,101 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             )
             raise DocumentQueryServiceException("An unexpected error occurred while fetching the document.") from e
 
-    async def get_documents(
+    async def get_document_status_manage(
+            self,
+            document_id: int,
+            database_session: AsyncSession,
+            authenticated_user: AuthenticatedUser,
+    ) -> DocumentStatusResponse:
+        logger.info(
+            "Fetching the processing status of a document was initiated.",
+            extra={
+                "document_id": document_id,
+                "user_id": authenticated_user.id
+            }
+        )
+
+        try:
+            if document_id <= 0:
+                raise DocumentQueryInvalidRequestException("The document identifier must be a positive number.")
+
+            document = await self._get_document_or_raise(document_id, database_session)
+
+            logger.info(
+                "The document status was fetched successfully.",
+                extra={
+                    "document_id": document_id,
+                    "user_id": authenticated_user.id
+                }
+            )
+            return DocumentStatusResponse.model_validate(document)
+
+        except (
+                DocumentQueryNotFoundException,
+                UnauthorizedException,
+                DocumentQueryInvalidRequestException,
+        ):
+            raise
+        except Exception as e:
+            logger.exception(
+                "An unexpected error occurred while fetching the document status.",
+                extra={
+                    "document_id": document_id
+                }
+            )
+            raise DocumentQueryServiceException(
+                "An unexpected error occurred while fetching the document status."
+            ) from e
+
+    async def get_document_status(
+            self,
+            document_id: int,
+            database_session: AsyncSession,
+            authenticated_user: AuthenticatedUser,
+    ) -> DocumentStatusResponse:
+        logger.info(
+            "Fetching the processing status of a document was initiated.",
+            extra={
+                "document_id": document_id,
+                "user_id": authenticated_user.id
+            }
+        )
+
+        try:
+            if document_id <= 0:
+                raise DocumentQueryInvalidRequestException("The document identifier must be a positive number.")
+
+            document = await self._get_document_or_raise(document_id, database_session)
+
+            await self._require_document_access(document, authenticated_user)
+
+            logger.info(
+                "The document status was fetched successfully.",
+                extra={
+                    "document_id": document_id,
+                    "user_id": authenticated_user.id
+                }
+            )
+            return DocumentStatusResponse.model_validate(document)
+
+        except (
+                DocumentQueryNotFoundException,
+                UnauthorizedException,
+                DocumentQueryInvalidRequestException,
+        ):
+            raise
+        except Exception as e:
+            logger.exception(
+                "An unexpected error occurred while fetching the document status.",
+                extra={
+                    "document_id": document_id
+                }
+            )
+            raise DocumentQueryServiceException(
+                "An unexpected error occurred while fetching the document status."
+            ) from e
+
+    async def get_documents_manage(
             self,
             database_session: AsyncSession,
             authenticated_user: AuthenticatedUser,

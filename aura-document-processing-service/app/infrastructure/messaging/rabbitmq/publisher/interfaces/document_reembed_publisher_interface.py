@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Optional
 
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 
@@ -11,5 +12,6 @@ class DocumentReembedPublisherInterface(ABC):
             document_id: int,
             user: AuthenticatedUser,
             force: bool = False,
+            batch_id: Optional[str] = None,
     ) -> str:
         pass

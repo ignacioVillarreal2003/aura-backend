@@ -32,14 +32,21 @@ TEST_USER_EMAIL = "user@test.com"
 
 ALL_PERMISSIONS = [
     "INGEST_DOCUMENT",
-    "GET_DOCUMENT",
-    "LIST_DOCUMENTS",
+    "UPDATE_DOCUMENT_MANAGE",
+    "REEMBED_DOCUMENT_MANAGE",
+    "REPROCESS_DOCUMENT_MANAGE",
+    "ENRICH_DOCUMENT_MANAGE",
+    "GET_DOCUMENT_MANAGE",
+    "GET_DOCUMENT_STATUS",
+    "GET_DOCUMENT_STATUS_MANAGE",
+    "LIST_DOCUMENTS_MANAGE",
     "LIST_DOCUMENTS_BY_CHAT",
     "DOWNLOAD_DOCUMENT",
-    "DOWNLOAD_DOCUMENT_ADMIN",
+    "DOWNLOAD_DOCUMENT_MANAGE",
     "SOFT_DELETE_DOCUMENT",
     "SOFT_DELETE_DOCUMENTS_BY_CHAT",
-    "SOFT_DELETE_DOCUMENT_ADMIN",
+    "SOFT_DELETE_DOCUMENT_MANAGE",
+    "RESTORE_DOCUMENT_MANAGE",
     "LIST_CONTEXT_FRAGMENTS_BY_QUESTION",
     "LIST_CONTEXT_FRAGMENTS_BY_DOCUMENTS",
     "SEARCH_DOCUMENTS_BY_CONTENT",
@@ -160,6 +167,16 @@ def mock_document_query_service(app):
 
 
 @pytest.fixture
+def mock_update_document_service(app):
+    yield from _mock_service(app, "update_document_service")
+
+
+@pytest.fixture
+def mock_restore_document_service(app):
+    yield from _mock_service(app, "restore_document_service")
+
+
+@pytest.fixture
 def mock_document_download_service(app):
     yield from _mock_service(app, "document_download_service")
 
@@ -182,3 +199,8 @@ def mock_graph_entity_service(app):
 @pytest.fixture
 def mock_graph_path_service(app):
     yield from _mock_service(app, "graph_path_service")
+
+
+@pytest.fixture
+def mock_bulk_dispatch_service(app):
+    yield from _mock_service(app, "bulk_dispatch_service")

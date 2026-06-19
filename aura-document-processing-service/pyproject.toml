@@ -1,41 +1,25 @@
-# Tooling configuration for aura-document-processing-service.
-#
-# This file does NOT declare a installable package; the service runs from the
-# `app` package via uvicorn (see Dockerfile). It centralises the quality gate:
-# ruff (lint), mypy (typing baseline) and pytest (async tests).
-
-# ----------------------------------------------------------------------------
-# Ruff — linting and import hygiene
-# ----------------------------------------------------------------------------
 [tool.ruff]
 target-version = "py313"
 line-length = 120
 extend-exclude = ["__pycache__", ".venv", "venv"]
 
 [tool.ruff.lint]
-# High-signal rules are ENFORCED and currently green. Stylistic/modernisation
-# rule sets ("I" import-order, "UP" pyupgrade) are intentionally left out of the
-# enforced set for now: applying them touches ~580 files and would bury the
-# meaningful diff during the in-progress refactor. They can be enabled and
-# auto-applied (`ruff check --fix`) in a dedicated follow-up commit.
 select = [
-    "F",    # pyflakes — undefined names, unused imports, real bugs
-    "E4", "E7", "E9",  # pycodestyle (import placement, statements, syntax)
-    "W",    # pycodestyle warnings
-    "B",    # flake8-bugbear — likely bugs
-    "C4",   # flake8-comprehensions
-    "PIE",  # flake8-pie — dead code / redundancy
-    "RUF",  # ruff-specific
+    "F",
+    "E4", "E7", "E9",
+    "W",
+    "B",
+    "C4",
+    "PIE",
+    "RUF",
 ]
 ignore = [
-    "E501",    # line length is advisory here, not a build failure
-    "RUF001",  # ambiguous-unicode: Spanish content/messages are intentional
-    "RUF003",  # ambiguous-unicode in comments (Spanish)
+    "E501",
+    "RUF001",
+    "RUF003",
 ]
 
 [tool.ruff.lint.flake8-bugbear]
-# FastAPI deliberately uses callables as argument defaults (Depends/File/...).
-# Whitelisting them removes the B008 false positives without disabling B008.
 extend-immutable-calls = [
     "fastapi.Depends",
     "fastapi.File",
@@ -50,20 +34,12 @@ extend-immutable-calls = [
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
 
-# ----------------------------------------------------------------------------
-# Mypy — typing baseline (incremental; not strict everywhere yet)
-# ----------------------------------------------------------------------------
 [tool.mypy]
 python_version = "3.13"
 files = ["app"]
-# `app` is a namespace package (no __init__.py); without these, mypy resolves
-# e.g. app/domain/types.py as the stdlib `types` and bails out before checking
-# anything. Anchoring the package base at the project root fixes module names.
 mypy_path = "."
 namespace_packages = true
 explicit_package_bases = true
-# Heavy ML/LLM deps (torch, langchain, docling, sentence-transformers...) ship
-# without complete stubs; silence those so mypy reports OUR types, not theirs.
 ignore_missing_imports = true
 follow_imports = "silent"
 no_implicit_optional = true
@@ -71,10 +47,6 @@ warn_redundant_casts = true
 warn_unused_ignores = false
 check_untyped_defs = true
 
-# Incremental strictness, hardened per module (see audit M-3). `domain/` and
-# `application/` are fully typed and enforced strict. The ORM models use SQLAlchemy 2.x
-# typed mappings (Mapped[...]/mapped_column), so instance attributes resolve to their
-# real types (int, str, ...) instead of Column[T] — which is what unblocked strict here.
 [[tool.mypy.overrides]]
 module = "app.domain.*"
 disallow_untyped_defs = true
@@ -85,9 +57,6 @@ module = "app.application.*"
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 
-# ----------------------------------------------------------------------------
-# Pytest — async test suite (replaces the missing pytest.ini)
-# ----------------------------------------------------------------------------
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["test"]

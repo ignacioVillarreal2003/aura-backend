@@ -36,6 +36,7 @@ class DocumentReprocessPublisher(DocumentReprocessPublisherInterface):
             prefer_docling: bool = False,
             post_process: bool = True,
             post_process_graph: bool = True,
+            batch_id: Optional[str] = None,
     ) -> str:
         envelope = MessageEnvelope.wrap(
             DocumentReprocessCommand(
@@ -44,6 +45,7 @@ class DocumentReprocessPublisher(DocumentReprocessPublisherInterface):
                 prefer_docling=prefer_docling,
                 post_process=post_process,
                 post_process_graph=post_process_graph,
+                batch_id=batch_id,
                 auth_token=get_request_token(),
             )
         )

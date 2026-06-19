@@ -151,6 +151,7 @@ class DocumentSearchService(DocumentSearchServiceInterface):
                 k=k,
                 threshold=self._settings.similarity_threshold,
                 pool_size=max(self._settings.candidate_pool_size, k),
+                embedding_identity=self._embedder_factory.get_active_embedding_identity(),
                 document_ids=document_ids,
             )
             logger.debug("Document similarity hits retrieved.", extra={"hit_count": len(hits)})

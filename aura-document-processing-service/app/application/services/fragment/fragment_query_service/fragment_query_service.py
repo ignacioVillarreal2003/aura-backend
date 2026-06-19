@@ -164,6 +164,19 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             )
             accessible_doc_ids = list(accessible_doc_set)
 
+            # A user with no accessible documents must get an empty result. The
+            # repository treats an empty doc-id list as "no filter" (it drops the
+            # WHERE clause), so passing [] down would scan every document. Short-
+            # circuit here instead. With this guard, accessible_doc_ids is always
+            # non-empty below, so the SQL doc-id filter alone is authoritative and
+            # no post-retrieval permission filter is needed.
+            if not accessible_doc_ids:
+                logger.info(
+                    "No accessible documents for the user; returning an empty fragment list.",
+                    extra={"user_id": authenticated_user.id},
+                )
+                return FragmentListResponse(fragments=[])
+
             # Each retrieval query runs on its own database session because a single
             # AsyncSession cannot be used concurrently. A per-request semaphore bounds
             # how many pooled connections one request can hold while fanning out.
@@ -233,10 +246,13 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             else:
                 fragments = []
 
-            fragments = [f for f in fragments if f.document_id in accessible_doc_set]
-
             rerank_applied = False
             if question_context_fragments_request.rerank.enabled and fragments:
+                # Cap the candidate pool before the cross-encoder. It scores one
+                # pair per candidate (O(pool)), and the fused pool can reach ~1000
+                # candidates across the query fan-out. The fused list is already
+                # ordered by RRF score, so truncating keeps the strongest ones.
+                fragments = fragments[:self._settings.rerank_candidate_pool_cap]
                 rerank_query = self._build_rerank_query(question_context_fragments_request)
                 # `rerank.enabled` guarantees max_fragments is set (model validator);
                 # fall back to all fragments to keep the type sound either way.
@@ -257,7 +273,13 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                     window=question_context_fragments_request.adjacent_chunks,
                     database_session=database_session,
                     exclude_ids=retrieved_ids,
+                    respect_section_boundaries=self._settings.respect_section_boundaries,
                 )
+                # Unlike the main retrieval, the adjacent query carries no permission
+                # filter in its SQL (it only matches the document_ids of already-
+                # retrieved fragments). Those are all accessible, so adjacency stays
+                # within accessible documents, but keep this guard as the authoritative
+                # permission check for this path.
                 adjacent = [f for f in adjacent if f.document_id in accessible_doc_set]
                 adjacent_added = len(adjacent)
                 fragments = fragments + adjacent
@@ -330,19 +352,53 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 document_ids=requested_ids,
                 database_session=database_session,
             )
+            # Authorize with the same model as the per-question path: a document is
+            # reachable through its document collection (MAC) or through membership of
+            # its chat. The collection catalog only covers the former, so fall back to
+            # chat membership for any requested doc the catalog doesn't grant —
+            # otherwise legitimately-accessible chat documents are wrongly denied. Also
+            # mirror the token fallback so callers relying on the request-context token
+            # (authorization_header=None) aren't denied here.
+            token = authorization_header or get_request_token()
             collection_doc_ids = await self._document_collection_catalog_client.fetch_all_accessible_document_ids(
                 user_id=int(authenticated_user.id),
-                authorization_header=authorization_header,
+                authorization_header=token,
             )
+
+            accessible_ids: set[int] = set(requested_ids) & set(collection_doc_ids)
+
+            # Resolve chat membership only for the distinct chats of docs the collection
+            # didn't already grant, concurrently.
+            chats_to_check: dict[int, list[int]] = {}
+            for document in documents:
+                doc_id = int(document.id)
+                if doc_id in accessible_ids or document.chat_id is None:
+                    continue
+                chats_to_check.setdefault(int(document.chat_id), []).append(doc_id)
+
+            if chats_to_check:
+                memberships = await asyncio.gather(*[
+                    self._chat_membership_provider.get_membership(
+                        chat_id=chat_id,
+                        user_id=int(authenticated_user.id),
+                        authorization_header=token,
+                    )
+                    for chat_id in chats_to_check
+                ])
+                for chat_id, membership in zip(chats_to_check, memberships, strict=True):
+                    if membership.is_member:
+                        accessible_ids.update(chats_to_check[chat_id])
+
             logger.debug(
-                "Accessible document IDs fetched from collection service.",
+                "Accessible document IDs resolved for documents request.",
                 extra={
                     "user_id": authenticated_user.id,
                     "collection_doc_count": len(collection_doc_ids),
+                    "chat_checked_count": len(chats_to_check),
                 },
             )
-            allowed_ids = set(documents_context_fragments_request.document_ids) & collection_doc_ids
-            if len(allowed_ids) != len(set(documents_context_fragments_request.document_ids)):
+
+            if len(accessible_ids) != len(set(requested_ids)):
                 logger.warning(
                     "Unauthorized or missing documents in fragments-by-documents request.",
                     extra={
@@ -492,6 +548,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             fragments = await self._fragment_repository.get_most_similar_fragments(
                 query_vector=query_vector,
                 database_session=database_session,
+                embedding_identity=self._embedder_factory.get_active_embedding_identity(),
                 k=k,
                 threshold=self._settings.similarity_threshold,
                 document_ids=document_ids,

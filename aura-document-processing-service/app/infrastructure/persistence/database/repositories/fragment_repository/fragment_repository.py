@@ -21,6 +21,12 @@ from app.infrastructure.persistence.database.repositories.repository_query_utils
 
 logger = logging.getLogger(__name__)
 
+# Static, value-free SQL fragment toggled into the vector/BM25 queries when a
+# document-id filter is requested. The ids themselves always travel as a bound
+# parameter (:doc_ids); this clause is a constant literal that never interpolates
+# input. Keep it that way (no f-string values) so the queries stay injection-safe.
+_DOC_ID_FILTER_CLAUSE = "AND document_id = ANY(:doc_ids)"
+
 
 def _sanitize_bm25_search_input(raw: str, max_chars: int) -> str:
     printable_only = "".join(c for c in raw if c.isprintable())
@@ -104,6 +110,8 @@ class FragmentRepository(FragmentRepositoryInterface):
             self,
             query_vector: list[float],
             database_session: AsyncSession,
+            *,
+            embedding_identity: str,
             k: int = 3,
             threshold: float = 0.3,
             document_ids: list[int] | None = None,
@@ -131,7 +139,7 @@ class FragmentRepository(FragmentRepositoryInterface):
 
             query_vector_str = "[" + ",".join(str(float(v)) for v in query_vector) + "]"
 
-            doc_id_clause = "AND document_id = ANY(:doc_ids)" if document_ids else ""
+            doc_id_clause = _DOC_ID_FILTER_CLAUSE if document_ids else ""
 
             sql = text(
                 f"""
@@ -159,6 +167,7 @@ class FragmentRepository(FragmentRepositoryInterface):
                        1 - (vector <=> :query_vector) AS cosine_similarity
                 FROM fragment
                 WHERE deleted_at IS NULL
+                  AND embedding_identity = :embedding_identity
                   AND 1 - (vector <=> :query_vector) >= :threshold
                   {doc_id_clause}
                 ORDER BY vector <=> :query_vector
@@ -168,6 +177,7 @@ class FragmentRepository(FragmentRepositoryInterface):
 
             params: dict = {
                 "query_vector": query_vector_str,
+                "embedding_identity": embedding_identity,
                 "threshold": threshold,
                 "k": k,
             }
@@ -232,6 +242,8 @@ class FragmentRepository(FragmentRepositoryInterface):
             k: int,
             threshold: float,
             pool_size: int,
+            *,
+            embedding_identity: str,
             document_ids: list[int] | None = None,
     ) -> list[DocumentSimilarityHit]:
         if not query_vector:
@@ -261,27 +273,40 @@ class FragmentRepository(FragmentRepositoryInterface):
 
             query_vector_str = "[" + ",".join(str(float(v)) for v in query_vector) + "]"
 
-            doc_id_clause = "AND document_id = ANY(:doc_ids)" if document_ids else ""
+            doc_id_clause = _DOC_ID_FILTER_CLAUSE if document_ids else ""
 
             sql = text(
                 f"""
+                -- Per document, keep only the best fragment's content. A window pass
+                -- (ROW_NUMBER + COUNT OVER) avoids ARRAY_AGG materializing every pooled
+                -- content string into an in-memory array just to take the first — it
+                -- carries one content per document and lets the DB spill if needed.
                 SELECT document_id,
-                       MAX(cosine_similarity)                                  AS best_similarity,
-                       COUNT(*)                                                AS matched_fragments,
-                       (ARRAY_AGG(content ORDER BY cosine_similarity DESC))[1] AS best_fragment_content
+                       best_similarity,
+                       matched_fragments,
+                       best_fragment_content
                 FROM (
                     SELECT document_id,
-                           content,
-                           1 - (vector <=> :query_vector) AS cosine_similarity
-                    FROM fragment
-                    WHERE vector IS NOT NULL
-                      AND deleted_at IS NULL
-                      AND 1 - (vector <=> :query_vector) >= :threshold
-                      {doc_id_clause}
-                    ORDER BY vector <=> :query_vector
-                    LIMIT :pool_size
-                ) AS top_fragments
-                GROUP BY document_id
+                           content                                   AS best_fragment_content,
+                           cosine_similarity                         AS best_similarity,
+                           COUNT(*) OVER (PARTITION BY document_id)   AS matched_fragments,
+                           ROW_NUMBER() OVER (PARTITION BY document_id
+                                              ORDER BY cosine_similarity DESC) AS rn
+                    FROM (
+                        SELECT document_id,
+                               content,
+                               1 - (vector <=> :query_vector) AS cosine_similarity
+                        FROM fragment
+                        WHERE vector IS NOT NULL
+                          AND deleted_at IS NULL
+                          AND embedding_identity = :embedding_identity
+                          AND 1 - (vector <=> :query_vector) >= :threshold
+                          {doc_id_clause}
+                        ORDER BY vector <=> :query_vector
+                        LIMIT :pool_size
+                    ) AS top_fragments
+                ) AS ranked
+                WHERE rn = 1
                 ORDER BY best_similarity DESC
                 LIMIT :k
                 """
@@ -289,6 +314,7 @@ class FragmentRepository(FragmentRepositoryInterface):
 
             params: dict = {
                 "query_vector": query_vector_str,
+                "embedding_identity": embedding_identity,
                 "threshold": threshold,
                 "pool_size": pool_size,
                 "k": k,
@@ -352,7 +378,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             raise DatabaseException("The BM25 result count k must be at least 1.")
 
         try:
-            doc_id_clause = "AND document_id = ANY(:doc_ids)" if document_ids else ""
+            doc_id_clause = _DOC_ID_FILTER_CLAUSE if document_ids else ""
 
             sql = text(
                 f"""
@@ -486,30 +512,40 @@ class FragmentRepository(FragmentRepositoryInterface):
             window: int,
             database_session: AsyncSession,
             exclude_ids: set[int],
+            respect_section_boundaries: bool = True,
     ) -> list[Fragment]:
         if not fragments or window <= 0:
             return []
 
         try:
-            conditions = [
-                and_(
+            conditions = []
+            for f in fragments:
+                condition = and_(
                     Fragment.document_id == f.document_id,
                     Fragment.fragment_index.between(
                         max(0, int(f.fragment_index) - window),
                         int(f.fragment_index) + window,
                     ),
                 )
-                for f in fragments
+                # Keep adjacency inside the seed's structural section so Docling
+                # chunks that cross page/section boundaries don't pull unrelated
+                # context. Seeds without a section_path (flat-text fallback) have
+                # no structure to honour, so they keep pure index contiguity.
+                if respect_section_boundaries and f.section_path is not None:
+                    condition = and_(condition, Fragment.section_path == f.section_path)
+                conditions.append(condition)
+
+            where_clauses = [
+                Fragment.deleted_at.is_(None),
+                or_(*conditions),
             ]
+            if exclude_ids:
+                where_clauses.append(Fragment.id.not_in(exclude_ids))
 
             stmt = (
                 select(Fragment)
                 .options(defer(Fragment.vector))
-                .where(
-                    Fragment.deleted_at.is_(None),
-                    Fragment.id.not_in(exclude_ids) if exclude_ids else True,
-                    or_(*conditions),
-                )
+                .where(*where_clauses)
                 .order_by(Fragment.document_id, Fragment.fragment_index)
                 .limit(MAX_FRAGMENTS_IN_LIST)
             )
@@ -646,6 +682,49 @@ class FragmentRepository(FragmentRepositoryInterface):
             )
             raise DatabaseException("Failed to soft-delete fragments.") from e
 
+    async def restore_fragments_by_document_id(
+            self,
+            document_id: int,
+            user_id: int,
+            database_session: AsyncSession,
+    ) -> int:
+        try:
+            logger.debug(
+                "Restoring fragments by document ID.",
+                extra={
+                    "document_id": document_id,
+                    "user_id": user_id
+                }
+            )
+
+            result = await database_session.execute(
+                update(Fragment)
+                .where(
+                    Fragment.document_id == document_id,
+                    Fragment.deleted_at.is_not(None),
+                )
+                .values(deleted_by=None, deleted_at=None)
+            )
+            updated_count: int = result.rowcount
+            await database_session.flush()
+
+            logger.info(
+                "The fragments were restored successfully.",
+                extra={
+                    "document_id": document_id,
+                    "user_id": user_id,
+                    "updated_count": updated_count
+                }
+            )
+            return updated_count
+
+        except SQLAlchemyError as e:
+            logger.exception(
+                "Failed to restore fragments.",
+                extra={"document_id": document_id, "user_id": user_id},
+            )
+            raise DatabaseException("Failed to restore fragments.") from e
+
     async def get_fragments_for_reembedding(
             self,
             document_id: int,
@@ -659,6 +738,7 @@ class FragmentRepository(FragmentRepositoryInterface):
                         Fragment.id,
                         Fragment.content,
                         Fragment.embedding_model,
+                        Fragment.embedding_identity,
                         Fragment.fragment_index,
                     )
                 )
@@ -684,6 +764,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             vector: list[float],
             embedding_model: str,
             embedding_dim: int,
+            embedding_identity: str,
             user_id: int,
             database_session: AsyncSession,
     ) -> None:
@@ -699,6 +780,7 @@ class FragmentRepository(FragmentRepositoryInterface):
                     vector=vector,
                     embedding_model=embedding_model,
                     embedding_dim=embedding_dim,
+                    embedding_identity=embedding_identity,
                     updated_by=user_id,
                     updated_at=now,
                 )

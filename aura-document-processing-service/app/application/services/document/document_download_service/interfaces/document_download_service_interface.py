@@ -16,7 +16,7 @@ class DocumentDownloadServiceInterface(ABC):
         pass
 
     @abstractmethod
-    async def download_document_admin(
+    async def download_document_manage(
             self,
             document_id: int,
             database_session: AsyncSession,

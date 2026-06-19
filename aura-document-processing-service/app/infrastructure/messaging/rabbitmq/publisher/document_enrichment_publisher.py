@@ -31,11 +31,13 @@ class DocumentEnrichmentPublisher(DocumentEnrichmentPublisherInterface):
             *,
             document_id: int,
             user: AuthenticatedUser,
+            batch_id: Optional[str] = None,
     ) -> str:
         envelope = MessageEnvelope.wrap(
             DocumentEnrichmentCommand(
                 document_id=document_id,
                 user=user.model_dump(mode="json"),
+                batch_id=batch_id,
                 auth_token=get_request_token(),
             )
         )

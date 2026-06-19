@@ -28,6 +28,8 @@ class FragmentRepositoryInterface(ABC):
             self,
             query_vector: list[float],
             database_session: AsyncSession,
+            *,
+            embedding_identity: str,
             k: int = 3,
             threshold: float = 0.3,
             document_ids: list[int] | None = None,
@@ -42,6 +44,8 @@ class FragmentRepositoryInterface(ABC):
             k: int,
             threshold: float,
             pool_size: int,
+            *,
+            embedding_identity: str,
             document_ids: list[int] | None = None,
     ) -> list[DocumentSimilarityHit]:
         pass
@@ -53,6 +57,7 @@ class FragmentRepositoryInterface(ABC):
             window: int,
             database_session: AsyncSession,
             exclude_ids: set[int],
+            respect_section_boundaries: bool = True,
     ) -> list[Fragment]:
         pass
 
@@ -103,6 +108,15 @@ class FragmentRepositoryInterface(ABC):
         pass
 
     @abstractmethod
+    async def restore_fragments_by_document_id(
+            self,
+            document_id: int,
+            user_id: int,
+            database_session: AsyncSession,
+    ) -> int:
+        pass
+
+    @abstractmethod
     async def get_fragments_for_reembedding(
             self,
             document_id: int,
@@ -118,6 +132,7 @@ class FragmentRepositoryInterface(ABC):
             vector: list[float],
             embedding_model: str,
             embedding_dim: int,
+            embedding_identity: str,
             user_id: int,
             database_session: AsyncSession,
     ) -> None:

@@ -1,16 +1,16 @@
 from pydantic import BaseModel, Field
 
-from app.domain.field_limits import MAX_ID
+from app.domain.dtos.document.bulk.document_selector import DocumentSelector
 
 
 class ReembedRequest(BaseModel):
-    document_id: int = Field(..., ge=1, le=MAX_ID, description="ID del documento a re-embeber.")
-    force: bool = Field(
-        default=False,
-        description=(
-            "Si True, re-embebe todos los fragmentos aunque ya estén en el modelo activo. "
-            "Si False (default), solo re-embebe los fragmentos cuyo modelo difiere del activo."
-        ),
-    )
+    """Re-embed the existing fragments of the selected documents with the active model.
+
+    The selector chooses one document, several, or the whole corpus (gradual migration).
+    With ``force=False`` only fragments whose embedding identity differs from the active
+    one are re-embedded (idempotent); with ``force=True`` every fragment is re-embedded.
+    """
+    selector: DocumentSelector = Field(...)
+    force: bool = Field(default=False)
 
     model_config = {"extra": "forbid"}

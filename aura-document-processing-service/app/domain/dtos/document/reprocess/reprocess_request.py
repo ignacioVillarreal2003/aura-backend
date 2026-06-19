@@ -1,10 +1,16 @@
 from pydantic import BaseModel, Field
 
-from app.domain.field_limits import MAX_ID
+from app.domain.dtos.document.bulk.document_selector import DocumentSelector
 
 
 class ReprocessRequest(BaseModel):
-    document_id: int = Field(..., ge=1, le=MAX_ID, description="ID del documento a reprocesar.")
+    """Reprocess the selected documents end-to-end from their stored objects.
+
+    The selector chooses one document, several, or the whole corpus. Each document's
+    existing fragments are soft-deleted and replaced by re-running the full ingestion
+    pipeline (re-download, re-chunk, re-embed).
+    """
+    selector: DocumentSelector = Field(...)
     prefer_docling: bool = Field(default=False)
     post_process: bool = Field(default=True)
     post_process_graph: bool = Field(default=True)

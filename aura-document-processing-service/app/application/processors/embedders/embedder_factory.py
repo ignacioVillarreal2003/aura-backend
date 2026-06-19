@@ -92,6 +92,14 @@ class EmbedderFactory:
     ) -> str:
         return self._settings.active_model_name
 
+    def get_active_embedding_identity(
+            self
+    ) -> str:
+        # Full identity of the active embedding configuration (model + dim +
+        # normalization + instructions). Persisted per fragment and matched at
+        # query time so query and corpus vectors always share one vector space.
+        return self._settings.active_embedding_identity
+
     def get_vector_dimension(
             self
     ) -> int:

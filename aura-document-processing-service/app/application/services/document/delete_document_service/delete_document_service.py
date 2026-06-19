@@ -186,14 +186,14 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
                 "An unexpected error occurred while soft deleting documents for the chat."
             ) from e
 
-    async def soft_delete_document_admin(
+    async def soft_delete_document_manage(
             self,
             document_id: int,
             database_session: AsyncSession,
             authenticated_user: AuthenticatedUser
     ) -> None:
         logger.info(
-            "An admin soft delete for the document was initiated.",
+            "A manage soft delete for the document was initiated.",
             extra={
                 "document_id": document_id,
                 "user_id": authenticated_user.id
@@ -211,7 +211,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             await self._request_purge(document, authenticated_user)
 
             logger.info(
-                "The document was soft deleted successfully by an admin.",
+                "The document was soft deleted successfully by manage.",
                 extra={
                     "document_id": document_id,
                     "user_id": authenticated_user.id
@@ -228,7 +228,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             raise
         except Exception as e:
             logger.exception(
-                "An unexpected error occurred during the admin soft delete.",
+                "An unexpected error occurred during the manage soft delete.",
                 extra={
                     "document_id": document_id
                 }

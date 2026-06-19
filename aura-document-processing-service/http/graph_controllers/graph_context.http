@@ -1,0 +1,28 @@
+@dpsBase = http://localhost:8000/api/v1
+@authToken = user_token_123
+
+### Contexto del grafo para RAG (a partir de una pregunta)
+POST {{dpsBase}}/graph/context
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "question": "¿Qué organismos regulan la aviación civil?",
+  "chat_id": 1,
+  "max_entities": 8,
+  "max_relations": 30
+}
+
+
+### Contexto del grafo a partir de términos
+POST {{dpsBase}}/graph/context
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "terms": ["aviación civil", "aeródromo"],
+  "max_entities": 10,
+  "max_relations": 40
+}

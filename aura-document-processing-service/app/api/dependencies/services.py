@@ -22,8 +22,17 @@ from app.application.services.document.document_ingestion_service.interfaces.doc
 from app.application.services.document.document_query_service.interfaces.document_query_service_interface import (
     DocumentQueryServiceInterface,
 )
+from app.application.services.document.bulk_dispatch_service.interfaces.bulk_dispatch_service_interface import (
+    BulkDispatchServiceInterface,
+)
 from app.application.services.document.document_search_service.interfaces.document_search_service_interface import (
     DocumentSearchServiceInterface,
+)
+from app.application.services.document.update_document_service.interfaces.update_document_service_interface import (
+    UpdateDocumentServiceInterface,
+)
+from app.application.services.document.restore_document_service.interfaces.restore_document_service_interface import (
+    RestoreDocumentServiceInterface,
 )
 from app.application.services.fragment.fragment_query_service.interfaces.fragment_query_service_interface import (
     FragmentQueryServiceInterface,
@@ -99,6 +108,27 @@ async def get_document_search_service(request: Request) -> DocumentSearchService
     svc = getattr(request.app.state, "document_search_service", None)
     if svc is None:
         raise _unavailable("DocumentSearchService")
+    return svc
+
+
+async def get_update_document_service(request: Request) -> UpdateDocumentServiceInterface:
+    svc = getattr(request.app.state, "update_document_service", None)
+    if svc is None:
+        raise _unavailable("UpdateDocumentService")
+    return svc
+
+
+async def get_restore_document_service(request: Request) -> RestoreDocumentServiceInterface:
+    svc = getattr(request.app.state, "restore_document_service", None)
+    if svc is None:
+        raise _unavailable("RestoreDocumentService")
+    return svc
+
+
+async def get_bulk_dispatch_service(request: Request) -> BulkDispatchServiceInterface:
+    svc = getattr(request.app.state, "bulk_dispatch_service", None)
+    if svc is None:
+        raise _unavailable("BulkDispatchService")
     return svc
 
 

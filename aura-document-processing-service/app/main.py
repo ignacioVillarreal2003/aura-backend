@@ -11,6 +11,7 @@ from app.api.handlers.exception_handlers import register_exception_handlers
 from app.configuration.cors_configuration import configure_cors
 from app.configuration.dependencies import shutdown_dependencies, startup_dependencies
 from app.configuration.environment_variables import environment_variables
+from app.configuration.gpu_guard import verify_gpu_availability
 from app.configuration.logging_configuration import configure_logging
 from app.configuration.middlewares.authentication_middleware import add_authentication_middleware
 from app.configuration.middlewares.logging_middleware import add_logging_middleware
@@ -54,6 +55,9 @@ def create_app() -> FastAPI:
     # Fail fast before any resource is wired if the production configuration is unsafe.
     assert_production_invariants()
 
+    # Fail fast on a GPU deployment that cannot reach CUDA (silent CPU fallback).
+    verify_gpu_availability()
+
     app = FastAPI(
         title=environment_variables.app_name,
         version=environment_variables.app_version,
@@ -95,8 +99,13 @@ def create_app() -> FastAPI:
 def _add_middlewares(
         app: FastAPI
 ) -> None:
-    add_logging_middleware(app)
+    # Order matters: Starlette applies the LAST-registered middleware as the
+    # OUTERMOST layer. Authentication is registered first (inner) and logging
+    # last (outer), so the structured access-log line and the X-Request-ID header
+    # also cover requests that authentication rejects (401/403/503) before they
+    # reach a route. Do not swap these back.
     add_authentication_middleware(app)
+    add_logging_middleware(app)
 
 
 def _include_routers(

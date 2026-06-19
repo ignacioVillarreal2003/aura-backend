@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.controllers.document.document_download_controller.download_document_controller_interface import (
+from app.api.controllers.document.document_download_controller.interfaces.download_document_controller_interface import (
     DocumentDownloadControllerInterface,
 )
 from app.api.dependencies.rate_limiter import default_rate_limit
@@ -15,9 +15,8 @@ from app.application.services.document.document_download_service.interfaces.docu
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
-from app.api.dependencies.services import (
-    get_document_download_service,
-)
+from app.api.dependencies.services import get_document_download_service
+
 
 class DocumentDownloadController(DocumentDownloadControllerInterface):
     async def download_document(
@@ -46,7 +45,7 @@ class DocumentDownloadController(DocumentDownloadControllerInterface):
             },
         )
 
-    async def download_document_admin(
+    async def download_document_manage(
             self,
             document_id: int,
             document_download_service: DocumentDownloadServiceInterface = Depends(get_document_download_service),
@@ -56,10 +55,10 @@ class DocumentDownloadController(DocumentDownloadControllerInterface):
     ) -> StreamingResponse:
         Authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.DOWNLOAD_DOCUMENT_ADMIN}),
+            required_permissions=frozenset({Permissions.DOWNLOAD_DOCUMENT_MANAGE}),
         )
 
-        content_stream, filename, mime_type = await document_download_service.download_document_admin(
+        content_stream, filename, mime_type = await document_download_service.download_document_manage(
             document_id=document_id,
             database_session=database_session,
             authenticated_user=authenticated_user,
@@ -71,6 +70,7 @@ class DocumentDownloadController(DocumentDownloadControllerInterface):
                 "Content-Disposition": f"attachment; filename=\"{filename}\"",
             },
         )
+
 
 router = APIRouter()
 document_download_controller = DocumentDownloadController()
@@ -98,12 +98,12 @@ router.add_api_route(
     responses=_response,
 )
 router.add_api_route(
-    "/admin/document/{document_id}/download",
-    document_download_controller.download_document_admin,
+    "/manage/document/{document_id}/download",
+    document_download_controller.download_document_manage,
     methods=["GET"],
     response_class=StreamingResponse,
-    operation_id="downloadDocumentAdmin",
-    summary="Descargar documento (admin)",
-    description="Devuelve el archivo de cualquier documento sin restricción de pertenencia al chat. Requiere permiso de administrador.",
+    operation_id="downloadDocumentManage",
+    summary="Descargar documento (manage)",
+    description="Devuelve el archivo de cualquier documento sin restricción de pertenencia al chat. Requiere permiso de administración.",
     responses=_response,
 )

@@ -94,14 +94,14 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
             )
             raise DocumentDownloadServiceException("Document download failed.") from e
 
-    async def download_document_admin(
+    async def download_document_manage(
             self,
             document_id: int,
             database_session: AsyncSession,
             authenticated_user: AuthenticatedUser,
     ) -> tuple[AsyncIterator[bytes], str, str]:
         logger.info(
-            "Admin document download was initiated.",
+            "Manage document download was initiated.",
             extra={
                 "document_id": document_id,
                 "user_id": authenticated_user.id
@@ -126,7 +126,7 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
             raise
         except Exception as e:
             logger.exception(
-                "An unexpected error occurred during admin document download.",
+                "An unexpected error occurred during manage document download.",
                 extra={"document_id": document_id}
             )
             raise DocumentDownloadServiceException("Document download failed.") from e

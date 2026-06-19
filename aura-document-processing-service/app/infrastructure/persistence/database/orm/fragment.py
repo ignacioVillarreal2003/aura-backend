@@ -46,6 +46,13 @@ class Fragment(Base):
     embedding_model: Mapped[str] = mapped_column(String(255), nullable=False)
     embedding_dim: Mapped[int] = mapped_column(Integer, nullable=False)
 
+    # Full identity of the embedding configuration (model + dim + normalization +
+    # instruction prefixes; see EmbedderSettings.active_embedding_identity). Cosine
+    # similarity is only meaningful between vectors of the same identity, so semantic
+    # retrieval matches on this — it catches instruction/normalization drift that
+    # embedding_model alone misses.
+    embedding_identity: Mapped[str] = mapped_column(Text, nullable=False)
+
     fragment_index: Mapped[int] = mapped_column(Integer, nullable=False)
 
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)

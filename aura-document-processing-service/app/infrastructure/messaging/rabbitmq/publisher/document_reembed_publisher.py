@@ -34,12 +34,14 @@ class DocumentReembedPublisher(DocumentReembedPublisherInterface):
             document_id: int,
             user: AuthenticatedUser,
             force: bool = False,
+            batch_id: Optional[str] = None,
     ) -> str:
         envelope = MessageEnvelope.wrap(
             DocumentReembedCommand(
                 document_id=document_id,
                 user=user.model_dump(mode="json"),
                 force=force,
+                batch_id=batch_id,
                 auth_token=get_request_token(),
             )
         )

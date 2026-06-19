@@ -1,0 +1,183 @@
+name: aura-document-processing-service CI
+
+# Quality gate for aura-document-processing-service (monorepo-scoped).
+# Mirrors the per-service convention already used by aura-chat-service.yml and
+# aura-llm-service.yml. Path-filtered so it only runs when this service (or this
+# workflow) changes.
+#
+# Jobs:
+#   lint            -> ruff check            (fast, no app deps)
+#   type-check      -> mypy                  (uses [tool.mypy] in pyproject; ignore_missing_imports)
+#   test            -> pytest                (full deps; controller suite with mocked services/DB)
+#   lock-verify     -> pip --dry-run resolve (mirrors `make lock-verify`)
+#   dependency-audit-> pip-audit             (informational until the baseline is triaged)
+#   docker-build    -> build CPU image       (validates Dockerfile; heaviest job)
+on:
+  push:
+    branches: [main]
+    paths:
+      - "aura-document-processing-service/**"
+      - ".github/workflows/aura-document-processing-service.yml"
+  pull_request:
+    paths:
+      - "aura-document-processing-service/**"
+      - ".github/workflows/aura-document-processing-service.yml"
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: aura-document-processing-service
+
+jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install ruff
+        # Pinned to the version used locally (see .ruff_cache/0.15.17) so CI and
+        # developers enforce the exact same rule set.
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff==0.15.17
+
+      - name: ruff check
+        # Same enforced rule set declared in pyproject.toml ([tool.ruff.lint]).
+        run: ruff check .
+
+  type-check:
+    name: Type check (mypy)
+    runs-on: ubuntu-latest
+    # Informational for now. A fresh run reports ~109 findings in 36 files
+    # (mostly a repeated FastAPI `responses: dict[int, ...]` vs `dict[int | str, ...]`
+    # mismatch, plus a couple of real ones in fragment_repository.py). Despite the
+    # pyproject note, the baseline is NOT clean, so this job must not block merges
+    # yet. Remove `continue-on-error` to make it a hard gate once the backlog is
+    # burned down (domain/* and application/* are the strict, must-stay-green parts).
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install mypy
+        # mypy config lives in pyproject.toml ([tool.mypy]); ignore_missing_imports
+        # is set, so the heavy ML/LLM stack does not need to be installed for mypy
+        # to type-check OUR code (unresolved third-party imports resolve to Any).
+        run: |
+          python -m pip install --upgrade pip
+          pip install mypy==1.13.0
+
+      - name: mypy
+        # No args: picks up files=["app"], mypy_path, namespace_packages and the
+        # per-module strictness overrides from pyproject.toml.
+        run: mypy
+
+  test:
+    name: Unit tests (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            aura-document-processing-service/requirements/requirements.txt
+            aura-document-processing-service/requirements/requirements.test.txt
+
+      - name: Install dependencies
+        # Full runtime stack is installed for parity with the deploy image. The
+        # heavy ML deps (torch+cpu, docling, sentence-transformers) are imported
+        # lazily by the factories, so the mocked controller suite does not load any
+        # model at runtime — but installing everything keeps the import graph honest
+        # and matches the aura-llm-service workflow. The torch CPU wheel resolves via
+        # the --extra-index-url pinned at the top of requirements.txt.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements/requirements.txt -r requirements/requirements.test.txt
+
+      - name: pytest
+        # asyncio_mode=auto, testpaths=["test"] and addopts come from pyproject.toml.
+        # conftest.py seeds the one required env var and mocks the DB/services, so no
+        # external Postgres/Redis/RabbitMQ/MinIO is contacted.
+        run: pytest -q
+
+  lock-verify:
+    name: Lockfile resolves (dry-run)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Resolve pinned requirements (no install)
+        # Equivalent to `make lock-verify`: proves the CPU lockfile resolves cleanly
+        # without building/installing the app. Catches a drifted or unresolvable pin
+        # before it reaches a real build.
+        run: |
+          python -m pip install --upgrade pip
+          pip install --no-cache-dir --dry-run -r requirements/requirements.txt
+
+  dependency-audit:
+    name: Dependency vulnerability scan (pip-audit)
+    runs-on: ubuntu-latest
+    # Informational for now: a single pre-existing transitive CVE should not block
+    # every PR on day one. Remove `continue-on-error` to make it a hard gate once
+    # the current findings are fixed or explicitly ignored (`--ignore-vuln`).
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install pip-audit
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-audit
+
+      - name: Audit locked requirements
+        run: pip-audit -r requirements/requirements.txt --desc
+
+  docker-build:
+    name: Docker image builds (CPU)
+    runs-on: ubuntu-latest
+    # Heaviest job: the Dockerfile installs the full CPU ML stack and pre-downloads
+    # the HF + tiktoken models in a build step. GHA layer caching keeps reruns cheap;
+    # if PR minutes become a concern, restrict this job to `push` to main.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build CPU image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: aura-document-processing-service
+          file: aura-document-processing-service/Dockerfile
+          push: false
+          load: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

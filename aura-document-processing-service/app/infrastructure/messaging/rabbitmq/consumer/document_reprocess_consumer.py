@@ -7,13 +7,18 @@ from app.application.services.document.reprocess_document_service.interfaces.rep
     ReprocessDocumentServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
+from app.domain.constants.document.bulk_operation import BulkOperation
 from app.infrastructure.messaging.rabbitmq.consumer.base_consumer import BaseConsumer
+from app.infrastructure.messaging.rabbitmq.consumer.bulk_progress_mixin import BulkProgressMixin
 from app.infrastructure.messaging.rabbitmq.consumer.interfaces.document_reprocess_consumer_interface import (
     DocumentReprocessConsumerInterface,
 )
 from app.infrastructure.messaging.rabbitmq.dtos.commands.document_reprocess_command import DocumentReprocessCommand
 from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
 from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
+from app.infrastructure.persistence.memory_database.bulk_job_progress_store.bulk_job_progress_store_interface import (
+    BulkJobProgressStoreInterface,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -24,16 +29,24 @@ _RELEASE_LOCK_SCRIPT = (
 )
 
 
-class DocumentReprocessConsumer(BaseConsumer[DocumentReprocessCommand], DocumentReprocessConsumerInterface):
+class DocumentReprocessConsumer(
+    BulkProgressMixin,
+    BaseConsumer[DocumentReprocessCommand],
+    DocumentReprocessConsumerInterface,
+):
+    _bulk_operation = BulkOperation.reprocess
+
     def __init__(
             self,
             rabbitmq_manager: RabbitMQManagerInterface,
             reprocess_document_service: ReprocessDocumentServiceInterface,
             redis_client: aioredis.Redis,
+            bulk_job_progress_store: Optional[BulkJobProgressStoreInterface] = None,
     ) -> None:
         super().__init__(rabbitmq_manager)
         self._service = reprocess_document_service
         self._redis = redis_client
+        self._bulk_store = bulk_job_progress_store
 
     @property
     def _queue_name(self) -> str:
@@ -46,7 +59,7 @@ class DocumentReprocessConsumer(BaseConsumer[DocumentReprocessCommand], Document
     def _get_command_type(self) -> type[DocumentReprocessCommand]:
         return DocumentReprocessCommand
 
-    async def _process(self, envelope: MessageEnvelope[DocumentReprocessCommand]) -> None:
+    async def _execute(self, envelope: MessageEnvelope[DocumentReprocessCommand]) -> None:
         command = envelope.command
         document_id = command.document_id
         user = AuthenticatedUser.model_validate(command.user)

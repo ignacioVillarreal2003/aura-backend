@@ -35,6 +35,7 @@ class EnvironmentVariables(BaseSettings):
     app_host: str = Field(default="0.0.0.0")
     app_port: int = Field(default=8000, ge=1, le=65535)
     app_reload: bool = Field(default=False)
+    require_gpu: bool = Field(default=False)
     log_level: str = Field(default="INFO")
     cors_origins: list[str] = Field(default_factory=lambda: list(_DEFAULT_CORS_ORIGINS))
     environment: str = Field(default="development")

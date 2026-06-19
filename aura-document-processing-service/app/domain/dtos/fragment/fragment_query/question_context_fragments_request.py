@@ -64,7 +64,11 @@ class QuestionContextFragmentsRequest(BaseModel):
 
     rerank: _RerankConfig = Field(default_factory=_RerankConfig)
 
-    adjacent_chunks: int = Field(default=0, ge=0, le=3)
+    # Default to 1 so retrieval pulls each hit's immediate neighbours. This is the
+    # query-time compensation for the structure-aware chunker's lack of overlap:
+    # a concept split at a chunk border is recovered via its adjacent chunk (kept
+    # within the same section by respect_section_boundaries). Set 0 to disable.
+    adjacent_chunks: int = Field(default=1, ge=0, le=3)
 
     @model_validator(mode="after")
     def _validate_queries(self) -> "QuestionContextFragmentsRequest":

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, File, UploadFile
 from sqlalchemy.ext.asyncio.session import AsyncSession
 
-from app.api.controllers.document.create_document_controller.create_document_controller_interface import (
+from app.api.controllers.document.create_document_controller.interfaces.create_document_controller_interface import (
     CreateDocumentControllerInterface,
 )
 from app.api.dependencies.rate_limiter import strict_rate_limit
@@ -17,9 +17,8 @@ from app.domain.dtos.document.create_document.create_document_request import Cre
 from app.domain.dtos.document.create_document.create_document_response import CreateDocumentResponse
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
-from app.api.dependencies.services import (
-    get_create_document_service,
-)
+from app.api.dependencies.services import get_create_document_service
+
 
 class CreateDocumentController(CreateDocumentControllerInterface):
     async def create_document(
@@ -42,6 +41,7 @@ class CreateDocumentController(CreateDocumentControllerInterface):
             database_session=database_session,
             authenticated_user=authenticated_user,
         )
+
 
 router = APIRouter()
 create_document_controller = CreateDocumentController()

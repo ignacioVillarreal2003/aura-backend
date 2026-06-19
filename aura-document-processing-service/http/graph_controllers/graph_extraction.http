@@ -1,0 +1,55 @@
+@dpsBase = http://localhost:8000/api/v1
+@authToken = user_token_123
+
+### Progreso de extracción del grafo para un documento (por documento)
+GET {{dpsBase}}/graph/extraction/progress/1
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Re-extraer el grafo para un documento (aditivo, MERGE)
+POST {{dpsBase}}/graph/extraction/reextract
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "selector": { "document_ids": [1] },
+  "force": false
+}
+
+
+### Re-extraer el grafo para varios documentos
+POST {{dpsBase}}/graph/extraction/reextract
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "selector": { "document_ids": [1, 2, 3] },
+  "force": false
+}
+
+
+### Re-extraer el grafo para TODA la base (de a poco)
+POST {{dpsBase}}/graph/extraction/reextract
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "selector": { "all_documents": true },
+  "force": true
+}
+
+
+### Estado del job masivo de extracción del grafo
+GET {{dpsBase}}/graph/extraction/batch-status
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Detener el job masivo en curso
+DELETE {{dpsBase}}/graph/extraction/stop
+Accept: application/json
+Authorization: Bearer {{authToken}}

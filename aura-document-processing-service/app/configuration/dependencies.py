@@ -22,7 +22,10 @@ from app.application.services.document.document_ingestion_service.document_inges
 from app.application.services.document.document_enrichment_service.document_enrichment_service import (
     DocumentEnrichmentService,
 )
+from app.application.services.document.bulk_dispatch_service.bulk_dispatch_service import BulkDispatchService
 from app.application.services.document.delete_document_service.delete_document_service import DeleteDocumentService
+from app.application.services.document.restore_document_service.restore_document_service import RestoreDocumentService
+from app.application.services.document.update_document_service.update_document_service import UpdateDocumentService
 from app.application.services.document.document_query_service.document_query_service import DocumentQueryService
 from app.application.services.document.document_search_service.document_search_service import DocumentSearchService
 from app.application.services.document.reembed_document_service.reembed_document_service import ReembedDocumentService
@@ -100,6 +103,9 @@ from app.infrastructure.persistence.graph.repositories.graph_stats_repository.gr
 )
 from app.infrastructure.persistence.memory_database.graph_extraction_job_progress_store.graph_extraction_job_progress_store import (
     GraphExtractionJobProgressStore,
+)
+from app.infrastructure.persistence.memory_database.bulk_job_progress_store.bulk_job_progress_store import (
+    BulkJobProgressStore,
 )
 from app.infrastructure.persistence.memory_database.redis_client.interfaces.redis_client_interface import (
     RedisClientInterface,
@@ -320,6 +326,13 @@ async def _build_messaging(c: DependencyContainer) -> None:
     )
     c.register("outbox_lite", outbox_lite)
 
+    # Shared across the bulk maintenance operations (reembed/reprocess/enrich/graph);
+    # the per-document consumers report into it and the HTTP status/stop endpoints read it.
+    c.register(
+        "bulk_job_progress_store",
+        BulkJobProgressStore(redis_client=c.redis_client.client),
+    )
+
     c.register(
         "document_purge_publisher",
         DocumentPurgePublisher(
@@ -421,6 +434,7 @@ async def _build_document_services(c: DependencyContainer) -> None:
     document_enrichment_consumer = DocumentEnrichmentConsumer(
         rabbitmq_manager=rabbitmq_manager,
         document_enrichment_service=c.document_enrichment_service,
+        bulk_job_progress_store=c.bulk_job_progress_store,
     )
     await document_enrichment_consumer.start()
     c.register("document_enrichment_consumer", document_enrichment_consumer)
@@ -441,6 +455,21 @@ async def _build_document_services(c: DependencyContainer) -> None:
             fragment_repository=fragment_repository,
             chat_membership_provider=c.chat_membership_provider,
             document_purge_publisher=c.document_purge_publisher,
+        ),
+    )
+
+    c.register(
+        "restore_document_service",
+        RestoreDocumentService(
+            document_repository=document_repository,
+            fragment_repository=fragment_repository,
+        ),
+    )
+
+    c.register(
+        "update_document_service",
+        UpdateDocumentService(
+            document_repository=document_repository,
         ),
     )
 
@@ -507,6 +536,7 @@ async def _build_maintenance_pipelines(c: DependencyContainer) -> None:
         rabbitmq_manager=rabbitmq_manager,
         reembed_document_service=c.reembed_document_service,
         redis_client=c.redis_client.client,
+        bulk_job_progress_store=c.bulk_job_progress_store,
     )
     await document_reembed_consumer.start()
     c.register("document_reembed_consumer", document_reembed_consumer)
@@ -515,9 +545,26 @@ async def _build_maintenance_pipelines(c: DependencyContainer) -> None:
         rabbitmq_manager=rabbitmq_manager,
         reprocess_document_service=c.reprocess_document_service,
         redis_client=c.redis_client.client,
+        bulk_job_progress_store=c.bulk_job_progress_store,
     )
     await document_reprocess_consumer.start()
     c.register("document_reprocess_consumer", document_reprocess_consumer)
+
+    # Coordinator for 1/several/all-document maintenance jobs. The graph-extraction
+    # publisher is only present when the knowledge graph module is enabled; the
+    # dispatcher reports the graph operation as unavailable (503) otherwise.
+    c.register(
+        "bulk_dispatch_service",
+        BulkDispatchService(
+            database_manager=c.db_manager,
+            document_repository=c.document_repository,
+            progress_store=c.bulk_job_progress_store,
+            reembed_publisher=c.document_reembed_publisher,
+            reprocess_publisher=c.document_reprocess_publisher,
+            enrichment_publisher=c.document_enrichment_publisher,
+            graph_extraction_publisher=c.get("graph_extraction_publisher"),
+        ),
+    )
 
 
 async def _build_purge_consumer(c: DependencyContainer) -> None:
@@ -623,6 +670,7 @@ async def _wire_knowledge_graph_module(c: DependencyContainer) -> None:
     graph_extraction_consumer = GraphExtractionConsumer(
         rabbitmq_manager=c.rabbitmq_manager,
         graph_extraction_service=c.graph_extraction_service,
+        bulk_job_progress_store=c.bulk_job_progress_store,
     )
     await graph_extraction_consumer.start()
     c.register("graph_extraction_consumer", graph_extraction_consumer)

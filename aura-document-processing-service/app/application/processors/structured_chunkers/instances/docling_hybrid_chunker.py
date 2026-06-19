@@ -90,7 +90,8 @@ class DoclingHybridChunker(StructuredChunkerInterface):
                 text = (getattr(raw_chunk, "text", "") or "").strip()
                 if not text:
                     continue
-                chunks.append(self._to_document_chunk(raw_chunk, text))
+                embed_text = self._contextualize(raw_chunk, fallback=text)
+                chunks.append(self._to_document_chunk(raw_chunk, text, embed_text))
 
             if not chunks:
                 raise StructuredChunkerExecutionException(
@@ -183,12 +184,28 @@ class DoclingHybridChunker(StructuredChunkerInterface):
                 merge_peers=self._settings.merge_peers,
             )
 
-    def _to_document_chunk(self, raw_chunk: Any, text: str) -> DocumentChunk:
+    def _contextualize(self, raw_chunk: Any, fallback: str) -> str:
+        # HybridChunker.contextualize() prepends the heading path / captions to the
+        # chunk's serialized text. Used only as the embedding input so a chunk keeps
+        # its section anchor in the vector even when a concept is split at a border.
+        # Best-effort: any failure degrades to the raw chunk text.
+        try:
+            enriched = (self._chunker.contextualize(chunk=raw_chunk) or "").strip()
+        except Exception:
+            logger.warning(
+                "Failed to contextualize a Docling chunk; using raw text for embedding.",
+                exc_info=True,
+            )
+            return fallback
+        return enriched or fallback
+
+    def _to_document_chunk(self, raw_chunk: Any, text: str, embed_text: str) -> DocumentChunk:
         headings = self._extract_headings(raw_chunk)
         page_number, char_span, bbox = self._extract_provenance(raw_chunk)
 
         return DocumentChunk(
             text=text,
+            embed_text=embed_text,
             page_number=page_number,
             section_path=" > ".join(headings) if headings else None,
             heading=headings[-1] if headings else None,

@@ -24,7 +24,7 @@ class DeleteDocumentServiceInterface(ABC):
         pass
 
     @abstractmethod
-    async def soft_delete_document_admin(
+    async def soft_delete_document_manage(
             self,
             document_id: int,
             database_session: AsyncSession,

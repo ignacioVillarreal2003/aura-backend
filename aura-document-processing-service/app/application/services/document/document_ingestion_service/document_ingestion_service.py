@@ -21,6 +21,7 @@ from app.application.processors.text_splitters.text_splitter_factory import Text
 from app.application.services.document.document_ingestion_service.document_ingestion_service_settings import (
     DocumentIngestionServiceSettings
 )
+from app.configuration.metrics import structural_chunk_fallback_total
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.messaging.rabbitmq.publisher.interfaces.document_enrichment_publisher_interface import (
     DocumentEnrichmentPublisherInterface,
@@ -118,7 +119,14 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                 local_file_path,
                 prefer_docling=prefer_docling,
             )
-            texts = [chunk.text for chunk in outcome.chunks]
+            if len(outcome.chunks) > self._settings.max_chunks_per_document:
+                raise DocumentIngestionServiceSplitException(
+                    "The document produced too many text segments to embed safely "
+                    f"({len(outcome.chunks)} > {self._settings.max_chunks_per_document})."
+                )
+            # Embed the contextualized variant when the chunker provides one
+            # (Docling prepends the heading path); fall back to the raw text.
+            texts = [chunk.embed_text or chunk.text for chunk in outcome.chunks]
             embeddings = await self._embed_chunks(document, texts)
             fragments = self._build_fragments(document, outcome.chunks, embeddings)
             await self._persist_fragments_and_update_document(document, fragments, outcome)
@@ -174,10 +182,21 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             # Building the chunker loads heavy Docling/tokenizer models on first use;
             # offload it so the event loop is not blocked.
             chunker = await asyncio.to_thread(self._structured_chunker_factory.get_chunker)
-            if chunker is not None and chunker.supports(local_file_path):
+            if chunker is None:
+                # Docling is configured but its dependencies are unavailable: this is a
+                # silent quality degradation (flat chunking drops structural metadata),
+                # so surface it as a metric rather than only a one-time factory log.
+                structural_chunk_fallback_total.labels(reason="unavailable").inc()
+                logger.warning(
+                    "Structural chunking is configured but unavailable; "
+                    "falling back to the flat-text splitter.",
+                    extra={"document_id": document.id},
+                )
+            elif chunker.supports(local_file_path):
                 try:
                     return await self._produce_chunks_structural(document, local_file_path, chunker)
                 except StructuredChunkerException:
+                    structural_chunk_fallback_total.labels(reason="exception").inc()
                     logger.warning(
                         "Structural chunking failed; falling back to the flat-text splitter.",
                         exc_info=True,
@@ -195,6 +214,12 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             chunker: Any,
     ) -> _ChunkingOutcome:
         chunks: list[DocumentChunk] = await asyncio.to_thread(chunker.chunk_file, local_file_path)
+
+        # Drop empty/whitespace-only chunks before indexing, mirroring the classic
+        # path. fragment_index is a contiguous 0..N ordering/adjacency key (not a
+        # source-document offset), so empties must be removed *before* indexing to
+        # keep the indices gapless; gaps would break adjacency's window queries.
+        chunks = [c for c in chunks if c.text and c.text.strip()]
 
         if len(chunks) < self._settings.min_chunks_required:
             raise DocumentIngestionServiceSplitException("The document did not produce enough text segments.")
@@ -347,10 +372,15 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
         now = datetime.now(timezone.utc)
 
         # Record which model/dimension produced these vectors so they can be audited
-        # and selectively re-embedded when the embedding model changes.
+        # and selectively re-embedded when the embedding model changes. embedding_identity
+        # additionally captures normalization/instructions and is what retrieval matches on.
         embedding_model = self._embedder_factory.get_active_model_name()
         embedding_dim = self._embedder_factory.get_vector_dimension()
+        embedding_identity = self._embedder_factory.get_active_embedding_identity()
 
+        # fragment_index is a contiguous 0..N sequence over the (already empty-
+        # filtered) chunks, in document reading order. It is an ordering/adjacency
+        # key, not a source-document offset, so consumers rely on it being gapless.
         fragments = [
             Fragment(
                 document_id=document.id,
@@ -358,6 +388,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                 vector=embedding,
                 embedding_model=embedding_model,
                 embedding_dim=embedding_dim,
+                embedding_identity=embedding_identity,
                 fragment_index=idx,
                 page_number=chunk.page_number,
                 section_path=chunk.section_path,

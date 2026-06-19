@@ -62,6 +62,7 @@ class ReembedDocumentService(ReembedDocumentServiceInterface):
         try:
             target_model = self._embedder_factory.get_active_model_name()
             target_dim = self._embedder_factory.get_vector_dimension()
+            target_identity = self._embedder_factory.get_active_embedding_identity()
 
             async with self._database_manager.session() as session:
                 document = await self._document_repository.get_document_by_id(
@@ -77,13 +78,15 @@ class ReembedDocumentService(ReembedDocumentServiceInterface):
                     database_session=session,
                 )
 
+            # Compare the full embedding identity, not just the model name, so a change
+            # to normalization or the instruction prefixes also marks vectors stale.
             stale = [
                 fragment for fragment in fragments
-                if force or fragment.embedding_model != target_model
+                if force or fragment.embedding_identity != target_identity
             ]
             if not stale:
                 logger.info(
-                    "No fragments require re-embedding; document is already on the active model.",
+                    "No fragments require re-embedding; document is already on the active embedding identity.",
                     extra={"document_id": document_id, "model": target_model, "fragment_count": len(fragments)},
                 )
                 return 0
@@ -97,6 +100,7 @@ class ReembedDocumentService(ReembedDocumentServiceInterface):
                 embeddings=embeddings,
                 target_model=target_model,
                 target_dim=target_dim,
+                target_identity=target_identity,
             )
 
             logger.info(
@@ -139,6 +143,7 @@ class ReembedDocumentService(ReembedDocumentServiceInterface):
             embeddings: list[list[float]],
             target_model: str,
             target_dim: int,
+            target_identity: str,
     ) -> None:
         fragment_ids = [int(fragment.id) for fragment in fragments]
 
@@ -149,6 +154,7 @@ class ReembedDocumentService(ReembedDocumentServiceInterface):
                     vector=embedding,
                     embedding_model=target_model,
                     embedding_dim=target_dim,
+                    embedding_identity=target_identity,
                     user_id=user_id,
                     database_session=session,
                 )

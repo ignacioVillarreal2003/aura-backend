@@ -212,6 +212,15 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             document_id: int,
             user: AuthenticatedUser,
     ) -> None:
+        # Purge the document's prior footprint so extraction is an idempotent
+        # rebuild rather than purely additive. Without this, re-extraction leaves
+        # entities/relations from removed text behind and re-inflates relation
+        # confidence (confidence_sum/confidence_count are summed again each run).
+        # The deletes are document-scoped (shared entities/relations survive) and
+        # no-ops on a first extraction. This also cleans any partial footprint left
+        # by a previously failed run before the rebuild starts.
+        await self._purge_document_footprint(document_id)
+
         fragments = await self._load_fragments(document_id)
         await self._job_progress_store.begin_job(
             job_id=job_id,
@@ -287,6 +296,26 @@ class GraphExtractionService(GraphExtractionServiceInterface):
                 "document_id": document_id,
                 "job_id": job_id,
                 "fragment_count": len(fragments),
+            },
+        )
+
+    async def _purge_document_footprint(self, document_id: int) -> None:
+        # Relations first, then entities: entity deletion DETACH-deletes orphaned
+        # nodes, so clearing relation provenance beforehand keeps the relation
+        # bookkeeping (confidence sums, source arrays) consistent for relations
+        # shared with other documents.
+        relations_deleted = await self._relation_repository.delete_document_relations(
+            document_id=document_id,
+        )
+        entities_deleted = await self._entity_repository.delete_document_entities(
+            document_id=document_id,
+        )
+        logger.info(
+            "Existing graph footprint purged before extraction (idempotent rebuild).",
+            extra={
+                "document_id": document_id,
+                "relations_deleted": relations_deleted,
+                "orphaned_entities_deleted": entities_deleted,
             },
         )
 
