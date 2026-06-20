@@ -49,7 +49,9 @@ def _persist_generated_lessons_learned(
         user_id: int,
         title: str,
         query: str,
-        mode: str,
+        retrieve_context: bool | None,
+        process_documents: bool | None,
+        document_ids: list[int],
         source_chat_id: int,
         context: str,
         items: list,
@@ -58,7 +60,9 @@ def _persist_generated_lessons_learned(
     artifact = create_artifact_for_content(
         user_id=user_id,
         artifact_type=Artifact.Type.LESSONS_LEARNED,
-        mode=mode,
+        retrieve_context=retrieve_context,
+        process_documents=process_documents,
+        document_ids=document_ids,
         source_chat_id=source_chat_id,
         fragments=fragments,
     )
@@ -110,8 +114,10 @@ class LessonsLearnedService(ArtifactCrudService):
             self,
             user: AuthenticatedUser,
             message: str,
-            mode: str,
             chat_id: int,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
+            document_ids: list[int] | None = None,
     ) -> tuple[ArtifactLessonsLearned, list[dict], list[dict]]:
         AccessControl.require_permissions(user, frozenset({perms.LLM_LESSONS_LEARNED_GENERATE}))
 
@@ -127,11 +133,13 @@ class LessonsLearnedService(ArtifactCrudService):
         try:
             async for event in llm_client.generate_lessons_learned_stream_events(
                     messages=messages,
-                    mode=mode,
                     user=user,
                     chat_id=chat_id,
                     system_prompt=system_prompt,
                     response_style=response_style,
+                    retrieve_context=retrieve_context,
+                    process_documents=process_documents,
+                    document_ids=document_ids,
             ):
                 et = event.get("type")
                 if et == "progress":
@@ -176,7 +184,9 @@ class LessonsLearnedService(ArtifactCrudService):
             user_id=user.id,
             title=title,
             query=message,
-            mode=mode,
+            retrieve_context=retrieve_context,
+            process_documents=process_documents,
+            document_ids=document_ids or [],
             source_chat_id=chat_id,
             context=context,
             items=items,

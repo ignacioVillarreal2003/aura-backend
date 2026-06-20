@@ -2,7 +2,6 @@ import html
 import logging
 
 from core.export import pdf_export
-from apps.artifact.models.artifact import Artifact
 from apps.artifact_checklist.exceptions import ChecklistExportException
 from apps.artifact_checklist.models import ArtifactChecklist
 
@@ -42,7 +41,7 @@ def generate_checklist_pdf(checklist: ArtifactChecklist) -> bytes:
     all_items = [item for sec in sections for item in sec.items.all()]
     total = len(all_items)
     checked = sum(1 for it in all_items if it.is_checked)
-    mode_label = "Con documentos de contexto" if checklist.artifact.mode == Artifact.Mode.RAG else "Directo"
+    mode_label = "Con documentos de contexto" if (checklist.artifact.retrieve_context or checklist.artifact.process_documents) else "Directo"
     created = html.escape(pdf_export.fmt_dt(checklist.created_at))
 
     sections_html = ""

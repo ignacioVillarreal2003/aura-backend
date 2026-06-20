@@ -1,6 +1,5 @@
 from rest_framework import serializers
 
-from apps.artifact.models.artifact import Artifact
 from apps.artifact.shared_serializers import FragmentSerializer as _FragmentSerializer, \
     MessageSerializer as _MessageSerializer
 from apps.artifact_quiz.models import ArtifactQuiz, ArtifactQuizOption, ArtifactQuizQuestion
@@ -8,10 +7,28 @@ from core.validators.audio import MAX_AUDIO_MB as _MAX_AUDIO_MB, SUPPORTED_AUDIO
 
 
 class GenerateQuizRequest(serializers.Serializer):
-    mode = serializers.ChoiceField(choices=Artifact.Mode.choices)
     message = serializers.CharField(allow_blank=False, max_length=4000, required=False)
     audio = serializers.FileField(required=False)
     chat_id = serializers.IntegerField()
+    retrieve_context = serializers.BooleanField(
+        required=False,
+        allow_null=True,
+        default=None,
+        help_text="Recuperar contexto de la base de conocimiento. Si se omite, usa el default del servicio.",
+    )
+    process_documents = serializers.BooleanField(
+        required=False,
+        allow_null=True,
+        default=None,
+        help_text="Procesar el contenido completo de los documentos adjuntos. Si se omite, usa el default del servicio.",
+    )
+    document_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        default=list,
+        max_length=20,
+        help_text="IDs de documentos a adjuntar como contexto prioritario (opcional).",
+    )
 
     def validate_audio(self, file):
         content_type = getattr(file, "content_type", "")
@@ -49,7 +66,9 @@ class QuizQuestionResponse(serializers.ModelSerializer):
 
 class QuizResponse(serializers.ModelSerializer):
     questions = QuizQuestionResponse(many=True)
-    mode = serializers.SerializerMethodField()
+    retrieve_context = serializers.SerializerMethodField()
+    process_documents = serializers.SerializerMethodField()
+    document_ids = serializers.SerializerMethodField()
     source_chat_id = serializers.SerializerMethodField()
 
     class Meta:
@@ -61,7 +80,9 @@ class QuizResponse(serializers.ModelSerializer):
             "query",
             "instructions",
             "pass_score",
-            "mode",
+            "retrieve_context",
+            "process_documents",
+            "document_ids",
             "questions",
             "source_chat_id",
             "created_by",
@@ -69,8 +90,14 @@ class QuizResponse(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    def get_mode(self, obj) -> str:
-        return obj.artifact.mode if obj.artifact_id else ""
+    def get_retrieve_context(self, obj) -> bool | None:
+        return obj.artifact.retrieve_context if obj.artifact_id else None
+
+    def get_process_documents(self, obj) -> bool | None:
+        return obj.artifact.process_documents if obj.artifact_id else None
+
+    def get_document_ids(self, obj) -> list[int]:
+        return obj.artifact.document_ids if obj.artifact_id else []
 
     def get_source_chat_id(self, obj) -> int | None:
         return obj.artifact.source_chat_id if obj.artifact_id else None
@@ -87,7 +114,9 @@ class QuizGenerateResponse(serializers.Serializer):
 
 class QuizListResponse(serializers.ModelSerializer):
     question_count = serializers.SerializerMethodField()
-    mode = serializers.SerializerMethodField()
+    retrieve_context = serializers.SerializerMethodField()
+    process_documents = serializers.SerializerMethodField()
+    document_ids = serializers.SerializerMethodField()
     source_chat_id = serializers.SerializerMethodField()
 
     class Meta:
@@ -96,7 +125,9 @@ class QuizListResponse(serializers.ModelSerializer):
             "id",
             "artifact_id",
             "title",
-            "mode",
+            "retrieve_context",
+            "process_documents",
+            "document_ids",
             "pass_score",
             "source_chat_id",
             "question_count",
@@ -105,8 +136,14 @@ class QuizListResponse(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    def get_mode(self, obj) -> str:
-        return obj.artifact.mode if obj.artifact_id else ""
+    def get_retrieve_context(self, obj) -> bool | None:
+        return obj.artifact.retrieve_context if obj.artifact_id else None
+
+    def get_process_documents(self, obj) -> bool | None:
+        return obj.artifact.process_documents if obj.artifact_id else None
+
+    def get_document_ids(self, obj) -> list[int]:
+        return obj.artifact.document_ids if obj.artifact_id else []
 
     def get_source_chat_id(self, obj) -> int | None:
         return obj.artifact.source_chat_id if obj.artifact_id else None

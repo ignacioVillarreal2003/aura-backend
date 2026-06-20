@@ -2,7 +2,6 @@ import html
 import logging
 
 from core.export import pdf_export
-from apps.artifact.models.artifact import Artifact
 from apps.artifact_report.exceptions import ReportExportException
 from apps.artifact_report.models import ArtifactReport
 
@@ -73,7 +72,7 @@ def generate_report_pdf(report: ArtifactReport) -> bytes:
     type_label = html.escape(_TYPE_LABELS.get(report.type, report.type))
     title = html.escape(report.title)
     created = html.escape(_fmt_dt(report.created_at))
-    mode_label = "Con documentos de contexto" if report.artifact.mode == Artifact.Mode.RAG else "Directo"
+    mode_label = "Con documentos de contexto" if (report.artifact.retrieve_context or report.artifact.process_documents) else "Directo"
     content_html = _render_markdown(report.content)
 
     html_doc = f"""<!DOCTYPE html>

@@ -168,6 +168,8 @@ class DocumentActionGenerateView(APIView):
                 instruction=instruction,
                 action=action,
                 chat_id=chat_id,
+                retrieve_context=d.get("retrieve_context"),
+                process_documents=d.get("process_documents"),
             )
 
         return Response(

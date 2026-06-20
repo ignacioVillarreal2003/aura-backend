@@ -131,6 +131,8 @@ class MessageGenerateView(APIView):
 
         chat_id = serializer.validated_data["chat_id"]
         mode = serializer.validated_data.get("mode", "document_question")
+        retrieve_context = serializer.validated_data.get("retrieve_context")
+        process_documents = serializer.validated_data.get("process_documents")
 
         await sync_to_async(message_service.assert_send_access)(request.user, chat_id)
 
@@ -166,7 +168,11 @@ class MessageGenerateView(APIView):
             )
             msg_data = MessageResponse(msg).data
             try:
-                turn = await message_service.run_ai_reply(mode, request.user, chat_id)
+                turn = await message_service.run_ai_reply(
+                    mode, request.user, chat_id,
+                    retrieve_context=retrieve_context,
+                    process_documents=process_documents,
+                )
                 assistant = {"question": turn.question, "answer": turn.answer, "fragments": turn.fragments}
             except LLMServiceException as e:
                 assistant_error = {"detail": e.detail}

@@ -13,6 +13,7 @@ from app.configuration.dependencies import shutdown_dependencies, startup_depend
 from app.configuration.environment_variables import environment_variables
 from app.configuration.gpu_guard import verify_gpu_availability
 from app.configuration.logging_configuration import configure_logging
+from app.configuration.metrics import patch_instrumentator_routing
 from app.configuration.middlewares.authentication_middleware import add_authentication_middleware
 from app.configuration.middlewares.logging_middleware import add_logging_middleware
 from app.configuration.production_invariants import assert_production_invariants
@@ -71,6 +72,7 @@ def create_app() -> FastAPI:
     _include_routers(app)
     register_exception_handlers(app)
 
+    patch_instrumentator_routing()
     Instrumentator(
         should_group_status_codes=True,
         should_ignore_untemplated=True,

@@ -9,7 +9,6 @@ import datetime
 
 import pytest
 
-from apps.artifact.models.artifact import Artifact
 from apps.artifact_report.exceptions import ReportExportException
 from apps.artifact_report.models import ArtifactReport
 from apps.artifact_report.services.export_service import (
@@ -119,7 +118,7 @@ def test_generate_pdf_returns_pdf_bytes():
 
 
 def test_generate_pdf_handles_rag_mode():
-    report = make_report(mode=Artifact.Mode.RAG, content="Contenido con contexto.")
+    report = make_report(process_documents=True, content="Contenido con contexto.")
     pdf = generate_report_pdf(report)
     assert pdf[:4] == b"%PDF"
 

@@ -6,7 +6,10 @@ from aiobreaker import CircuitBreaker as AioBreaker
 from aiobreaker import CircuitBreakerError
 from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from app.application.processors._hf_model_cache import get_or_create as _get_or_create_hf_embeddings
+from app.application.processors._hf_model_cache import (
+    get_or_create as _get_or_create_hf_embeddings,
+    get_sentence_transformer as _get_sentence_transformer,
+)
 from app.application.processors.embedders.embedder_settings import EmbedderSettings
 from app.application.processors.embedders.exceptions.embedder_exception import (
     EmbedderInitializationException,
@@ -58,8 +61,9 @@ class HuggingFaceEmbedder(BaseEmbedder):
                 max_seq_length=self._settings.huggingface_max_seq_length,
             )
 
-            self._max_seq_length: Optional[int] = getattr(self._model.client, "max_seq_length", None)
-            self._tokenizer = getattr(self._model.client, "tokenizer", None)
+            st_model = _get_sentence_transformer(self._model)
+            self._max_seq_length: Optional[int] = getattr(st_model, "max_seq_length", None)
+            self._tokenizer = getattr(st_model, "tokenizer", None)
 
             self._embed_query_with_retry: Callable[[str], list[float]] = _retry(
                 self._model.embed_query

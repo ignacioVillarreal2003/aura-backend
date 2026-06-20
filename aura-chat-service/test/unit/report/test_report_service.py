@@ -312,4 +312,4 @@ async def test_generate_report_chat_not_found_raises_404(mocker):
     mocker.patch(f"{SVC}.AccessControl.require_permissions")
     mocker.patch(f"{SVC}.chat_repository.get_by_id", return_value=None)
     with pytest.raises(ChatNotFoundException):
-        await service.generate_report(user, "SITREP", "x", "direct", chat_id=99)
+        await service.generate_report(user, "SITREP", "x", chat_id=99)

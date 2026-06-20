@@ -16,12 +16,10 @@ class Artifact(AuditModel, SoftDeleteModel):
         DOCUMENT_SUMMARY = "DOCUMENT_SUMMARY", "Resumen de documento"
         DOCUMENT_ACTION = "DOCUMENT_ACTION", "Acción sobre documento"
 
-    class Mode(models.TextChoices):
-        DIRECT = "direct", "Directo"
-        RAG = "rag", "Con documentos"
-
     type = models.CharField(max_length=32, choices=Type.choices)
-    mode = models.CharField(max_length=16, choices=Mode.choices, default=Mode.DIRECT)
+    retrieve_context = models.BooleanField(null=True, blank=True, default=None)
+    process_documents = models.BooleanField(null=True, blank=True, default=None)
+    document_ids = models.JSONField(blank=True, default=list)
     fragments = models.JSONField(null=True, blank=True, default=None)
     source_chat = models.ForeignKey(
         "chat.Chat",

@@ -165,8 +165,10 @@ class QuizGenerateView(APIView):
             quiz, messages, fragments = await quiz_service.generate_quiz(
                 user=request.user,
                 message=message,
-                mode=d["mode"],
                 chat_id=chat_id,
+                retrieve_context=d.get("retrieve_context"),
+                process_documents=d.get("process_documents"),
+                document_ids=d.get("document_ids", []),
             )
 
         return Response(

@@ -33,7 +33,7 @@ htmlcov/
 *.log
 
 # Environment files (secrets must come from env vars / secrets manager)
-env/.env
+.env
 .env.*
 
 # Database

@@ -171,6 +171,8 @@ class MessageService:
             self,
             user: AuthenticatedUser,
             chat_id: int,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
     ) -> DocumentQuestionRunResult:
         messages = await self._build_llm_messages(chat_id)
         system_prompt, response_style = await self._get_chat_prompt_style(chat_id)
@@ -179,6 +181,7 @@ class MessageService:
             llm_out: DocumentQuestionResult = await llm_client.document_question(
                 messages, user, chat_id=chat_id,
                 system_prompt=system_prompt, response_style=response_style,
+                retrieve_context=retrieve_context, process_documents=process_documents,
             )
         except HttpClientException as e:
             logger.error(
@@ -216,17 +219,22 @@ class MessageService:
             mode: str,
             user: AuthenticatedUser,
             chat_id: int,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
     ) -> DocumentQuestionRunResult:
+        flags = {"retrieve_context": retrieve_context, "process_documents": process_documents}
         if mode == ChatAIMode.GENERAL_CHAT:
-            return await self.run_general_chat(user, chat_id)
+            return await self.run_general_chat(user, chat_id, **flags)
         if mode == ChatAIMode.RAG_AGENT:
-            return await self.run_rag_agent(user, chat_id)
-        return await self.run_document_question(user, chat_id)
+            return await self.run_rag_agent(user, chat_id, **flags)
+        return await self.run_document_question(user, chat_id, **flags)
 
     async def run_general_chat(
             self,
             user: AuthenticatedUser,
             chat_id: int,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
     ) -> DocumentQuestionRunResult:
         messages = await self._build_llm_messages(chat_id)
         system_prompt, response_style = await self._get_chat_prompt_style(chat_id)
@@ -234,6 +242,7 @@ class MessageService:
             result: GeneralChatResult = await llm_client.general_chat(
                 messages, user, chat_id=chat_id,
                 system_prompt=system_prompt, response_style=response_style,
+                retrieve_context=retrieve_context, process_documents=process_documents,
             )
         except HttpClientException as e:
             logger.error(
@@ -261,6 +270,8 @@ class MessageService:
             self,
             user: AuthenticatedUser,
             chat_id: int,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
     ) -> DocumentQuestionRunResult:
         return await self._run_agent_flow(
             user=user,
@@ -268,6 +279,8 @@ class MessageService:
             caller=llm_client.rag_agent,
             url_setting_name="LLM_RAG_AGENT_URL",
             label="rag-agent",
+            retrieve_context=retrieve_context,
+            process_documents=process_documents,
         )
 
     async def _run_agent_flow(
@@ -278,6 +291,8 @@ class MessageService:
             caller: Callable[..., Any],
             url_setting_name: str,
             label: str,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
     ) -> DocumentQuestionRunResult:
         messages = await self._build_llm_messages(chat_id)
         system_prompt, response_style = await self._get_chat_prompt_style(chat_id)
@@ -285,6 +300,7 @@ class MessageService:
             result: AgentRunResult = await caller(
                 messages, user, chat_id=chat_id,
                 system_prompt=system_prompt, response_style=response_style,
+                retrieve_context=retrieve_context, process_documents=process_documents,
             )
         except HttpClientException as e:
             logger.error(
@@ -334,17 +350,22 @@ class MessageService:
             mode: str,
             user: AuthenticatedUser,
             chat_id: int,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
+        flags = {"retrieve_context": retrieve_context, "process_documents": process_documents}
         if mode == ChatAIMode.GENERAL_CHAT:
-            return self.iter_general_chat_stream_group_payloads(user, chat_id)
+            return self.iter_general_chat_stream_group_payloads(user, chat_id, **flags)
         if mode == ChatAIMode.RAG_AGENT:
-            return self.iter_rag_agent_stream_group_payloads(user, chat_id)
-        return self.iter_document_question_stream_group_payloads(user, chat_id)
+            return self.iter_rag_agent_stream_group_payloads(user, chat_id, **flags)
+        return self.iter_document_question_stream_group_payloads(user, chat_id, **flags)
 
     async def iter_document_question_stream_group_payloads(
             self,
             user: AuthenticatedUser,
             chat_id: int,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         messages = await self._build_llm_messages(chat_id)
         system_prompt, response_style = await self._get_chat_prompt_style(chat_id)
@@ -354,6 +375,7 @@ class MessageService:
                 sse_events=llm_client.document_question_stream_events(
                     messages, user, chat_id=chat_id,
                     system_prompt=system_prompt, response_style=response_style,
+                    retrieve_context=retrieve_context, process_documents=process_documents,
                 ),
                 complete_extractor=self._extract_document_question_complete,
                 stream_url_setting_name="LLM_DOCUMENT_QUESTION_STREAM_URL",
@@ -364,6 +386,8 @@ class MessageService:
             self,
             user: AuthenticatedUser,
             chat_id: int,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         messages = await self._build_llm_messages(chat_id)
         system_prompt, response_style = await self._get_chat_prompt_style(chat_id)
@@ -373,6 +397,7 @@ class MessageService:
                 sse_events=llm_client.general_chat_stream_events(
                     messages, user, chat_id=chat_id,
                     system_prompt=system_prompt, response_style=response_style,
+                    retrieve_context=retrieve_context, process_documents=process_documents,
                 ),
                 complete_extractor=self._extract_general_chat_complete,
                 stream_url_setting_name="LLM_GENERAL_CHAT_STREAM_URL",
@@ -383,6 +408,8 @@ class MessageService:
             self,
             user: AuthenticatedUser,
             chat_id: int,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         messages = await self._build_llm_messages(chat_id)
         system_prompt, response_style = await self._get_chat_prompt_style(chat_id)
@@ -392,6 +419,7 @@ class MessageService:
                 sse_events=llm_client.rag_agent_stream_events(
                     messages, user, chat_id=chat_id,
                     system_prompt=system_prompt, response_style=response_style,
+                    retrieve_context=retrieve_context, process_documents=process_documents,
                 ),
                 complete_extractor=self._extract_agent_complete,
                 stream_url_setting_name="LLM_RAG_AGENT_STREAM_URL",

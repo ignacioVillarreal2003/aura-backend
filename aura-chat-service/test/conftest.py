@@ -149,10 +149,12 @@ def make_checklist_section(sec_id=1, title="Preparación", position=0, items=Non
 
 
 def make_checklist(cl_id=1, title="Checklist de prueba", mode="direct",
+                   retrieve_context=None, process_documents=None, document_ids=None,
                    source_chat_id=1, created_by=1, sections=None, **overrides):
     now = timezone.now()
     artifact = make_artifact(
-        artifact_id=cl_id, type="CHECKLIST", mode=mode,
+        artifact_id=cl_id, type="CHECKLIST",
+        retrieve_context=retrieve_context, process_documents=process_documents, document_ids=document_ids,
         source_chat_id=source_chat_id, created_by=created_by,
     )
     data = dict(
@@ -197,11 +199,13 @@ def make_assistant(assistant_id=1, name="Asistente Alfa", description="Descripci
 
 def make_report(report_id=1, title="Informe de prueba", report_type="SITREP",
                 content="Contenido del informe", mode="direct",
+                retrieve_context=None, process_documents=None, document_ids=None,
                 source_chat_id=1, created_by=1, **overrides):
     now = timezone.now()
-    # mode / source_chat_id now live on the linked Artifact, not the report row.
+    # generation params / source_chat_id now live on the linked Artifact, not the report row.
     artifact = make_artifact(
-        artifact_id=report_id, type="REPORT", mode=mode,
+        artifact_id=report_id, type="REPORT",
+        retrieve_context=retrieve_context, process_documents=process_documents, document_ids=document_ids,
         source_chat_id=source_chat_id, created_by=created_by,
     )
     data = dict(
@@ -224,6 +228,7 @@ def make_report(report_id=1, title="Informe de prueba", report_type="SITREP",
 
 def make_artifact(artifact_id=1, type="REPORT", title="Artefacto de prueba",
                   description="", status="draft", version=1, mode="direct",
+                  retrieve_context=None, process_documents=None, document_ids=None,
                   source_chat_id=1, created_by=1, fragments=None, **overrides):
     now = timezone.now()
     data = dict(
@@ -233,7 +238,9 @@ def make_artifact(artifact_id=1, type="REPORT", title="Artefacto de prueba",
         description=description,
         status=status,
         version=version,
-        mode=mode,
+        retrieve_context=retrieve_context,
+        process_documents=process_documents,
+        document_ids=document_ids if document_ids is not None else [],
         source_chat_id=source_chat_id,
         fragments=fragments,
         created_by=created_by,

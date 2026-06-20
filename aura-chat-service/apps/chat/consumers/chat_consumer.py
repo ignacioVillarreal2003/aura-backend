@@ -235,7 +235,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         pre = await self._validate_send_preconditions(content)
         if pre is None:
             return
-        text, mode = pre
+        text, mode, retrieve_context, process_documents = pre
 
         if not await self._enforce_rate_limit():
             return
@@ -249,9 +249,11 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         if not await self._persist_user_message(text, lock_token):
             return
 
-        self._spawn_ai_reply_task(mode, lock_token)
+        self._spawn_ai_reply_task(mode, retrieve_context, process_documents, lock_token)
 
-    async def _validate_send_preconditions(self, content: dict) -> tuple[str, str] | None:
+    async def _validate_send_preconditions(
+            self, content: dict
+    ) -> tuple[str, str, bool | None, bool | None] | None:
         """Run all send guards. Returns (text, mode) or sends an error and returns None.
 
         Validates membership/role BEFORE acquiring the AI lock so a reader (or a
@@ -308,7 +310,18 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             return None
 
         mode = ChatAIMode.normalize(content.get("mode"))
-        return text, mode
+        retrieve_context = self._optional_bool(content.get("retrieve_context"))
+        process_documents = self._optional_bool(content.get("process_documents"))
+        return text, mode, retrieve_context, process_documents
+
+    @staticmethod
+    def _optional_bool(value: object) -> bool | None:
+        """Coerce a raw WS payload value to a tri-state flag (True/False/None).
+
+        Only genuine booleans are honoured; anything else (missing, null, string)
+        falls back to None so the LLM service applies its own default.
+        """
+        return value if isinstance(value, bool) else None
 
     async def _enforce_rate_limit(self) -> bool:
         allowed = await database_sync_to_async(check_message_rate_limit)(
@@ -381,8 +394,16 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             return False
         return True
 
-    def _spawn_ai_reply_task(self, mode: str, lock_token: str) -> None:
-        task = asyncio.create_task(self._run_ai_reply(mode, lock_token))
+    def _spawn_ai_reply_task(
+            self,
+            mode: str,
+            retrieve_context: bool | None,
+            process_documents: bool | None,
+            lock_token: str,
+    ) -> None:
+        task = asyncio.create_task(
+            self._run_ai_reply(mode, retrieve_context, process_documents, lock_token)
+        )
         # Hold a process-level strong reference so the reply survives even if this
         # consumer disconnects before the stream finishes.
         _BACKGROUND_AI_TASKS.add(task)
@@ -411,7 +432,13 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         task.add_done_callback(_on_ai_reply_done)
         self._ai_reply_task = task
 
-    async def _run_ai_reply(self, mode: str, lock_token: str):
+    async def _run_ai_reply(
+            self,
+            mode: str,
+            retrieve_context: bool | None,
+            process_documents: bool | None,
+            lock_token: str,
+    ):
         if self.group_name is None or self.chat_id is None:
             return
         try:
@@ -423,7 +450,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             last_lock_refresh = 0.0
             try:
                 async for payload in message_service.iter_ai_reply_stream_group_payloads(
-                        mode, self.user, self.chat_id
+                        mode, self.user, self.chat_id,
+                        retrieve_context=retrieve_context,
+                        process_documents=process_documents,
                 ):
                     now = asyncio.get_running_loop().time()
                     if now - last_lock_refresh >= _LOCK_REFRESH_INTERVAL_SECONDS:
