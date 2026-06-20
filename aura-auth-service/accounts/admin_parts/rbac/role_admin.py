@@ -7,6 +7,7 @@ from django.utils.html import format_html
 from accounts.models import Role, Permission, PermissionInRole
 from accounts.admin_parts.utils.mixins import HelpTextStripMixin
 from accounts.admin_parts.utils.audit import _is_super_admin_user, _is_admin_or_super_user, _is_effective_superadmin, log_audit
+from accounts.admin_parts.utils.permissions import has_permission
 
 
 class RoleAdminForm(forms.ModelForm):
@@ -93,16 +94,16 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
         return super().change_view(request, object_id, form_url, extra_context)
 
     def has_module_permission(self, request):
-        return _is_admin_or_super_user(request.user)
+        return has_permission(request, 'ADMIN_ROLES_VIEW')
 
     def has_view_permission(self, request, obj=None):
-        return _is_admin_or_super_user(request.user)
+        return has_permission(request, 'ADMIN_ROLES_VIEW')
 
     def has_add_permission(self, request):
         return False
 
     def has_change_permission(self, request, obj=None):
-        return _is_effective_superadmin(request)
+        return has_permission(request, 'ADMIN_ROLES_EDIT') or _is_effective_superadmin(request)
 
     def has_delete_permission(self, request, obj=None):
         return False

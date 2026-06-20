@@ -14,7 +14,7 @@ from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
 
-from accounts.admin_parts.common import _is_super_admin_user, _is_admin_or_super_user, _is_effective_superadmin
+from accounts.admin_parts.common import _is_super_admin_user, _is_admin_or_super_user, _is_effective_superadmin, has_permission
 from accounts.admin_parts.utils.audit import log_audit
 from accounts.services.mac_client import MacServiceError, mac_client
 
@@ -24,12 +24,12 @@ logger = logging.getLogger(__name__)
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 def _check_superadmin(request):
-    if not _is_effective_superadmin(request):
+    if not (has_permission(request, 'ADMIN_MAC_USER_PROFILE') or _is_effective_superadmin(request)):
         raise PermissionDenied
 
 
 def _check_admin_or_superadmin(request):
-    if not _is_admin_or_super_user(request.user):
+    if not has_permission(request, 'ADMIN_MAC_MANAGE'):
         raise PermissionDenied
 
 

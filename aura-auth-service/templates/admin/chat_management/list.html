@@ -1,0 +1,156 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'admin/css/changelists.css' %}">
+<style>
+  .fallback-banner {
+    background: #fef3cd;
+    border: 1px solid #ffc107;
+    color: #664d03;
+    padding: 10px 16px;
+    margin-bottom: 16px;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  .chat-search {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .chat-search input[type="search"] {
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+    width: 260px;
+  }
+  .chat-search button {
+    padding: 6px 14px;
+    background: #205067;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .chat-search a.clear-btn {
+    font-size: 12px;
+    color: #697688;
+    text-decoration: none;
+  }
+  .lock-badge {
+    display: inline-block;
+    border-radius: 999px;
+    padding: 2px 9px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .lock-badge.locked { background: #fee2e2; color: #991b1b; }
+  .lock-badge.unlocked { background: #d1fae5; color: #065f46; }
+  .pagination {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 16px;
+    font-size: 13px;
+    flex-wrap: wrap;
+  }
+  .pagination a, .pagination span {
+    padding: 5px 10px;
+    border: 1px solid #d1d8e4;
+    border-radius: 4px;
+    text-decoration: none;
+    color: #205067;
+  }
+  .pagination .disabled {
+    color: #aab4c2;
+    pointer-events: none;
+  }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Inicio</a>
+  &rsaquo; Chats
+</div>
+{% endblock %}
+
+{% block content_title %}{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <h1>Todos los chats</h1>
+
+  {% if using_fallback %}
+  <div class="fallback-banner">
+    ⚠️ Mostrando datos locales — servicio de chat no disponible. Algunas columnas
+    (Estado, Miembros) pueden no reflejar el estado real hasta que el servicio
+    vuelva a estar disponible.
+  </div>
+  {% endif %}
+
+  <form class="chat-search" method="get" action="">
+    <input type="search" name="q" value="{{ search }}" placeholder="Buscar por nombre de chat&hellip;">
+    <button type="submit">Buscar</button>
+    {% if search %}<a class="clear-btn" href="?">Limpiar</a>{% endif %}
+  </form>
+
+  <div class="module" id="changelist">
+    <p class="paginator">{{ total_count }} chat{{ total_count|pluralize }}</p>
+    <table id="result_list">
+      <thead>
+        <tr>
+          <th scope="col">ID</th>
+          <th scope="col">Nombre</th>
+          <th scope="col">Creado por</th>
+          <th scope="col">Creado</th>
+          <th scope="col">Último mensaje</th>
+          <th scope="col">Estado</th>
+          <th scope="col">Miembros</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for chat in chats %}
+        <tr class="{% cycle 'row1' 'row2' %}">
+          <td><a href="{% url 'admin:chat_management_detail' chat.id %}">{{ chat.id }}</a></td>
+          <td><a href="{% url 'admin:chat_management_detail' chat.id %}">{{ chat.name }}</a></td>
+          <td>{{ chat.creator_username }}</td>
+          <td>{{ chat.created_at }}</td>
+          <td>{{ chat.last_message_at }}</td>
+          <td>
+            {% if chat.is_locked %}
+              <span class="lock-badge locked">🔒 Bloqueado</span>
+            {% else %}
+              <span class="lock-badge unlocked">✅ Activo</span>
+            {% endif %}
+          </td>
+          <td>{{ chat.member_count }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" style="color:#888;font-style:italic;padding:10px 14px">No hay chats.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if total_pages > 1 %}
+    <div class="pagination">
+      {% if has_prev %}
+        <a href="?page={{ page|add:'-1' }}&q={{ search|urlencode }}">&laquo; Anterior</a>
+      {% else %}
+        <span class="disabled">&laquo; Anterior</span>
+      {% endif %}
+      <span>Página {{ page }} de {{ total_pages }}</span>
+      {% if has_next %}
+        <a href="?page={{ page|add:'1' }}&q={{ search|urlencode }}">Siguiente &raquo;</a>
+      {% else %}
+        <span class="disabled">Siguiente &raquo;</span>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -9,7 +9,8 @@ from django.template.response import TemplateResponse
 from django.urls import path
 
 from accounts.admin_parts.common import _is_super_admin_user, _is_admin_or_super_user, _is_effective_superadmin
-from accounts.models import AuditLog, UserRole
+from accounts.admin_parts.utils.permissions import has_permission
+from accounts.models import AuditLog
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,7 @@ _ENTITY_LABELS = {
 
 
 def _audit_list_view(request):
-    if not _is_admin_or_super_user(request.user):
+    if not has_permission(request, 'ADMIN_AUDIT_VIEW'):
         raise PermissionDenied
 
     try:
@@ -57,14 +58,11 @@ def _audit_list_view(request):
 
     qs = AuditLog.objects.all()
 
-    if not _is_effective_superadmin(request):
-        admin_actor_ids = list(
-            UserRole.objects.filter(
-                role__name='admin',
-                deleted_at__isnull=True,
-            ).values_list('user_id', flat=True)
-        )
-        qs = qs.filter(actor_id__in=admin_actor_ids)
+    if not (has_permission(request, 'ADMIN_AUDIT_VIEW_ALL') or _is_effective_superadmin(request)):
+        # Admin sees only entries originating from non-elevated admin sessions.
+        # Elevated-admin actions (source='superadmin') are hidden to prevent
+        # plain admins from observing superadmin-level operations.
+        qs = qs.filter(source='admin')
 
     if search:
         from django.db.models import Q

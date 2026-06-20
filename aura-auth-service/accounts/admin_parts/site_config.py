@@ -3,7 +3,7 @@
 from django.contrib import admin
 from django.contrib.auth.models import Group
 from django.urls import reverse
-from accounts.admin_parts.common import _is_super_admin_user, _is_admin_user, _is_effective_superadmin
+from accounts.admin_parts.common import _is_super_admin_user, _is_admin_user, _is_effective_superadmin, has_permission
 
 
 # Customize admin site
@@ -18,15 +18,17 @@ admin.site.unregister(Group)
 def _custom_get_app_list(self, request, app_label=None):
     app_list = admin.AdminSite.get_app_list(self, request, app_label)
 
-    is_admin = _is_admin_user(request.user)
-    is_superadmin = _is_effective_superadmin(request)
-    is_any_admin = is_superadmin or is_admin
+    can_view_roles = has_permission(request, 'ADMIN_ROLES_VIEW')
+    can_manage_mac = has_permission(request, 'ADMIN_MAC_MANAGE')
+    can_view_audit = has_permission(request, 'ADMIN_AUDIT_VIEW')
+    can_view_chats = has_permission(request, 'ADMIN_CHAT_VIEW') or _is_effective_superadmin(request)
+    can_view_users = has_permission(request, 'ADMIN_USERS_VIEW')
 
     # Models shown in Gestión de usuarios (accounts app), in order.
     # CustomGroup is excluded — groups are managed via MAC collections.
     _accounts_allowed = {'User', 'Role', 'Permission'}
     desired_order = ['User']
-    if is_any_admin:
+    if can_view_roles:
         desired_order = ['User', 'Role', 'Permission']
     order_map = {name: i for i, name in enumerate(desired_order)}
 
@@ -51,7 +53,7 @@ def _custom_get_app_list(self, request, app_label=None):
     ]
 
     # Grupos section: classification levels and compartments.
-    if is_any_admin:
+    if can_manage_mac:
         grupos_models = [
             {
                 'name': 'Niveles',
@@ -76,34 +78,37 @@ def _custom_get_app_list(self, request, app_label=None):
             }
         )
 
-    # Gestión section: documents, chats and audit log — visible to all admins.
-    if is_any_admin:
+    # Gestión section: documents, chats and audit log.
+    if can_view_users or can_view_audit or can_view_chats:
+        gestion_models = [
+            {
+                'name': 'Documentos',
+                'object_name': 'Document',
+                'admin_url': reverse('admin:documents_document_changelist'),
+                'view_only': True,
+            },
+        ]
+        if can_view_chats:
+            gestion_models.append({
+                'name': 'Chats',
+                'object_name': 'Chat',
+                'admin_url': reverse('admin:chat_management_list'),
+                'view_only': True,
+            })
+        if can_view_audit:
+            gestion_models.append({
+                'name': 'Registro de acciones',
+                'object_name': 'AuditoriaList',
+                'admin_url': reverse('admin:auditoria_list'),
+                'view_only': True,
+            })
         placeholder_apps.append(
             {
                 'app_label': 'gestion',
                 'name': 'Gestión',
                 'app_url': reverse('admin:documents_document_changelist'),
                 'has_module_perms': True,
-                'models': [
-                    {
-                        'name': 'Documentos',
-                        'object_name': 'Document',
-                        'admin_url': reverse('admin:documents_document_changelist'),
-                        'view_only': True,
-                    },
-                    *([{
-                        'name': 'Chats',
-                        'object_name': 'Chat',
-                        'admin_url': reverse('admin:chat_chat_changelist'),
-                        'view_only': True,
-                    }] if is_superadmin else []),
-                    {
-                        'name': 'Registro de acciones',
-                        'object_name': 'AuditoriaList',
-                        'admin_url': reverse('admin:auditoria_list'),
-                        'view_only': True,
-                    },
-                ],
+                'models': gestion_models,
             }
         )
 
@@ -121,7 +126,7 @@ def _custom_get_app_list(self, request, app_label=None):
     for app in app_list:
         if app.get('app_label') == 'accounts':
             # Show only allowed models; CustomGroup is intentionally excluded.
-            allowed = _accounts_allowed if is_any_admin else {'User'}
+            allowed = _accounts_allowed if can_view_roles else {'User'}
             app['models'] = [
                 m for m in app['models'] if m.get('object_name') in allowed
             ]
