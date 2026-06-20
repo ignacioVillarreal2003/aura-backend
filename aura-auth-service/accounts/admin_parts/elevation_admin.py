@@ -7,7 +7,7 @@ from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
 
-from accounts.admin_parts.common import _is_admin_or_super_user, log_audit
+from accounts.admin_parts.common import _is_admin_or_super_user, log_audit, has_permission
 from accounts.services.elevation_service import (
     drop_elevation,
     elevate_to_superadmin,
@@ -23,7 +23,7 @@ class ElevateForm(forms.Form):
 
 
 def _elevate_view(request):
-    if not _is_admin_or_super_user(request.user):
+    if not has_permission(request, 'ADMIN_ELEVATE'):
         raise PermissionDenied
 
     if is_elevated(request):

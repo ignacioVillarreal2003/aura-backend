@@ -1,6 +1,8 @@
 """Django Admin for Document model."""
 
+import contextvars
 import json
+import logging
 import re
 
 from django import forms
@@ -13,17 +15,33 @@ from django.db import connections, router, transaction
 from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.utils.translation import gettext as _
-from django.utils.html import format_html
+from django.utils.html import format_html, format_html_join
+
+logger = logging.getLogger(__name__)
 from accounts.admin_parts.utils.audit import log_audit, _is_admin_or_super_user
 from accounts.services.mac_client import mac_client
 from documents.models import Document
 from documents.services.document_processing_client import (
     DocumentProcessingServiceError,
     create_document_from_admin,
+    delete_document as delete_document_remote,
+    get_document as get_document_remote,
 )
 
 _ADMIN_LEVEL_RE = re.compile(r'^__admin_level_(\d+)__$')
 _ADMIN_COMP_RE = re.compile(r'^__admin_comp_(\d+)__$')
+
+# Readonly field callables registered via `readonly_fields` only ever receive
+# `obj` (Django's contract — see django.contrib.admin.utils.lookup_field),
+# never `request`. `processing_status_display` needs `request.user` to build
+# the document-processing service headers. A plain `self._current_request =
+# request` attribute would be unsafe: `DocumentAdmin` is a single instance
+# shared across every request/thread. A ContextVar — the same mechanism
+# accounts/request_token.py already uses for this exact problem — is
+# per-thread/per-task, so it's safe even under threaded WSGI workers.
+_current_admin_actor: 'contextvars.ContextVar' = contextvars.ContextVar(
+    'document_admin_current_actor', default=None
+)
 
 # ── Local meta table (default DB) — immune to processing-service overwrites ───
 
@@ -87,6 +105,26 @@ def _batch_get_doc_meta_all():
             return {row[0]: {'name': row[1], 'description': row[2]} for row in cursor.fetchall()}
     except Exception:
         return {}
+
+
+def _format_processing_dt(value):
+    """Format an ISO timestamp coming from document-processing-service's
+    JSON response for display. Defensive: the value may be a string, an
+    already-parsed datetime, or missing."""
+    if not value:
+        return '—'
+    try:
+        from django.utils import timezone as dj_timezone
+        from django.utils.dateparse import parse_datetime
+
+        dt = parse_datetime(value) if isinstance(value, str) else value
+        if dt is None:
+            return str(value)
+        if dj_timezone.is_naive(dt):
+            dt = dj_timezone.make_aware(dt, dj_timezone.utc)
+        return dj_timezone.localtime(dt).strftime('%d/%m/%Y %H:%M')
+    except Exception:
+        return str(value)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -250,6 +288,7 @@ class DocumentAdmin(admin.ModelAdmin):
         'storage_url',
         'created_at',
         'created_by',
+        'processing_status_display',
     )
     actions = None
     actions_selection_counter = False
@@ -257,6 +296,9 @@ class DocumentAdmin(admin.ModelAdmin):
     fieldsets = (
         ('Información Básica', {
             'fields': ('name', 'description', 'size_display', 'status', 'mime_type_display', 'storage_url'),
+        }),
+        ('Estado de procesamiento', {
+            'fields': ('processing_status_display',),
         }),
         ('Auditoría', {
             'fields': ('created_at', 'created_by'),
@@ -368,6 +410,12 @@ class DocumentAdmin(admin.ModelAdmin):
 
     def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
         extra_context = extra_context or {}
+        # Set before any rendering happens in this request/thread so
+        # `processing_status_display` (invoked later in this same call stack
+        # while rendering the change form) can read it back. See the
+        # `_current_admin_actor` comment above for why this isn't a plain
+        # instance attribute.
+        _current_admin_actor.set(request.user)
 
         if object_id:
             doc_id = int(object_id)
@@ -706,7 +754,60 @@ class DocumentAdmin(admin.ModelAdmin):
         return username or str(obj.created_by)
     created_by_display.short_description = 'Subido por'
 
+    def processing_status_display(self, obj):
+        """Best-effort live status from document-processing-service.
+
+        Only registered on the change-form fieldsets (see `get_fieldsets` /
+        the add-view branch, which omits it) — never on `list_display` — so
+        it costs exactly one extra HTTP call per detail-page view, not one
+        per row in the changelist.
+        """
+        if obj is None or obj.pk is None:
+            return '-'
+
+        actor = _current_admin_actor.get()
+        if actor is None or not getattr(actor, 'pk', None):
+            return format_html('<span style="color:#888">Estado desconocido</span>')
+
+        try:
+            data = get_document_remote(obj.pk, actor)
+        except DocumentProcessingServiceError as exc:
+            logger.warning(
+                'No se pudo obtener el estado de procesamiento del documento %s: %s', obj.pk, exc,
+            )
+            return format_html('<span style="color:#888">Estado desconocido</span>')
+        except Exception:
+            logger.exception(
+                'Error inesperado al consultar el estado de procesamiento del documento %s', obj.pk,
+            )
+            return format_html('<span style="color:#888">Estado desconocido</span>')
+
+        rows = (
+            ('Estado', data.get('status') or '—'),
+            ('Tipo', data.get('type') or '—'),
+            ('Categoría', data.get('category') or '—'),
+            ('Procesamiento iniciado', _format_processing_dt(data.get('processing_started_at'))),
+            ('Procesamiento finalizado', _format_processing_dt(data.get('processing_finished_at'))),
+        )
+        return format_html_join(
+            '',
+            '<div style="margin-bottom:2px;"><strong>{}:</strong> {}</div>',
+            rows,
+        )
+    processing_status_display.short_description = 'Estado de procesamiento'
+
     def delete_model(self, request, obj):
+        try:
+            delete_document_remote(obj.pk, request.user)
+        except DocumentProcessingServiceError as exc:
+            messages.error(
+                request,
+                f'No se pudo eliminar el documento "{obj.name}" en el servicio de procesamiento '
+                f'({exc}). El registro no fue eliminado localmente; intenta nuevamente.',
+            )
+            logger.warning('Document delete aborted for doc %s (upstream failure): %s', obj.pk, exc)
+            return
+
         obj.soft_delete(deleted_by=request.user.pk)
         log_audit(
             actor=request.user, action='DELETE',
@@ -716,13 +817,30 @@ class DocumentAdmin(admin.ModelAdmin):
         )
 
     def delete_queryset(self, request, queryset):
+        failed_names = []
         for obj in queryset:
+            try:
+                delete_document_remote(obj.pk, request.user)
+            except DocumentProcessingServiceError as exc:
+                failed_names.append(obj.name)
+                logger.warning(
+                    'Bulk document delete: doc %s failed upstream, local record kept: %s', obj.pk, exc,
+                )
+                continue
+
             obj.soft_delete(deleted_by=request.user.pk)
             log_audit(
                 actor=request.user, action='DELETE',
                 entity_type='Document', entity_id=str(obj.pk),
                 entity_label=obj.name,
                 details={'deleted_at': str(obj.deleted_at)}, source='admin',
+            )
+
+        if failed_names:
+            messages.error(
+                request,
+                'No se pudo eliminar en el servicio de procesamiento (registro local conservado '
+                'para reintentar): ' + ', '.join(failed_names),
             )
 
     def history_view(self, request, object_id, extra_context=None):

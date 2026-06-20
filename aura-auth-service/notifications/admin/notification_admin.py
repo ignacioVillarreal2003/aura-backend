@@ -132,6 +132,45 @@ class BaseNotificationAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return _is_admin_or_super_user(request.user)
 
+    def _report_send_result(self, request, result):
+        """Surface every counter returned by the notification service for a
+        send operation, instead of only the `created` count.
+
+        `result` is the JSON body of `POST /api/v1/internal/events/`, which
+        may include `created`, `skipped` (recipient already had this exact
+        notification) and `pending_email` (queued for async email delivery).
+        """
+        if not isinstance(result, dict):
+            result = {}
+        created = result.get('created', 0) or 0
+        skipped = result.get('skipped', 0) or 0
+        pending_email = result.get('pending_email', 0) or 0
+
+        if created:
+            self.message_user(
+                request,
+                f'✅ {created} notificación(es) enviada(s) correctamente.',
+                level=messages.SUCCESS,
+            )
+        if skipped:
+            self.message_user(
+                request,
+                f'⚠️ {skipped} omitida(s) (el usuario ya tenía esta notificación).',
+                level=messages.WARNING,
+            )
+        if pending_email:
+            self.message_user(
+                request,
+                f'📧 {pending_email} pendiente(s) de entrega por email.',
+                level=messages.WARNING,
+            )
+        if not created and not skipped and not pending_email:
+            self.message_user(
+                request,
+                'El servicio de notificaciones no reportó destinatarios procesados.',
+                level=messages.WARNING,
+            )
+
     def delete_model(self, request, obj):
         obj.soft_delete(deleted_by=request.user.pk)
         log_audit(
@@ -242,10 +281,7 @@ class IndividualNotificationAdmin(BaseNotificationAdmin):
                         actor_user_id=request.user.pk,
                         actor_name=request.user.username,
                     )
-                    self.message_user(
-                        request,
-                        f"Se enviaron {result.get('created', 0)} notificación(es) correctamente.",
-                    )
+                    self._report_send_result(request, result)
                     log_audit(
                         actor=request.user,
                         action='CREATE',
@@ -331,10 +367,7 @@ class GroupNotificationAdmin(BaseNotificationAdmin):
                         actor_user_id=request.user.pk,
                         actor_name=request.user.username,
                     )
-                    self.message_user(
-                        request,
-                        f"Se enviaron {result.get('created', 0)} notificación(es) grupales.",
-                    )
+                    self._report_send_result(request, result)
                     log_audit(
                         actor=request.user,
                         action='CREATE',

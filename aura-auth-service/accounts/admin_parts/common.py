@@ -10,6 +10,7 @@ from accounts.admin_parts.utils.audit import (
     log_audit,
 )
 from accounts.admin_parts.utils.mixins import HelpTextStripInlineMixin, HelpTextStripMixin
+from accounts.admin_parts.utils.permissions import has_permission
 
 __all__ = [
     'CreatedDateFilter',
@@ -22,4 +23,5 @@ __all__ = [
     'log_audit',
     'HelpTextStripInlineMixin',
     'HelpTextStripMixin',
+    'has_permission',
 ]

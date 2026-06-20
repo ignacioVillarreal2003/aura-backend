@@ -260,6 +260,20 @@ NOTIFICATION_SERVICE_TIMEOUT_SECONDS = config(
 DOC_COLLECTION_SERVICE_URL = config('DOC_COLLECTION_SERVICE_URL', default='http://localhost:8005')
 DOC_COLLECTION_SERVICE_API_KEY = config('DOC_COLLECTION_SERVICE_API_KEY', default='dev-doc-collection-key')
 
+# Chat Service (used by Django admin Chat section: messages, share links, members)
+CHAT_SERVICE_URL = config('CHAT_SERVICE_URL', default='http://localhost:8003')
+
+# LLM Service — referenced only for the admin dashboard health panel today;
+# no functional client exists yet (no admin feature reads from it directly).
+LLM_SERVICE_URL = config('LLM_SERVICE_URL', default='http://localhost:8001')
+
+# Dashboard health panel — per-service timeout for the concurrent health poll.
+SERVICE_HEALTH_CHECK_TIMEOUT_SECONDS = config(
+    'SERVICE_HEALTH_CHECK_TIMEOUT_SECONDS',
+    default=3,
+    cast=int,
+)
+
 # Logging Configuration
 _LOG_LEVEL = config('LOG_LEVEL', default='INFO')
 
@@ -285,19 +299,14 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'json',
         },
-        'file': {
-            'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'debug.log',
-            'formatter': 'verbose',
-        },
     },
     'root': {
-        'handlers': ['console', 'file'],
+        'handlers': ['console'],
         'level': _LOG_LEVEL,
     },
     'loggers': {
         'django': {
-            'handlers': ['console', 'file'],
+            'handlers': ['console'],
             'level': 'WARNING',
             'propagate': False,
         },
@@ -308,10 +317,6 @@ LOGGING = {
         },
     },
 }
-
-# Create logs directory
-LOGS_DIR = BASE_DIR / 'logs'
-LOGS_DIR.mkdir(exist_ok=True)
 
 # Environment
 ENVIRONMENT = config('ENVIRONMENT', default='development')
