@@ -55,10 +55,10 @@ class LlmProviderSettings(BaseSettings):
         default=None, gt=0, le=3600.0
     )
 
-    max_document_name_length: int = Field(default=512, ge=1, le=MAX_LLM_DOCUMENT_NAME_CHARS)
-    max_classify_content_length: int = Field(default=5_000_000, ge=1024, le=MAX_LLM_CLASSIFY_CONTENT_CHARS)
-    max_enrich_content_length: int = Field(default=1_000_000, ge=256, le=MAX_LLM_ENRICH_CONTENT_CHARS)
-    max_extract_content_length: int = Field(default=1_000_000, ge=256, le=MAX_LLM_EXTRACT_CONTENT_CHARS)
+    max_document_name_length: int = Field(default=MAX_LLM_DOCUMENT_NAME_CHARS, ge=1, le=MAX_LLM_DOCUMENT_NAME_CHARS)
+    max_classify_content_length: int = Field(default=MAX_LLM_CLASSIFY_CONTENT_CHARS, ge=1024, le=MAX_LLM_CLASSIFY_CONTENT_CHARS)
+    max_enrich_content_length: int = Field(default=MAX_LLM_ENRICH_CONTENT_CHARS, ge=256, le=MAX_LLM_ENRICH_CONTENT_CHARS)
+    max_extract_content_length: int = Field(default=MAX_LLM_EXTRACT_CONTENT_CHARS, ge=256, le=MAX_LLM_EXTRACT_CONTENT_CHARS)
     max_translate_query_question_length: int = Field(default=4_000, ge=64, le=64_000)
 
     allowed_llm_hosts: Optional[str] = Field(

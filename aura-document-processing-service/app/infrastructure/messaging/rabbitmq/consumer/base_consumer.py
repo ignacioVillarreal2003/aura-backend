@@ -1,10 +1,15 @@
 import json
 import logging
+import time
 from abc import ABC, abstractmethod
 from typing import Generic, Optional, TypeVar
 import aio_pika.abc
 from pydantic import BaseModel, ValidationError
 
+from app.configuration.metrics import (
+    message_processing_duration_seconds,
+    messages_consumed_total,
+)
 from app.infrastructure.http.authentication_provider.request_token import get_request_token, set_request_token
 from app.infrastructure.messaging.rabbitmq.consumer.consumer_utils import extract_retry_count
 from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
@@ -62,6 +67,7 @@ class BaseConsumer(ABC, Generic[T]):
                     "message_id": message_id,
                 },
             )
+            messages_consumed_total.labels(queue=self._queue_name, result="dropped").inc()
             await message.nack(requeue=False)
             return
 
@@ -76,6 +82,7 @@ class BaseConsumer(ABC, Generic[T]):
                     "max_message_body_bytes": self._settings.max_message_body_bytes,
                 },
             )
+            messages_consumed_total.labels(queue=self._queue_name, result="dropped").inc()
             await message.nack(requeue=False)
             return
 
@@ -90,6 +97,7 @@ class BaseConsumer(ABC, Generic[T]):
                 "The message body was not valid UTF-8; discarding without requeue.",
                 extra={"queue": self._queue_name, "message_id": message_id, "error": type(e).__name__},
             )
+            messages_consumed_total.labels(queue=self._queue_name, result="dropped").inc()
             await message.nack(requeue=False)
             return
         except json.JSONDecodeError as e:
@@ -97,6 +105,7 @@ class BaseConsumer(ABC, Generic[T]):
                 "The message body was not valid JSON; discarding without requeue.",
                 extra={"queue": self._queue_name, "message_id": message_id, "error": type(e).__name__},
             )
+            messages_consumed_total.labels(queue=self._queue_name, result="dropped").inc()
             await message.nack(requeue=False)
             return
         except ValidationError as e:
@@ -109,6 +118,7 @@ class BaseConsumer(ABC, Generic[T]):
                     "error_count": len(e.errors()),
                 },
             )
+            messages_consumed_total.labels(queue=self._queue_name, result="dropped").inc()
             await message.nack(requeue=False)
             return
         except (KeyError, ValueError) as e:
@@ -116,6 +126,7 @@ class BaseConsumer(ABC, Generic[T]):
                 "The message envelope is missing required fields; discarding without requeue.",
                 extra={"queue": self._queue_name, "message_id": message_id, "error": type(e).__name__},
             )
+            messages_consumed_total.labels(queue=self._queue_name, result="dropped").inc()
             await message.nack(requeue=False)
             return
 
@@ -124,9 +135,11 @@ class BaseConsumer(ABC, Generic[T]):
         # user; restored afterwards so it never leaks to the next message.
         previous_token = get_request_token()
         set_request_token(getattr(envelope.command, "auth_token", None))
+        start = time.perf_counter()
         try:
             await self._process(envelope)
             await message.ack()
+            messages_consumed_total.labels(queue=self._queue_name, result="ack").inc()
             logger.info(
                 "The queue message was processed and acknowledged.",
                 extra={
@@ -136,6 +149,7 @@ class BaseConsumer(ABC, Generic[T]):
                 },
             )
         except Exception:
+            messages_consumed_total.labels(queue=self._queue_name, result="nack").inc()
             logger.exception(
                 "The message handler failed; negative-acknowledging for dead-letter retry.",
                 extra={
@@ -146,4 +160,7 @@ class BaseConsumer(ABC, Generic[T]):
             )
             await message.nack(requeue=False)
         finally:
+            message_processing_duration_seconds.labels(queue=self._queue_name).observe(
+                time.perf_counter() - start
+            )
             set_request_token(previous_token)

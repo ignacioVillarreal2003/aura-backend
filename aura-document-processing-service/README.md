@@ -1,210 +1,250 @@
-# AURA Document Processing Service — Revisión Global de Arquitectura
+# AURA — Document Processing Service
 
-> **Tipo de documento:** Reporte de auditoría / code review global (Staff Eng + Architect).
-> **Alcance:** Revisión exhaustiva de todo el repositorio a nivel sistema.
-> **Acción ejecutada:** Solo análisis. **No se modificó ningún archivo de código.** Este documento es el entregable.
-> **Fecha:** 2026-06-20 · **Rama analizada:** `document-pro`
+Servicio FastAPI (Python 3.13) que ingiere documentos, los convierte en *fragments*
+embebidos para búsqueda semántica/híbrida, y opcionalmente los enriquece y extrae un
+grafo de conocimiento. Forma parte del backend **AURA** (monorepo `aura-backend`).
 
----
+- **Framework:** FastAPI + Uvicorn
+- **Arquitectura:** hexagonal / clean — `domain` ← `application` ← `infrastructure` / `api`
+- **Persistencia:** PostgreSQL + pgvector (fragments), MinIO (binarios), Neo4j (grafo), Redis (locks/rate-limit), RabbitMQ (pipeline asíncrono)
+- **Dependencias de servicio:** `aura-llm-service`, `aura-document-collection-service`, proveedor de autenticación
 
-## 0. Resumen ejecutivo
-
-Este es un servicio de procesamiento de documentos (ingesta → lectura → limpieza → chunking → embedding → indexado vectorial/BM25 → enriquecimiento LLM → grafo de conocimiento) construido sobre **FastAPI + SQLAlchemy async + PostgreSQL/pgvector + Redis + RabbitMQ + MinIO + Neo4j**.
-
-**Veredicto general:** el proyecto está **notablemente cerca de "production-ready"** y muy por encima de la media. La Clean Architecture es real (no decorativa), la inyección de dependencias es explícita y con rollback, hay invariantes de producción, logging estructurado JSON, manejo de errores centralizado, outbox para publicación confiable, idempotencia con locks en Redis, soft-deletes y consultas parametrizadas. **No se detectaron bugs críticos ni vulnerabilidades de inyección.**
-
-Los hallazgos relevantes son **de proceso e higiene del repositorio**, no de diseño del runtime:
-
-| Severidad | Cantidad | Tema principal |
-|-----------|----------|----------------|
-| 🔴 Crítico | 0 | — |
-| 🟠 Alto | 3 | Secretos versionados en git, ausencia de `.gitignore`, ausencia de CI |
-| 🟡 Medio | 5 | Cobertura de tests, DRY en requirements, observabilidad de negocio, README inexistente, rate-limit no configurable |
-| 🟢 Bajo | 6 | Detalles menores (ver sección 4) |
+> La fuente canónica del contrato HTTP es el **OpenAPI** que expone la app en runtime
+> (`/api/docs`, `/api/redoc`, `/api/openapi.json`). Ver también [`docs/api/`](docs/api/README.md).
 
 ---
 
-## 1. Fotografía del sistema
+## Índice
 
-### Estructura (Clean Architecture, 4 capas bien delimitadas)
+1. [Arquitectura y pipeline](#arquitectura-y-pipeline)
+2. [Arranque rápido (Docker)](#arranque-rápido-docker)
+3. [Arranque local (sin Docker)](#arranque-local-sin-docker)
+4. [Variables de entorno](#variables-de-entorno)
+5. [Tests, lint y tipado](#tests-lint-y-tipado)
+6. [Observabilidad](#observabilidad)
+7. [Endpoints operativos](#endpoints-operativos)
+8. [Runbook de incidentes](#runbook-de-incidentes)
+9. [Documentación adicional](#documentación-adicional)
 
+---
+
+## Arquitectura y pipeline
+
+La creación de un documento es **síncrona hasta encolar** y luego el procesamiento
+pesado ocurre **asíncrono** vía RabbitMQ (patrón outbox para publicar de forma fiable).
+
+```mermaid
+flowchart TD
+    A[POST /api/v1/documents] --> B[Validar archivo<br/>tipo, tamaño, magic numbers]
+    B --> C[Subir binario a MinIO]
+    C --> D[Crear fila Document en Postgres]
+    D --> E[Publicar DocumentIngestionCommand<br/>RabbitMQ vía outbox]
+    E -->|ack al cliente| F[(Respuesta 201)]
+
+    E -.cola.-> G[DocumentIngestionConsumer]
+    G --> H[Descargar de MinIO]
+    H --> I[read → clean → split]
+    I --> J[embed]
+    J --> K[Persistir fragments + estado processed]
+    K -->|si enrich| L[Evento enrichment]
+    K -->|si graph_extract| M[Evento graph extraction]
 ```
-app/
-├── api/               # Capa de entrada: controllers (thin), schemas, handlers, openapi, dependencies, rate limiter
-├── application/       # Casos de uso: services, processors (readers/embedders/splitters/rerankers/cleaners), authorization
-├── domain/            # DTOs, constantes, entidades de autenticación, field_limits (núcleo sin dependencias de framework)
-└── infrastructure/    # Adaptadores: persistence (db/graph/memory/storage), http (providers), messaging (rabbitmq)
+
+**Etapas del pipeline de ingesta** (en `document_ingestion_service`): `chunk` (read +
+clean + split), `embed`, `persist`. Cada etapa está instrumentada con métricas (ver
+[Observabilidad](#observabilidad)). Ante fallo en cualquier etapa el documento pasa a
+estado `failed` y el mensaje va a dead-letter para reintento.
+
+Estructura del código:
+
+| Capa | Carpeta | Contenido |
+|------|---------|-----------|
+| Dominio | `app/domain` | entidades, DTOs, constantes, límites de campos |
+| Aplicación | `app/application` | servicios de negocio, procesadores (readers/cleaners/splitters/embedders/rerankers) |
+| Infraestructura | `app/infrastructure` | Postgres, Neo4j, MinIO, Redis, RabbitMQ, clientes HTTP (LLM, auth, catálogo) |
+| API | `app/api` | controllers, dependencias (auth, rate limit), handlers de error |
+| Configuración | `app/configuration` | settings de entorno, logging, métricas, middlewares |
+
+---
+
+## Arranque rápido (Docker)
+
+Todo el stack vive en `aura-backend/docker/docker-compose/`. Desde la raíz del monorepo:
+
+```bash
+# 1. Infraestructura (Postgres, MinIO, Redis, RabbitMQ, Neo4j, ...)
+docker compose -f docker/docker-compose/docker-compose-infrastructure.yml up -d
+
+# 2. Servicios de aplicación (incluye este servicio en el puerto 8000)
+docker compose -f docker/docker-compose/docker-compose-services.yml up -d
+
+# (opcional) Observabilidad: Prometheus, Grafana, Elasticsearch, Filebeat, Phoenix
+docker compose -f docker/docker-compose/docker-compose-observability.yml up -d
 ```
 
-- **~357 archivos Python**, ~27k LOC.
-- Patrón consistente: cada controller/service/repository vive en su carpeta con su `interfaces/` (puerto) y sus `exceptions/`.
-- Entrypoint: `app/main.py` (`create_app()` + `lifespan`).
+- El servicio se construye con [`Dockerfile`](Dockerfile) (CPU). Para GPU/CUDA usar
+  [`DockerfileGPU`](DockerfileGPU) y el compose `docker-compose-services.gpu.yml`.
+- La config se inyecta vía `env_file: .env.docker` (CPU) / `.env.docker.gpu` (GPU).
+- El primer build descarga modelos HF/tiktoken (build pesado; `start_period` del
+  healthcheck es de 600s). Verificá con:
 
-### Stack y dependencias
-- Web: FastAPI 0.137, Uvicorn, prometheus-fastapi-instrumentator.
-- Datos: SQLAlchemy 2.0 async, asyncpg, pgvector, Redis 8, Neo4j 6, MinIO.
-- IA/NLP: torch (CPU pin en base), sentence-transformers, docling, langchain, tiktoken.
-- Resiliencia: tenacity, aiobreaker (circuit breaker), aio-pika.
-- Todas las versiones están **pinneadas** (bien).
-
-### Lo que ya está bien resuelto (no tocar)
-- ✅ **Clean Architecture real** con puertos/interfaces por capa e inversión de dependencias.
-- ✅ **DI container** (`configuration/dependencies.py`) con registro ordenado, *cleanup stack* y **rollback en reversa** si falla el arranque.
-- ✅ **Invariantes de producción** (`production_invariants.py`): rechaza arrancar con `APP_RELOAD`, `LOG_LEVEL=DEBUG`, CORS `*`, secretos débiles, TLS desactivado en MinIO/RabbitMQ/Neo4j, Redis por defecto. Excelente.
-- ✅ **Logging estructurado JSON** con `request_id`, `cause_chain`, contexto seguro y UTC.
-- ✅ **Manejo de errores centralizado** (`exception_handlers.py`) con jerarquía `AppException`, mapeo de status, y propagación de `X-Request-ID`.
-- ✅ **Health/Readiness** separados; `/ready` sondea Redis, DB, RabbitMQ y MinIO y devuelve 503 degradado.
-- ✅ **Mensajería confiable**: patrón *outbox-lite* (Redis), DLQ/reintentos con `max_delivery_attempts`, límite de tamaño de mensaje, validación de envelope, y **propagación del bearer token del usuario** a través de la cola (con restauración para no filtrar entre mensajes).
-- ✅ **Idempotencia**: locks en Redis (scripts Lua `release-if-owner`) en consumers de ingest/reembed/reprocess/graph.
-- ✅ **SQL parametrizado**: las únicas interpolaciones por f-string son una cláusula constante y el vector de floats; **sin riesgo de inyección**.
-- ✅ **AuthZ explícita** por endpoint (`Authorizer.require_permissions`) + middleware de autenticación con paths excluidos.
-- ✅ **Rate limiting** distribuido por usuario/ruta con ventana deslizante en Redis (Lua atómico).
-- ✅ **Dockerfile multi-stage**, usuario no-root, modelos pre-descargados en build, `HEALTHCHECK`.
-- ✅ **Higiene de código**: 0 `TODO/FIXME`, 0 `print()`, 0 `except:` desnudos, 0 `eval/exec` de Python. ruff + mypy (estricto en `domain`/`application`) configurados.
+```bash
+curl http://localhost:8000/api/v1/health     # liveness
+curl http://localhost:8000/api/v1/ready       # readiness (chequea DB/RabbitMQ/MinIO)
+```
 
 ---
 
-## 2. FASE 1 — Auditoría: hallazgos
+## Arranque local (sin Docker)
 
-### 🟠 ALTOS
+Requiere Python 3.13 y las dependencias de infraestructura accesibles (Postgres+pgvector,
+Redis, RabbitMQ, MinIO, Neo4j) — lo más simple es levantar solo el compose de
+infraestructura y correr la app desde el host.
 
-#### A1. Secretos y archivos `.env` versionados en git
-- **Problema:** `env/.env`, `env/.env.docker`, `env/.env.docker.gpu` están **trackeados en git** y contienen credenciales (`DATABASE_MANAGER_PASSWORD=aura_password`, `MINIO_MANAGER_SECRET_KEY=aura_password`, `NEO4J_MANAGER_PASSWORD=aura_password`, `RABBITMQ_MANAGER_URL=amqp://aura_root:aura_password@...`). Aunque hoy son credenciales de desarrollo, **quedan en el historial de git**.
-- **Impacto:** *secret sprawl*; si alguna vez se reutiliza un patrón/credencial real, queda expuesto permanentemente en la historia. Riesgo de filtración si el repo se vuelve público o se comparte.
-- **Severidad:** Alto.
-- **Propuesta:** (1) Crear `env/.env.example` con claves sin valores. (2) Dejar de trackear los `.env` reales (`git rm --cached`). (3) Rotar cualquier credencial que haya sido real. (4) En prod, inyectar desde un *secrets manager* (ya soportado: `pydantic-settings` lee de variables de entorno). *Mitigante existente:* `production_invariants` rechaza estos secretos débiles en producción y `.dockerignore` los excluye de la imagen.
+```bash
+# 1. Entorno e instalación (variante CPU)
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements/requirements.txt -r requirements/requirements.test.txt
 
-#### A2. No existe `.gitignore`
-- **Problema:** No hay archivo `.gitignore` en la raíz. Hoy el árbol está limpio (no hay `__pycache__`/`.idea`/`.pytest_cache` trackeados), pero nada lo impide.
-- **Impacto:** alto riesgo de commitear basura, cachés de modelos, o secretos por accidente. Es la causa raíz que permite A1.
-- **Severidad:** Alto.
-- **Propuesta:** añadir `.gitignore` (puede derivarse del `.dockerignore` existente: `__pycache__/`, `*.py[cod]`, `.idea/`, `.pytest_cache/`, `.mypy_cache/`, `.ruff_cache/`, `env/.env`, `.env.*`, `*.log`, `.venv/`).
+# 2. Configuración: pydantic-settings lee un .env en la raíz del servicio
+cp env/.env .env        # ajustá hosts/credenciales según tu entorno local
 
-#### A3. Sin pipeline de CI/CD
-- **Problema:** no hay `.github/workflows` ni equivalente. ruff, mypy y pytest están configurados pero **no se ejecutan automáticamente**.
-- **Impacto:** las garantías de calidad dependen de la disciplina manual; regresiones de tipado/lint/tests pueden llegar a `main`.
-- **Severidad:** Alto (de proceso).
-- **Propuesta:** workflow que en cada PR corra `ruff check`, `mypy`, `pytest`, build de imagen Docker, y opcionalmente `pip-audit`/escaneo de secretos.
+# 3. Levantar la API
+python -m app.main      # equivale a: uvicorn app.main:app --host $APP_HOST --port $APP_PORT
+```
 
-### 🟡 MEDIOS
-
-#### M1. Cobertura de tests parcial y sin medición
-- **Problema:** 19 archivos de test, mayormente a nivel **controller**. Servicios pesados (`document_ingestion_service` 556 LOC, `graph_query_service` 524, `create_document_service` 506) y repositorios (`fragment_repository` 792, `document_repository` 452) tienen poca o nula cobertura unitaria. No hay tests de integración del flujo de mensajería (outbox → publisher → consumer → idempotencia). `requirements.test.txt` no incluye `pytest-cov`.
-- **Impacto:** la lógica de negocio más crítica y compleja es la menos cubierta; difícil refactorizar con seguridad.
-- **Severidad:** Medio.
-- **Propuesta:** añadir `pytest-cov` y un umbral mínimo; priorizar tests de ingestion/graph y un test de integración del ciclo de cola (con testcontainers o broker en memoria).
-
-#### M2. Duplicación en gestión de dependencias (DRY)
-- **Problema:** `requirements.gpu.txt` es una **copia completa** de `requirements.txt`; la única diferencia son 4 líneas (`--extra-index-url` y los `torch/torchaudio/torchvision` `+cpu` vs `+cu130`).
-- **Impacto:** *drift* garantizado a futuro — al subir una versión en un archivo es fácil olvidar el otro.
-- **Severidad:** Medio.
-- **Propuesta:** dividir en `requirements/base.txt` (todo excepto torch) + `requirements/torch.cpu.txt` / `requirements/torch.gpu.txt`, e incluir base con `-r base.txt`. Mantiene un único punto de verdad.
-
-#### M3. Observabilidad de negocio limitada
-- **Problema:** solo existe **una** métrica custom (`structural_chunk_fallback_total`). El resto es instrumentación HTTP genérica. No hay métricas de negocio (documentos ingeridos, latencia de LLM, profundidad de cola, fallos por etapa) ni tracing distribuido (OpenTelemetry).
-- **Impacto:** difícil diagnosticar cuellos de botella en el pipeline asíncrono y correlacionar entre servicios.
-- **Severidad:** Medio.
-- **Propuesta:** añadir contadores/histogramas por etapa del pipeline y por proveedor LLM; evaluar OpenTelemetry para trazas cross-service (ya se propaga `request_id`).
-
-#### M4. README/documentación operativa inexistente (antes de este informe)
-- **Problema:** el `README.md` estaba vacío. No había guía de setup, variables de entorno, arranque local, ni runbook.
-- **Impacto:** onboarding lento; conocimiento operativo solo en la cabeza del autor.
-- **Severidad:** Medio.
-- **Propuesta:** documentar arranque (docker / local), tabla de variables de entorno (referenciar `env/.env.example`), diagrama del pipeline y runbook de incidentes. (La carpeta `docs/` ya tiene buen material de adapters/API que puede enlazarse.)
-
-#### M5. Parámetros de rate limit y umbrales hardcodeados
-- **Problema:** `_STRICT_RATE=20`, `_DEFAULT_RATE=60`, `_WINDOW_SECONDS=60` son constantes de módulo en `rate_limiter.py`. El rate limiter además **falla abierto** (si `redis_client is None`, no limita).
-- **Impacto:** no se pueden ajustar límites por entorno sin redeploy; el *fail-open* puede ser deseado (disponibilidad) pero debe ser una decisión consciente.
-- **Severidad:** Medio/Bajo.
-- **Propuesta:** mover límites a settings por entorno; documentar explícitamente la política *fail-open*.
-
-### 🟢 BAJOS / Observaciones
-
-- **B1. Readiness no sondea Neo4j.** `/ready` no incluye Neo4j cuando el grafo está activo. Es coherente con el diseño (el módulo KG **degrada con gracia** si Neo4j no está al arrancar), pero un fallo de Neo4j en caliente no se reflejará en readiness. Documentar como decisión.
-- **B2. `requirements.test.txt` mínimo.** Solo `pytest` + `pytest-asyncio`; los tests dependen implícitamente de las deps de la app. Añadir explícitamente lo necesario (`pytest-cov`, etc.).
-- **B3. Boilerplate por endpoint.** Un controller-clase + interfaz + carpeta por endpoint multiplica archivos. Es una decisión arquitectónica consistente y defendible (aislamiento, testabilidad), pero aumenta la superficie de mantenimiento; tenerlo presente.
-- **B4. Versiones "del futuro" pinneadas** (torch 2.11, fastapi 0.137, pydantic 2.13). Consistentes con el entorno; mantener `pip-audit` en CI para vigilar CVEs.
-- **B5. `test_documents/` y PDFs versionados** (decretos, leyes, etc.) inflan el repo. Evaluar Git LFS o un bucket de fixtures.
-- **B6. `_json_safe` del logger** hace `json.dumps` por cada campo de contexto para validar serializabilidad — costo menor por log; aceptable, pero a volumen alto considerar *fast path*.
+> Las clases de settings cargan `.env` desde el directorio de trabajo. En local copiá
+> `env/.env` a `.env`; en Docker la config llega como variables de entorno del contenedor.
 
 ---
 
-## 3. FASE 2 — Plan de refactorización priorizado
+## Variables de entorno
 
-> Ordenado por relación impacto/esfuerzo. Nada de esto se ejecutó (solo informe).
+La configuración se reparte en clases `*_settings.py` (pydantic-settings), cada una con
+su **prefijo**. Los archivos de referencia son [`env/.env`](env/), [`env/.env.docker`](env/)
+y [`env/.env.docker.gpu`](env/) — **no existe `.env.example`**; usá `env/.env.docker` como
+plantilla. La fuente de verdad de cada variable es su clase de settings.
 
-### Prioridad 0 — Higiene del repo (rápido, alto impacto)
-| # | Qué | Por qué | Beneficio | Riesgo |
-|---|-----|---------|-----------|--------|
-| 1 | Añadir `.gitignore` (A2) | Evita commits accidentales | Protección permanente | Nulo |
-| 2 | Dejar de trackear `.env` + crear `.env.example` + rotar (A1) | Eliminar secretos del control de versiones | Reduce superficie de filtración | Bajo (coordinar con despliegues) |
-| 3 | Añadir CI (ruff/mypy/pytest/build) (A3) | Automatizar garantías ya configuradas | Frena regresiones | Nulo |
+### Núcleo (obligatorias para arrancar)
 
-### Prioridad 1 — Confianza para evolucionar
-| # | Qué | Por qué | Beneficio | Riesgo |
-|---|-----|---------|-----------|--------|
-| 4 | `pytest-cov` + tests de services/repos críticos (M1) | Cubrir la lógica más compleja | Refactors seguros | Esfuerzo medio |
-| 5 | Test de integración del ciclo de cola (M1) | El flujo asíncrono es el corazón del sistema | Detecta regresiones de idempotencia/DLQ | Requiere infra de test |
-| 6 | Refactor de `requirements` (M2) | Eliminar duplicación CPU/GPU | Sin drift de deps | Bajo |
+| Variable | Descripción |
+|----------|-------------|
+| `APP_HOST`, `APP_PORT` | bind de la API (default `0.0.0.0:8000`) |
+| `ENVIRONMENT` | `development` / `production` (en prod no se permite CORS `*`) |
+| `LOG_LEVEL` | `DEBUG`/`INFO`/`WARNING`/`ERROR`/`CRITICAL` |
+| `CORS_ORIGINS` | lista de orígenes permitidos |
+| `REQUIRE_GPU` | si `true`, falla el arranque sin GPU |
+| `DATABASE_MANAGER_HOST` `_PORT` `_USER` `_PASSWORD` `_NAME` `_DRIVER` | PostgreSQL + pgvector |
+| `REDIS_CLIENT_URL` | Redis (locks de idempotencia, rate limiting) |
+| `RABBITMQ_MANAGER_URL` | RabbitMQ (pipeline asíncrono) |
+| `MINIO_MANAGER_ENDPOINT` `_ACCESS_KEY` `_SECRET_KEY` | almacenamiento de binarios |
+| `NEO4J_MANAGER_URI` `_USER` `_PASSWORD` `_DATABASE` | grafo de conocimiento |
+| `AUTHENTICATION_PROVIDER_AUTHENTICATION_URL` | validación de tokens (**requerida**) |
+| `CHAT_SERVICE_MEMBERSHIP_URL` | verificación de membresía de chat |
+| `DOCUMENT_COLLECTION_SERVICE_ACCESSIBLE_COLLECTIONS_URL` | resolución de docs accesibles |
+| `LLM_PROVIDER_*_URL`, `LLM_PROVIDER_TIMEOUT_SECONDS` | endpoints del `aura-llm-service` |
+| `KNOWLEDGE_GRAPH_ENABLED` | activa extracción de grafo |
 
-### Prioridad 2 — Operación en producción
-| # | Qué | Por qué | Beneficio | Riesgo |
-|---|-----|---------|-----------|--------|
-| 7 | Métricas de negocio + (opcional) OpenTelemetry (M3) | Diagnóstico del pipeline | Observabilidad real | Bajo/Medio |
-| 8 | Límites de rate configurables por entorno (M5) | Ajuste sin redeploy | Flexibilidad operativa | Nulo |
-| 9 | Runbook + tabla de envs en docs (M4) | Onboarding y on-call | Menor MTTR | Nulo |
+### Rate limiting (configurable por entorno)
 
-### Categorías (referencia rápida)
-- **Arquitectura:** ya sólida; no requiere cambios estructurales. Solo reducir boilerplate si se vuelve un problema (B3).
-- **Seguridad:** A1, A2 (acción inmediata); validaciones de entrada ya presentes.
-- **Base de Datos:** consultas parametrizadas y eficientes (window functions, `load_only`, `defer`, chunked IDs); recordar que el DDL se gestiona externamente (sin migraciones — ver nota de memoria del proyecto). Considerar herramienta de migraciones a futuro.
-- **API:** controllers delgados y consistentes; OK.
-- **Testing:** M1 (foco principal).
-- **Logging:** estructurado y correcto; OK.
-- **Configuración:** centralizada en `pydantic-settings` con invariantes; A1/M5 pendientes.
-- **Docker:** multi-stage, no-root, healthcheck; añadir `.dockerignore` ya existe. OK.
-- **Performance:** sin problemas evidentes; vigilar carga de modelos en arranque (ya hay warmup en hilos).
-- **Mantenibilidad:** alta; M2/M4 la mejoran.
-- **Observabilidad:** M3.
+| Variable | Default | Descripción |
+|----------|---------|-------------|
+| `RATE_LIMIT_STRICT_RATE` | `20` | req/ventana en endpoints de escritura/costosos |
+| `RATE_LIMIT_DEFAULT_RATE` | `60` | req/ventana en endpoints de lectura |
+| `RATE_LIMIT_WINDOW_SECONDS` | `60` | tamaño de la ventana deslizante |
+| `RATE_LIMIT_FAIL_OPEN` | `true` | si Redis no está disponible: `true` deja pasar, `false` responde 503 |
 
----
+### Tuning del pipeline (opcionales, con defaults sensatos)
 
-## 4. FASE 3–5 — Estado y recomendaciones
+Agrupadas por prefijo — ver la clase de settings correspondiente para el detalle:
 
-> **No se ejecutó refactorización** (instrucción explícita: *"no me cambies nada"*). Esta sección documenta qué haría cada fase y el estado actual frente a "producción".
-
-### Checklist de Producción (Fase 4)
-| Capacidad | Estado | Nota |
-|-----------|:---:|------|
-| Configuración segura | 🟡 | Invariantes ✅, pero secretos en git (A1) |
-| Liveness / Readiness | ✅ | `/api/v1/health`, `/api/v1/ready` (Neo4j no sondeado, B1) |
-| Logging estructurado | ✅ | JSON + request_id + cause_chain |
-| Métricas | 🟡 | HTTP ✅, negocio mínimo (M3) |
-| Trazabilidad | 🟡 | request_id propagado; sin tracing distribuido |
-| Manejo de errores | ✅ | Centralizado, jerarquía `AppException` |
-| Validación robusta | ✅ | Pydantic + sanitización BM25 + límites de dominio |
-| Docker optimizado | ✅ | Multi-stage, no-root, healthcheck |
-| Gestión de secretos | 🟡 | Mecanismo OK (env vars); falta sacarlos de git |
-| Mensajería confiable | ✅ | Outbox-lite, DLQ, idempotencia |
-| Apagado ordenado | ✅ | `shutdown_dependencies` en reversa |
-| CI/CD | 🔴 | Inexistente (A3) |
-
-### Deuda técnica restante (resumen)
-1. Secretos en historial de git (A1).
-2. Ausencia de `.gitignore` y de CI (A2, A3).
-3. Brechas de cobertura en services/repos y flujo de cola (M1).
-4. Duplicación CPU/GPU en requirements (M2).
-5. Observabilidad de negocio y tracing (M3).
-6. Documentación operativa/runbook (M4, parcialmente cubierto por este informe).
-7. Sin herramienta de migraciones de BD (DDL externo) — gestionar ALTERs a mano es frágil a largo plazo.
-
-### Próximos pasos recomendados (orden sugerido)
-1. **Hoy:** `.gitignore` + sacar `.env` de git + `.env.example` (P0-1, P0-2).
-2. **Esta semana:** CI con ruff/mypy/pytest/build + `pip-audit` (P0-3).
-3. **Próximo sprint:** `pytest-cov` y tests de `document_ingestion_service`, `graph_query_service`, repositorios y ciclo de cola (P1-4, P1-5).
-4. **Después:** refactor de requirements (P1-6), métricas de negocio (P2-7), límites configurables (P2-8), runbook (P2-9).
-5. **Backlog:** evaluar migraciones de BD, Git LFS para fixtures, y reducción de boilerplate si crece el número de endpoints.
+`CREATE_DOCUMENT_*`, `DOCUMENT_INGESTION_*`, `DOCUMENT_QUERY_*`, `DOCUMENT_SEARCH_*`,
+`FRAGMENT_QUERY_*`, `READER_*`, `TEXT_CLEANER_*`, `TEXT_SPLITTER_*`, `EMBEDDER_*`,
+`RERANKER_*`, `POST_PROCESS_DOCUMENT_*`, `POST_PROCESS_FRAGMENT_*`, `HTTP_CLIENT_*`,
+`DOCUMENT_STORAGE_*`.
 
 ---
 
-*Fin del reporte. No se realizaron cambios en el código fuente; el único archivo escrito es este `README.md`.*
+## Tests, lint y tipado
+
+La suite corre **100% mockeada** (sin DB/Redis/RabbitMQ/MinIO reales) y es rápida:
+
+```bash
+pip install -r requirements/requirements.test.txt
+
+pytest -q                                   # ~270 tests, < 10s
+pytest -q --cov=app --cov-report=term-missing   # con cobertura (pytest-cov)
+
+ruff check .                                # lint
+mypy                                        # tipado (config en pyproject.toml)
+```
+
+`conftest.py` siembra la única variable requerida y mockea DB/servicios externos. La CI
+(`.github/workflows/aura-document-processing-service.yml`) corre lint, mypy, pytest+cobertura,
+resolución del lockfile, `pip-audit` y build de la imagen Docker.
+
+---
+
+## Observabilidad
+
+### Métricas (Prometheus)
+
+La app expone métricas en `GET /metrics`. Prometheus ya está configurado para *scrapear*
+este servicio (ver `docker/observability/prometheus/prometheus.yml`). Además de la
+instrumentación HTTP genérica, hay métricas de negocio:
+
+| Métrica | Tipo | Qué mide |
+|---------|------|----------|
+| `aura_document_ingestion_total{result}` | counter | documentos ingeridos (success/failure) |
+| `aura_document_ingestion_duration_seconds` | histogram | duración end-to-end de la ingesta |
+| `aura_document_pipeline_stage_duration_seconds{stage}` | histogram | latencia por etapa (chunk/embed/persist) |
+| `aura_document_pipeline_stage_failures_total{stage}` | counter | fallos por etapa (read/clean/split/embed/persist) |
+| `aura_document_fragments_per_document` | histogram | fragments por documento |
+| `aura_llm_request_duration_seconds{operation}` | histogram | latencia de llamadas al LLM por operación |
+| `aura_llm_requests_total{operation,result}` | counter | resultado de llamadas al LLM |
+| `aura_messages_consumed_total{queue,result}` | counter | throughput de colas (ack/nack/dropped) |
+| `aura_message_processing_duration_seconds{queue}` | histogram | latencia de procesamiento por cola |
+
+Hay un **dashboard de Grafana** provisionado en
+`docker/observability/grafana/provisioning/dashboards/aura-document-processing.json`
+(carpeta "AURA" en Grafana, `http://localhost:3001`, admin/admin).
+
+### Logs
+
+Logs estructurados a stdout; Filebeat los envía a Elasticsearch y se consultan desde
+Grafana/Kibana. Se propaga un `request_id` por request para correlación.
+
+---
+
+## Endpoints operativos
+
+| Endpoint | Propósito |
+|----------|-----------|
+| `GET /api/v1/health` | liveness (responde si el proceso está vivo) |
+| `GET /api/v1/ready` | readiness (chequea DB, RabbitMQ y MinIO; 200 u 503) |
+| `GET /metrics` | métricas Prometheus |
+| `GET /api/docs`, `/api/redoc`, `/api/openapi.json` | documentación interactiva del API |
+
+---
+
+## Runbook de incidentes
+
+| Síntoma | Causa probable | Acción |
+|---------|----------------|--------|
+| `/api/v1/ready` devuelve **503** | una dependencia (DB/RabbitMQ/MinIO) caída | revisar el cuerpo de la respuesta (indica qué dependencia falla) y el contenedor correspondiente |
+| Documentos quedan en estado `uploaded`/no se procesan | consumer caído o cola sin drenar | revisar logs del servicio; mirar `aura_messages_consumed_total` y la cola en RabbitMQ (`http://localhost:15672`) |
+| Muchos documentos en estado `failed` | fallo recurrente en una etapa | mirar `aura_document_pipeline_stage_failures_total{stage}` para aislar la etapa; revisar logs por `document_id` |
+| Latencia alta de ingesta | etapa `embed`/`read` lenta (modelos en CPU, archivos grandes) | mirar `aura_document_pipeline_stage_duration_seconds{stage}`; considerar build GPU |
+| Errores 5xx del LLM / timeouts | `aura-llm-service` degradado | mirar `aura_llm_requests_total{result}`; verificar `LLM_PROVIDER_*_URL` y el servicio LLM |
+| **429** inesperados | rate limit muy bajo para el entorno | ajustar `RATE_LIMIT_*` (no requiere redeploy de código, solo cambiar env y reiniciar) |
+| **503** del rate limiter | Redis caído con `RATE_LIMIT_FAIL_OPEN=false` | restaurar Redis, o setear `fail_open=true` si se prioriza disponibilidad |
+| Mensajes descartados (`dropped`) | poison messages (body inválido/oversize/superó reintentos) | revisar logs; los mensajes van a dead-letter sin requeue |
+
+---
+
+## Documentación adicional
+
+- [`docs/api/`](docs/api/README.md) — visión del API, autenticación, flujos de documentos
+- [`docs/adapters/`](docs/adapters/) — readers, text cleaners, text splitters, embedders
+- [`docs/embedding/`](docs/embedding/) — modelos de embedding (HuggingFace / Ollama)
+- [`docs/splitting/`](docs/splitting/) — modelos de splitting (HuggingFace)

@@ -1,15 +1,17 @@
+import logging
 import time
 import uuid
 from collections.abc import Awaitable, Callable
 from fastapi import HTTPException, Request, status
 
+from app.api.dependencies.rate_limiter_settings import RateLimiterSettings
 from app.infrastructure.persistence.memory_database.redis_client.interfaces.redis_client_interface import (
     RedisClientInterface,
 )
 
-_WINDOW_SECONDS = 60
-_STRICT_RATE = 20
-_DEFAULT_RATE = 60
+logger = logging.getLogger(__name__)
+
+_settings = RateLimiterSettings()
 
 _RATE_LIMIT_LUA = """
 local key = KEYS[1]
@@ -35,9 +37,24 @@ return {1, 0}
 """
 
 
+def _handle_backend_unavailable(reason: str) -> None:
+    if _settings.fail_open:
+        return
+    logger.warning(
+        "Rate limiter backend unavailable and fail_open is disabled; rejecting request.",
+        extra={"reason": reason},
+    )
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Rate limiting is temporarily unavailable. Please retry later.",
+        headers={"Retry-After": "1"},
+    )
+
+
 async def _check_rate_limit(request: Request, limit: int) -> None:
     redis_client: RedisClientInterface | None = getattr(request.app.state, "redis_client", None)
     if redis_client is None:
+        _handle_backend_unavailable("redis_client_missing")
         return
 
     auth_user = getattr(request.state, "authenticated_user", None)
@@ -49,15 +66,20 @@ async def _check_rate_limit(request: Request, limit: int) -> None:
     key = f"rl:{identity}:{request.url.path}"
     now = time.time()
 
-    allowed, retry_after = await redis_client.client.eval(
-        _RATE_LIMIT_LUA,
-        1,
-        key,
-        now,
-        _WINDOW_SECONDS,
-        limit,
-        str(uuid.uuid4()),
-    )
+    try:
+        allowed, retry_after = await redis_client.client.eval(
+            _RATE_LIMIT_LUA,
+            1,
+            key,
+            now,
+            _settings.window_seconds,
+            limit,
+            str(uuid.uuid4()),
+        )
+    except Exception:
+        logger.warning("Rate limiter Redis call failed.", exc_info=True)
+        _handle_backend_unavailable("redis_eval_error")
+        return
 
     if not int(allowed):
         raise HTTPException(
@@ -74,5 +96,5 @@ def make_rate_limiter(limit: int) -> Callable[[Request], Awaitable[None]]:
     return _limiter
 
 
-strict_rate_limit = make_rate_limiter(_STRICT_RATE)
-default_rate_limit = make_rate_limiter(_DEFAULT_RATE)
+strict_rate_limit = make_rate_limiter(_settings.strict_rate)
+default_rate_limit = make_rate_limiter(_settings.default_rate)

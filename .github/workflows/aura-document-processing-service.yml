@@ -98,6 +98,7 @@ jobs:
           python-version: "3.13"
           cache: pip
           cache-dependency-path: |
+            aura-document-processing-service/requirements/base.txt
             aura-document-processing-service/requirements/requirements.txt
             aura-document-processing-service/requirements/requirements.test.txt
 
@@ -116,7 +117,17 @@ jobs:
         # asyncio_mode=auto, testpaths=["test"] and addopts come from pyproject.toml.
         # conftest.py seeds the one required env var and mocks the DB/services, so no
         # external Postgres/Redis/RabbitMQ/MinIO is contacted.
-        run: pytest -q
+        #
+        # Coverage floor is set below the current measured value (~70%) so the gate
+        # catches regressions without flaking; ratchet it up as the service/repository
+        # suites grow. Cov flags live here (not in pyproject addopts) so running a
+        # single test file locally does not trip the whole-app threshold.
+        run: |
+          pytest -q \
+            --cov=app \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-fail-under=65
 
   lock-verify:
     name: Lockfile resolves (dry-run)

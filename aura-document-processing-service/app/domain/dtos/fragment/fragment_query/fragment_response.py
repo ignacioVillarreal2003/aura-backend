@@ -62,7 +62,6 @@ class FragmentResponse(BaseModel):
     summary: str | None = Field(default=None, min_length=1, max_length=MAX_FRAGMENT_SUMMARY_CHARS)
     entities: dict[str, object] | None = Field(default=None)
     topics: list[str] | None = Field(default=None, max_length=MAX_TOPICS)
-    enrichment_status: str = Field(default="pending", min_length=1, max_length=32)
 
     page_number: int | None = Field(default=None, ge=1)
     section_path: str | None = Field(default=None)

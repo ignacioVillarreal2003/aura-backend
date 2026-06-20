@@ -13,9 +13,9 @@ WORKDIR /application
 
 RUN python -m venv /opt/venv
 
-COPY requirements/requirements.txt .
+COPY requirements/base.txt requirements/requirements.txt ./requirements/
 
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements/requirements.txt
 
 ARG TEXT_SPLITTER_HF_MODEL="sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
 ARG EMBEDDER_HF_MODEL=""

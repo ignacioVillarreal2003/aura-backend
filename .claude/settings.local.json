@@ -91,7 +91,12 @@
       "Bash(python -m py_compile aura-document-processing-service/app/application/services/document/document_query_service/document_query_service.py aura-document-processing-service/app/infrastructure/http/chat_membership/chat_membership_provider.py aura-auth-service/scripts/setup_db.py)",
       "Bash(python -m py_compile app/api/schemas/document/create_document_form.py app/domain/dtos/document/create_document/create_document_request.py)",
       "Bash(python -m py_compile /c/Users/ignac/Desktop/AURA/aura-backend/aura-llm-service/app/configuration/middlewares/guardrails_middleware.py /c/Users/ignac/Desktop/AURA/aura-backend/aura-llm-service/app/infrastructure/guardrails/nemo_guardrails_settings.py)",
-      "Bash(python *)"
+      "Bash(python *)",
+      "Bash(py -c \"import pydantic; print\\('pydantic', pydantic.VERSION\\)\")",
+      "Bash(py -3.13 -c \"import pydantic, pydantic_settings; print\\('ok', pydantic.VERSION\\)\")",
+      "Bash(py -3.13 -c ' *)",
+      "Bash(py -3.13 -m pytest -q -k \"fragment or context or retriev\")",
+      "Bash(py -3.13 -m pytest -q test/unit/test_context_retrieval_processor.py)"
     ]
   }
 }

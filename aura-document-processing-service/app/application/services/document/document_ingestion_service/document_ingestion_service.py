@@ -1,4 +1,5 @@
 import logging
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,7 +19,14 @@ from app.application.processors.text_splitters.text_splitter_factory import Text
 from app.application.services.document.document_ingestion_service.document_ingestion_service_settings import (
     DocumentIngestionServiceSettings,
 )
-from app.configuration.metrics import structural_chunk_fallback_total
+from app.configuration.metrics import (
+    document_fragments_per_document,
+    document_ingestion_duration_seconds,
+    document_ingestion_total,
+    observe_stage,
+    pipeline_stage_failures_total,
+    structural_chunk_fallback_total,
+)
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.messaging.rabbitmq.publisher.interfaces.document_enrichment_publisher_interface import (
     DocumentEnrichmentPublisherInterface,
@@ -60,6 +68,18 @@ class _ChunkingOutcome:
     cleaner_type: Optional[str]
     chunk_size: Optional[int]
     chunk_overlap: Optional[int]
+
+
+# Maps a stage-typed ingestion failure to the pipeline stage that raised it, so
+# `pipeline_stage_failures_total` attributes failures precisely even though
+# read/clean/split all happen inside the single `chunk` timing stage.
+_FAILURE_STAGE_BY_EXCEPTION: dict[type[Exception], str] = {
+    DocumentIngestionServiceReadException: "read",
+    DocumentIngestionServiceCleanException: "clean",
+    DocumentIngestionServiceSplitException: "split",
+    DocumentIngestionServiceEmbedException: "embed",
+    DocumentIngestionServicePersistenceException: "persist",
+}
 
 
 class DocumentIngestionService(DocumentIngestionServiceInterface):
@@ -107,21 +127,28 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             }
         )
 
+        start = time.perf_counter()
         try:
-            outcome = await self._produce_chunks(
-                document,
-                local_file_path,
-                prefer_docling=prefer_docling,
-            )
+            with observe_stage("chunk"):
+                outcome = await self._produce_chunks(
+                    document,
+                    local_file_path,
+                    prefer_docling=prefer_docling,
+                )
             if len(outcome.chunks) > self._settings.max_chunks_per_document:
                 raise DocumentIngestionServiceSplitException(
                     "The document produced too many text segments to embed safely "
                     f"({len(outcome.chunks)} > {self._settings.max_chunks_per_document})."
                 )
             texts = [chunk.embed_text or chunk.text for chunk in outcome.chunks]
-            embeddings = await self._embed_chunks(document, texts)
+            with observe_stage("embed"):
+                embeddings = await self._embed_chunks(document, texts)
             fragments = self._build_fragments(document, outcome.chunks, embeddings)
-            await self._persist_fragments_and_update_document(document, fragments, outcome)
+            with observe_stage("persist"):
+                await self._persist_fragments_and_update_document(document, fragments, outcome)
+
+            document_ingestion_total.labels(result="success").inc()
+            document_fragments_per_document.observe(len(fragments))
 
             logger.info(
                 "Document ingestion completed successfully.",
@@ -144,11 +171,17 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                 DocumentIngestionServiceSplitException,
                 DocumentIngestionServiceEmbedException,
                 DocumentIngestionServicePersistenceException,
-        ):
+        ) as e:
+            document_ingestion_total.labels(result="failure").inc()
+            pipeline_stage_failures_total.labels(
+                stage=_FAILURE_STAGE_BY_EXCEPTION.get(type(e), "unexpected")
+            ).inc()
             await self._mark_document_as_failed(document)
             raise
 
         except Exception as e:
+            document_ingestion_total.labels(result="failure").inc()
+            pipeline_stage_failures_total.labels(stage="unexpected").inc()
             await self._mark_document_as_failed(document)
             logger.exception(
                 "An unexpected error occurred during document ingestion.",
@@ -159,6 +192,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             raise DocumentIngestionServiceException("Document ingestion failed.") from e
 
         finally:
+            document_ingestion_duration_seconds.observe(time.perf_counter() - start)
             await self._cleanup_temp_file(local_file_path)
 
     async def _produce_chunks(
