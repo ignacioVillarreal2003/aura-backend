@@ -1,0 +1,24 @@
+services:
+  aura-auth-service:
+    deploy:
+      replicas: 2
+
+  aura-chat-service:
+    deploy:
+      replicas: 2
+
+  aura-notification-service:
+    deploy:
+      replicas: 2
+
+  aura-notification-worker:
+    deploy:
+      replicas: 2
+
+  aura-document-collection-service:
+    deploy:
+      replicas: 2
+
+  aura-gateway:
+    deploy:
+      replicas: 2

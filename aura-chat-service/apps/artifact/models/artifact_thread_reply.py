@@ -16,6 +16,6 @@ class ArtifactThreadReply(AuditModel, SoftDeleteModel):
         db_table = "artifact_thread_reply"
         ordering = ["created_at"]
         indexes = [
-            models.Index(fields=["parent_artifact"], name="idx_artifact_thread_reply_parent"),
-            models.Index(fields=["deleted_at"], name="idx_artifact_thread_reply_deleted"),
+            models.Index(fields=["parent_artifact"], name="idx_art_thrd_reply_par"),
+            models.Index(fields=["deleted_at"], name="idx_art_thrd_reply_del"),
         ]
