@@ -150,7 +150,7 @@ def test_get_report_response_fields_are_complete(api_client, mocker):
     mocker.patch(f"{VIEW}.report_service.get_report", return_value=make_report())
     response = api_client.get("/api/v1/reports/1/")
     data = response.data
-    for field in ("id", "type", "title", "content", "mode", "source_chat_id", "created_by", "created_at"):
+    for field in ("id", "type", "title", "content", "retrieve_context", "process_documents", "document_ids", "source_chat_id", "created_by", "created_at"):
         assert field in data, f"Missing field: {field}"
 
 

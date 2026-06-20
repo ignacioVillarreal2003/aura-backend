@@ -1,0 +1,13 @@
+@dpsBase = http://localhost:8000/api/v1
+@authToken = user_token_123
+
+### Buscar entidades por nombre (autocomplete)
+GET {{dpsBase}}/graph/search?q=fuerza
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Buscar con filtro por tipo de entidad y límite
+GET {{dpsBase}}/graph/search?q=fuerza&type=ORGANIZATION&limit=20
+Accept: application/json
+Authorization: Bearer {{authToken}}

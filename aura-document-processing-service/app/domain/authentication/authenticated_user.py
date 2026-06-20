@@ -1,4 +1,4 @@
-from typing import Optional
+from collections.abc import Set as AbstractSet
 from pydantic import BaseModel, Field, PrivateAttr
 
 from app.domain.types import UserId
@@ -6,10 +6,7 @@ from app.domain.types import UserId
 
 class AuthenticatedUser(BaseModel):
     id: UserId = Field(...)
-    # Optional because system-initiated principals (e.g. an outbox reconcile job
-    # with no request context) carry only the owner's id. Real authenticated users
-    # always have an email, enforced by the auth service response DTO.
-    email: Optional[str] = Field(default=None)
+    email: str | None = Field(default=None)
     roles: list[str] = Field(default_factory=list)
     permissions: list[str] = Field(default_factory=list)
 
@@ -28,14 +25,14 @@ class AuthenticatedUser(BaseModel):
     def has_role(self, role: str) -> bool:
         return role in self._roles_set
 
-    def has_any_role(self, roles: set[str]) -> bool:
+    def has_any_role(self, roles: AbstractSet[str]) -> bool:
         return bool(self._roles_set & roles)
 
     def has_permission(self, permission: str) -> bool:
         return permission in self._permissions_set
 
-    def has_any_permission(self, permissions: set[str]) -> bool:
+    def has_any_permission(self, permissions: AbstractSet[str]) -> bool:
         return bool(self._permissions_set & permissions)
 
-    def has_all_permissions(self, permissions: set[str]) -> bool:
-        return permissions.issubset(self._permissions_set)
+    def has_all_permissions(self, permissions: AbstractSet[str]) -> bool:
+        return self._permissions_set >= permissions

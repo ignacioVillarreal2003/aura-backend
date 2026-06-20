@@ -2,7 +2,6 @@ import html
 import logging
 
 from core.export import pdf_export
-from apps.artifact.models.artifact import Artifact
 from apps.artifact_quiz.exceptions import QuizExportException
 from apps.artifact_quiz.models import ArtifactQuiz, ArtifactQuizQuestion
 
@@ -33,7 +32,7 @@ def _build_pdf(html_content: str) -> bytes:
 
 def generate_quiz_pdf(quiz: ArtifactQuiz, *, with_answers: bool = True) -> bytes:
     questions = list(quiz.questions.all())
-    mode_label = "Con documentos de contexto" if quiz.artifact.mode == Artifact.Mode.RAG else "Directo"
+    mode_label = "Con documentos de contexto" if (quiz.artifact.retrieve_context or quiz.artifact.process_documents) else "Directo"
     created = html.escape(_fmt_dt(quiz.created_at))
     pass_label = f"{quiz.pass_score}%" if quiz.pass_score is not None else "—"
 

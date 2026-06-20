@@ -24,8 +24,6 @@ class HealthController:
         for name, attr, probe in self._critical_probes():
             dependency = getattr(state, attr, None)
             if dependency is None:
-                # A critical dependency that is not registered means startup did
-                # not complete; report it explicitly instead of silently passing.
                 logger.error("Readiness: critical dependency not registered", extra={"dependency": name})
                 checks[name] = {"status": "not_registered"}
                 overall_ok = False

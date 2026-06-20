@@ -18,12 +18,20 @@ def openapi_tags_metadata() -> list[dict[str, str]]:
             "description": "Alta de documentos por multipart con límite estricto.",
         },
         {
+            "name": "update-document",
+            "description": "Actualización parcial (PATCH) de la metadata editable de un documento.",
+        },
+        {
             "name": "delete-document",
             "description": "Borrado lógico por documento o por chat.",
         },
         {
+            "name": "restore-document",
+            "description": "Restauración de documentos eliminados de forma lógica.",
+        },
+        {
             "name": "document-query",
-            "description": "Consulta y listado de documentos.",
+            "description": "Consulta, estado y listado de documentos.",
         },
         {
             "name": "document-download",

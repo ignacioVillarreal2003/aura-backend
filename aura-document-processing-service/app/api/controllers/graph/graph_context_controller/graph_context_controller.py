@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.controllers.graph.graph_context_controller.graph_context_controller_interface import (
+from app.api.controllers.graph.graph_context_controller.interfaces.graph_context_controller_interface import (
     GraphContextControllerInterface,
 )
 from app.api.dependencies.rate_limiter import default_rate_limit
@@ -19,6 +19,7 @@ from app.infrastructure.persistence.database.database_manager.database_manager i
 from app.api.dependencies.services import (
     get_graph_context_service,
 )
+
 
 class GraphContextController(GraphContextControllerInterface):
     async def get_context(
@@ -39,6 +40,7 @@ class GraphContextController(GraphContextControllerInterface):
             authenticated_user=authenticated_user,
             database_session=database_session,
         )
+
 
 router = APIRouter()
 graph_context_controller = GraphContextController()

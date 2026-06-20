@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 from docx import Document
+from docx.document import Document as DocxDocument
 
 from app.application.processors.readers.exceptions.reader_exception import (
     DigitalDOCXReadException,
@@ -30,7 +31,7 @@ class DigitalDOCXReader(BaseReader):
             return False
 
         try:
-            doc = Document(file_path)
+            doc = Document(str(file_path))
             if any(p.text and p.text.strip() for p in doc.paragraphs[:20]):
                 return True
             if doc.tables:
@@ -65,7 +66,7 @@ class DigitalDOCXReader(BaseReader):
         )
 
         try:
-            doc = Document(file_path)
+            doc = Document(str(file_path))
             text_parts = self._extract_text(doc)
 
             if not text_parts:
@@ -97,7 +98,7 @@ class DigitalDOCXReader(BaseReader):
 
     def _extract_text(
             self,
-            doc: Document
+            doc: DocxDocument
     ) -> list[str]:
         text_parts: list[str] = []
 

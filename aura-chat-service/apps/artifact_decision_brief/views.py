@@ -170,8 +170,10 @@ class DecisionBriefGenerateView(APIView):
             brief, messages, fragments = await decision_brief_service.generate_decision_brief(
                 user=request.user,
                 message=message,
-                mode=d["mode"],
                 chat_id=chat_id,
+                retrieve_context=d.get("retrieve_context"),
+                process_documents=d.get("process_documents"),
+                document_ids=d.get("document_ids", []),
             )
 
         return Response(

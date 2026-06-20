@@ -11,9 +11,12 @@ from app.api.handlers.exception_handlers import register_exception_handlers
 from app.configuration.cors_configuration import configure_cors
 from app.configuration.dependencies import shutdown_dependencies, startup_dependencies
 from app.configuration.environment_variables import environment_variables
+from app.configuration.gpu_guard import verify_gpu_availability
 from app.configuration.logging_configuration import configure_logging
+from app.configuration.metrics import patch_instrumentator_routing
 from app.configuration.middlewares.authentication_middleware import add_authentication_middleware
 from app.configuration.middlewares.logging_middleware import add_logging_middleware
+from app.configuration.production_invariants import assert_production_invariants
 
 _root_log_level = getattr(
     logging,
@@ -25,9 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(
-        app: FastAPI
-):
+async def lifespan(app: FastAPI):
     logger.info("Starting application")
     try:
         await startup_dependencies(
@@ -50,6 +51,10 @@ async def lifespan(
 
 
 def create_app() -> FastAPI:
+    assert_production_invariants()
+
+    verify_gpu_availability()
+
     app = FastAPI(
         title=environment_variables.app_name,
         version=environment_variables.app_version,
@@ -67,6 +72,7 @@ def create_app() -> FastAPI:
     _include_routers(app)
     register_exception_handlers(app)
 
+    patch_instrumentator_routing()
     Instrumentator(
         should_group_status_codes=True,
         should_ignore_untemplated=True,
@@ -88,16 +94,12 @@ def create_app() -> FastAPI:
     return app
 
 
-def _add_middlewares(
-        app: FastAPI
-) -> None:
-    add_logging_middleware(app)
+def _add_middlewares(app: FastAPI) -> None:
     add_authentication_middleware(app)
+    add_logging_middleware(app)
 
 
-def _include_routers(
-        app: FastAPI
-) -> None:
+def _include_routers(app: FastAPI) -> None:
     app.include_router(router, prefix="/api/v1")
 
 

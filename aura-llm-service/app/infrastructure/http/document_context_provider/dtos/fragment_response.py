@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 _MAX_ID = 2_147_483_647
@@ -13,6 +13,8 @@ _MAX_FRAGMENT_INDEX = 100_000
 _MAX_ENTITY_KEYS = 200
 _MAX_ENTITY_KEY_CHARS = 255
 _MAX_ENTITY_VALUE_CHARS = 1_000
+_MAX_SECTION_PATH_CHARS = 1_024
+_MAX_HEADING_CHARS = 512
 
 
 class FragmentEmbeddedDocument(BaseModel):
@@ -59,6 +61,14 @@ class FragmentResponse(BaseModel):
     summary: Optional[str] = Field(default=None, min_length=1, max_length=_MAX_FRAGMENT_SUMMARY_CHARS)
     entities: Optional[dict[str, object]] = Field(default=None)
     topics: Optional[list[str]] = Field(default=None, max_length=_MAX_TOPICS)
+
+    page_number: Optional[int] = Field(default=None, ge=1)
+    section_path: Optional[str] = Field(default=None, max_length=_MAX_SECTION_PATH_CHARS)
+    heading: Optional[str] = Field(default=None, max_length=_MAX_HEADING_CHARS)
+    char_start: Optional[int] = Field(default=None, ge=0)
+    char_end: Optional[int] = Field(default=None, ge=0)
+    bbox: Optional[dict[str, Any]] = Field(default=None)
+
     document: FragmentEmbeddedDocument = Field(...)
 
     @computed_field
@@ -91,6 +101,22 @@ class FragmentResponse(BaseModel):
             return v
         cleaned = [t.strip()[:_MAX_TOPIC_CHARS] for t in v if isinstance(t, str) and t.strip()]
         return cleaned or None
+
+    @field_validator("section_path", mode="before")
+    @classmethod
+    def sanitize_section_path(cls, v: object) -> Optional[str]:
+        if not isinstance(v, str):
+            return v
+        section_path = v.strip()
+        return section_path[:_MAX_SECTION_PATH_CHARS] if section_path else None
+
+    @field_validator("heading", mode="before")
+    @classmethod
+    def sanitize_heading(cls, v: object) -> Optional[str]:
+        if not isinstance(v, str):
+            return v
+        heading = v.strip()
+        return heading[:_MAX_HEADING_CHARS] if heading else None
 
     @model_validator(mode="after")
     def validate_entities(self) -> "FragmentResponse":

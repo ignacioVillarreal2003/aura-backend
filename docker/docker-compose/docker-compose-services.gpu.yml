@@ -34,7 +34,7 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      - ../../aura-document-processing-service/.env.docker.gpu
+      - ../../aura-document-processing-service/env/.env.docker.gpu
     environment:
       HF_TOKEN: ${HF_TOKEN:-}
       NVIDIA_VISIBLE_DEVICES: all
@@ -189,7 +189,7 @@ services:
     container_name: llm
     env_file:
       - ../../aura-llm-service/env/.env.docker.gpu
-      - ../../aura-document-processing-service/.env.docker.gpu
+      - ../../aura-document-processing-service/env/.env.docker.gpu
     ports:
       - "11434:11434"
     volumes:

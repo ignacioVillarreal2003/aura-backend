@@ -1,12 +1,12 @@
 """
 Tests for DELETE /api/v1/delete-document/soft/document/{id}
          DELETE /api/v1/delete-document/soft/chat/{id}
-         DELETE /api/v1/delete-document/admin/soft/document/{id}
+         DELETE /api/v1/delete-document/manage/soft/document/{id}
 """
 
 DOC_URL = "/api/v1/delete-document/soft/document/1"
 CHAT_URL = "/api/v1/delete-document/soft/chat/5"
-ADMIN_DOC_URL = "/api/v1/delete-document/admin/soft/document/1"
+ADMIN_DOC_URL = "/api/v1/delete-document/manage/soft/document/1"
 
 
 class TestDeleteDocumentAuth:
@@ -22,7 +22,7 @@ class TestDeleteDocumentAuth:
     def test_admin_document_without_permission_returns_403(
             self, client, service_headers, mock_delete_document_service
     ):
-        headers = service_headers(permissions=["SOFT_DELETE_DOCUMENT"])
+        headers = service_headers(permissions=["DOCUMENT_DELETE"])
         assert client.delete(ADMIN_DOC_URL, headers=headers).status_code == 403
 
 
@@ -43,12 +43,12 @@ class TestDeleteDocumentSuccess:
         assert response.status_code == 204
 
     def test_soft_delete_document_admin_returns_204(self, client, auth_headers, mock_delete_document_service):
-        mock_delete_document_service.soft_delete_document_admin.return_value = None
+        mock_delete_document_service.soft_delete_document_manage.return_value = None
         response = client.delete(ADMIN_DOC_URL, headers=auth_headers)
         assert response.status_code == 204
 
     def test_soft_delete_document_admin_has_no_body(self, client, auth_headers, mock_delete_document_service):
-        mock_delete_document_service.soft_delete_document_admin.return_value = None
+        mock_delete_document_service.soft_delete_document_manage.return_value = None
         response = client.delete(ADMIN_DOC_URL, headers=auth_headers)
         assert response.content == b""
 

@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from typing import Optional
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.services.fragment.post_process_fragment_service.interfaces.post_process_fragment_processor_interface import (
     PostProcessFragmentProcessorInterface,
@@ -10,12 +11,12 @@ from app.application.services.fragment.post_process_fragment_service.post_proces
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.processing_status import ProcessingStatus
-from app.infrastructure.http.llm_provider.llm_provider_interface import LlmProviderInterface
-from app.infrastructure.persistence.database.database_manager.database_manager_interface import (
+from app.infrastructure.http.llm_provider.interfaces.llm_provider_interface import LlmProviderInterface
+from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
     DatabaseManagerInterface,
 )
 from app.infrastructure.persistence.database.orm.fragment import Fragment
-from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository_interface import (
+from app.infrastructure.persistence.database.repositories.interfaces.fragment_repository_interface import (
     FragmentRepositoryInterface,
 )
 
@@ -93,7 +94,7 @@ class PostProcessFragmentProcessor(PostProcessFragmentProcessorInterface):
                 authenticated_user=user,
             )
 
-            async def _operation(session):
+            async def _operation(session: AsyncSession) -> None:
                 db_fragment = await self._fragment_repository.get_fragment_by_id(
                     fragment_id=fragment_id,
                     database_session=session,
@@ -126,7 +127,7 @@ class PostProcessFragmentProcessor(PostProcessFragmentProcessorInterface):
 
     async def _mark_fragment_failed(self, fragment_id: int) -> None:
         try:
-            async def _operation(session):
+            async def _operation(session: AsyncSession) -> None:
                 db_fragment = await self._fragment_repository.get_fragment_by_id(
                     fragment_id=fragment_id,
                     database_session=session,

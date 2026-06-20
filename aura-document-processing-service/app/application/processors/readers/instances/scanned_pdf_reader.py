@@ -21,7 +21,7 @@ from app.application.processors.readers.reader_settings import ReaderSettings
 logger = logging.getLogger(__name__)
 
 def _ocr_page_worker(
-        args: tuple[bytes, int, str, int, str],
+        args: tuple[bytes, int, str, int, str | None],
 ) -> tuple[int, str, Optional[str]]:
     import io
     import pytesseract
@@ -245,7 +245,7 @@ class ScannedPDFReader(BaseReader):
                     try:
                         buf = io.BytesIO()
                         page.save(buf, format="PNG")
-                        payload: tuple[bytes, int, str, int, str] = (
+                        payload: tuple[bytes, int, str, int, str | None] = (
                             buf.getvalue(),
                             next_page_to_submit,
                             self._settings.tesseract_lang,

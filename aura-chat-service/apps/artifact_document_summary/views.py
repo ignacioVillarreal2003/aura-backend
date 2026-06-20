@@ -162,6 +162,8 @@ class DocumentSummaryGenerateView(APIView):
                 user=request.user,
                 document_ids=document_ids,
                 chat_id=chat_id,
+                retrieve_context=d.get("retrieve_context"),
+                process_documents=d.get("process_documents"),
             )
 
         return Response(

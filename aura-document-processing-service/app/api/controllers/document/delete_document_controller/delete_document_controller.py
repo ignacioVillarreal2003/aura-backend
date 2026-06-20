@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.ext.asyncio.session import AsyncSession
 
-from app.api.controllers.document.delete_document_controller.delete_document_controller_interface import (
+from app.api.controllers.document.delete_document_controller.interfaces.delete_document_controller_interface import (
     DeleteDocumentControllerInterface,
 )
 from app.api.dependencies.rate_limiter import strict_rate_limit
@@ -14,9 +14,8 @@ from app.application.services.document.delete_document_service.interfaces.delete
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
-from app.api.dependencies.services import (
-    get_delete_document_service,
-)
+from app.api.dependencies.services import get_delete_document_service
+
 
 class DeleteDocumentController(DeleteDocumentControllerInterface):
     async def soft_delete_document(
@@ -29,7 +28,7 @@ class DeleteDocumentController(DeleteDocumentControllerInterface):
     ) -> Response:
         Authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.SOFT_DELETE_DOCUMENT}),
+            required_permissions=frozenset({Permissions.DOCUMENT_DELETE}),
         )
 
         await delete_document_service.soft_delete_document(
@@ -49,7 +48,7 @@ class DeleteDocumentController(DeleteDocumentControllerInterface):
     ) -> Response:
         Authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.SOFT_DELETE_DOCUMENTS_BY_CHAT}),
+            required_permissions=frozenset({Permissions.DOCUMENT_DELETE}),
         )
 
         await delete_document_service.soft_delete_documents_by_chat(
@@ -59,7 +58,7 @@ class DeleteDocumentController(DeleteDocumentControllerInterface):
         )
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-    async def soft_delete_document_admin(
+    async def soft_delete_document_manage(
             self,
             document_id: int,
             delete_document_service: DeleteDocumentServiceInterface = Depends(get_delete_document_service),
@@ -69,15 +68,16 @@ class DeleteDocumentController(DeleteDocumentControllerInterface):
     ) -> Response:
         Authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.SOFT_DELETE_DOCUMENT_ADMIN}),
+            required_permissions=frozenset({Permissions.DOCUMENT_DELETE_MANAGE}),
         )
 
-        await delete_document_service.soft_delete_document_admin(
+        await delete_document_service.soft_delete_document_manage(
             document_id=document_id,
             database_session=database_session,
             authenticated_user=authenticated_user,
         )
         return Response(status_code=status.HTTP_204_NO_CONTENT)
+
 
 router = APIRouter()
 delete_document_controller = DeleteDocumentController()
@@ -118,17 +118,17 @@ router.add_api_route(
     responses=_response,
 )
 router.add_api_route(
-    "/admin/soft/document/{document_id}",
-    delete_document_controller.soft_delete_document_admin,
+    "/manage/soft/document/{document_id}",
+    delete_document_controller.soft_delete_document_manage,
     methods=["DELETE"],
     response_class=Response,
     response_model=None,
     status_code=status.HTTP_204_NO_CONTENT,
-    operation_id="softDeleteDocumentAdmin",
-    summary="Eliminar documento (admin)",
+    operation_id="softDeleteDocumentManage",
+    summary="Eliminar documento (manage)",
     description=(
         "Marca como eliminado cualquier documento sin restricción de pertenencia al chat "
-        "y responde 204. Requiere permiso de administrador."
+        "y responde 204. Requiere permiso de administración."
     ),
     responses=_response,
 )

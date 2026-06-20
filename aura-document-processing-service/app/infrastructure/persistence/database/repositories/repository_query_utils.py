@@ -12,4 +12,4 @@ def chunked_ids(document_ids: Sequence[int], chunk_size: int = DEFAULT_IN_CLAUSE
         seen.add(doc_id)
         ordered_unique.append(doc_id)
     for i in range(0, len(ordered_unique), chunk_size):
-        yield ordered_unique[i : i + chunk_size]
+        yield ordered_unique[i: i + chunk_size]

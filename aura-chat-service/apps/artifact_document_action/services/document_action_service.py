@@ -41,6 +41,8 @@ def _persist_generated_document_action(
         user_id: int,
         title: str,
         source_chat_id: int,
+        retrieve_context: bool | None,
+        process_documents: bool | None,
         document_ids: list,
         instruction: str,
         action: Optional[str],
@@ -50,7 +52,9 @@ def _persist_generated_document_action(
     artifact = create_artifact_for_content(
         user_id=user_id,
         artifact_type=Artifact.Type.DOCUMENT_ACTION,
-        mode=Artifact.Mode.DIRECT,
+        retrieve_context=retrieve_context,
+        process_documents=process_documents,
+        document_ids=document_ids,
         source_chat_id=source_chat_id,
         fragments=fragments,
     )
@@ -107,6 +111,8 @@ class DocumentActionService(ArtifactCrudService):
             instruction: str,
             action: Optional[str],
             chat_id: int,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
     ) -> tuple[ArtifactDocumentAction, list[dict]]:
         AccessControl.require_permissions(user, frozenset({perms.LLM_DOCUMENT_ACTION_GENERATE}))
 
@@ -126,6 +132,8 @@ class DocumentActionService(ArtifactCrudService):
                     chat_id=chat_id,
                     system_prompt=system_prompt,
                     response_style=response_style,
+                    retrieve_context=retrieve_context,
+                    process_documents=process_documents,
             ):
                 et = event.get("type")
                 if et == "progress":
@@ -164,6 +172,8 @@ class DocumentActionService(ArtifactCrudService):
             user_id=user.id,
             title=title,
             source_chat_id=chat_id,
+            retrieve_context=retrieve_context,
+            process_documents=process_documents,
             document_ids=document_ids,
             instruction=instruction,
             action=action,

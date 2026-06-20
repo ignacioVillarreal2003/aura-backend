@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-
+from typing import Any
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import AcceleratorDevice, AcceleratorOptions, PdfPipelineOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
@@ -50,6 +50,12 @@ class DoclingReader(BaseReader):
                 num_threads=reader_settings.docling_num_threads,
                 device=device,
             )
+
+            # When set (Docker images), Docling loads its layout/tableformer models from
+            # this pre-downloaded path instead of fetching them from the network on the
+            # first conversion. Left unset in local dev so Docling uses its default cache.
+            if reader_settings.docling_artifacts_path:
+                pipeline_options.artifacts_path = reader_settings.docling_artifacts_path
 
             self._converter = DocumentConverter(
                 allowed_formats=[
@@ -135,9 +141,7 @@ class DoclingReader(BaseReader):
             ) from e
 
     @staticmethod
-    def _export_plain_text(document) -> str:
+    def _export_plain_text(document: Any) -> str:
         if hasattr(document, "export_to_text"):
             return (document.export_to_text() or "").strip()
-        # Fallback for older Docling versions: markdown output is handled
-        # downstream by the text cleaner's markdown-stripping step.
         return (document.export_to_markdown() or "").strip()

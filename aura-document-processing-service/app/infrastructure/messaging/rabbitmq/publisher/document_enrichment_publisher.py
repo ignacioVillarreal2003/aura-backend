@@ -10,7 +10,7 @@ from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import
 from app.infrastructure.messaging.rabbitmq.publisher.interfaces.document_enrichment_publisher_interface import (
     DocumentEnrichmentPublisherInterface,
 )
-from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
+from app.infrastructure.messaging.rabbitmq.interfaces.rabbitmq_manager_interface import RabbitMQManagerInterface
 from app.infrastructure.messaging.rabbitmq.reliable_publish.redis_outbox_lite import RedisOutboxLite
 
 logger = logging.getLogger(__name__)
@@ -31,11 +31,13 @@ class DocumentEnrichmentPublisher(DocumentEnrichmentPublisherInterface):
             *,
             document_id: int,
             user: AuthenticatedUser,
+            batch_id: Optional[str] = None,
     ) -> str:
         envelope = MessageEnvelope.wrap(
             DocumentEnrichmentCommand(
                 document_id=document_id,
                 user=user.model_dump(mode="json"),
+                batch_id=batch_id,
                 auth_token=get_request_token(),
             )
         )

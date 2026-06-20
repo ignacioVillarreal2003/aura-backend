@@ -52,7 +52,9 @@ def _persist_generated_decision_brief(
         user_id: int,
         title: str,
         query: str,
-        mode: str,
+        retrieve_context: bool | None,
+        process_documents: bool | None,
+        document_ids: list[int],
         source_chat_id: int,
         problem: str,
         context: str,
@@ -64,7 +66,9 @@ def _persist_generated_decision_brief(
     artifact = create_artifact_for_content(
         user_id=user_id,
         artifact_type=Artifact.Type.DECISION_BRIEF,
-        mode=mode,
+        retrieve_context=retrieve_context,
+        process_documents=process_documents,
+        document_ids=document_ids,
         source_chat_id=source_chat_id,
         fragments=fragments,
     )
@@ -118,8 +122,10 @@ class DecisionBriefService(ArtifactCrudService):
             self,
             user: AuthenticatedUser,
             message: str,
-            mode: str,
             chat_id: int,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
+            document_ids: list[int] | None = None,
     ) -> tuple[ArtifactDecisionBrief, list[dict], list[dict]]:
         AccessControl.require_permissions(user, frozenset({perms.LLM_DECISION_BRIEF_GENERATE}))
 
@@ -135,11 +141,13 @@ class DecisionBriefService(ArtifactCrudService):
         try:
             async for event in llm_client.generate_decision_brief_stream_events(
                     messages=messages,
-                    mode=mode,
                     user=user,
                     chat_id=chat_id,
                     system_prompt=system_prompt,
                     response_style=response_style,
+                    retrieve_context=retrieve_context,
+                    process_documents=process_documents,
+                    document_ids=document_ids,
             ):
                 et = event.get("type")
                 if et == "progress":
@@ -183,7 +191,9 @@ class DecisionBriefService(ArtifactCrudService):
             user_id=user.id,
             title=title,
             query=message,
-            mode=mode,
+            retrieve_context=retrieve_context,
+            process_documents=process_documents,
+            document_ids=document_ids or [],
             source_chat_id=chat_id,
             problem=str(result_data.get("problem", "")),
             context=str(result_data.get("context", "")),

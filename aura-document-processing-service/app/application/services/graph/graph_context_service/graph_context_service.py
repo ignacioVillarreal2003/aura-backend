@@ -15,13 +15,14 @@ from app.domain.dtos.graph.graph_context.graph_context_response import (
 )
 from app.domain.dtos.graph.graph_entity.graph_entity_response import GraphEntityResponse
 from app.domain.dtos.graph.graph_entity.graph_relation_response import GraphRelationResponse
-from app.infrastructure.http.document_collection_catalog.document_collection_catalog_client_interface import (
+from app.infrastructure.http.authentication_provider.request_token import get_request_token
+from app.infrastructure.http.document_collection_catalog.interfaces.document_collection_catalog_client_interface import (
     DocumentCollectionCatalogClientInterface,
 )
-from app.infrastructure.persistence.graph.repositories.graph_entity_repository.graph_entity_repository_interface import (
+from app.infrastructure.persistence.graph.repositories.interfaces.graph_entity_repository_interface import (
     GraphEntityRepositoryInterface,
 )
-from app.infrastructure.persistence.graph.repositories.graph_relation_repository.graph_relation_repository_interface import (
+from app.infrastructure.persistence.graph.repositories.interfaces.graph_relation_repository_interface import (
     GraphRelationRepositoryInterface,
 )
 
@@ -255,9 +256,10 @@ class GraphContextService(GraphContextServiceInterface):
             user_id: int,
             authorization_header: str | None,
     ) -> list[int]:
+        token = authorization_header or get_request_token()
         accessible = await self._document_collection_catalog_client.fetch_all_accessible_document_ids(
             user_id=user_id,
-            authorization_header=authorization_header,
+            authorization_header=token,
         )
         return list(accessible)
 

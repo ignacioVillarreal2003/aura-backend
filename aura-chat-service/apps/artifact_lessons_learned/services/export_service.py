@@ -2,7 +2,6 @@ import html
 import logging
 
 from core.export import pdf_export
-from apps.artifact.models.artifact import Artifact
 from apps.artifact_lessons_learned.exceptions import LessonsLearnedExportException
 from apps.artifact_lessons_learned.models import ArtifactLessonsLearned, ArtifactLessonsLearnedItem
 
@@ -43,7 +42,7 @@ def _grouped_items(ll: ArtifactLessonsLearned) -> dict:
 
 
 def generate_lessons_learned_pdf(ll: ArtifactLessonsLearned) -> bytes:
-    mode_label = "Con documentos de contexto" if ll.artifact.mode == Artifact.Mode.RAG else "Directo"
+    mode_label = "Con documentos de contexto" if (ll.artifact.retrieve_context or ll.artifact.process_documents) else "Directo"
     created = html.escape(_fmt_dt(ll.created_at))
     grouped = _grouped_items(ll)
 

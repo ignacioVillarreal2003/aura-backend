@@ -13,6 +13,6 @@ class DocumentIngestionCommand(BaseModel):
     created_by: int = Field(..., ge=1)
     user: dict[str, Any] = Field(...)
     prefer_docling: bool = Field(default=False)
-    post_process: bool = Field(default=True)
-    post_process_graph: bool = Field(default=True)
+    enrich: bool = Field(default=True)
+    graph_extract: bool = Field(default=True)
     auth_token: Optional[str] = Field(default=None, repr=False)

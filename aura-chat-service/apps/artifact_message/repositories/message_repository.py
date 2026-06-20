@@ -22,7 +22,6 @@ class MessageRepository:
         artifact = Artifact.objects.create(
             source_chat_id=chat_id,
             type=Artifact.Type.MESSAGE,
-            mode=Artifact.Mode.DIRECT,
             fragments=fragments or None,
             created_by=created_by,
         )

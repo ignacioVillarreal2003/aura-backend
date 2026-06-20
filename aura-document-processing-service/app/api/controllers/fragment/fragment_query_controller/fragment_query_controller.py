@@ -25,6 +25,7 @@ from app.api.dependencies.services import (
     get_fragment_query_service,
 )
 
+
 class FragmentQueryController(FragmentQueryControllerInterface):
     async def retrieve_context_fragments_by_question(
             self,
@@ -36,7 +37,7 @@ class FragmentQueryController(FragmentQueryControllerInterface):
     ) -> FragmentListResponse:
         Authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.LIST_CONTEXT_FRAGMENTS_BY_QUESTION}),
+            required_permissions=frozenset({Permissions.FRAGMENT_QUERY}),
         )
 
         return await fragment_query_service.retrieve_context_fragments_by_question(
@@ -55,7 +56,7 @@ class FragmentQueryController(FragmentQueryControllerInterface):
     ) -> FragmentListResponse:
         Authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.LIST_CONTEXT_FRAGMENTS_BY_DOCUMENTS}),
+            required_permissions=frozenset({Permissions.FRAGMENT_QUERY}),
         )
 
         return await fragment_query_service.retrieve_context_fragments_by_documents(
@@ -63,6 +64,7 @@ class FragmentQueryController(FragmentQueryControllerInterface):
             database_session=database_session,
             authenticated_user=authenticated_user,
         )
+
 
 router = APIRouter()
 fragment_query_controller = FragmentQueryController()

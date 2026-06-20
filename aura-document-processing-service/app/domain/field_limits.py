@@ -70,7 +70,7 @@ MAX_PERMISSIONS: Final[int] = 200
 
 # ─── LLM provider payload ceilings ────────────────────────────────────────────
 
-MAX_LLM_DOCUMENT_NAME_CHARS: Final[int] = 2_048
-MAX_LLM_CLASSIFY_CONTENT_CHARS: Final[int] = 50_000_000
-MAX_LLM_ENRICH_CONTENT_CHARS: Final[int] = 10_000_000
-MAX_LLM_EXTRACT_CONTENT_CHARS: Final[int] = 10_000_000
+MAX_LLM_DOCUMENT_NAME_CHARS: Final[int] = 255
+MAX_LLM_CLASSIFY_CONTENT_CHARS: Final[int] = 50_000
+MAX_LLM_ENRICH_CONTENT_CHARS: Final[int] = 50_000
+MAX_LLM_EXTRACT_CONTENT_CHARS: Final[int] = 50_000

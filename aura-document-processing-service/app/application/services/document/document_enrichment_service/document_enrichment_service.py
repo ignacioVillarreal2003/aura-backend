@@ -1,5 +1,6 @@
 import logging
 from typing import Optional
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.services.document.document_enrichment_service.interfaces.document_enrichment_service_interface import (
     DocumentEnrichmentServiceInterface,
@@ -12,10 +13,10 @@ from app.application.services.fragment.post_process_fragment_service.interfaces.
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.processing_status import ProcessingStatus
-from app.infrastructure.persistence.database.database_manager.database_manager_interface import (
+from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
     DatabaseManagerInterface,
 )
-from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
+from app.infrastructure.persistence.database.repositories.interfaces.document_repository_interface import (
     DocumentRepositoryInterface,
 )
 
@@ -89,7 +90,7 @@ class DocumentEnrichmentService(DocumentEnrichmentServiceInterface):
             status: ProcessingStatus,
     ) -> None:
         try:
-            async def _operation(session):
+            async def _operation(session: AsyncSession) -> None:
                 document = await self._document_repository.get_document_by_id(
                     document_id=document_id,
                     database_session=session,

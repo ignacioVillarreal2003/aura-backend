@@ -11,8 +11,14 @@ class FragmentQueryServiceSettings(BaseSettings):
         extra="ignore",
     )
 
-    similarity_threshold: float = Field(default=0.65, ge=0.0, le=1.0)
+    similarity_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+
+    respect_section_boundaries: bool = Field(default=True)
 
     bm25_rrf_k: int = Field(default=60, ge=1, le=10_000)
     bm25_min_score: float = Field(default=0.0)
     bm25_query_max_chars: int = Field(default=512, ge=1, le=4_000)
+
+    max_retrieval_concurrency: int = Field(default=8, ge=1, le=64)
+
+    rerank_candidate_pool_cap: int = Field(default=200, ge=1, le=1_000)

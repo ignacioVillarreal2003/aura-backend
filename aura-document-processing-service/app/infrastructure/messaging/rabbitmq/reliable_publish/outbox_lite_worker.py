@@ -9,8 +9,8 @@ from app.infrastructure.messaging.rabbitmq.dtos.commands.document_ingestion_comm
 from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
 from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_settings import RabbitMQManagerSettings
 from app.infrastructure.messaging.rabbitmq.reliable_publish.redis_outbox_lite import RedisOutboxLite
-from app.infrastructure.persistence.database.database_manager.database_manager_interface import DatabaseManagerInterface
-from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
+from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import DatabaseManagerInterface
+from app.infrastructure.persistence.database.repositories.interfaces.document_repository_interface import (
     DocumentRepositoryInterface,
 )
 from app.infrastructure.persistence.memory_database.redis_client.redis_client_settings import RedisClientSettings
@@ -84,9 +84,6 @@ class OutboxLiteWorker:
             if already_published:
                 continue
 
-            # System-initiated recovery: there is no request context, so we act as a
-            # bare owner principal (id only, no email/token). Downstream LLM steps that
-            # require a token will dead-letter; embeddings still complete.
             system_principal = AuthenticatedUser(id=UserId(int(document.created_by)))
             command = DocumentIngestionCommand(
                 document_id=document.id,

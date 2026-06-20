@@ -42,6 +42,8 @@ def _persist_generated_document_summary(
         user_id: int,
         title: str,
         source_chat_id: int,
+        retrieve_context: bool | None,
+        process_documents: bool | None,
         document_ids: list,
         summary: str,
         fragments=None,
@@ -49,7 +51,9 @@ def _persist_generated_document_summary(
     artifact = create_artifact_for_content(
         user_id=user_id,
         artifact_type=Artifact.Type.DOCUMENT_SUMMARY,
-        mode=Artifact.Mode.DIRECT,
+        retrieve_context=retrieve_context,
+        process_documents=process_documents,
+        document_ids=document_ids,
         source_chat_id=source_chat_id,
         fragments=fragments,
     )
@@ -102,6 +106,8 @@ class DocumentSummaryService(ArtifactCrudService):
             user: AuthenticatedUser,
             document_ids: list,
             chat_id: int,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
     ) -> tuple[ArtifactDocumentSummary, list[dict]]:
         AccessControl.require_permissions(user, frozenset({perms.LLM_DOCUMENT_SUMMARY_GENERATE}))
 
@@ -119,6 +125,8 @@ class DocumentSummaryService(ArtifactCrudService):
                     chat_id=chat_id,
                     system_prompt=system_prompt,
                     response_style=response_style,
+                    retrieve_context=retrieve_context,
+                    process_documents=process_documents,
             ):
                 et = event.get("type")
                 if et == "progress":
@@ -157,6 +165,8 @@ class DocumentSummaryService(ArtifactCrudService):
             user_id=user.id,
             title=title,
             source_chat_id=chat_id,
+            retrieve_context=retrieve_context,
+            process_documents=process_documents,
             document_ids=document_ids,
             summary=summary,
             fragments=fragments,

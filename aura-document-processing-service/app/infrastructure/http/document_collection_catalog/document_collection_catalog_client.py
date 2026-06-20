@@ -2,14 +2,14 @@ import logging
 from typing import Any, Optional
 import httpx
 
-from app.infrastructure.http.document_collection_catalog.document_collection_catalog_client_interface import (
+from app.infrastructure.http.document_collection_catalog.interfaces.document_collection_catalog_client_interface import (
     DocumentCollectionCatalogClientInterface,
 )
 from app.infrastructure.http.document_collection_catalog.document_collection_catalog_settings import (
     DocumentCollectionCatalogSettings,
 )
-from app.infrastructure.http.http_client.http_client_exceptions import HttpClientException
-from app.infrastructure.http.http_client.http_client_interface import HttpClientInterface
+from app.infrastructure.http.http_client.exceptions.http_client_exceptions import HttpClientException
+from app.infrastructure.http.http_client.interfaces.http_client_interface import HttpClientInterface
 
 logger = logging.getLogger(__name__)
 
@@ -120,16 +120,10 @@ class DocumentCollectionCatalogClient(DocumentCollectionCatalogClientInterface):
             authorization_header: str | None,
     ) -> dict[str, str] | None:
         bearer = self._normalize_bearer(authorization_header)
-        if bearer is not None:
-            return {
-                "Authorization": bearer,
-                "Accept": "application/json",
-            }
-        fallback_bearer = self._normalize_bearer(self._settings.fallback_bearer_token)
-        if fallback_bearer is None:
+        if bearer is None:
             return None
         return {
-            "Authorization": fallback_bearer,
+            "Authorization": bearer,
             "Accept": "application/json",
         }
 

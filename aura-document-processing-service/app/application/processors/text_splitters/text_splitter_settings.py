@@ -1,5 +1,5 @@
 import logging
-from typing import Literal
+from typing import Literal, Optional
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -17,7 +17,8 @@ class TextSplitterSettings(BaseSettings):
         extra="ignore"
     )
 
-    active_type: TextSplitterType = Field(default=TextSplitterType.recursive)
+    active_type: TextSplitterType = Field(default=TextSplitterType.docling_hybrid)
+    structured_fallback_type: TextSplitterType = Field(default=TextSplitterType.huggingface)
 
     max_text_length: int = Field(default=10_000_000, gt=0)
     min_chunk_chars: int = Field(default=150, ge=0)
@@ -46,6 +47,15 @@ class TextSplitterSettings(BaseSettings):
                                  "gpt2"
                              ] | str = Field(default="cl100k_base")
 
+    docling_tokenizer_model: str = Field(
+        default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    )
+    docling_max_tokens: int = Field(default=512, gt=0, le=8192)
+    docling_merge_peers: bool = Field(default=True)
+    docling_device: Literal["cpu", "cuda", "mps", "auto"] = Field(default="auto")
+    docling_num_threads: int = Field(default=4, ge=1, le=16)
+    docling_artifacts_path: Optional[str] = Field(default=None)
+
     @model_validator(
         mode="after"
     )
@@ -53,9 +63,16 @@ class TextSplitterSettings(BaseSettings):
             self
     ) -> "TextSplitterSettings":
         self._validate_common()
-        if self.active_type == TextSplitterType.recursive:
+        if self.structured_fallback_type == TextSplitterType.docling_hybrid:
+            raise ValueError("structured_fallback_type must be a flat-text splitter, not docling_hybrid.")
+        effective_type = (
+            self.structured_fallback_type
+            if self.active_type == TextSplitterType.docling_hybrid
+            else self.active_type
+        )
+        if effective_type == TextSplitterType.recursive:
             self._validate_recursive()
-        elif self.active_type == TextSplitterType.huggingface:
+        elif effective_type == TextSplitterType.huggingface:
             self._validate_huggingface()
         return self
 
@@ -78,7 +95,8 @@ class TextSplitterSettings(BaseSettings):
             raise ValueError("The Hugging Face breakpoint threshold amount must be greater than zero.")
 
         if self.huggingface_chunk_token_overlap >= self.huggingface_max_chunk_tokens:
-            raise ValueError("huggingface_chunk_token_overlap must be strictly smaller than huggingface_max_chunk_tokens.")
+            raise ValueError(
+                "huggingface_chunk_token_overlap must be strictly smaller than huggingface_max_chunk_tokens.")
 
     def _validate_recursive(
             self

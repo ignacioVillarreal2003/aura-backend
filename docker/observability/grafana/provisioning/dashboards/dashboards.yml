@@ -1,0 +1,16 @@
+apiVersion: 1
+
+providers:
+  - name: 'aura-dashboards'
+    orgId: 1
+    folder: 'AURA'
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      # Grafana loads every *.json in this path as a dashboard. The provider
+      # YAML files in the same directory are ignored by the dashboard loader.
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: false

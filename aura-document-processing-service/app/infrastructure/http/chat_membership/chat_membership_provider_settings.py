@@ -14,4 +14,3 @@ class ChatMembershipProviderSettings(BaseSettings):
 
     membership_url: Optional[str] = Field(default=None)
     request_timeout_seconds: float = Field(default=15.0, gt=0, le=120.0)
-    fallback_bearer_token: Optional[str] = Field(default=None)

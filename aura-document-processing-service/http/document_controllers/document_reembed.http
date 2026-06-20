@@ -1,0 +1,46 @@
+@dpsBase = http://localhost:8000/api/v1
+@authToken = user_token_123
+
+### Re-embeber un documento (solo fragmentos desactualizados)
+POST {{dpsBase}}/document-reembed
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "selector": { "document_ids": [1] }
+}
+
+
+### Re-embeber varios documentos
+POST {{dpsBase}}/document-reembed
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "selector": { "document_ids": [1, 2, 3] }
+}
+
+
+### Re-embeber TODA la base (migración de modelo, de a poco)
+POST {{dpsBase}}/document-reembed
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "selector": { "all_documents": true }
+}
+
+
+### Estado del job de re-embedding
+GET {{dpsBase}}/document-reembed/status
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Detener el job en curso
+DELETE {{dpsBase}}/document-reembed/stop
+Accept: application/json
+Authorization: Bearer {{authToken}}

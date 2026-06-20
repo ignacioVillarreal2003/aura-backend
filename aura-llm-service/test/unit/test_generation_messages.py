@@ -49,6 +49,25 @@ class TestBuildContextBlock:
         block = build_context_block(state, max_context_chars=1000)
         assert "Reglamento X" in block
 
+    def test_fragment_header_includes_page_and_section(self, make_fragment):
+        state = _state()
+        state.fragments = [
+            make_fragment(
+                document_name="Reglamento X",
+                content="dato",
+                page_number=4,
+                heading="Disposiciones generales",
+            )
+        ]
+        block = build_context_block(state, max_context_chars=1000)
+        assert "[FRAGMENTO 1 — Reglamento X · pág. 4 · Disposiciones generales]" in block
+
+    def test_fragment_header_without_metadata_stays_plain(self, make_fragment):
+        state = _state()
+        state.fragments = [make_fragment(document_name="Reglamento X", content="dato")]
+        block = build_context_block(state, max_context_chars=1000)
+        assert "[FRAGMENTO 1 — Reglamento X]" in block
+
     def test_budget_limits_rag_fragments(self, make_fragment):
         state = _state()
         state.fragments = [

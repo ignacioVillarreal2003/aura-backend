@@ -1,9 +1,9 @@
 """
 Tests for the authentication middleware.
 
-Uses GET /api/v1/document-query/documents as a stable authenticated endpoint.
+Uses GET /api/v1/document-query/manage/documents as a stable authenticated endpoint.
 """
-_URL = "/api/v1/document-query/documents"
+_URL = "/api/v1/document-query/manage/documents"
 
 
 class TestBearerTokenAuth:

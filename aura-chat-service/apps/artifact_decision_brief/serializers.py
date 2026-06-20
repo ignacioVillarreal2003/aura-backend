@@ -1,6 +1,5 @@
 from rest_framework import serializers
 
-from apps.artifact.models.artifact import Artifact
 from apps.artifact.shared_serializers import FragmentSerializer as _FragmentSerializer, \
     MessageSerializer as _MessageSerializer
 from apps.artifact_decision_brief.models import ArtifactDecisionBrief, ArtifactDecisionBriefOption
@@ -8,10 +7,28 @@ from core.validators.audio import MAX_AUDIO_MB as _MAX_AUDIO_MB, SUPPORTED_AUDIO
 
 
 class GenerateDecisionBriefRequest(serializers.Serializer):
-    mode = serializers.ChoiceField(choices=Artifact.Mode.choices)
     message = serializers.CharField(allow_blank=False, max_length=4000, required=False)
     audio = serializers.FileField(required=False)
     chat_id = serializers.IntegerField()
+    retrieve_context = serializers.BooleanField(
+        required=False,
+        allow_null=True,
+        default=None,
+        help_text="Recuperar contexto de la base de conocimiento. Si se omite, usa el default del servicio.",
+    )
+    process_documents = serializers.BooleanField(
+        required=False,
+        allow_null=True,
+        default=None,
+        help_text="Procesar el contenido completo de los documentos adjuntos. Si se omite, usa el default del servicio.",
+    )
+    document_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        default=list,
+        max_length=20,
+        help_text="IDs de documentos a adjuntar como contexto prioritario (opcional).",
+    )
 
     def validate_audio(self, file):
         content_type = getattr(file, "content_type", "")
@@ -41,7 +58,9 @@ class DecisionBriefOptionResponse(serializers.ModelSerializer):
 
 class DecisionBriefResponse(serializers.ModelSerializer):
     options = DecisionBriefOptionResponse(many=True)
-    mode = serializers.SerializerMethodField()
+    retrieve_context = serializers.SerializerMethodField()
+    process_documents = serializers.SerializerMethodField()
+    document_ids = serializers.SerializerMethodField()
     source_chat_id = serializers.SerializerMethodField()
 
     class Meta:
@@ -55,7 +74,9 @@ class DecisionBriefResponse(serializers.ModelSerializer):
             "context",
             "risks",
             "recommendation",
-            "mode",
+            "retrieve_context",
+            "process_documents",
+            "document_ids",
             "options",
             "source_chat_id",
             "created_by",
@@ -63,8 +84,14 @@ class DecisionBriefResponse(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    def get_mode(self, obj) -> str:
-        return obj.artifact.mode if obj.artifact_id else ""
+    def get_retrieve_context(self, obj) -> bool | None:
+        return obj.artifact.retrieve_context if obj.artifact_id else None
+
+    def get_process_documents(self, obj) -> bool | None:
+        return obj.artifact.process_documents if obj.artifact_id else None
+
+    def get_document_ids(self, obj) -> list[int]:
+        return obj.artifact.document_ids if obj.artifact_id else []
 
     def get_source_chat_id(self, obj) -> int | None:
         return obj.artifact.source_chat_id if obj.artifact_id else None
@@ -81,7 +108,9 @@ class DecisionBriefGenerateResponse(serializers.Serializer):
 
 class DecisionBriefListResponse(serializers.ModelSerializer):
     option_count = serializers.SerializerMethodField()
-    mode = serializers.SerializerMethodField()
+    retrieve_context = serializers.SerializerMethodField()
+    process_documents = serializers.SerializerMethodField()
+    document_ids = serializers.SerializerMethodField()
     source_chat_id = serializers.SerializerMethodField()
 
     class Meta:
@@ -90,7 +119,9 @@ class DecisionBriefListResponse(serializers.ModelSerializer):
             "id",
             "artifact_id",
             "title",
-            "mode",
+            "retrieve_context",
+            "process_documents",
+            "document_ids",
             "source_chat_id",
             "option_count",
             "created_by",
@@ -101,8 +132,14 @@ class DecisionBriefListResponse(serializers.ModelSerializer):
     def get_option_count(self, obj: ArtifactDecisionBrief) -> int:
         return getattr(obj, "option_count", 0)
 
-    def get_mode(self, obj) -> str:
-        return obj.artifact.mode if obj.artifact_id else ""
+    def get_retrieve_context(self, obj) -> bool | None:
+        return obj.artifact.retrieve_context if obj.artifact_id else None
+
+    def get_process_documents(self, obj) -> bool | None:
+        return obj.artifact.process_documents if obj.artifact_id else None
+
+    def get_document_ids(self, obj) -> list[int]:
+        return obj.artifact.document_ids if obj.artifact_id else []
 
     def get_source_chat_id(self, obj) -> int | None:
         return obj.artifact.source_chat_id if obj.artifact_id else None

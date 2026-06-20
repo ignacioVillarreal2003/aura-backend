@@ -1,0 +1,7 @@
+@dpsBase = http://localhost:8000/api/v1
+@authToken = user_token_123
+
+### Estadísticas del grafo de conocimiento (manage / admin)
+GET {{dpsBase}}/graph/stats/manage
+Accept: application/json
+Authorization: Bearer {{authToken}}

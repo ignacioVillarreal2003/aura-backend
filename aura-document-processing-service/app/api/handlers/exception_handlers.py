@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import Any
 from fastapi import Request, status, FastAPI
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
@@ -10,7 +10,7 @@ from app.application.exceptions.app_exception import AppException
 logger = logging.getLogger(__name__)
 
 
-def _get_request_id(request: Request) -> Optional[str]:
+def _get_request_id(request: Request) -> str | None:
     return getattr(request.state, "request_id", None)
 
 
@@ -43,7 +43,7 @@ async def app_exception_handler(
         },
     )
 
-    content: dict = {"error": exc.code, "message": exc.message}
+    content: dict[str, Any] = {"error": exc.code, "message": exc.message}
     if request_id:
         content["request_id"] = request_id
 
@@ -65,7 +65,7 @@ async def request_validation_exception_handler(
             "path": request.url.path,
         },
     )
-    content: dict = {
+    content: dict[str, Any] = {
         "error": "ValidationError",
         "message": "Request validation failed",
         "detail": errors,
@@ -94,7 +94,7 @@ async def http_exception_handler(
             "path": request.url.path,
         },
     )
-    content: dict = {"error": "HttpError", "message": exc.detail}
+    content: dict[str, Any] = {"error": "HttpError", "message": exc.detail}
     if request_id:
         content["request_id"] = request_id
 
@@ -117,7 +117,7 @@ async def general_exception_handler(
             "path": request.url.path,
         },
     )
-    content: dict = {
+    content: dict[str, Any] = {
         "error": "InternalServerError",
         "message": "An unexpected error occurred",
     }

@@ -1,10 +1,21 @@
 import logging
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
 _PRODUCTION_ENVIRONMENT_NAMES = frozenset({"production", "prod"})
+
+_DEFAULT_CORS_ORIGINS = [
+    "http://localhost:3000", "http://127.0.0.1:3000",
+    "http://localhost:4200", "http://127.0.0.1:4200",
+    "http://localhost:8000", "http://127.0.0.1:8000",
+    "http://localhost:8001", "http://127.0.0.1:8001",
+    "http://localhost:8002", "http://127.0.0.1:8002",
+    "http://localhost:8003", "http://127.0.0.1:8003",
+    "http://localhost:8004", "http://127.0.0.1:8004",
+    "http://localhost:8005", "http://127.0.0.1:8005",
+]
 
 
 class EnvironmentVariables(BaseSettings):
@@ -21,8 +32,9 @@ class EnvironmentVariables(BaseSettings):
     app_host: str = Field(default="0.0.0.0")
     app_port: int = Field(default=8000, ge=1, le=65535)
     app_reload: bool = Field(default=False)
+    require_gpu: bool = Field(default=False)
     log_level: str = Field(default="INFO")
-    cors_origins: list[str] = Field(default=["*"])
+    cors_origins: list[str] = Field(default_factory=lambda: list(_DEFAULT_CORS_ORIGINS))
     environment: str = Field(default="development")
 
     @field_validator(
@@ -53,6 +65,18 @@ class EnvironmentVariables(BaseSettings):
             raise ValueError("At least one CORS origin must be specified")
 
         return v
+
+    @model_validator(mode="after")
+    def validate_cors_not_wildcard_in_production(self) -> "EnvironmentVariables":
+        if self.is_production() and any(
+                (o or "").strip() == "*" for o in self.cors_origins
+        ):
+            raise ValueError(
+                "Wildcard CORS origin '*' is not allowed when "
+                f"ENVIRONMENT='{self.environment}'. Specify explicit origins."
+            )
+
+        return self
 
     def log_configuration(
             self

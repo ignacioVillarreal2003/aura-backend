@@ -2,7 +2,7 @@ import logging
 from typing import Any, Optional
 import httpx
 
-from app.infrastructure.http.chat_membership.chat_membership_provider_interface import (
+from app.infrastructure.http.chat_membership.interfaces.chat_membership_provider_interface import (
     ChatMembershipProviderInterface,
 )
 from app.infrastructure.http.chat_membership.chat_membership_provider_settings import (
@@ -11,8 +11,8 @@ from app.infrastructure.http.chat_membership.chat_membership_provider_settings i
 from app.infrastructure.http.chat_membership.dtos.chat_membership_response import (
     ChatMembershipResponse,
 )
-from app.infrastructure.http.http_client.http_client_exceptions import HttpClientException
-from app.infrastructure.http.http_client.http_client_interface import HttpClientInterface
+from app.infrastructure.http.http_client.exceptions.http_client_exceptions import HttpClientException
+from app.infrastructure.http.http_client.interfaces.http_client_interface import HttpClientInterface
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +51,6 @@ class ChatMembershipProvider(ChatMembershipProviderInterface):
             return _NOT_A_MEMBER
 
         base = self._settings.membership_url.rstrip("/")
-        # The chat service is a Django app that enforces trailing slashes; without
-        # it the request is 301-redirected and the (non-redirect-following) client
-        # would misread the empty body as "not a member".
         url = f"{base}/internal/chats/{chat_id}/members/{user_id}/"
         timeout = self._settings.request_timeout_seconds
 
@@ -108,16 +105,10 @@ class ChatMembershipProvider(ChatMembershipProviderInterface):
             authorization_header: str | None,
     ) -> dict[str, str] | None:
         bearer = self._normalize_bearer(authorization_header)
-        if bearer is not None:
-            return {
-                "Authorization": bearer,
-                "Accept": "application/json",
-            }
-        fallback_bearer = self._normalize_bearer(self._settings.fallback_bearer_token)
-        if fallback_bearer is None:
+        if bearer is None:
             return None
         return {
-            "Authorization": fallback_bearer,
+            "Authorization": bearer,
             "Accept": "application/json",
         }
 

@@ -78,8 +78,9 @@ CREATE TABLE artifact
                                                      'TIMELINE', 'LESSONS_LEARNED', 'DECISION_BRIEF',
                                                      'DOCUMENT_SUMMARY', 'DOCUMENT_ACTION'
             )),
-    mode           VARCHAR(16) NOT NULL DEFAULT 'direct'
-        CONSTRAINT chk_artifact_mode CHECK (mode IN ('direct', 'rag')),
+    retrieve_context  BOOLEAN,
+    process_documents BOOLEAN,
+    document_ids      JSONB       NOT NULL DEFAULT '[]'::jsonb,
     fragments      JSONB,
     source_chat_id BIGINT      NOT NULL
         CONSTRAINT fk_artifact_source_chat REFERENCES chat (id) ON DELETE CASCADE,

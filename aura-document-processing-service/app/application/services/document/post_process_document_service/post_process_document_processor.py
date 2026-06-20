@@ -1,5 +1,6 @@
 import logging
 from typing import Optional
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.services.document.post_process_document_service.interfaces.post_process_document_processor_interface import (
     PostProcessDocumentProcessorInterface,
@@ -10,22 +11,22 @@ from app.application.services.document.post_process_document_service.post_proces
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.persistence.database.orm.document import Document
 from app.infrastructure.persistence.database.orm.fragment import Fragment
-from app.infrastructure.http.llm_provider.llm_provider_interface import LlmProviderInterface
+from app.infrastructure.http.llm_provider.interfaces.llm_provider_interface import LlmProviderInterface
 from app.infrastructure.http.llm_provider.llm_provider_settings import LlmProviderSettings
-from app.infrastructure.persistence.database.database_manager.database_manager_interface import (
+from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
     DatabaseManagerInterface,
 )
-from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
+from app.infrastructure.persistence.database.repositories.interfaces.document_repository_interface import (
     DocumentRepositoryInterface,
 )
-from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository_interface import (
+from app.infrastructure.persistence.database.repositories.interfaces.fragment_repository_interface import (
     FragmentRepositoryInterface,
 )
 
 logger = logging.getLogger(__name__)
 
 
-def _safe_fragment_index(fragment) -> int:
+def _safe_fragment_index(fragment: Fragment) -> int:
     try:
         return int(fragment.fragment_index)
     except (TypeError, ValueError):
@@ -76,7 +77,7 @@ class PostProcessDocumentProcessor(PostProcessDocumentProcessorInterface):
             authenticated_user=user,
         )
 
-        async def _operation(session):
+        async def _operation(session: AsyncSession) -> None:
             document = await self._document_repository.get_document_by_id(
                 document_id=document_id,
                 database_session=session,
@@ -136,13 +137,6 @@ class PostProcessDocumentProcessor(PostProcessDocumentProcessorInterface):
             self,
             fragments: list[Fragment],
     ) -> list[Fragment]:
-        """Pick a representative, evenly-spaced sample across the document.
-
-        Instead of feeding the whole document (or only its head) to the
-        classifier, take ``classify_sample_size`` fragments spread uniformly
-        from start to end. This keeps the prompt bounded and cheap while still
-        covering the beginning, middle and end of the document.
-        """
         ordered = sorted(fragments, key=lambda f: _safe_fragment_index(f))
         sample_size = self._settings.classify_sample_size
         total = len(ordered)

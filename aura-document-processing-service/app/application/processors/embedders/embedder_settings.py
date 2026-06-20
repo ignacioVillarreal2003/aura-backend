@@ -66,9 +66,32 @@ class EmbedderSettings(BaseSettings):
     huggingface_token: Optional[str] = Field(default=None)
     huggingface_device: Literal["cpu", "cuda"] = "cpu"
     huggingface_normalize_embeddings: bool = Field(default=True)
-
+    huggingface_max_seq_length: Optional[int] = Field(default=None, gt=0, le=8192)
     huggingface_query_instruction: str = Field(default="")
     huggingface_embed_instruction: str = Field(default="")
+
+    @property
+    def active_model_name(self) -> str:
+        if self.active_type == EmbedderType.ollama:
+            return self.ollama_model
+        if self.active_type == EmbedderType.huggingface:
+            return self.huggingface_model
+        return str(self.active_type)
+
+    @property
+    def active_embedding_identity(self) -> str:
+        parts = [
+            f"type={self.active_type.value}",
+            f"model={self.active_model_name}",
+            f"dim={self.vector_dimension}",
+        ]
+        if self.active_type == EmbedderType.huggingface:
+            parts.append(f"norm={int(self.huggingface_normalize_embeddings)}")
+            if self.huggingface_max_seq_length is not None:
+                parts.append(f"msl={self.huggingface_max_seq_length}")
+            parts.append(f"qi={self.huggingface_query_instruction}")
+            parts.append(f"di={self.huggingface_embed_instruction}")
+        return "v1|" + "|".join(parts)
 
     @model_validator(
         mode="after"
@@ -98,7 +121,7 @@ class EmbedderSettings(BaseSettings):
 
     def _validate_all(
             self
-    ):
+    ) -> None:
         if self.retry_max_delay < self.retry_delay:
             raise ValueError("The maximum retry delay must be greater than or equal to the initial retry delay.")
         if self.max_batch_size > 1 and self.max_text_length < 32:
@@ -128,10 +151,3 @@ class EmbedderSettings(BaseSettings):
             raise ValueError("The Hugging Face model name cannot be empty.")
 
         self.huggingface_model = self.huggingface_model.strip()
-
-        # Auto-apply e5 asymmetric prefixes when not explicitly set
-        if "e5" in self.huggingface_model.lower():
-            if not self.huggingface_query_instruction:
-                self.huggingface_query_instruction = "query: "
-            if not self.huggingface_embed_instruction:
-                self.huggingface_embed_instruction = "passage: "

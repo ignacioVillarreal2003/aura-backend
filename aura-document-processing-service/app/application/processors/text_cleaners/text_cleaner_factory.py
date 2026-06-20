@@ -39,7 +39,6 @@ class TextCleanerFactory:
 
         self._lock = threading.Lock()
         self._cleaner: TextCleanerInterface | None = None
-        self._instances: dict[TextCleanerType, TextCleanerInterface] = {}
 
         logger.info(
             "The text cleaner factory was created.",
@@ -62,37 +61,10 @@ class TextCleanerFactory:
 
         return self._cleaner
 
-    def get_by_type(
-            self,
-            cleaner_type: TextCleanerType
-    ) -> TextCleanerInterface:
-        if cleaner_type not in _TEXT_CLEANER_REGISTRY:
-            raise UnsupportedTextCleanerTypeException("That text cleaner type is not supported.")
-
-        if cleaner_type in self._instances:
-            return self._instances[cleaner_type]
-
-        with self._lock:
-            if cleaner_type not in self._instances:
-                self._instances[cleaner_type] = self._build_by_type(cleaner_type)
-
-        return self._instances[cleaner_type]
-
     def get_active_type(
             self
     ) -> TextCleanerType:
         return self._active_type
-
-    def is_supported(
-            self,
-            text_cleaner_type: TextCleanerType
-    ) -> bool:
-        return text_cleaner_type in _TEXT_CLEANER_REGISTRY
-
-    def available_types(
-            self
-    ) -> list[TextCleanerType]:
-        return list(_TEXT_CLEANER_REGISTRY.keys())
 
     def _build_cleaner(
             self
@@ -119,36 +91,6 @@ class TextCleanerFactory:
                 "An unexpected error occurred while initializing the text cleaner.",
                 extra={
                     "cleaner_type": self._active_type,
-                    "exception_type": type(e).__name__
-                }
-            )
-            raise TextCleanerInitializationException("Failed to initialize the text cleaner.") from e
-
-    def _build_by_type(
-            self,
-            cleaner_type: TextCleanerType
-    ) -> TextCleanerInterface:
-        dotted_path = _TEXT_CLEANER_REGISTRY[cleaner_type]
-
-        try:
-            cleaner_class = _import_cleaner_class(dotted_path)
-            instance = cleaner_class(text_cleaner_settings=self._settings)
-
-            logger.info(
-                "The text cleaner was initialized.",
-                extra={
-                    "cleaner_type": cleaner_type
-                }
-            )
-            return instance
-
-        except TextCleanerInitializationException:
-            raise
-        except Exception as e:
-            logger.error(
-                "An unexpected error occurred while initializing the text cleaner.",
-                extra={
-                    "cleaner_type": cleaner_type,
                     "exception_type": type(e).__name__
                 }
             )

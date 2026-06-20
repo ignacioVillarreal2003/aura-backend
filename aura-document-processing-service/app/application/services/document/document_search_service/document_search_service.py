@@ -24,13 +24,14 @@ from app.domain.dtos.document.document_search.document_search_response import (
 )
 from app.domain.dtos.document.document_search.document_similarity_hit import DocumentSimilarityHit
 from app.domain.field_limits import MAX_DOCUMENT_SEARCH_SNIPPET_CHARS
-from app.infrastructure.http.document_collection_catalog.document_collection_catalog_client_interface import (
+from app.infrastructure.http.authentication_provider.request_token import get_request_token
+from app.infrastructure.http.document_collection_catalog.interfaces.document_collection_catalog_client_interface import (
     DocumentCollectionCatalogClientInterface,
 )
-from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
+from app.infrastructure.persistence.database.repositories.interfaces.document_repository_interface import (
     DocumentRepositoryInterface,
 )
-from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository_interface import (
+from app.infrastructure.persistence.database.repositories.interfaces.fragment_repository_interface import (
     FragmentRepositoryInterface,
 )
 
@@ -69,10 +70,11 @@ class DocumentSearchService(DocumentSearchServiceInterface):
         )
 
         try:
+            token = authorization_header or get_request_token()
             accessible_doc_set: set[int] = set(
                 await self._document_collection_catalog_client.fetch_all_accessible_document_ids(
                     user_id=int(authenticated_user.id),
-                    authorization_header=authorization_header,
+                    authorization_header=token,
                 )
             )
             logger.debug(
@@ -151,6 +153,7 @@ class DocumentSearchService(DocumentSearchServiceInterface):
                 k=k,
                 threshold=self._settings.similarity_threshold,
                 pool_size=max(self._settings.candidate_pool_size, k),
+                embedding_identity=self._embedder_factory.get_active_embedding_identity(),
                 document_ids=document_ids,
             )
             logger.debug("Document similarity hits retrieved.", extra={"hit_count": len(hits)})
@@ -170,7 +173,7 @@ class DocumentSearchService(DocumentSearchServiceInterface):
             document_ids=[hit.document_id for hit in hits],
             database_session=database_session,
         )
-        docs_by_id = {doc.id: doc for doc in documents}
+        docs_by_id = {int(doc.id): doc for doc in documents}
 
         results: list[DocumentSearchResultResponse] = []
         for hit in hits:

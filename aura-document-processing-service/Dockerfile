@@ -1,25 +1,21 @@
-FROM python:3.13-slim
+FROM python:3.13-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     HF_HOME=/opt/cache/huggingface \
-    TIKTOKEN_CACHE_DIR=/opt/cache/tiktoken \
-    HF_HUB_DISABLE_TELEMETRY=1
+    TIKTOKEN_CACHE_DIR=/opt/cache/huggingface/tiktoken \
+    HF_HUB_DISABLE_TELEMETRY=1 \
+    HF_HUB_DOWNLOAD_TIMEOUT=30 \
+    VIRTUAL_ENV=/opt/venv \
+    PATH=/opt/venv/bin:$PATH
 
 WORKDIR /application
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    poppler-utils \
-    tesseract-ocr \
-    tesseract-ocr-spa \
-    libgl1 \
-    && rm -rf /var/lib/apt/lists/*
+RUN python -m venv /opt/venv
 
-RUN useradd --create-home --shell /usr/sbin/nologin appuser
+COPY requirements/base.txt requirements/requirements.txt ./requirements/
 
-COPY requirements/requirements.txt .
-
-RUN pip install --no-cache-dir --upgrade -r requirements.txt
+RUN pip install --no-cache-dir -r requirements/requirements.txt
 
 ARG TEXT_SPLITTER_HF_MODEL="sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
 ARG EMBEDDER_HF_MODEL=""
@@ -34,7 +30,33 @@ RUN mkdir -p /opt/cache \
     --sentence-transformer "$EMBEDDER_HF_MODEL" \
     --cross-encoder "$RERANKER_MODEL" \
     --tiktoken "$TIKTOKEN_ENCODING" \
-    && chown -R appuser:appuser /opt/cache
+    --docling-output /opt/cache/huggingface/docling
+
+
+FROM python:3.13-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    HF_HOME=/opt/cache/huggingface \
+    TIKTOKEN_CACHE_DIR=/opt/cache/huggingface/tiktoken \
+    HF_HUB_DISABLE_TELEMETRY=1 \
+    READER_DOCLING_ARTIFACTS_PATH=/opt/cache/huggingface/docling \
+    VIRTUAL_ENV=/opt/venv \
+    PATH=/opt/venv/bin:$PATH
+
+WORKDIR /application
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    poppler-utils \
+    tesseract-ocr \
+    tesseract-ocr-spa \
+    libgl1 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd --create-home --shell /usr/sbin/nologin appuser
+
+COPY --from=builder /opt/venv /opt/venv
+COPY --from=builder --chown=appuser:appuser /opt/cache /opt/cache
 
 COPY ./app ./app
 

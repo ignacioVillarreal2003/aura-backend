@@ -1,0 +1,46 @@
+@dpsBase = http://localhost:8000/api/v1
+@authToken = user_token_123
+
+### Extraer el grafo para un documento (reconstrucción idempotente)
+POST {{dpsBase}}/graph/extraction/manage
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "selector": { "document_ids": [1] }
+}
+
+
+### Extraer el grafo para varios documentos
+POST {{dpsBase}}/graph/extraction/manage
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "selector": { "document_ids": [1, 2, 3] }
+}
+
+
+### Extraer el grafo para TODA la base (de a poco)
+POST {{dpsBase}}/graph/extraction/manage
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "selector": { "all_documents": true }
+}
+
+
+### Estado del job de extracción del grafo
+GET {{dpsBase}}/graph/extraction/manage/status
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Detener el job en curso
+DELETE {{dpsBase}}/graph/extraction/manage/stop
+Accept: application/json
+Authorization: Bearer {{authToken}}
