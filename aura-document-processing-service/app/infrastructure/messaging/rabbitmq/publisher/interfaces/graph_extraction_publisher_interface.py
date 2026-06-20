@@ -11,7 +11,6 @@ class GraphExtractionPublisherInterface(ABC):
             *,
             document_id: int,
             user: AuthenticatedUser,
-            force: bool = False,
             batch_id: Optional[str] = None,
     ) -> str:
         pass

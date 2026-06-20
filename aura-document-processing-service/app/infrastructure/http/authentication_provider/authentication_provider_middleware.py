@@ -6,15 +6,15 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.infrastructure.http.authentication_provider.authentication_provider_exception import (
+from app.infrastructure.http.authentication_provider.exceptions.authentication_provider_exception import (
     AuthenticationProviderException,
     AuthenticationProviderInvalidTokenException,
     AuthenticationProviderServiceUnavailableException,
     AuthenticationProviderUnauthorizedException,
-    AuthenticationProviderUserNotFoundException
+    AuthenticationProviderUserNotFoundException,
 )
-from app.infrastructure.http.authentication_provider.authentication_provider_interface import (
-    AuthenticationProviderInterface
+from app.infrastructure.http.authentication_provider.interfaces.authentication_provider_interface import (
+    AuthenticationProviderInterface,
 )
 from app.infrastructure.http.authentication_provider.request_token import set_request_token
 
@@ -85,24 +85,6 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
                     "error": "missing_token"
                 },
                 headers=WWW_AUTH
-            )
-
-        settings = getattr(request.app.state, "authentication_provider_settings", None)
-        if settings is not None and len(token) > settings.max_bearer_token_characters:
-            logger.warning(
-                "Rejected a bearer token that exceeds the configured maximum length.",
-                extra={
-                    "path": request.url.path,
-                    "error_code": "token_too_long",
-                },
-            )
-            return JSONResponse(
-                status_code=401,
-                content={
-                    "detail": "Bearer token is too long",
-                    "error": "token_too_long",
-                },
-                headers=WWW_AUTH,
             )
 
         return await self._validate_jwt(request, call_next, token, provider)

@@ -11,12 +11,12 @@ from app.infrastructure.messaging.rabbitmq.consumer.bulk_progress_mixin import B
 from app.infrastructure.messaging.rabbitmq.consumer.interfaces.document_enrichment_consumer_interface import (
     DocumentEnrichmentConsumerInterface,
 )
-from app.infrastructure.persistence.memory_database.bulk_job_progress_store.bulk_job_progress_store_interface import (
+from app.infrastructure.persistence.memory_database.bulk_job_progress_store.interfaces.bulk_job_progress_store_interface import (
     BulkJobProgressStoreInterface,
 )
 from app.infrastructure.messaging.rabbitmq.dtos.commands.document_enrichment_command import DocumentEnrichmentCommand
 from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
-from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
+from app.infrastructure.messaging.rabbitmq.interfaces.rabbitmq_manager_interface import RabbitMQManagerInterface
 
 logger = logging.getLogger(__name__)
 

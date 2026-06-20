@@ -15,8 +15,8 @@ from app.infrastructure.messaging.rabbitmq.consumer.interfaces.document_reproces
 )
 from app.infrastructure.messaging.rabbitmq.dtos.commands.document_reprocess_command import DocumentReprocessCommand
 from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
-from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
-from app.infrastructure.persistence.memory_database.bulk_job_progress_store.bulk_job_progress_store_interface import (
+from app.infrastructure.messaging.rabbitmq.interfaces.rabbitmq_manager_interface import RabbitMQManagerInterface
+from app.infrastructure.persistence.memory_database.bulk_job_progress_store.interfaces.bulk_job_progress_store_interface import (
     BulkJobProgressStoreInterface,
 )
 
@@ -64,8 +64,6 @@ class DocumentReprocessConsumer(
         document_id = command.document_id
         user = AuthenticatedUser.model_validate(command.user)
 
-        # Share the ingestion lock so reprocess cannot run concurrently with an
-        # in-flight ingestion/re-embed of the same document.
         lock_key = self._build_document_lock_key(document_id)
         lock_token = f"{envelope.message_id}:{uuid.uuid4().hex}"
         lock_acquired = bool(
@@ -88,16 +86,14 @@ class DocumentReprocessConsumer(
                 document_id=document_id,
                 user=user,
                 prefer_docling=command.prefer_docling,
-                post_process=command.post_process,
-                post_process_graph=command.post_process_graph,
+                enrich=command.enrich,
+                graph_extract=command.graph_extract,
             )
             logger.info(
                 "The document-reprocess message was processed.",
                 extra={"message_id": envelope.message_id, "document_id": document_id, "user_id": user.id},
             )
         finally:
-            # redis-py types eval() as returning ResponseT (Awaitable | Any); on the
-            # async client it is always awaitable.
             await self._redis.eval(_RELEASE_LOCK_SCRIPT, 1, lock_key, lock_token)  # type: ignore[misc]
 
     def _build_document_lock_key(self, document_id: int) -> str:

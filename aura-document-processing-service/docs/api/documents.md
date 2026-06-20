@@ -17,8 +17,8 @@ La ingesta suele ser el punto de entrada del **pipeline** asíncrono; el estado 
 
 El post-procesado (clasificación del documento + enriquecimiento de fragmentos y extracción del grafo de conocimiento) ya no expone endpoints propios: se dispara **durante la ingesta** a partir de dos banderas del formulario de creación:
 
-- `post_process` (bool, default `true`): clasifica el documento (tipo/categoría/descripción) y enriquece sus fragmentos (resumen, entidades, temas).
-- `post_process_graph` (bool, default `true`): encola la extracción del grafo de conocimiento.
+- `enrich` (bool, default `false`): clasifica el documento (tipo/categoría/descripción) y enriquece sus fragmentos (resumen, entidades, temas).
+- `graph_extract` (bool, default `false`): encola la extracción del grafo de conocimiento.
 
 Ambas se ejecutan de forma **best-effort** tras persistir los fragmentos; un fallo en el post-procesado no invalida la ingesta.
 
@@ -60,7 +60,7 @@ Las respuestas suelen ser **204** sin cuerpo cuando la operación concluye corre
 
 ## Resumen
 
-- **Ingesta:** `POST /api/create-document/` con banderas `post_process` y `post_process_graph` (default `true`) que disparan el post-procesado durante la ingesta.
+- **Ingesta:** `POST /api/create-document/` con banderas `enrich` y `graph_extract` (default `false`) que disparan el post-procesado durante la ingesta.
 - **Retrieve:** `GET /api/document-query/...` y `GET /api/document-download/...`.
 - **Fragmentos para contexto:** `/api/fragment-query/...` (contrato en OpenAPI).
 - **Borrado:** `/api/delete-document/...` (soft/hard, por documento o por chat).

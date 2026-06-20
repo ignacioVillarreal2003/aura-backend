@@ -59,7 +59,6 @@ class TestBulkDispatchService:
             operation=BulkOperation.reembed,
             selector=DocumentSelector(document_ids=[10, 11, 12]),
             user=_user(),
-            force=True,
         )
         await _drain(service)
 
@@ -69,7 +68,6 @@ class TestBulkDispatchService:
         assert reembed.publish.await_count == 3
         for call in reembed.publish.await_args_list:
             assert call.kwargs["batch_id"] == result.job_id
-            assert call.kwargs["force"] is True
 
     async def test_all_documents_resolves_via_repository(self):
         store = _store()

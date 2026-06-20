@@ -22,7 +22,7 @@ class TestDeleteDocumentAuth:
     def test_admin_document_without_permission_returns_403(
             self, client, service_headers, mock_delete_document_service
     ):
-        headers = service_headers(permissions=["SOFT_DELETE_DOCUMENT"])
+        headers = service_headers(permissions=["DOCUMENT_DELETE"])
         assert client.delete(ADMIN_DOC_URL, headers=headers).status_code == 403
 
 

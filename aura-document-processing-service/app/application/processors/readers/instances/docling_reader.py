@@ -1,7 +1,6 @@
 import logging
 from pathlib import Path
 from typing import Any
-
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import AcceleratorDevice, AcceleratorOptions, PdfPipelineOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
@@ -145,6 +144,4 @@ class DoclingReader(BaseReader):
     def _export_plain_text(document: Any) -> str:
         if hasattr(document, "export_to_text"):
             return (document.export_to_text() or "").strip()
-        # Fallback for older Docling versions: markdown output is handled
-        # downstream by the text cleaner's markdown-stripping step.
         return (document.export_to_markdown() or "").strip()

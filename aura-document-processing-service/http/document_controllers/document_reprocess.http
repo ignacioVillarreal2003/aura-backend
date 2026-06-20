@@ -9,9 +9,9 @@ Authorization: Bearer {{authToken}}
 
 {
   "selector": { "document_ids": [1] },
-  "prefer_docling": false,
-  "post_process": true,
-  "post_process_graph": true
+  "prefer_docling": true,
+  "enrich": true,
+  "graph_extract": true
 }
 
 
@@ -23,9 +23,9 @@ Authorization: Bearer {{authToken}}
 
 {
   "selector": { "document_ids": [1, 2, 3] },
-  "prefer_docling": false,
-  "post_process": true,
-  "post_process_graph": false
+  "prefer_docling": true,
+  "enrich": true,
+  "graph_extract": false
 }
 
 
@@ -38,8 +38,8 @@ Authorization: Bearer {{authToken}}
 {
   "selector": { "all_documents": true },
   "prefer_docling": true,
-  "post_process": true,
-  "post_process_graph": true
+  "enrich": true,
+  "graph_extract": true
 }
 
 

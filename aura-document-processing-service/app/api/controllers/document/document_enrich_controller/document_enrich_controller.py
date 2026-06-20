@@ -25,13 +25,13 @@ from app.infrastructure.http.authentication_provider.authentication_provider imp
 logger = logging.getLogger(__name__)
 
 _OPERATION = BulkOperation.enrich
-_REQUIRED = frozenset({Permissions.ENRICH_DOCUMENT_MANAGE})
+_REQUIRED = frozenset({Permissions.DOCUMENT_ENRICH_MANAGE})
 
 
 class DocumentEnrichController(DocumentEnrichControllerInterface):
     async def enrich_manage(
             self,
-            request: EnrichRequest,
+            enrich_request: EnrichRequest,
             bulk_dispatch_service: BulkDispatchServiceInterface = Depends(get_bulk_dispatch_service),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
             _rl: None = Depends(strict_rate_limit),
@@ -40,7 +40,7 @@ class DocumentEnrichController(DocumentEnrichControllerInterface):
         try:
             return await bulk_dispatch_service.start(
                 operation=_OPERATION,
-                selector=request.selector,
+                selector=enrich_request.selector,
                 user=authenticated_user,
             )
         except BulkOperationConflictException as e:

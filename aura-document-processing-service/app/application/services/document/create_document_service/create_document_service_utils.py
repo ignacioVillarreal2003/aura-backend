@@ -2,10 +2,10 @@ import logging
 from fastapi import UploadFile
 
 from app.application.services.document.create_document_service.create_document_service_settings import (
-    CreateDocumentServiceSettings
+    CreateDocumentServiceSettings,
 )
 from app.application.services.document.create_document_service.exceptions.create_document_service_exception import (
-    CreateDocumentUnsupportedTypeException
+    CreateDocumentUnsupportedTypeException,
 )
 from app.domain.constants.document.document_mime_type import DocumentMimeType
 

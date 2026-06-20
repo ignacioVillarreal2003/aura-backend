@@ -26,9 +26,8 @@ from app.domain.dtos.document.document_query.document_response import DocumentRe
 from app.domain.dtos.document.document_query.document_status_response import DocumentStatusResponse
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
-from app.api.dependencies.services import (
-    get_document_query_service,
-)
+from app.api.dependencies.services import get_document_query_service
+
 
 class DocumentQueryController(DocumentQueryControllerInterface):
     async def get_document_manage(
@@ -41,7 +40,7 @@ class DocumentQueryController(DocumentQueryControllerInterface):
     ) -> DocumentResponse:
         Authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.GET_DOCUMENT_MANAGE}),
+            required_permissions=frozenset({Permissions.DOCUMENT_QUERY_MANAGE}),
         )
 
         return await document_query_service.get_document_manage(
@@ -60,7 +59,7 @@ class DocumentQueryController(DocumentQueryControllerInterface):
     ) -> DocumentStatusResponse:
         Authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.GET_DOCUMENT_STATUS_MANAGE}),
+            required_permissions=frozenset({Permissions.DOCUMENT_QUERY_MANAGE}),
         )
 
         return await document_query_service.get_document_status_manage(
@@ -79,7 +78,7 @@ class DocumentQueryController(DocumentQueryControllerInterface):
     ) -> DocumentStatusResponse:
         Authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.GET_DOCUMENT_STATUS}),
+            required_permissions=frozenset({Permissions.DOCUMENT_QUERY}),
         )
 
         return await document_query_service.get_document_status(
@@ -105,7 +104,7 @@ class DocumentQueryController(DocumentQueryControllerInterface):
     ) -> DocumentListResponse:
         Authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.LIST_DOCUMENTS_MANAGE}),
+            required_permissions=frozenset({Permissions.DOCUMENT_QUERY_MANAGE}),
         )
 
         return await document_query_service.get_documents_manage(
@@ -133,7 +132,7 @@ class DocumentQueryController(DocumentQueryControllerInterface):
     ) -> DocumentListResponse:
         Authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.LIST_DOCUMENTS_BY_CHAT}),
+            required_permissions=frozenset({Permissions.DOCUMENT_QUERY}),
         )
 
         return await document_query_service.get_documents_by_chat(
@@ -143,6 +142,7 @@ class DocumentQueryController(DocumentQueryControllerInterface):
             page=page,
             size=size,
         )
+
 
 router = APIRouter()
 document_query_controller = DocumentQueryController()

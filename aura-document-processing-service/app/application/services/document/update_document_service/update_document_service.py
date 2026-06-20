@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime, timezone
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
@@ -17,14 +16,12 @@ from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.document.document_query.document_response import DocumentResponse
 from app.domain.dtos.document.update_document.update_document_request import UpdateDocumentRequest
 from app.infrastructure.persistence.database.orm.document import Document
-from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
+from app.infrastructure.persistence.database.repositories.interfaces.document_repository_interface import (
     DocumentRepositoryInterface,
 )
 
 logger = logging.getLogger(__name__)
 
-# Editable metadata fields exposed through the manage update endpoint. Anything
-# outside this set is never written by an update, regardless of the request payload.
 _EDITABLE_FIELDS = frozenset({"name", "description", "category"})
 
 
@@ -54,14 +51,14 @@ class UpdateDocumentService(UpdateDocumentServiceInterface):
             if document_id <= 0:
                 raise UpdateDocumentInvalidRequestException("The document identifier must be a positive number.")
 
-            # Only the fields explicitly present in the request are applied (PATCH).
             changes = {
                 field: value
                 for field, value in update_document_request.model_dump(exclude_unset=True).items()
                 if field in _EDITABLE_FIELDS
             }
             if not changes:
-                raise UpdateDocumentInvalidRequestException("At least one field must be provided to update the document.")
+                raise UpdateDocumentInvalidRequestException(
+                    "At least one field must be provided to update the document.")
 
             document = await self._get_document_or_raise(document_id, database_session)
 

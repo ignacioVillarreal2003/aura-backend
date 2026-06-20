@@ -1,5 +1,4 @@
 import logging
-
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.controllers.document.document_reembed_controller.interfaces.document_reembed_controller_interface import (
@@ -26,13 +25,13 @@ from app.infrastructure.http.authentication_provider.authentication_provider imp
 logger = logging.getLogger(__name__)
 
 _OPERATION = BulkOperation.reembed
-_REQUIRED = frozenset({Permissions.REEMBED_DOCUMENT_MANAGE})
+_REQUIRED = frozenset({Permissions.DOCUMENT_REEMBED_MANAGE})
 
 
 class DocumentReembedController(DocumentReembedControllerInterface):
     async def reembed_manage(
             self,
-            request: ReembedRequest,
+            reembed_request: ReembedRequest,
             bulk_dispatch_service: BulkDispatchServiceInterface = Depends(get_bulk_dispatch_service),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
             _rl: None = Depends(strict_rate_limit),
@@ -41,9 +40,8 @@ class DocumentReembedController(DocumentReembedControllerInterface):
         try:
             return await bulk_dispatch_service.start(
                 operation=_OPERATION,
-                selector=request.selector,
+                selector=reembed_request.selector,
                 user=authenticated_user,
-                force=request.force,
             )
         except BulkOperationConflictException as e:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e

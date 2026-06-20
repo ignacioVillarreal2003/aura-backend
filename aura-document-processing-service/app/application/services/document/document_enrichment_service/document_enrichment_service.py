@@ -13,10 +13,10 @@ from app.application.services.fragment.post_process_fragment_service.interfaces.
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.processing_status import ProcessingStatus
-from app.infrastructure.persistence.database.database_manager.database_manager_interface import (
+from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
     DatabaseManagerInterface,
 )
-from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
+from app.infrastructure.persistence.database.repositories.interfaces.document_repository_interface import (
     DocumentRepositoryInterface,
 )
 

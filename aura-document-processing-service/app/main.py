@@ -27,9 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(
-        app: FastAPI
-):
+async def lifespan(app: FastAPI):
     logger.info("Starting application")
     try:
         await startup_dependencies(
@@ -52,10 +50,8 @@ async def lifespan(
 
 
 def create_app() -> FastAPI:
-    # Fail fast before any resource is wired if the production configuration is unsafe.
     assert_production_invariants()
 
-    # Fail fast on a GPU deployment that cannot reach CUDA (silent CPU fallback).
     verify_gpu_availability()
 
     app = FastAPI(
@@ -96,21 +92,12 @@ def create_app() -> FastAPI:
     return app
 
 
-def _add_middlewares(
-        app: FastAPI
-) -> None:
-    # Order matters: Starlette applies the LAST-registered middleware as the
-    # OUTERMOST layer. Authentication is registered first (inner) and logging
-    # last (outer), so the structured access-log line and the X-Request-ID header
-    # also cover requests that authentication rejects (401/403/503) before they
-    # reach a route. Do not swap these back.
+def _add_middlewares(app: FastAPI) -> None:
     add_authentication_middleware(app)
     add_logging_middleware(app)
 
 
-def _include_routers(
-        app: FastAPI
-) -> None:
+def _include_routers(app: FastAPI) -> None:
     app.include_router(router, prefix="/api/v1")
 
 

@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
 from app.application.services.document.document_download_service.document_download_service_settings import (
-    DocumentDownloadServiceSettings
+    DocumentDownloadServiceSettings,
 )
 from app.application.services.document.document_download_service.exceptions.document_download_service_exception import (
     DocumentDownloadInvalidRequestException,
@@ -14,27 +14,27 @@ from app.application.services.document.document_download_service.exceptions.docu
     DocumentDownloadStorageException,
 )
 from app.application.services.document.document_download_service.interfaces.document_download_service_interface import (
-    DocumentDownloadServiceInterface
+    DocumentDownloadServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.document.document_status import DocumentStatus
 from app.infrastructure.http.authentication_provider.request_token import get_request_token
-from app.infrastructure.http.chat_membership.chat_membership_provider_interface import (
+from app.infrastructure.http.chat_membership.interfaces.chat_membership_provider_interface import (
     ChatMembershipProviderInterface,
 )
-from app.infrastructure.http.document_collection_catalog.document_collection_catalog_client_interface import (
+from app.infrastructure.http.document_collection_catalog.interfaces.document_collection_catalog_client_interface import (
     DocumentCollectionCatalogClientInterface,
 )
 from app.infrastructure.persistence.database.orm.document import Document
-from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
-    DocumentRepositoryInterface
+from app.infrastructure.persistence.database.repositories.interfaces.document_repository_interface import (
+    DocumentRepositoryInterface,
 )
-from app.infrastructure.persistence.storages.document_storage.document_storage_exception import (
+from app.infrastructure.persistence.storages.document_storage.exceptions.document_storage_exception import (
     DocumentNotFoundException,
     DocumentStorageException,
 )
-from app.infrastructure.persistence.storages.document_storage.document_storage_interface import (
-    DocumentStorageInterface
+from app.infrastructure.persistence.storages.document_storage.interfaces.document_storage_interface import (
+    DocumentStorageInterface,
 )
 
 logger = logging.getLogger(__name__)

@@ -11,15 +11,15 @@ from app.application.services.document.post_process_document_service.post_proces
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.persistence.database.orm.document import Document
 from app.infrastructure.persistence.database.orm.fragment import Fragment
-from app.infrastructure.http.llm_provider.llm_provider_interface import LlmProviderInterface
+from app.infrastructure.http.llm_provider.interfaces.llm_provider_interface import LlmProviderInterface
 from app.infrastructure.http.llm_provider.llm_provider_settings import LlmProviderSettings
-from app.infrastructure.persistence.database.database_manager.database_manager_interface import (
+from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
     DatabaseManagerInterface,
 )
-from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
+from app.infrastructure.persistence.database.repositories.interfaces.document_repository_interface import (
     DocumentRepositoryInterface,
 )
-from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository_interface import (
+from app.infrastructure.persistence.database.repositories.interfaces.fragment_repository_interface import (
     FragmentRepositoryInterface,
 )
 
@@ -47,10 +47,7 @@ class PostProcessDocumentProcessor(PostProcessDocumentProcessorInterface):
         self._document_repository = document_repository
         self._fragment_repository = fragment_repository
         self._llm_provider = llm_provider
-        # LlmProviderSettings is a pydantic BaseSettings whose required fields are
-        # populated from the environment at runtime; mypy can't model that (and the
-        # pydantic mypy plugin is incompatible with the pinned mypy here).
-        self._llm_settings = llm_provider_settings or LlmProviderSettings()  # type: ignore[call-arg]
+        self._llm_settings = llm_provider_settings or LlmProviderSettings()
         self._settings = post_process_document_service_settings or PostProcessDocumentServiceSettings()
 
     async def process_document_metadata(
@@ -140,13 +137,6 @@ class PostProcessDocumentProcessor(PostProcessDocumentProcessorInterface):
             self,
             fragments: list[Fragment],
     ) -> list[Fragment]:
-        """Pick a representative, evenly-spaced sample across the document.
-
-        Instead of feeding the whole document (or only its head) to the
-        classifier, take ``classify_sample_size`` fragments spread uniformly
-        from start to end. This keeps the prompt bounded and cheap while still
-        covering the beginning, middle and end of the document.
-        """
         ordered = sorted(fragments, key=lambda f: _safe_fragment_index(f))
         sample_size = self._settings.classify_sample_size
         total = len(ordered)

@@ -2,20 +2,17 @@ import json
 import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
-
 import redis.asyncio as aioredis
 
 from app.domain.constants.document.bulk_operation import BulkOperation
 from app.domain.field_limits import MAX_POST_PROCESS_SNAPSHOT_ERRORS
-from app.infrastructure.persistence.memory_database.bulk_job_progress_store.bulk_job_progress_store_interface import (
+from app.infrastructure.persistence.memory_database.bulk_job_progress_store.interfaces.bulk_job_progress_store_interface import (
     BulkJobProgressStoreInterface,
 )
 from app.infrastructure.persistence.memory_database.redis_client.redis_client_settings import RedisClientSettings
 
 logger = logging.getLogger(__name__)
 
-# Increment processed/failed atomically and flip is_running off once every target has
-# reached a terminal state, so the completion transition cannot race between consumers.
 _MARK_SCRIPT = """
 local raw = redis.call("GET", KEYS[1])
 if not raw then return 0 end
@@ -23,6 +20,7 @@ local snap = cjson.decode(raw)
 if snap["job_id"] ~= ARGV[1] then return 0 end
 snap["processed"] = (snap["processed"] or 0) + tonumber(ARGV[2])
 snap["failed"] = (snap["failed"] or 0) + tonumber(ARGV[3])
+snap["heartbeat_at"] = ARGV[4]
 if (snap["processed"] + snap["failed"]) >= (snap["total"] or 0) then
     snap["is_running"] = false
     if not snap["finished_at"] or snap["finished_at"] == cjson.null then
@@ -79,6 +77,7 @@ class BulkJobProgressStore(BulkJobProgressStoreInterface):
             job_id: str,
             total: int,
     ) -> None:
+        now_iso = datetime.now(timezone.utc).isoformat()
         snapshot = {
             "job_id": job_id,
             "operation": operation.value,
@@ -87,7 +86,8 @@ class BulkJobProgressStore(BulkJobProgressStoreInterface):
             "total": int(total),
             "processed": 0,
             "failed": 0,
-            "started_at": datetime.now(timezone.utc).isoformat(),
+            "started_at": now_iso,
+            "heartbeat_at": now_iso,
             "finished_at": None,
             "errors": [],
         }
@@ -175,7 +175,6 @@ class BulkJobProgressStore(BulkJobProgressStoreInterface):
             return None
         if not isinstance(data, dict):
             return None
-        # cjson re-encodes an emptied list as an object ({}); normalise back to a list.
         if not isinstance(data.get("errors"), list):
             data["errors"] = []
         return data

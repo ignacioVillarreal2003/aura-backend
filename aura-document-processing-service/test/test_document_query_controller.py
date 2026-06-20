@@ -55,14 +55,14 @@ class TestDocumentQueryAuth:
         assert client.get(STATUS_URL).status_code == 401
 
     def test_status_without_permission_returns_403(self, client, service_headers, mock_document_query_service):
-        headers = service_headers(permissions=["GET_DOCUMENT_MANAGE"])
+        headers = service_headers(permissions=["DOCUMENT_QUERY"])
         assert client.get(STATUS_URL, headers=headers).status_code == 403
 
     def test_missing_auth_user_status_returns_401(self, client):
         assert client.get(USER_STATUS_URL).status_code == 401
 
     def test_user_status_without_permission_returns_403(self, client, service_headers, mock_document_query_service):
-        headers = service_headers(permissions=["GET_DOCUMENT_STATUS_MANAGE"])
+        headers = service_headers(permissions=["DOCUMENT_QUERY_MANAGE"])
         assert client.get(USER_STATUS_URL, headers=headers).status_code == 403
 
 

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.controllers.graph.graph_path_controller.graph_path_controller_interface import (
+from app.api.controllers.graph.graph_path_controller.interfaces.graph_path_controller_interface import (
     GraphPathControllerInterface,
 )
 from app.api.dependencies.rate_limiter import default_rate_limit

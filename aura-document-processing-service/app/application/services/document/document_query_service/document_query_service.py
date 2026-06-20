@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
 from app.application.services.document.document_query_service.document_query_service_settings import (
-    DocumentQueryServiceSettings
+    DocumentQueryServiceSettings,
 )
 from app.domain.constants.document.document_type import DocumentType
 
@@ -15,22 +15,22 @@ from app.application.services.document.document_query_service.exceptions.documen
     DocumentQueryServiceException,
 )
 from app.application.services.document.document_query_service.interfaces.document_query_service_interface import (
-    DocumentQueryServiceInterface
+    DocumentQueryServiceInterface,
 )
 from app.domain.dtos.document.document_query.document_list_response import DocumentListResponse
 from app.domain.dtos.document.document_query.document_response import DocumentResponse
 from app.domain.dtos.document.document_query.document_status_response import DocumentStatusResponse
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.infrastructure.http.chat_membership.chat_membership_provider_interface import (
+from app.infrastructure.http.chat_membership.interfaces.chat_membership_provider_interface import (
     ChatMembershipProviderInterface,
 )
 from app.infrastructure.http.authentication_provider.request_token import get_request_token
-from app.infrastructure.http.document_collection_catalog.document_collection_catalog_client_interface import (
+from app.infrastructure.http.document_collection_catalog.interfaces.document_collection_catalog_client_interface import (
     DocumentCollectionCatalogClientInterface,
 )
 from app.infrastructure.persistence.database.orm.document import Document
-from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
-    DocumentRepositoryInterface
+from app.infrastructure.persistence.database.repositories.interfaces.document_repository_interface import (
+    DocumentRepositoryInterface,
 )
 
 logger = logging.getLogger(__name__)
@@ -204,9 +204,6 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             f is not None
             for f in (name, description, category, document_type, created_from, created_to)
         )
-        # Pagination is opt-in: if neither page nor size is supplied the full result
-        # set is returned (bounded by the repository safety cap). Supplying either one
-        # turns pagination on and the missing value falls back to its default.
         paginate = page is not None or size is not None
 
         logger.info(
@@ -291,9 +288,6 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             page: Optional[int] = None,
             size: Optional[int] = None,
     ) -> DocumentListResponse:
-        # Pagination is opt-in: if neither page nor size is supplied the full result
-        # set is returned (bounded by the repository safety cap). Supplying either one
-        # turns pagination on and the missing value falls back to its default.
         paginate = page is not None or size is not None
 
         logger.info(
@@ -385,9 +379,6 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             document: Document,
             authenticated_user: AuthenticatedUser,
     ) -> None:
-        # Service-to-service calls authenticate by forwarding the caller's bearer
-        # token, so the downstream services derive identity and permissions from
-        # it (the user is allowed to check their own access).
         authorization_header = get_request_token()
 
         accessible_ids = await self._document_collection_catalog_client.fetch_all_accessible_document_ids(

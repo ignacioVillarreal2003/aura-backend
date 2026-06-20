@@ -43,7 +43,6 @@ class EmbedderFactory:
 
         self._lock = threading.Lock()
         self._embedder: EmbedderInterface | None = None
-        self._instances: dict[EmbedderType, EmbedderInterface] = {}
 
         logger.info(
             "The embedder factory was created.",
@@ -66,22 +65,6 @@ class EmbedderFactory:
 
         return self._embedder
 
-    def get_by_type(
-            self,
-            embedder_type: EmbedderType
-    ) -> EmbedderInterface:
-        if embedder_type not in _EMBEDDER_REGISTRY:
-            raise UnsupportedEmbedderTypeException("That embedder type is not supported.")
-
-        if embedder_type in self._instances:
-            return self._instances[embedder_type]
-
-        with self._lock:
-            if embedder_type not in self._instances:
-                self._instances[embedder_type] = self._build_by_type(embedder_type)
-
-        return self._instances[embedder_type]
-
     def get_active_type(
             self
     ) -> EmbedderType:
@@ -95,31 +78,15 @@ class EmbedderFactory:
     def get_active_embedding_identity(
             self
     ) -> str:
-        # Full identity of the active embedding configuration (model + dim +
-        # normalization + instructions). Persisted per fragment and matched at
-        # query time so query and corpus vectors always share one vector space.
         return self._settings.active_embedding_identity
 
     def get_vector_dimension(
             self
     ) -> int:
-        # EmbedderSettings' validator resolves and guarantees this is non-None on
-        # construction; guard keeps the return type sound for static analysis.
         dimension = self._settings.vector_dimension
         if dimension is None:
             raise EmbedderInitializationException("The embedder vector dimension is not configured.")
         return int(dimension)
-
-    def is_supported(
-            self,
-            embedder_type: EmbedderType
-    ) -> bool:
-        return embedder_type in _EMBEDDER_REGISTRY
-
-    def available_types(
-            self
-    ) -> list[EmbedderType]:
-        return list(_EMBEDDER_REGISTRY.keys())
 
     def _build_embedder(
             self
@@ -152,33 +119,3 @@ class EmbedderFactory:
             raise EmbedderInitializationException(
                 "Failed to initialize the embedder."
             ) from e
-
-    def _build_by_type(
-            self,
-            embedder_type: EmbedderType
-    ) -> EmbedderInterface:
-        dotted_path = _EMBEDDER_REGISTRY[embedder_type]
-
-        try:
-            embedder_class = _import_embedder_class(dotted_path)
-            instance = embedder_class(embedder_settings=self._settings)
-
-            logger.info(
-                "The embedder was initialized.",
-                extra={
-                    "embedder_type": embedder_type
-                }
-            )
-            return instance
-
-        except EmbedderInitializationException:
-            raise
-        except Exception as e:
-            logger.error(
-                "An unexpected error occurred while initializing the embedder.",
-                extra={
-                    "embedder_type": embedder_type,
-                    "exception_type": type(e).__name__
-                }
-            )
-            raise EmbedderInitializationException("Failed to initialize the embedder.") from e

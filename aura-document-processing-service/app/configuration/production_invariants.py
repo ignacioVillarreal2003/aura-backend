@@ -1,8 +1,15 @@
 import logging
+from urllib.parse import unquote, urlparse
 
 from app.configuration.environment_variables import environment_variables
+from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_settings import (
+    RabbitMQManagerSettings,
+)
 from app.infrastructure.persistence.database.database_manager.database_manager_settings import (
     DatabaseManagerSettings,
+)
+from app.infrastructure.persistence.graph.neo4j_manager.neo4j_manager_settings import (
+    Neo4jManagerSettings,
 )
 from app.infrastructure.persistence.memory_database.redis_client.redis_client_settings import (
     RedisClientSettings,
@@ -13,9 +20,6 @@ from app.infrastructure.persistence.storages.minio_manager.minio_manager_setting
 
 logger = logging.getLogger(__name__)
 
-# Secrets that must never reach production. Compared case-insensitively against the
-# configured passwords / secret keys. These are the values shipped in the dev `.env*`
-# files and the usual vendor defaults (e.g. MinIO's "minioadmin").
 _WEAK_SECRETS = frozenset(
     {
         "",
@@ -31,24 +35,19 @@ _WEAK_SECRETS = frozenset(
         "minioadmin",
         "minio",
         "redis",
+        "neo4j",
+        "rabbitmq",
     }
 )
 
-# Default Redis URL: localhost, no authentication. Fine for dev, never for prod.
 _DEFAULT_REDIS_URL = "redis://127.0.0.1:6379/0"
 
 
 class ProductionInvariantError(RuntimeError):
-    """Raised when the service starts in production with an unsafe configuration."""
+    pass
 
 
 def assert_production_invariants() -> None:
-    """Fail fast when the service boots in production with an unsafe configuration.
-
-    Only enforced when ``ENVIRONMENT`` is a production name; in development/test it is a
-    no-op. All violations are collected and reported together so a misconfigured deploy
-    surfaces every problem at once instead of one boot attempt per fix.
-    """
     if not environment_variables.is_production():
         return
 
@@ -57,6 +56,8 @@ def assert_production_invariants() -> None:
     _check_database(violations)
     _check_redis(violations)
     _check_minio(violations)
+    _check_neo4j(violations)
+    _check_rabbitmq(violations)
 
     if violations:
         bullet_list = "\n".join(f"  - {violation}" for violation in violations)
@@ -81,8 +82,6 @@ def _check_runtime_flags(violations: list[str]) -> None:
             "LOG_LEVEL must not be DEBUG in production (verbose logs may leak sensitive data)."
         )
 
-    # Also enforced when EnvironmentVariables loads, kept here so the production report
-    # is complete and self-contained.
     if any((origin or "").strip() == "*" for origin in environment_variables.cors_origins):
         violations.append(
             "CORS_ORIGINS must not contain '*' in production; specify explicit origins."
@@ -139,6 +138,43 @@ def _check_minio(violations: list[str]) -> None:
         violations.append(
             "MINIO_MANAGER_USE_TLS must be True in production (object storage traffic "
             "would otherwise be unencrypted)."
+        )
+
+
+def _check_neo4j(violations: list[str]) -> None:
+    settings = Neo4jManagerSettings()
+
+    _check_secret(
+        violations,
+        env_name="NEO4J_MANAGER_PASSWORD",
+        value=settings.password.get_secret_value(),
+    )
+
+    # Encryption is enabled either by a +s/+ssc URI scheme or the explicit flag.
+    scheme = (urlparse(settings.uri).scheme or "").lower()
+    scheme_encrypted = scheme in ("neo4j+s", "neo4j+ssc", "bolt+s", "bolt+ssc")
+    if not scheme_encrypted and settings.encrypted is not True:
+        violations.append(
+            "Neo4j must use an encrypted connection in production: use a +s/+ssc URI "
+            "scheme (e.g. neo4j+s://) or set NEO4J_MANAGER_ENCRYPTED=True."
+        )
+
+
+def _check_rabbitmq(violations: list[str]) -> None:
+    settings = RabbitMQManagerSettings()
+    parsed = urlparse(settings.url.get_secret_value())
+
+    if (parsed.scheme or "").lower() != "amqps":
+        violations.append(
+            "RABBITMQ_MANAGER_URL must use amqps:// (TLS) in production; "
+            "amqp:// sends credentials and messages unencrypted."
+        )
+
+    password = unquote(parsed.password) if parsed.password else ""
+    if password.strip().lower() in _WEAK_SECRETS:
+        violations.append(
+            "RABBITMQ_MANAGER_URL embeds an empty or well-known weak password "
+            "(e.g. guest); use strong broker credentials in production."
         )
 
 

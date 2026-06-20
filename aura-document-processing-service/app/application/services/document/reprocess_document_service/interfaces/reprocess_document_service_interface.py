@@ -11,12 +11,7 @@ class ReprocessDocumentServiceInterface(ABC):
             document_id: int,
             user: AuthenticatedUser,
             prefer_docling: bool = False,
-            post_process: bool = True,
-            post_process_graph: bool = True,
+            enrich: bool = True,
+            graph_extract: bool = True,
     ) -> None:
-        """Reprocess a document end-to-end from its stored object.
-
-        Soft-deletes the existing fragments and re-runs the full ingestion pipeline
-        (re-download, re-chunk, re-embed) against the object already in storage.
-        """
-        ...
+        pass

@@ -10,10 +10,5 @@ class ReembedDocumentServiceInterface(ABC):
             *,
             document_id: int,
             user: AuthenticatedUser,
-            force: bool = False,
     ) -> int:
-        """Re-embed a document's existing fragments with the active model.
-
-        Returns the number of fragments that were re-embedded.
-        """
-        ...
+        pass

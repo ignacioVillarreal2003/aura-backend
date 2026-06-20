@@ -31,7 +31,7 @@ class UpdateDocumentController(UpdateDocumentControllerInterface):
     ) -> DocumentResponse:
         Authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.UPDATE_DOCUMENT_MANAGE}),
+            required_permissions=frozenset({Permissions.DOCUMENT_UPDATE_MANAGE}),
         )
 
         return await update_document_service.update_document_manage(

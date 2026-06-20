@@ -6,20 +6,10 @@ logger = logging.getLogger(__name__)
 
 
 class GpuUnavailableError(RuntimeError):
-    """Raised when REQUIRE_GPU is set but no CUDA device is reachable."""
+    pass
 
 
 def verify_gpu_availability() -> None:
-    """Fail fast when a GPU deployment cannot actually reach a CUDA device.
-
-    The PyTorch CUDA wheels silently fall back to CPU when the NVIDIA runtime is
-    missing (no ``--gpus all``, no nvidia-container-toolkit, no host driver). On a GPU
-    deployment that means the service boots "fine" but runs inference on CPU, orders
-    of magnitude slower. When ``REQUIRE_GPU`` is true we refuse to start instead.
-
-    No-op when ``REQUIRE_GPU`` is false (CPU deployments), so torch is only imported
-    when a GPU is actually expected.
-    """
     if not environment_variables.require_gpu:
         return
 

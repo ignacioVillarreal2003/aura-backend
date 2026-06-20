@@ -8,8 +8,7 @@ Content-Type: application/json
 Authorization: Bearer {{authToken}}
 
 {
-  "selector": { "document_ids": [1] },
-  "force": false
+  "selector": { "document_ids": [1] }
 }
 
 
@@ -20,8 +19,7 @@ Content-Type: application/json
 Authorization: Bearer {{authToken}}
 
 {
-  "selector": { "document_ids": [1, 2, 3] },
-  "force": false
+  "selector": { "document_ids": [1, 2, 3] }
 }
 
 
@@ -32,8 +30,7 @@ Content-Type: application/json
 Authorization: Bearer {{authToken}}
 
 {
-  "selector": { "all_documents": true },
-  "force": true
+  "selector": { "all_documents": true }
 }
 
 

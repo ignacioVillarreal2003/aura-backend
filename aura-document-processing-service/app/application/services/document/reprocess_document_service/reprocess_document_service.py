@@ -19,17 +19,17 @@ from app.application.services.document.reprocess_document_service.interfaces.rep
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.document.document_status import DocumentStatus
-from app.infrastructure.persistence.database.database_manager.database_manager_interface import (
+from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
     DatabaseManagerInterface,
 )
-from app.infrastructure.persistence.database.repositories.database_exceptions import DatabaseException
-from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
+from app.infrastructure.persistence.database.repositories.exceptions.database_exceptions import DatabaseException
+from app.infrastructure.persistence.database.repositories.interfaces.document_repository_interface import (
     DocumentRepositoryInterface,
 )
-from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository_interface import (
+from app.infrastructure.persistence.database.repositories.interfaces.fragment_repository_interface import (
     FragmentRepositoryInterface,
 )
-from app.infrastructure.persistence.storages.document_storage.document_storage_interface import (
+from app.infrastructure.persistence.storages.document_storage.interfaces.document_storage_interface import (
     DocumentStorageInterface,
 )
 
@@ -39,13 +39,6 @@ _REPROCESS_TEMP_DIR_NAME = "doc_reprocess"
 
 
 class ReprocessDocumentService(ReprocessDocumentServiceInterface):
-    """Reprocesses a document from its stored object by re-running ingestion.
-
-    The original file already lives in object storage, so no re-upload is needed:
-    the existing fragments are soft-deleted, the document is reset to ``uploaded``,
-    and the unmodified ingestion pipeline is re-run to re-chunk and re-embed.
-    """
-
     def __init__(
             self,
             document_repository: DocumentRepositoryInterface,
@@ -66,8 +59,8 @@ class ReprocessDocumentService(ReprocessDocumentServiceInterface):
             document_id: int,
             user: AuthenticatedUser,
             prefer_docling: bool = False,
-            post_process: bool = True,
-            post_process_graph: bool = True,
+            enrich: bool = True,
+            graph_extract: bool = True,
     ) -> None:
         logger.info(
             "Document reprocess was initiated.",
@@ -96,8 +89,6 @@ class ReprocessDocumentService(ReprocessDocumentServiceInterface):
                 file_path=str(temp_path),
             )
 
-            # Soft-delete the existing fragments and reset the document to `uploaded`
-            # so the unmodified ingestion pipeline's status transition is valid.
             await self._reset_for_reprocess(document_id=document_id, user_id=int(user.id))
 
             async with self._database_manager.session() as session:
@@ -115,14 +106,13 @@ class ReprocessDocumentService(ReprocessDocumentServiceInterface):
                 )
 
             handed_off = True
-            # process_document owns temp-file cleanup in its own finally block.
             await self._document_ingestion_service.process_document(
                 document=document,
                 local_file_path=temp_path,
                 user=user,
                 prefer_docling=prefer_docling,
-                post_process=post_process,
-                post_process_graph=post_process_graph,
+                enrich=enrich,
+                graph_extract=graph_extract,
             )
 
             logger.info(
@@ -164,8 +154,6 @@ class ReprocessDocumentService(ReprocessDocumentServiceInterface):
             )
             if document is None:
                 raise ReprocessDocumentNotFoundException(f"Document {document_id} was not found.")
-            # Direct assignment (not transition_to): a processed/failed document has no
-            # valid forward transition, so reprocess explicitly rewinds it to uploaded.
             document.status = DocumentStatus.uploaded
             document.processing_finished_at = None
             document.updated_by = user_id

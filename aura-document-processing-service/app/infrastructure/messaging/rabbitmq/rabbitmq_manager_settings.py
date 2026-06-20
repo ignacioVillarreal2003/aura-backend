@@ -63,8 +63,6 @@ class RabbitMQManagerSettings(BaseSettings):
     graph_extraction_queue: str = Field(default="graph.extraction")
     document_enrichment_queue: str = Field(default="document.enrichment")
     document_purge_queue: str = Field(default="document.purge")
-    # Maintenance pipelines (C-4): re-embed existing fragments with the current model
-    # (model migration) and full reprocess (re-chunk + re-embed) from the stored object.
     document_reembed_queue: str = Field(default="document.reembed")
     document_reprocess_queue: str = Field(default="document.reprocess")
 

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from app.api.controllers.graph.graph_stats_controller.graph_stats_controller_interface import (
+from app.api.controllers.graph.graph_stats_controller.interfaces.graph_stats_controller_interface import (
     GraphStatsControllerInterface,
 )
 from app.api.dependencies.rate_limiter import default_rate_limit
@@ -17,8 +17,9 @@ from app.api.dependencies.services import (
     get_graph_stats_service,
 )
 
+
 class GraphStatsController(GraphStatsControllerInterface):
-    async def get_stats(
+    async def get_stats_manage(
             self,
             graph_stats_service: GraphStatsServiceInterface = Depends(get_graph_stats_service),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
@@ -26,11 +27,12 @@ class GraphStatsController(GraphStatsControllerInterface):
     ) -> GraphStatsResponse:
         Authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.GRAPH_STATS}),
+            required_permissions=frozenset({Permissions.GRAPH_STATS_MANAGE}),
         )
         return await graph_stats_service.get_stats(
             authenticated_user=authenticated_user,
         )
+
 
 router = APIRouter()
 graph_stats_controller = GraphStatsController()
@@ -48,16 +50,16 @@ _response = {
 }
 
 router.add_api_route(
-    "",
-    graph_stats_controller.get_stats,
+    "/manage",
+    graph_stats_controller.get_stats_manage,
     methods=["GET"],
     response_model=GraphStatsResponse,
-    operation_id="getKnowledgeGraphStats",
-    summary="Estadísticas del grafo de conocimiento",
+    operation_id="getKnowledgeGraphStatsManage",
+    summary="Estadísticas del grafo de conocimiento (manage)",
     description=(
         "Devuelve métricas de cobertura del grafo: total de entidades, relaciones, "
         "entidades por tipo y número de documentos indexados. Útil para dashboards de "
-        "monitorización y para dar feedback al usuario sobre la cobertura del grafo."
+        "monitorización. Requiere permiso de administración."
     ),
     responses=_response,
 )

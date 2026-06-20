@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 class RerankerInterface(ABC):
     @abstractmethod
     def __init__(self, reranker_settings: "RerankerSettings") -> None:
-        ...
+        pass
 
     @abstractmethod
     async def rerank(
@@ -17,5 +17,4 @@ class RerankerInterface(ABC):
             candidates: list[str],
             top_n: int,
     ) -> list[int]:
-        """Score each candidate against the query and return the indices of the
-        top_n most relevant candidates sorted by descending score."""
+        pass

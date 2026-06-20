@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import uuid
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from app.application.services.document.bulk_dispatch_service.exceptions.bulk_dispatch_service_exception import (
@@ -38,29 +39,22 @@ from app.infrastructure.messaging.rabbitmq.publisher.interfaces.document_reproce
 from app.infrastructure.messaging.rabbitmq.publisher.interfaces.graph_extraction_publisher_interface import (
     GraphExtractionPublisherInterface,
 )
-from app.infrastructure.persistence.database.database_manager.database_manager_interface import (
+from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
     DatabaseManagerInterface,
 )
-from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
+from app.infrastructure.persistence.database.repositories.interfaces.document_repository_interface import (
     DocumentRepositoryInterface,
 )
-from app.infrastructure.persistence.memory_database.bulk_job_progress_store.bulk_job_progress_store_interface import (
+from app.infrastructure.persistence.memory_database.bulk_job_progress_store.interfaces.bulk_job_progress_store_interface import (
     BulkJobProgressStoreInterface,
 )
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_STALE_JOB_AFTER_SECONDS = 3600
+
 
 class BulkDispatchService(BulkDispatchServiceInterface):
-    """Fans a maintenance operation out over 1, several or all documents.
-
-    Resolves the target ids (explicit list or the whole corpus), records a job in the
-    bulk progress store, and publishes one per-document command per target carrying the
-    ``batch_id``. The existing per-document queues (prefetch=1) process them gradually;
-    the per-document consumers report back into the same job. The HTTP request returns
-    immediately while the fan-out runs in a background task.
-    """
-
     def __init__(
             self,
             *,
@@ -71,6 +65,7 @@ class BulkDispatchService(BulkDispatchServiceInterface):
             reprocess_publisher: Optional[DocumentReprocessPublisherInterface] = None,
             enrichment_publisher: Optional[DocumentEnrichmentPublisherInterface] = None,
             graph_extraction_publisher: Optional[GraphExtractionPublisherInterface] = None,
+            stale_job_after_seconds: int = _DEFAULT_STALE_JOB_AFTER_SECONDS,
     ) -> None:
         self._database_manager = database_manager
         self._document_repository = document_repository
@@ -79,6 +74,7 @@ class BulkDispatchService(BulkDispatchServiceInterface):
         self._reprocess_publisher = reprocess_publisher
         self._enrichment_publisher = enrichment_publisher
         self._graph_extraction_publisher = graph_extraction_publisher
+        self._stale_job_after_seconds = stale_job_after_seconds
         self._tasks: set[asyncio.Task[None]] = set()
 
     async def start(
@@ -87,10 +83,9 @@ class BulkDispatchService(BulkDispatchServiceInterface):
             operation: BulkOperation,
             selector: DocumentSelector,
             user: AuthenticatedUser,
-            force: bool = False,
             prefer_docling: bool = False,
-            post_process: bool = True,
-            post_process_graph: bool = True,
+            enrich: bool = True,
+            graph_extract: bool = True,
     ) -> BulkStartResponse:
         if self._publisher_for(operation) is None:
             raise BulkOperationUnavailableException(
@@ -99,8 +94,17 @@ class BulkDispatchService(BulkDispatchServiceInterface):
 
         existing = await self._store.get_snapshot(operation=operation)
         if existing is not None and existing.get("is_running"):
-            raise BulkOperationConflictException(
-                f"A '{operation.value}' bulk job is already running."
+            if not self._is_stale(existing):
+                raise BulkOperationConflictException(
+                    f"A '{operation.value}' bulk job is already running."
+                )
+            logger.warning(
+                "Taking over a stale bulk job; its dispatcher likely crashed mid-fan-out.",
+                extra={
+                    "operation": operation.value,
+                    "stale_job_id": existing.get("job_id"),
+                    "heartbeat_at": existing.get("heartbeat_at") or existing.get("started_at"),
+                },
             )
 
         document_ids = await self._resolve_target_ids(selector)
@@ -121,19 +125,16 @@ class BulkDispatchService(BulkDispatchServiceInterface):
         )
 
         if total == 0:
-            # Nothing to enqueue: flip the freshly-created job to a terminal state.
             await self._store.mark(operation=operation, job_id=job_id)
             return BulkStartResponse(job_id=job_id, operation=operation, total=0, queued=False)
 
         op_kwargs = self._publish_kwargs(
             operation,
-            force=force,
             prefer_docling=prefer_docling,
-            post_process=post_process,
-            post_process_graph=post_process_graph,
+            enrich=enrich,
+            graph_extract=graph_extract,
         )
-        # Preserve the requester's bearer token in the detached task so downstream
-        # providers authenticate as that user (the request context is gone by then).
+
         token = get_request_token()
         task = asyncio.create_task(
             self._fan_out(
@@ -189,12 +190,10 @@ class BulkDispatchService(BulkDispatchServiceInterface):
     ) -> None:
         set_request_token(token)
         publisher = self._publisher_for(operation)
-        assert publisher is not None  # guarded in start()
+        assert publisher is not None
 
         for index, document_id in enumerate(document_ids):
             if await self._store.is_stopped(operation=operation, job_id=job_id):
-                # Count the not-yet-enqueued remainder as processed so the job
-                # converges to a terminal state instead of hanging.
                 remaining = len(document_ids) - index
                 if remaining > 0:
                     await self._store.mark(
@@ -207,15 +206,13 @@ class BulkDispatchService(BulkDispatchServiceInterface):
                 return
 
             try:
-                await publisher.publish(  # type: ignore[call-arg]
+                await publisher.publish(
                     document_id=document_id,
                     user=user,
                     batch_id=job_id,
                     **op_kwargs,
                 )
             except Exception as exc:
-                # The command never reached the queue, so no consumer will mark it;
-                # account for it here to keep the job total consistent.
                 await self._store.mark(operation=operation, job_id=job_id, failed_increment=1)
                 await self._store.append_error(
                     operation=operation,
@@ -235,6 +232,22 @@ class BulkDispatchService(BulkDispatchServiceInterface):
             extra={"operation": operation.value, "job_id": job_id, "total": len(document_ids)},
         )
 
+    def _is_stale(self, snapshot: dict[str, Any]) -> bool:
+        # Only take over a running job when staleness can be proven from a timestamp.
+        # Missing/unparseable timestamp -> not stale, so a genuinely running job is
+        # never taken over (real jobs always carry started_at/heartbeat_at).
+        timestamp = snapshot.get("heartbeat_at") or snapshot.get("started_at")
+        if not timestamp:
+            return False
+        try:
+            parsed = datetime.fromisoformat(str(timestamp))
+        except (TypeError, ValueError):
+            return False
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        age_seconds = (datetime.now(timezone.utc) - parsed).total_seconds()
+        return age_seconds > self._stale_job_after_seconds
+
     def _publisher_for(self, operation: BulkOperation) -> Optional[object]:
         return {
             BulkOperation.reembed: self._reembed_publisher,
@@ -247,21 +260,16 @@ class BulkDispatchService(BulkDispatchServiceInterface):
     def _publish_kwargs(
             operation: BulkOperation,
             *,
-            force: bool,
             prefer_docling: bool,
-            post_process: bool,
-            post_process_graph: bool,
+            enrich: bool,
+            graph_extract: bool,
     ) -> dict[str, Any]:
-        if operation is BulkOperation.reembed:
-            return {"force": force}
         if operation is BulkOperation.reprocess:
             return {
                 "prefer_docling": prefer_docling,
-                "post_process": post_process,
-                "post_process_graph": post_process_graph,
+                "enrich": enrich,
+                "graph_extract": graph_extract,
             }
-        if operation is BulkOperation.graph_extract:
-            return {"force": force}
         return {}
 
     @staticmethod

@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 class CrossEncoderReranker(RerankerInterface):
     _model: ClassVar[Optional[CrossEncoder]] = None
     _model_lock: ClassVar[asyncio.Lock] = asyncio.Lock()
+    _inference_lock: ClassVar[asyncio.Lock] = asyncio.Lock()
 
     def __init__(self, reranker_settings: RerankerSettings) -> None:
         self._settings = reranker_settings
@@ -63,11 +64,6 @@ class CrossEncoderReranker(RerankerInterface):
                 )
             return cls._model
 
-    @classmethod
-    async def reset_model(cls) -> None:
-        async with cls._model_lock:
-            cls._model = None
-
     async def warmup(self) -> None:
         await self._get_or_load_model(self._settings)
 
@@ -106,7 +102,8 @@ class CrossEncoderReranker(RerankerInterface):
                 batch_size=self._settings.batch_size,
                 show_progress_bar=False,
             )
-            scores = await loop.run_in_executor(None, predict_fn)
+            async with self._inference_lock:
+                scores = await loop.run_in_executor(None, predict_fn)
 
             indexed: list[tuple[int, float]] = sorted(
                 enumerate(scores),

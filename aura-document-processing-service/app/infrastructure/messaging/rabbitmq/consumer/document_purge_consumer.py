@@ -7,23 +7,23 @@ from app.infrastructure.messaging.rabbitmq.consumer.interfaces.document_purge_co
 )
 from app.infrastructure.messaging.rabbitmq.dtos.commands.document_purge_command import DocumentPurgeCommand
 from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
-from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
-from app.infrastructure.persistence.database.database_manager.database_manager_interface import (
+from app.infrastructure.messaging.rabbitmq.interfaces.rabbitmq_manager_interface import RabbitMQManagerInterface
+from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
     DatabaseManagerInterface,
 )
-from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
+from app.infrastructure.persistence.database.repositories.interfaces.document_repository_interface import (
     DocumentRepositoryInterface,
 )
-from app.infrastructure.persistence.graph.repositories.graph_entity_repository.graph_entity_repository_interface import (
+from app.infrastructure.persistence.graph.repositories.interfaces.graph_entity_repository_interface import (
     GraphEntityRepositoryInterface,
 )
-from app.infrastructure.persistence.graph.repositories.graph_relation_repository.graph_relation_repository_interface import (
+from app.infrastructure.persistence.graph.repositories.interfaces.graph_relation_repository_interface import (
     GraphRelationRepositoryInterface,
 )
-from app.infrastructure.persistence.storages.document_storage.document_storage_exception import (
+from app.infrastructure.persistence.storages.document_storage.exceptions.document_storage_exception import (
     DocumentNotFoundException,
 )
-from app.infrastructure.persistence.storages.document_storage.document_storage_interface import (
+from app.infrastructure.persistence.storages.document_storage.interfaces.document_storage_interface import (
     DocumentStorageInterface,
 )
 
@@ -31,16 +31,6 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentPurgeConsumer(BaseConsumer[DocumentPurgeCommand], DocumentPurgeConsumerInterface):
-    """Purges a soft-deleted document's footprint from the external systems.
-
-    Postgres keeps the document and its fragments soft-deleted (already excluded
-    from search). This consumer reclaims the rest of the footprint that the soft
-    delete leaves behind: the object in MinIO and the entity/relation provenance
-    in Neo4j. It is driven by a queue so the delete request stays fast and the
-    cleanup is retried (dead-letter) on partial failure. Every step is idempotent,
-    so a redelivery is safe.
-    """
-
     def __init__(
             self,
             rabbitmq_manager: RabbitMQManagerInterface,
@@ -93,12 +83,6 @@ class DocumentPurgeConsumer(BaseConsumer[DocumentPurgeCommand], DocumentPurgeCon
         )
 
     async def _is_safe_to_purge(self, document_id: int) -> bool:
-        """Confirm the document is actually gone before reclaiming its footprint.
-
-        Purging MinIO and Neo4j is irreversible, so we never act on a live row. A
-        missing row is safe to purge (already hard-deleted upstream); a row with no
-        ``deleted_at`` means the delete never committed and must not be purged.
-        """
         async with self._database_manager.session() as session:
             document = await self._document_repository.get_document_by_id_including_deleted(
                 document_id=document_id,
@@ -112,8 +96,6 @@ class DocumentPurgeConsumer(BaseConsumer[DocumentPurgeCommand], DocumentPurgeCon
         try:
             await self._document_storage.delete_document(storage_url)
         except DocumentNotFoundException:
-            # Already gone (e.g. a redelivery after a prior successful purge). Treat
-            # as success so the rest of the purge can complete and the message acks.
             logger.info(
                 "The storage object was already absent during purge.",
                 extra={"document_id": document_id},
@@ -127,7 +109,5 @@ class DocumentPurgeConsumer(BaseConsumer[DocumentPurgeCommand], DocumentPurgeCon
             )
             return
 
-        # Relations first so relation provenance is corrected even for relations
-        # whose endpoint entities survive; then orphaned entities (DETACH DELETE).
         await self._graph_relation_repository.delete_document_relations(document_id=document_id)
         await self._graph_entity_repository.delete_document_entities(document_id=document_id)

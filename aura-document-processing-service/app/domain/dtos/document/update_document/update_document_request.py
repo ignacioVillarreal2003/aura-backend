@@ -9,14 +9,6 @@ from app.domain.field_limits import (
 
 
 class UpdateDocumentRequest(BaseModel):
-    """Partial update of a document's editable metadata (PATCH semantics).
-
-    Every field is optional and only the fields explicitly present in the
-    request body are applied; omitted fields are left untouched. At least one
-    field must be supplied. ``description`` may be sent as ``null`` to clear it;
-    ``name`` and ``category`` cannot be blanked once present.
-    """
-
     name: Optional[str] = Field(default=None, min_length=1, max_length=MAX_NAME_CHARS)
     description: Optional[str] = Field(default=None, max_length=MAX_DESCRIPTION_CHARS)
     category: Optional[str] = Field(default=None, min_length=1, max_length=MAX_CATEGORY_CHARS)

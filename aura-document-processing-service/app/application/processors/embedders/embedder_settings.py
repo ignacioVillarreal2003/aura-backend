@@ -66,18 +66,12 @@ class EmbedderSettings(BaseSettings):
     huggingface_token: Optional[str] = Field(default=None)
     huggingface_device: Literal["cpu", "cuda"] = "cpu"
     huggingface_normalize_embeddings: bool = Field(default=True)
-
+    huggingface_max_seq_length: Optional[int] = Field(default=None, gt=0, le=8192)
     huggingface_query_instruction: str = Field(default="")
     huggingface_embed_instruction: str = Field(default="")
 
     @property
     def active_model_name(self) -> str:
-        """The model name of the currently-active embedder.
-
-        Persisted per fragment (see Fragment.embedding_model) so the row records
-        exactly which model produced its vector — enabling audit and selective
-        re-embedding when the embedding model changes.
-        """
         if self.active_type == EmbedderType.ollama:
             return self.ollama_model
         if self.active_type == EmbedderType.huggingface:
@@ -86,18 +80,6 @@ class EmbedderSettings(BaseSettings):
 
     @property
     def active_embedding_identity(self) -> str:
-        """Stable identity of the active embedding configuration.
-
-        Cosine similarity is only meaningful between vectors produced by the *same*
-        configuration. This identity is persisted per fragment (Fragment.embedding_identity)
-        and matched at query time, so a partially re-embedded corpus never mixes
-        incompatible vector spaces, and a re-embed treats a config change as stale.
-
-        It captures every input that shifts the vector space: backend type, model,
-        dimension, normalization and the query/document instruction prefixes — an
-        instruction change silently moves the space, so it must invalidate old vectors.
-        The ``v1`` prefix lets the format evolve without colliding with stored values.
-        """
         parts = [
             f"type={self.active_type.value}",
             f"model={self.active_model_name}",
@@ -105,6 +87,8 @@ class EmbedderSettings(BaseSettings):
         ]
         if self.active_type == EmbedderType.huggingface:
             parts.append(f"norm={int(self.huggingface_normalize_embeddings)}")
+            if self.huggingface_max_seq_length is not None:
+                parts.append(f"msl={self.huggingface_max_seq_length}")
             parts.append(f"qi={self.huggingface_query_instruction}")
             parts.append(f"di={self.huggingface_embed_instruction}")
         return "v1|" + "|".join(parts)
@@ -167,10 +151,3 @@ class EmbedderSettings(BaseSettings):
             raise ValueError("The Hugging Face model name cannot be empty.")
 
         self.huggingface_model = self.huggingface_model.strip()
-
-        # Auto-apply e5 asymmetric prefixes when not explicitly set
-        if "e5" in self.huggingface_model.lower():
-            if not self.huggingface_query_instruction:
-                self.huggingface_query_instruction = "query: "
-            if not self.huggingface_embed_instruction:
-                self.huggingface_embed_instruction = "passage: "

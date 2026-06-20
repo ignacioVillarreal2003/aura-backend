@@ -29,21 +29,21 @@ from app.domain.dtos.fragment.fragment_query.question_context_fragments_request 
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.authentication_provider.request_token import get_request_token
-from app.infrastructure.http.chat_membership.chat_membership_provider_interface import (
+from app.infrastructure.http.chat_membership.interfaces.chat_membership_provider_interface import (
     ChatMembershipProviderInterface,
 )
-from app.infrastructure.http.document_collection_catalog.document_collection_catalog_client_interface import (
+from app.infrastructure.http.document_collection_catalog.interfaces.document_collection_catalog_client_interface import (
     DocumentCollectionCatalogClientInterface,
 )
-from app.infrastructure.persistence.database.database_manager.database_manager_interface import (
+from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
     DatabaseManagerInterface,
 )
 from app.infrastructure.persistence.database.orm.document import Document
 from app.infrastructure.persistence.database.orm.fragment import Fragment
-from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
+from app.infrastructure.persistence.database.repositories.interfaces.document_repository_interface import (
     DocumentRepositoryInterface,
 )
-from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository_interface import (
+from app.infrastructure.persistence.database.repositories.interfaces.fragment_repository_interface import (
     FragmentRepositoryInterface,
 )
 
@@ -51,8 +51,6 @@ logger = logging.getLogger(__name__)
 
 
 class _HasId(Protocol):
-    # `Any` so ORM rows (whose `id` is typed as Column[int] under the legacy
-    # mapping) satisfy the protocol; at runtime the attribute is the int value.
     id: Any
 
 
@@ -113,12 +111,6 @@ class FragmentQueryService(FragmentQueryServiceInterface):
         try:
             token = authorization_header or get_request_token()
 
-            # Documents are reachable either through a document collection (MAC) or
-            # through chat membership. The collection catalog only covers the former,
-            # so for a chat-scoped question we must also include the chat's documents
-            # when the user is a member — otherwise the post-filter below drops every
-            # fragment and the search returns nothing. The catalog and membership
-            # lookups hit independent services, so resolve them concurrently.
             if question_context_fragments_request.chat_id is not None:
                 collection_doc_ids, membership = await asyncio.gather(
                     self._document_collection_catalog_client.fetch_all_accessible_document_ids(
@@ -164,12 +156,6 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             )
             accessible_doc_ids = list(accessible_doc_set)
 
-            # A user with no accessible documents must get an empty result. The
-            # repository treats an empty doc-id list as "no filter" (it drops the
-            # WHERE clause), so passing [] down would scan every document. Short-
-            # circuit here instead. With this guard, accessible_doc_ids is always
-            # non-empty below, so the SQL doc-id filter alone is authoritative and
-            # no post-retrieval permission filter is needed.
             if not accessible_doc_ids:
                 logger.info(
                     "No accessible documents for the user; returning an empty fragment list.",
@@ -177,9 +163,6 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 )
                 return FragmentListResponse(fragments=[])
 
-            # Each retrieval query runs on its own database session because a single
-            # AsyncSession cannot be used concurrently. A per-request semaphore bounds
-            # how many pooled connections one request can hold while fanning out.
             semantic_queries = question_context_fragments_request.semantic_queries
             bm25_queries = question_context_fragments_request.bm25_queries
             retrieval_semaphore = asyncio.Semaphore(self._settings.max_retrieval_concurrency)
@@ -209,9 +192,6 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 for q in bm25_queries
             ]
 
-            # Run all semantic and BM25 queries concurrently. Semantic failures
-            # propagate (the request cannot answer without its vector pool); BM25 is
-            # best-effort, so its failures are captured and degrade to vector-only.
             semantic_ranked_lists, bm25_results = await asyncio.gather(
                 asyncio.gather(*semantic_coros),
                 asyncio.gather(*bm25_coros, return_exceptions=True),
@@ -230,8 +210,6 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                         extra={"user_id": authenticated_user.id},
                     )
                 else:
-                    # No failure in this branch; filter narrows away the BaseException
-                    # arm left by gather(return_exceptions=True).
                     bm25_ranked_lists = [r for r in bm25_results if not isinstance(r, BaseException)]
                     bm25_used = True
 
@@ -248,14 +226,8 @@ class FragmentQueryService(FragmentQueryServiceInterface):
 
             rerank_applied = False
             if question_context_fragments_request.rerank.enabled and fragments:
-                # Cap the candidate pool before the cross-encoder. It scores one
-                # pair per candidate (O(pool)), and the fused pool can reach ~1000
-                # candidates across the query fan-out. The fused list is already
-                # ordered by RRF score, so truncating keeps the strongest ones.
                 fragments = fragments[:self._settings.rerank_candidate_pool_cap]
                 rerank_query = self._build_rerank_query(question_context_fragments_request)
-                # `rerank.enabled` guarantees max_fragments is set (model validator);
-                # fall back to all fragments to keep the type sound either way.
                 top_n = question_context_fragments_request.rerank.max_fragments or len(fragments)
                 indices = await self._reranker_factory.reranker.rerank(
                     query=rerank_query,
@@ -275,11 +247,6 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                     exclude_ids=retrieved_ids,
                     respect_section_boundaries=self._settings.respect_section_boundaries,
                 )
-                # Unlike the main retrieval, the adjacent query carries no permission
-                # filter in its SQL (it only matches the document_ids of already-
-                # retrieved fragments). Those are all accessible, so adjacency stays
-                # within accessible documents, but keep this guard as the authoritative
-                # permission check for this path.
                 adjacent = [f for f in adjacent if f.document_id in accessible_doc_set]
                 adjacent_added = len(adjacent)
                 fragments = fragments + adjacent
@@ -345,20 +312,11 @@ class FragmentQueryService(FragmentQueryServiceInterface):
         )
 
         try:
-            # DocumentId is a NewType over int; the repository layer works in plain
-            # ints, so normalize once at this boundary.
             requested_ids: list[int] = [int(d) for d in documents_context_fragments_request.document_ids]
             documents = await self._get_documents_by_ids_or_raise(
                 document_ids=requested_ids,
                 database_session=database_session,
             )
-            # Authorize with the same model as the per-question path: a document is
-            # reachable through its document collection (MAC) or through membership of
-            # its chat. The collection catalog only covers the former, so fall back to
-            # chat membership for any requested doc the catalog doesn't grant —
-            # otherwise legitimately-accessible chat documents are wrongly denied. Also
-            # mirror the token fallback so callers relying on the request-context token
-            # (authorization_header=None) aren't denied here.
             token = authorization_header or get_request_token()
             collection_doc_ids = await self._document_collection_catalog_client.fetch_all_accessible_document_ids(
                 user_id=int(authenticated_user.id),
@@ -367,8 +325,6 @@ class FragmentQueryService(FragmentQueryServiceInterface):
 
             accessible_ids: set[int] = set(requested_ids) & set(collection_doc_ids)
 
-            # Resolve chat membership only for the distinct chats of docs the collection
-            # didn't already grant, concurrently.
             chats_to_check: dict[int, list[int]] = {}
             for document in documents:
                 doc_id = int(document.id)
@@ -585,8 +541,6 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             document_ids: list[int] | None,
             semaphore: asyncio.Semaphore,
     ) -> list[Fragment]:
-        # Own session so this query can run concurrently with the others; the
-        # semaphore caps the request's total in-flight connections.
         async with semaphore:
             async with self._database_manager.session() as session:
                 return await self._retrieve_similar_fragments(

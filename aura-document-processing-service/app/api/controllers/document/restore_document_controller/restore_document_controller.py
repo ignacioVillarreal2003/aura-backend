@@ -29,7 +29,7 @@ class RestoreDocumentController(RestoreDocumentControllerInterface):
     ) -> DocumentResponse:
         Authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.RESTORE_DOCUMENT_MANAGE}),
+            required_permissions=frozenset({Permissions.DOCUMENT_RESTORE_MANAGE}),
         )
 
         return await restore_document_service.restore_document_manage(

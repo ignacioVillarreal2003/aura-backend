@@ -49,9 +49,9 @@ Crea un documento a partir de un archivo subido.
 |---|---|---|---|
 | `file` | `UploadFile` | sí | Archivo del documento |
 | `chat_id` | `int` | no | 1–2 147 483 647 |
-| `prefer_docling` | `bool` | no | default `false`; usa el pipeline Docling en vez del predeterminado |
-| `post_process` | `bool` | no | default `true`; clasifica el documento y enriquece sus fragmentos durante la ingesta |
-| `post_process_graph` | `bool` | no | default `true`; encola la extracción del grafo de conocimiento tras la ingesta |
+| `prefer_docling` | `bool` | no | default `true`; usa el pipeline Docling en vez del predeterminado |
+| `enrich` | `bool` | no | default `false`; clasifica el documento y enriquece sus fragmentos durante la ingesta |
+| `graph_extract` | `bool` | no | default `false`; encola la extracción del grafo de conocimiento tras la ingesta |
 
 **Ejemplo**
 

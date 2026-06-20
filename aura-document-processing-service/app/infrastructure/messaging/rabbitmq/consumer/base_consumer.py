@@ -8,7 +8,7 @@ from pydantic import BaseModel, ValidationError
 from app.infrastructure.http.authentication_provider.request_token import get_request_token, set_request_token
 from app.infrastructure.messaging.rabbitmq.consumer.consumer_utils import extract_retry_count
 from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
-from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
+from app.infrastructure.messaging.rabbitmq.interfaces.rabbitmq_manager_interface import RabbitMQManagerInterface
 
 T = TypeVar("T", bound=BaseModel)
 

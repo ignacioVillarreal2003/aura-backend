@@ -11,12 +11,12 @@ from app.application.services.fragment.post_process_fragment_service.post_proces
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.processing_status import ProcessingStatus
-from app.infrastructure.http.llm_provider.llm_provider_interface import LlmProviderInterface
-from app.infrastructure.persistence.database.database_manager.database_manager_interface import (
+from app.infrastructure.http.llm_provider.interfaces.llm_provider_interface import LlmProviderInterface
+from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
     DatabaseManagerInterface,
 )
 from app.infrastructure.persistence.database.orm.fragment import Fragment
-from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository_interface import (
+from app.infrastructure.persistence.database.repositories.interfaces.fragment_repository_interface import (
     FragmentRepositoryInterface,
 )
 

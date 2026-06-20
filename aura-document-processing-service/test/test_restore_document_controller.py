@@ -25,7 +25,7 @@ class TestRestoreDocumentAuth:
         assert client.post(URL).status_code == 401
 
     def test_without_permission_returns_403(self, client, service_headers, mock_restore_document_service):
-        headers = service_headers(permissions=["GET_DOCUMENT_MANAGE"])
+        headers = service_headers(permissions=["DOCUMENT_QUERY_MANAGE"])
         assert client.post(URL, headers=headers).status_code == 403
 
 

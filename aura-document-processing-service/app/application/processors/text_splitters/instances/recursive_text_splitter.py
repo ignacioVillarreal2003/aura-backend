@@ -1,9 +1,10 @@
 import logging
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+from app.application.processors.text_splitters.dtos.document_chunk import DocumentChunk
 from app.application.processors.text_splitters.exceptions.text_splitter_exception import (
     TextSplitterInitializationException,
-    TextSplitterExecutionException
+    TextSplitterExecutionException,
 )
 from app.application.processors.text_splitters.instances.base_text_splitter import BaseTextSplitter
 from app.application.processors.text_splitters.text_splitter_settings import TextSplitterSettings
@@ -45,7 +46,7 @@ class RecursiveTextSplitter(BaseTextSplitter):
     def split_text(
             self,
             text: str
-    ) -> list[str]:
+    ) -> list[DocumentChunk]:
         if not text or not text.strip():
             logger.debug("split_text received empty text; returning an empty list.")
             return []
@@ -73,7 +74,7 @@ class RecursiveTextSplitter(BaseTextSplitter):
                 }
             )
 
-            return splits
+            return [DocumentChunk(text=chunk) for chunk in splits]
 
         except TextSplitterExecutionException:
             raise

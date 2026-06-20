@@ -10,7 +10,7 @@ from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import
 from app.infrastructure.messaging.rabbitmq.publisher.interfaces.document_enrichment_publisher_interface import (
     DocumentEnrichmentPublisherInterface,
 )
-from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
+from app.infrastructure.messaging.rabbitmq.interfaces.rabbitmq_manager_interface import RabbitMQManagerInterface
 from app.infrastructure.messaging.rabbitmq.reliable_publish.redis_outbox_lite import RedisOutboxLite
 
 logger = logging.getLogger(__name__)

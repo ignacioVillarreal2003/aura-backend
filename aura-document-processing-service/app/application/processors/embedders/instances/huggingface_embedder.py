@@ -1,8 +1,9 @@
 import asyncio
 import logging
 from datetime import timedelta
-from typing import Callable
+from typing import Callable, Optional
 from aiobreaker import CircuitBreaker as AioBreaker
+from aiobreaker import CircuitBreakerError
 from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from app.application.processors._hf_model_cache import get_or_create as _get_or_create_hf_embeddings
@@ -10,11 +11,13 @@ from app.application.processors.embedders.embedder_settings import EmbedderSetti
 from app.application.processors.embedders.exceptions.embedder_exception import (
     EmbedderInitializationException,
     EmbedDocumentsException,
-    EmbedQueryException
+    EmbedQueryException,
 )
 from app.application.processors.embedders.instances.base_embedder import BaseEmbedder
 
 logger = logging.getLogger(__name__)
+
+_CHARS_PER_TOKEN_HINT = 2.0
 
 
 class HuggingFaceEmbedder(BaseEmbedder):
@@ -47,12 +50,16 @@ class HuggingFaceEmbedder(BaseEmbedder):
         self._model = None
 
         try:
-            self._model = _get_or_create_hf_embeddings(
+            self._model, self._encode_lock = _get_or_create_hf_embeddings(
                 model_name=self._settings.huggingface_model,
                 device=self._settings.huggingface_device,
                 normalize_embeddings=self._settings.huggingface_normalize_embeddings,
                 token=self._settings.huggingface_token,
+                max_seq_length=self._settings.huggingface_max_seq_length,
             )
+
+            self._max_seq_length: Optional[int] = getattr(self._model.client, "max_seq_length", None)
+            self._tokenizer = getattr(self._model.client, "tokenizer", None)
 
             self._embed_query_with_retry: Callable[[str], list[float]] = _retry(
                 self._model.embed_query
@@ -68,6 +75,7 @@ class HuggingFaceEmbedder(BaseEmbedder):
                     "device": self._settings.huggingface_device,
                     "normalize": self._settings.huggingface_normalize_embeddings,
                     "dimensions": self._settings.vector_dimension,
+                    "max_seq_length": self._max_seq_length,
                     "max_batch_size": self._settings.max_batch_size,
                     "max_retries": self._settings.max_retries,
                     "circuit_breaker_threshold": self._settings.circuit_breaker_threshold
@@ -88,6 +96,7 @@ class HuggingFaceEmbedder(BaseEmbedder):
             texts = [self._settings.huggingface_embed_instruction + t for t in texts]
 
         self._validate_texts(texts)
+        self._warn_if_truncated(texts)
 
         if len(texts) > self._max_batch_size:
             logger.info(
@@ -109,6 +118,7 @@ class HuggingFaceEmbedder(BaseEmbedder):
             text = self._settings.huggingface_query_instruction + text
 
         self._validate_text(text)
+        self._warn_if_truncated([text])
 
         logger.debug(
             "Generating a query embedding.",
@@ -118,7 +128,8 @@ class HuggingFaceEmbedder(BaseEmbedder):
         )
 
         try:
-            embedding = self._embed_query_with_retry(text)
+            with self._encode_lock:
+                embedding = self._embed_query_with_retry(text)
             logger.info("The query embedding was generated successfully.")
             return embedding
         except Exception as e:
@@ -128,13 +139,23 @@ class HuggingFaceEmbedder(BaseEmbedder):
             self,
             text: str
     ) -> list[float]:
-        return await self._circuit_breaker.call(asyncio.to_thread, self.embed_query, text)
+        try:
+            return await self._circuit_breaker.call(asyncio.to_thread, self.embed_query, text)
+        except CircuitBreakerError as e:
+            raise EmbedQueryException(
+                "The Hugging Face embedder is temporarily unavailable (circuit breaker is open)."
+            ) from e
 
     async def aembed_documents(
             self,
             texts: list[str]
     ) -> list[list[float]]:
-        return await self._circuit_breaker.call(asyncio.to_thread, self.embed_documents, texts)
+        try:
+            return await self._circuit_breaker.call(asyncio.to_thread, self.embed_documents, texts)
+        except CircuitBreakerError as e:
+            raise EmbedDocumentsException(
+                "The Hugging Face embedder is temporarily unavailable (circuit breaker is open)."
+            ) from e
 
     def _embed_single_batch(
             self,
@@ -148,7 +169,8 @@ class HuggingFaceEmbedder(BaseEmbedder):
             }
         )
         try:
-            embeddings = self._embed_documents_with_retry(texts)
+            with self._encode_lock:
+                embeddings = self._embed_documents_with_retry(texts)
             logger.info(
                 "The document embeddings were generated successfully.",
                 extra={
@@ -158,3 +180,37 @@ class HuggingFaceEmbedder(BaseEmbedder):
             return embeddings
         except Exception as e:
             raise EmbedDocumentsException("Failed to generate document embeddings with Hugging Face.") from e
+
+    def _warn_if_truncated(
+            self,
+            texts: list[str]
+    ) -> None:
+        if self._max_seq_length is None or self._tokenizer is None:
+            return
+
+        pre_filter_chars = int(self._max_seq_length * _CHARS_PER_TOKEN_HINT)
+        truncated = 0
+        max_observed_tokens = 0
+        for text in texts:
+            if len(text) < pre_filter_chars:
+                continue
+            try:
+                token_count = len(self._tokenizer.encode(text, add_special_tokens=True))
+            except Exception:
+                continue
+            if token_count > self._max_seq_length:
+                truncated += 1
+                max_observed_tokens = max(max_observed_tokens, token_count)
+
+        if truncated:
+            logger.warning(
+                "Some inputs exceed the model token window and will be truncated by the tokenizer; "
+                "consider smaller chunks to avoid losing content.",
+                extra={
+                    "model": self._settings.huggingface_model,
+                    "max_seq_length": self._max_seq_length,
+                    "truncated_inputs": truncated,
+                    "total_inputs": len(texts),
+                    "max_observed_tokens": max_observed_tokens,
+                }
+            )

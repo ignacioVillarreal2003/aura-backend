@@ -32,7 +32,7 @@ class CreateDocumentController(CreateDocumentControllerInterface):
     ) -> CreateDocumentResponse:
         Authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.INGEST_DOCUMENT}),
+            required_permissions=frozenset({Permissions.DOCUMENT_CREATE}),
         )
 
         return await create_document_service.create_document(

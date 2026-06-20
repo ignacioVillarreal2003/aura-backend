@@ -64,8 +64,6 @@ class FragmentResponse(BaseModel):
     topics: list[str] | None = Field(default=None, max_length=MAX_TOPICS)
     enrichment_status: str = Field(default="pending", min_length=1, max_length=32)
 
-    # Structural provenance (NULL for flat-text fallback fragments). Enables
-    # citations such as "page 14, section 3".
     page_number: int | None = Field(default=None, ge=1)
     section_path: str | None = Field(default=None)
     heading: str | None = Field(default=None)

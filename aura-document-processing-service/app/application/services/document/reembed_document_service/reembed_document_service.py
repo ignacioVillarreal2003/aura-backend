@@ -1,5 +1,4 @@
 import logging
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
@@ -11,15 +10,15 @@ from app.application.services.document.reembed_document_service.interfaces.reemb
     ReembedDocumentServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.infrastructure.persistence.database.database_manager.database_manager_interface import (
+from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
     DatabaseManagerInterface,
 )
 from app.infrastructure.persistence.database.orm.fragment import Fragment
-from app.infrastructure.persistence.database.repositories.database_exceptions import DatabaseException
-from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
+from app.infrastructure.persistence.database.repositories.exceptions.database_exceptions import DatabaseException
+from app.infrastructure.persistence.database.repositories.interfaces.document_repository_interface import (
     DocumentRepositoryInterface,
 )
-from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository_interface import (
+from app.infrastructure.persistence.database.repositories.interfaces.fragment_repository_interface import (
     FragmentRepositoryInterface,
 )
 
@@ -27,14 +26,6 @@ logger = logging.getLogger(__name__)
 
 
 class ReembedDocumentService(ReembedDocumentServiceInterface):
-    """Re-embeds a document's existing fragments with the currently-active model.
-
-    Chunk text is preserved; only the vectors (and their model/dimension provenance)
-    are regenerated. This is the safe path for an embedding-model migration: by
-    default only fragments whose stored ``embedding_model`` differs from the active
-    model are touched, so the operation is idempotent and can be retried safely.
-    """
-
     def __init__(
             self,
             document_repository: DocumentRepositoryInterface,
@@ -52,11 +43,10 @@ class ReembedDocumentService(ReembedDocumentServiceInterface):
             *,
             document_id: int,
             user: AuthenticatedUser,
-            force: bool = False,
     ) -> int:
         logger.info(
             "Document re-embedding was initiated.",
-            extra={"document_id": document_id, "force": force, "user_id": user.id},
+            extra={"document_id": document_id, "user_id": user.id},
         )
 
         try:
@@ -78,11 +68,9 @@ class ReembedDocumentService(ReembedDocumentServiceInterface):
                     database_session=session,
                 )
 
-            # Compare the full embedding identity, not just the model name, so a change
-            # to normalization or the instruction prefixes also marks vectors stale.
             stale = [
                 fragment for fragment in fragments
-                if force or fragment.embedding_identity != target_identity
+                if fragment.embedding_identity != target_identity
             ]
             if not stale:
                 logger.info(

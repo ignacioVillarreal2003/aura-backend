@@ -10,7 +10,7 @@ class DeleteDocumentServiceInterface(ABC):
             self,
             document_id: int,
             database_session: AsyncSession,
-            authenticated_user: AuthenticatedUser
+            authenticated_user: AuthenticatedUser,
     ) -> None:
         pass
 
@@ -19,7 +19,7 @@ class DeleteDocumentServiceInterface(ABC):
             self,
             chat_id: int,
             database_session: AsyncSession,
-            authenticated_user: AuthenticatedUser
+            authenticated_user: AuthenticatedUser,
     ) -> None:
         pass
 
@@ -28,6 +28,6 @@ class DeleteDocumentServiceInterface(ABC):
             self,
             document_id: int,
             database_session: AsyncSession,
-            authenticated_user: AuthenticatedUser
+            authenticated_user: AuthenticatedUser,
     ) -> None:
         pass

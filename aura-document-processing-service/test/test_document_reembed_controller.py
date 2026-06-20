@@ -33,7 +33,7 @@ class TestReembedValidation:
 class TestReembedSuccess:
     def test_single_id_returns_202(self, client, auth_headers, mock_bulk_dispatch_service):
         mock_bulk_dispatch_service.start.return_value = _START
-        body = {"selector": {"document_ids": [1]}, "force": False}
+        body = {"selector": {"document_ids": [1]}}
         response = client.post(URL, json=body, headers=auth_headers)
         assert response.status_code == 202
         assert response.json()["job_id"] == "abc123"

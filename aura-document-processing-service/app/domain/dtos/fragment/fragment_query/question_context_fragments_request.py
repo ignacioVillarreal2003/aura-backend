@@ -64,10 +64,6 @@ class QuestionContextFragmentsRequest(BaseModel):
 
     rerank: _RerankConfig = Field(default_factory=_RerankConfig)
 
-    # Default to 1 so retrieval pulls each hit's immediate neighbours. This is the
-    # query-time compensation for the structure-aware chunker's lack of overlap:
-    # a concept split at a chunk border is recovered via its adjacent chunk (kept
-    # within the same section by respect_section_boundaries). Set 0 to disable.
     adjacent_chunks: int = Field(default=1, ge=0, le=3)
 
     @model_validator(mode="after")
@@ -86,8 +82,6 @@ class QuestionContextFragmentsRequest(BaseModel):
                     + sum(q.max_fragments for q in self.bm25_queries)
             )
 
-            # `validate_rerank_consistency` on _RerankConfig guarantees max_fragments
-            # is set whenever rerank is enabled; the None guard keeps mypy sound.
             rerank_max = self.rerank.max_fragments
             if rerank_max is not None and rerank_max > pool:
                 raise ValueError(

@@ -12,8 +12,8 @@ class DocumentReprocessPublisherInterface(ABC):
             document_id: int,
             user: AuthenticatedUser,
             prefer_docling: bool = False,
-            post_process: bool = True,
-            post_process_graph: bool = True,
+            enrich: bool = True,
+            graph_extract: bool = True,
             batch_id: Optional[str] = None,
     ) -> str:
         pass

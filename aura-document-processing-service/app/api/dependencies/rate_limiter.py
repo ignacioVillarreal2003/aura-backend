@@ -11,9 +11,6 @@ _WINDOW_SECONDS = 60
 _STRICT_RATE = 20
 _DEFAULT_RATE = 60
 
-# Sliding-window rate limit evaluated atomically inside Redis so that the
-# "count then add" sequence cannot interleave across concurrent requests
-# (no TOCTOU). Returns {allowed (1/0), retry_after_seconds}.
 _RATE_LIMIT_LUA = """
 local key = KEYS[1]
 local now = tonumber(ARGV[1])

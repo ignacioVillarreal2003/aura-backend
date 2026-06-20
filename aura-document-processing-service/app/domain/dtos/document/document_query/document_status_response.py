@@ -7,13 +7,6 @@ from app.domain.types import DocumentId
 
 
 class DocumentStatusResponse(BaseModel):
-    """Lightweight processing-status projection of a document.
-
-    Exposes only the fields a client needs to poll an asynchronous ingestion
-    pipeline (chunk -> embed -> enrichment / graph), avoiding the cost of
-    transferring the full document on every poll.
-    """
-
     id: DocumentId = Field(..., gt=0, le=MAX_ID)
     status: str = Field(..., min_length=1, max_length=64)
     enrichment_status: str = Field(default="pending", min_length=1, max_length=32)

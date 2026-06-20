@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 class EmbedderInterface(ABC):
     @abstractmethod
     def __init__(self, embedder_settings: "EmbedderSettings") -> None:
-        ...
+        pass
 
     @abstractmethod
     def embed_documents(

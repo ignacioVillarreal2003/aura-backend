@@ -9,10 +9,10 @@ from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.services.document.create_document_service.create_document_service_settings import (
-    CreateDocumentServiceSettings
+    CreateDocumentServiceSettings,
 )
 from app.application.services.document.create_document_service.create_document_service_utils import (
-    CreateDocumentServiceUtils
+    CreateDocumentServiceUtils,
 )
 from app.application.services.document.create_document_service.exceptions.create_document_service_exception import (
     CreateDocumentInvalidException,
@@ -24,7 +24,7 @@ from app.application.services.document.create_document_service.exceptions.create
     CreateDocumentValidationException,
 )
 from app.application.services.document.create_document_service.interfaces.create_document_service_interface import (
-    CreateDocumentServiceInterface
+    CreateDocumentServiceInterface,
 )
 from app.domain.constants.document.document_mime_type import DocumentMimeType
 from app.domain.constants.document.document_status import DocumentStatus
@@ -37,18 +37,18 @@ from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.field_limits import MAX_NAME_CHARS
 from app.infrastructure.http.authentication_provider.request_token import get_request_token
 from app.infrastructure.persistence.database.orm.document import Document
-from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_exception import RabbitMQPublishException
-from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
+from app.infrastructure.messaging.rabbitmq.exceptions.rabbitmq_manager_exception import RabbitMQPublishException
+from app.infrastructure.messaging.rabbitmq.interfaces.rabbitmq_manager_interface import RabbitMQManagerInterface
 from app.infrastructure.messaging.rabbitmq.reliable_publish.redis_outbox_lite import RedisOutboxLite
-from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
-    DocumentRepositoryInterface
+from app.infrastructure.persistence.database.repositories.interfaces.document_repository_interface import (
+    DocumentRepositoryInterface,
 )
-from app.infrastructure.persistence.database.repositories.database_exceptions import DatabaseException
-from app.infrastructure.persistence.storages.document_storage.document_storage_exception import (
-    DocumentStorageException
+from app.infrastructure.persistence.database.repositories.exceptions.database_exceptions import DatabaseException
+from app.infrastructure.persistence.storages.document_storage.exceptions.document_storage_exception import (
+    DocumentStorageException,
 )
-from app.infrastructure.persistence.storages.document_storage.document_storage_interface import (
-    DocumentStorageInterface
+from app.infrastructure.persistence.storages.document_storage.interfaces.document_storage_interface import (
+    DocumentStorageInterface,
 )
 
 logger = logging.getLogger(__name__)
@@ -233,12 +233,12 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             file_size_bytes=file_size,
             enrichment_status=(
                 ProcessingStatus.pending
-                if create_document_request.post_process
+                if create_document_request.enrich
                 else ProcessingStatus.not_required
             ),
             graph_status=(
                 ProcessingStatus.pending
-                if create_document_request.post_process_graph
+                if create_document_request.graph_extract
                 else ProcessingStatus.not_required
             ),
             processing_started_at=now,
@@ -266,7 +266,6 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             )
             return database_document
         except DatabaseException as e:
-            # Compensate the already-uploaded object before surfacing the failure.
             await self._cleanup_storage(object_name)
             raise CreateDocumentPersistenceException("Failed to save the document to the database.") from e
 
@@ -287,8 +286,8 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             created_by=authenticated_user.id,
             user=authenticated_user.model_dump(mode="json"),
             prefer_docling=create_document_request.prefer_docling,
-            post_process=create_document_request.post_process,
-            post_process_graph=create_document_request.post_process_graph,
+            enrich=create_document_request.enrich,
+            graph_extract=create_document_request.graph_extract,
             auth_token=get_request_token(),
         )
         envelope = MessageEnvelope.wrap(command)
@@ -312,8 +311,6 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                     }
                 )
         except Exception as e:
-            # Publish failed after the document was committed: roll back both the
-            # database row and the stored object so no orphan is left behind.
             await self._compensate_failed_publish(database_document, object_name, database_session)
             raise RabbitMQPublishException("Failed to enqueue the document for ingestion.") from e
 

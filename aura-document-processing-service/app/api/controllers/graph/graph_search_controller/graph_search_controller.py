@@ -2,7 +2,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.controllers.graph.graph_search_controller.graph_search_controller_interface import (
+from app.api.controllers.graph.graph_search_controller.interfaces.graph_search_controller_interface import (
     GraphSearchControllerInterface,
 )
 from app.api.dependencies.rate_limiter import default_rate_limit
@@ -26,10 +26,11 @@ from app.api.dependencies.services import (
 _DEFAULT_SEARCH_LIMIT = 10
 _MAX_SEARCH_LIMIT = min(50, MAX_QUERY_RESULTS)
 
+
 class GraphSearchController(GraphSearchControllerInterface):
     async def search(
             self,
-            q: str = Query(..., min_length=1, max_length=MAX_ENTITY_NAME_CHARS, description="Search prefix or keyword"),
+            q: str = Query(..., min_length=1, max_length=MAX_ENTITY_NAME_CHARS, description="Prefijo o palabra clave de búsqueda"),
             entity_type: Optional[EntityType] = Query(default=None, alias="type"),
             limit: int = Query(default=_DEFAULT_SEARCH_LIMIT, ge=1, le=_MAX_SEARCH_LIMIT),
             graph_entity_service: GraphEntityServiceInterface = Depends(get_graph_entity_service),
@@ -55,6 +56,7 @@ class GraphSearchController(GraphSearchControllerInterface):
             total=len(trimmed),
             has_more=has_more,
         )
+
 
 router = APIRouter()
 graph_search_controller = GraphSearchController()

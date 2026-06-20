@@ -1,5 +1,5 @@
 import logging
-
+from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
@@ -17,10 +17,10 @@ from app.application.services.document.restore_document_service.interfaces.resto
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.document.document_query.document_response import DocumentResponse
 from app.infrastructure.persistence.database.orm.document import Document
-from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
+from app.infrastructure.persistence.database.repositories.interfaces.document_repository_interface import (
     DocumentRepositoryInterface,
 )
-from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository_interface import (
+from app.infrastructure.persistence.database.repositories.interfaces.fragment_repository_interface import (
     FragmentRepositoryInterface,
 )
 
@@ -28,15 +28,6 @@ logger = logging.getLogger(__name__)
 
 
 class RestoreDocumentService(RestoreDocumentServiceInterface):
-    """Reverses a soft delete, clearing the delete markers on a document and its fragments.
-
-    The restore operates on the Postgres records only. If the asynchronous purge
-    of the external footprint (MinIO object / Neo4j graph) already ran after the
-    delete, the binary and graph are not recovered by a restore; the document row
-    returns but its file/graph must be regenerated (e.g. via reprocess) when the
-    stored object is still available.
-    """
-
     def __init__(
             self,
             document_repository: DocumentRepositoryInterface,
@@ -65,7 +56,12 @@ class RestoreDocumentService(RestoreDocumentServiceInterface):
 
             document = await self._get_deleted_document_or_raise(document_id, database_session)
 
-            restored = await self._restore(document.id, authenticated_user.id, database_session)
+            restored = await self._restore(
+                document.id,
+                authenticated_user.id,
+                database_session,
+                deleted_at=document.deleted_at,
+            )
 
             logger.info(
                 "The document was restored successfully.",
@@ -127,22 +123,25 @@ class RestoreDocumentService(RestoreDocumentServiceInterface):
             self,
             document_id: int,
             user_id: int,
-            database_session: AsyncSession
+            database_session: AsyncSession,
+            deleted_at: datetime,
     ) -> Document:
-        await self._restore_fragments(document_id, user_id, database_session)
+        await self._restore_fragments(document_id, user_id, database_session, deleted_at)
         return await self._restore_document(document_id, user_id, database_session)
 
     async def _restore_fragments(
             self,
             document_id: int,
             user_id: int,
-            database_session: AsyncSession
+            database_session: AsyncSession,
+            deleted_at: datetime,
     ) -> None:
         try:
             await self._fragment_repository.restore_fragments_by_document_id(
                 document_id=document_id,
                 user_id=user_id,
-                database_session=database_session
+                database_session=database_session,
+                deleted_at=deleted_at,
             )
             logger.debug(
                 "Fragments were restored.",
@@ -169,7 +168,5 @@ class RestoreDocumentService(RestoreDocumentServiceInterface):
             raise RestoreDocumentFailedException("Failed to restore the document record.") from e
 
         if document is None:
-            # The document was deleted when first read but vanished before restore
-            # (concurrent purge/restore). Treat it as a conflict rather than a 500.
             raise RestoreDocumentConflictException("The document is no longer available to restore.")
         return document

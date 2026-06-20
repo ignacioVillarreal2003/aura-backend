@@ -8,14 +8,14 @@ class DocumentReembedControllerInterface(ABC):
     @abstractmethod
     async def reembed_manage(
             self,
-            request: ReembedRequest,
+            reembed_request: ReembedRequest,
     ) -> BulkStartResponse:
-        ...
+        pass
 
     @abstractmethod
     async def status_manage(self) -> BulkJobStatusResponse:
-        ...
+        pass
 
     @abstractmethod
     async def stop_manage(self) -> BulkJobStatusResponse:
-        ...
+        pass

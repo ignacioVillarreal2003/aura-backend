@@ -29,7 +29,7 @@ class DocumentDownloadController(DocumentDownloadControllerInterface):
     ) -> StreamingResponse:
         Authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.DOWNLOAD_DOCUMENT}),
+            required_permissions=frozenset({Permissions.DOCUMENT_DOWNLOAD}),
         )
 
         content_stream, filename, mime_type = await document_download_service.download_document(
@@ -55,7 +55,7 @@ class DocumentDownloadController(DocumentDownloadControllerInterface):
     ) -> StreamingResponse:
         Authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.DOWNLOAD_DOCUMENT_MANAGE}),
+            required_permissions=frozenset({Permissions.DOCUMENT_DOWNLOAD_MANAGE}),
         )
 
         content_stream, filename, mime_type = await document_download_service.download_document_manage(

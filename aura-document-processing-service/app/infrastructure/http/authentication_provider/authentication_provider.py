@@ -8,27 +8,27 @@ import redis.asyncio as aioredis
 
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.authentication_provider.authentication_provider_settings import (
-    AuthenticationProviderSettings
+    AuthenticationProviderSettings,
 )
 from app.infrastructure.http.authentication_provider.dtos.authenticated_user_response import (
-    AuthenticatedUserResponse
+    AuthenticatedUserResponse,
 )
-from app.infrastructure.http.authentication_provider.authentication_provider_exception import (
+from app.infrastructure.http.authentication_provider.exceptions.authentication_provider_exception import (
     AuthenticationProviderInvalidTokenException,
     AuthenticationProviderServiceUnavailableException,
     AuthenticationProviderUnauthorizedException,
-    AuthenticationProviderUserNotFoundException
+    AuthenticationProviderUserNotFoundException,
 )
-from app.infrastructure.http.authentication_provider.authentication_provider_interface import (
+from app.infrastructure.http.authentication_provider.interfaces.authentication_provider_interface import (
     AuthenticationProviderInterface,
 )
-from app.infrastructure.http.http_client.http_client_exceptions import (
+from app.infrastructure.http.http_client.exceptions.http_client_exceptions import (
     HttpClientCircuitBreakerException,
     HttpClientConnectionException,
     HttpClientException,
-    HttpClientTimeoutException
+    HttpClientTimeoutException,
 )
-from app.infrastructure.http.http_client.http_client_interface import HttpClientInterface
+from app.infrastructure.http.http_client.interfaces.http_client_interface import HttpClientInterface
 
 logger = logging.getLogger(__name__)
 

@@ -6,9 +6,6 @@ logger = logging.getLogger(__name__)
 
 _PRODUCTION_ENVIRONMENT_NAMES = frozenset({"production", "prod"})
 
-# Explicit, non-permissive default. Browser-based clients only: server-to-server
-# calls between microservices are not subject to CORS, so only the frontend
-# origins need to be listed here.
 _DEFAULT_CORS_ORIGINS = [
     "http://localhost:3000", "http://127.0.0.1:3000",
     "http://localhost:4200", "http://127.0.0.1:4200",
@@ -72,7 +69,7 @@ class EnvironmentVariables(BaseSettings):
     @model_validator(mode="after")
     def validate_cors_not_wildcard_in_production(self) -> "EnvironmentVariables":
         if self.is_production() and any(
-            (o or "").strip() == "*" for o in self.cors_origins
+                (o or "").strip() == "*" for o in self.cors_origins
         ):
             raise ValueError(
                 "Wildcard CORS origin '*' is not allowed when "

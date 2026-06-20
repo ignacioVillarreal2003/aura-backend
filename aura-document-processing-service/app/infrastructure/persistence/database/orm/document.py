@@ -13,10 +13,6 @@ class Document(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
 
-    # The `chat` table lives in another service's domain; its ORM model is no
-    # longer registered in this service's metadata. The foreign key still exists
-    # at the database level, but declaring it here makes SQLAlchemy fail to
-    # resolve the (absent) `chat` table during flush. Keep it as a plain column.
     chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
 
     name: Mapped[str] = mapped_column(String(MAX_NAME_CHARS), nullable=False)

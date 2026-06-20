@@ -1,6 +1,7 @@
 import logging
 from abc import abstractmethod
 
+from app.application.processors.text_splitters.dtos.document_chunk import DocumentChunk
 from app.application.processors.text_splitters.exceptions.text_splitter_exception import (
     TextSplitterExecutionException
 )
@@ -57,5 +58,5 @@ class BaseTextSplitter(TextSplitterInterface):
     def split_text(
             self,
             text: str
-    ) -> list[str]:
+    ) -> list[DocumentChunk]:
         pass

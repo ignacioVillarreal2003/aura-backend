@@ -13,8 +13,8 @@ from app.infrastructure.messaging.rabbitmq.consumer.interfaces.graph_extraction_
 )
 from app.infrastructure.messaging.rabbitmq.dtos.commands.graph_extraction_command import GraphExtractionCommand
 from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
-from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
-from app.infrastructure.persistence.memory_database.bulk_job_progress_store.bulk_job_progress_store_interface import (
+from app.infrastructure.messaging.rabbitmq.interfaces.rabbitmq_manager_interface import RabbitMQManagerInterface
+from app.infrastructure.persistence.memory_database.bulk_job_progress_store.interfaces.bulk_job_progress_store_interface import (
     BulkJobProgressStoreInterface,
 )
 
@@ -55,7 +55,6 @@ class GraphExtractionConsumer(
         await self._service.extract_for_document(
             document_id=command.document_id,
             user=user,
-            force=command.force,
             message_id=envelope.message_id,
         )
         logger.info(

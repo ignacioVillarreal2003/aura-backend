@@ -1,18 +1,17 @@
 import json
 import logging
 from typing import Any, Optional, TypeVar
-
 from pydantic import BaseModel, ValidationError
 
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.authentication_provider.request_token import get_request_token
-from app.infrastructure.http.http_client.http_client_exceptions import (
+from app.infrastructure.http.http_client.exceptions.http_client_exceptions import (
     HttpClientCircuitBreakerException,
     HttpClientConnectionException,
     HttpClientException,
     HttpClientTimeoutException,
 )
-from app.infrastructure.http.http_client.http_client_interface import HttpClientInterface
+from app.infrastructure.http.http_client.interfaces.http_client_interface import HttpClientInterface
 from app.infrastructure.http.llm_provider.dtos.classify_document_request import ClassifyDocumentRequest
 from app.infrastructure.http.llm_provider.dtos.classify_document_response import ClassifyDocumentResponse
 from app.infrastructure.http.llm_provider.dtos.enrich_fragment_request import EnrichFragmentRequest
@@ -30,11 +29,11 @@ from app.infrastructure.http.llm_provider.dtos.translate_graph_query_request imp
 from app.infrastructure.http.llm_provider.dtos.translate_graph_query_response import (
     TranslateGraphQueryResponse,
 )
-from app.infrastructure.http.llm_provider.llm_provider_exception import (
+from app.infrastructure.http.llm_provider.exceptions.llm_provider_exception import (
     LlmProviderException,
     LlmProviderInvalidResponseException,
 )
-from app.infrastructure.http.llm_provider.llm_provider_interface import LlmProviderInterface
+from app.infrastructure.http.llm_provider.interfaces.llm_provider_interface import LlmProviderInterface
 from app.infrastructure.http.llm_provider.llm_provider_settings import LlmProviderSettings
 
 logger = logging.getLogger(__name__)

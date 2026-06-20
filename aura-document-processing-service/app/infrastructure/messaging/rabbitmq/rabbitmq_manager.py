@@ -13,13 +13,13 @@ from aio_pika.exceptions import (
 from fastapi import HTTPException, Request, status
 from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_exception import (
+from app.infrastructure.messaging.rabbitmq.exceptions.rabbitmq_manager_exception import (
     RabbitMQConnectionException,
     RabbitMQNotStartedException,
     RabbitMQPublishException,
     RabbitMQTopologyException
 )
-from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
+from app.infrastructure.messaging.rabbitmq.interfaces.rabbitmq_manager_interface import RabbitMQManagerInterface
 from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_settings import RabbitMQManagerSettings
 
 logger = logging.getLogger(__name__)

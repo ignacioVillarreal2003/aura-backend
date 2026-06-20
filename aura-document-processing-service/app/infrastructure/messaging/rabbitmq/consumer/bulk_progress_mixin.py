@@ -4,7 +4,7 @@ from typing import Any, Optional
 from app.domain.constants.document.bulk_operation import BulkOperation
 from app.domain.field_limits import MAX_POST_PROCESS_ERROR_MESSAGE_CHARS
 from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
-from app.infrastructure.persistence.memory_database.bulk_job_progress_store.bulk_job_progress_store_interface import (
+from app.infrastructure.persistence.memory_database.bulk_job_progress_store.interfaces.bulk_job_progress_store_interface import (
     BulkJobProgressStoreInterface,
 )
 
@@ -12,15 +12,6 @@ logger = logging.getLogger(__name__)
 
 
 class BulkProgressMixin:
-    """Adds bulk-job progress accounting to a per-document consumer.
-
-    Subclasses set ``_bulk_operation`` / ``_bulk_store`` and implement ``_execute`` (the
-    real per-document work). When a command carries a ``batch_id`` and a store is wired,
-    success/failure is reported into the bulk job and failures are swallowed (acked) so a
-    single poison document cannot stall a large migration via endless dead-letter retries.
-    Without a ``batch_id`` the original single-document behaviour is preserved: ``_execute``
-    runs directly and any exception propagates for the queue's dead-letter retry.
-    """
     _bulk_operation: BulkOperation
     _bulk_store: Optional[BulkJobProgressStoreInterface]
 

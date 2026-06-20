@@ -11,15 +11,15 @@ from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_afte
 
 from app.application.exceptions.app_exception import AppException
 from app.infrastructure.persistence.database.database_manager.database_manager_settings import (
-    DatabaseManagerSettings
+    DatabaseManagerSettings,
 )
-from app.infrastructure.persistence.database.database_manager.database_manager_exception import (
+from app.infrastructure.persistence.database.database_manager.exceptions.database_manager_exception import (
     DatabaseManagerException,
     DatabaseNotInitializedException,
-    DatabaseSessionException
+    DatabaseSessionException,
 )
-from app.infrastructure.persistence.database.database_manager.database_manager_interface import (
-    DatabaseManagerInterface
+from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
+    DatabaseManagerInterface,
 )
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ T = TypeVar("T")
 class DatabaseManager(DatabaseManagerInterface):
     def __init__(
             self,
-            database_manager_settings: Optional[DatabaseManagerSettings] = None
+            database_manager_settings: Optional[DatabaseManagerSettings] = None,
     ) -> None:
         self._settings = database_manager_settings or DatabaseManagerSettings()
 

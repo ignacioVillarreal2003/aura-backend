@@ -2,7 +2,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.controllers.graph.graph_entity_controller.graph_entity_controller_interface import (
+from app.api.controllers.graph.graph_entity_controller.interfaces.graph_entity_controller_interface import (
     GraphEntityControllerInterface,
 )
 from app.api.dependencies.rate_limiter import default_rate_limit
@@ -23,6 +23,7 @@ from app.infrastructure.persistence.database.database_manager.database_manager i
 from app.api.dependencies.services import (
     get_graph_entity_service,
 )
+
 
 class GraphEntityController(GraphEntityControllerInterface):
     async def get_entity(
@@ -49,6 +50,7 @@ class GraphEntityController(GraphEntityControllerInterface):
             authenticated_user=authenticated_user,
             database_session=database_session,
         )
+
 
 router = APIRouter()
 graph_entity_controller = GraphEntityController()

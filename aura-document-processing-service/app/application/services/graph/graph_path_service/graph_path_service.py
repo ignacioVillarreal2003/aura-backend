@@ -9,10 +9,11 @@ from app.application.services.graph.knowledge_graph_settings import KnowledgeGra
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.graph.graph_path.find_path_request import FindPathRequest
 from app.domain.dtos.graph.graph_path.graph_path_response import FindPathResponse
-from app.infrastructure.http.document_collection_catalog.document_collection_catalog_client_interface import (
+from app.infrastructure.http.authentication_provider.request_token import get_request_token
+from app.infrastructure.http.document_collection_catalog.interfaces.document_collection_catalog_client_interface import (
     DocumentCollectionCatalogClientInterface,
 )
-from app.infrastructure.persistence.graph.repositories.graph_path_repository.graph_path_repository_interface import (
+from app.infrastructure.persistence.graph.repositories.interfaces.graph_path_repository_interface import (
     GraphPathRepositoryInterface,
 )
 
@@ -39,10 +40,11 @@ class GraphPathService(GraphPathServiceInterface):
             database_session: AsyncSession,
             authorization_header: str | None = None,
     ) -> FindPathResponse:
+        token = authorization_header or get_request_token()
         accessible_ids = list(
             await self._document_collection_catalog_client.fetch_all_accessible_document_ids(
                 user_id=int(authenticated_user.id),
-                authorization_header=authorization_header,
+                authorization_header=token,
             )
         )
         if not accessible_ids:

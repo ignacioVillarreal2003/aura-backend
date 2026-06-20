@@ -28,7 +28,7 @@ class DeleteDocumentController(DeleteDocumentControllerInterface):
     ) -> Response:
         Authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.SOFT_DELETE_DOCUMENT}),
+            required_permissions=frozenset({Permissions.DOCUMENT_DELETE}),
         )
 
         await delete_document_service.soft_delete_document(
@@ -48,7 +48,7 @@ class DeleteDocumentController(DeleteDocumentControllerInterface):
     ) -> Response:
         Authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.SOFT_DELETE_DOCUMENTS_BY_CHAT}),
+            required_permissions=frozenset({Permissions.DOCUMENT_DELETE}),
         )
 
         await delete_document_service.soft_delete_documents_by_chat(
@@ -68,7 +68,7 @@ class DeleteDocumentController(DeleteDocumentControllerInterface):
     ) -> Response:
         Authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.SOFT_DELETE_DOCUMENT_MANAGE}),
+            required_permissions=frozenset({Permissions.DOCUMENT_DELETE_MANAGE}),
         )
 
         await delete_document_service.soft_delete_document_manage(

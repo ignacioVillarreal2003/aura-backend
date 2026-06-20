@@ -1,6 +1,5 @@
 from datetime import datetime
 from typing import Optional
-
 from pydantic import BaseModel, Field
 
 from app.domain.constants.document.bulk_operation import BulkOperation
@@ -19,7 +18,6 @@ class BulkJobError(BaseModel):
 
 
 class BulkStartResponse(BaseModel):
-    """Returned when a bulk operation is accepted; the fan-out runs in background."""
     job_id: str = Field(..., min_length=1, max_length=MAX_JOB_ID_CHARS)
     operation: BulkOperation = Field(...)
     total: int = Field(..., ge=0, le=MAX_POST_PROCESS_DOCUMENT_IDS)

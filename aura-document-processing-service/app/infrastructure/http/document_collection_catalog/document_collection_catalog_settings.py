@@ -1,4 +1,3 @@
-from typing import Optional
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -16,4 +15,3 @@ class DocumentCollectionCatalogSettings(BaseSettings):
     request_timeout_seconds: float = Field(default=15.0, gt=0, le=120.0)
     page_size: int = Field(default=100, ge=1, le=100)
     max_pages: int = Field(default=500, ge=1, le=10000)
-    fallback_bearer_token: Optional[str] = Field(default=None)

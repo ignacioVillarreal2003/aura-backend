@@ -14,12 +14,11 @@ class BulkDispatchServiceInterface(ABC):
             operation: BulkOperation,
             selector: DocumentSelector,
             user: AuthenticatedUser,
-            force: bool = False,
             prefer_docling: bool = False,
-            post_process: bool = True,
-            post_process_graph: bool = True,
+            enrich: bool = True,
+            graph_extract: bool = True,
     ) -> BulkStartResponse:
-        ...
+        pass
 
     @abstractmethod
     async def status(
@@ -27,7 +26,7 @@ class BulkDispatchServiceInterface(ABC):
             *,
             operation: BulkOperation,
     ) -> BulkJobStatusResponse:
-        ...
+        pass
 
     @abstractmethod
     async def stop(
@@ -35,4 +34,4 @@ class BulkDispatchServiceInterface(ABC):
             *,
             operation: BulkOperation,
     ) -> BulkJobStatusResponse:
-        ...
+        pass

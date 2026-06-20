@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import uuid
-from datetime import datetime
 from typing import Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,36 +15,31 @@ from app.application.services.graph.knowledge_graph_settings import KnowledgeGra
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.processing_status import ProcessingStatus
 from app.domain.constants.graph.relation_type import normalize_relation_type
-from app.domain.dtos.graph.graph_field_limits import MAX_KG_ERROR_MESSAGE_CHARS
 from app.domain.dtos.graph.graph_extraction.extracted_entity import ExtractedEntity
 from app.domain.dtos.graph.graph_extraction.extracted_relation import ExtractedRelation
-from app.domain.dtos.graph.graph_extraction.graph_extraction_progress import (
-    GraphExtractionError,
-    GraphExtractionProgressResponse,
-)
 from app.domain.dtos.graph.graph_extraction.graph_upsert_items import (
     EntityUpsertItem,
     RelationUpsertItem,
 )
-from app.infrastructure.http.llm_provider.llm_provider_interface import LlmProviderInterface
-from app.infrastructure.persistence.database.database_manager.database_manager_interface import (
+from app.infrastructure.http.llm_provider.interfaces.llm_provider_interface import LlmProviderInterface
+from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
     DatabaseManagerInterface,
 )
 from app.infrastructure.persistence.database.orm.fragment import Fragment
-from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
+from app.infrastructure.persistence.database.repositories.interfaces.document_repository_interface import (
     DocumentRepositoryInterface,
 )
-from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository_interface import (
+from app.infrastructure.persistence.database.repositories.interfaces.fragment_repository_interface import (
     FragmentRepositoryInterface,
 )
-from app.infrastructure.persistence.graph.repositories.graph_entity_repository.graph_entity_repository_interface import (
+from app.infrastructure.persistence.graph.repositories.interfaces.graph_entity_repository_interface import (
     GraphEntityRepositoryInterface,
 )
-from app.infrastructure.persistence.graph.repositories.graph_relation_repository.graph_relation_repository_interface import (
+from app.infrastructure.persistence.graph.repositories.interfaces.graph_relation_repository_interface import (
     GraphRelationRepositoryInterface,
 )
-from app.infrastructure.persistence.memory_database.graph_extraction_job_progress_store.graph_extraction_job_progress_store_interface import (
-    GraphExtractionJobProgressStoreInterface,
+from app.infrastructure.persistence.memory_database.graph_extraction_lock_store.interfaces.graph_extraction_lock_store_interface import (
+    GraphExtractionLockStoreInterface,
 )
 
 logger = logging.getLogger(__name__)
@@ -61,7 +55,7 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             llm_provider: LlmProviderInterface,
             entity_repository: GraphEntityRepositoryInterface,
             relation_repository: GraphRelationRepositoryInterface,
-            job_progress_store: GraphExtractionJobProgressStoreInterface,
+            lock_store: GraphExtractionLockStoreInterface,
             knowledge_graph_settings: Optional[KnowledgeGraphSettings] = None,
     ) -> None:
         self._database_manager = database_manager
@@ -70,7 +64,7 @@ class GraphExtractionService(GraphExtractionServiceInterface):
         self._llm_provider = llm_provider
         self._entity_repository = entity_repository
         self._relation_repository = relation_repository
-        self._job_progress_store = job_progress_store
+        self._lock_store = lock_store
         self._settings = knowledge_graph_settings or KnowledgeGraphSettings()
 
     async def extract_for_document(
@@ -78,7 +72,6 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             *,
             document_id: int,
             user: AuthenticatedUser,
-            force: bool = False,
             message_id: Optional[str] = None,
     ) -> None:
         job_id = uuid.uuid4().hex
@@ -88,19 +81,11 @@ class GraphExtractionService(GraphExtractionServiceInterface):
                 "document_id": document_id,
                 "user_id": user.id,
                 "job_id": job_id,
-                "force": force,
                 "message_id": message_id,
             },
         )
 
-        if force:
-            await self._job_progress_store.release_extraction_lock(document_id=document_id)
-            logger.info(
-                "Force flag set; any existing extraction lock was released.",
-                extra={"document_id": document_id, "user_id": user.id},
-            )
-
-        acquired = await self._job_progress_store.try_acquire_extraction_lock(
+        acquired = await self._lock_store.try_acquire_extraction_lock(
             document_id=document_id,
             job_id=job_id,
         )
@@ -124,11 +109,7 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             await self._set_graph_status(document_id, ProcessingStatus.failed)
             raise
         finally:
-            await self._job_progress_store.complete_job(
-                job_id=job_id,
-                document_id=document_id,
-            )
-            await self._job_progress_store.release_extraction_lock(
+            await self._lock_store.release_extraction_lock(
                 document_id=document_id,
                 job_id=job_id,
             )
@@ -162,49 +143,6 @@ class GraphExtractionService(GraphExtractionServiceInterface):
                 extra={"document_id": document_id, "graph_status": status.value},
             )
 
-    async def get_progress(
-            self,
-            *,
-            document_id: int,
-    ) -> GraphExtractionProgressResponse:
-        snapshot = await self._job_progress_store.get_snapshot(document_id=document_id)
-        if snapshot is None:
-            return GraphExtractionProgressResponse(
-                job_id=None,
-                document_id=document_id,
-                is_running=False,
-                total_fragments=0,
-                processed_fragments=0,
-                failed_fragments=0,
-                extracted_entities=0,
-                extracted_relations=0,
-                started_at=None,
-                finished_at=None,
-                errors=[],
-            )
-
-        errors_raw = snapshot.get("errors") or []
-        errors = []
-        for item in errors_raw:
-            try:
-                errors.append(GraphExtractionError.model_validate(item))
-            except Exception:
-                continue
-
-        return GraphExtractionProgressResponse(
-            job_id=snapshot.get("job_id"),
-            document_id=document_id,
-            is_running=bool(snapshot.get("is_running")),
-            total_fragments=int(snapshot.get("total_fragments", 0)),
-            processed_fragments=int(snapshot.get("processed_fragments", 0)),
-            failed_fragments=int(snapshot.get("failed_fragments", 0)),
-            extracted_entities=int(snapshot.get("extracted_entities", 0)),
-            extracted_relations=int(snapshot.get("extracted_relations", 0)),
-            started_at=self._parse_optional_datetime(snapshot.get("started_at")),
-            finished_at=self._parse_optional_datetime(snapshot.get("finished_at")),
-            errors=errors,
-        )
-
     async def _run_job(
             self,
             *,
@@ -212,21 +150,9 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             document_id: int,
             user: AuthenticatedUser,
     ) -> None:
-        # Purge the document's prior footprint so extraction is an idempotent
-        # rebuild rather than purely additive. Without this, re-extraction leaves
-        # entities/relations from removed text behind and re-inflates relation
-        # confidence (confidence_sum/confidence_count are summed again each run).
-        # The deletes are document-scoped (shared entities/relations survive) and
-        # no-ops on a first extraction. This also cleans any partial footprint left
-        # by a previously failed run before the rebuild starts.
         await self._purge_document_footprint(document_id)
 
         fragments = await self._load_fragments(document_id)
-        await self._job_progress_store.begin_job(
-            job_id=job_id,
-            document_id=document_id,
-            total_fragments=len(fragments),
-        )
 
         if not fragments:
             logger.info(
@@ -300,10 +226,6 @@ class GraphExtractionService(GraphExtractionServiceInterface):
         )
 
     async def _purge_document_footprint(self, document_id: int) -> None:
-        # Relations first, then entities: entity deletion DETACH-deletes orphaned
-        # nodes, so clearing relation provenance beforehand keeps the relation
-        # bookkeeping (confidence sums, source arrays) consistent for relations
-        # shared with other documents.
         relations_deleted = await self._relation_repository.delete_document_relations(
             document_id=document_id,
         )
@@ -350,12 +272,6 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             prev_context_tail: str = "",
     ) -> str:
         fragment_id = int(fragment.id)
-        await self._job_progress_store.mark_progress(
-            job_id=job_id,
-            document_id=document_id,
-            current_fragment_id=fragment_id,
-        )
-
         content = self._build_fragment_content(fragment.content, prev_context_tail)
 
         try:
@@ -417,16 +333,10 @@ class GraphExtractionService(GraphExtractionServiceInterface):
         entities_count = len(entity_items)
         relations_count = len(relation_items)
 
-        await self._job_progress_store.mark_progress(
-            job_id=job_id,
-            document_id=document_id,
-            processed_increment=1,
-            extracted_entities_increment=entities_count,
-            extracted_relations_increment=relations_count,
-        )
         logger.debug(
             "Fragment was extracted into the knowledge graph.",
             extra={
+                "job_id": job_id,
                 "document_id": document_id,
                 "fragment_id": fragment_id,
                 "entities_count": entities_count,
@@ -452,14 +362,6 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             entities: list[ExtractedEntity],
             relations: list[ExtractedRelation],
     ) -> tuple[list[EntityUpsertItem], list[RelationUpsertItem]]:
-        """Deduplicate the LLM output for a fragment into two write batches.
-
-        Entities are keyed by ``(canonical_name, type)``; aliases are unioned
-        and the first non-empty description wins. Relation endpoints are added
-        to the entity batch so the relation MATCH always finds its nodes.
-        Relations are keyed by the full quintuple keeping the highest
-        confidence seen in the fragment.
-        """
         entity_map: dict[tuple[str, str], EntityUpsertItem] = {}
 
         def add_entity(
@@ -542,27 +444,14 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             error: BaseException,
             stage: str,
     ) -> None:
-        message = f"[{stage}] {type(error).__name__}: {str(error) or type(error).__name__}"[
-            :MAX_KG_ERROR_MESSAGE_CHARS
-        ]
-        await self._job_progress_store.append_error(
-            job_id=job_id,
-            document_id=document_id,
-            error=GraphExtractionError(
-                fragment_id=fragment_id, error=message
-            ).model_dump(mode="json"),
-        )
-        await self._job_progress_store.mark_progress(
-            job_id=job_id,
-            document_id=document_id,
-            failed_increment=1,
-        )
         logger.exception(
             "A fragment failed during knowledge graph extraction.",
             extra={
+                "job_id": job_id,
                 "document_id": document_id,
                 "fragment_id": fragment_id,
                 "stage": stage,
+                "error_type": type(error).__name__,
             },
         )
 
@@ -571,16 +460,3 @@ class GraphExtractionService(GraphExtractionServiceInterface):
         if not name:
             return ""
         return " ".join(name.strip().lower().split())
-
-    @staticmethod
-    def _parse_optional_datetime(value: object) -> Optional[datetime]:
-        if value is None or value == "":
-            return None
-        if isinstance(value, datetime):
-            return value
-        if isinstance(value, str):
-            try:
-                return datetime.fromisoformat(value)
-            except ValueError:
-                return None
-        return None

@@ -24,7 +24,7 @@ class ReaderSettings(BaseSettings):
     pdf_use_parallel: bool = Field(default=True)
     pdf_max_workers: Optional[int] = Field(default=None, ge=1, le=16)
 
-    docling_enabled: bool = Field(default=False)
+    docling_enabled: bool = Field(default=True)
     docling_device: Literal["cpu", "cuda", "mps", "auto"] = "auto"
     docling_num_threads: int = Field(default=4, ge=1, le=16)
     docling_artifacts_path: Optional[str] = Field(default=None)

@@ -12,7 +12,7 @@ from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import
 from app.infrastructure.messaging.rabbitmq.publisher.interfaces.document_reprocess_publisher_interface import (
     DocumentReprocessPublisherInterface,
 )
-from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
+from app.infrastructure.messaging.rabbitmq.interfaces.rabbitmq_manager_interface import RabbitMQManagerInterface
 from app.infrastructure.messaging.rabbitmq.reliable_publish.redis_outbox_lite import RedisOutboxLite
 
 logger = logging.getLogger(__name__)
@@ -34,8 +34,8 @@ class DocumentReprocessPublisher(DocumentReprocessPublisherInterface):
             document_id: int,
             user: AuthenticatedUser,
             prefer_docling: bool = False,
-            post_process: bool = True,
-            post_process_graph: bool = True,
+            enrich: bool = True,
+            graph_extract: bool = True,
             batch_id: Optional[str] = None,
     ) -> str:
         envelope = MessageEnvelope.wrap(
@@ -43,8 +43,8 @@ class DocumentReprocessPublisher(DocumentReprocessPublisherInterface):
                 document_id=document_id,
                 user=user.model_dump(mode="json"),
                 prefer_docling=prefer_docling,
-                post_process=post_process,
-                post_process_graph=post_process_graph,
+                enrich=enrich,
+                graph_extract=graph_extract,
                 batch_id=batch_id,
                 auth_token=get_request_token(),
             )

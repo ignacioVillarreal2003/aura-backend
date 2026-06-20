@@ -9,9 +9,6 @@ from app.application.processors.readers.reader_factory import ReaderFactory
 from app.application.processors.rerankers.reranker_factory import RerankerFactory
 from app.application.processors.text_cleaners.text_cleaner_factory import TextCleanerFactory
 from app.application.processors.text_splitters.text_splitter_factory import TextSplitterFactory
-from app.application.processors.structured_chunkers.structured_chunker_factory import (
-    StructuredChunkerFactory,
-)
 from app.application.services.document.create_document_service.create_document_service import CreateDocumentService
 from app.application.services.document.document_download_service.document_download_service import (
     DocumentDownloadService,
@@ -81,28 +78,29 @@ from app.infrastructure.messaging.rabbitmq.reliable_publish.redis_outbox_lite im
 from app.infrastructure.messaging.rabbitmq.rabbitmq_manager import RabbitMQManager
 from app.infrastructure.persistence.database.database_manager.database_manager import DatabaseManager
 from app.infrastructure.http.chat_membership.chat_membership_provider import ChatMembershipProvider
-from app.infrastructure.persistence.database.repositories.document_repository.document_repository import (
+from app.infrastructure.persistence.database.repositories.document_repository import (
     DocumentRepository,
 )
-from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository import (
+from app.infrastructure.persistence.database.repositories.fragment_repository import (
     FragmentRepository,
 )
 from app.infrastructure.persistence.graph.neo4j_manager.neo4j_manager import Neo4jManager
-from app.infrastructure.persistence.graph.neo4j_manager.exceptions.neo4j_manager_exception import Neo4jConnectionException
-from app.infrastructure.persistence.graph.repositories.graph_entity_repository.graph_entity_repository import (
+from app.infrastructure.persistence.graph.neo4j_manager.exceptions.neo4j_manager_exception import \
+    Neo4jConnectionException
+from app.infrastructure.persistence.graph.repositories.graph_entity_repository import (
     GraphEntityRepository,
 )
-from app.infrastructure.persistence.graph.repositories.graph_path_repository.graph_path_repository import (
+from app.infrastructure.persistence.graph.repositories.graph_path_repository import (
     GraphPathRepository,
 )
-from app.infrastructure.persistence.graph.repositories.graph_relation_repository.graph_relation_repository import (
+from app.infrastructure.persistence.graph.repositories.graph_relation_repository import (
     GraphRelationRepository,
 )
-from app.infrastructure.persistence.graph.repositories.graph_stats_repository.graph_stats_repository import (
+from app.infrastructure.persistence.graph.repositories.graph_stats_repository import (
     GraphStatsRepository,
 )
-from app.infrastructure.persistence.memory_database.graph_extraction_job_progress_store.graph_extraction_job_progress_store import (
-    GraphExtractionJobProgressStore,
+from app.infrastructure.persistence.memory_database.graph_extraction_lock_store.graph_extraction_lock_store import (
+    GraphExtractionLockStore,
 )
 from app.infrastructure.persistence.memory_database.bulk_job_progress_store.bulk_job_progress_store import (
     BulkJobProgressStore,
@@ -120,20 +118,6 @@ _CleanupFn = Callable[[], Awaitable[None]]
 
 
 class DependencyContainer:
-    """Lightweight wiring container for application startup.
-
-    Every component is published through :meth:`register`, which:
-      * stores it on ``app.state`` under the given name (the lookup key the rest of
-        the app uses), and
-      * records the name so :meth:`rollback` can remove *exactly* what was created,
-        without a hand-maintained list, and
-      * optionally records an async teardown callback for resources that must be
-        released on a failed startup.
-
-    Already-registered components are read back as plain attributes
-    (``container.http_client``), so builders can declare their dependencies by name.
-    """
-
     def __init__(self, app: FastAPI) -> None:
         self._app = app
         self._cleanup_stack: list[tuple[str, _CleanupFn]] = []
@@ -154,8 +138,6 @@ class DependencyContainer:
         return getattr(self._app.state, name, default)
 
     def __getattr__(self, name: str) -> Any:
-        # Only reached for names that are not real instance/class attributes; resolve
-        # them against the components published on app.state.
         if name.startswith("_"):
             raise AttributeError(name)
         try:
@@ -166,8 +148,6 @@ class DependencyContainer:
             ) from e
 
     def mark_started(self) -> None:
-        # Startup succeeded: drop the teardown callbacks so a later error cannot
-        # trigger a rollback of a fully-started app.
         self._cleanup_stack.clear()
 
     async def rollback(self) -> None:
@@ -267,13 +247,9 @@ async def _build_processors_and_read_services(c: DependencyContainer) -> None:
     c.register("text_cleaner_factory", text_cleaner_factory)
 
     text_splitter_factory = TextSplitterFactory()
-    # Warm the flat-text splitter (the classic path / docling_hybrid fallback). The
-    # active type may be docling_hybrid, which is not a flat-text splitter, so warm
-    # the effective classic splitter rather than the active one.
-    await asyncio.to_thread(text_splitter_factory.get_classic_splitter)
-    c.register("text_splitter_factory", text_splitter_factory)
 
-    c.register("structured_chunker_factory", StructuredChunkerFactory())
+    await asyncio.to_thread(text_splitter_factory.warmup)
+    c.register("text_splitter_factory", text_splitter_factory)
 
     c.register(
         "document_query_service",
@@ -326,8 +302,6 @@ async def _build_messaging(c: DependencyContainer) -> None:
     )
     c.register("outbox_lite", outbox_lite)
 
-    # Shared across the bulk maintenance operations (reembed/reprocess/enrich/graph);
-    # the per-document consumers report into it and the HTTP status/stop endpoints read it.
     c.register(
         "bulk_job_progress_store",
         BulkJobProgressStore(redis_client=c.redis_client.client),
@@ -416,7 +390,6 @@ async def _build_document_services(c: DependencyContainer) -> None:
             embedder_factory=c.embedder_factory,
             graph_extraction_publisher=c.get("graph_extraction_publisher"),
             document_enrichment_publisher=c.document_enrichment_publisher,
-            structured_chunker_factory=c.structured_chunker_factory,
         ),
     )
 
@@ -497,9 +470,6 @@ async def _build_document_services(c: DependencyContainer) -> None:
 
 
 async def _build_maintenance_pipelines(c: DependencyContainer) -> None:
-    # C-4 maintenance flows: re-embed existing fragments with the current model
-    # (model migration) and full reprocess (re-chunk + re-embed) from the stored
-    # object. Both are async (queue + consumer) and reuse the existing pipeline.
     rabbitmq_manager = c.rabbitmq_manager
     outbox_lite = c.outbox_lite
 
@@ -550,9 +520,6 @@ async def _build_maintenance_pipelines(c: DependencyContainer) -> None:
     await document_reprocess_consumer.start()
     c.register("document_reprocess_consumer", document_reprocess_consumer)
 
-    # Coordinator for 1/several/all-document maintenance jobs. The graph-extraction
-    # publisher is only present when the knowledge graph module is enabled; the
-    # dispatcher reports the graph operation as unavailable (503) otherwise.
     c.register(
         "bulk_dispatch_service",
         BulkDispatchService(
@@ -568,9 +535,6 @@ async def _build_maintenance_pipelines(c: DependencyContainer) -> None:
 
 
 async def _build_purge_consumer(c: DependencyContainer) -> None:
-    # Registered after the knowledge-graph wiring so the purge consumer can pick
-    # up the graph repositories when present; it falls back to MinIO-only cleanup
-    # when Neo4j is disabled or unavailable.
     document_purge_consumer = DocumentPurgeConsumer(
         rabbitmq_manager=c.rabbitmq_manager,
         database_manager=c.db_manager,
@@ -645,11 +609,10 @@ async def _wire_knowledge_graph_module(c: DependencyContainer) -> None:
     c.register("graph_path_repository", GraphPathRepository(neo4j_manager=neo4j_manager))
 
     c.register(
-        "graph_extraction_job_progress_store",
-        GraphExtractionJobProgressStore(
+        "graph_extraction_lock_store",
+        GraphExtractionLockStore(
             redis_client=c.redis_client.client,
             lock_ttl_seconds=knowledge_graph_settings.extraction_lock_ttl_seconds,
-            snapshot_ttl_seconds=knowledge_graph_settings.extraction_snapshot_ttl_seconds,
         ),
     )
 
@@ -662,7 +625,7 @@ async def _wire_knowledge_graph_module(c: DependencyContainer) -> None:
             llm_provider=c.llm_provider,
             entity_repository=c.graph_entity_repository,
             relation_repository=c.graph_relation_repository,
-            job_progress_store=c.graph_extraction_job_progress_store,
+            lock_store=c.graph_extraction_lock_store,
             knowledge_graph_settings=knowledge_graph_settings,
         ),
     )

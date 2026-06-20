@@ -12,7 +12,7 @@ from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import
 from app.infrastructure.messaging.rabbitmq.publisher.interfaces.document_reembed_publisher_interface import (
     DocumentReembedPublisherInterface,
 )
-from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
+from app.infrastructure.messaging.rabbitmq.interfaces.rabbitmq_manager_interface import RabbitMQManagerInterface
 from app.infrastructure.messaging.rabbitmq.reliable_publish.redis_outbox_lite import RedisOutboxLite
 
 logger = logging.getLogger(__name__)
@@ -33,14 +33,12 @@ class DocumentReembedPublisher(DocumentReembedPublisherInterface):
             *,
             document_id: int,
             user: AuthenticatedUser,
-            force: bool = False,
             batch_id: Optional[str] = None,
     ) -> str:
         envelope = MessageEnvelope.wrap(
             DocumentReembedCommand(
                 document_id=document_id,
                 user=user.model_dump(mode="json"),
-                force=force,
                 batch_id=batch_id,
                 auth_token=get_request_token(),
             )
@@ -69,7 +67,7 @@ class DocumentReembedPublisher(DocumentReembedPublisherInterface):
 
         logger.info(
             "A document-reembed command was published.",
-            extra={"document_id": document_id, "message_id": envelope.message_id, "force": force},
+            extra={"document_id": document_id, "message_id": envelope.message_id},
         )
         return envelope.message_id
 

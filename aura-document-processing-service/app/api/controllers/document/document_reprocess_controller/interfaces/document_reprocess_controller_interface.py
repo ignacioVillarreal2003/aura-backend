@@ -10,12 +10,12 @@ class DocumentReprocessControllerInterface(ABC):
             self,
             request: ReprocessRequest,
     ) -> BulkStartResponse:
-        ...
+        pass
 
     @abstractmethod
     async def status_manage(self) -> BulkJobStatusResponse:
-        ...
+        pass
 
     @abstractmethod
     async def stop_manage(self) -> BulkJobStatusResponse:
-        ...
+        pass

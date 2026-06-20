@@ -7,9 +7,9 @@ from app.domain.types import ChatId
 
 class CreateDocumentRequest(BaseModel):
     chat_id: Optional[ChatId] = Field(default=None, gt=0, le=MAX_ID)
-    prefer_docling: bool = False
-    post_process: bool = False
-    post_process_graph: bool = False
+    prefer_docling: bool = True
+    enrich: bool = False
+    graph_extract: bool = False
     name: Optional[str] = Field(default=None, max_length=MAX_NAME_CHARS)
     description: Optional[str] = Field(default=None, max_length=MAX_DESCRIPTION_CHARS)
 

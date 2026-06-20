@@ -1,5 +1,4 @@
 import logging
-
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.controllers.document.document_reprocess_controller.interfaces.document_reprocess_controller_interface import (
@@ -26,13 +25,13 @@ from app.infrastructure.http.authentication_provider.authentication_provider imp
 logger = logging.getLogger(__name__)
 
 _OPERATION = BulkOperation.reprocess
-_REQUIRED = frozenset({Permissions.REPROCESS_DOCUMENT_MANAGE})
+_REQUIRED = frozenset({Permissions.DOCUMENT_REPROCESS_MANAGE})
 
 
 class DocumentReprocessController(DocumentReprocessControllerInterface):
     async def reprocess_manage(
             self,
-            request: ReprocessRequest,
+            reprocess_request: ReprocessRequest,
             bulk_dispatch_service: BulkDispatchServiceInterface = Depends(get_bulk_dispatch_service),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
             _rl: None = Depends(strict_rate_limit),
@@ -41,11 +40,11 @@ class DocumentReprocessController(DocumentReprocessControllerInterface):
         try:
             return await bulk_dispatch_service.start(
                 operation=_OPERATION,
-                selector=request.selector,
+                selector=reprocess_request.selector,
                 user=authenticated_user,
-                prefer_docling=request.prefer_docling,
-                post_process=request.post_process,
-                post_process_graph=request.post_process_graph,
+                prefer_docling=reprocess_request.prefer_docling,
+                enrich=reprocess_request.enrich,
+                graph_extract=reprocess_request.graph_extract,
             )
         except BulkOperationConflictException as e:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e

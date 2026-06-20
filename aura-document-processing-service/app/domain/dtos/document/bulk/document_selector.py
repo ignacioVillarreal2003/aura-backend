@@ -1,17 +1,10 @@
 from typing import Optional
-
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.domain.field_limits import MAX_ID, MAX_POST_PROCESS_DOCUMENT_IDS
 
 
 class DocumentSelector(BaseModel):
-    """Selects which documents a bulk operation targets.
-
-    Exactly one mode must be chosen: an explicit list of ids (one or several), or
-    ``all_documents`` to migrate the whole corpus gradually. The list is deduplicated
-    and bounded so a single request cannot enqueue an unbounded fan-out.
-    """
     document_ids: Optional[list[int]] = Field(
         default=None,
         max_length=MAX_POST_PROCESS_DOCUMENT_IDS,

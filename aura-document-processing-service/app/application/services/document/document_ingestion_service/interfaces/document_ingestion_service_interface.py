@@ -13,7 +13,7 @@ class DocumentIngestionServiceInterface(ABC):
             local_file_path: Path,
             user: AuthenticatedUser,
             prefer_docling: bool = False,
-            post_process: bool = True,
-            post_process_graph: bool = True,
+            enrich: bool = True,
+            graph_extract: bool = True,
     ) -> None:
         pass
