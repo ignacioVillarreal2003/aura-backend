@@ -21,18 +21,19 @@ from accounts.admin_parts.common import (
     _is_admin_or_super_user,
     _is_effective_superadmin,
     log_audit,
+    has_permission,
 )
 from accounts.admin_parts.forms.user_form import UserAdminForm
 
 
 def _can_see_full_user_edit(request, obj):
     """True cuando el editor puede ver Grupos + Auditoría en el formulario de un user."""
-    if _is_effective_superadmin(request):
+    if has_permission(request, 'ADMIN_USERS_EDIT_ADMIN'):
         return True
     if not obj:
         return False
     return (
-        _is_admin_or_super_user(request.user) and
+        has_permission(request, 'ADMIN_USERS_EDIT') and
         obj.user_roles.filter(role__name='user', deleted_at__isnull=True).exists()
     )
 
@@ -309,7 +310,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             .prefetch_related('user_roles__role')
             .order_by(F('deleted_at').asc(nulls_first=True), 'username')
         )
-        if not _is_effective_superadmin(request):
+        if not (has_permission(request, 'ADMIN_USERS_VIEW_ADMINS') or _is_effective_superadmin(request)):
             queryset = queryset.filter(
                 user_roles__role__name='user',
                 user_roles__deleted_at__isnull=True,
@@ -317,17 +318,17 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
         return queryset
 
     def has_add_permission(self, request):
-        if _is_admin_or_super_user(request.user):
+        if has_permission(request, 'ADMIN_USERS_CREATE'):
             return True
         return bool(request.user and request.user.is_staff)
 
     def has_module_permission(self, request):
-        if _is_admin_or_super_user(request.user):
+        if has_permission(request, 'ADMIN_USERS_VIEW'):
             return True
         return bool(request.user and request.user.is_staff)
 
     def has_view_permission(self, request, obj=None):
-        if _is_admin_or_super_user(request.user):
+        if has_permission(request, 'ADMIN_USERS_VIEW'):
             return True
         if obj is None:
             return bool(request.user and request.user.is_staff)
@@ -338,10 +339,10 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             return False
         if obj is not None and obj.user_roles.filter(role__name='superadmin', deleted_at__isnull=True).exists():
             return False
-        if obj is not None and not _is_effective_superadmin(request):
-            if obj.user_roles.filter(role__name='admin', deleted_at__isnull=True).exists():
+        if obj is not None and obj.user_roles.filter(role__name='admin', deleted_at__isnull=True).exists():
+            if not has_permission(request, 'ADMIN_USERS_EDIT_ADMIN'):
                 return False
-        if _is_admin_or_super_user(request.user):
+        if has_permission(request, 'ADMIN_USERS_EDIT'):
             return True
         if obj is None:
             return bool(request.user and request.user.is_staff)
@@ -352,10 +353,10 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             return False
         if obj is not None and obj.user_roles.filter(role__name='superadmin', deleted_at__isnull=True).exists():
             return False
-        if obj is not None and not _is_effective_superadmin(request):
-            if obj.user_roles.filter(role__name='admin', deleted_at__isnull=True).exists():
+        if obj is not None and obj.user_roles.filter(role__name='admin', deleted_at__isnull=True).exists():
+            if not has_permission(request, 'ADMIN_USERS_DELETE_ADMIN'):
                 return False
-        if _is_admin_or_super_user(request.user):
+        if has_permission(request, 'ADMIN_USERS_DELETE'):
             return True
         if obj is None:
             return False
@@ -372,7 +373,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
         from django.core.exceptions import PermissionDenied
         extra_context = extra_context or {}
         if request.GET.get('role') == 'admin':
-            if not _is_effective_superadmin(request):
+            if not (has_permission(request, 'ADMIN_USERS_CREATE_ADMIN') or _is_effective_superadmin(request)):
                 raise PermissionDenied
             extra_context['custom_verbose_name'] = 'Administrador'
         if request.GET.get('role', 'user') == 'user':
@@ -411,8 +412,8 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
         is_user_type = extra_context.get('custom_verbose_name') == 'Usuario'
         can_load_mac = (
             not extra_context.get('view_only_user') and (
-                _is_effective_superadmin(request) or
-                (_is_admin_or_super_user(request.user) and is_user_type)
+                has_permission(request, 'ADMIN_USERS_EDIT_ADMIN') or
+                (has_permission(request, 'ADMIN_USERS_MAC') and is_user_type)
             )
         )
         if object_id and can_load_mac:
@@ -564,7 +565,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
         else:
             from accounts.services.mac_client import mac_client
             role_type = request.GET.get('role', 'user')
-            if role_type == 'admin' and not _is_effective_superadmin(request):
+            if role_type == 'admin' and not (has_permission(request, 'ADMIN_USERS_CREATE_ADMIN') or _is_effective_superadmin(request)):
                 role_type = 'user'
             try:
                 role = Role.objects.get(name=role_type)

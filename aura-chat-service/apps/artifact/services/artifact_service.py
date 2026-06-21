@@ -171,15 +171,19 @@ def create_artifact_for_content(
         *,
         user_id: int,
         artifact_type: str,
-        mode: str,
         source_chat_id: int,
+        retrieve_context: bool | None = None,
+        process_documents: bool | None = None,
+        document_ids: list[int] | None = None,
         fragments=None,
 ) -> Artifact:
     try:
         artifact = artifact_repository.create(
             user_id=user_id,
             type=artifact_type,
-            mode=mode,
+            retrieve_context=retrieve_context,
+            process_documents=process_documents,
+            document_ids=document_ids or [],
             source_chat_id=source_chat_id,
             fragments=fragments,
         )

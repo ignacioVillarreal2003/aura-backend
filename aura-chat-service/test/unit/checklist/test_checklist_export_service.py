@@ -16,7 +16,6 @@ import pytest
 from apps.artifact_checklist.exceptions import ChecklistExportException
 from apps.artifact_checklist.models import ArtifactChecklist
 from core.export.pdf_export import fmt_dt as _fmt_dt
-from apps.artifact.models.artifact import Artifact
 from apps.artifact_checklist.services.export_service import (
     generate_checklist_markdown,
     generate_checklist_pdf,
@@ -34,11 +33,11 @@ def _section(title="Sección", items=None):
     return SimpleNamespace(title=title, items=SimpleNamespace(all=lambda: items))
 
 
-def _checklist(title="Mi checklist", mode=Artifact.Mode.DIRECT, sections=None, created_at=None):
+def _checklist(title="Mi checklist", retrieve_context=None, process_documents=None, sections=None, created_at=None):
     sections = sections or []
     return SimpleNamespace(
         title=title,
-        artifact=SimpleNamespace(mode=mode),
+        artifact=SimpleNamespace(retrieve_context=retrieve_context, process_documents=process_documents),
         created_at=created_at or datetime.datetime(2025, 3, 15, 9, 30, tzinfo=datetime.timezone.utc),
         sections=SimpleNamespace(all=lambda: sections),
     )
@@ -127,7 +126,7 @@ def test_pdf_returns_pdf_bytes():
 
 
 def test_pdf_handles_rag_mode():
-    cl = _checklist(mode=Artifact.Mode.RAG, sections=[_section("S", items=[_item("a")])])
+    cl = _checklist(process_documents=True, sections=[_section("S", items=[_item("a")])])
     assert generate_checklist_pdf(cl)[:4] == b"%PDF"
 
 

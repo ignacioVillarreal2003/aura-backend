@@ -10,7 +10,7 @@ class DeleteDocumentServiceInterface(ABC):
             self,
             document_id: int,
             database_session: AsyncSession,
-            authenticated_user: AuthenticatedUser
+            authenticated_user: AuthenticatedUser,
     ) -> None:
         pass
 
@@ -19,15 +19,15 @@ class DeleteDocumentServiceInterface(ABC):
             self,
             chat_id: int,
             database_session: AsyncSession,
-            authenticated_user: AuthenticatedUser
+            authenticated_user: AuthenticatedUser,
     ) -> None:
         pass
 
     @abstractmethod
-    async def soft_delete_document_admin(
+    async def soft_delete_document_manage(
             self,
             document_id: int,
             database_session: AsyncSession,
-            authenticated_user: AuthenticatedUser
+            authenticated_user: AuthenticatedUser,
     ) -> None:
         pass

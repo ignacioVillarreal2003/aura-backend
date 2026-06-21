@@ -13,7 +13,7 @@ from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_afte
 from urllib3.exceptions import HTTPError as Urllib3HTTPError
 
 from app.application.exceptions.app_exception import AppException
-from app.infrastructure.persistence.storages.minio_manager.minio_manager_exception import (
+from app.infrastructure.persistence.storages.minio_manager.exceptions.minio_manager_exception import (
     MinioBucketException,
     MinioConnectionException,
     MinioDeleteException,
@@ -22,7 +22,7 @@ from app.infrastructure.persistence.storages.minio_manager.minio_manager_excepti
     MinioOperationException,
     MinioUploadException
 )
-from app.infrastructure.persistence.storages.minio_manager.minio_manager_interface import (
+from app.infrastructure.persistence.storages.minio_manager.interfaces.minio_manager_interface import (
     MinioManagerInterface
 )
 from app.infrastructure.persistence.storages.minio_manager.minio_manager_settings import (

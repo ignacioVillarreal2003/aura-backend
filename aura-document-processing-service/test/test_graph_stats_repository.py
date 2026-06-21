@@ -14,10 +14,10 @@ from neo4j.exceptions import Neo4jError
 from app.infrastructure.persistence.graph.neo4j_manager.interfaces.neo4j_manager_interface import (
     Neo4jManagerInterface,
 )
-from app.infrastructure.persistence.graph.repositories.graph_repository_exceptions import (
+from app.infrastructure.persistence.graph.repositories.exceptions.graph_repository_exceptions import (
     GraphPersistenceException,
 )
-from app.infrastructure.persistence.graph.repositories.graph_stats_repository.graph_stats_repository import (
+from app.infrastructure.persistence.graph.repositories.graph_stats_repository import (
     GraphStatsRepository,
 )
 

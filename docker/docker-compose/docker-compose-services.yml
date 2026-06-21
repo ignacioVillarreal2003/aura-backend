@@ -35,7 +35,7 @@ services:
     ports:
       - 8000:8000
     env_file:
-      - ../../aura-document-processing-service/.env.docker
+      - ../../aura-document-processing-service/env/.env.docker
     environment:
       HF_TOKEN: ${HF_TOKEN:-}
     depends_on:
@@ -264,10 +264,7 @@ services:
 
     env_file:
       - ../../aura-llm-service/env/.env.docker
-      - ../../aura-document-processing-service/.env.docker
-    environment:
-      - OLLAMA_LOAD_TIMEOUT=15m
-      - OLLAMA_KEEP_ALIVE=24h
+      - ../../aura-document-processing-service/env/.env.docker
     volumes:
       - llm_data:/root/.ollama
     restart: unless-stopped

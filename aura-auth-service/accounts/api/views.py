@@ -1,36 +1,68 @@
 """Auth API views for login, refresh, validate, and logout."""
 
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.throttling import AnonRateThrottle
-from drf_spectacular.utils import extend_schema
-
 import secrets
+
 from django.conf import settings
+from django.db.models import Q
+from django.utils import timezone
+from drf_spectacular.utils import extend_schema
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
+from rest_framework.views import APIView
+
+from accounts.admin_parts.utils.audit import log_audit
+from accounts.api.serializers import (
+    ChangePasswordSerializer,
+    ErrorResponseSerializer,
+    LoginSerializer,
+    LogoutResponseSerializer,
+    LogoutSerializer,
+    RefreshSerializer,
+    TokenResponseSerializer,
+    UserDetailSerializer,
+    UserListResponseSerializer,
+    ValidateResponseSerializer,
+)
+from accounts.models import RefreshToken, User
+from accounts.services.auth_service import (
+    authenticate_user,
+    get_user_info,
+    introspect_token,
+    issue_tokens_for_user,
+    revoke_refresh_token,
+    rotate_refresh_token,
+)
+from notifications.services.notification_client import emit_event_async
 
 
 class LoginRateThrottle(AnonRateThrottle):
     scope = 'login'
-from accounts.api.serializers import (
-    LoginSerializer, RefreshSerializer, LogoutSerializer,
-    TokenResponseSerializer, ValidateResponseSerializer,
-    ErrorResponseSerializer, LogoutResponseSerializer,
-    UserDetailSerializer, UserListResponseSerializer,
-    ChangePasswordSerializer,
-)
-from accounts.services.auth_service import (
-    authenticate_user,
-    issue_tokens_for_user,
-    rotate_refresh_token,
-    revoke_refresh_token,
-    get_user_info,
-    introspect_token,
-)
-from accounts.models import User, RefreshToken
-from accounts.admin_parts.utils.audit import log_audit
-from notifications.services.notification_client import emit_event_async
-from django.utils import timezone
+
+
+def _require_authenticated(request):
+    """Returns None if the request carries valid credentials, or a 401 Response.
+
+    Accepts either a service-to-service X-Service-Api-Key header or a
+    user-issued Bearer token. Error messages deliberately avoid hinting
+    which path failed to limit information leakage.
+    """
+    service_key = request.headers.get('X-Service-Api-Key')
+    if service_key:
+        expected = getattr(settings, 'SERVICE_API_KEY', '')
+        if expected and secrets.compare_digest(service_key.strip(), str(expected)):
+            return None
+        return Response({'detail': 'Invalid service API key.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+    auth_header = request.headers.get('Authorization', '')
+    if not auth_header.startswith('Bearer '):
+        return Response(
+            {'detail': 'Authorization header missing or invalid.'},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+    if not introspect_token(auth_header.split(' ', 1)[1]):
+        return Response({'detail': 'Invalid or expired token.'}, status=status.HTTP_401_UNAUTHORIZED)
+    return None
 
 
 def _is_new_device_login(user, request) -> bool:
@@ -198,24 +230,13 @@ class UserLookupView(APIView):
         tags=['Auth'],
     )
     def get(self, request):
-        service_key = request.headers.get('X-Service-Api-Key')
-        if service_key:
-            expected = getattr(settings, 'SERVICE_API_KEY', '')
-            if not (expected and secrets.compare_digest(service_key.strip(), str(expected))):
-                return Response({'detail': 'Invalid service API key.'}, status=status.HTTP_401_UNAUTHORIZED)
-        else:
-            auth_header = request.headers.get('Authorization', '')
-            if not auth_header.startswith('Bearer '):
-                return Response({'detail': 'Authorization header missing or invalid.'}, status=status.HTTP_401_UNAUTHORIZED)
-            token = auth_header.split(' ', 1)[1]
-            if not introspect_token(token):
-                return Response({'detail': 'Invalid or expired token.'}, status=status.HTTP_401_UNAUTHORIZED)
+        if error := _require_authenticated(request):
+            return error
 
         q = request.query_params.get('q', '').strip()
         if not q:
             return Response({'detail': 'Query parameter "q" is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        from django.db.models import Q
         users = User.objects.filter(deleted_at__isnull=True, status='active').filter(
             Q(name__icontains=q) | Q(username__icontains=q) | Q(email__icontains=q)
         )
@@ -254,18 +275,8 @@ class UsersByIdsView(APIView):
         tags=['Auth'],
     )
     def get(self, request):
-        service_key = request.headers.get('X-Service-Api-Key')
-        if service_key:
-            expected = getattr(settings, 'SERVICE_API_KEY', '')
-            if not (expected and secrets.compare_digest(service_key.strip(), str(expected))):
-                return Response({'detail': 'Invalid service API key.'}, status=status.HTTP_401_UNAUTHORIZED)
-        else:
-            auth_header = request.headers.get('Authorization', '')
-            if not auth_header.startswith('Bearer '):
-                return Response({'detail': 'Authorization header missing or invalid.'}, status=status.HTTP_401_UNAUTHORIZED)
-            token = auth_header.split(' ', 1)[1]
-            if not introspect_token(token):
-                return Response({'detail': 'Invalid or expired token.'}, status=status.HTTP_401_UNAUTHORIZED)
+        if error := _require_authenticated(request):
+            return error
 
         ids_param = request.query_params.get('ids', '').strip()
         if not ids_param:

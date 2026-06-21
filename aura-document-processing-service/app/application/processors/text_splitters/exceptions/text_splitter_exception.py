@@ -18,3 +18,8 @@ class TextSplitterInitializationException(TextSplitterException):
 
 class TextSplitterExecutionException(TextSplitterException):
     pass
+
+
+class TextSplitterUnavailableException(TextSplitterException):
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=503)

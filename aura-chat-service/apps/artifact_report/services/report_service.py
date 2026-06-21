@@ -40,7 +40,9 @@ def _persist_generated_report(
         user_id: int,
         report_type: str,
         title: str,
-        mode: str,
+        retrieve_context: bool | None,
+        process_documents: bool | None,
+        document_ids: list[int],
         source_chat_id: int,
         content: str,
         query: str = "",
@@ -49,7 +51,9 @@ def _persist_generated_report(
     artifact = create_artifact_for_content(
         user_id=user_id,
         artifact_type=Artifact.Type.REPORT,
-        mode=mode,
+        retrieve_context=retrieve_context,
+        process_documents=process_documents,
+        document_ids=document_ids,
         source_chat_id=source_chat_id,
         fragments=fragments,
     )
@@ -111,8 +115,10 @@ class ReportService(ArtifactCrudService):
             user: AuthenticatedUser,
             report_type: str,
             message: str,
-            mode: str,
             chat_id: int,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
+            document_ids: list[int] | None = None,
     ) -> tuple[ArtifactReport, list[dict], list[dict]]:
         AccessControl.require_permissions(user, frozenset({perms.LLM_REPORT_GENERATE}))
 
@@ -128,12 +134,14 @@ class ReportService(ArtifactCrudService):
         try:
             async for event in llm_client.generate_report_stream_events(
                     messages=messages,
-                    mode=mode,
                     report_type=report_type,
                     user=user,
                     chat_id=chat_id,
                     system_prompt=system_prompt,
                     response_style=response_style,
+                    retrieve_context=retrieve_context,
+                    process_documents=process_documents,
+                    document_ids=document_ids,
             ):
                 et = event.get("type")
                 if et == "progress":
@@ -177,7 +185,9 @@ class ReportService(ArtifactCrudService):
             user_id=user.id,
             report_type=rtype,
             title=title,
-            mode=mode,
+            retrieve_context=retrieve_context,
+            process_documents=process_documents,
+            document_ids=document_ids or [],
             source_chat_id=chat_id,
             content=content,
             query=message,

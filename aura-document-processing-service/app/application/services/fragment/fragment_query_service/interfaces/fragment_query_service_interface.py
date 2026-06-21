@@ -3,7 +3,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.dtos.fragment.fragment_query.documents_context_fragments_request import (
-    DocumentsContextFragmentsRequest
+    DocumentsContextFragmentsRequest,
 )
 from app.domain.dtos.fragment.fragment_query.fragment_list_response import FragmentListResponse
 from app.domain.dtos.fragment.fragment_query.question_context_fragments_request import QuestionContextFragmentsRequest

@@ -77,6 +77,39 @@ class ReaderFactory:
             *,
             prefer_docling: bool = False
     ) -> ReaderInterface:
+        readers = self.get_capable_readers(file_path, prefer_docling=prefer_docling)
+
+        if not readers:
+            logger.error(
+                "No reader could handle the file.",
+                extra={
+                    "file_name": file_path.name
+                }
+            )
+            raise UnsupportedReaderException("No reader is available for this file.")
+
+        logger.info(
+            "A reader was selected for the file.",
+            extra={
+                "file_name": file_path.name,
+                "reader_type": type(readers[0]).__name__,
+                "prefer_docling": prefer_docling
+            }
+        )
+        return readers[0]
+
+    def get_capable_readers(
+            self,
+            file_path: Path,
+            *,
+            prefer_docling: bool = False
+    ) -> list[ReaderInterface]:
+        """Return every reader that claims the file, in priority order.
+
+        Lets callers fall back to the next capable reader when the preferred one
+        fails at read time (a reader's can_handle is best-effort, e.g. Docling
+        accepts by extension without opening the file).
+        """
         if not file_path.exists():
             raise ReaderFileNotFoundException("The file was not found.")
 
@@ -88,13 +121,14 @@ class ReaderFactory:
         )
 
         logger.debug(
-            "Selecting a reader for the file.",
+            "Collecting capable readers for the file.",
             extra={
                 "file_name": file_path.name,
                 "prefer_docling": prefer_docling
             }
         )
 
+        capable: list[ReaderInterface] = []
         for reader_type in priority:
             reader = self._reader_cache.get(reader_type)
             if reader is None:
@@ -102,15 +136,7 @@ class ReaderFactory:
 
             try:
                 if reader.can_handle(file_path):
-                    logger.info(
-                        "A reader was selected for the file.",
-                        extra={
-                            "file_name": file_path.name,
-                            "reader_type": reader_type,
-                            "prefer_docling": prefer_docling
-                        }
-                    )
-                    return reader
+                    capable.append(reader)
             except Exception as e:
                 logger.debug(
                     "The reader cannot handle this file.",
@@ -121,13 +147,7 @@ class ReaderFactory:
                     }
                 )
 
-        logger.error(
-            "No reader could handle the file.",
-            extra={
-                "file_name": file_path.name
-            }
-        )
-        raise UnsupportedReaderException("No reader is available for this file.")
+        return capable
 
     def is_supported(
             self,
@@ -165,7 +185,14 @@ class ReaderFactory:
         if self._docling_lazy_failed:
             return
 
-        from app.application.processors.readers.instances.docling_reader import DoclingReader
+        try:
+            from app.application.processors.readers.instances.docling_reader import DoclingReader
+        except ImportError:
+            self._docling_lazy_failed = True
+            logger.warning(
+                "Docling dependencies are not installed; prefer_docling will use the default reader order.",
+            )
+            return
 
         self._register(ReaderType.docling, DoclingReader, self._settings)
         if ReaderType.docling not in self._reader_cache:
@@ -265,8 +292,14 @@ class ReaderFactory:
         self._register(ReaderType.csv, CSVReader, self._settings)
 
         if self._settings.docling_enabled:
-            from app.application.processors.readers.instances.docling_reader import DoclingReader
-            self._register(ReaderType.docling, DoclingReader, self._settings)
+            try:
+                from app.application.processors.readers.instances.docling_reader import DoclingReader
+                self._register(ReaderType.docling, DoclingReader, self._settings)
+            except ImportError:
+                logger.warning(
+                    "Docling is enabled but its dependencies are not installed; "
+                    "skipping the Docling reader and using the default reader order."
+                )
 
         if self._ocr_settings.ocr_enabled:
             from app.application.processors.readers.instances.scanned_pdf_reader import ScannedPDFReader

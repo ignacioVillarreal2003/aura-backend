@@ -84,3 +84,22 @@ class TestBuildDocumentContext:
         context = build_document_context(fragments, max_context_chars=350)
         assert "a" * 200 in context
         assert "b" * 300 not in context
+
+    def test_fragment_header_includes_page_and_heading(self, make_fragment):
+        fragments = [
+            make_fragment(content="texto", page_number=3, heading="Introducción"),
+        ]
+        context = build_document_context(fragments, max_context_chars=1000)
+        assert "[Fragmento 1 · pág. 3 · Introducción]" in context
+
+    def test_fragment_header_falls_back_to_section_path(self, make_fragment):
+        fragments = [
+            make_fragment(content="texto", section_path="Capítulo 1 > Sección 2"),
+        ]
+        context = build_document_context(fragments, max_context_chars=1000)
+        assert "[Fragmento 1 · Capítulo 1 > Sección 2]" in context
+
+    def test_fragment_header_without_metadata_stays_plain(self, make_fragment):
+        fragments = [make_fragment(content="texto")]
+        context = build_document_context(fragments, max_context_chars=1000)
+        assert "[Fragmento 1]" in context

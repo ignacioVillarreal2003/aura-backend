@@ -12,8 +12,8 @@ from accounts.admin_parts.common import (
     HelpTextStripMixin,
     _apply_audit_fields,
     _is_super_admin_user,
-    _is_admin_or_super_user,
     log_audit,
+    has_permission,
 )
 
 logger = logging.getLogger(__name__)
@@ -129,19 +129,19 @@ class CustomGroupAdmin(HelpTextStripMixin, admin.ModelAdmin):
         return self.fieldsets
 
     def has_module_permission(self, request):
-        return _is_admin_or_super_user(request.user)
+        return has_permission(request, 'ADMIN_GROUPS_MANAGE')
 
     def has_view_permission(self, request, obj=None):
-        return _is_admin_or_super_user(request.user)
+        return has_permission(request, 'ADMIN_GROUPS_MANAGE')
 
     def has_add_permission(self, request):
-        return _is_admin_or_super_user(request.user)
+        return has_permission(request, 'ADMIN_GROUPS_MANAGE')
 
     def has_change_permission(self, request, obj=None):
-        return _is_admin_or_super_user(request.user)
+        return has_permission(request, 'ADMIN_GROUPS_MANAGE')
 
     def has_delete_permission(self, request, obj=None):
-        return _is_admin_or_super_user(request.user)
+        return has_permission(request, 'ADMIN_GROUPS_MANAGE')
 
     def _sync_collection_create_or_update(self, request, obj, old_name=None, is_create=False):
         try:

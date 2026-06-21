@@ -1,132 +1,108 @@
 import logging
-from fastapi import APIRouter, Depends, Path
+from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.controllers.graph.graph_extraction_controller.graph_extraction_controller_interface import (
+from app.api.controllers.graph.graph_extraction_controller.interfaces.graph_extraction_controller_interface import (
     GraphExtractionControllerInterface,
 )
-from app.api.dependencies.rate_limiter import default_rate_limit
+from app.api.dependencies.rate_limiter import default_rate_limit, strict_rate_limit
+from app.api.dependencies.services import get_bulk_dispatch_service
 from app.api.openapi.common import default_error_responses
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.permissions import Permissions
-from app.api.dependencies.services import get_graph_extraction_service
-from app.application.services.graph.graph_extraction_service.interfaces.graph_extraction_service_interface import (
-    GraphExtractionServiceInterface,
+from app.application.services.document.bulk_dispatch_service.exceptions.bulk_dispatch_service_exception import (
+    BulkOperationConflictException,
+    BulkOperationUnavailableException,
+)
+from app.application.services.document.bulk_dispatch_service.interfaces.bulk_dispatch_service_interface import (
+    BulkDispatchServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.dtos.graph.graph_extraction.graph_extraction_progress import (
-    GraphExtractionProgressResponse,
-)
+from app.domain.constants.document.bulk_operation import BulkOperation
+from app.domain.dtos.document.bulk.bulk_responses import BulkJobStatusResponse, BulkStartResponse
 from app.domain.dtos.graph.graph_extraction.graph_reextract_request import GraphReextractRequest
-from app.domain.dtos.graph.graph_extraction.graph_reextract_response import GraphReextractResponse
-from app.domain.field_limits import MAX_ID
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
-from app.infrastructure.messaging.rabbitmq.publisher.graph_extraction_publisher import (
-    get_graph_extraction_publisher,
-)
-from app.infrastructure.messaging.rabbitmq.publisher.interfaces.graph_extraction_publisher_interface import (
-    GraphExtractionPublisherInterface,
-)
 
 logger = logging.getLogger(__name__)
 
+_OPERATION = BulkOperation.graph_extract
+_REQUIRED = frozenset({Permissions.GRAPH_EXTRACT_MANAGE})
+
 
 class GraphExtractionController(GraphExtractionControllerInterface):
-    async def get_extraction_progress(
-            self,
-            document_id: int = Path(..., ge=1, le=MAX_ID, description="ID del documento."),
-            graph_extraction_service: GraphExtractionServiceInterface = Depends(
-                get_graph_extraction_service
-            ),
-            authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
-            _rl: None = Depends(default_rate_limit),
-    ) -> GraphExtractionProgressResponse:
-        Authorizer.require_permissions(
-            authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.GRAPH_EXTRACTION_PROGRESS}),
-        )
-
-        return await graph_extraction_service.get_progress(document_id=document_id)
-
-    async def reextract(
+    async def extract_manage(
             self,
             request: GraphReextractRequest,
-            graph_extraction_publisher: GraphExtractionPublisherInterface = Depends(
-                get_graph_extraction_publisher
-            ),
+            bulk_dispatch_service: BulkDispatchServiceInterface = Depends(get_bulk_dispatch_service),
+            authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
+            _rl: None = Depends(strict_rate_limit),
+    ) -> BulkStartResponse:
+        Authorizer.require_permissions(authenticated_user=authenticated_user, required_permissions=_REQUIRED)
+        try:
+            return await bulk_dispatch_service.start(
+                operation=_OPERATION,
+                selector=request.selector,
+                user=authenticated_user,
+            )
+        except BulkOperationConflictException as e:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+        except BulkOperationUnavailableException as e:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
+
+    async def status_manage(
+            self,
+            bulk_dispatch_service: BulkDispatchServiceInterface = Depends(get_bulk_dispatch_service),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
             _rl: None = Depends(default_rate_limit),
-    ) -> GraphReextractResponse:
-        Authorizer.require_permissions(
-            authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.GRAPH_REEXTRACT}),
-        )
-        message_id = await graph_extraction_publisher.publish(
-            document_id=request.document_id,
-            user=authenticated_user,
-            force=request.force,
-        )
-        return GraphReextractResponse(
-            document_id=request.document_id,
-            message_id=message_id,
-            force=request.force,
-            queued=True,
-        )
+    ) -> BulkJobStatusResponse:
+        Authorizer.require_permissions(authenticated_user=authenticated_user, required_permissions=_REQUIRED)
+        return await bulk_dispatch_service.status(operation=_OPERATION)
+
+    async def stop_manage(
+            self,
+            bulk_dispatch_service: BulkDispatchServiceInterface = Depends(get_bulk_dispatch_service),
+            authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
+            _rl: None = Depends(strict_rate_limit),
+    ) -> BulkJobStatusResponse:
+        Authorizer.require_permissions(authenticated_user=authenticated_user, required_permissions=_REQUIRED)
+        return await bulk_dispatch_service.stop(operation=_OPERATION)
 
 
 router = APIRouter()
 graph_extraction_controller = GraphExtractionController()
 
-_error_progress = default_error_responses(
-    include_400=False,
-    include_403=True,
-    include_503=True,
-)
-_response_progress = {
-    200: {
-        "description": "Progreso del job de extracción del grafo de conocimiento",
-        "model": GraphExtractionProgressResponse,
-    },
-    **_error_progress,
-}
+_error = default_error_responses(include_400=True, include_403=True, include_409=True, include_503=True)
 
 router.add_api_route(
-    "/progress/{document_id}",
-    graph_extraction_controller.get_extraction_progress,
-    methods=["GET"],
-    response_model=GraphExtractionProgressResponse,
-    operation_id="getGraphExtractionProgress",
-    summary="Consultar progreso de extracción del grafo",
-    description=(
-        "Devuelve el estado actual del job de extracción del grafo de conocimiento "
-        "para un documento dado. Si no hay job activo, devuelve is_running=False."
-    ),
-    responses=_response_progress,
-)
-
-_error_reextract = default_error_responses(
-    include_400=True,
-    include_403=True,
-    include_503=True,
-)
-_response_reextract = {
-    200: {
-        "description": "Comando de re-extracción encolado exitosamente",
-        "model": GraphReextractResponse,
-    },
-    **_error_reextract,
-}
-
-router.add_api_route(
-    "/reextract",
-    graph_extraction_controller.reextract,
+    "/manage",
+    graph_extraction_controller.extract_manage,
     methods=["POST"],
-    response_model=GraphReextractResponse,
-    operation_id="reextractKnowledgeGraph",
-    summary="Disparar re-extracción del grafo de conocimiento",
+    response_model=BulkStartResponse,
+    status_code=202,
+    operation_id="extractGraphManage",
+    summary="Extraer el grafo para 1, varios o todos los documentos (manage)",
     description=(
-        "Encola un comando de extracción del grafo para el documento indicado. "
-        "Con force=True libera cualquier lock activo antes de encolar. "
-        "Las entidades y relaciones existentes se fusionan idempotentemente."
+        "Encola la (re)extracción del grafo de conocimiento para los documentos seleccionados "
+        "(un id, varios ids, o todos via all_documents). Es una reconstrucción idempotente: el "
+        "footprint previo de cada documento se purga y se vuelve a extraer. Corre como job en "
+        "background; ver /manage/status y /manage/stop."
     ),
-    responses=_response_reextract,
+    responses={202: {"description": "Job de extracción aceptado", "model": BulkStartResponse}, **_error},
+)
+router.add_api_route(
+    "/manage/status",
+    graph_extraction_controller.status_manage,
+    methods=["GET"],
+    response_model=BulkJobStatusResponse,
+    operation_id="getGraphExtractionJobStatusManage",
+    summary="Estado del job de extracción del grafo (manage)",
+    responses={200: {"description": "Estado del job", "model": BulkJobStatusResponse}, **_error},
+)
+router.add_api_route(
+    "/manage/stop",
+    graph_extraction_controller.stop_manage,
+    methods=["DELETE"],
+    response_model=BulkJobStatusResponse,
+    operation_id="stopGraphExtractionJobManage",
+    summary="Detener el job de extracción del grafo en curso (manage)",
+    responses={200: {"description": "Estado del job tras solicitar el stop", "model": BulkJobStatusResponse}, **_error},
 )

@@ -16,10 +16,10 @@ from app.api.handlers.exception_handlers import register_exception_handlers
 from app.application.authorization.authorizer import Authorizer
 from app.configuration.cors_configuration import configure_cors
 from app.configuration.middlewares.authentication_middleware import add_authentication_middleware
-from app.infrastructure.http.authentication_provider.authentication_provider_exception import (
+from app.infrastructure.http.authentication_provider.exceptions.authentication_provider_exception import (
     AuthenticationProviderInvalidTokenException,
 )
-from app.infrastructure.http.authentication_provider.authentication_provider_interface import (
+from app.infrastructure.http.authentication_provider.interfaces.authentication_provider_interface import (
     AuthenticationProviderInterface,
 )
 from app.infrastructure.http.authentication_provider.dtos.authenticated_user_response import (
@@ -31,26 +31,27 @@ TEST_USER_ID = 42
 TEST_USER_EMAIL = "user@test.com"
 
 ALL_PERMISSIONS = [
-    "INGEST_DOCUMENT",
-    "GET_DOCUMENT",
-    "LIST_DOCUMENTS",
-    "LIST_DOCUMENTS_BY_CHAT",
-    "DOWNLOAD_DOCUMENT",
-    "DOWNLOAD_DOCUMENT_ADMIN",
-    "SOFT_DELETE_DOCUMENT",
-    "SOFT_DELETE_DOCUMENTS_BY_CHAT",
-    "SOFT_DELETE_DOCUMENT_ADMIN",
-    "LIST_CONTEXT_FRAGMENTS_BY_QUESTION",
-    "LIST_CONTEXT_FRAGMENTS_BY_DOCUMENTS",
-    "SEARCH_DOCUMENTS_BY_CONTENT",
+    "DOCUMENT_CREATE",
+    "DOCUMENT_UPDATE_MANAGE",
+    "DOCUMENT_REEMBED_MANAGE",
+    "DOCUMENT_REPROCESS_MANAGE",
+    "DOCUMENT_ENRICH_MANAGE",
+    "DOCUMENT_QUERY",
+    "DOCUMENT_QUERY_MANAGE",
+    "DOCUMENT_DELETE",
+    "DOCUMENT_DELETE_MANAGE",
+    "DOCUMENT_RESTORE_MANAGE",
+    "DOCUMENT_DOWNLOAD",
+    "DOCUMENT_DOWNLOAD_MANAGE",
+    "DOCUMENT_SEARCH",
+    "FRAGMENT_QUERY",
     "GRAPH_QUERY",
     "GRAPH_ENTITY",
     "GRAPH_PATH",
     "GRAPH_SEARCH",
     "GRAPH_ONTOLOGY",
-    "GRAPH_STATS",
-    "GRAPH_EXTRACTION_PROGRESS",
-    "GRAPH_REEXTRACT",
+    "GRAPH_STATS_MANAGE",
+    "GRAPH_EXTRACT_MANAGE",
 ]
 
 
@@ -160,6 +161,16 @@ def mock_document_query_service(app):
 
 
 @pytest.fixture
+def mock_update_document_service(app):
+    yield from _mock_service(app, "update_document_service")
+
+
+@pytest.fixture
+def mock_restore_document_service(app):
+    yield from _mock_service(app, "restore_document_service")
+
+
+@pytest.fixture
 def mock_document_download_service(app):
     yield from _mock_service(app, "document_download_service")
 
@@ -182,3 +193,8 @@ def mock_graph_entity_service(app):
 @pytest.fixture
 def mock_graph_path_service(app):
     yield from _mock_service(app, "graph_path_service")
+
+
+@pytest.fixture
+def mock_bulk_dispatch_service(app):
+    yield from _mock_service(app, "bulk_dispatch_service")

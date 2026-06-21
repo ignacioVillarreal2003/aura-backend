@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,26 +8,29 @@ from app.application.services.document.delete_document_service.exceptions.delete
     DeleteDocumentInvalidRequestException,
     DeleteDocumentNotFoundException,
     DeleteDocumentServiceException,
-    DeleteFragmentsFailedException
+    DeleteFragmentsFailedException,
 )
 from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
 from app.application.services.document.delete_document_service.delete_document_service_settings import (
-    DeleteDocumentServiceSettings
+    DeleteDocumentServiceSettings,
 )
 from app.application.services.document.delete_document_service.interfaces.delete_document_service_interface import (
-    DeleteDocumentServiceInterface
+    DeleteDocumentServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.authentication_provider.request_token import get_request_token
-from app.infrastructure.http.chat_membership.chat_membership_provider_interface import (
+from app.infrastructure.http.chat_membership.interfaces.chat_membership_provider_interface import (
     ChatMembershipProviderInterface,
 )
 from app.infrastructure.persistence.database.orm.document import Document
-from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
-    DocumentRepositoryInterface
+from app.infrastructure.persistence.database.repositories.interfaces.document_repository_interface import (
+    DocumentRepositoryInterface,
 )
-from app.infrastructure.persistence.database.repositories.fragment_repository.fragment_repository_interface import (
-    FragmentRepositoryInterface
+from app.infrastructure.persistence.database.repositories.interfaces.fragment_repository_interface import (
+    FragmentRepositoryInterface,
+)
+from app.infrastructure.messaging.rabbitmq.publisher.interfaces.document_purge_publisher_interface import (
+    DocumentPurgePublisherInterface,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,18 +42,20 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             document_repository: DocumentRepositoryInterface,
             fragment_repository: FragmentRepositoryInterface,
             chat_membership_provider: ChatMembershipProviderInterface,
-            delete_document_service_settings: Optional[DeleteDocumentServiceSettings] = None
+            document_purge_publisher: Optional[DocumentPurgePublisherInterface] = None,
+            delete_document_service_settings: Optional[DeleteDocumentServiceSettings] = None,
     ) -> None:
         self._document_repository = document_repository
         self._fragment_repository = fragment_repository
         self._chat_membership_provider = chat_membership_provider
+        self._document_purge_publisher = document_purge_publisher
         self._settings = delete_document_service_settings or DeleteDocumentServiceSettings()
 
     async def soft_delete_document(
             self,
             document_id: int,
             database_session: AsyncSession,
-            authenticated_user: AuthenticatedUser
+            authenticated_user: AuthenticatedUser,
     ) -> None:
         logger.info(
             "A soft delete for the document was initiated.",
@@ -67,8 +73,10 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
 
             await self._require_document_access(document, authenticated_user)
 
-            await self._soft_delete_fragments(document.id, authenticated_user.id, database_session)
-            await self._soft_delete_document(document.id, authenticated_user.id, database_session)
+            deleted_at = datetime.now(timezone.utc)
+            await self._soft_delete_fragments(document.id, authenticated_user.id, database_session, deleted_at)
+            await self._soft_delete_document(document.id, authenticated_user.id, database_session, deleted_at)
+            await self._request_purge(document, authenticated_user)
 
             logger.info(
                 "The document was soft deleted successfully.",
@@ -148,8 +156,10 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
                 return
 
             for document in documents:
-                await self._soft_delete_fragments(document.id, authenticated_user.id, database_session)
-                await self._soft_delete_document(document.id, authenticated_user.id, database_session)
+                deleted_at = datetime.now(timezone.utc)
+                await self._soft_delete_fragments(document.id, authenticated_user.id, database_session, deleted_at)
+                await self._soft_delete_document(document.id, authenticated_user.id, database_session, deleted_at)
+                await self._request_purge(document, authenticated_user)
 
             logger.info(
                 "Documents in the chat were soft deleted successfully.",
@@ -179,14 +189,14 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
                 "An unexpected error occurred while soft deleting documents for the chat."
             ) from e
 
-    async def soft_delete_document_admin(
+    async def soft_delete_document_manage(
             self,
             document_id: int,
             database_session: AsyncSession,
-            authenticated_user: AuthenticatedUser
+            authenticated_user: AuthenticatedUser,
     ) -> None:
         logger.info(
-            "An admin soft delete for the document was initiated.",
+            "A manage soft delete for the document was initiated.",
             extra={
                 "document_id": document_id,
                 "user_id": authenticated_user.id
@@ -199,11 +209,13 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
 
             document = await self._get_document_or_raise(document_id, database_session)
 
-            await self._soft_delete_fragments(document.id, authenticated_user.id, database_session)
-            await self._soft_delete_document(document.id, authenticated_user.id, database_session)
+            deleted_at = datetime.now(timezone.utc)
+            await self._soft_delete_fragments(document.id, authenticated_user.id, database_session, deleted_at)
+            await self._soft_delete_document(document.id, authenticated_user.id, database_session, deleted_at)
+            await self._request_purge(document, authenticated_user)
 
             logger.info(
-                "The document was soft deleted successfully by an admin.",
+                "The document was soft deleted successfully by manage.",
                 extra={
                     "document_id": document_id,
                     "user_id": authenticated_user.id
@@ -220,7 +232,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             raise
         except Exception as e:
             logger.exception(
-                "An unexpected error occurred during the admin soft delete.",
+                "An unexpected error occurred during the manage soft delete.",
                 extra={
                     "document_id": document_id
                 }
@@ -231,7 +243,7 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
 
     async def _require_document_access(
             self,
-            document,
+            document: Document,
             authenticated_user: AuthenticatedUser,
     ) -> None:
         if document.chat_id is not None:
@@ -281,17 +293,40 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             database_session=database_session
         )
 
+    async def _request_purge(
+            self,
+            document: Document,
+            authenticated_user: AuthenticatedUser,
+    ) -> None:
+        if self._document_purge_publisher is None:
+            return
+        try:
+            await self._document_purge_publisher.publish(
+                document_id=int(document.id),
+                storage_url=document.storage_url,
+                user=authenticated_user,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to enqueue the document-purge command; external footprint "
+                "(MinIO/Neo4j) was not scheduled for reclamation.",
+                extra={"document_id": document.id},
+                exc_info=True,
+            )
+
     async def _soft_delete_fragments(
             self,
             document_id: int,
             user_id: int,
-            database_session: AsyncSession
+            database_session: AsyncSession,
+            deleted_at: datetime,
     ) -> None:
         try:
             await self._fragment_repository.soft_delete_fragments_by_document_id(
                 document_id=document_id,
                 user_id=user_id,
-                database_session=database_session
+                database_session=database_session,
+                deleted_at=deleted_at,
             )
             logger.debug(
                 "Fragments were soft deleted.",
@@ -306,13 +341,15 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             self,
             document_id: int,
             user_id: int,
-            database_session: AsyncSession
+            database_session: AsyncSession,
+            deleted_at: datetime,
     ) -> None:
         try:
             await self._document_repository.soft_delete_document_by_id(
                 document_id=document_id,
                 user_id=user_id,
-                database_session=database_session
+                database_session=database_session,
+                deleted_at=deleted_at,
             )
             logger.debug(
                 "The document record was soft deleted.",

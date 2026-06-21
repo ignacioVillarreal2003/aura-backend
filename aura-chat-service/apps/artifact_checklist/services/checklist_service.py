@@ -24,11 +24,13 @@ logger = logging.getLogger(__name__)
 
 
 @transaction.atomic
-def _persist_generated_checklist(*, user_id, title, description, query, mode, source_chat_id, sections, fragments=None) -> tuple:
+def _persist_generated_checklist(*, user_id, title, description, query, retrieve_context, process_documents, document_ids, source_chat_id, sections, fragments=None) -> tuple:
     artifact = create_artifact_for_content(
         user_id=user_id,
         artifact_type=Artifact.Type.CHECKLIST,
-        mode=mode,
+        retrieve_context=retrieve_context,
+        process_documents=process_documents,
+        document_ids=document_ids,
         source_chat_id=source_chat_id,
         fragments=fragments,
     )
@@ -108,8 +110,10 @@ class ChecklistService(ArtifactCrudService):
             self,
             user: AuthenticatedUser,
             message: str,
-            mode: str,
             chat_id: int,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
+            document_ids: list[int] | None = None,
     ) -> tuple[ArtifactChecklist, list[dict], list[dict]]:
         AccessControl.require_permissions(user, frozenset({perms.LLM_CHECKLIST_GENERATE}))
 
@@ -125,11 +129,13 @@ class ChecklistService(ArtifactCrudService):
         try:
             async for event in llm_client.generate_checklist_stream_events(
                     messages=messages,
-                    mode=mode,
                     user=user,
                     chat_id=chat_id,
                     system_prompt=system_prompt,
                     response_style=response_style,
+                    retrieve_context=retrieve_context,
+                    process_documents=process_documents,
+                    document_ids=document_ids,
             ):
                 et = event.get("type")
                 if et == "progress":
@@ -175,7 +181,9 @@ class ChecklistService(ArtifactCrudService):
             title=title,
             description=description,
             query=message,
-            mode=mode,
+            retrieve_context=retrieve_context,
+            process_documents=process_documents,
+            document_ids=document_ids or [],
             source_chat_id=chat_id,
             sections=sections,
             fragments=fragments,

@@ -13,13 +13,13 @@ from aio_pika.exceptions import (
 from fastapi import HTTPException, Request, status
 from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_exception import (
+from app.infrastructure.messaging.rabbitmq.exceptions.rabbitmq_manager_exception import (
     RabbitMQConnectionException,
     RabbitMQNotStartedException,
     RabbitMQPublishException,
     RabbitMQTopologyException
 )
-from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
+from app.infrastructure.messaging.rabbitmq.interfaces.rabbitmq_manager_interface import RabbitMQManagerInterface
 from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_settings import RabbitMQManagerSettings
 
 logger = logging.getLogger(__name__)
@@ -360,6 +360,8 @@ class RabbitMQManager(RabbitMQManagerInterface):
             await self._declare_work_queue(exchange, self._settings.document_ingestion_queue, queue_args)
             await self._declare_work_queue(exchange, self._settings.graph_extraction_queue, queue_args)
             await self._declare_work_queue(exchange, self._settings.document_enrichment_queue, queue_args)
+            await self._declare_work_queue(exchange, self._settings.document_reembed_queue, queue_args)
+            await self._declare_work_queue(exchange, self._settings.document_reprocess_queue, queue_args)
 
             self._exchanges[self._settings.exchange] = exchange
             self._exchanges[self._settings.dlx_exchange] = dlx_exchange

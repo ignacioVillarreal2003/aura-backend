@@ -47,6 +47,7 @@ NO debes:
 # Citado de fuentes
 
 - Indica de qué documento o fragmento proviene cada afirmación relevante (nombre o identificador del documento si está disponible en el contexto).
+- Cuando el fragmento indique página o sección en su encabezado, inclúyelas en la cita para mayor precisión.
 - Cuando cites textualmente, usa comillas y mantén el texto exacto.
 
 # Manejo de información insuficiente

@@ -6,10 +6,10 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from transformers import AutoTokenizer
 
 from app.application.processors._hf_model_cache import get_or_create as _get_or_create_hf_embeddings
-
+from app.application.processors.text_splitters.dtos.document_chunk import DocumentChunk
 from app.application.processors.text_splitters.exceptions.text_splitter_exception import (
     TextSplitterInitializationException,
-    TextSplitterExecutionException
+    TextSplitterExecutionException,
 )
 from app.application.processors.text_splitters.instances.base_text_splitter import BaseTextSplitter
 from app.application.processors.text_splitters.text_splitter_settings import TextSplitterSettings
@@ -27,7 +27,12 @@ class HuggingFaceTextSplitter(BaseTextSplitter):
         self._splitter: Optional[SemanticChunker] = None
 
         try:
-            embeddings = _get_or_create_hf_embeddings(
+            # The shared cache returns (embeddings, encode_lock). The lock serializes
+            # access to this model instance, which may be shared with the embedder
+            # (same model/device key) and is not safe to drive concurrently from
+            # multiple threads / a single CUDA context. Held around the semantic
+            # split calls, which is where the model actually runs (see split_text).
+            embeddings, self._encode_lock = _get_or_create_hf_embeddings(
                 model_name=self._settings.huggingface_model,
                 device=self._settings.huggingface_device,
             )
@@ -68,7 +73,13 @@ class HuggingFaceTextSplitter(BaseTextSplitter):
                 "Failed to initialize the Hugging Face semantic text splitter."
             ) from e
 
-    def split_text(self, text: str) -> list[str]:
+    def get_chunk_params(self) -> tuple[int | None, int | None]:
+        return (
+            self._settings.huggingface_max_chunk_tokens,
+            self._settings.huggingface_chunk_token_overlap,
+        )
+
+    def split_text(self, text: str) -> list[DocumentChunk]:
         if not text or not text.strip():
             logger.debug("split_text received empty text; returning an empty list.")
             return []
@@ -83,12 +94,20 @@ class HuggingFaceTextSplitter(BaseTextSplitter):
             }
         )
 
+        splitter = self._splitter
+        if splitter is None:
+            raise TextSplitterExecutionException("The semantic splitter is not initialized.")
+
         try:
             segments = self._pre_segment(text)
 
+            # Only the semantic split drives the embedding model; pre-segmentation,
+            # token-limit enforcement and short-chunk merging use the tokenizer /
+            # char splitter (CPU) and stay outside the lock.
             raw_chunks: list[str] = []
-            for segment in segments:
-                raw_chunks.extend(self._splitter.split_text(segment))
+            with self._encode_lock:
+                for segment in segments:
+                    raw_chunks.extend(splitter.split_text(segment))
 
             splits = self._enforce_token_limit(raw_chunks)
             splits = self._merge_short_chunks(splits)
@@ -102,7 +121,7 @@ class HuggingFaceTextSplitter(BaseTextSplitter):
                 }
             )
 
-            return splits
+            return [DocumentChunk(text=chunk) for chunk in splits]
 
         except TextSplitterExecutionException:
             raise

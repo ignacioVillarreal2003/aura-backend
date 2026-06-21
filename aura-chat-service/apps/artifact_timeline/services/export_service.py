@@ -2,7 +2,6 @@ import html
 import logging
 
 from core.export import pdf_export
-from apps.artifact.models.artifact import Artifact
 from apps.artifact_timeline.exceptions import TimelineExportException
 from apps.artifact_timeline.models import ArtifactTimeline
 
@@ -39,7 +38,7 @@ def _build_pdf(html_content: str) -> bytes:
 
 def generate_timeline_pdf(timeline: ArtifactTimeline) -> bytes:
     events = list(timeline.events.all())
-    mode_label = "Con documentos de contexto" if timeline.artifact.mode == Artifact.Mode.RAG else "Directo"
+    mode_label = "Con documentos de contexto" if (timeline.artifact.retrieve_context or timeline.artifact.process_documents) else "Directo"
     created = html.escape(_fmt_dt(timeline.created_at))
 
     events_html = ""

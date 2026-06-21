@@ -2,10 +2,10 @@ import logging
 from fastapi import UploadFile
 
 from app.application.services.document.create_document_service.create_document_service_settings import (
-    CreateDocumentServiceSettings
+    CreateDocumentServiceSettings,
 )
 from app.application.services.document.create_document_service.exceptions.create_document_service_exception import (
-    CreateDocumentUnsupportedTypeException
+    CreateDocumentUnsupportedTypeException,
 )
 from app.domain.constants.document.document_mime_type import DocumentMimeType
 
@@ -24,6 +24,9 @@ class CreateDocumentServiceUtils:
             raw_document: UploadFile
     ) -> DocumentMimeType:
         content_type = raw_document.content_type
+        if not content_type:
+            raise CreateDocumentUnsupportedTypeException("This content type is not supported.")
+
         doc_type_str = self._settings.get_document_type(content_type)
 
         if not doc_type_str:

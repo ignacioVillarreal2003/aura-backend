@@ -8,7 +8,7 @@ from minio.error import S3Error
 
 from app.application.exceptions.app_exception import AppException
 from app.infrastructure.persistence.storages.document_storage.document_storage_settings import DocumentStorageSettings
-from app.infrastructure.persistence.storages.document_storage.document_storage_exception import (
+from app.infrastructure.persistence.storages.document_storage.exceptions.document_storage_exception import (
     DocumentDeleteException,
     DocumentDownloadException,
     DocumentExtensionException,
@@ -18,15 +18,15 @@ from app.infrastructure.persistence.storages.document_storage.document_storage_e
     DocumentUploadException,
     DocumentValidationException
 )
-from app.infrastructure.persistence.storages.document_storage.document_storage_interface import (
+from app.infrastructure.persistence.storages.document_storage.interfaces.document_storage_interface import (
     DocumentStorageInterface
 )
-from app.infrastructure.persistence.storages.minio_manager.minio_manager_exception import (
+from app.infrastructure.persistence.storages.minio_manager.exceptions.minio_manager_exception import (
     MinioDeleteException,
     MinioDownloadException,
     MinioManagerException,
 )
-from app.infrastructure.persistence.storages.minio_manager.minio_manager_interface import (
+from app.infrastructure.persistence.storages.minio_manager.interfaces.minio_manager_interface import (
     MinioManagerInterface
 )
 

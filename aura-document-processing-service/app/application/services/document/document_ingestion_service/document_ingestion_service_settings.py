@@ -17,6 +17,8 @@ class DocumentIngestionServiceSettings(BaseSettings):
     max_raw_text_length: int = Field(default=50_000_000, gt=0)
     min_chunks_required: int = Field(default=1, ge=1)
 
+    max_chunks_per_document: int = Field(default=10_000, ge=1)
+
     @model_validator(
         mode="after"
     )

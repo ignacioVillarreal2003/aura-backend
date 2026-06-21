@@ -6,12 +6,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain.constants.document.document_type import DocumentType
 from app.domain.dtos.document.document_query.document_list_response import DocumentListResponse
 from app.domain.dtos.document.document_query.document_response import DocumentResponse
+from app.domain.dtos.document.document_query.document_status_response import DocumentStatusResponse
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 
 
 class DocumentQueryServiceInterface(ABC):
     @abstractmethod
-    async def get_document(
+    async def get_document_manage(
             self,
             document_id: int,
             database_session: AsyncSession,
@@ -20,7 +21,25 @@ class DocumentQueryServiceInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_documents(
+    async def get_document_status_manage(
+            self,
+            document_id: int,
+            database_session: AsyncSession,
+            authenticated_user: AuthenticatedUser,
+    ) -> DocumentStatusResponse:
+        pass
+
+    @abstractmethod
+    async def get_document_status(
+            self,
+            document_id: int,
+            database_session: AsyncSession,
+            authenticated_user: AuthenticatedUser,
+    ) -> DocumentStatusResponse:
+        pass
+
+    @abstractmethod
+    async def get_documents_manage(
             self,
             database_session: AsyncSession,
             authenticated_user: AuthenticatedUser,

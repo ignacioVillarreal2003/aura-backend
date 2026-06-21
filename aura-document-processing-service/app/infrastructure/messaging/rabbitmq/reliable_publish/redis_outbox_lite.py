@@ -4,7 +4,7 @@ import time
 from typing import Any, Optional
 import redis.asyncio as aioredis
 
-from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
+from app.infrastructure.messaging.rabbitmq.interfaces.rabbitmq_manager_interface import RabbitMQManagerInterface
 from app.infrastructure.persistence.memory_database.redis_client.redis_client_settings import RedisClientSettings
 
 logger = logging.getLogger(__name__)

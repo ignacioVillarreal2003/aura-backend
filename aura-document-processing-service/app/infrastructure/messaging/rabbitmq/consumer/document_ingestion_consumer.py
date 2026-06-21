@@ -16,14 +16,14 @@ from app.infrastructure.messaging.rabbitmq.consumer.interfaces.document_ingestio
 )
 from app.infrastructure.messaging.rabbitmq.dtos.commands.document_ingestion_command import DocumentIngestionCommand
 from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
-from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_interface import RabbitMQManagerInterface
-from app.infrastructure.persistence.database.database_manager.database_manager_interface import (
+from app.infrastructure.messaging.rabbitmq.interfaces.rabbitmq_manager_interface import RabbitMQManagerInterface
+from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
     DatabaseManagerInterface,
 )
-from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
+from app.infrastructure.persistence.database.repositories.interfaces.document_repository_interface import (
     DocumentRepositoryInterface,
 )
-from app.infrastructure.persistence.storages.document_storage.document_storage_interface import (
+from app.infrastructure.persistence.storages.document_storage.interfaces.document_storage_interface import (
     DocumentStorageInterface,
 )
 
@@ -153,8 +153,8 @@ class DocumentIngestionConsumer(BaseConsumer[DocumentIngestionCommand], Document
                 local_file_path=temp_path,
                 user=user,
                 prefer_docling=document_ingestion_command.prefer_docling,
-                post_process=document_ingestion_command.post_process,
-                post_process_graph=document_ingestion_command.post_process_graph,
+                enrich=document_ingestion_command.enrich,
+                graph_extract=document_ingestion_command.graph_extract,
             )
 
             logger.info(

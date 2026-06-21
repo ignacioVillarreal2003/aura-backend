@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from app.api.controllers.graph.graph_ontology_controller.graph_ontology_controller_interface import (
+from app.api.controllers.graph.graph_ontology_controller.interfaces.graph_ontology_controller_interface import (
     GraphOntologyControllerInterface,
 )
 from app.api.dependencies.rate_limiter import default_rate_limit

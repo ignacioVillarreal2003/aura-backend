@@ -1,0 +1,55 @@
+@dpsBase = http://localhost:8000/api/v1
+@authToken = user_token_123
+
+### Reprocesar un documento (pipeline completo)
+POST {{dpsBase}}/document-reprocess
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "selector": { "document_ids": [1] },
+  "prefer_docling": true,
+  "enrich": true,
+  "graph_extract": true
+}
+
+
+### Reprocesar varios documentos
+POST {{dpsBase}}/document-reprocess
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "selector": { "document_ids": [1, 2, 3] },
+  "prefer_docling": true,
+  "enrich": true,
+  "graph_extract": false
+}
+
+
+### Reprocesar TODA la base (de a poco)
+POST {{dpsBase}}/document-reprocess
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "selector": { "all_documents": true },
+  "prefer_docling": true,
+  "enrich": true,
+  "graph_extract": true
+}
+
+
+### Estado del job de reprocesamiento
+GET {{dpsBase}}/document-reprocess/status
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+
+### Detener el job en curso
+DELETE {{dpsBase}}/document-reprocess/stop
+Accept: application/json
+Authorization: Bearer {{authToken}}

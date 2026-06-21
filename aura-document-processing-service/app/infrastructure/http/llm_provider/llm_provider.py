@@ -1,18 +1,23 @@
 import json
 import logging
+import time
 from typing import Any, Optional, TypeVar
-
 from pydantic import BaseModel, ValidationError
 
+from app.configuration.metrics import (
+    llm_request_duration_seconds,
+    llm_requests_total,
+    llm_result_from_status,
+)
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.authentication_provider.request_token import get_request_token
-from app.infrastructure.http.http_client.http_client_exceptions import (
+from app.infrastructure.http.http_client.exceptions.http_client_exceptions import (
     HttpClientCircuitBreakerException,
     HttpClientConnectionException,
     HttpClientException,
     HttpClientTimeoutException,
 )
-from app.infrastructure.http.http_client.http_client_interface import HttpClientInterface
+from app.infrastructure.http.http_client.interfaces.http_client_interface import HttpClientInterface
 from app.infrastructure.http.llm_provider.dtos.classify_document_request import ClassifyDocumentRequest
 from app.infrastructure.http.llm_provider.dtos.classify_document_response import ClassifyDocumentResponse
 from app.infrastructure.http.llm_provider.dtos.enrich_fragment_request import EnrichFragmentRequest
@@ -30,11 +35,11 @@ from app.infrastructure.http.llm_provider.dtos.translate_graph_query_request imp
 from app.infrastructure.http.llm_provider.dtos.translate_graph_query_response import (
     TranslateGraphQueryResponse,
 )
-from app.infrastructure.http.llm_provider.llm_provider_exception import (
+from app.infrastructure.http.llm_provider.exceptions.llm_provider_exception import (
     LlmProviderException,
     LlmProviderInvalidResponseException,
 )
-from app.infrastructure.http.llm_provider.llm_provider_interface import LlmProviderInterface
+from app.infrastructure.http.llm_provider.interfaces.llm_provider_interface import LlmProviderInterface
 from app.infrastructure.http.llm_provider.llm_provider_settings import LlmProviderSettings
 
 logger = logging.getLogger(__name__)
@@ -167,6 +172,49 @@ class LlmProvider(LlmProviderInterface):
         return self._settings.translate_graph_query_url
 
     async def _post_llm_json(
+            self,
+            *,
+            url: str,
+            json_body: dict[str, Any],
+            timeout: float,
+            response_model: type[TResponse],
+            authenticated_user: AuthenticatedUser,
+            operation: str,
+    ) -> TResponse:
+        # Thin observability wrapper around the real call: records latency and a
+        # stable outcome label per operation, then re-raises unchanged so error
+        # handling stays exactly as before.
+        start = time.perf_counter()
+        try:
+            result = await self._do_post_llm_json(
+                url=url,
+                json_body=json_body,
+                timeout=timeout,
+                response_model=response_model,
+                authenticated_user=authenticated_user,
+                operation=operation,
+            )
+        except LlmProviderInvalidResponseException:
+            llm_requests_total.labels(operation=operation, result="invalid_response").inc()
+            raise
+        except LlmProviderException as e:
+            llm_requests_total.labels(
+                operation=operation,
+                result=llm_result_from_status(getattr(e, "status_code", None)),
+            ).inc()
+            raise
+        except Exception:
+            llm_requests_total.labels(operation=operation, result="error").inc()
+            raise
+        else:
+            llm_requests_total.labels(operation=operation, result="success").inc()
+            return result
+        finally:
+            llm_request_duration_seconds.labels(operation=operation).observe(
+                time.perf_counter() - start
+            )
+
+    async def _do_post_llm_json(
             self,
             *,
             url: str,

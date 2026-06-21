@@ -96,6 +96,37 @@
     text-transform: uppercase;
     letter-spacing: .04em;
   }
+  .service-health-grid {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    margin: 14px 0 20px;
+  }
+  .service-health-card {
+    background: #fff;
+    border: 1px solid #e6e9ef;
+    border-radius: 10px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .service-health-name {
+    font-size: 13px;
+    color: #1e2430;
+    font-weight: 600;
+  }
+  .service-health-badge {
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .service-health-detail {
+    font-size: 11px;
+    color: #b91c1c;
+    margin-top: 2px;
+  }
 </style>
 {% endblock %}
 
@@ -104,6 +135,22 @@
 {% block content %}
 <div id="content-main">
   <h1>Dashboard Administrativo</h1>
+
+  <!-- ── Estado de los servicios ── -->
+  <p class="section-title">Estado de los servicios</p>
+  <div class="service-health-grid">
+    {% for svc in services_health %}
+      <div class="service-health-card">
+        <div>
+          <div class="service-health-name">{{ svc.name }}</div>
+          {% if svc.detail %}<div class="service-health-detail">{{ svc.detail }}</div>{% endif %}
+        </div>
+        <span class="service-health-badge">{{ svc.icon }} {{ svc.label }}</span>
+      </div>
+    {% empty %}
+      <div class="muted">No se pudo consultar el estado de los servicios.</div>
+    {% endfor %}
+  </div>
 
   <!-- ── Usuarios ── -->
   <p class="section-title">Usuarios</p>

@@ -2,7 +2,6 @@ import html
 import logging
 
 from core.export import pdf_export
-from apps.artifact.models.artifact import Artifact
 from apps.artifact_decision_brief.exceptions import DecisionBriefExportException
 from apps.artifact_decision_brief.models import ArtifactDecisionBrief
 
@@ -34,7 +33,7 @@ def _section(title: str, body: str) -> str:
 
 def generate_decision_brief_pdf(brief: ArtifactDecisionBrief) -> bytes:
     options = list(brief.options.all())
-    mode_label = "Con documentos de contexto" if brief.artifact.mode == Artifact.Mode.RAG else "Directo"
+    mode_label = "Con documentos de contexto" if (brief.artifact.retrieve_context or brief.artifact.process_documents) else "Directo"
     created = html.escape(_fmt_dt(brief.created_at))
 
     options_html = ""

@@ -4,6 +4,7 @@ from django.contrib import admin
 from accounts.models import User, Role, UserRole
 from accounts.admin_parts.utils.mixins import HelpTextStripMixin, HelpTextStripInlineMixin
 from accounts.admin_parts.utils.audit import _is_super_admin_user, _is_admin_or_super_user, _is_effective_superadmin, log_audit
+from accounts.admin_parts.utils.permissions import has_permission
 
 
 class UserRoleInline(HelpTextStripInlineMixin, admin.TabularInline):
@@ -50,20 +51,16 @@ class UserRoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
         return queryset
 
     def has_view_permission(self, request, obj=None):
-        if _is_effective_superadmin(request):
-            return True
-        if _is_admin_or_super_user(request.user):
-            return True
-        return False
+        return has_permission(request, 'ADMIN_ROLES_VIEW')
 
     def has_add_permission(self, request):
-        return _is_effective_superadmin(request)
+        return has_permission(request, 'ADMIN_ROLES_EDIT') or _is_effective_superadmin(request)
 
     def has_change_permission(self, request, obj=None):
-        return _is_effective_superadmin(request)
+        return has_permission(request, 'ADMIN_ROLES_EDIT') or _is_effective_superadmin(request)
 
     def has_delete_permission(self, request, obj=None):
-        return _is_effective_superadmin(request)
+        return has_permission(request, 'ADMIN_ROLES_EDIT') or _is_effective_superadmin(request)
 
     def get_fieldsets(self, request, obj=None):
         if _is_effective_superadmin(request):

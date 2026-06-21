@@ -9,6 +9,11 @@ from app.api.controllers.document import (
     document_download_router,
     document_query_router,
     document_search_router,
+    document_reembed_router,
+    document_reprocess_router,
+    document_enrich_router,
+    update_document_router,
+    restore_document_router,
 )
 from app.api.controllers.graph import (
     graph_context_router,
@@ -42,6 +47,18 @@ router.include_router(
 )
 
 router.include_router(
+    update_document_router,
+    prefix="/update-document",
+    tags=["update-document"],
+)
+
+router.include_router(
+    restore_document_router,
+    prefix="/restore-document",
+    tags=["restore-document"],
+)
+
+router.include_router(
     document_query_router,
     prefix="/document-query",
     tags=["document-query"],
@@ -57,6 +74,24 @@ router.include_router(
     document_search_router,
     prefix="/document-search",
     tags=["document-search"],
+)
+
+router.include_router(
+    document_reembed_router,
+    prefix="/document-reembed",
+    tags=["document-reembed"],
+)
+
+router.include_router(
+    document_reprocess_router,
+    prefix="/document-reprocess",
+    tags=["document-reprocess"],
+)
+
+router.include_router(
+    document_enrich_router,
+    prefix="/document-enrich",
+    tags=["document-enrich"],
 )
 
 router.include_router(

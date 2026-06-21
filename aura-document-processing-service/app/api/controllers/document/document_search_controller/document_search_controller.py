@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio.session import AsyncSession
 
-from app.api.controllers.document.document_search_controller.document_search_controller_interface import (
+from app.api.controllers.document.document_search_controller.interfaces.document_search_controller_interface import (
     DocumentSearchControllerInterface,
 )
 from app.api.dependencies.rate_limiter import default_rate_limit
@@ -20,6 +20,7 @@ from app.api.dependencies.services import (
     get_document_search_service,
 )
 
+
 class DocumentSearchController(DocumentSearchControllerInterface):
     async def search_documents_by_content(
             self,
@@ -31,7 +32,7 @@ class DocumentSearchController(DocumentSearchControllerInterface):
     ) -> DocumentSearchListResponse:
         Authorizer.require_permissions(
             authenticated_user=authenticated_user,
-            required_permissions=frozenset({Permissions.SEARCH_DOCUMENTS_BY_CONTENT}),
+            required_permissions=frozenset({Permissions.DOCUMENT_SEARCH}),
         )
 
         return await document_search_service.search_documents_by_content(
@@ -39,6 +40,7 @@ class DocumentSearchController(DocumentSearchControllerInterface):
             database_session=database_session,
             authenticated_user=authenticated_user,
         )
+
 
 router = APIRouter()
 document_search_controller = DocumentSearchController()

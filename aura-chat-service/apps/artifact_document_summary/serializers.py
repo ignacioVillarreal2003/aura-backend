@@ -11,6 +11,18 @@ class GenerateDocumentSummaryRequest(serializers.Serializer):
         max_length=50,
     )
     chat_id = serializers.IntegerField()
+    retrieve_context = serializers.BooleanField(
+        required=False,
+        allow_null=True,
+        default=None,
+        help_text="Recuperar contexto de la base de conocimiento. Si se omite, usa el default del servicio.",
+    )
+    process_documents = serializers.BooleanField(
+        required=False,
+        allow_null=True,
+        default=None,
+        help_text="Procesar el contenido completo de los documentos adjuntos. Si se omite, usa el default del servicio.",
+    )
 
 
 class DocumentSummaryResponse(serializers.ModelSerializer):

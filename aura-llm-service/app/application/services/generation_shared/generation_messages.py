@@ -10,10 +10,22 @@ _NO_CONTEXT_PLACEHOLDER = (
 )
 
 
+def _format_fragment_locator(fragment: FragmentResponse) -> str:
+    parts: list[str] = []
+    if fragment.page_number is not None:
+        parts.append(f"pág. {fragment.page_number}")
+    section = fragment.heading or fragment.section_path
+    if section:
+        parts.append(section)
+    return " · ".join(parts)
+
+
 def _render_fragments(parts: list[str], fragments: list[FragmentResponse], budget: int) -> int:
     used = 0
     for i, frag in enumerate(fragments, 1):
-        entry = f"\n[FRAGMENTO {i} — {frag.document.name}]\n{frag.content}"
+        locator = _format_fragment_locator(frag)
+        header = f"[FRAGMENTO {i} — {frag.document.name}" + (f" · {locator}" if locator else "") + "]"
+        entry = f"\n{header}\n{frag.content}"
         if used + len(entry) > budget:
             break
         parts.append(entry)

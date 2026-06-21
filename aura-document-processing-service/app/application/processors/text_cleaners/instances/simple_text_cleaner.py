@@ -9,12 +9,12 @@ from app.application.processors.text_cleaners.text_cleaner_settings import TextC
 logger = logging.getLogger(__name__)
 
 _SPANISH_STOP_WORDS: frozenset[str] = frozenset({
-    "de", "la", "las", "los", "el", "un", "una", "y", "o", "a", "en",
-    "con", "por", "que", "del", "al", "se", "le", "su", "sus", "si",
+    "de", "la", "las", "los", "el", "él", "un", "una", "y", "o", "a", "en",
+    "con", "por", "que", "del", "al", "se", "le", "su", "sus", "si", "sí",
     "no", "ni", "ya", "es", "ha", "lo", "me", "te", "nos", "les",
-    "eso", "aun", "mas", "muy", "bien", "son", "fue", "ser", "hay",
+    "eso", "aun", "aún", "mas", "más", "muy", "bien", "son", "fue", "ser", "hay",
     "ver", "dar", "han", "era", "iba", "sin", "tan", "tal", "cual",
-    "ahi",
+    "ahi", "ahí",
 })
 
 _HYPHEN_LINEBREAK_RE = re.compile(

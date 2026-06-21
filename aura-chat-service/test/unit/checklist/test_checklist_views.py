@@ -145,7 +145,7 @@ def test_get_checklist_response_fields_are_complete(api_client, mocker):
     mocker.patch(f"{VIEW}.checklist_service.get_checklist", return_value=cl)
     response = api_client.get("/api/v1/checklists/1/")
     data = response.data
-    for field in ("id", "title", "mode", "sections", "source_chat_id", "created_by", "created_at"):
+    for field in ("id", "title", "retrieve_context", "process_documents", "document_ids", "sections", "source_chat_id", "created_by", "created_at"):
         assert field in data, f"Missing field: {field}"
     assert data["source_chat_id"] == 42
 

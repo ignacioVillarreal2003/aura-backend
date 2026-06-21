@@ -9,6 +9,15 @@ logger = logging.getLogger("download_models")
 RETRIES = 3
 RETRY_BASE_DELAY_SECONDS = 10
 
+_RETRYABLE_STATUS = frozenset({408, 425, 429, 500, 502, 503, 504})
+
+
+def _is_transient(exc: BaseException) -> bool:
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    if status is not None:
+        return status in _RETRYABLE_STATUS
+    return True
+
 
 def _with_retries(label: str, fn) -> None:
     for attempt in range(1, RETRIES + 1):
@@ -17,7 +26,10 @@ def _with_retries(label: str, fn) -> None:
             fn()
             logger.info("Ready: %s (%.1fs)", label, time.monotonic() - started)
             return
-        except Exception:
+        except Exception as exc:
+            if not _is_transient(exc):
+                logger.error("Non-retryable error for %s: %s", label, exc)
+                raise
             logger.exception("Attempt %d/%d failed: %s", attempt, RETRIES, label)
             if attempt == RETRIES:
                 raise
@@ -51,6 +63,17 @@ def download_tiktoken_encoding(encoding_name: str) -> None:
     )
 
 
+def download_docling_models(output_dir: str) -> None:
+    from pathlib import Path
+
+    from docling.utils.model_downloader import download_models
+
+    _with_retries(
+        f"docling models -> '{output_dir}'",
+        lambda: download_models(output_dir=Path(output_dir)),
+    )
+
+
 def _clean(values: list[str]) -> list[str]:
     seen: list[str] = []
     for value in values:
@@ -80,13 +103,19 @@ def main() -> int:
         default=[],
         help="tiktoken encoding to pre-download (repeatable; empty values are skipped).",
     )
+    parser.add_argument(
+        "--docling-output",
+        default="",
+        help="Directory to pre-download Docling's models (layout/tableformer) into; empty skips.",
+    )
     args = parser.parse_args()
 
     sentence_transformers = _clean(args.sentence_transformer)
     cross_encoders = _clean(args.cross_encoder)
     tiktoken_encodings = _clean(args.tiktoken)
+    docling_output = args.docling_output.strip()
 
-    if not (sentence_transformers or cross_encoders or tiktoken_encodings):
+    if not (sentence_transformers or cross_encoders or tiktoken_encodings or docling_output):
         logger.warning("Nothing to download.")
         return 0
 
@@ -96,6 +125,8 @@ def main() -> int:
         download_cross_encoder(model_name)
     for encoding_name in tiktoken_encodings:
         download_tiktoken_encoding(encoding_name)
+    if docling_output:
+        download_docling_models(docling_output)
 
     logger.info("All models are cached.")
     return 0

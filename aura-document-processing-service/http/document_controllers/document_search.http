@@ -1,0 +1,24 @@
+@dpsBase = http://localhost:8000/api/v1
+@authToken = user_token_123
+
+### Buscar documentos por contenido (similitud vectorial)
+POST {{dpsBase}}/document-search/by-content
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "query": "requisitos para habilitar un aeródromo",
+  "max_documents": 10
+}
+
+
+### Búsqueda mínima (usa max_documents por defecto)
+POST {{dpsBase}}/document-search/by-content
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "query": "normativa de seguridad operacional"
+}

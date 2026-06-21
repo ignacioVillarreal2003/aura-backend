@@ -123,16 +123,24 @@ class LLMClient:
         await self._http_client.aclose()
 
     @staticmethod
-    def _apply_prompt_overrides(
+    def _apply_overrides(
             payload: dict,
-            system_prompt: str | None,
-            response_style: str | None,
+            system_prompt: str | None = None,
+            response_style: str | None = None,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
+            document_ids: list[int] | None = None,
     ) -> dict:
         for key, value in (("system_prompt", system_prompt), ("response_style", response_style)):
             if value:
                 stripped = value.strip()
                 if stripped:
                     payload[key] = stripped
+        for key, flag in (("retrieve_context", retrieve_context), ("process_documents", process_documents)):
+            if flag is not None:
+                payload[key] = bool(flag)
+        if document_ids is not None:
+            payload["document_ids"] = list(document_ids)
         return payload
 
     async def _generate(
@@ -177,9 +185,12 @@ class LLMClient:
             chat_id: int,
             system_prompt: str | None = None,
             response_style: str | None = None,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
     ) -> DocumentQuestionResult:
-        payload = self._apply_prompt_overrides(
+        payload = self._apply_overrides(
             {"messages": messages, "chat_id": chat_id}, system_prompt, response_style,
+            retrieve_context, process_documents,
         )
         data = await self._generate(
             url=settings.LLM_DOCUMENT_QUESTION_URL,
@@ -201,9 +212,12 @@ class LLMClient:
             chat_id: int,
             system_prompt: str | None = None,
             response_style: str | None = None,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload = self._apply_prompt_overrides(
+        payload = self._apply_overrides(
             {"messages": messages, "chat_id": chat_id}, system_prompt, response_style,
+            retrieve_context, process_documents,
         )
         async for event in self._generate_stream(
                 url=settings.LLM_DOCUMENT_QUESTION_STREAM_URL,
@@ -219,12 +233,14 @@ class LLMClient:
             messages: list[dict[str, str]],
             user: AuthenticatedUser,
             chat_id: int,
-            mode: str = "direct",
             system_prompt: str | None = None,
             response_style: str | None = None,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
     ) -> GeneralChatResult:
-        payload = self._apply_prompt_overrides(
-            {"messages": messages, "mode": mode, "chat_id": chat_id}, system_prompt, response_style,
+        payload = self._apply_overrides(
+            {"messages": messages, "chat_id": chat_id}, system_prompt, response_style,
+            retrieve_context, process_documents,
         )
         data = await self._generate(
             url=settings.LLM_GENERAL_CHAT_URL,
@@ -243,12 +259,14 @@ class LLMClient:
             messages: list[dict[str, str]],
             user: AuthenticatedUser,
             chat_id: int,
-            mode: str = "direct",
             system_prompt: str | None = None,
             response_style: str | None = None,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload = self._apply_prompt_overrides(
-            {"messages": messages, "mode": mode, "chat_id": chat_id}, system_prompt, response_style,
+        payload = self._apply_overrides(
+            {"messages": messages, "chat_id": chat_id}, system_prompt, response_style,
+            retrieve_context, process_documents,
         )
         async for event in self._generate_stream(
                 url=settings.LLM_GENERAL_CHAT_STREAM_URL,
@@ -266,9 +284,12 @@ class LLMClient:
             chat_id: int,
             system_prompt: str | None = None,
             response_style: str | None = None,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
     ) -> AgentRunResult:
-        payload = self._apply_prompt_overrides(
+        payload = self._apply_overrides(
             {"messages": messages, "chat_id": chat_id}, system_prompt, response_style,
+            retrieve_context, process_documents,
         )
         data = await self._generate(
             url=settings.LLM_RAG_AGENT_URL,
@@ -286,9 +307,12 @@ class LLMClient:
             chat_id: int,
             system_prompt: str | None = None,
             response_style: str | None = None,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload = self._apply_prompt_overrides(
+        payload = self._apply_overrides(
             {"messages": messages, "chat_id": chat_id}, system_prompt, response_style,
+            retrieve_context, process_documents,
         )
         async for event in self._generate_stream(
                 url=settings.LLM_RAG_AGENT_STREAM_URL,
@@ -302,14 +326,17 @@ class LLMClient:
     async def generate_checklist(
             self,
             messages: list[dict[str, str]],
-            mode: str,
             user: AuthenticatedUser,
             chat_id: int,
             system_prompt: str | None = None,
             response_style: str | None = None,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
+            document_ids: list[int] | None = None,
     ) -> ChecklistGenerateResult:
-        payload = self._apply_prompt_overrides(
-            {"messages": messages, "mode": mode, "chat_id": chat_id}, system_prompt, response_style,
+        payload = self._apply_overrides(
+            {"messages": messages, "chat_id": chat_id}, system_prompt, response_style,
+            retrieve_context, process_documents, document_ids,
         )
         data = await self._generate(
             url=settings.LLM_CHECKLIST_GENERATE_URL,
@@ -328,14 +355,17 @@ class LLMClient:
     async def generate_checklist_stream_events(
             self,
             messages: list[dict[str, str]],
-            mode: str,
             user: AuthenticatedUser,
             chat_id: int,
             system_prompt: str | None = None,
             response_style: str | None = None,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
+            document_ids: list[int] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload = self._apply_prompt_overrides(
-            {"messages": messages, "mode": mode, "chat_id": chat_id}, system_prompt, response_style,
+        payload = self._apply_overrides(
+            {"messages": messages, "chat_id": chat_id}, system_prompt, response_style,
+            retrieve_context, process_documents, document_ids,
         )
         async for event in self._generate_stream(
                 url=settings.LLM_CHECKLIST_GENERATE_STREAM_URL,
@@ -349,16 +379,19 @@ class LLMClient:
     async def generate_report(
             self,
             messages: list[dict[str, str]],
-            mode: str,
             report_type: str,
             user: AuthenticatedUser,
             chat_id: int,
             system_prompt: str | None = None,
             response_style: str | None = None,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
+            document_ids: list[int] | None = None,
     ) -> ReportGenerateResult:
-        payload = self._apply_prompt_overrides(
-            {"messages": messages, "mode": mode, "report_type": report_type, "chat_id": chat_id},
+        payload = self._apply_overrides(
+            {"messages": messages, "report_type": report_type, "chat_id": chat_id},
             system_prompt, response_style,
+            retrieve_context, process_documents, document_ids,
         )
         data = await self._generate(
             url=settings.LLM_REPORT_GENERATE_URL,
@@ -377,16 +410,19 @@ class LLMClient:
     async def generate_report_stream_events(
             self,
             messages: list[dict[str, str]],
-            mode: str,
             report_type: str,
             user: AuthenticatedUser,
             chat_id: int,
             system_prompt: str | None = None,
             response_style: str | None = None,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
+            document_ids: list[int] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload = self._apply_prompt_overrides(
-            {"messages": messages, "mode": mode, "report_type": report_type, "chat_id": chat_id},
+        payload = self._apply_overrides(
+            {"messages": messages, "report_type": report_type, "chat_id": chat_id},
             system_prompt, response_style,
+            retrieve_context, process_documents, document_ids,
         )
         async for event in self._generate_stream(
                 url=settings.LLM_REPORT_GENERATE_STREAM_URL,
@@ -400,14 +436,17 @@ class LLMClient:
     async def generate_timeline(
             self,
             messages: list[dict[str, str]],
-            mode: str,
             user: AuthenticatedUser,
             chat_id: int,
             system_prompt: str | None = None,
             response_style: str | None = None,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
+            document_ids: list[int] | None = None,
     ) -> TimelineGenerateResult:
-        payload = self._apply_prompt_overrides(
-            {"messages": messages, "mode": mode, "chat_id": chat_id}, system_prompt, response_style,
+        payload = self._apply_overrides(
+            {"messages": messages, "chat_id": chat_id}, system_prompt, response_style,
+            retrieve_context, process_documents, document_ids,
         )
         data = await self._generate(
             url=settings.LLM_TIMELINE_GENERATE_URL,
@@ -427,14 +466,17 @@ class LLMClient:
     async def generate_timeline_stream_events(
             self,
             messages: list[dict[str, str]],
-            mode: str,
             user: AuthenticatedUser,
             chat_id: int,
             system_prompt: str | None = None,
             response_style: str | None = None,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
+            document_ids: list[int] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload = self._apply_prompt_overrides(
-            {"messages": messages, "mode": mode, "chat_id": chat_id}, system_prompt, response_style,
+        payload = self._apply_overrides(
+            {"messages": messages, "chat_id": chat_id}, system_prompt, response_style,
+            retrieve_context, process_documents, document_ids,
         )
         async for event in self._generate_stream(
                 url=settings.LLM_TIMELINE_GENERATE_STREAM_URL,
@@ -448,14 +490,17 @@ class LLMClient:
     async def generate_quiz(
             self,
             messages: list[dict[str, str]],
-            mode: str,
             user: AuthenticatedUser,
             chat_id: int,
             system_prompt: str | None = None,
             response_style: str | None = None,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
+            document_ids: list[int] | None = None,
     ) -> QuizGenerateResult:
-        payload = self._apply_prompt_overrides(
-            {"messages": messages, "mode": mode, "chat_id": chat_id}, system_prompt, response_style,
+        payload = self._apply_overrides(
+            {"messages": messages, "chat_id": chat_id}, system_prompt, response_style,
+            retrieve_context, process_documents, document_ids,
         )
         data = await self._generate(
             url=settings.LLM_QUIZ_GENERATE_URL,
@@ -476,14 +521,17 @@ class LLMClient:
     async def generate_quiz_stream_events(
             self,
             messages: list[dict[str, str]],
-            mode: str,
             user: AuthenticatedUser,
             chat_id: int,
             system_prompt: str | None = None,
             response_style: str | None = None,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
+            document_ids: list[int] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload = self._apply_prompt_overrides(
-            {"messages": messages, "mode": mode, "chat_id": chat_id}, system_prompt, response_style,
+        payload = self._apply_overrides(
+            {"messages": messages, "chat_id": chat_id}, system_prompt, response_style,
+            retrieve_context, process_documents, document_ids,
         )
         async for event in self._generate_stream(
                 url=settings.LLM_QUIZ_GENERATE_STREAM_URL,
@@ -497,14 +545,17 @@ class LLMClient:
     async def generate_lessons_learned(
             self,
             messages: list[dict[str, str]],
-            mode: str,
             user: AuthenticatedUser,
             chat_id: int,
             system_prompt: str | None = None,
             response_style: str | None = None,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
+            document_ids: list[int] | None = None,
     ) -> LessonsLearnedGenerateResult:
-        payload = self._apply_prompt_overrides(
-            {"messages": messages, "mode": mode, "chat_id": chat_id}, system_prompt, response_style,
+        payload = self._apply_overrides(
+            {"messages": messages, "chat_id": chat_id}, system_prompt, response_style,
+            retrieve_context, process_documents, document_ids,
         )
         data = await self._generate(
             url=settings.LLM_LESSONS_LEARNED_GENERATE_URL,
@@ -524,14 +575,17 @@ class LLMClient:
     async def generate_lessons_learned_stream_events(
             self,
             messages: list[dict[str, str]],
-            mode: str,
             user: AuthenticatedUser,
             chat_id: int,
             system_prompt: str | None = None,
             response_style: str | None = None,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
+            document_ids: list[int] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload = self._apply_prompt_overrides(
-            {"messages": messages, "mode": mode, "chat_id": chat_id}, system_prompt, response_style,
+        payload = self._apply_overrides(
+            {"messages": messages, "chat_id": chat_id}, system_prompt, response_style,
+            retrieve_context, process_documents, document_ids,
         )
         async for event in self._generate_stream(
                 url=settings.LLM_LESSONS_LEARNED_GENERATE_STREAM_URL,
@@ -545,14 +599,17 @@ class LLMClient:
     async def generate_decision_brief(
             self,
             messages: list[dict[str, str]],
-            mode: str,
             user: AuthenticatedUser,
             chat_id: int,
             system_prompt: str | None = None,
             response_style: str | None = None,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
+            document_ids: list[int] | None = None,
     ) -> DecisionBriefGenerateResult:
-        payload = self._apply_prompt_overrides(
-            {"messages": messages, "mode": mode, "chat_id": chat_id}, system_prompt, response_style,
+        payload = self._apply_overrides(
+            {"messages": messages, "chat_id": chat_id}, system_prompt, response_style,
+            retrieve_context, process_documents, document_ids,
         )
         data = await self._generate(
             url=settings.LLM_DECISION_BRIEF_GENERATE_URL,
@@ -579,9 +636,12 @@ class LLMClient:
             chat_id: int,
             system_prompt: str | None = None,
             response_style: str | None = None,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
     ) -> DocumentSummaryResult:
-        payload = self._apply_prompt_overrides(
+        payload = self._apply_overrides(
             {"document_ids": document_ids, "chat_id": chat_id}, system_prompt, response_style,
+            retrieve_context, process_documents,
         )
         data = await self._generate(
             url=settings.LLM_DOCUMENT_SUMMARY_URL,
@@ -603,9 +663,12 @@ class LLMClient:
             chat_id: int,
             system_prompt: str | None = None,
             response_style: str | None = None,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload = self._apply_prompt_overrides(
+        payload = self._apply_overrides(
             {"document_ids": document_ids, "chat_id": chat_id}, system_prompt, response_style,
+            retrieve_context, process_documents,
         )
         async for event in self._generate_stream(
                 url=settings.LLM_DOCUMENT_SUMMARY_STREAM_URL,
@@ -625,11 +688,13 @@ class LLMClient:
             chat_id: int,
             system_prompt: str | None = None,
             response_style: str | None = None,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
     ) -> DocumentActionResult:
         payload: dict = {"document_ids": document_ids, "instruction": instruction, "chat_id": chat_id}
         if action is not None:
             payload["action"] = action
-        self._apply_prompt_overrides(payload, system_prompt, response_style)
+        self._apply_overrides(payload, system_prompt, response_style, retrieve_context, process_documents)
         data = await self._generate(
             url=settings.LLM_DOCUMENT_ACTION_URL,
             context="document-action",
@@ -654,11 +719,13 @@ class LLMClient:
             chat_id: int,
             system_prompt: str | None = None,
             response_style: str | None = None,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         payload: dict = {"document_ids": document_ids, "instruction": instruction, "chat_id": chat_id}
         if action is not None:
             payload["action"] = action
-        self._apply_prompt_overrides(payload, system_prompt, response_style)
+        self._apply_overrides(payload, system_prompt, response_style, retrieve_context, process_documents)
         async for event in self._generate_stream(
                 url=settings.LLM_DOCUMENT_ACTION_STREAM_URL,
                 context="document-action-stream",
@@ -671,14 +738,17 @@ class LLMClient:
     async def generate_decision_brief_stream_events(
             self,
             messages: list[dict[str, str]],
-            mode: str,
             user: AuthenticatedUser,
             chat_id: int,
             system_prompt: str | None = None,
             response_style: str | None = None,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
+            document_ids: list[int] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        payload = self._apply_prompt_overrides(
-            {"messages": messages, "mode": mode, "chat_id": chat_id}, system_prompt, response_style,
+        payload = self._apply_overrides(
+            {"messages": messages, "chat_id": chat_id}, system_prompt, response_style,
+            retrieve_context, process_documents, document_ids,
         )
         async for event in self._generate_stream(
                 url=settings.LLM_DECISION_BRIEF_GENERATE_STREAM_URL,

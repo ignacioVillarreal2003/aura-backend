@@ -9,9 +9,9 @@ from app.domain.types import ChatId
 
 def parse_create_document_request(
         chat_id: Optional[int] = Form(None),
-        prefer_docling: bool = Form(False),
-        post_process: bool = Form(False),
-        post_process_graph: bool = Form(False),
+        prefer_docling: bool = Form(True),
+        enrich: bool = Form(False),
+        graph_extract: bool = Form(False),
         name: Optional[str] = Form(None),
         description: Optional[str] = Form(None),
 ) -> CreateDocumentRequest:
@@ -19,8 +19,8 @@ def parse_create_document_request(
         return CreateDocumentRequest(
             chat_id=ChatId(chat_id) if chat_id is not None else None,
             prefer_docling=prefer_docling,
-            post_process=post_process,
-            post_process_graph=post_process_graph,
+            enrich=enrich,
+            graph_extract=graph_extract,
             name=name,
             description=description,
         )

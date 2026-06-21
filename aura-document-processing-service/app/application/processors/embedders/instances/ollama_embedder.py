@@ -3,6 +3,7 @@ import logging
 from datetime import timedelta
 from typing import Callable, Optional
 from aiobreaker import CircuitBreaker as AioBreaker
+from aiobreaker import CircuitBreakerError
 from httpx import ConnectError, ConnectTimeout, ReadTimeout, RemoteProtocolError
 from langchain_ollama import OllamaEmbeddings
 from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -11,7 +12,7 @@ from app.application.processors.embedders.embedder_settings import EmbedderSetti
 from app.application.processors.embedders.exceptions.embedder_exception import (
     EmbedderInitializationException,
     EmbedDocumentsException,
-    EmbedQueryException
+    EmbedQueryException,
 )
 from app.application.processors.embedders.instances.base_embedder import BaseEmbedder
 
@@ -54,6 +55,7 @@ class OllamaEmbedder(BaseEmbedder):
             self._model = OllamaEmbeddings(
                 model=self._settings.ollama_model,
                 base_url=self._settings.ollama_url,
+                client_kwargs={"timeout": self._settings.ollama_request_timeout},
             )
 
             self._embed_query_with_retry: Callable[[str], list[float]] = _retry(
@@ -116,13 +118,23 @@ class OllamaEmbedder(BaseEmbedder):
             self,
             text: str
     ) -> list[float]:
-        return await self._circuit_breaker.call(asyncio.to_thread, self.embed_query, text)
+        try:
+            return await self._circuit_breaker.call(asyncio.to_thread, self.embed_query, text)
+        except CircuitBreakerError as e:
+            raise EmbedQueryException(
+                "The Ollama embedder is temporarily unavailable (circuit breaker is open)."
+            ) from e
 
     async def aembed_documents(
             self,
             texts: list[str]
     ) -> list[list[float]]:
-        return await self._circuit_breaker.call(asyncio.to_thread, self.embed_documents, texts)
+        try:
+            return await self._circuit_breaker.call(asyncio.to_thread, self.embed_documents, texts)
+        except CircuitBreakerError as e:
+            raise EmbedDocumentsException(
+                "The Ollama embedder is temporarily unavailable (circuit breaker is open)."
+            ) from e
 
     def _embed_single_batch(
             self,

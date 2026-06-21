@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
 from app.application.services.document.document_query_service.document_query_service_settings import (
-    DocumentQueryServiceSettings
+    DocumentQueryServiceSettings,
 )
 from app.domain.constants.document.document_type import DocumentType
 
@@ -15,21 +15,22 @@ from app.application.services.document.document_query_service.exceptions.documen
     DocumentQueryServiceException,
 )
 from app.application.services.document.document_query_service.interfaces.document_query_service_interface import (
-    DocumentQueryServiceInterface
+    DocumentQueryServiceInterface,
 )
 from app.domain.dtos.document.document_query.document_list_response import DocumentListResponse
 from app.domain.dtos.document.document_query.document_response import DocumentResponse
+from app.domain.dtos.document.document_query.document_status_response import DocumentStatusResponse
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.infrastructure.http.chat_membership.chat_membership_provider_interface import (
+from app.infrastructure.http.chat_membership.interfaces.chat_membership_provider_interface import (
     ChatMembershipProviderInterface,
 )
 from app.infrastructure.http.authentication_provider.request_token import get_request_token
-from app.infrastructure.http.document_collection_catalog.document_collection_catalog_client_interface import (
+from app.infrastructure.http.document_collection_catalog.interfaces.document_collection_catalog_client_interface import (
     DocumentCollectionCatalogClientInterface,
 )
 from app.infrastructure.persistence.database.orm.document import Document
-from app.infrastructure.persistence.database.repositories.document_repository.document_repository_interface import (
-    DocumentRepositoryInterface
+from app.infrastructure.persistence.database.repositories.interfaces.document_repository_interface import (
+    DocumentRepositoryInterface,
 )
 
 logger = logging.getLogger(__name__)
@@ -48,7 +49,7 @@ class DocumentQueryService(DocumentQueryServiceInterface):
         self._chat_membership_provider = chat_membership_provider
         self._settings = document_query_service_settings or DocumentQueryServiceSettings()
 
-    async def get_document(
+    async def get_document_manage(
             self,
             document_id: int,
             database_session: AsyncSession,
@@ -67,8 +68,6 @@ class DocumentQueryService(DocumentQueryServiceInterface):
                 raise DocumentQueryInvalidRequestException("The document identifier must be a positive number.")
 
             document = await self._get_document_or_raise(document_id, database_session)
-
-            await self._require_document_access(document, authenticated_user)
 
             logger.info(
                 "The document was fetched successfully.",
@@ -94,7 +93,101 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             )
             raise DocumentQueryServiceException("An unexpected error occurred while fetching the document.") from e
 
-    async def get_documents(
+    async def get_document_status_manage(
+            self,
+            document_id: int,
+            database_session: AsyncSession,
+            authenticated_user: AuthenticatedUser,
+    ) -> DocumentStatusResponse:
+        logger.info(
+            "Fetching the processing status of a document was initiated.",
+            extra={
+                "document_id": document_id,
+                "user_id": authenticated_user.id
+            }
+        )
+
+        try:
+            if document_id <= 0:
+                raise DocumentQueryInvalidRequestException("The document identifier must be a positive number.")
+
+            document = await self._get_document_or_raise(document_id, database_session)
+
+            logger.info(
+                "The document status was fetched successfully.",
+                extra={
+                    "document_id": document_id,
+                    "user_id": authenticated_user.id
+                }
+            )
+            return DocumentStatusResponse.model_validate(document)
+
+        except (
+                DocumentQueryNotFoundException,
+                UnauthorizedException,
+                DocumentQueryInvalidRequestException,
+        ):
+            raise
+        except Exception as e:
+            logger.exception(
+                "An unexpected error occurred while fetching the document status.",
+                extra={
+                    "document_id": document_id
+                }
+            )
+            raise DocumentQueryServiceException(
+                "An unexpected error occurred while fetching the document status."
+            ) from e
+
+    async def get_document_status(
+            self,
+            document_id: int,
+            database_session: AsyncSession,
+            authenticated_user: AuthenticatedUser,
+    ) -> DocumentStatusResponse:
+        logger.info(
+            "Fetching the processing status of a document was initiated.",
+            extra={
+                "document_id": document_id,
+                "user_id": authenticated_user.id
+            }
+        )
+
+        try:
+            if document_id <= 0:
+                raise DocumentQueryInvalidRequestException("The document identifier must be a positive number.")
+
+            document = await self._get_document_or_raise(document_id, database_session)
+
+            await self._require_document_access(document, authenticated_user)
+
+            logger.info(
+                "The document status was fetched successfully.",
+                extra={
+                    "document_id": document_id,
+                    "user_id": authenticated_user.id
+                }
+            )
+            return DocumentStatusResponse.model_validate(document)
+
+        except (
+                DocumentQueryNotFoundException,
+                UnauthorizedException,
+                DocumentQueryInvalidRequestException,
+        ):
+            raise
+        except Exception as e:
+            logger.exception(
+                "An unexpected error occurred while fetching the document status.",
+                extra={
+                    "document_id": document_id
+                }
+            )
+            raise DocumentQueryServiceException(
+                "An unexpected error occurred while fetching the document status."
+            ) from e
+
+    async def get_documents_manage(
             self,
             database_session: AsyncSession,
             authenticated_user: AuthenticatedUser,
@@ -111,9 +204,6 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             f is not None
             for f in (name, description, category, document_type, created_from, created_to)
         )
-        # Pagination is opt-in: if neither page nor size is supplied the full result
-        # set is returned (bounded by the repository safety cap). Supplying either one
-        # turns pagination on and the missing value falls back to its default.
         paginate = page is not None or size is not None
 
         logger.info(
@@ -198,9 +288,6 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             page: Optional[int] = None,
             size: Optional[int] = None,
     ) -> DocumentListResponse:
-        # Pagination is opt-in: if neither page nor size is supplied the full result
-        # set is returned (bounded by the repository safety cap). Supplying either one
-        # turns pagination on and the missing value falls back to its default.
         paginate = page is not None or size is not None
 
         logger.info(
@@ -292,9 +379,6 @@ class DocumentQueryService(DocumentQueryServiceInterface):
             document: Document,
             authenticated_user: AuthenticatedUser,
     ) -> None:
-        # Service-to-service calls authenticate by forwarding the caller's bearer
-        # token, so the downstream services derive identity and permissions from
-        # it (the user is allowed to check their own access).
         authorization_header = get_request_token()
 
         accessible_ids = await self._document_collection_catalog_client.fetch_all_accessible_document_ids(

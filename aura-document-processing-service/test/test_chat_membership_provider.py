@@ -14,13 +14,15 @@ from app.infrastructure.http.chat_membership.chat_membership_provider import (
 from app.infrastructure.http.chat_membership.chat_membership_provider_settings import (
     ChatMembershipProviderSettings,
 )
-from app.infrastructure.http.http_client.http_client_exceptions import HttpClientException
+from app.infrastructure.http.http_client.exceptions.http_client_exceptions import HttpClientException
+
+
+_AUTH_HEADER = "Bearer user-token"
 
 
 def _provider(http_client, *, membership_url="http://chat-service"):
     settings = ChatMembershipProviderSettings(
         membership_url=membership_url,
-        fallback_bearer_token="service-token",
     )
     return ChatMembershipProvider(http_client=http_client, settings=settings)
 
@@ -40,7 +42,7 @@ class TestChatMembershipProvider:
             200, {"chat_id": 5, "user_id": 1, "is_member": True, "role": "owner"}
         )
         result = await _provider(http_client).get_membership(
-            chat_id=5, user_id=1, authorization_header=None
+            chat_id=5, user_id=1, authorization_header=_AUTH_HEADER
         )
         assert result.is_member is True
         assert result.is_owner is True
@@ -52,7 +54,7 @@ class TestChatMembershipProvider:
             200, {"is_member": True, "role": "member"}
         )
         result = await _provider(http_client).get_membership(
-            chat_id=5, user_id=1, authorization_header=None
+            chat_id=5, user_id=1, authorization_header=_AUTH_HEADER
         )
         assert result.is_member is True
         assert result.is_owner is False
@@ -62,7 +64,7 @@ class TestChatMembershipProvider:
         http_client = AsyncMock()
         http_client.get.return_value = _response(200, {"is_member": False, "role": None})
         result = await _provider(http_client).get_membership(
-            chat_id=5, user_id=1, authorization_header=None
+            chat_id=5, user_id=1, authorization_header=_AUTH_HEADER
         )
         assert result.is_member is False
         assert result.is_owner is False
@@ -71,7 +73,7 @@ class TestChatMembershipProvider:
     async def test_url_not_configured_is_fail_closed(self):
         http_client = AsyncMock()
         result = await _provider(http_client, membership_url=None).get_membership(
-            chat_id=5, user_id=1, authorization_header=None
+            chat_id=5, user_id=1, authorization_header=_AUTH_HEADER
         )
         assert result.is_member is False
         http_client.get.assert_not_awaited()
@@ -81,7 +83,7 @@ class TestChatMembershipProvider:
         http_client = AsyncMock()
         http_client.get.return_value = _response(404)
         result = await _provider(http_client).get_membership(
-            chat_id=5, user_id=1, authorization_header=None
+            chat_id=5, user_id=1, authorization_header=_AUTH_HEADER
         )
         assert result.is_member is False
 
@@ -90,6 +92,6 @@ class TestChatMembershipProvider:
         http_client = AsyncMock()
         http_client.get.side_effect = HttpClientException("boom")
         result = await _provider(http_client).get_membership(
-            chat_id=5, user_id=1, authorization_header=None
+            chat_id=5, user_id=1, authorization_header=_AUTH_HEADER
         )
         assert result.is_member is False

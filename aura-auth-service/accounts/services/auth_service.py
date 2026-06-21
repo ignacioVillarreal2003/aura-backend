@@ -126,6 +126,22 @@ def issue_tokens_for_user(user: User, request=None) -> dict:
 	}
 
 
+def issue_service_token_for_user(user: User) -> str:
+	"""Mint a short-lived access token for `user`, with no refresh token and
+	no RefreshToken row, for outbound admin-initiated service-to-service
+	calls (e.g. Django admin -> chat-service) where the inbound request has
+	no Bearer token to forward — admin pages are session-authenticated, not
+	JWT-authenticated.
+
+	The downstream service validates this exactly like any user-issued
+	access token (GET /auth/validate), so the real RBAC roles/permissions of
+	`user` are what gets enforced there — this is not a blanket
+	service-trust bypass like the X-Service-Api-Key headers used for the MAC
+	and document-processing clients.
+	"""
+	return _build_access_token(user)
+
+
 def rotate_refresh_token(refresh_token: uuid.UUID | str, request=None) -> dict | None:
 	token_value = str(refresh_token)
 	refresh = RefreshToken.objects.filter(token=token_value, is_revoked=False).first()

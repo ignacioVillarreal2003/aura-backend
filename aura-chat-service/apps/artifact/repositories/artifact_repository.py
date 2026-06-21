@@ -34,13 +34,17 @@ class ArtifactRepository:
             user_id: int,
             type: str,
             source_chat_id: int,
-            mode: str = Artifact.Mode.DIRECT,
+            retrieve_context: bool | None = None,
+            process_documents: bool | None = None,
+            document_ids: list[int] | None = None,
             fragments=None,
     ) -> Artifact:
         return Artifact.objects.create(
             created_by=user_id,
             type=type,
-            mode=mode,
+            retrieve_context=retrieve_context,
+            process_documents=process_documents,
+            document_ids=document_ids or [],
             fragments=fragments,
             source_chat_id=source_chat_id,
         )

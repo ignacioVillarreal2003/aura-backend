@@ -18,18 +18,19 @@ from app.domain.dtos.graph.graph_entity.graph_relation_response import GraphRela
 from app.domain.dtos.graph.graph_query.graph_query_interpreted_as import GraphQueryInterpretedAs
 from app.domain.dtos.graph.graph_query.graph_query_request import GraphQueryRequest
 from app.domain.dtos.graph.graph_query.graph_query_response import GraphQueryResponse
+from app.infrastructure.http.authentication_provider.request_token import get_request_token
 from app.infrastructure.http.llm_provider.dtos.translate_graph_query_request import GraphOntology
-from app.infrastructure.http.llm_provider.llm_provider_interface import LlmProviderInterface
-from app.infrastructure.http.document_collection_catalog.document_collection_catalog_client_interface import (
+from app.infrastructure.http.llm_provider.interfaces.llm_provider_interface import LlmProviderInterface
+from app.infrastructure.http.document_collection_catalog.interfaces.document_collection_catalog_client_interface import (
     DocumentCollectionCatalogClientInterface,
 )
-from app.infrastructure.persistence.graph.repositories.graph_entity_repository.graph_entity_repository_interface import (
+from app.infrastructure.persistence.graph.repositories.interfaces.graph_entity_repository_interface import (
     GraphEntityRepositoryInterface,
 )
-from app.infrastructure.persistence.graph.repositories.graph_path_repository.graph_path_repository_interface import (
+from app.infrastructure.persistence.graph.repositories.interfaces.graph_path_repository_interface import (
     GraphPathRepositoryInterface,
 )
-from app.infrastructure.persistence.graph.repositories.graph_relation_repository.graph_relation_repository_interface import (
+from app.infrastructure.persistence.graph.repositories.interfaces.graph_relation_repository_interface import (
     GraphRelationRepositoryInterface,
 )
 
@@ -316,14 +317,14 @@ class GraphQueryService(GraphQueryServiceInterface):
                     seen_rels: set[tuple[str, str, str]] = set()
                     for path in paths:
                         for node in path.nodes:
-                            key = (node.canonical_name, node.type.value)
-                            if key not in seen_nodes:
-                                seen_nodes.add(key)
+                            node_key = (node.canonical_name, node.type.value)
+                            if node_key not in seen_nodes:
+                                seen_nodes.add(node_key)
                                 path_nodes.append(node)
                         for rel in path.relations:
-                            key = (rel.source.canonical_name, rel.target.canonical_name, rel.type)
-                            if key not in seen_rels:
-                                seen_rels.add(key)
+                            rel_key = (rel.source.canonical_name, rel.target.canonical_name, rel.type)
+                            if rel_key not in seen_rels:
+                                seen_rels.add(rel_key)
                                 path_rels.append(rel)
                     return path_nodes, path_rels
             except Exception:
@@ -362,7 +363,7 @@ class GraphQueryService(GraphQueryServiceInterface):
             accessible_ids: list[int],
             max_results: int,
     ) -> tuple[list[GraphEntityResponse], list[GraphRelationResponse]]:
-        raw = params.get("document_id")
+        raw: Any = params.get("document_id")
         try:
             document_id = int(raw)
             if document_id <= 0:
@@ -452,9 +453,10 @@ class GraphQueryService(GraphQueryServiceInterface):
             user_id: int,
             authorization_header: str | None,
     ) -> list[int]:
+        token = authorization_header or get_request_token()
         accessible = await self._document_collection_catalog_client.fetch_all_accessible_document_ids(
             user_id=user_id,
-            authorization_header=authorization_header,
+            authorization_header=token,
         )
         return list(accessible)
 

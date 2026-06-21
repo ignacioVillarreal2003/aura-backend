@@ -78,5 +78,5 @@ class TestHasAllPermissions:
 class TestImmutability:
     def test_model_is_frozen(self):
         user = _user()
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             user.email = "other@example.com"

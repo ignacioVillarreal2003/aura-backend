@@ -29,6 +29,18 @@ class SendMessageRequest(serializers.Serializer):
             "`agent` = tool-using agent."
         ),
     )
+    retrieve_context = serializers.BooleanField(
+        required=False,
+        allow_null=True,
+        default=None,
+        help_text="Recuperar contexto de la base de conocimiento. Si se omite, usa el default del servicio.",
+    )
+    process_documents = serializers.BooleanField(
+        required=False,
+        allow_null=True,
+        default=None,
+        help_text="Procesar el contenido completo de los documentos adjuntos. Si se omite, usa el default del servicio.",
+    )
 
     def validate_audio(self, file):
         content_type = getattr(file, "content_type", "")
