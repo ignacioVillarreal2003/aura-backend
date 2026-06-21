@@ -287,6 +287,7 @@ async def _build_processors_and_read_services(c: DependencyContainer) -> None:
             fragment_repository=c.fragment_repository,
             embedder_factory=c.embedder_factory,
             document_collection_catalog_client=c.document_collection_catalog_client,
+            reranker_factory=reranker_factory,
         ),
     )
 

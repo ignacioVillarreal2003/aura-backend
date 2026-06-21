@@ -7,7 +7,7 @@ from app.domain.types import DocumentId
 
 class DocumentSimilarityHit(BaseModel):
     document_id: DocumentId = Field(..., gt=0, le=MAX_ID)
-    best_similarity: float = Field(..., ge=0.0, le=1.0)
+    score: float = Field(..., ge=0.0)
     matched_fragments: int = Field(..., ge=1)
     best_fragment_content: Optional[str] = Field(default=None, max_length=MAX_FRAGMENT_CONTENT_CHARS)
 

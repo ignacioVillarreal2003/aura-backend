@@ -73,6 +73,15 @@ class CrossEncoderReranker(RerankerInterface):
             candidates: list[str],
             top_n: int,
     ) -> list[int]:
+        scored = await self.rerank_with_scores(query, candidates, top_n)
+        return [idx for idx, _ in scored]
+
+    async def rerank_with_scores(
+            self,
+            query: str,
+            candidates: list[str],
+            top_n: int,
+    ) -> list[tuple[int, float]]:
         if not candidates:
             return []
 
@@ -106,32 +115,32 @@ class CrossEncoderReranker(RerankerInterface):
                 scores = await loop.run_in_executor(None, predict_fn)
 
             indexed: list[tuple[int, float]] = sorted(
-                enumerate(scores),
-                key=lambda item: float(item[1]),
+                ((idx, float(score)) for idx, score in enumerate(scores)),
+                key=lambda item: item[1],
                 reverse=True,
             )
             top_indexed = indexed[:top_n]
 
-            selected_indices = [
-                idx for idx, score in top_indexed
-                if float(score) >= self._settings.min_score
+            selected = [
+                (idx, score) for idx, score in top_indexed
+                if score >= self._settings.min_score
             ]
 
-            if not selected_indices:
+            if not selected:
                 logger.warning(
                     "No candidates above min_score threshold; using top-k without score filter.",
                     extra={"top_n": top_n, "min_score": self._settings.min_score},
                 )
-                selected_indices = [idx for idx, _ in top_indexed]
+                selected = list(top_indexed)
 
             logger.debug(
                 "Cross-encoder reranking complete.",
                 extra={
-                    "kept": len(selected_indices),
-                    "scores": [round(float(s), 3) for _, s in top_indexed],
+                    "kept": len(selected),
+                    "scores": [round(s, 3) for _, s in top_indexed],
                 },
             )
-            return selected_indices
+            return selected
 
         except RerankerExecutionException:
             raise
@@ -142,4 +151,4 @@ class CrossEncoderReranker(RerankerInterface):
                 "Cross-encoder reranking failed; falling back to original top-k order.",
                 exc_info=True,
             )
-            return list(range(top_n))
+            return [(idx, 0.0) for idx in range(top_n)]

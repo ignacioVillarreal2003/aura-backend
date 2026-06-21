@@ -47,6 +47,22 @@ class FragmentRepositoryInterface(ABC):
             pool_size: int,
             *,
             embedding_identity: str,
+            offset: int = 0,
+            document_ids: list[int] | None = None,
+    ) -> list[DocumentSimilarityHit]:
+        pass
+
+    @abstractmethod
+    async def search_documents_by_bm25(
+            self,
+            *,
+            query: str,
+            database_session: AsyncSession,
+            k: int,
+            pool_size: int,
+            offset: int = 0,
+            min_score: float = 0.0,
+            query_max_chars: int = 512,
             document_ids: list[int] | None = None,
     ) -> list[DocumentSimilarityHit]:
         pass
