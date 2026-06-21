@@ -146,6 +146,24 @@ CREATE TABLE artifact_feedback
     CONSTRAINT uq_artifact_feedback UNIQUE (artifact_id, created_by)
 );
 
+CREATE TABLE artifact_feedback_evaluation
+(
+    id                  BIGSERIAL PRIMARY KEY,
+    feedback_id         BIGINT NOT NULL UNIQUE
+        CONSTRAINT fk_evaluation_feedback REFERENCES artifact_feedback (id) ON DELETE CASCADE,
+    evaluated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    judge_model         VARCHAR(128) NOT NULL,
+    failure_category    VARCHAR(64) NOT NULL
+        CONSTRAINT chk_failure_category CHECK (
+            failure_category IN ('retrieval_miss', 'hallucination', 'reasoning', 'style', 'incomplete', 'other', 'no_failure')
+        ),
+    failure_explanation TEXT NOT NULL,
+    expected_output     TEXT NOT NULL,
+    confidence_score    NUMERIC(3, 2)
+        CONSTRAINT chk_confidence_score CHECK (confidence_score >= 0.00 AND confidence_score <= 1.00),
+    raw_response        JSONB
+);
+
 CREATE TABLE artifact_message
 (
     id          BIGSERIAL PRIMARY KEY,

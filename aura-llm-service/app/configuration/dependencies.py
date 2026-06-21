@@ -31,6 +31,9 @@ from app.application.services.user_interactions.lessons_learned_service.lessons_
 from app.application.services.user_interactions.decision_brief_service.decision_brief_service import (
     DecisionBriefService,
 )
+from app.application.services.user_interactions.feedback_evaluation_service.feedback_evaluation_service import (
+    FeedbackEvaluationService,
+)
 from app.application.services.generation_shared.generation_settings import GenerationSettings
 from app.configuration.context_budget import validate_context_budget
 from app.infrastructure.guardrails.nemo_guardrails_service import NemoGuardrailsService
@@ -131,6 +134,14 @@ async def startup_dependencies(app: FastAPI) -> None:
         registry.register("quiz_service", QuizService(**generation_service_kwargs))
         registry.register("lessons_learned_service", LessonsLearnedService(**generation_service_kwargs))
         registry.register("decision_brief_service", DecisionBriefService(**generation_service_kwargs))
+        registry.register(
+            "feedback_evaluation_service",
+            FeedbackEvaluationService(
+                ollama_llm_facade=ollama_facade,
+                ollama_llm_invoker=ollama_llm_invoker,
+            )
+        )
+
 
         logger.info("All dependencies started successfully")
         registry.commit()
