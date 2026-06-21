@@ -14,6 +14,7 @@ from apps.artifact.exceptions import (
 from apps.artifact.models import Artifact, ArtifactBookmark, ArtifactFeedback, ArtifactPin, ArtifactThreadReply
 from apps.artifact.registry import is_known_type
 from apps.artifact.repositories.artifact_repository import artifact_repository
+from apps.artifact.utils import deduplicate_fragments_by_document
 from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.membership.repositories.membership_repository import membership_repository
@@ -185,7 +186,7 @@ def create_artifact_for_content(
             process_documents=process_documents,
             document_ids=document_ids or [],
             source_chat_id=source_chat_id,
-            fragments=fragments,
+            fragments=deduplicate_fragments_by_document(fragments),
         )
         return artifact
     except Exception:

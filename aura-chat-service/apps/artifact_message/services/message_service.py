@@ -19,6 +19,7 @@ from apps.artifact_message.exceptions import (
     MessageNotFoundException,
     ReaderCannotSendMessageException,
 )
+from apps.artifact.utils import deduplicate_fragments_by_document
 from apps.artifact_message.models import ArtifactMessage
 from apps.artifact_message.repositories.message_repository import message_repository
 from apps.artifact_message.serializers import MessageResponse
@@ -123,7 +124,7 @@ class MessageService:
                 message=answer,
                 sender_type=ArtifactMessage.SenderType.ASSISTANT,
                 created_by=user_id,
-                fragments=fragments or None,
+                fragments=deduplicate_fragments_by_document(fragments) or None,
             )
             chat_repository.touch_last_message_at(chat_id, updated_by=user_id)
         return msg
