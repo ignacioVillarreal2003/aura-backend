@@ -38,6 +38,8 @@ services:
       - ../../aura-document-processing-service/env/.env.docker
     environment:
       HF_TOKEN: ${HF_TOKEN:-}
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
     depends_on:
       aura_db:
         condition: service_healthy

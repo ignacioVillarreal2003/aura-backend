@@ -30,12 +30,12 @@ def standard_error_responses(*status_codes: int) -> dict[int, OpenApiResponse]:
             "(e.g. invalid X-User-Id)."
         ),
         401: (
-            "Caller is unauthenticated or credentials were rejected: missing Bearer token, mismatching format, "
-            "empty X-Service-Api-Key, or invalid/expired JWT as determined by middleware."
+            "Caller is unauthenticated or credentials were rejected: missing Bearer token, "
+            "malformed Authorization header, or invalid/expired JWT as determined by middleware."
         ),
         403: (
             "Caller is authenticated but forbidden: insufficient application-level permission "
-            "`insufficient_permissions`, invalid service API key (403 variant), or token blocked upstream."
+            "`insufficient_permissions`, or token blocked upstream."
         ),
         404: (
             "Resource does not exist, is soft-deleted, or—for some JWT flows—a user referenced by auth cannot be found."

@@ -37,6 +37,10 @@ services:
       - ../../aura-document-processing-service/env/.env.docker.gpu
     environment:
       HF_TOKEN: ${HF_TOKEN:-}
+      # Models are pre-baked into the image (/opt/cache/huggingface); never hit
+      # the Hub at runtime so an expired/missing HF_TOKEN can't break startup.
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
       NVIDIA_VISIBLE_DEVICES: all
     depends_on:
       aura_db:

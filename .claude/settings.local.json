@@ -121,7 +121,10 @@
       "PowerShell($py=\"C:\\\\Users\\\\ignac\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python313\\\\python.exe\"; & $py -m pytest test/unit/artifact/test_artifact_service.py -q -p no:cacheprovider 2>&1 | Select-Object -Last 40)",
       "PowerShell($py=\"C:\\\\Users\\\\ignac\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python313\\\\python.exe\"; & $py -m pytest test/unit/checklist test/unit/report test/unit/chat -q -p no:cacheprovider 2>&1 | Select-Object -Last 6)",
       "PowerShell($py=\"C:\\\\Users\\\\ignac\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python313\\\\python.exe\"; & $py manage.py check 2>&1 | Select-Object -Last 30)",
-      "Bash(grep -nA8 \"def is_production\" aura-document-processing-service/app/configuration/environment_variables.py)"
+      "Bash(grep -nA8 \"def is_production\" aura-document-processing-service/app/configuration/environment_variables.py)",
+      "Bash(xargs ls -la)",
+      "Bash(grep -n \"evaluate_service_auth\\\\|ServiceAuthenticationRejected\\\\|SERVICE_API_KEY\\\\|service_auth\\\\|X-Service\" test/conftest.py)",
+      "Bash(grep -rn \"SERVICE_API_KEY\" aura_document_collection_service/)"
     ]
   }
 }

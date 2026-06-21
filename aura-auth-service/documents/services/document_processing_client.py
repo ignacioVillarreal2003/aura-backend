@@ -6,7 +6,7 @@ import mimetypes
 import requests
 from django.conf import settings
 
-from accounts.request_token import get_request_token
+from accounts.services.auth_service import get_outbound_authorization
 
 logger = logging.getLogger(__name__)
 
@@ -169,6 +169,7 @@ def create_document_from_admin(*, raw_document, actor_user, chat_id=None, name=N
     if description:
         data['description'] = description
 
+<<<<<<< HEAD
     from accounts.services.auth_service import _build_access_token
 
     token = get_request_token()
@@ -177,6 +178,14 @@ def create_document_from_admin(*, raw_document, actor_user, chat_id=None, name=N
         token = f"Bearer {raw_token}"
 
     headers = {'Authorization': token}
+=======
+    authorization = get_outbound_authorization(actor_user)
+    if not authorization:
+        raise DocumentProcessingServiceError(
+            'No hay credenciales para autenticar la carga del documento.'
+        )
+    headers = {'Authorization': authorization}
+>>>>>>> 5c00b41a (fix 6/21)
 
     logger.info(
         '[doc-processing] POST %s | file=%s size=%s bytes | chat_id=%s actor=%s',

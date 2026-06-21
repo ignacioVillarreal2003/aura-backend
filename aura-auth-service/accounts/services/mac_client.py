@@ -5,7 +5,7 @@ import logging
 import requests
 from django.conf import settings
 
-from accounts.request_token import get_request_token
+from accounts.services.auth_service import get_outbound_authorization
 
 logger = logging.getLogger(__name__)
 
@@ -21,20 +21,12 @@ class MacServiceClient:
     def _base_url(self):
         return getattr(settings, 'DOC_COLLECTION_SERVICE_URL', '').rstrip('/')
 
-    def _api_key(self):
-        return getattr(settings, 'DOC_COLLECTION_SERVICE_API_KEY', '')
-
     def _headers(self, user):
-        token = get_request_token()
-        if token:
-            return {
-                'Authorization': token,
-                'Content-Type': 'application/json',
-            }
+        authorization = get_outbound_authorization(user)
+        if not authorization:
+            raise MacServiceError('No hay credenciales para autenticar la llamada al servicio MAC.')
         return {
-            'X-Service-Api-Key': self._api_key(),
-            'X-User-Id': str(user.pk),
-            'X-User-Email': str(user.email),
+            'Authorization': authorization,
             'Content-Type': 'application/json',
         }
 

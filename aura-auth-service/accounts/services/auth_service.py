@@ -9,6 +9,7 @@ from django.utils import timezone
 from django.contrib.auth import authenticate
 
 from accounts.models import RefreshToken, User
+from accounts.request_token import get_request_token
 from accounts.utils import get_user_permissions, get_user_roles
 
 
@@ -70,6 +71,35 @@ def _create_refresh_token(user: User, request=None) -> RefreshToken:
 	user.refresh_token = token_value
 	user.save(update_fields=['refresh_token', 'updated_at'])
 	return refresh
+
+
+# ---------------------------------------------------------------------------
+# Inter-service authorization
+# ---------------------------------------------------------------------------
+
+def mint_access_token(user: User) -> str:
+	"""Mint a short-lived access token for an internal service-to-service call.
+
+	Used when an action originates from a context that has no end-user bearer
+	token to forward (e.g. the Django admin, authenticated via session cookie).
+	"""
+	return _build_access_token(user)
+
+
+def get_outbound_authorization(user: User | None = None) -> str | None:
+	"""Return the ``Authorization`` header value for an outbound inter-service call.
+
+	Prefers forwarding the caller's own bearer token so the downstream service
+	acts with the real user's identity and permissions. When no token is being
+	forwarded — typically Django admin flows authenticated via session cookie —
+	a short-lived JWT is minted for the acting user instead.
+	"""
+	forwarded = get_request_token()
+	if forwarded:
+		return forwarded
+	if user is not None and getattr(user, 'is_authenticated', False):
+		return f'Bearer {_build_access_token(user)}'
+	return None
 
 
 # ---------------------------------------------------------------------------

@@ -227,13 +227,10 @@ DOCUMENT_PROCESSING_URL = config(
     'DOCUMENT_PROCESSING_URL',
     default='http://localhost:8000',
 )
-DOCUMENT_PROCESSING_SERVICE_API_KEY = config(
-    'DOCUMENT_PROCESSING_SERVICE_API_KEY',
-    default='service_api_key',
-)
 
-# Shared key for generic service-to-service calls (e.g. notification service
-# enriching email recipients via the user lookup endpoint).
+# Shared key for *inbound* generic service-to-service calls (e.g. notification
+# service enriching email recipients via the user lookup endpoint). Outbound
+# inter-service calls forward/mint a JWT instead — see accounts.services.auth_service.
 SERVICE_API_KEY = config('SERVICE_API_KEY', default='service_api_key')
 DOCUMENT_PROCESSING_TIMEOUT_SECONDS = config(
     'DOCUMENT_PROCESSING_TIMEOUT_SECONDS',
@@ -258,7 +255,6 @@ NOTIFICATION_SERVICE_TIMEOUT_SECONDS = config(
 
 # Document Collection Service (MAC — Mandatory Access Control)
 DOC_COLLECTION_SERVICE_URL = config('DOC_COLLECTION_SERVICE_URL', default='http://localhost:8005')
-DOC_COLLECTION_SERVICE_API_KEY = config('DOC_COLLECTION_SERVICE_API_KEY', default='dev-doc-collection-key')
 
 # Chat Service (used by Django admin Chat section: messages, share links, members)
 CHAT_SERVICE_URL = config('CHAT_SERVICE_URL', default='http://localhost:8003')
