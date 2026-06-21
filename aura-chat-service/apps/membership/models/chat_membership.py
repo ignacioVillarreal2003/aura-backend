@@ -44,7 +44,7 @@ class ChatMembership(AuditModel, SoftDeleteModel):
             models.Index(fields=["member_id"], name="idx_chat_membership_member"),
             models.Index(
                 fields=["chat", "member_id", "status"],
-                name="idx_chat_membership_chat_member_status",
+                name="idx_chat_memb_status",
             ),
         ]
 

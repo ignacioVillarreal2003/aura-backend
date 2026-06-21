@@ -16,6 +16,8 @@ class AccessControl:
             authenticated_user: AuthenticatedUser,
             required_permissions: frozenset[str],
     ) -> None:
+        if getattr(authenticated_user, "is_service", False):
+            return
         if authenticated_user.has_all_permissions(required_permissions):
             return
         user_permissions = set(authenticated_user.permissions)

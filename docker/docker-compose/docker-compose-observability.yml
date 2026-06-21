@@ -2,9 +2,10 @@ services:
   phoenix:
     image: arizephoenix/phoenix:17.4.0
     container_name: phoenix
+
     ports:
-      - "6006:6006"
-      - "4317:4317"
+      - 6006:6006
+      - 4317:4317
     environment:
       - PHOENIX_WORKING_DIR=/mnt/data
     volumes:
@@ -13,10 +14,14 @@ services:
       # La imagen de Phoenix es distroless (sin /bin/sh): hay que usar forma exec, no CMD-SHELL
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6006/healthz', timeout=5)"]
       interval: 15s
-      timeout: 10s
+      timeout: 120s
       retries: 10
       start_period: 30s
     restart: unless-stopped
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
 
   aura-llm-service:
     environment:
@@ -30,8 +35,9 @@ services:
   prometheus:
     image: prom/prometheus:v2.53.0
     container_name: prometheus
+
     ports:
-      - "9090:9090"
+      - 9090:9090
     volumes:
       - ../observability/prometheus/:/etc/prometheus/
       - prometheus_data:/prometheus
@@ -39,29 +45,39 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
     restart: unless-stopped
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
     container_name: elasticsearch
+
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
     ports:
-      - "9200:9200"
+      - 9200:9200
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health?wait_for_status=yellow >/dev/null || exit 1"]
       interval: 15s
-      timeout: 10s
+      timeout: 120s
       retries: 30
-      start_period: 60s
+      start_period: 600s
     restart: unless-stopped
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
 
   filebeat:
     image: docker.elastic.co/beats/filebeat:8.12.0
     container_name: filebeat
+
     user: root
     volumes:
       - ../observability/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
@@ -72,18 +88,25 @@ services:
       elasticsearch:
         condition: service_healthy
     restart: unless-stopped
+    deploy:
+      mode: global
 
   grafana:
     image: grafana/grafana:10.2.3
     container_name: grafana
+
     ports:
-      - "3001:3000"
+      - 3001:3000
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:
       - grafana_data:/var/lib/grafana
       - ../observability/grafana/provisioning/:/etc/grafana/provisioning/
     restart: unless-stopped
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
 
 volumes:
   phoenix_data:

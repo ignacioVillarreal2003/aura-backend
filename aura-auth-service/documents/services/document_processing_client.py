@@ -169,15 +169,14 @@ def create_document_from_admin(*, raw_document, actor_user, chat_id=None, name=N
     if description:
         data['description'] = description
 
+    from accounts.services.auth_service import _build_access_token
+
     token = get_request_token()
-    if token:
-        headers = {'Authorization': token}
-    else:
-        headers = {
-            'X-Service-Api-Key': settings.DOCUMENT_PROCESSING_SERVICE_API_KEY,
-            'X-User-Id': str(actor_user.pk),
-            'X-User-Email': actor_user.email or f'{actor_user.username}@local',
-        }
+    if not token:
+        raw_token = _build_access_token(actor_user)
+        token = f"Bearer {raw_token}"
+
+    headers = {'Authorization': token}
 
     logger.info(
         '[doc-processing] POST %s | file=%s size=%s bytes | chat_id=%s actor=%s',

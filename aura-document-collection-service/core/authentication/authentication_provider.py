@@ -109,7 +109,7 @@ class AuthenticationProvider:
             )
 
         logger.debug("Service-to-service request authenticated.", extra={"path": request.path})
-        return AuthenticatedUser(id=0, email="service@internal", roles=(), permissions=())
+        return AuthenticatedUser(id=0, email="service@internal", roles=(), permissions=(), is_service=True)
 
     def validate_token(self, token: str) -> AuthenticatedUser:
         cached = _get_cached_user(token)

@@ -8,7 +8,7 @@ scrape_configs:
     metrics_path: '/metrics'
     scrape_interval: 10s
     static_configs:
-      - targets: ['host.docker.internal:3000']
+      - targets: ['aura-auth-service:8000']
 
   - job_name: 'aura-chat-service'
     metrics_path: '/metrics'
@@ -28,11 +28,11 @@ scrape_configs:
     static_configs:
       - targets: ['aura-llm-service:8000']
 
-  - job_name: 'mock-auth'
+  - job_name: 'aura-document-collection-service'
     metrics_path: '/metrics'
     scrape_interval: 10s
     static_configs:
-      - targets: ['mock-auth:8000']
+      - targets: ['aura-document-collection-service:8000']
 
   - job_name: 'aura-notification-service'
     metrics_path: '/metrics'

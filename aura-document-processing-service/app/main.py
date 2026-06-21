@@ -72,7 +72,9 @@ def create_app() -> FastAPI:
     _include_routers(app)
     register_exception_handlers(app)
 
+    from app.configuration.metrics import patch_instrumentator_routing
     patch_instrumentator_routing()
+
     Instrumentator(
         should_group_status_codes=True,
         should_ignore_untemplated=True,
