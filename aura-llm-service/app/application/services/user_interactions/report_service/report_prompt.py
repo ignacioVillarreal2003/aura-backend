@@ -1,4 +1,17 @@
+from datetime import datetime, timezone
+
 from app.domain.dtos.user_interactions.report.report_request import ReportType
+
+# Abreviaturas de mes en español para el grupo fecha-hora (DTG) militar.
+_MESES_DTG = ("ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC")
+
+
+def current_datetime_directive(now: datetime | None = None) -> str:
+    """Línea con la fecha y hora actuales (UTC) para que el modelo redacte un DTG real."""
+    now = now or datetime.now(timezone.utc)
+    dtg = f"{now:%d%H%M}Z {_MESES_DTG[now.month - 1]} {now:%y}"
+    legible = now.strftime("%d/%m/%Y %H:%M UTC")
+    return f"\nFECHA Y HORA ACTUAL (UTC) para el DTG y referencias temporales: {dtg} ({legible}).\n"
 
 _COMMON_RULES = """
 ÁMBITO:
@@ -6,11 +19,14 @@ _COMMON_RULES = """
 
 REGLAS ESTRICTAS:
 - Responde EXCLUSIVAMENTE con el informe. Sin preámbulos, explicaciones ni comentarios fuera del formato.
-- Mantén la estructura exacta de secciones y subsecciones. No omitas ninguna sección.
-- Usa lenguaje militar conciso y directo. Tiempo verbal presente o pasado inmediato según corresponda.
-- Si el usuario no aportó datos para una subsección escribe "[SIN DATOS]" — nunca la elimines.
+- Mantené la numeración y los títulos de las secciones principales (1, 2, 3...). Usalos como guía de qué información buscar.
+- Usá lenguaje militar conciso y directo. Tiempo verbal presente o pasado inmediato según corresponda.
+- Completá cada subsección ÚNICAMENTE con datos aportados por el usuario o el contexto documental. NUNCA inventes datos.
+- Si una subsección no tiene datos, OMITÍ esa línea por completo. No escribas marcadores de relleno como "[SIN DATOS]", "[N/A]", "Pendiente" ni similares.
+- Si una sección principal queda sin ningún dato, escribí únicamente "Sin novedades." debajo de su título.
+- Encabezado de metadatos (NR, DTG, UNIDAD, REF, PERÍODO, etc.): completá solo los campos con dato disponible. Para el DTG usá la fecha y hora actuales provistas en formato Zulú. Si un campo de metadatos no tiene dato, omití esa línea completa (no escribas "[SIN REFERENCIA]" ni placeholders). La línea CLASIFICACIÓN siempre debe estar presente; usá "RESERVADO" por defecto si no se indica otro nivel.
 - Cuando se proporcione contexto documental, intégralo en las secciones pertinentes con fidelidad al documento; no inventes datos no respaldados.
-- Cuando el usuario pida un retoque, modifica solo lo solicitado y devuelve el informe completo.
+- Cuando el usuario pida un retoque, modificá solo lo solicitado y devolvé el informe completo.
 """
 
 HUMAN_PROMPT = """

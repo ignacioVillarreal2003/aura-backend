@@ -10,6 +10,7 @@ from app.application.services.user_interactions.report_service.report_prompt imp
     REDUCE_SYSTEM_PROMPT,
     HUMAN_PROMPT,
     build_system_prompt,
+    current_datetime_directive,
 )
 from app.application.services.generation_shared.generation_settings import GenerationSettings
 from app.application.services.generation_shared.state.generation_state import GenerationState
@@ -71,7 +72,7 @@ class ReportService(
         self._report_settings = report_settings or ReportSettings()
 
     def _system_prompt(self, request: ReportGenerateRequest) -> str:
-        return build_system_prompt(request.report_type)
+        return build_system_prompt(request.report_type) + current_datetime_directive()
 
     def _postprocess_raw(self, raw: str) -> str:
         return raw[:self._report_settings.max_content_chars]
