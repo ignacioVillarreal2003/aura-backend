@@ -10,6 +10,8 @@ from rest_framework.views import APIView
 from apps.artifact_checklist.exceptions import ChecklistExportException
 from apps.artifact_checklist.serializers import (
     ChecklistGenerateResponse,
+    ChecklistItemResponse,
+    ChecklistItemUpdateRequest,
     ChecklistListResponse,
     ChecklistResponse,
     GenerateChecklistRequest,
@@ -94,6 +96,42 @@ class ChecklistDetailView(APIView):
     def delete(self, request: Request, checklist_id: int) -> Response:
         checklist_service.delete_checklist(user=request.user, checklist_id=checklist_id)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+_ITEM_ID_PARAM = OpenApiParameter(
+    name="item_id",
+    type=int,
+    location=OpenApiParameter.PATH,
+    required=True,
+    description="ID del ítem de la checklist.",
+)
+
+
+class ChecklistItemUpdateView(APIView):
+    @extend_schema(
+        tags=["Checklists"],
+        summary="Marcar/desmarcar ítem de checklist",
+        description=(
+            "Actualiza el estado `is_checked` de un ítem. Requiere permiso `UPDATE_CHECKLIST` "
+            "y ser el creador de la checklist o un miembro activo (contributor) del chat de origen."
+        ),
+        parameters=[_ID_PARAM, _ITEM_ID_PARAM],
+        request=ChecklistItemUpdateRequest,
+        responses={
+            200: ChecklistItemResponse,
+            **standard_error_responses(400, 401, 403, 404),
+        },
+    )
+    def patch(self, request: Request, checklist_id: int, item_id: int) -> Response:
+        serializer = ChecklistItemUpdateRequest(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        item = checklist_service.set_item_checked(
+            user=request.user,
+            checklist_id=checklist_id,
+            item_id=item_id,
+            is_checked=serializer.validated_data["is_checked"],
+        )
+        return Response(ChecklistItemResponse(item).data)
 
 
 class ChecklistManageView(APIView):

@@ -104,8 +104,8 @@ async def startup_dependencies(app: FastAPI) -> None:
         }
 
         registry.register("document_question_service", DocumentQuestionService(**streaming_service_kwargs))
-        registry.register("document_summary_service", DocumentSummaryService(**streaming_service_kwargs))
-        registry.register("document_action_service", DocumentActionService(**streaming_service_kwargs))
+        registry.register("document_summary_service", DocumentSummaryService(**generation_service_kwargs))
+        registry.register("document_action_service", DocumentActionService(**generation_service_kwargs))
         registry.register("general_chat_service", GeneralChatService(**streaming_service_kwargs))
 
         registry.register("document_classify_service", DocumentClassifyService(**processing_service_kwargs))

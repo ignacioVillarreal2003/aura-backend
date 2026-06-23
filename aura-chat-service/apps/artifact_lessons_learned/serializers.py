@@ -70,7 +70,7 @@ class LessonsLearnedResponse(serializers.ModelSerializer):
             "artifact_id",
             "title",
             "query",
-            "context",
+            "description",
             "retrieve_context",
             "process_documents",
             "document_ids",

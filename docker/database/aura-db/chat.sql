@@ -215,7 +215,6 @@ CREATE TABLE artifact_checklist_item
         CONSTRAINT fk_artifact_checklist_item_section REFERENCES artifact_checklist_section (id) ON DELETE CASCADE,
     text       VARCHAR(500) NOT NULL,
     is_checked BOOLEAN      NOT NULL DEFAULT FALSE,
-    notes      TEXT         NOT NULL DEFAULT '',
     position   SMALLINT     NOT NULL DEFAULT 0,
     created_by BIGINT       NOT NULL,
     created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
@@ -232,7 +231,6 @@ CREATE TABLE artifact_quiz
     description  TEXT         NOT NULL DEFAULT '',
     query        TEXT         NOT NULL DEFAULT '',
     instructions TEXT         NOT NULL DEFAULT '',
-    pass_score   SMALLINT,
     created_by   BIGINT       NOT NULL,
     created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     deleted_by   BIGINT,
@@ -249,6 +247,7 @@ CREATE TABLE artifact_quiz_question
     kind        VARCHAR(16) NOT NULL DEFAULT 'single'
         CONSTRAINT chk_artifact_quiz_question_kind CHECK (kind IN ('single', 'multiple', 'boolean')),
     explanation TEXT        NOT NULL DEFAULT '',
+    selected_option_id BIGINT,
     position    SMALLINT    NOT NULL DEFAULT 0,
     created_by  BIGINT      NOT NULL,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -276,8 +275,8 @@ CREATE TABLE artifact_timeline
     artifact_id BIGINT       NOT NULL
         CONSTRAINT fk_artifact_timeline_artifact REFERENCES artifact (id) ON DELETE CASCADE,
     title       VARCHAR(500) NOT NULL DEFAULT '',
+    description TEXT         NOT NULL DEFAULT '',
     query       TEXT         NOT NULL DEFAULT '',
-    summary     TEXT         NOT NULL DEFAULT '',
     created_by  BIGINT       NOT NULL,
     created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     deleted_by  BIGINT,
@@ -306,8 +305,8 @@ CREATE TABLE artifact_lessons_learned
     artifact_id BIGINT       NOT NULL
         CONSTRAINT fk_artifact_lessons_learned_artifact REFERENCES artifact (id) ON DELETE CASCADE,
     title       VARCHAR(500) NOT NULL DEFAULT '',
+    description TEXT         NOT NULL DEFAULT '',
     query       TEXT         NOT NULL DEFAULT '',
-    context     TEXT         NOT NULL DEFAULT '',
     created_by  BIGINT       NOT NULL,
     created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     deleted_by  BIGINT,
@@ -338,8 +337,8 @@ CREATE TABLE artifact_decision_brief
     artifact_id    BIGINT       NOT NULL
         CONSTRAINT fk_artifact_decision_brief_artifact REFERENCES artifact (id) ON DELETE CASCADE,
     title          VARCHAR(500) NOT NULL DEFAULT '',
+    description    TEXT         NOT NULL DEFAULT '',
     query          TEXT         NOT NULL DEFAULT '',
-    problem        TEXT         NOT NULL DEFAULT '',
     context        TEXT         NOT NULL DEFAULT '',
     risks          TEXT         NOT NULL DEFAULT '',
     recommendation TEXT         NOT NULL DEFAULT '',
@@ -372,7 +371,7 @@ CREATE TABLE artifact_document_summary
     artifact_id  BIGINT       NOT NULL
         CONSTRAINT fk_artifact_document_summary_artifact REFERENCES artifact (id) ON DELETE CASCADE,
     title        VARCHAR(500) NOT NULL DEFAULT '',
-    document_ids JSONB        NOT NULL DEFAULT '[]'::jsonb,
+    description  TEXT         NOT NULL DEFAULT '',
     summary      TEXT         NOT NULL DEFAULT '',
     created_by   BIGINT       NOT NULL,
     created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
@@ -387,7 +386,7 @@ CREATE TABLE artifact_document_action
     artifact_id  BIGINT       NOT NULL
         CONSTRAINT fk_artifact_document_action_artifact REFERENCES artifact (id) ON DELETE CASCADE,
     title        VARCHAR(500) NOT NULL DEFAULT '',
-    document_ids JSONB        NOT NULL DEFAULT '[]'::jsonb,
+    description  TEXT         NOT NULL DEFAULT '',
     instruction  TEXT         NOT NULL DEFAULT '',
     action       VARCHAR(32)
         CONSTRAINT chk_artifact_document_action_action CHECK (

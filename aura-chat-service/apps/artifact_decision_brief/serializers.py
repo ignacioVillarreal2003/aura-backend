@@ -70,7 +70,7 @@ class DecisionBriefResponse(serializers.ModelSerializer):
             "artifact_id",
             "title",
             "query",
-            "problem",
+            "description",
             "context",
             "risks",
             "recommendation",

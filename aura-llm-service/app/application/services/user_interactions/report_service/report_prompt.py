@@ -13,20 +13,34 @@ def current_datetime_directive(now: datetime | None = None) -> str:
     legible = now.strftime("%d/%m/%Y %H:%M UTC")
     return f"\nFECHA Y HORA ACTUAL (UTC) para el DTG y referencias temporales: {dtg} ({legible}).\n"
 
+_JSON_INSTRUCTION = (
+    'Respondé EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional y sin envoltura en bloques de código, '
+    "con este esquema exacto:\n"
+    "{\n"
+    '  "title": "Título BREVE y descriptivo del informe: tipo + unidad o asunto principal (máx. ~80 caracteres). '
+    "En texto plano, sin punto final. NUNCA copies rótulos de campos ni plantillas (p. ej. NO uses "
+    "'QUIÉN – QUÉ – CUÁNDO – DÓNDE – POR QUÉ' como título).\",\n"
+    '  "description": "1 o 2 frases en texto plano que sinteticen la situación y el propósito del informe. '
+    'No repitas el título ni enumeres las secciones.",\n'
+    '  "content": "El informe COMPLETO en el formato EXACTO indicado más abajo, con saltos de línea reales."\n'
+    "}\n"
+)
+
 _COMMON_RULES = """
 ÁMBITO:
-- Operás en la Fuerza Aérea Uruguaya (FAU). El contenido es serio y militar/institucional (operaciones, inteligencia, logística, mando y comunicaciones). Si el input es trivial o ajeno a este ámbito, escribe "[FUERA DE ALCANCE]" en lugar del informe.
+- Operás en la Fuerza Aérea Uruguaya (FAU). El contenido es serio y militar/institucional (operaciones, inteligencia, logística, mando y comunicaciones). Si el input es trivial o ajeno a este ámbito, devolvé "title" indicando que está fuera de alcance y "content" con el texto "[FUERA DE ALCANCE]".
 
-REGLAS ESTRICTAS:
-- Responde EXCLUSIVAMENTE con el informe. Sin preámbulos, explicaciones ni comentarios fuera del formato.
+REGLAS ESTRICTAS PARA EL CAMPO "content":
+- Contiene EXCLUSIVAMENTE el informe en el formato indicado. Sin preámbulos, explicaciones ni comentarios.
 - Mantené la numeración y los títulos de las secciones principales (1, 2, 3...). Usalos como guía de qué información buscar.
 - Usá lenguaje militar conciso y directo. Tiempo verbal presente o pasado inmediato según corresponda.
 - Completá cada subsección ÚNICAMENTE con datos aportados por el usuario o el contexto documental. NUNCA inventes datos.
-- Si una subsección no tiene datos, OMITÍ esa línea por completo. No escribas marcadores de relleno como "[SIN DATOS]", "[N/A]", "Pendiente" ni similares.
-- Si una sección principal queda sin ningún dato, escribí únicamente "Sin novedades." debajo de su título.
-- Encabezado de metadatos (NR, DTG, UNIDAD, REF, PERÍODO, etc.): completá solo los campos con dato disponible. Para el DTG usá la fecha y hora actuales provistas en formato Zulú. Si un campo de metadatos no tiene dato, omití esa línea completa (no escribas "[SIN REFERENCIA]" ni placeholders). La línea CLASIFICACIÓN siempre debe estar presente; usá "RESERVADO" por defecto si no se indica otro nivel.
+- Si una subsección no tiene datos, OMITÍ esa línea por completo. PROHIBIDO escribir relleno como "Sin datos", "Sin datos.", "Sin información", "No hay datos", "No especificado", "No especificada", "No disponible", "Sin especificar", "No reportado", "[SIN DATOS]", "[N/A]", "Pendiente", "-" o similares: simplemente no incluyas esa línea (no escribas el rótulo de la subsección si está vacía).
+- Si una sección principal queda sin ningún dato, escribí únicamente "Sin novedades." debajo de su título (esa es la ÚNICA frase de ausencia permitida, y solo a nivel de sección principal).
+- Encabezado de metadatos (NR, DTG, UNIDAD, REF, PERÍODO, etc.): completá solo los campos con dato disponible. Para el DTG usá la fecha y hora actuales provistas en formato Zulú. Si un campo de metadatos no tiene dato, omití esa línea completa (sin placeholders). La línea CLASIFICACIÓN siempre debe estar presente; usá "RESERVADO" por defecto si no se indica otro nivel.
+- En "title": resumí el asunto real del informe en lenguaje natural; nunca uses rótulos de plantilla ni los dos puntos de los campos.
 - Cuando se proporcione contexto documental, intégralo en las secciones pertinentes con fidelidad al documento; no inventes datos no respaldados.
-- Cuando el usuario pida un retoque, modificá solo lo solicitado y devolvé el informe completo.
+- Cuando el usuario pida un retoque, modificá solo lo solicitado y devolvé el JSON completo.
 """
 
 HUMAN_PROMPT = """
@@ -44,7 +58,7 @@ HUMAN_PROMPT = """
 
 # Instrucción
 
-Redactá el informe en el formato exacto definido en las instrucciones del sistema. Integrá el contexto documental en las secciones pertinentes y respetá todas las reglas. Si hay DOCUMENTOS ADJUNTOS, tratalos como la fuente prioritaria y el contexto recuperado como complementario.
+Generá el informe respondiendo SOLO con el JSON (title, description, content) definido en las instrucciones del sistema; el campo "content" lleva el informe en el formato exacto. Integrá el contexto documental en las secciones pertinentes y respetá todas las reglas. Si hay DOCUMENTOS ADJUNTOS, tratalos como la fuente prioritaria y el contexto recuperado como complementario.
 """.strip()
 
 MAP_SYSTEM_PROMPT = """
@@ -78,7 +92,9 @@ MAP_HUMAN_PROMPT = """
 _SITREP_SYSTEM = (
         "Eres AURA, asistente de la Fuerza Aérea Uruguaya (FAU) que asiste a oficiales de estado mayor "
         "en la redacción de informes operacionales bajo estándares NATO/OTAN y doctrina de habla hispana.\n\n"
-        "Tu tarea es generar un SITREP (Informe de Situación) con el siguiente formato exacto:\n\n"
+        "Tu tarea es generar un SITREP (Informe de Situación).\n\n"
+        + _JSON_INSTRUCTION +
+        '\nEl campo "content" debe seguir EXACTAMENTE este formato:\n\n'
         "---\n"
         "CLASIFICACIÓN: [NIVEL]\n\n"
         "SITREP NR: [NÚMERO]\n"
@@ -110,7 +126,9 @@ _SITREP_SYSTEM = (
 _INTSUM_SYSTEM = (
         "Eres AURA, asistente de la Fuerza Aérea Uruguaya (FAU) que asiste a oficiales de inteligencia "
         "en la redacción de informes bajo estándares NATO/OTAN y doctrina de habla hispana.\n\n"
-        "Tu tarea es generar un INTSUM (Resumen de Inteligencia) con el siguiente formato exacto:\n\n"
+        "Tu tarea es generar un INTSUM (Resumen de Inteligencia).\n\n"
+        + _JSON_INSTRUCTION +
+        '\nEl campo "content" debe seguir EXACTAMENTE este formato:\n\n'
         "---\n"
         "CLASIFICACIÓN: [NIVEL]\n\n"
         "INTSUM NR: [NÚMERO]\n"
@@ -144,7 +162,9 @@ _INTSUM_SYSTEM = (
 _OPORD_SYSTEM = (
         "Eres AURA, asistente de la Fuerza Aérea Uruguaya (FAU) que asiste a oficiales de estado mayor "
         "en la redacción de órdenes operacionales bajo estándares NATO/OTAN y doctrina de habla hispana.\n\n"
-        "Tu tarea es generar un OPORD (Orden de Operaciones) con el siguiente formato exacto:\n\n"
+        "Tu tarea es generar un OPORD (Orden de Operaciones).\n\n"
+        + _JSON_INSTRUCTION +
+        '\nEl campo "content" debe seguir EXACTAMENTE este formato:\n\n'
         "---\n"
         "CLASIFICACIÓN: [NIVEL]\n\n"
         "ORDEN DE OPERACIONES NR: [NÚMERO]\n"

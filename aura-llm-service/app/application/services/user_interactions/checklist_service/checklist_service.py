@@ -23,6 +23,7 @@ from app.application.services.generation_shared.output_parsing import clean_text
 from app.application.services.generation_shared.structured_generation_service import StructuredGenerationService
 from app.domain.dtos.user_interactions.checklist.checklist_request import ChecklistGenerateRequest
 from app.domain.dtos.user_interactions.checklist.checklist_response import ChecklistGenerateResponse, ChecklistItem
+from app.domain.field_limits import MAX_DESCRIPTION_CHARS
 from app.domain.dtos.user_interactions.checklist.checklist_stream_events import (
     ChecklistStreamComplete,
     ChecklistStreamError,
@@ -36,7 +37,8 @@ from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface i
 
 logger = logging.getLogger(__name__)
 
-_ParsedChecklist = tuple[str, list[ChecklistItem]]
+# (title, description, items)
+_ParsedChecklist = tuple[str, str, list[ChecklistItem]]
 
 
 def _parse_items(raw_items: list, settings: ChecklistSettings) -> list[ChecklistItem]:
@@ -53,7 +55,6 @@ def _parse_items(raw_items: list, settings: ChecklistSettings) -> list[Checklist
                 order=max(1, int(entry.get("order", 1))),
                 text=text,
                 is_checked=False,
-                notes="",
             )
         )
     return items
@@ -66,21 +67,21 @@ def _fallback_items(raw: str, settings: ChecklistSettings) -> _ParsedChecklist:
             order=i + 1,
             text=line[:settings.max_item_text_chars],
             is_checked=False,
-            notes="",
         )
         for i, line in enumerate(fallback_lines(raw)[:settings.max_items])
     ]
-    return "Checklist de procedimiento", items
+    return "Checklist de procedimiento", "", items
 
 
 def _parse_llm_output(raw: str, settings: ChecklistSettings) -> _ParsedChecklist:
     try:
         data = parse_json_object(raw)
         title = clean_text(data.get("title", "Checklist"), settings.max_title_chars) or "Checklist"
+        description = clean_text(data.get("description", ""), MAX_DESCRIPTION_CHARS)
         items = _parse_items(data.get("items", []), settings)
         if not items:
             raise ValueError("No se encontraron ítems válidos en la respuesta.")
-        return title, items
+        return title, description, items
     except (json.JSONDecodeError, ValueError, TypeError) as e:
         logger.warning("LLM did not return valid JSON; falling back to line-by-line parsing: %s", e)
         return _fallback_items(raw, settings)
@@ -123,15 +124,15 @@ class ChecklistService(
         return build_system_prompt(self._checklist_settings)
 
     def _parse_output(self, raw: str, request: ChecklistGenerateRequest) -> _ParsedChecklist:
-        title, items = _parse_llm_output(raw, self._checklist_settings)
+        title, description, items = _parse_llm_output(raw, self._checklist_settings)
         if not items:
             raise ChecklistServiceException(
                 "No se pudieron extraer ítems de la respuesta del modelo.", status_code=502
             )
-        return title, items
+        return title, description, items
 
     def _result_log_extra(self, parsed: _ParsedChecklist) -> dict:
-        return {"items_count": len(parsed[1])}
+        return {"items_count": len(parsed[2])}
 
     def _build_response(
             self,
@@ -140,9 +141,10 @@ class ChecklistService(
             parsed: _ParsedChecklist,
             raw: str,
     ) -> ChecklistGenerateResponse:
-        title, items = parsed
+        title, description, items = parsed
         return ChecklistGenerateResponse(
             title=title,
+            description=description,
             items=items,
             messages=self._conversation_with_answer(state, raw),
             fragments=state.all_fragments,

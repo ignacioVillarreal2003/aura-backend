@@ -76,7 +76,7 @@ class TimelineResponse(serializers.ModelSerializer):
             "artifact_id",
             "title",
             "query",
-            "summary",
+            "description",
             "retrieve_context",
             "process_documents",
             "document_ids",

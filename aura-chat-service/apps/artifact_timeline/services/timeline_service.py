@@ -45,7 +45,7 @@ def _persist_generated_timeline(
         process_documents: bool | None,
         document_ids: list[int],
         source_chat_id: int,
-        summary: str,
+        description: str,
         events: list,
         fragments=None,
 ) -> tuple:
@@ -60,7 +60,7 @@ def _persist_generated_timeline(
     )
     timeline = timeline_repository.create(
         user_id=user_id,
-        summary=summary,
+        description=description,
         events=events,
         artifact_id=artifact.id,
         title=title,
@@ -161,7 +161,7 @@ class TimelineService(ArtifactCrudService):
         raw_events = result_data.get("events") or []
         out_messages = result_data.get("messages") or []
         fragments = llm_client.normalize_fragments(result_data.get("fragments"))
-        summary = str(result_data.get("summary", ""))
+        description = str(result_data.get("description", ""))
 
         if not title:
             logger.error("LLM returned empty title for timeline", extra={"user_id": user.id})
@@ -179,7 +179,7 @@ class TimelineService(ArtifactCrudService):
             process_documents=process_documents,
             document_ids=document_ids or [],
             source_chat_id=chat_id,
-            summary=summary,
+            description=description,
             events=events,
             fragments=fragments,
         )

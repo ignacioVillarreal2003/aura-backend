@@ -30,6 +30,9 @@ _DESCRIPTION_MAX_CHARS = 240
 _SECTION_RE = re.compile(r"^\s*\d+\.\s*(.+?)\s*:?\s*$")
 # Marcadores entre corchetes que el modelo puede dejar: [SIN DATOS], [NIVEL], etc.
 _PLACEHOLDER_RE = re.compile(r"\[[^\]]*\]")
+# Rótulo de plantilla al inicio de la MISIÓN (p.ej. "QUIÉN – QUÉ – CUÁNDO – DÓNDE – POR QUÉ:").
+# Una corrida inicial en MAYÚSCULAS con separadores que termina en ":" es siempre una etiqueta.
+_LABEL_PREFIX_RE = re.compile(r"^[A-ZÁÉÍÓÚÑ¿?()/0-9 .–—-]{6,}:\s*")
 # Sección que mejor resume el informe, según el tipo (MISIÓN para SITREP/OPORD,
 # CONCLUSIONES para INTSUM).
 _SUMMARY_SECTION_KEYWORDS = ("MISIÓN", "MISION", "CONCLUSIONES", "RESUMEN")
@@ -63,6 +66,7 @@ def _extract_section_body(content: str, keywords: tuple[str, ...]) -> str:
 def _summary_text(content: str) -> str:
     body = _extract_section_body(content, _SUMMARY_SECTION_KEYWORDS)
     summary = _clean_inline(" ".join(ln for ln in body.splitlines() if _clean_inline(ln)))
+    summary = _LABEL_PREFIX_RE.sub("", summary).strip()
     if summary:
         return summary
     # Fallback: primera línea sustantiva que no sea un metadato del encabezado.
@@ -252,7 +256,12 @@ class ReportService(ArtifactCrudService):
             logger.error("LLM returned unknown report type: %s", rtype, extra={"user_id": user.id})
             raise LLMServiceException()
 
-        title, description = _derive_title_and_description(rtype, content)
+        # El LLM ahora devuelve title/description; si vienen vacíos (fallback de
+        # texto plano), los derivamos del contenido como red de seguridad.
+        title = _truncate(str(result_data.get("title", "")).strip(), _AUTO_TITLE_MAX_CHARS)
+        description = _truncate(str(result_data.get("description", "")).strip(), _DESCRIPTION_MAX_CHARS)
+        if not title:
+            title, description = _derive_title_and_description(rtype, content)
         artifact, report = await sync_to_async(_persist_generated_report)(
             user_id=user.id,
             report_type=rtype,

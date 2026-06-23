@@ -10,6 +10,8 @@ from rest_framework.views import APIView
 from apps.artifact_quiz.exceptions import QuizExportException
 from apps.artifact_quiz.serializers import (
     GenerateQuizRequest,
+    QuizAnswerRequest,
+    QuizAnswerResponse,
     QuizGenerateResponse,
     QuizListResponse,
     QuizResponse,
@@ -94,6 +96,62 @@ class QuizDetailView(APIView):
     def delete(self, request: Request, quiz_id: int) -> Response:
         quiz_service.delete_quiz(user=request.user, quiz_id=quiz_id)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+_QUESTION_ID_PARAM = OpenApiParameter(
+    name="question_id",
+    type=int,
+    location=OpenApiParameter.PATH,
+    required=True,
+    description="ID de la pregunta del cuestionario.",
+)
+
+
+class QuizQuestionAnswerView(APIView):
+    @extend_schema(
+        tags=["Quizzes"],
+        summary="Responder una pregunta del cuestionario",
+        description=(
+            "Guarda la opción seleccionada para una pregunta y devuelve si es correcta, "
+            "las opciones correctas y el puntaje acumulado. Requiere permiso `UPDATE_QUIZ` "
+            "y ser el creador del cuestionario o un miembro activo del chat de origen."
+        ),
+        parameters=[_ID_PARAM, _QUESTION_ID_PARAM],
+        request=QuizAnswerRequest,
+        responses={
+            200: QuizAnswerResponse,
+            **standard_error_responses(400, 401, 403, 404),
+        },
+    )
+    def patch(self, request: Request, quiz_id: int, question_id: int) -> Response:
+        serializer = QuizAnswerRequest(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = quiz_service.answer_question(
+            user=request.user,
+            quiz_id=quiz_id,
+            question_id=question_id,
+            option_id=serializer.validated_data["option_id"],
+        )
+        return Response(QuizAnswerResponse(result).data)
+
+
+class QuizResetView(APIView):
+    @extend_schema(
+        tags=["Quizzes"],
+        summary="Reiniciar el cuestionario",
+        description=(
+            "Limpia todas las respuestas seleccionadas del cuestionario. Requiere permiso "
+            "`UPDATE_QUIZ` y ser el creador o un miembro activo del chat de origen."
+        ),
+        parameters=[_ID_PARAM],
+        responses={
+            200: QuizResponse,
+            **standard_error_responses(401, 403, 404),
+        },
+    )
+    def post(self, request: Request, quiz_id: int) -> Response:
+        quiz = quiz_service.reset_quiz(user=request.user, quiz_id=quiz_id)
+        return Response(QuizResponse(quiz).data)
 
 
 class QuizManageView(APIView):

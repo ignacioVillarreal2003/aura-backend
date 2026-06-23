@@ -11,6 +11,16 @@ class QuizAccessDeniedException(ForbiddenException):
     detail = "No tenés acceso a este cuestionario."
 
 
+class QuizQuestionNotFoundException(NotFoundException):
+    error_code = "quiz_question_not_found"
+    detail = "Pregunta del cuestionario no encontrada."
+
+
+class QuizOptionNotFoundException(NotFoundException):
+    error_code = "quiz_option_not_found"
+    detail = "Opción no encontrada para esta pregunta."
+
+
 class LLMServiceException(ServiceUnavailableException):
     status_code = 502
     error_code = "llm_service_error"

@@ -8,10 +8,33 @@ from apps.artifact_lessons_learned.models import ArtifactLessonsLearned, Artifac
 logger = logging.getLogger(__name__)
 
 _CSS = pdf_export.DOC_BASE_CSS + """
-h2 { font-size: 11pt; margin: 12px 0 4px 0; font-family: Courier, monospace; border-bottom: 1px solid #cccccc; }
-.ll-item { margin: 4px 0; padding: 2px 0 2px 6px; border-left: 2px solid #999999; }
-.ll-obs { font-size: 9pt; font-weight: bold; }
-.ll-rec { font-size: 8.5pt; color: #444444; margin-top: 1px; }
+.ll-cat {
+    font-size: 10pt;
+    font-weight: bold;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #111111;
+    font-family: Courier, monospace;
+    margin: 18px 0 6px;
+}
+.ll-item {
+    margin: 0 0 14px;
+}
+.ll-flabel {
+    font-size: 8.5pt;
+    color: #444444;
+    font-family: Helvetica, Arial, sans-serif;
+    margin: 7px 0 1px;
+}
+.ll-flabel--obs {
+    font-weight: bold;
+    color: #111111;
+}
+.ll-text { font-size: 8.5pt; color: #444444; margin: 0; }
+.ll-text p { margin: 0 0 4px; }
+.ll-text p:last-child { margin-bottom: 0; }
+.ll-text ul, .ll-text ol { margin: 2px 0 4px; padding-left: 16px; }
+.ll-text li { margin: 1px 0; }
 """
 
 _CATEGORY_LABELS = {
@@ -30,6 +53,10 @@ def _fmt_dt(dt) -> str:
     return pdf_export.fmt_dt(dt)
 
 
+def _count_label(count: int) -> str:
+    return f"{count} {'lección' if count == 1 else 'lecciones'}"
+
+
 def _build_pdf(html_content: str) -> bytes:
     return pdf_export.build_pdf(html_content, exc_factory=LessonsLearnedExportException, label="lessons-learned")
 
@@ -42,23 +69,37 @@ def _grouped_items(ll: ArtifactLessonsLearned) -> dict:
 
 
 def generate_lessons_learned_pdf(ll: ArtifactLessonsLearned) -> bytes:
-    mode_label = "Con documentos de contexto" if (ll.artifact.retrieve_context or ll.artifact.process_documents) else "Directo"
     created = html.escape(_fmt_dt(ll.created_at))
     grouped = _grouped_items(ll)
-
-    context_html = f"<h2>Contexto</h2><p>{html.escape(ll.context)}</p>" if ll.context else ""
+    total = sum(len(items) for items in grouped.values())
 
     sections_html = ""
     for category in _CATEGORY_ORDER:
         items = grouped.get(category, [])
         if not items:
             continue
-        sections_html += f"<h2>{html.escape(_CATEGORY_LABELS[category])}</h2>\n"
+        sections_html += f'<div class="ll-cat">{html.escape(_CATEGORY_LABELS[category])}</div>\n'
         for item in items:
             obs = html.escape(item.observation)
-            rec = html.escape(item.recommendation)
-            rec_html = f'<div class="ll-rec">&rarr; {rec}</div>' if rec else ""
-            sections_html += f'<div class="ll-item"><div class="ll-obs">{obs}</div>{rec_html}</div>\n'
+            disc = (item.discussion or "").strip()
+            rec = (item.recommendation or "").strip()
+            fields_html = (
+                f'<div class="ll-flabel ll-flabel--obs">Observación</div>'
+                f'<div class="ll-text">{obs}</div>'
+            )
+            if disc:
+                fields_html += (
+                    f'<div class="ll-flabel">Discusión</div>'
+                    f'<div class="ll-text">{pdf_export.render_markdown(disc)}</div>'
+                )
+            if rec:
+                fields_html += (
+                    f'<div class="ll-flabel">Recomendación</div>'
+                    f'<div class="ll-text">{pdf_export.render_markdown(rec)}</div>'
+                )
+            sections_html += f'<div class="ll-item">{fields_html}</div>\n'
+
+    description_html = f"<p>{html.escape(ll.description)}</p>" if ll.description else ""
 
     html_doc = f"""<!DOCTYPE html>
 <html>
@@ -67,17 +108,14 @@ def generate_lessons_learned_pdf(ll: ArtifactLessonsLearned) -> bytes:
 <style>{_CSS}</style>
 </head>
 <body>
-<div class="doc-header">
-  <div class="classification">CLASIFICACIÓN SEGÚN CONTENIDO</div>
-</div>
 <h1>LECCIONES APRENDIDAS</h1>
 <h2 style="border:none; margin-top:2px;">{html.escape(ll.title)}</h2>
-<div class="meta">Generado: {created} &bull; Modo: {mode_label}</div>
-{context_html}
+<div class="meta">Generado: {created} &bull; {_count_label(total)}</div>
+{description_html}
 <hr/>
 {sections_html}
 <div class="doc-footer">
-  CLASIFICACIÓN SEGÚN CONTENIDO — LECCIONES APRENDIDAS — {created}
+  LECCIONES APRENDIDAS — {created}
 </div>
 </body>
 </html>"""
@@ -87,30 +125,34 @@ def generate_lessons_learned_pdf(ll: ArtifactLessonsLearned) -> bytes:
 
 def generate_lessons_learned_markdown(ll: ArtifactLessonsLearned) -> str:
     grouped = _grouped_items(ll)
+    total = sum(len(items) for items in grouped.values())
 
-    lines = [
-        "# LECCIONES APRENDIDAS",
+    lines = ["# Lecciones aprendidas", ""]
+    if (ll.title or "").strip():
+        lines += [f"## {ll.title.strip()}", ""]
+    if (ll.description or "").strip():
+        lines += [ll.description.strip(), ""]
+    lines += [
+        f"_Generado: {_fmt_dt(ll.created_at)} · {_count_label(total)}_",
         "",
-        f"**{ll.title}**",
-        "",
-        f"*Generado: {_fmt_dt(ll.created_at)}*",
+        "---",
         "",
     ]
-    if (ll.context or "").strip():
-        lines += ["## Contexto", "", ll.context.strip(), ""]
-    lines += ["---", ""]
 
     for category in _CATEGORY_ORDER:
         items = grouped.get(category, [])
         if not items:
             continue
-        lines.append(f"## {_CATEGORY_LABELS[category]}")
-        lines.append("")
-        for item in items:
-            lines.append(f"- {item.observation}")
-            if item.recommendation.strip():
-                lines.append(f"  > {item.recommendation}")
-        lines.append("")
+        lines += [f"## {_CATEGORY_LABELS[category]}", ""]
+        for idx, item in enumerate(items, start=1):
+            obs = (item.observation or "").strip()
+            lines += [f"### {idx}. Observación", "", obs, ""]
+            disc = (item.discussion or "").strip()
+            if disc:
+                lines += ["**Discusión**", "", disc, ""]
+            rec = (item.recommendation or "").strip()
+            if rec:
+                lines += ["**Recomendación**", "", rec, ""]
 
-    lines += ["---", "*Lecciones aprendidas exportadas desde AURA*"]
+    lines += ["---", "", "_Exportado desde AURA_"]
     return "\n".join(lines)

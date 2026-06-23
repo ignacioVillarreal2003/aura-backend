@@ -40,14 +40,14 @@ class TimelineRepository:
             *,
             user_id: int,
             events: list,
-            summary: str = "",
+            description: str = "",
             artifact_id: int,
             title: str = "",
             query: str = "",
     ) -> ArtifactTimeline:
         timeline = ArtifactTimeline.objects.create(
             created_by=user_id,
-            summary=summary,
+            description=description,
             artifact_id=artifact_id,
             title=title,
             query=query,

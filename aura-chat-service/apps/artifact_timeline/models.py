@@ -13,7 +13,7 @@ class ArtifactTimeline(CreatedAuditModel, SoftDeleteModel):
     )
     title = models.CharField(max_length=500, default="", blank=True)
     query = models.TextField(default="", blank=True)
-    summary = models.TextField(default="", blank=True)
+    description = models.TextField(default="", blank=True)
 
     class Meta:
         managed = False

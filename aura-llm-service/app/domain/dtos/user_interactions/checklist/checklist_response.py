@@ -7,7 +7,6 @@ from app.domain.field_limits import (
     MAX_CHECKLIST_ORDER,
     MAX_DESCRIPTION_CHARS,
     MAX_ITEM_TEXT_CHARS,
-    MAX_NOTES_CHARS,
     MAX_SECTION_CHARS,
     MAX_TITLE_CHARS,
 )
@@ -18,7 +17,6 @@ class ChecklistItem(BaseModel):
     order: int = Field(..., ge=1, le=MAX_CHECKLIST_ORDER, description="Posición dentro de la sección (empieza en 1).")
     text: str = Field(..., min_length=1, max_length=MAX_ITEM_TEXT_CHARS, description="Descripción del paso a verificar.")
     is_checked: bool = Field(default=False, description="Estado de verificación.")
-    notes: str = Field(default="", max_length=MAX_NOTES_CHARS, description="Notas opcionales sobre el ítem.")
 
     model_config = {"frozen": True}
 

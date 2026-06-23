@@ -23,24 +23,12 @@ from apps.artifact.services.artifact_crud_service import ArtifactCrudService
 
 logger = logging.getLogger(__name__)
 
-_MAX_TITLE_CHARS = 200
-
-
-def _derive_title(summary: str) -> str:
-    text = summary.strip()
-    if not text:
-        return "Resumen de documentos"
-    truncated = text[:_MAX_TITLE_CHARS]
-    if len(text) > _MAX_TITLE_CHARS:
-        truncated = truncated.rstrip() + "..."
-    return truncated
-
-
 @transaction.atomic
 def _persist_generated_document_summary(
         *,
         user_id: int,
         title: str,
+        description: str,
         source_chat_id: int,
         retrieve_context: bool | None,
         process_documents: bool | None,
@@ -59,10 +47,10 @@ def _persist_generated_document_summary(
     )
     obj = document_summary_repository.create(
         user_id=user_id,
-        document_ids=document_ids,
         summary=summary,
         artifact_id=artifact.id,
         title=title,
+        description=description,
     )
     return artifact, obj
 
@@ -160,10 +148,12 @@ class DocumentSummaryService(ArtifactCrudService):
             logger.error("LLM returned empty summary for document-summary", extra={"user_id": user.id})
             raise LLMServiceException()
 
-        title = _derive_title(summary)
+        title = str(result_data.get("title", "")).strip() or "Resumen de documentos"
+        description = str(result_data.get("description", "")).strip()
         artifact, obj = await sync_to_async(_persist_generated_document_summary)(
             user_id=user.id,
             title=title,
+            description=description,
             source_chat_id=chat_id,
             retrieve_context=retrieve_context,
             process_documents=process_documents,

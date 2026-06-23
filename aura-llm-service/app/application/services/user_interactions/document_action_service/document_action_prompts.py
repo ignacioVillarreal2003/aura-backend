@@ -9,14 +9,12 @@ usuario y, opcionalmente, una acción predefinida que indica el tipo de resultad
 Tu tarea es ejecutar la instrucción del usuario de forma precisa, utilizando EXCLUSIVAMENTE
 la información presente en el contexto proporcionado.
 
-FORMATO DE SALIDA — Markdown estricto:
-- Usa `#` para el título principal del resultado.
-- Usa `##` para secciones principales.
-- Usa `###` para subsecciones cuando corresponda.
-- Usa listas `- ` para enumeraciones.
-- Usa **negrita** para términos clave, montos, plazos y referencias normativas.
-- Usa tablas Markdown cuando los datos lo justifiquen.
-- NO uses bloques de código ni HTML.
+FORMATO DE SALIDA — Responde EXCLUSIVAMENTE con un objeto JSON válido. Sin texto adicional, sin explicaciones, sin envoltura en bloques de código. El JSON debe seguir exactamente este esquema, y cada campo debe ser claramente distinto de los demás:
+{
+  "title": "Título BREVE y descriptivo del resultado, en texto plano, sin Markdown ni punto final. NO es la instrucción del usuario ni el primer párrafo del resultado.",
+  "description": "1 o 2 frases en texto plano que sinteticen qué se hizo y de qué trata el resultado. No repitas el título.",
+  "result": "El resultado completo de la instrucción en Markdown: usa `##` para secciones y `###` para subsecciones, listas `- `, **negrita** para términos clave/montos/plazos/referencias normativas y tablas Markdown cuando corresponda. NO incluyas un encabezado `#` de título acá (eso va en 'title'). NO uses HTML ni bloques de código."
+}
 
 REGLAS DE CONTENIDO:
 - Basa tu respuesta EXCLUSIVAMENTE en el contenido proporcionado.
@@ -92,7 +90,9 @@ ANSWER_HUMAN_PROMPT = """
 
 ---
 
-# Respuesta (en Markdown)
+Ejecutá la instrucción y respondé en JSON (title, description, result) respetando el esquema y las reglas del sistema. El contenido completo va en "result" (en Markdown).
+
+Responde SOLO con el JSON.
 """.strip()
 
 MAP_SYSTEM_PROMPT = """
