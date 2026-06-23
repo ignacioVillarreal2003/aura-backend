@@ -15,7 +15,7 @@
     border: 1px solid #e6e9ef;
     border-radius: 10px;
     padding: 14px;
-    box-shadow: 0 1px 2px rgba(20, 28, 38, 0.06);
+    box-shadow: 0 1px 2px rgba(20,28,38,.06);
   }
   .dashboard-card h3 {
     margin: 0;
@@ -30,17 +30,14 @@
     font-weight: 700;
     color: #1e2430;
   }
-  .dashboard-value.warn { color: #b45309; }
+  .dashboard-value.warn   { color: #b45309; }
   .dashboard-value.danger { color: #b91c1c; }
   .dashboard-layout {
     display: grid;
     gap: 14px;
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   }
-  .dashboard-layout > .dashboard-card {
-    min-width: 0;
-    overflow: hidden;
-  }
+  .dashboard-layout > .dashboard-card { min-width: 0; overflow: hidden; }
   .dashboard-table {
     width: 100%;
     border-collapse: collapse;
@@ -62,32 +59,17 @@
     text-transform: uppercase;
     letter-spacing: .04em;
   }
-  .muted {
-    color: #697688;
-    font-size: 12px;
-  }
+  .muted { color: #697688; font-size: 12px; }
   .badge {
     border-radius: 999px;
     padding: 2px 8px;
     font-size: 12px;
     font-weight: 600;
   }
-  .badge-ready, .badge-processed {
-    color: #fff;
-    background: #17803d;
-  }
-  .badge-processing, .badge-uploaded {
-    color: #fff;
-    background: #8a6300;
-  }
-  .badge-error, .badge-failed {
-    color: #fff;
-    background: #9b1c1c;
-  }
-  .badge-default {
-    color: #fff;
-    background: #365f90;
-  }
+  .badge-ready, .badge-processed { color:#fff; background:#17803d; }
+  .badge-processing, .badge-uploaded { color:#fff; background:#8a6300; }
+  .badge-error, .badge-failed { color:#fff; background:#9b1c1c; }
+  .badge-default { color:#fff; background:#365f90; }
   .section-title {
     font-size: 14px;
     font-weight: 700;
@@ -96,13 +78,14 @@
     text-transform: uppercase;
     letter-spacing: .04em;
   }
-  .service-health-grid {
+  /* Health grids */
+  .health-grid {
     display: grid;
     gap: 10px;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     margin: 14px 0 20px;
   }
-  .service-health-card {
+  .health-card {
     background: #fff;
     border: 1px solid #e6e9ef;
     border-radius: 10px;
@@ -112,20 +95,41 @@
     justify-content: space-between;
     gap: 8px;
   }
-  .service-health-name {
-    font-size: 13px;
-    color: #1e2430;
+  .health-name { font-size: 13px; color: #1e2430; font-weight: 600; }
+  .health-badge { font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .health-detail { font-size: 11px; color: #b91c1c; margin-top: 2px; }
+  /* Collapsible user detail */
+  details.kpi-detail { margin-top: 10px; }
+  details.kpi-detail > summary {
+    cursor: pointer;
+    font-size: 11px;
+    color: #365f90;
     font-weight: 600;
+    user-select: none;
+    list-style: none;
   }
-  .service-health-badge {
-    font-size: 12px;
-    font-weight: 600;
+  details.kpi-detail > summary::before { content: "▶ "; font-size: 9px; }
+  details.kpi-detail[open] > summary::before { content: "▼ "; }
+  details.kpi-detail .detail-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+    font-size: 11px;
+  }
+  details.kpi-detail .detail-table th,
+  details.kpi-detail .detail-table td {
+    border-bottom: 1px solid #edf0f5;
+    padding: 5px 4px;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .service-health-detail {
-    font-size: 11px;
-    color: #b91c1c;
-    margin-top: 2px;
+  details.kpi-detail .detail-table th {
+    color: #4d5b6c;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 10px;
   }
 </style>
 {% endblock %}
@@ -136,19 +140,35 @@
 <div id="content-main">
   <h1>Dashboard Administrativo</h1>
 
-  <!-- ── Estado de los servicios ── -->
-  <p class="section-title">Estado de los servicios</p>
-  <div class="service-health-grid">
+  <!-- ── Microservicios ── -->
+  <p class="section-title">Microservicios</p>
+  <div class="health-grid">
     {% for svc in services_health %}
-      <div class="service-health-card">
+      <div class="health-card">
         <div>
-          <div class="service-health-name">{{ svc.name }}</div>
-          {% if svc.detail %}<div class="service-health-detail">{{ svc.detail }}</div>{% endif %}
+          <div class="health-name">{{ svc.name }}</div>
+          {% if svc.detail %}<div class="health-detail">{{ svc.detail }}</div>{% endif %}
         </div>
-        <span class="service-health-badge">{{ svc.icon }} {{ svc.label }}</span>
+        <span class="health-badge">{{ svc.icon }} {{ svc.label }}</span>
       </div>
     {% empty %}
-      <div class="muted">No se pudo consultar el estado de los servicios.</div>
+      <div class="muted">No se pudo consultar el estado de los microservicios.</div>
+    {% endfor %}
+  </div>
+
+  <!-- ── Infraestructura ── -->
+  <p class="section-title">Infraestructura</p>
+  <div class="health-grid">
+    {% for svc in infra_health %}
+      <div class="health-card">
+        <div>
+          <div class="health-name">{{ svc.name }}</div>
+          {% if svc.detail %}<div class="health-detail">{{ svc.detail }}</div>{% endif %}
+        </div>
+        <span class="health-badge">{{ svc.icon }} {{ svc.label }}</span>
+      </div>
+    {% empty %}
+      <div class="muted">No se pudo consultar el estado de la infraestructura.</div>
     {% endfor %}
   </div>
 
@@ -157,22 +177,63 @@
   <div class="dashboard-grid">
     <section class="dashboard-card">
       <h3>Usuarios activos</h3>
-      <div class="dashboard-value">{{ kpis.users_total }}</div>
-      <div class="muted">Habilitados: {{ kpis.users_enabled }}</div>
+      <div class="dashboard-value">{{ kpis.users_regular }}</div>
     </section>
     <section class="dashboard-card">
       <h3>Usuarios nuevos (30d)</h3>
-      <div class="dashboard-value">{{ kpis.users_new_30 }}</div>
+      <div class="dashboard-value">{{ kpis.users_regular_new_30 }}</div>
+    </section>
+    <section class="dashboard-card">
+      <h3>Activos (últimas 24 h)</h3>
+      <div class="dashboard-value">{{ kpis.active_users_24h }}</div>
+      <div class="muted">Usuarios con login hoy</div>
+    </section>
+    <section class="dashboard-card">
+      <h3>Inactivos (30d)</h3>
+      <div class="dashboard-value {% if kpis.users_inactive_30d > 0 %}warn{% endif %}">{{ kpis.users_inactive_30d }}</div>
+      <div class="muted">Sin login en más de 30 días</div>
     </section>
     <section class="dashboard-card">
       <h3>Cuentas bloqueadas</h3>
       <div class="dashboard-value {% if kpis.users_locked > 0 %}warn{% endif %}">{{ kpis.users_locked }}</div>
-      <div class="muted">Bloqueo activo por intentos fallidos</div>
+      {% if locked_users_list %}
+        <details class="kpi-detail">
+          <summary>Ver usuarios bloqueados</summary>
+          <table class="detail-table">
+            <thead><tr><th>Usuario</th><th>Hasta</th><th>Intentos</th></tr></thead>
+            <tbody>
+              {% for u in locked_users_list %}
+                <tr>
+                  <td title="{{ u.email }}">{{ u.username }}</td>
+                  <td>{{ u.lockout_until|date:"d/m H:i" }}</td>
+                  <td>{{ u.failed_login_attempts }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </details>
+      {% endif %}
     </section>
     <section class="dashboard-card">
       <h3>Sesiones activas</h3>
       <div class="dashboard-value">{{ kpis.sessions_active }}</div>
-      <div class="muted">Tokens de refresco vigentes</div>
+      {% if active_sessions_list %}
+        <details class="kpi-detail">
+          <summary>Ver usuarios con sesión</summary>
+          <table class="detail-table">
+            <thead><tr><th>Usuario</th><th>Último login</th><th>Sesiones</th></tr></thead>
+            <tbody>
+              {% for s in active_sessions_list %}
+                <tr>
+                  <td title="{{ s.user__email }}">{{ s.user__username }}</td>
+                  <td>{{ s.last_login|date:"d/m H:i" }}</td>
+                  <td>{{ s.session_count }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </details>
+      {% endif %}
     </section>
   </div>
 
@@ -186,7 +247,45 @@
     <section class="dashboard-card">
       <h3>Logins fallidos</h3>
       <div class="dashboard-value {% if kpis.logins_failed_24h > 0 %}warn{% endif %}">{{ kpis.logins_failed_24h }}</div>
+      {% if suspicious_users %}
+        <details class="kpi-detail">
+          <summary>Ver usuarios con más fallos</summary>
+          <table class="detail-table">
+            <thead><tr><th>Usuario</th><th>Intentos</th></tr></thead>
+            <tbody>
+              {% for u in suspicious_users %}
+                <tr>
+                  <td>{{ u.actor_username }}</td>
+                  <td>{{ u.failed_count }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </details>
+      {% endif %}
     </section>
+  </div>
+
+  <!-- ── Chat ── -->
+  <p class="section-title">Chat</p>
+  <div class="dashboard-grid">
+    {% if kpis.chat_available %}
+      <section class="dashboard-card">
+        <h3>Chats totales</h3>
+        <div class="dashboard-value">{{ kpis.chats_total }}</div>
+      </section>
+      <section class="dashboard-card">
+        <h3>Chats activos (24 h)</h3>
+        <div class="dashboard-value">{{ kpis.chats_active_24h }}</div>
+        <div class="muted">Con al menos un mensaje hoy</div>
+      </section>
+      <section class="dashboard-card">
+        <h3>Mensajes de usuario (7d)</h3>
+        <div class="dashboard-value">{{ kpis.messages_7d }}</div>
+      </section>
+    {% else %}
+      <div class="muted">Métricas de chat no disponibles.</div>
+    {% endif %}
   </div>
 
   <!-- ── Documentos ── -->
@@ -196,7 +295,16 @@
       <h3>Documentos activos</h3>
       {% if kpis.documents_available %}
         <div class="dashboard-value">{{ kpis.documents_total }}</div>
-        <div class="muted">Nuevos (30d): {{ kpis.documents_new_30 }}</div>
+      {% else %}
+        <div class="dashboard-value">-</div>
+        <div class="muted">Métrica no disponible</div>
+      {% endif %}
+    </section>
+    <section class="dashboard-card">
+      <h3>Documentos fallidos</h3>
+      {% if kpis.documents_available %}
+        <div class="dashboard-value {% if kpis.documents_failed > 0 %}danger{% endif %}">{{ kpis.documents_failed }}</div>
+        {% if kpis.documents_failed > 0 %}<div class="muted">Requieren revisión</div>{% endif %}
       {% else %}
         <div class="dashboard-value">-</div>
         <div class="muted">Métrica no disponible</div>
@@ -236,23 +344,36 @@
     </section>
   </div>
 
+  <!-- ── Grafo de conocimiento ── -->
+  <p class="section-title">Grafo de conocimiento (Neo4j)</p>
+  <div class="dashboard-grid">
+    {% if neo4j_stats.available %}
+      <section class="dashboard-card">
+        <h3>Entidades</h3>
+        <div class="dashboard-value">{{ neo4j_stats.node_count }}</div>
+      </section>
+      <section class="dashboard-card">
+        <h3>Relaciones</h3>
+        <div class="dashboard-value">{{ neo4j_stats.rel_count }}</div>
+      </section>
+      <section class="dashboard-card">
+        <h3>Documentos indexados</h3>
+        <div class="dashboard-value">{{ neo4j_stats.docs_indexed }}</div>
+      </section>
+    {% else %}
+      <div class="muted">Estadísticas del grafo no disponibles.</div>
+    {% endif %}
+  </div>
+
   <!-- ── Tablas ── -->
   <div class="dashboard-layout" style="margin-top:20px">
     <section class="dashboard-card">
       <h3>Usuarios por rol</h3>
       <table class="dashboard-table">
-        <thead>
-          <tr>
-            <th>Rol</th>
-            <th>Total</th>
-          </tr>
-        </thead>
+        <thead><tr><th>Rol</th><th>Total</th></tr></thead>
         <tbody>
           {% for item in users_by_role %}
-            <tr>
-              <td>{{ item.role__name }}</td>
-              <td>{{ item.total }}</td>
-            </tr>
+            <tr><td>{{ item.role__name }}</td><td>{{ item.total }}</td></tr>
           {% empty %}
             <tr><td colspan="2">Sin datos</td></tr>
           {% endfor %}
@@ -263,24 +384,15 @@
     <section class="dashboard-card">
       <h3>Documentos por estado</h3>
       <table class="dashboard-table">
-        <thead>
-          <tr>
-            <th>Estado</th>
-            <th>Total</th>
-          </tr>
-        </thead>
+        <thead><tr><th>Estado</th><th>Total</th></tr></thead>
         <tbody>
           {% for item in documents_by_status %}
             <tr>
               <td>
-                {% if item.status == 'processed' %}
-                  <span class="badge badge-processed">Procesado</span>
-                {% elif item.status == 'failed' %}
-                  <span class="badge badge-failed">Fallido</span>
-                {% elif item.status == 'uploaded' %}
-                  <span class="badge badge-uploaded">Cargado</span>
-                {% else %}
-                  <span class="badge badge-default">{{ item.status|default:"-" }}</span>
+                {% if item.status == 'processed' %}<span class="badge badge-processed">Procesado</span>
+                {% elif item.status == 'failed' %}<span class="badge badge-failed">Fallido</span>
+                {% elif item.status == 'uploaded' %}<span class="badge badge-uploaded">Cargado</span>
+                {% else %}<span class="badge badge-default">{{ item.status|default:"-" }}</span>
                 {% endif %}
               </td>
               <td>{{ item.total }}</td>
@@ -293,16 +405,29 @@
     </section>
 
     <section class="dashboard-card">
-      <h3>Colecciones con más documentos</h3>
+      <h3>Niveles con más documentos</h3>
       <table class="dashboard-table">
-        <thead>
-          <tr>
-            <th>Colección</th>
-            <th>Documentos</th>
-          </tr>
-        </thead>
+        <thead><tr><th>Nivel</th><th>Rango</th><th>Documentos</th></tr></thead>
         <tbody>
-          {% for item in collections_by_doc_count %}
+          {% for item in levels_by_doc_count %}
+            <tr>
+              <td>{{ item.name }}</td>
+              <td>{{ item.rank }}</td>
+              <td>{{ item.doc_count }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="3">Sin datos</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="dashboard-card">
+      <h3>Agrupaciones con más documentos</h3>
+      <table class="dashboard-table">
+        <thead><tr><th>Agrupación</th><th>Documentos</th></tr></thead>
+        <tbody>
+          {% for item in compartments_by_doc_count %}
             <tr>
               <td>{{ item.name }}</td>
               <td>{{ item.doc_count }}</td>
@@ -317,13 +442,7 @@
     <section class="dashboard-card">
       <h3>Documentos más pesados</h3>
       <table class="dashboard-table">
-        <thead>
-          <tr>
-            <th>Documento</th>
-            <th>Tamaño</th>
-            <th>Creador</th>
-          </tr>
-        </thead>
+        <thead><tr><th>Documento</th><th>Tamaño</th><th>Creador</th></tr></thead>
         <tbody>
           {% for item in largest_documents %}
             <tr>
@@ -341,27 +460,17 @@
     <section class="dashboard-card">
       <h3>Últimos documentos cargados</h3>
       <table class="dashboard-table">
-        <thead>
-          <tr>
-            <th>Documento</th>
-            <th>Fecha</th>
-            <th>Estado</th>
-          </tr>
-        </thead>
+        <thead><tr><th>Documento</th><th>Fecha</th><th>Estado</th></tr></thead>
         <tbody>
           {% for item in recent_documents %}
             <tr>
               <td title="{{ item.name }}">{{ item.name|truncatechars:30 }}</td>
               <td>{{ item.created_at|date:"d/m/Y H:i" }}</td>
               <td>
-                {% if item.status == 'processed' %}
-                  <span class="badge badge-processed">Procesado</span>
-                {% elif item.status == 'failed' %}
-                  <span class="badge badge-failed">Fallido</span>
-                {% elif item.status == 'uploaded' %}
-                  <span class="badge badge-uploaded">Cargado</span>
-                {% else %}
-                  <span class="badge badge-default">{{ item.status|default:"-" }}</span>
+                {% if item.status == 'processed' %}<span class="badge badge-processed">Procesado</span>
+                {% elif item.status == 'failed' %}<span class="badge badge-failed">Fallido</span>
+                {% elif item.status == 'uploaded' %}<span class="badge badge-uploaded">Cargado</span>
+                {% else %}<span class="badge badge-default">{{ item.status|default:"-" }}</span>
                 {% endif %}
               </td>
             </tr>

@@ -35,17 +35,12 @@ class Chat(models.Model):
         return f'#{self.id} — {self.name}'
 
 
-class ChatMessage(models.Model):
+class ArtifactMessage(models.Model):
+    """Mirror of artifact_message — one message record per artifact of type MESSAGE."""
     id = models.BigAutoField(primary_key=True)
-    chat = models.ForeignKey(
-        Chat,
-        on_delete=models.DO_NOTHING,
-        related_name='messages',
-        db_column='chat_id',
-    )
+    artifact_id = models.BigIntegerField()
     message = models.TextField(verbose_name='Mensaje')
-    sender_type = models.CharField(max_length=20, verbose_name='Tipo de remitente')
-    # Cross-DB ref for sender_type='user'; null for system messages.
+    sender_type = models.CharField(max_length=16, verbose_name='Tipo de remitente')
     created_by = models.BigIntegerField(null=True, blank=True, verbose_name='Enviado por (user ID)')
     created_at = models.DateTimeField(verbose_name='Enviado el')
     deleted_by = models.BigIntegerField(null=True, blank=True)
@@ -53,7 +48,7 @@ class ChatMessage(models.Model):
 
     class Meta:
         managed = False
-        db_table = 'chat_message'
+        db_table = 'artifact_message'
         app_label = 'chat'
         verbose_name = 'Mensaje'
         verbose_name_plural = 'Mensajes'

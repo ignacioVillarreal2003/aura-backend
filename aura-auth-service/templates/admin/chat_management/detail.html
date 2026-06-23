@@ -113,6 +113,11 @@
 <div id="content-main">
   <h1>Chat — {{ chat.name }}</h1>
 
+  <p style="margin:0 0 16px;">
+    <a class="button" href="{% url 'admin:chat_management_export' chat.id 'pdf' %}">Exportar PDF</a>
+    <a class="button" href="{% url 'admin:chat_management_export' chat.id 'markdown' %}">Exportar Markdown</a>
+  </p>
+
   <table class="chat-info-table">
     <tr><th>ID</th><td>{{ chat.id }}</td></tr>
     <tr><th>Nombre</th><td>{{ chat.name }}</td></tr>
