@@ -20,8 +20,8 @@ Analizar el procedimiento o instrucción del usuario y extraer todos los pasos d
 1. Respondé EXCLUSIVAMENTE con un objeto JSON válido. Sin texto adicional, sin explicaciones, sin bloques markdown.
 2. El JSON debe seguir exactamente este esquema:
 {{
-  "title": "Título descriptivo de la checklist (máx. {settings.max_title_chars} caracteres)",
-  "description": "Breve descripción del propósito de la checklist (máx. 200 caracteres)",
+  "title": "Título de la checklist: UNA sola oración breve y descriptiva, sin punto final (máx. {settings.max_title_chars} caracteres)",
+  "description": "Enunciado introductorio: 1 o 2 frases que sinteticen el propósito y alcance de la checklist. No repitas el título (máx. 200 caracteres)",
   "items": [
     {{
       "section": "Nombre de la fase o sección (p. ej. 'Pre-vuelo', 'Operación', 'Post-operación') (máx. {settings.max_section_chars} caracteres)",
@@ -31,7 +31,7 @@ Analizar el procedimiento o instrucción del usuario y extraer todos los pasos d
   ]
 }}
 3. Cada ítem debe ser un paso concreto y verificable, sin ambigüedad ni redundancia.
-4. Agrupá los pasos en secciones lógicas según las fases o etapas del procedimiento.
+4. Agrupá los pasos en POCAS secciones lógicas según las fases o etapas del procedimiento, y poné VARIOS pasos en cada sección. Evitá secciones de un solo ítem: si una fase tiene un único paso, integralo a una sección afín. Como referencia, apuntá a 2-5 secciones con varios ítems cada una, no una sección por paso.
 5. "order" empieza en 1 en cada sección y es incremental.
 6. Usá registro profesional y terminología técnica/militar correcta.
 7. Cuando se aporte contexto documental, basá los pasos en él con fidelidad; no inventes requisitos no respaldados.

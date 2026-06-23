@@ -15,17 +15,17 @@ class DocumentSummaryRepository:
             self,
             *,
             user_id: int,
-            document_ids: list,
             summary: str,
             artifact_id: int,
             title: str = "",
+            description: str = "",
     ) -> ArtifactDocumentSummary:
         obj = ArtifactDocumentSummary.objects.create(
             created_by=user_id,
-            document_ids=document_ids,
             summary=summary,
             artifact_id=artifact_id,
             title=title,
+            description=description,
         )
         return _with_related(ArtifactDocumentSummary.objects.filter(id=obj.id)).first()
 

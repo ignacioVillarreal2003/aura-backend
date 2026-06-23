@@ -41,7 +41,6 @@ def _bulk_create_sections(checklist_id: int, sections: list, created_by: int) ->
                 section_id=section_obj.id,
                 text=item["text"],
                 is_checked=bool(item.get("is_checked", False)),
-                notes=str(item.get("notes", "")),
                 position=item["position"],
                 created_by=created_by,
             ))
@@ -87,6 +86,19 @@ class ChecklistRepository:
 
     def soft_delete(self, checklist: ArtifactChecklist, deleted_by: int) -> None:
         checklist.delete(deleted_by=deleted_by)
+
+    def get_item(self, checklist_id: int, item_id: int) -> Optional[ArtifactChecklistItem]:
+        return (
+            ArtifactChecklistItem.objects
+            .select_related("section", "section__checklist")
+            .filter(id=item_id, section__checklist_id=checklist_id)
+            .first()
+        )
+
+    def set_item_checked(self, item: ArtifactChecklistItem, is_checked: bool) -> ArtifactChecklistItem:
+        item.is_checked = is_checked
+        item.save(update_fields=["is_checked"])
+        return item
 
 
 checklist_repository = ChecklistRepository()

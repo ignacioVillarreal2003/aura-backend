@@ -85,16 +85,18 @@ class LessonsLearnedGenerateResult:
 
 @dataclass
 class DocumentSummaryResult:
-    document_ids: list[int]
     summary: str
+    title: str = ""
+    description: str = ""
     fragments: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
 class DocumentActionResult:
     result: str
-    document_ids: list[int]
     instruction: str
+    title: str = ""
+    description: str = ""
     action: str | None = None
     fragments: list[dict[str, Any]] = field(default_factory=list)
 
@@ -651,8 +653,9 @@ class LLMClient:
             log_extra={"document_count": len(document_ids)},
         )
         return DocumentSummaryResult(
-            document_ids=data.get("document_ids") or document_ids,
             summary=str(data.get("summary", "")),
+            title=str(data.get("title", "")),
+            description=str(data.get("description", "")),
             fragments=self.normalize_fragments(data.get("fragments")),
         )
 
@@ -704,8 +707,9 @@ class LLMClient:
         )
         return DocumentActionResult(
             result=str(data.get("result", "")),
-            document_ids=data.get("document_ids") or document_ids,
             instruction=str(data.get("instruction", instruction)),
+            title=str(data.get("title", "")),
+            description=str(data.get("description", "")),
             action=data.get("action"),
             fragments=self.normalize_fragments(data.get("fragments")),
         )

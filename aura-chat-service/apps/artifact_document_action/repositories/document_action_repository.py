@@ -15,21 +15,21 @@ class DocumentActionRepository:
             self,
             *,
             user_id: int,
-            document_ids: list,
             instruction: str,
             action: Optional[str],
             result: str,
             artifact_id: int,
             title: str = "",
+            description: str = "",
     ) -> ArtifactDocumentAction:
         obj = ArtifactDocumentAction.objects.create(
             created_by=user_id,
-            document_ids=document_ids,
             instruction=instruction,
             action=action,
             result=result,
             artifact_id=artifact_id,
             title=title,
+            description=description,
         )
         return _with_related(ArtifactDocumentAction.objects.filter(id=obj.id)).first()
 

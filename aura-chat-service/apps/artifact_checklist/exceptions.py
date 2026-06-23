@@ -11,6 +11,11 @@ class ChecklistAccessDeniedException(ForbiddenException):
     detail = "No tenés acceso a esta checklist."
 
 
+class ChecklistItemNotFoundException(NotFoundException):
+    error_code = "checklist_item_not_found"
+    detail = "Ítem de checklist no encontrado."
+
+
 class LLMServiceException(ServiceUnavailableException):
     status_code = 502
     error_code = "llm_service_error"

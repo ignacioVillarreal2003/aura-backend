@@ -41,8 +41,8 @@ def generate_checklist_pdf(checklist: ArtifactChecklist) -> bytes:
     all_items = [item for sec in sections for item in sec.items.all()]
     total = len(all_items)
     checked = sum(1 for it in all_items if it.is_checked)
-    mode_label = "Con documentos de contexto" if (checklist.artifact.retrieve_context or checklist.artifact.process_documents) else "Directo"
     created = html.escape(pdf_export.fmt_dt(checklist.created_at))
+    description_html = f"<p>{html.escape(checklist.description)}</p>" if checklist.description else ""
 
     sections_html = ""
     for section in sections:
@@ -62,17 +62,14 @@ def generate_checklist_pdf(checklist: ArtifactChecklist) -> bytes:
 <style>{_CSS}</style>
 </head>
 <body>
-<div class="doc-header">
-  <div class="classification">CLASIFICACIÓN SEGÚN CONTENIDO</div>
-</div>
 <h1>CHECKLIST DE PROCEDIMIENTO</h1>
 <h2 style="border:none; margin-top:2px;">{html.escape(checklist.title)}</h2>
-<div class="meta">Generado: {created} &bull; Modo: {mode_label}</div>
-<div class="progress">Progreso: {checked}/{total} ítems verificados</div>
+<div class="meta">Generado: {created} &bull; {checked}/{total} ítems verificados</div>
+{description_html}
 <hr/>
 {sections_html}
 <div class="doc-footer">
-  CLASIFICACIÓN SEGÚN CONTENIDO — CHECKLIST — {created}
+  CHECKLIST — {created}
 </div>
 </body>
 </html>"""
@@ -86,14 +83,13 @@ def generate_checklist_markdown(checklist: ArtifactChecklist) -> str:
     total = len(all_items)
     checked = sum(1 for it in all_items if it.is_checked)
 
-    lines = [
-        "# CHECKLIST DE PROCEDIMIENTO",
-        "",
-        f"**{checklist.title}**",
-        "",
-        f"*Generado: {pdf_export.fmt_dt(checklist.created_at)}*",
-        "",
-        f"*Progreso: {checked}/{total} ítems verificados*",
+    lines = ["# Checklist de procedimiento", ""]
+    if (checklist.title or "").strip():
+        lines += [f"## {checklist.title.strip()}", ""]
+    if (checklist.description or "").strip():
+        lines += [checklist.description.strip(), ""]
+    lines += [
+        f"_Generado: {pdf_export.fmt_dt(checklist.created_at)} · {checked}/{total} ítems verificados_",
         "",
         "---",
         "",
@@ -105,9 +101,7 @@ def generate_checklist_markdown(checklist: ArtifactChecklist) -> str:
         for item in section.items.all():
             checkbox = "[x]" if item.is_checked else "[ ]"
             lines.append(f"- {checkbox} {item.text}")
-            if item.notes.strip():
-                lines.append(f"  > {item.notes}")
         lines.append("")
 
-    lines += ["---", "*ArtifactChecklist exportada desde AURA*"]
+    lines += ["---", "", "_Exportado desde AURA_"]
     return "\n".join(lines)

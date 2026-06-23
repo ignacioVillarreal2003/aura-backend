@@ -12,8 +12,9 @@ VALID_BODY = {
 }
 
 _RESPONSE = DocumentActionResponse(
+    title="Fechas importantes del documento",
+    description="Listado de las fechas relevantes mencionadas.",
     result="Las fechas encontradas son: 01/01/2024 y 15/06/2024.",
-    document_ids=[1, 2],
     instruction="Extraer las fechas importantes mencionadas en el documento.",
     action=None,
 )

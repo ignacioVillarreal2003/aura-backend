@@ -24,22 +24,13 @@ from apps.artifact.services.artifact_crud_service import ArtifactCrudService
 
 logger = logging.getLogger(__name__)
 
-_MAX_TITLE_CHARS = 200
-
-
-def _derive_title(instruction: str, action: Optional[str]) -> str:
-    prefix = f"{action}: " if action else ""
-    text = (prefix + instruction.strip())[:_MAX_TITLE_CHARS]
-    if len(prefix + instruction.strip()) > _MAX_TITLE_CHARS:
-        text = text.rstrip() + "..."
-    return text or "Acción sobre documentos"
-
 
 @transaction.atomic
 def _persist_generated_document_action(
         *,
         user_id: int,
         title: str,
+        description: str,
         source_chat_id: int,
         retrieve_context: bool | None,
         process_documents: bool | None,
@@ -60,12 +51,12 @@ def _persist_generated_document_action(
     )
     obj = document_action_repository.create(
         user_id=user_id,
-        document_ids=document_ids,
         instruction=instruction,
         action=action,
         result=result,
         artifact_id=artifact.id,
         title=title,
+        description=description,
     )
     return artifact, obj
 
@@ -167,10 +158,12 @@ class DocumentActionService(ArtifactCrudService):
             logger.error("LLM returned empty result for document-action", extra={"user_id": user.id})
             raise LLMServiceException()
 
-        title = _derive_title(instruction, action)
+        title = str(result_data.get("title", "")).strip() or "Acción sobre documentos"
+        description = str(result_data.get("description", "")).strip()
         artifact, obj = await sync_to_async(_persist_generated_document_action)(
             user_id=user.id,
             title=title,
+            description=description,
             source_chat_id=chat_id,
             retrieve_context=retrieve_context,
             process_documents=process_documents,

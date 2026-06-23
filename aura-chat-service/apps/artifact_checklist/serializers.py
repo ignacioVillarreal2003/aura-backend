@@ -53,7 +53,7 @@ class GenerateChecklistRequest(serializers.Serializer):
 class ChecklistItemResponse(serializers.ModelSerializer):
     class Meta:
         model = ArtifactChecklistItem
-        fields = ["id", "text", "is_checked", "notes", "position"]
+        fields = ["id", "text", "is_checked", "position"]
 
 
 class ChecklistSectionResponse(serializers.ModelSerializer):
@@ -77,6 +77,7 @@ class ChecklistResponse(serializers.ModelSerializer):
             "id",
             "artifact_id",
             "title",
+            "description",
             "query",
             "retrieve_context",
             "process_documents",
@@ -99,6 +100,10 @@ class ChecklistResponse(serializers.ModelSerializer):
 
     def get_source_chat_id(self, obj) -> int | None:
         return obj.artifact.source_chat_id if obj.artifact_id else None
+
+
+class ChecklistItemUpdateRequest(serializers.Serializer):
+    is_checked = serializers.BooleanField()
 
 
 class ChecklistGenerateResponse(serializers.Serializer):

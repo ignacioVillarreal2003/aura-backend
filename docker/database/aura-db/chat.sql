@@ -215,7 +215,6 @@ CREATE TABLE artifact_checklist_item
         CONSTRAINT fk_artifact_checklist_item_section REFERENCES artifact_checklist_section (id) ON DELETE CASCADE,
     text       VARCHAR(500) NOT NULL,
     is_checked BOOLEAN      NOT NULL DEFAULT FALSE,
-    notes      TEXT         NOT NULL DEFAULT '',
     position   SMALLINT     NOT NULL DEFAULT 0,
     created_by BIGINT       NOT NULL,
     created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
@@ -372,7 +371,7 @@ CREATE TABLE artifact_document_summary
     artifact_id  BIGINT       NOT NULL
         CONSTRAINT fk_artifact_document_summary_artifact REFERENCES artifact (id) ON DELETE CASCADE,
     title        VARCHAR(500) NOT NULL DEFAULT '',
-    document_ids JSONB        NOT NULL DEFAULT '[]'::jsonb,
+    description  TEXT         NOT NULL DEFAULT '',
     summary      TEXT         NOT NULL DEFAULT '',
     created_by   BIGINT       NOT NULL,
     created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
@@ -387,7 +386,7 @@ CREATE TABLE artifact_document_action
     artifact_id  BIGINT       NOT NULL
         CONSTRAINT fk_artifact_document_action_artifact REFERENCES artifact (id) ON DELETE CASCADE,
     title        VARCHAR(500) NOT NULL DEFAULT '',
-    document_ids JSONB        NOT NULL DEFAULT '[]'::jsonb,
+    description  TEXT         NOT NULL DEFAULT '',
     instruction  TEXT         NOT NULL DEFAULT '',
     action       VARCHAR(32)
         CONSTRAINT chk_artifact_document_action_action CHECK (

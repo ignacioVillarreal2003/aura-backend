@@ -5,6 +5,7 @@ from apps.artifact_checklist.views import (
     ChecklistExportMarkdownView,
     ChecklistExportPDFView,
     ChecklistGenerateView,
+    ChecklistItemUpdateView,
     ChecklistListView,
     ChecklistManageExportMarkdownView,
     ChecklistManageExportPDFView,
@@ -14,6 +15,7 @@ from apps.artifact_checklist.views import (
 urlpatterns = [
     path("", ChecklistListView.as_view(), name="checklist-list"),
     path("manage/", ChecklistManageView.as_view(), name="checklist-manage"),
+    path("<int:checklist_id>/items/<int:item_id>/", ChecklistItemUpdateView.as_view(), name="checklist-item-update"),
     path("manage/<int:checklist_id>/export/pdf/", ChecklistManageExportPDFView.as_view(),
          name="checklist-manage-export-pdf"),
     path("manage/<int:checklist_id>/export/markdown/", ChecklistManageExportMarkdownView.as_view(),

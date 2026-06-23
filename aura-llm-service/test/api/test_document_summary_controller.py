@@ -8,7 +8,8 @@ URL = "/api/v1/document-summary"
 VALID_BODY = {"document_ids": [1, 2, 3], "chat_id": 1}
 
 _RESPONSE = DocumentSummaryResponse(
-    document_ids=[1, 2, 3],
+    title="Resumen de documentos",
+    description="Síntesis introductoria de los documentos solicitados.",
     summary="Resumen consolidado de los tres documentos solicitados.",
     fragments=[],
 )

@@ -1,3 +1,4 @@
+import json
 import logging
 
 from app.application.services.user_interactions.report_service.exceptions.report_service_exceptions import ReportServiceException
@@ -13,10 +14,13 @@ from app.application.services.user_interactions.report_service.report_prompt imp
     current_datetime_directive,
 )
 from app.application.services.generation_shared.generation_settings import GenerationSettings
+from app.application.services.generation_shared.output_parsing import clean_text, split_markdown_doc
 from app.application.services.generation_shared.state.generation_state import GenerationState
 from app.application.services.generation_shared.structured_generation_service import StructuredGenerationService
+from app.application.utils.llm_json_parser import parse_json_object
 from app.domain.dtos.user_interactions.report.report_request import ReportGenerateRequest, ReportType
 from app.domain.dtos.user_interactions.report.report_response import ReportGenerateResponse
+from app.domain.field_limits import MAX_DESCRIPTION_CHARS, MAX_TITLE_CHARS
 from app.domain.dtos.user_interactions.report.report_stream_events import (
     ReportStreamComplete,
     ReportStreamError,
@@ -37,8 +41,12 @@ _REPORT_GENERATION_MESSAGES: dict[ReportType, str] = {
 }
 
 
+# (title, description, content)
+_ParsedReport = tuple[str, str, str]
+
+
 class ReportService(
-    StructuredGenerationService[ReportGenerateRequest, str, ReportGenerateResponse],
+    StructuredGenerationService[ReportGenerateRequest, _ParsedReport, ReportGenerateResponse],
     ReportServiceInterface,
 ):
     label = "report"
@@ -58,7 +66,7 @@ class ReportService(
     reduce_system_prompt = REDUCE_SYSTEM_PROMPT
     reduce_human_prompt = REDUCE_HUMAN_PROMPT
 
-    uses_json_mode = False
+    uses_json_mode = True
 
     def __init__(
             self,
@@ -74,29 +82,47 @@ class ReportService(
     def _system_prompt(self, request: ReportGenerateRequest) -> str:
         return build_system_prompt(request.report_type) + current_datetime_directive()
 
-    def _postprocess_raw(self, raw: str) -> str:
-        return raw[:self._report_settings.max_content_chars]
-
     def _generation_progress_message(self, request: ReportGenerateRequest) -> str:
         return _REPORT_GENERATION_MESSAGES[request.report_type]
 
     def _request_log_extra(self, request: ReportGenerateRequest) -> dict:
         return {"report_type": request.report_type}
 
-    def _parse_output(self, raw: str, request: ReportGenerateRequest) -> str:
-        return raw
+    def _parse_output(self, raw: str, request: ReportGenerateRequest) -> _ParsedReport:
+        max_content = self._report_settings.max_content_chars
+        try:
+            data = parse_json_object(raw)
+            title = clean_text(data.get("title"), MAX_TITLE_CHARS)
+            description = clean_text(data.get("description"), MAX_DESCRIPTION_CHARS)
+            content = clean_text(data.get("content"), max_content)
+            if not content:
+                raise ValueError("Empty content in JSON report.")
+        except (json.JSONDecodeError, ValueError, TypeError):
+            # Fallback: el modelo devolvió el informe en texto plano (no JSON).
+            # Dejamos que chat-service derive título/descripción del contenido.
+            title, description = "", ""
+            content = clean_text(raw, max_content)
+
+        if not content:
+            raise ReportServiceException(
+                "No se pudo extraer el contenido del informe.", status_code=502
+            )
+        return title, description, content
 
     def _build_response(
             self,
             state: GenerationState,
             request: ReportGenerateRequest,
-            parsed: str,
+            parsed: _ParsedReport,
             raw: str,
     ) -> ReportGenerateResponse:
+        title, description, content = parsed
         return ReportGenerateResponse(
             report_type=request.report_type,
-            content=parsed,
-            messages=self._conversation_with_answer(state, parsed),
+            title=title,
+            description=description,
+            content=content,
+            messages=self._conversation_with_answer(state, content),
             fragments=state.all_fragments,
             degraded_stages=self._degraded_stages(state),
         )
