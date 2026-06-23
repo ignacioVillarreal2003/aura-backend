@@ -66,7 +66,7 @@ MAX_EMAIL_CHARS: Final[int] = 254
 MAX_ROLE_CHARS: Final[int] = 100
 MAX_PERMISSION_CHARS: Final[int] = 100
 MAX_ROLES: Final[int] = 50
-MAX_PERMISSIONS: Final[int] = 200
+MAX_PERMISSIONS: Final[int] = 1000
 
 # ─── LLM provider payload ceilings ────────────────────────────────────────────
 
