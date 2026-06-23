@@ -176,5 +176,43 @@ class ChatClient:
             return data.get('results', [])
         return data or []
 
+    # ── Export (manage) ────────────────────────────────────────────────────────
+
+    def _get_binary(self, user, path):
+        """GET returning a streaming binary response (PDF/Markdown export).
+
+        Returns the raw ``requests.Response`` (stream=True); the caller must
+        iterate and close it. Raises ChatServiceError on any non-OK status."""
+        base = self._base_url()
+        if not base:
+            raise ChatServiceError('CHAT_SERVICE_URL no configurado.')
+        try:
+            resp = requests.get(
+                f'{base}{path}',
+                headers=self._headers(user),
+                stream=True,
+                timeout=(10, 60),
+            )
+        except Exception as exc:
+            logger.error('Chat client GET(binary) %s failed: %s', path, exc)
+            raise ChatServiceError(f'No se pudo conectar al servicio de chat: {exc}')
+
+        if resp.ok:
+            return resp
+        status_code = resp.status_code
+        resp.close()
+        if status_code == 401:
+            raise ChatServiceError('El servicio de chat rechazó las credenciales.')
+        if status_code == 403:
+            raise ChatServiceError('Permisos insuficientes en el servicio de chat para esta acción.')
+        if status_code == 404:
+            raise ChatServiceError('Recurso no encontrado en el servicio de chat.')
+        raise ChatServiceError(f'Error inesperado del servicio de chat ({status_code}).')
+
+    def export_chat(self, user, chat_id, fmt):
+        """GET /api/v1/chats/{chat_id}/manage/export/{pdf|markdown}/ (MANAGE_CHATS)."""
+        suffix = 'pdf' if fmt == 'pdf' else 'markdown'
+        return self._get_binary(user, f'/api/v1/chats/{chat_id}/manage/export/{suffix}/')
+
 
 chat_client = ChatClient()

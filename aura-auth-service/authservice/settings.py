@@ -270,6 +270,16 @@ SERVICE_HEALTH_CHECK_TIMEOUT_SECONDS = config(
     cast=int,
 )
 
+# Neo4j HTTP API (dashboard graph stats)
+NEO4J_HTTP_URL = config('NEO4J_HTTP_URL', default='http://neo4j:7474')
+NEO4J_HTTP_USER = config('NEO4J_HTTP_USER', default='neo4j')
+NEO4J_HTTP_PASSWORD = config('NEO4J_HTTP_PASSWORD', default='aura_password')
+
+# RabbitMQ management API (dashboard queue depth)
+RABBITMQ_MGMT_URL = config('RABBITMQ_MGMT_URL', default='http://queue:15672')
+RABBITMQ_MGMT_USER = config('RABBITMQ_MGMT_USER', default='aura_root')
+RABBITMQ_MGMT_PASSWORD = config('RABBITMQ_MGMT_PASSWORD', default='aura_password')
+
 # Logging Configuration
 _LOG_LEVEL = config('LOG_LEVEL', default='INFO')
 

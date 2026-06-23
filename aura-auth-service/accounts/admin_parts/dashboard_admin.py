@@ -1,6 +1,7 @@
 """Dashboard admin custom view with operational KPIs."""
 
 import concurrent.futures
+import socket
 from datetime import timedelta
 import logging
 
@@ -9,7 +10,7 @@ from django.conf import settings
 from django.contrib import admin
 from django.core.exceptions import PermissionDenied
 from django.db import OperationalError, connections
-from django.db.models import Count, Sum
+from django.db.models import Count, Max, Q, Sum
 from django.db.models.functions import Coalesce
 from django.template.response import TemplateResponse
 from django.urls import path
@@ -17,6 +18,7 @@ from django.utils import timezone
 
 from accounts.admin_parts.common import has_permission
 from accounts.models import User, UserRole, AuditLog, RefreshToken
+from chat.models import Chat, ArtifactMessage
 from documents.models import Document
 from notifications.models import Notification
 
@@ -24,24 +26,7 @@ from notifications.models import Notification
 logger = logging.getLogger(__name__)
 
 
-# ── Service health panel ────────────────────────────────────────────────────
-#
-# Every AURA microservice exposes an unauthenticated `/api/v1/health`. We
-# poll all of them on every dashboard load so FAU admins can see at a glance
-# whether something is down — today the only way to find out was to check
-# Docker directly.
-#
-# NOTE on concurrency: the brief asked for `asyncio.gather()`, but this view
-# (like every other view in this Django/WSGI service — served by
-# `gunicorn authservice.wsgi:application`, no ASGI/async anywhere in the
-# codebase) is fully synchronous, and every existing service client
-# (mac_client.py, document_processing_client.py, notification_client.py)
-# uses the synchronous `requests` library. Introducing `asyncio`/`httpx` for
-# this single view only would mean two HTTP stacks in one small Django app
-# for no real benefit. A `ThreadPoolExecutor` running 5 ordinary
-# `requests.get(timeout=...)` calls in parallel OS threads achieves the same
-# actual goal — bounded ~3s total wait instead of ~15s sequential — without
-# adding a new dependency or an inconsistent pattern.
+# ── Microservice health panel ────────────────────────────────────────────────
 _HEALTH_TARGETS = (
     ('Chat', lambda: f"{settings.CHAT_SERVICE_URL.rstrip('/')}/api/v1/health"),
     ('Procesamiento de documentos', lambda: f"{settings.DOCUMENT_PROCESSING_URL.rstrip('/')}/api/v1/health"),
@@ -73,9 +58,7 @@ def _check_one_service_health(name, url, timeout):
 
 
 def _poll_services_health():
-    """Polls every service's /health concurrently, 3s timeout per service by
-    default. Never raises — a service that times out or errors is reported
-    as 'down' rather than breaking the dashboard."""
+    """Polls every microservice's /health concurrently. Never raises."""
     timeout = getattr(settings, 'SERVICE_HEALTH_CHECK_TIMEOUT_SECONDS', 3)
     jobs = [(name, url_fn()) for name, url_fn in _HEALTH_TARGETS]
 
@@ -103,6 +86,97 @@ def _poll_services_health():
     return services
 
 
+# ── Infrastructure health panel ──────────────────────────────────────────────
+
+def _check_db_health(name: str, alias: str) -> dict:
+    try:
+        conn = connections[alias]
+        conn.ensure_connection()
+        return {'name': name, 'state': 'up', 'detail': None}
+    except Exception as exc:
+        return {'name': name, 'state': 'down', 'detail': str(exc)[:100]}
+
+
+def _check_tcp_health(name: str, host: str, port: int, timeout: int) -> dict:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            pass
+        return {'name': name, 'state': 'up', 'detail': None}
+    except Exception as exc:
+        return {'name': name, 'state': 'down', 'detail': str(exc)[:100]}
+
+
+def _check_http_infra(name: str, url: str, timeout: int) -> dict:
+    try:
+        r = requests.get(url, timeout=timeout)
+        if r.status_code < 400:
+            return {'name': name, 'state': 'up', 'detail': None}
+        return {'name': name, 'state': 'degraded', 'detail': f'HTTP {r.status_code}'}
+    except requests.Timeout:
+        return {'name': name, 'state': 'down', 'detail': f'Sin respuesta en {timeout}s'}
+    except requests.RequestException as exc:
+        return {'name': name, 'state': 'down', 'detail': str(exc)[:100]}
+
+
+def _poll_infra_health() -> list:
+    """Checks databases, cache, queue, storage and search engine. Never raises."""
+    timeout = getattr(settings, 'SERVICE_HEALTH_CHECK_TIMEOUT_SECONDS', 3)
+
+    jobs = [
+        ('BD Auth',       lambda: _check_db_health('BD Auth', 'default')),
+        ('BD Principal',  lambda: _check_db_health('BD Principal', 'aura_db')),
+        ('Redis',         lambda: _check_tcp_health('Redis', 'memory_db', 6379, timeout)),
+        ('RabbitMQ',      lambda: _check_tcp_health('RabbitMQ', 'queue', 5672, timeout)),
+        ('MinIO',         lambda: _check_http_infra('MinIO', 'http://storage:9000/minio/health/live', timeout)),
+        ('Neo4j',         lambda: _check_http_infra('Neo4j', 'http://neo4j:7474', timeout)),
+    ]
+
+    results_by_name = {}
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(jobs)) as executor:
+            futures = {name: executor.submit(fn) for name, fn in jobs}
+            for name, future in futures.items():
+                try:
+                    results_by_name[name] = future.result(timeout=timeout + 1)
+                except Exception:
+                    results_by_name[name] = {'name': name, 'state': 'down', 'detail': 'Tiempo de espera agotado'}
+    except Exception:
+        logger.exception('Infra health poll failed unexpectedly.')
+
+    result = []
+    for name, _fn in jobs:
+        entry = results_by_name.get(name, {'name': name, 'state': 'down', 'detail': 'Sin datos'})
+        icon, label = _HEALTH_BADGES.get(entry['state'], _HEALTH_BADGES['down'])
+        result.append({**entry, 'icon': icon, 'label': label})
+    return result
+
+
+# ── Knowledge graph stats ────────────────────────────────────────────────────
+
+def _get_graph_stats(user) -> dict:
+    """Graph stats via document-processing's GET /graph/stats/manage endpoint.
+
+    Replaces the previous direct-to-Neo4j HTTP query so the dashboard uses the
+    official contract and the user's RBAC. Maps the response to the keys the
+    template already expects (node_count, rel_count, available). Never raises.
+
+    Note: `total_entities` counts entity nodes specifically (not every node, as
+    the old direct query did), so the figure may be lower but more meaningful.
+    """
+    try:
+        from documents.services.document_processing_client import get_graph_stats
+        data = get_graph_stats(user) or {}
+        return {
+            'node_count': data.get('total_entities', 0),
+            'rel_count': data.get('total_relations', 0),
+            'docs_indexed': data.get('total_documents_indexed', 0),
+            'available': True,
+        }
+    except Exception:
+        logger.warning('Dashboard: graph stats unavailable via document-processing.')
+        return {'node_count': 0, 'rel_count': 0, 'docs_indexed': 0, 'available': False}
+
+
 def _dashboard_overview_view(request):
     """Render a lightweight admin dashboard using existing project data."""
 
@@ -110,6 +184,7 @@ def _dashboard_overview_view(request):
         raise PermissionDenied
 
     services_health = _poll_services_health()
+    infra_health = _poll_infra_health()
 
     now = timezone.now()
     last_24h = now - timedelta(hours=24)
@@ -117,33 +192,117 @@ def _dashboard_overview_view(request):
     last_30_days = now - timedelta(days=30)
 
     active_users_qs = User.objects.filter(deleted_at__isnull=True)
-    users_total = active_users_qs.count()
-    users_enabled = active_users_qs.filter(enabled=True).count()
-    users_new_30 = active_users_qs.filter(created_at__gte=last_30_days).count()
+
+    # Separate regular users (role "user") from elevated accounts (admin / superadmin).
+    try:
+        elevated_user_ids = set(
+            UserRole.objects.filter(
+                role__name__in=['admin', 'superadmin'],
+                deleted_at__isnull=True,
+            ).values_list('user_id', flat=True)
+        )
+    except Exception:
+        elevated_user_ids = set()
+        logger.warning('Dashboard: could not determine elevated user IDs.')
+
+    regular_users_qs = active_users_qs.exclude(pk__in=elevated_user_ids)
+    users_regular = regular_users_qs.count()
+    users_regular_new_30 = regular_users_qs.filter(created_at__gte=last_30_days).count()
+
     users_locked = active_users_qs.filter(lockout_until__gt=now).count()
 
+    # Users who existed before the 30d window but have not logged in.
+    users_inactive_30d = 0
+    try:
+        users_inactive_30d = active_users_qs.filter(
+            created_at__lt=last_30_days,
+        ).filter(
+            Q(last_login__isnull=True) | Q(last_login__lt=last_30_days)
+        ).count()
+    except Exception:
+        logger.warning('Dashboard: users_inactive_30d unavailable.')
+
+    # Unique users who completed a successful login in the last 24 h.
+    active_users_24h = 0
+    try:
+        active_users_24h = (
+            AuditLog.objects.filter(action='LOGIN', timestamp__gte=last_24h, actor_id__isnull=False)
+            .values('actor_id').distinct().count()
+        )
+    except Exception:
+        logger.warning('Dashboard: active_users_24h unavailable.')
+
+    locked_users_list = []
+    try:
+        locked_users_list = list(
+            active_users_qs.filter(lockout_until__gt=now)
+            .values('username', 'email', 'lockout_until', 'failed_login_attempts')
+            .order_by('lockout_until')[:20]
+        )
+    except Exception:
+        logger.warning('Dashboard: locked_users_list unavailable.')
+
     sessions_active = 0
+    active_sessions_list = []
     try:
         sessions_active = RefreshToken.objects.filter(is_revoked=False, expires_at__gt=now).count()
+        active_sessions_list = list(
+            RefreshToken.objects.filter(is_revoked=False, expires_at__gt=now)
+            .values('user__username', 'user__email')
+            .annotate(last_login=Max('created_at'), session_count=Count('id'))
+            .order_by('-last_login')[:20]
+        )
     except Exception:
         logger.warning('Dashboard: sessions_active unavailable.')
 
     logins_24h = 0
     logins_failed_24h = 0
+    suspicious_users = []
     try:
         logins_24h = AuditLog.objects.filter(action='LOGIN', timestamp__gte=last_24h).count()
         logins_failed_24h = AuditLog.objects.filter(action='LOGIN_FAILED', timestamp__gte=last_24h).count()
+        suspicious_users = list(
+            AuditLog.objects.filter(
+                action='LOGIN_FAILED',
+                timestamp__gte=last_24h,
+                actor_username__isnull=False,
+            )
+            .values('actor_username')
+            .annotate(failed_count=Count('id'))
+            .order_by('-failed_count')[:5]
+        )
     except Exception:
         logger.warning('Dashboard: login audit metrics unavailable.')
 
+    # ── Chat metrics ─────────────────────────────────────────────────────────
+    chats_total = 0
+    chats_active_24h = 0
+    messages_7d = 0
+    chat_available = True
+    try:
+        chats_total = Chat.objects.filter(deleted_at__isnull=True).count()
+        chats_active_24h = Chat.objects.filter(
+            deleted_at__isnull=True,
+            last_message_at__gte=last_24h,
+        ).count()
+        messages_7d = ArtifactMessage.objects.filter(
+            deleted_at__isnull=True,
+            created_at__gte=last_7_days,
+            sender_type='user',
+        ).count()
+    except Exception:
+        chat_available = False
+        logger.warning('Dashboard: chat metrics unavailable.')
+
+    # ── Document metrics ──────────────────────────────────────────────────────
     documents_total = 0
-    documents_new_30 = 0
+    documents_failed = 0
     total_storage_bytes = 0
     documents_available = True
     try:
         document_qs = Document.objects.filter(deleted_at__isnull=True)
         documents_total = document_qs.count()
-        documents_new_30 = document_qs.filter(created_at__gte=last_30_days).count()
+        documents_failed = document_qs.filter(status='failed').count()
         total_storage_bytes = document_qs.aggregate(
             total=Coalesce(Sum('file_size_bytes'), 0)
         )['total']
@@ -151,6 +310,7 @@ def _dashboard_overview_view(request):
         documents_available = False
         logger.warning('Dashboard: document metrics unavailable.')
 
+    # ── Notification metrics ──────────────────────────────────────────────────
     notification_qs = Notification.objects.filter(deleted_at__isnull=True)
     notifications_7d = 0
     notifications_read_rate_7d = 0
@@ -159,8 +319,7 @@ def _dashboard_overview_view(request):
     try:
         notifications_7d = notification_qs.filter(created_at__gte=last_7_days).count()
         notifications_read_7d = notification_qs.filter(
-            created_at__gte=last_7_days,
-            status='read',
+            created_at__gte=last_7_days, status='read',
         ).count()
         notifications_unread = notification_qs.filter(status='unread').count()
         if notifications_7d:
@@ -169,6 +328,10 @@ def _dashboard_overview_view(request):
         notifications_available = False
         logger.warning('Dashboard: notifications metrics unavailable because aura_db connection failed.')
 
+    # ── Knowledge graph stats (non-critical) ─────────────────────────────────
+    neo4j_stats = _get_graph_stats(request.user)
+
+    # ── Table data ────────────────────────────────────────────────────────────
     users_by_role = list(
         UserRole.objects.filter(deleted_at__isnull=True)
         .values('role__name')
@@ -176,25 +339,42 @@ def _dashboard_overview_view(request):
         .order_by('-total')[:8]
     )
 
-    # Collections with most documents (replaces groups_by_user_count).
-    collections_by_doc_count = []
+    levels_by_doc_count = []
+    compartments_by_doc_count = []
     try:
         with connections['aura_db'].cursor() as cursor:
             cursor.execute("""
-                SELECT dc.name, COUNT(didc.document_id) AS doc_count
-                FROM document_collection dc
+                SELECT cl.name, cl.rank, COUNT(DISTINCT didc.document_id) AS doc_count
+                FROM classification_level cl
+                LEFT JOIN document_collection dc
+                    ON dc.classification_level_id = cl.id AND dc.deleted_at IS NULL
                 LEFT JOIN document_in_document_collection didc
                     ON didc.document_collection_id = dc.id AND didc.deleted_at IS NULL
-                WHERE dc.deleted_at IS NULL
-                GROUP BY dc.id, dc.name
-                ORDER BY doc_count DESC, dc.name
-                LIMIT 8
+                GROUP BY cl.id, cl.name, cl.rank
+                ORDER BY doc_count DESC, cl.rank DESC
             """)
-            collections_by_doc_count = [
-                {'name': row[0], 'doc_count': row[1]} for row in cursor.fetchall()
+            levels_by_doc_count = [
+                {'name': row[0], 'rank': row[1], 'doc_count': row[2]}
+                for row in cursor.fetchall()
+            ]
+
+            cursor.execute("""
+                SELECT comp.name, COUNT(DISTINCT didc.document_id) AS doc_count
+                FROM compartment comp
+                LEFT JOIN document_collection_compartment dcc
+                    ON dcc.compartment_id = comp.id
+                LEFT JOIN document_in_document_collection didc
+                    ON didc.document_collection_id = dcc.document_collection_id
+                    AND didc.deleted_at IS NULL
+                GROUP BY comp.id, comp.name
+                ORDER BY doc_count DESC, comp.name
+            """)
+            compartments_by_doc_count = [
+                {'name': row[0], 'doc_count': row[1]}
+                for row in cursor.fetchall()
             ]
     except Exception:
-        logger.warning('Dashboard: collections_by_doc_count unavailable.')
+        logger.warning('Dashboard: levels/compartments_by_doc_count unavailable.')
 
     documents_by_status = []
     largest_documents = []
@@ -217,8 +397,6 @@ def _dashboard_overview_view(request):
                 .values('name', 'created_at', 'created_by', 'status')
                 .order_by('-created_at')[:8]
             )
-            # Fetch only the users referenced in the limited result sets,
-            # not all users (created_by is a cross-DB FK — annotate won't work).
             referenced_ids = {d['created_by'] for d in largest_docs_raw} | {d['created_by'] for d in recent_docs_raw}
             user_map = {
                 u.pk: u.username
@@ -237,16 +415,22 @@ def _dashboard_overview_view(request):
         **admin.site.each_context(request),
         'title': 'Dashboard Administrativo',
         'services_health': services_health,
+        'infra_health': infra_health,
         'kpis': {
-            'users_total': users_total,
-            'users_enabled': users_enabled,
-            'users_new_30': users_new_30,
+            'users_regular': users_regular,
+            'users_regular_new_30': users_regular_new_30,
             'users_locked': users_locked,
+            'users_inactive_30d': users_inactive_30d,
+            'active_users_24h': active_users_24h,
             'sessions_active': sessions_active,
             'logins_24h': logins_24h,
             'logins_failed_24h': logins_failed_24h,
+            'chats_total': chats_total,
+            'chats_active_24h': chats_active_24h,
+            'messages_7d': messages_7d,
+            'chat_available': chat_available,
             'documents_total': documents_total,
-            'documents_new_30': documents_new_30,
+            'documents_failed': documents_failed,
             'notifications_7d': notifications_7d,
             'notifications_read_rate_7d': notifications_read_rate_7d,
             'notifications_unread': notifications_unread,
@@ -254,8 +438,13 @@ def _dashboard_overview_view(request):
             'notifications_available': notifications_available,
             'documents_available': documents_available,
         },
+        'neo4j_stats': neo4j_stats,
+        'locked_users_list': locked_users_list,
+        'active_sessions_list': active_sessions_list,
+        'suspicious_users': suspicious_users,
         'users_by_role': users_by_role,
-        'collections_by_doc_count': collections_by_doc_count,
+        'levels_by_doc_count': levels_by_doc_count,
+        'compartments_by_doc_count': compartments_by_doc_count,
         'documents_by_status': documents_by_status,
         'largest_documents': largest_documents,
         'recent_documents': recent_documents,

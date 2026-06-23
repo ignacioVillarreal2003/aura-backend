@@ -12,13 +12,13 @@ from django.contrib.admin.exceptions import DisallowedModelAdminToField
 from django.contrib.admin.options import IS_POPUP_VAR, TO_FIELD_VAR
 from django.core.exceptions import PermissionDenied
 from django.db import connections, router, transaction
-from django.http import HttpResponseRedirect
-from django.urls import reverse
+from django.http import HttpResponseRedirect, StreamingHttpResponse
+from django.urls import path, reverse
 from django.utils.translation import gettext as _
 from django.utils.html import format_html, format_html_join
 
 logger = logging.getLogger(__name__)
-from accounts.admin_parts.utils.audit import log_audit, _is_admin_or_super_user
+from accounts.admin_parts.utils.audit import log_audit, _is_admin_or_super_user, _is_super_admin_user
 from accounts.services.mac_client import mac_client
 from documents.models import Document
 from documents.services.document_processing_client import (
@@ -26,6 +26,10 @@ from documents.services.document_processing_client import (
     create_document_from_admin,
     delete_document as delete_document_remote,
     get_document as get_document_remote,
+    update_document as update_document_remote,
+    restore_document as restore_document_remote,
+    download_document as download_document_remote,
+    start_bulk_job as start_bulk_job_remote,
 )
 
 _ADMIN_LEVEL_RE = re.compile(r'^__admin_level_(\d+)__$')
@@ -267,6 +271,22 @@ class DocumentChangeForm(forms.ModelForm):
 
 # ── Admin ─────────────────────────────────────────────────────────────────────
 
+class DeletedDocumentsFilter(admin.SimpleListFilter):
+    """Sidebar toggle to view soft-deleted documents (for restore).
+
+    The actual queryset switch lives in DocumentAdmin.get_queryset, which reads
+    the same ``deleted`` GET param; this filter only renders the toggle link.
+    """
+    title = 'Mostrar'
+    parameter_name = 'deleted'
+
+    def lookups(self, request, model_admin):
+        return (('1', 'Eliminados'),)
+
+    def queryset(self, request, queryset):
+        return queryset
+
+
 @admin.register(Document)
 class DocumentAdmin(admin.ModelAdmin):
     change_form_template = 'admin/documents/document/change_form.html'
@@ -279,7 +299,7 @@ class DocumentAdmin(admin.ModelAdmin):
         'agrupaciones_count',
     )
     list_display_links = ('name_display',)
-    list_filter = ()
+    list_filter = (DeletedDocumentsFilter,)
     search_fields = ('name', 'description')
     readonly_fields = (
         'size_display',
@@ -289,16 +309,17 @@ class DocumentAdmin(admin.ModelAdmin):
         'created_at',
         'created_by',
         'processing_status_display',
+        'download_link',
     )
-    actions = None
-    actions_selection_counter = False
+    actions = ['action_restore', 'action_reprocess', 'action_reembed', 'action_enrich', 'action_graph_extract']
+    actions_selection_counter = True
 
     fieldsets = (
         ('Información Básica', {
             'fields': ('name', 'description', 'size_display', 'status', 'mime_type_display', 'storage_url'),
         }),
         ('Estado de procesamiento', {
-            'fields': ('processing_status_display',),
+            'fields': ('processing_status_display', 'download_link'),
         }),
         ('Auditoría', {
             'fields': ('created_at', 'created_by'),
@@ -307,7 +328,33 @@ class DocumentAdmin(admin.ModelAdmin):
     )
 
     def get_queryset(self, request):
-        return super().get_queryset(request).filter(deleted_at__isnull=True)
+        qs = super().get_queryset(request)
+        if request.GET.get('deleted') == '1':
+            return qs.filter(deleted_at__isnull=False)
+        return qs.filter(deleted_at__isnull=True)
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        # Never expose Django's bulk "delete selected" — deletion goes through
+        # the per-object flow (delete_model) so it can call the service first.
+        actions.pop('delete_selected', None)
+        # Heavy bulk operations are superadmin-only (the permission is too, so a
+        # plain admin would just get a 403); hide them to avoid dead options.
+        if not _is_super_admin_user(request.user):
+            for name in ('action_reprocess', 'action_reembed', 'action_enrich', 'action_graph_extract'):
+                actions.pop(name, None)
+        return actions
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [
+            path(
+                '<int:document_id>/download-file/',
+                self.admin_site.admin_view(self.download_file_view),
+                name='documents_document_download_file',
+            ),
+        ]
+        return custom + urls
 
     def get_form(self, request, obj=None, **kwargs):
         return DocumentUploadForm if obj is None else DocumentChangeForm
@@ -473,18 +520,23 @@ class DocumentAdmin(admin.ModelAdmin):
                 prev_name = meta['name'] if meta else ''
                 prev_description = (meta['description'] if meta else '') or ''
 
-                # Save to local meta (survives processing-service overwrites).
+                # Save to local meta (survives processing-service overwrites:
+                # the async enrichment overwrites `description` upstream, so this
+                # cache keeps the admin's values visible in the panel).
                 _save_doc_meta(doc_id, name, description)
 
-                # Also update the document table directly.
+                # Propagate to document-processing (source of truth) via the
+                # manage endpoint instead of a raw UPDATE on the shared aura_db.
+                # Non-fatal: the local meta above already preserves what the
+                # admin sees, so a service outage degrades gracefully.
                 try:
-                    with connections['aura_db'].cursor() as cursor:
-                        cursor.execute(
-                            'UPDATE document SET name = %s, description = %s WHERE id = %s',
-                            [name, description, doc_id],
-                        )
-                except Exception:
-                    pass
+                    update_document_remote(doc_id, request.user, name=name, description=description)
+                except DocumentProcessingServiceError as exc:
+                    messages.warning(
+                        request,
+                        'El documento se guardó en el panel, pero el servicio de '
+                        f'procesamiento no aplicó el cambio: {exc}',
+                    )
 
                 # Update MAC assignment directly via strict collection logic
                 new_level_id_raw = request.POST.get('classification_level_id', '').strip()
@@ -786,6 +838,8 @@ class DocumentAdmin(admin.ModelAdmin):
             ('Estado', data.get('status') or '—'),
             ('Tipo', data.get('type') or '—'),
             ('Categoría', data.get('category') or '—'),
+            ('Enriquecimiento', data.get('enrichment_status') or '—'),
+            ('Grafo', data.get('graph_status') or '—'),
             ('Procesamiento iniciado', _format_processing_dt(data.get('processing_started_at'))),
             ('Procesamiento finalizado', _format_processing_dt(data.get('processing_finished_at'))),
         )
@@ -795,6 +849,98 @@ class DocumentAdmin(admin.ModelAdmin):
             rows,
         )
     processing_status_display.short_description = 'Estado de procesamiento'
+
+    # ── Download (manage) ──────────────────────────────────────────────────────
+
+    def download_link(self, obj):
+        if obj is None or obj.pk is None:
+            return '—'
+        url = reverse('admin:documents_document_download_file', args=[obj.pk])
+        return format_html('<a class="button" href="{}">Descargar archivo</a>', url)
+    download_link.short_description = 'Archivo'
+
+    def download_file_view(self, request, document_id):
+        if not self.has_view_permission(request):
+            raise PermissionDenied
+        try:
+            upstream = download_document_remote(document_id, request.user)
+        except DocumentProcessingServiceError as exc:
+            messages.error(request, f'No se pudo descargar el documento: {exc}')
+            return HttpResponseRedirect(
+                reverse('admin:documents_document_change', args=[document_id])
+            )
+
+        response = StreamingHttpResponse(
+            upstream.iter_content(chunk_size=8192),
+            content_type=upstream.headers.get('Content-Type', 'application/octet-stream'),
+        )
+        disposition = upstream.headers.get('Content-Disposition')
+        response['Content-Disposition'] = disposition or f'attachment; filename="documento_{document_id}"'
+        content_length = upstream.headers.get('Content-Length')
+        if content_length:
+            response['Content-Length'] = content_length
+        return response
+
+    # ── Bulk operations (manage) — changelist actions ───────────────────────────
+
+    def _run_bulk(self, request, queryset, operation, label):
+        document_ids = list(queryset.values_list('id', flat=True))
+        if not document_ids:
+            messages.warning(request, 'No se seleccionaron documentos.')
+            return
+        try:
+            result = start_bulk_job_remote(operation, request.user, document_ids=document_ids)
+        except DocumentProcessingServiceError as exc:
+            messages.error(request, f'No se pudo iniciar {label}: {exc}')
+            return
+        result = result or {}
+        job_id = result.get('job_id', '—')
+        total = result.get('total', len(document_ids))
+        messages.success(request, f'{label.capitalize()} encolado (job {job_id}) para {total} documento(s).')
+        log_audit(
+            actor=request.user, action='UPDATE', entity_type='Document',
+            entity_id=','.join(str(i) for i in document_ids[:50]),
+            entity_label=f'{request.user.username} encoló {label} para {total} documento(s)',
+            details={'operation': operation, 'job_id': job_id, 'count': total},
+            source='admin', request=request,
+        )
+
+    def action_restore(self, request, queryset):
+        restored, failed = 0, []
+        for obj in queryset:
+            try:
+                restore_document_remote(obj.pk, request.user)
+            except DocumentProcessingServiceError:
+                failed.append(str(obj.pk))
+                continue
+            restored += 1
+            log_audit(
+                actor=request.user, action='UPDATE', entity_type='Document',
+                entity_id=str(obj.pk),
+                entity_label=f'{request.user.username} restauró el documento {obj.pk}',
+                source='admin', request=request,
+            )
+        if restored:
+            messages.success(request, f'{restored} documento(s) restaurado(s).')
+        if failed:
+            messages.error(request, f'No se pudieron restaurar: {", ".join(failed)}.')
+    action_restore.short_description = 'Restaurar documentos seleccionados'
+
+    def action_reprocess(self, request, queryset):
+        self._run_bulk(request, queryset, 'reprocess', 'reprocesamiento')
+    action_reprocess.short_description = 'Reprocesar documentos seleccionados'
+
+    def action_reembed(self, request, queryset):
+        self._run_bulk(request, queryset, 'reembed', 're-embedding')
+    action_reembed.short_description = 'Regenerar embeddings de los documentos seleccionados'
+
+    def action_enrich(self, request, queryset):
+        self._run_bulk(request, queryset, 'enrich', 'enriquecimiento')
+    action_enrich.short_description = 'Enriquecer los documentos seleccionados'
+
+    def action_graph_extract(self, request, queryset):
+        self._run_bulk(request, queryset, 'graph_extract', 'extracción de grafo')
+    action_graph_extract.short_description = 'Reextraer el grafo de los documentos seleccionados'
 
     def delete_model(self, request, obj):
         try:
