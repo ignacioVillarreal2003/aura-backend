@@ -32,9 +32,8 @@ def _build_pdf(html_content: str) -> bytes:
 
 def generate_quiz_pdf(quiz: ArtifactQuiz, *, with_answers: bool = True) -> bytes:
     questions = list(quiz.questions.all())
-    mode_label = "Con documentos de contexto" if (quiz.artifact.retrieve_context or quiz.artifact.process_documents) else "Directo"
     created = html.escape(_fmt_dt(quiz.created_at))
-    pass_label = f"{quiz.pass_score}%" if quiz.pass_score is not None else "—"
+    description_html = f"<p>{html.escape(quiz.description)}</p>" if quiz.description else ""
 
     questions_html = ""
     for idx, question in enumerate(questions, start=1):
@@ -58,17 +57,15 @@ def generate_quiz_pdf(quiz: ArtifactQuiz, *, with_answers: bool = True) -> bytes
 <style>{_CSS}</style>
 </head>
 <body>
-<div class="doc-header">
-  <div class="classification">CLASIFICACIÓN SEGÚN CONTENIDO</div>
-</div>
 <h1>CUESTIONARIO DE EVALUACIÓN</h1>
 <h2 style="border:none; margin-top:2px;">{html.escape(quiz.title)}</h2>
-<div class="meta">Generado: {created} &bull; Modo: {mode_label} &bull; Puntaje mínimo: {pass_label} &bull; {len(questions)} preguntas</div>
+<div class="meta">Generado: {created} &bull; {len(questions)} preguntas</div>
+{description_html}
 {instructions_html}
 <hr/>
 {questions_html}
 <div class="doc-footer">
-  CLASIFICACIÓN SEGÚN CONTENIDO — CUESTIONARIO — {created}
+  CUESTIONARIO — {created}
 </div>
 </body>
 </html>"""
@@ -78,18 +75,13 @@ def generate_quiz_pdf(quiz: ArtifactQuiz, *, with_answers: bool = True) -> bytes
 
 def generate_quiz_markdown(quiz: ArtifactQuiz, *, with_answers: bool = True) -> str:
     questions = list(quiz.questions.all())
-    pass_label = f"{quiz.pass_score}%" if quiz.pass_score is not None else "—"
 
-    lines = [
-        "# CUESTIONARIO DE EVALUACIÓN",
-        "",
-        f"**{quiz.title}**",
-        "",
-        f"*Generado: {_fmt_dt(quiz.created_at)}*",
-        "",
-        f"*Puntaje mínimo: {pass_label}*",
-        "",
-    ]
+    lines = ["# Cuestionario de evaluación", ""]
+    if (quiz.title or "").strip():
+        lines += [f"## {quiz.title.strip()}", ""]
+    if (quiz.description or "").strip():
+        lines += [quiz.description.strip(), ""]
+    lines += [f"_Generado: {_fmt_dt(quiz.created_at)} · {len(questions)} preguntas_", ""]
     if (quiz.instructions or "").strip():
         lines += [quiz.instructions.strip(), ""]
     lines += ["---", ""]
@@ -104,5 +96,5 @@ def generate_quiz_markdown(quiz: ArtifactQuiz, *, with_answers: bool = True) -> 
             lines.append(f"  > {question.explanation}")
         lines.append("")
 
-    lines += ["---", "*Cuestionario exportado desde AURA*"]
+    lines += ["---", "", "_Exportado desde AURA_"]
     return "\n".join(lines)

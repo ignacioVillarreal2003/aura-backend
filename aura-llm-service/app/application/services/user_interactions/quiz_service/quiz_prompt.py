@@ -23,24 +23,25 @@ Analizar el material del usuario y generar un cuestionario que evalúe su compre
   "title": "Título descriptivo del cuestionario (máx. {settings.max_title_chars} caracteres)",
   "description": "Breve descripción del propósito del cuestionario (máx. 200 caracteres)",
   "instructions": "Instrucciones generales para el evaluado (máx. {settings.max_instructions_chars} caracteres)",
-  "passing_score": 70,
   "questions": [
     {{
       "question": "Enunciado claro de la pregunta (máx. {settings.max_question_chars} caracteres)",
       "type": "single | multiple | boolean",
       "explanation": "Explicación de la respuesta correcta (máx. {settings.max_explanation_chars} caracteres)",
       "options": [
-        {{ "text": "Texto de la opción (máx. {settings.max_option_chars} caracteres)", "is_correct": true }}
+        {{ "text": "Texto de la opción (máx. {settings.max_option_chars} caracteres)", "is_correct": true }},
+        {{ "text": "Texto de otra opción", "is_correct": false }}
       ]
     }}
   ]
 }}
-3. Tipos de pregunta:
-   - "single": una sola opción correcta (2 a 5 opciones).
-   - "multiple": varias opciones correctas (3 a 6 opciones).
-   - "boolean": exactamente 2 opciones ("Verdadero" y "Falso").
-4. Marcá al menos una opción con "is_correct": true en cada pregunta.
-5. "passing_score" es un entero 0-100; usá null si no corresponde calificación.
+3. Tipos de pregunta y CANTIDAD DE OPCIONES (obligatorio):
+   - "single": EXACTAMENTE UNA opción correcta y el resto incorrectas. SIEMPRE 4 opciones (mínimo 3). NUNCA generes una pregunta single con menos de 3 opciones.
+   - "multiple": 2 o más opciones correctas; entre 4 y 6 opciones en total.
+   - "boolean": exactamente 2 opciones ("Verdadero" y "Falso"), una correcta.
+4. Las opciones incorrectas (distractores) deben ser plausibles y del mismo tipo/registro que la correcta: NO uses rellenos como "Ninguna", "No sé", "Otra" ni opciones obviamente absurdas. Cada distractor debe representar un error conceptual realista.
+5. Marcá con "is_correct" exactamente según el tipo (single: una; multiple: varias; boolean: una). NUNCA dejes una pregunta sin opción correcta.
+6. Preferí mayoritariamente preguntas "single" de 4 opciones, salvo que el contenido pida claramente otro tipo.
 7. Las preguntas deben ser claras, sin ambigüedad y derivadas del material provisto; usá terminología técnica/militar correcta.
 8. Cuando se aporte contexto documental, basá las preguntas y respuestas en él con fidelidad; no inventes contenido no respaldado.
 9. Si el usuario pide modificaciones, devolvé el cuestionario completo actualizado.

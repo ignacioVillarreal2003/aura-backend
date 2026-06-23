@@ -70,7 +70,6 @@ class QuizGenerateResult:
     questions: list[dict[str, Any]]
     messages: list[dict[str, str]]
     instructions: str = ""
-    passing_score: int | None = None
     fragments: list[dict[str, Any]] = field(default_factory=list)
 
 
@@ -514,7 +513,6 @@ class LLMClient:
         return QuizGenerateResult(
             title=str(data.get("title", "")),
             instructions=str(data.get("instructions", "")),
-            passing_score=self._coerce_int(data.get("passing_score")),
             questions=data.get("questions") or [],
             messages=data.get("messages") or [],
             fragments=self.normalize_fragments(data.get("fragments")),

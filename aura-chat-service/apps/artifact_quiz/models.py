@@ -15,7 +15,6 @@ class ArtifactQuiz(CreatedAuditModel, SoftDeleteModel):
     description = models.TextField(default="", blank=True)
     query = models.TextField(default="", blank=True)
     instructions = models.TextField(default="", blank=True)
-    pass_score = models.SmallIntegerField(null=True, blank=True)
 
     class Meta:
         managed = False
@@ -33,6 +32,7 @@ class ArtifactQuizQuestion(models.Model):
     text = models.TextField()
     kind = models.CharField(max_length=16, choices=Kind.choices, default=Kind.SINGLE)
     explanation = models.TextField(default="", blank=True)
+    selected_option_id = models.BigIntegerField(null=True, blank=True)
     position = models.SmallIntegerField(default=0)
     created_by = models.BigIntegerField()
     created_at = models.DateTimeField(auto_now_add=True)

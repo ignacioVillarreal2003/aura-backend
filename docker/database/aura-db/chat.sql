@@ -231,7 +231,6 @@ CREATE TABLE artifact_quiz
     description  TEXT         NOT NULL DEFAULT '',
     query        TEXT         NOT NULL DEFAULT '',
     instructions TEXT         NOT NULL DEFAULT '',
-    pass_score   SMALLINT,
     created_by   BIGINT       NOT NULL,
     created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     deleted_by   BIGINT,
@@ -248,6 +247,7 @@ CREATE TABLE artifact_quiz_question
     kind        VARCHAR(16) NOT NULL DEFAULT 'single'
         CONSTRAINT chk_artifact_quiz_question_kind CHECK (kind IN ('single', 'multiple', 'boolean')),
     explanation TEXT        NOT NULL DEFAULT '',
+    selected_option_id BIGINT,
     position    SMALLINT    NOT NULL DEFAULT 0,
     created_by  BIGINT      NOT NULL,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),

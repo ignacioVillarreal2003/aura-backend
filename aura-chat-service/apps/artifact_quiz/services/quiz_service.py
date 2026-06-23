@@ -10,8 +10,14 @@ from core.clients.llm_client import llm_client
 from apps.chat.exceptions import ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.artifact.models import Artifact
-from apps.artifact_quiz.exceptions import QuizAccessDeniedException, QuizNotFoundException, LLMServiceException
-from apps.artifact_quiz.models import ArtifactQuiz
+from apps.artifact_quiz.exceptions import (
+    LLMServiceException,
+    QuizAccessDeniedException,
+    QuizNotFoundException,
+    QuizOptionNotFoundException,
+    QuizQuestionNotFoundException,
+)
+from apps.artifact_quiz.models import ArtifactQuiz, ArtifactQuizQuestion
 from apps.artifact_quiz.repositories.quiz_repository import quiz_repository
 from django.db import transaction
 from apps.artifact.broadcasting import broadcast_artifact_created, broadcast_artifact_progress
@@ -20,13 +26,6 @@ from apps.artifact.services.artifact_crud_service import ArtifactCrudService
 from apps.artifact.llm_context import build_chat_history
 
 logger = logging.getLogger(__name__)
-
-
-def _to_int_or_none(value) -> int | None:
-    try:
-        return int(value) if value is not None else None
-    except (TypeError, ValueError):
-        return None
 
 
 def _normalize_questions(questions: list) -> list:
@@ -68,7 +67,6 @@ def _persist_generated_quiz(
         document_ids: list[int],
         source_chat_id: int,
         instructions: str,
-        pass_score,
         questions: list,
         fragments=None,
 ) -> tuple:
@@ -84,7 +82,6 @@ def _persist_generated_quiz(
     quiz = quiz_repository.create(
         user_id=user_id,
         instructions=instructions,
-        pass_score=pass_score,
         questions=questions,
         artifact_id=artifact.id,
         title=title,
@@ -103,6 +100,7 @@ class QuizService(ArtifactCrudService):
     perm_list = perms.LIST_QUIZZES
     perm_manage = perms.MANAGE_QUIZZES
     perm_get = perms.GET_QUIZ
+    perm_update = perms.UPDATE_QUIZ
     perm_export = perms.EXPORT_QUIZ
     perm_manage_export = perms.MANAGE_EXPORT_QUIZ
     perm_delete = perms.DELETE_QUIZ
@@ -125,6 +123,74 @@ class QuizService(ArtifactCrudService):
 
     def delete_quiz(self, user: AuthenticatedUser, quiz_id: int) -> None:
         self._delete(user, quiz_id)
+
+    @transaction.atomic
+    def answer_question(
+            self,
+            user: AuthenticatedUser,
+            quiz_id: int,
+            question_id: int,
+            option_id: int,
+    ) -> dict:
+        """Guarda la opción seleccionada para una pregunta y devuelve la corrección.
+
+        Requiere permiso ``UPDATE_QUIZ`` y ser el creador del quiz o un miembro
+        activo (contributor) del chat de origen.
+        """
+        AccessControl.require_permissions(user, frozenset({self.perm_update}))
+        quiz = self.repository.get_by_id_for_update(quiz_id)
+        if quiz is None:
+            raise self.not_found_exc()
+        self._assert_access(user.id, quiz, require_contributor=True)
+
+        question = self.repository.get_question(quiz_id, question_id)
+        if question is None:
+            raise QuizQuestionNotFoundException()
+        option = self.repository.get_option(question_id, option_id)
+        if option is None:
+            raise QuizOptionNotFoundException()
+
+        self.repository.set_selected_option(question, option_id)
+
+        quiz = self.repository.get_by_id(quiz_id)
+        total, answered, correct = self._progress(quiz)
+        correct_ids = [opt.id for opt in question.options.all() if opt.is_correct]
+        return {
+            "question_id": question_id,
+            "selected_option_id": option_id,
+            "is_correct": bool(option.is_correct),
+            "correct_option_ids": correct_ids,
+            "answered_count": answered,
+            "correct_count": correct,
+            "total_questions": total,
+            "score_pct": round(correct / total * 100) if total else 0,
+        }
+
+    @transaction.atomic
+    def reset_quiz(self, user: AuthenticatedUser, quiz_id: int) -> ArtifactQuiz:
+        """Limpia todas las respuestas seleccionadas del quiz."""
+        AccessControl.require_permissions(user, frozenset({self.perm_update}))
+        quiz = self.repository.get_by_id_for_update(quiz_id)
+        if quiz is None:
+            raise self.not_found_exc()
+        self._assert_access(user.id, quiz, require_contributor=True)
+        self.repository.reset_answers(quiz_id)
+        self.logger.info("ArtifactQuiz answers reset", extra={"user_id": user.id, self.log_id_key: quiz_id})
+        return self.repository.get_by_id(quiz_id)
+
+    @staticmethod
+    def _progress(quiz: ArtifactQuiz) -> tuple[int, int, int]:
+        questions = list(quiz.questions.all())
+        total = len(questions)
+        answered = 0
+        correct = 0
+        for q in questions:
+            if q.selected_option_id is None:
+                continue
+            answered += 1
+            if any(o.id == q.selected_option_id and o.is_correct for o in q.options.all()):
+                correct += 1
+        return total, answered, correct
 
     async def generate_quiz(
             self,
@@ -187,7 +253,6 @@ class QuizService(ArtifactCrudService):
         out_messages = result_data.get("messages") or []
         fragments = llm_client.normalize_fragments(result_data.get("fragments"))
         instructions = str(result_data.get("instructions", ""))
-        passing_score = _to_int_or_none(result_data.get("passing_score"))
 
         if not title:
             logger.error("LLM returned empty title for quiz", extra={"user_id": user.id})
@@ -207,7 +272,6 @@ class QuizService(ArtifactCrudService):
             document_ids=document_ids or [],
             source_chat_id=chat_id,
             instructions=instructions,
-            pass_score=passing_score,
             questions=questions,
             fragments=fragments,
         )
