@@ -31,7 +31,7 @@ class LessonsLearnedItem(BaseModel):
 
 class LessonsLearnedGenerateResponse(BaseModel):
     title: str = Field(..., min_length=1, max_length=MAX_TITLE_CHARS, description="Título descriptivo de las lecciones aprendidas.")
-    context: str = Field(default="", max_length=MAX_PROSE_CHARS, description="Contexto de la operación o ejercicio analizado.")
+    description: str = Field(default="", max_length=MAX_PROSE_CHARS, description="Descripción de la operación o ejercicio analizado.")
     items: list[LessonsLearnedItem] = Field(..., max_length=MAX_LESSONS_LEARNED_ITEMS, description="Lecciones individuales clasificadas por categoría.")
     messages: list[Message] = Field(
         ...,

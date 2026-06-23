@@ -81,11 +81,11 @@ def _parse_llm_output(raw: str, settings: LessonsLearnedSettings) -> _ParsedLess
     try:
         data = parse_json_object(raw)
         title = clean_text(data.get("title"), settings.max_title_chars) or "Lecciones aprendidas"
-        context = clean_text(data.get("context"), settings.max_narrative_chars)
+        description = clean_text(data.get("description"), settings.max_narrative_chars)
         items = _parse_items(data.get("items", []), settings)
         if not items:
             raise ValueError("No se encontraron lecciones válidas en la respuesta.")
-        return title, context, items
+        return title, description, items
     except (json.JSONDecodeError, ValueError, TypeError) as e:
         logger.warning("LLM did not return valid JSON; falling back to line-by-line parsing: %s", e)
         return _fallback_items(raw, settings)
@@ -145,10 +145,10 @@ class LessonsLearnedService(
             parsed: _ParsedLessons,
             raw: str,
     ) -> LessonsLearnedGenerateResponse:
-        title, context, items = parsed
+        title, description, items = parsed
         return LessonsLearnedGenerateResponse(
             title=title,
-            context=context,
+            description=description,
             items=items,
             messages=self._conversation_with_answer(state, raw),
             fragments=state.all_fragments,

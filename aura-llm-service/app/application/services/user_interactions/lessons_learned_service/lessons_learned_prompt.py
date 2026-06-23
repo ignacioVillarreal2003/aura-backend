@@ -19,26 +19,26 @@ Analizar el relato del usuario y extraer lecciones aprendidas estructuradas, con
 
 # Reglas obligatorias
 
-1. Respondé EXCLUSIVAMENTE con un objeto JSON válido. Sin texto adicional, sin explicaciones, sin bloques markdown.
-2. El JSON debe seguir exactamente este esquema:
+1. Respondé EXCLUSIVAMENTE con un objeto JSON válido. Sin texto adicional, sin explicaciones, sin envoltura en bloques de código.
+2. El JSON debe seguir exactamente este esquema. Cada campo tiene un propósito y un formato específicos:
 {{
-  "title": "Título descriptivo (máx. {settings.max_title_chars} caracteres)",
-  "context": "Contexto de la operación, ejercicio o actividad analizada (máx. {settings.max_narrative_chars} caracteres)",
+  "title": "Título del análisis: UNA sola oración breve y descriptiva que nombre la operación, ejercicio o actividad, sin punto final (máx. {settings.max_title_chars} caracteres)",
+  "description": "Enunciado introductorio: 1 o 2 frases en texto plano que sinteticen qué se analizó, su período y su propósito. No repitas el título ni enumeres los hallazgos (máx. {settings.max_narrative_chars} caracteres)",
   "items": [
     {{
-      "category": "sustain | improve | recommendation",
-      "observation": "Observación o hallazgo concreto (máx. {settings.max_observation_chars} caracteres)",
-      "discussion": "Análisis breve del hallazgo (máx. {settings.max_observation_chars} caracteres)",
-      "recommendation": "Acción recomendada asociada (máx. {settings.max_observation_chars} caracteres)"
+      "category": "Una de: sustain | improve | recommendation",
+      "observation": "Título del hallazgo: UNA sola oración breve y concreta que nombre el hecho puntual, sin punto final ni Markdown (máx. {settings.max_observation_chars} caracteres)",
+      "discussion": "Análisis del hallazgo en formato Markdown: explicá causas, impacto y evidencia. Podés usar **negrita**, viñetas con '- ' y saltos de línea cuando aporten claridad (máx. {settings.max_observation_chars} caracteres)",
+      "recommendation": "Acción recomendada asociada, en formato Markdown: concreta y accionable. Dejala en cadena vacía si el hallazgo no requiere acción (máx. {settings.max_observation_chars} caracteres)"
     }}
   ]
 }}
-3. Categorías:
+3. Categorías (campo "category"):
    - "sustain": prácticas que funcionaron y deben sostenerse.
    - "improve": fallas o deficiencias a corregir.
    - "recommendation": recomendaciones accionables a futuro.
-4. Cada ítem debe ser concreto, específico y verificable; sin generalidades vacías.
-5. Usá registro profesional y terminología militar correcta.
+4. "observation" es una oración breve en texto plano (sin Markdown); "discussion" y "recommendation" admiten Markdown.
+5. Cada ítem debe ser concreto, específico y verificable, sin generalidades vacías ni duplicados; usá registro profesional y terminología militar correcta.
 6. Cuando se aporte contexto documental, fundamentá observaciones y recomendaciones en él con fidelidad; no inventes hechos no respaldados.
 7. Si el usuario pide modificaciones, devolvé el análisis completo actualizado.
 8. Máximo {settings.max_items} ítems.

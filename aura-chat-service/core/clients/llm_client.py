@@ -79,7 +79,7 @@ class LessonsLearnedGenerateResult:
     title: str
     items: list[dict[str, Any]]
     messages: list[dict[str, str]]
-    context: str = ""
+    description: str = ""
     fragments: list[dict[str, Any]] = field(default_factory=list)
 
 
@@ -104,7 +104,7 @@ class DecisionBriefGenerateResult:
     title: str
     options: list[dict[str, Any]]
     messages: list[dict[str, str]]
-    problem: str = ""
+    description: str = ""
     context: str = ""
     risks: str = ""
     recommendation: str = ""
@@ -566,7 +566,7 @@ class LLMClient:
         )
         return LessonsLearnedGenerateResult(
             title=str(data.get("title", "")),
-            context=str(data.get("context", "")),
+            description=str(data.get("description", "")),
             items=data.get("items") or [],
             messages=data.get("messages") or [],
             fragments=self.normalize_fragments(data.get("fragments")),
@@ -620,7 +620,7 @@ class LLMClient:
         )
         return DecisionBriefGenerateResult(
             title=str(data.get("title", "")),
-            problem=str(data.get("problem", "")),
+            description=str(data.get("description", "")),
             context=str(data.get("context", "")),
             risks=str(data.get("risks", "")),
             recommendation=str(data.get("recommendation", "")),

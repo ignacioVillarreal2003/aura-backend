@@ -56,7 +56,7 @@ def _persist_generated_decision_brief(
         process_documents: bool | None,
         document_ids: list[int],
         source_chat_id: int,
-        problem: str,
+        description: str,
         context: str,
         risks: str,
         recommendation: str,
@@ -74,7 +74,7 @@ def _persist_generated_decision_brief(
     )
     brief = decision_brief_repository.create(
         user_id=user_id,
-        problem=problem,
+        description=description,
         context=context,
         risks=risks,
         recommendation=recommendation,
@@ -195,7 +195,7 @@ class DecisionBriefService(ArtifactCrudService):
             process_documents=process_documents,
             document_ids=document_ids or [],
             source_chat_id=chat_id,
-            problem=str(result_data.get("problem", "")),
+            description=str(result_data.get("description", "")),
             context=str(result_data.get("context", "")),
             risks=str(result_data.get("risks", "")),
             recommendation=str(result_data.get("recommendation", "")),

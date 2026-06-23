@@ -50,7 +50,7 @@ def _parse_events(raw_events: list, settings: TimelineSettings) -> list[Timeline
         events.append(
             TimelineEvent(
                 event=event_title,
-                description=clean_text(entry.get("description"), settings.max_description_chars),
+                description=clean_text(entry.get("description"), settings.max_event_description_chars),
                 occurred_label=clean_text(entry.get("occurred_label"), settings.max_label_chars),
             )
         )
@@ -69,11 +69,11 @@ def _parse_llm_output(raw: str, settings: TimelineSettings) -> _ParsedTimeline:
     try:
         data = parse_json_object(raw)
         title = clean_text(data.get("title"), settings.max_title_chars) or "Línea de tiempo"
-        summary = clean_text(data.get("summary"), settings.max_summary_chars)
+        description = clean_text(data.get("description"), settings.max_description_chars)
         events = _parse_events(data.get("events", []), settings)
         if not events:
             raise ValueError("No se encontraron eventos válidos en la respuesta.")
-        return title, summary, events
+        return title, description, events
     except (json.JSONDecodeError, ValueError, TypeError) as e:
         logger.warning("LLM did not return valid JSON; falling back to line-by-line parsing: %s", e)
         return _fallback_events(raw, settings)
@@ -133,10 +133,10 @@ class TimelineService(
             parsed: _ParsedTimeline,
             raw: str,
     ) -> TimelineGenerateResponse:
-        title, summary, events = parsed
+        title, description, events = parsed
         return TimelineGenerateResponse(
             title=title,
-            summary=summary,
+            description=description,
             events=events,
             messages=self._conversation_with_answer(state, raw),
             fragments=state.all_fragments,

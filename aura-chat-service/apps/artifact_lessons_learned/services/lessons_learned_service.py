@@ -53,7 +53,7 @@ def _persist_generated_lessons_learned(
         process_documents: bool | None,
         document_ids: list[int],
         source_chat_id: int,
-        context: str,
+        description: str,
         items: list,
         fragments=None,
 ) -> tuple:
@@ -68,11 +68,11 @@ def _persist_generated_lessons_learned(
     )
     ll = lessons_learned_repository.create(
         user_id=user_id,
-        context=context,
         items=items,
         artifact_id=artifact.id,
         title=title,
         query=query,
+        description=description,
     )
     return artifact, ll
 
@@ -170,7 +170,7 @@ class LessonsLearnedService(ArtifactCrudService):
         raw_items = result_data.get("items") or []
         out_messages = result_data.get("messages") or []
         fragments = llm_client.normalize_fragments(result_data.get("fragments"))
-        context = str(result_data.get("context", ""))
+        description = str(result_data.get("description", ""))
 
         if not title:
             logger.error("LLM returned empty title for lessons-learned", extra={"user_id": user.id})
@@ -188,7 +188,7 @@ class LessonsLearnedService(ArtifactCrudService):
             process_documents=process_documents,
             document_ids=document_ids or [],
             source_chat_id=chat_id,
-            context=context,
+            description=description,
             items=items,
             fragments=fragments,
         )

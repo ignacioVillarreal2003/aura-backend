@@ -41,7 +41,7 @@ class DecisionBriefRepository:
             *,
             user_id: int,
             options: list,
-            problem: str = "",
+            description: str = "",
             context: str = "",
             risks: str = "",
             recommendation: str = "",
@@ -51,7 +51,7 @@ class DecisionBriefRepository:
     ) -> ArtifactDecisionBrief:
         brief = ArtifactDecisionBrief.objects.create(
             created_by=user_id,
-            problem=problem,
+            description=description,
             context=context,
             risks=risks,
             recommendation=recommendation,

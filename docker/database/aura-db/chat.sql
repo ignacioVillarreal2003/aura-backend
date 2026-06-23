@@ -276,8 +276,8 @@ CREATE TABLE artifact_timeline
     artifact_id BIGINT       NOT NULL
         CONSTRAINT fk_artifact_timeline_artifact REFERENCES artifact (id) ON DELETE CASCADE,
     title       VARCHAR(500) NOT NULL DEFAULT '',
+    description TEXT         NOT NULL DEFAULT '',
     query       TEXT         NOT NULL DEFAULT '',
-    summary     TEXT         NOT NULL DEFAULT '',
     created_by  BIGINT       NOT NULL,
     created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     deleted_by  BIGINT,
@@ -306,8 +306,8 @@ CREATE TABLE artifact_lessons_learned
     artifact_id BIGINT       NOT NULL
         CONSTRAINT fk_artifact_lessons_learned_artifact REFERENCES artifact (id) ON DELETE CASCADE,
     title       VARCHAR(500) NOT NULL DEFAULT '',
+    description TEXT         NOT NULL DEFAULT '',
     query       TEXT         NOT NULL DEFAULT '',
-    context     TEXT         NOT NULL DEFAULT '',
     created_by  BIGINT       NOT NULL,
     created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     deleted_by  BIGINT,
@@ -338,8 +338,8 @@ CREATE TABLE artifact_decision_brief
     artifact_id    BIGINT       NOT NULL
         CONSTRAINT fk_artifact_decision_brief_artifact REFERENCES artifact (id) ON DELETE CASCADE,
     title          VARCHAR(500) NOT NULL DEFAULT '',
+    description    TEXT         NOT NULL DEFAULT '',
     query          TEXT         NOT NULL DEFAULT '',
-    problem        TEXT         NOT NULL DEFAULT '',
     context        TEXT         NOT NULL DEFAULT '',
     risks          TEXT         NOT NULL DEFAULT '',
     recommendation TEXT         NOT NULL DEFAULT '',
