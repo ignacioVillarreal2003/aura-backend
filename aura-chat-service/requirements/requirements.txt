@@ -6,8 +6,8 @@ django-cors-headers==4.7.0
 django-filter==25.1
 channels[daphne]==4.2.0
 channels-redis==4.2.1
-redis>=4.6,<6
-psycopg[binary]==3.2.6
+redis==5.2.1
+psycopg[binary]==3.2.10
 httpx==0.28.1
 python-decouple==3.8
 django-prometheus==2.3.1
