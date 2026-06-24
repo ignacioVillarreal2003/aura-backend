@@ -51,6 +51,7 @@ class GeneralChatService(
 
     default_retrieve_context = False
     default_process_documents = False
+    summarize_history = True
 
     human_prompt = ANSWER_HUMAN_PROMPT
     map_system_prompt = MAP_SYSTEM_PROMPT

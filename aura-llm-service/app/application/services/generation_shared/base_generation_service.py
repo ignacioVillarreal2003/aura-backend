@@ -37,6 +37,12 @@ from app.application.services.generation_shared.processors.context_retrieval_pro
 from app.application.services.generation_shared.processors.context_retrieval_processor.context_retrieval_settings import (
     ContextRetrievalSettings,
 )
+from app.application.services.generation_shared.processors.history_summarization_processor.history_summarization_processor import (
+    HistorySummarizationProcessor,
+)
+from app.application.services.generation_shared.processors.history_summarization_processor.history_summarization_settings import (
+    HistorySummarizationSettings,
+)
 from app.application.services.generation_shared.processors.query_reformulation_processor.query_reformulation_processor import (
     QueryReformulationProcessor,
 )
@@ -58,6 +64,7 @@ _REFORMULATING_MESSAGE = "Interpretando y optimizando la consulta..."
 _SEARCHING_COMPLEMENT_MESSAGE = "Buscando contexto adicional en la base de conocimiento..."
 _SEARCHING_MESSAGE = "Buscando información relevante en los documentos..."
 _REDUCING_MESSAGE = "Analizando el contenido de los documentos..."
+_SUMMARIZING_HISTORY_MESSAGE = "Resumiendo la conversación previa..."
 
 
 class GenerationRequest(Protocol):
@@ -75,6 +82,7 @@ class BaseGenerationService(ABC):
 
     default_retrieve_context: ClassVar[bool] = False
     default_process_documents: ClassVar[bool] = False
+    summarize_history: ClassVar[bool] = False
 
     human_prompt: ClassVar[str]
     map_system_prompt: ClassVar[str]
@@ -97,6 +105,7 @@ class BaseGenerationService(ABC):
             context_retrieval_settings: Optional[ContextRetrievalSettings] = None,
             attached_documents_settings: Optional[AttachedDocumentsSettings] = None,
             context_reduction_settings: Optional[ContextReductionSettings] = None,
+            history_summarization_settings: Optional[HistorySummarizationSettings] = None,
     ) -> None:
         self._ollama_llm_facade = ollama_llm_facade
         self._ollama_llm_invoker = ollama_llm_invoker
@@ -116,6 +125,9 @@ class BaseGenerationService(ABC):
             )
         self._reduction_processor = ContextReductionProcessor(
             ollama_llm_facade, ollama_llm_invoker, context_reduction_settings
+        )
+        self._history_summarization_processor = HistorySummarizationProcessor(
+            ollama_llm_facade, ollama_llm_invoker, history_summarization_settings
         )
         self._known_exceptions: tuple[type[Exception], ...] = (
             RequestValidationException,
@@ -194,7 +206,14 @@ class BaseGenerationService(ABC):
                 extra=log_extra(degraded_stages=degraded),
             )
 
+    async def _summarize_history(self, state: GenerationState) -> None:
+        await self._history_summarization_processor.run(
+            state, self._generation_settings.history_messages_window
+        )
+
     async def _collect_context(self, state: GenerationState) -> None:
+        if self.summarize_history:
+            await self._summarize_history(state)
         if state.process_documents:
             await self._attached_processor.run(state)
         if state.retrieve_context:
@@ -204,6 +223,11 @@ class BaseGenerationService(ABC):
         self._log_degradations(state)
 
     async def _collect_context_with_progress(self, state: GenerationState) -> AsyncIterator[Any]:
+        if self.summarize_history and self._history_summarization_processor.is_needed(
+            state, self._generation_settings.history_messages_window
+        ):
+            yield self.stream_progress_event(step="summarizing_history", message=_SUMMARIZING_HISTORY_MESSAGE)
+            await self._summarize_history(state)
         gathered = False
         if state.process_documents:
             yield self.stream_progress_event(step="loading_documents", message=_LOADING_DOCUMENTS_MESSAGE)
@@ -234,6 +258,7 @@ class BaseGenerationService(ABC):
             state,
             self._generation_settings.history_messages_window,
             context_block,
+            self._generation_settings.max_history_chars,
         )
 
     @contextmanager

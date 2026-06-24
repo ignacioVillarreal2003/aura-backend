@@ -65,25 +65,45 @@ def build_context_block(
     return "\n".join(parts)
 
 
+def _fit_history_within_budget(messages: list, max_history_chars: int) -> list:
+    if max_history_chars <= 0 or not messages:
+        return messages
+    kept: list = []
+    used = 0
+    for msg in reversed(messages):
+        if kept and used + len(msg.content) > max_history_chars:
+            break
+        kept.append(msg)
+        used += len(msg.content)
+    kept.reverse()
+    return kept
+
+
 def build_generation_messages(
         system_prompt: str,
         human_prompt_template: str,
         state: GenerationState,
         history_messages_window: int,
         context_block: str,
+        max_history_chars: int = 0,
 ) -> list[BaseMessage]:
     messages: list[BaseMessage] = [SystemMessage(content=system_prompt)]
 
-    tail = (
-        state.history_messages[-history_messages_window:]
-        if history_messages_window > 0
-        else []
-    )
-    for msg in tail:
-        if msg.role == MessageRole.human:
-            messages.append(HumanMessage(content=msg.content))
-        elif msg.role == MessageRole.assistant:
-            messages.append(AIMessage(content=msg.content))
+    if state.history_summary:
+        messages.append(
+            HumanMessage(content=f"(Resumen de la conversación previa)\n{state.history_summary}")
+        )
+    else:
+        tail = (
+            state.history_messages[-history_messages_window:]
+            if history_messages_window > 0
+            else []
+        )
+        for msg in _fit_history_within_budget(tail, max_history_chars):
+            if msg.role == MessageRole.human:
+                messages.append(HumanMessage(content=msg.content))
+            elif msg.role == MessageRole.assistant:
+                messages.append(AIMessage(content=msg.content))
 
     messages.append(
         HumanMessage(

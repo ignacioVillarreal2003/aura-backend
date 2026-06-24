@@ -115,3 +115,40 @@ class TestBuildGenerationMessages:
             "system", "{context}|{input}", _state(), history_messages_window=0, context_block="C"
         )
         assert len(messages) == 2
+
+    def test_history_char_budget_drops_oldest(self):
+        many = [
+            Message(role=MessageRole.human, content="a" * 100),
+            Message(role=MessageRole.assistant, content="b" * 100),
+            Message(role=MessageRole.human, content="c" * 100),
+            Message(role=MessageRole.human, content="actual"),
+        ]
+        messages = build_generation_messages(
+            "system", "{context}|{input}", _state(many),
+            history_messages_window=4, context_block="C", max_history_chars=250,
+        )
+        # 3 history turns of 100 chars exceed the 250 budget; only the 2 newest fit.
+        history = [m.content for m in messages[1:-1]]
+        assert history == ["b" * 100, "c" * 100]
+
+    def test_history_budget_zero_disables_trimming(self):
+        many = [Message(role=MessageRole.human, content="x" * 100) for _ in range(3)] + [
+            Message(role=MessageRole.human, content="actual")
+        ]
+        messages = build_generation_messages(
+            "system", "{context}|{input}", _state(many),
+            history_messages_window=4, context_block="C", max_history_chars=0,
+        )
+        assert len([m for m in messages[1:-1]]) == 3
+
+    def test_history_summary_replaces_verbatim_turns(self):
+        state = _state()
+        state.history_summary = "RESUMEN PREVIO"
+        messages = build_generation_messages(
+            "system", "{context}|{input}", state,
+            history_messages_window=4, context_block="CTX", max_history_chars=12_000,
+        )
+        # system + summary + final human
+        assert len(messages) == 3
+        assert "RESUMEN PREVIO" in messages[1].content
+        assert all(m.content not in ("m1", "m2") for m in messages)

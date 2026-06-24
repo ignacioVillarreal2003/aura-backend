@@ -23,6 +23,7 @@ class GenerationState:
     fragments: list[FragmentResponse] = field(default_factory=list)
 
     reduced_context: Optional[str] = None
+    history_summary: Optional[str] = None
 
     reformulation_degraded: bool = False
     retrieval_degraded: bool = False

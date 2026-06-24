@@ -42,6 +42,8 @@ class DocumentQuestionServiceSettings(BaseSettings):
     reduction_batch_chars: int = Field(default=6_000, ge=1_000, le=20_000)
     reduction_max_passes: int = Field(default=2, ge=1, le=5)
 
+    max_response_chars: int = Field(default=10_000, ge=1_000, le=200_000)
+
     def to_generation_settings(self) -> GenerationSettings:
         return GenerationSettings(
             history_messages_window=self.history_messages_window,

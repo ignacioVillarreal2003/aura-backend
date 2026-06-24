@@ -154,7 +154,7 @@ class TestStream:
 
         class _MapInvoker:
             async def call_llm_content(self, llm, llm_input):
-                if "extracción de información" in llm_input[0].content:
+                if "aislar los pasajes relevantes" in llm_input[0].content:
                     reduce_calls["map"] += 1
                     return "pasaje relevante"
                 return "Respuesta final."
