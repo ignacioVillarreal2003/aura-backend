@@ -1,8 +1,10 @@
+import json
 from collections.abc import AsyncIterator
 from typing import Optional
 
+from app.application.services.generation_shared.output_parsing import clean_text, split_markdown_doc
 from app.application.services.generation_shared.state.generation_state import GenerationState
-from app.application.services.generation_shared.streaming_generation_service import StreamingGenerationService
+from app.application.services.generation_shared.structured_generation_service import StructuredGenerationService
 from app.application.services.user_interactions.document_action_service.document_action_prompts import (
     ANSWER_GUIDANCE,
     ANSWER_HUMAN_PROMPT,
@@ -22,6 +24,7 @@ from app.application.services.user_interactions.document_action_service.exceptio
 from app.application.services.user_interactions.document_action_service.interfaces.document_action_service_interface import (
     DocumentActionServiceInterface,
 )
+from app.application.utils.llm_json_parser import parse_json_object
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.message import Message
@@ -29,24 +32,25 @@ from app.domain.dtos.user_interactions.document_action.document_action_request i
 from app.domain.dtos.user_interactions.document_action.document_action_response import DocumentActionResponse
 from app.domain.dtos.user_interactions.document_action.document_action_stream_events import (
     DocumentActionStreamComplete,
-    DocumentActionStreamDelta,
     DocumentActionStreamError,
     DocumentActionStreamEvent,
     DocumentActionStreamProgress,
 )
-from app.domain.field_limits import MAX_CONTENT_CHARS
+from app.domain.field_limits import MAX_CONTENT_CHARS, MAX_DESCRIPTION_CHARS, MAX_TITLE_CHARS
 from app.infrastructure.http.document_context_provider.interfaces.document_context_provider_interface import (
     DocumentContextProviderInterface,
 )
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface import OllamaLLMInvokerInterface
-from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_streaming_invoker_interface import (
-    OllamaLLMStreamingInvokerInterface,
-)
+
+_DEFAULT_TITLE = "Resultado de la acción"
+
+# (title, description, result)
+_ParsedAction = tuple[str, str, str]
 
 
 class DocumentActionService(
-    StreamingGenerationService[DocumentActionRequest, DocumentActionResponse],
+    StructuredGenerationService[DocumentActionRequest, _ParsedAction, DocumentActionResponse],
     DocumentActionServiceInterface,
 ):
     label = "document_action"
@@ -66,13 +70,11 @@ class DocumentActionService(
     stream_progress_event = DocumentActionStreamProgress
     stream_complete_event = DocumentActionStreamComplete
     stream_error_event = DocumentActionStreamError
-    stream_delta_event = DocumentActionStreamDelta
 
     def __init__(
             self,
             ollama_llm_facade: OllamaLLMFacadeInterface,
             ollama_llm_invoker: OllamaLLMInvokerInterface,
-            ollama_llm_streaming_invoker: OllamaLLMStreamingInvokerInterface,
             document_context_provider: DocumentContextProviderInterface,
             document_action_settings: Optional[DocumentActionServiceSettings] = None,
     ) -> None:
@@ -80,7 +82,6 @@ class DocumentActionService(
         super().__init__(
             ollama_llm_facade=ollama_llm_facade,
             ollama_llm_invoker=ollama_llm_invoker,
-            ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
             document_context_provider=document_context_provider,
             generation_settings=settings.to_generation_settings(),
             attached_documents_settings=settings.to_attached_settings(),
@@ -95,9 +96,6 @@ class DocumentActionService(
             else DEFAULT_ANSWER_GUIDANCE
         return f"{ANSWER_SYSTEM_PROMPT}\n\n{guidance}"
 
-    def _generation_progress_message(self, request: DocumentActionRequest) -> str:
-        return self.generation_step_message
-
     def _request_log_extra(self, request: DocumentActionRequest) -> dict:
         return {
             "document_count": len(request.document_ids),
@@ -106,18 +104,41 @@ class DocumentActionService(
             "process_documents": request.process_documents,
         }
 
-    def _postprocess_answer(self, answer: str) -> str:
-        return answer[:MAX_CONTENT_CHARS]
+    def _parse_output(self, raw: str, request: DocumentActionRequest) -> _ParsedAction:
+        try:
+            data = parse_json_object(raw)
+            title = clean_text(data.get("title"), MAX_TITLE_CHARS)
+            description = clean_text(data.get("description"), MAX_DESCRIPTION_CHARS)
+            result = clean_text(data.get("result"), MAX_CONTENT_CHARS)
+            if not result:
+                raise ValueError("Empty result in JSON response.")
+        except (json.JSONDecodeError, ValueError, TypeError):
+            title, description, body = split_markdown_doc(raw)
+            title = clean_text(title, MAX_TITLE_CHARS)
+            description = clean_text(description, MAX_DESCRIPTION_CHARS)
+            result = clean_text(body or raw, MAX_CONTENT_CHARS)
+
+        if not result:
+            raise DocumentActionServiceException(
+                "No se pudo extraer el resultado de la respuesta del modelo.", status_code=502
+            )
+        return title or _DEFAULT_TITLE, description, result
+
+    def _result_log_extra(self, parsed: _ParsedAction) -> dict:
+        return {"result_chars": len(parsed[2])}
 
     def _build_response(
             self,
             state: GenerationState,
             request: DocumentActionRequest,
-            answer: str,
+            parsed: _ParsedAction,
+            raw: str,
     ) -> DocumentActionResponse:
+        title, description, result = parsed
         return DocumentActionResponse(
-            result=answer,
-            document_ids=request.document_ids,
+            title=title,
+            description=description,
+            result=result,
             instruction=request.instruction,
             action=request.action,
             fragments=state.all_fragments,

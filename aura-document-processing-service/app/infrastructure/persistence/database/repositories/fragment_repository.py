@@ -240,6 +240,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             pool_size: int,
             *,
             embedding_identity: str,
+            offset: int = 0,
             document_ids: list[int] | None = None,
     ) -> list[DocumentSimilarityHit]:
         if not query_vector:
@@ -253,14 +254,18 @@ class FragmentRepository(FragmentRepositoryInterface):
         if k < 1:
             raise DatabaseException("The result count k must be at least 1.")
 
-        if pool_size < k:
-            raise DatabaseException("The candidate pool size must be at least k.")
+        if offset < 0:
+            raise DatabaseException("The offset cannot be negative.")
+
+        if pool_size < k + offset:
+            raise DatabaseException("The candidate pool size must be at least k + offset.")
 
         try:
             logger.debug(
                 "Executing document-level vector similarity search.",
                 extra={
                     "k": k,
+                    "offset": offset,
                     "threshold": threshold,
                     "pool_size": pool_size,
                     "doc_filter": len(document_ids) if document_ids else "none",
@@ -278,13 +283,13 @@ class FragmentRepository(FragmentRepositoryInterface):
                 -- content string into an in-memory array just to take the first — it
                 -- carries one content per document and lets the DB spill if needed.
                 SELECT document_id,
-                       best_similarity,
+                       best_score,
                        matched_fragments,
                        best_fragment_content
                 FROM (
                     SELECT document_id,
                            content                                   AS best_fragment_content,
-                           cosine_similarity                         AS best_similarity,
+                           cosine_similarity                         AS best_score,
                            COUNT(*) OVER (PARTITION BY document_id)   AS matched_fragments,
                            ROW_NUMBER() OVER (PARTITION BY document_id
                                               ORDER BY cosine_similarity DESC) AS rn
@@ -303,8 +308,8 @@ class FragmentRepository(FragmentRepositoryInterface):
                     ) AS top_fragments
                 ) AS ranked
                 WHERE rn = 1
-                ORDER BY best_similarity DESC
-                LIMIT :k
+                ORDER BY best_score DESC
+                LIMIT :k OFFSET :offset
                 """
             )
 
@@ -314,6 +319,7 @@ class FragmentRepository(FragmentRepositoryInterface):
                 "threshold": threshold,
                 "pool_size": pool_size,
                 "k": k,
+                "offset": offset,
             }
             if document_ids:
                 params["doc_ids"] = list(document_ids)
@@ -324,7 +330,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             hits = [
                 DocumentSimilarityHit(
                     document_id=row.document_id,
-                    best_similarity=min(max(float(row.best_similarity), 0.0), 1.0),
+                    score=min(max(float(row.best_score), 0.0), 1.0),
                     matched_fragments=int(row.matched_fragments),
                     best_fragment_content=row.best_fragment_content,
                 )
@@ -335,6 +341,7 @@ class FragmentRepository(FragmentRepositoryInterface):
                 "The document-level vector similarity search completed.",
                 extra={
                     "k": k,
+                    "offset": offset,
                     "threshold": threshold,
                     "results": len(hits)
                 }
@@ -351,6 +358,118 @@ class FragmentRepository(FragmentRepositoryInterface):
                 extra={"k": k, "threshold": threshold},
             )
             raise DatabaseException("Failed to run document-level vector similarity search.") from e
+
+    async def search_documents_by_bm25(
+            self,
+            *,
+            query: str,
+            database_session: AsyncSession,
+            k: int,
+            pool_size: int,
+            offset: int = 0,
+            min_score: float = 0.0,
+            query_max_chars: int = 512,
+            document_ids: list[int] | None = None,
+    ) -> list[DocumentSimilarityHit]:
+        sanitized = _sanitize_bm25_search_input(query, query_max_chars)
+        if not sanitized:
+            logger.debug(
+                "Document-level BM25 search skipped: query empty after sanitization.",
+                extra={"query_max_chars": query_max_chars},
+            )
+            return []
+
+        if k < 1:
+            raise DatabaseException("The result count k must be at least 1.")
+
+        if offset < 0:
+            raise DatabaseException("The offset cannot be negative.")
+
+        if pool_size < k + offset:
+            raise DatabaseException("The candidate pool size must be at least k + offset.")
+
+        try:
+            logger.debug(
+                "Executing document-level BM25 search.",
+                extra={
+                    "k": k,
+                    "offset": offset,
+                    "pool_size": pool_size,
+                    "doc_filter": len(document_ids) if document_ids else "none",
+                }
+            )
+
+            doc_id_clause = _DOC_ID_FILTER_CLAUSE if document_ids else ""
+
+            sql = text(
+                f"""
+                SELECT document_id,
+                       best_score,
+                       matched_fragments,
+                       best_fragment_content
+                FROM (
+                    SELECT document_id,
+                           content                                   AS best_fragment_content,
+                           bm25_score                                AS best_score,
+                           COUNT(*) OVER (PARTITION BY document_id)   AS matched_fragments,
+                           ROW_NUMBER() OVER (PARTITION BY document_id
+                                              ORDER BY bm25_score DESC) AS rn
+                    FROM (
+                        SELECT document_id,
+                               content,
+                               paradedb.score(id) AS bm25_score
+                        FROM fragment
+                        WHERE deleted_at IS NULL
+                          AND content @@@ :search_query
+                          {doc_id_clause}
+                          AND paradedb.score(id) >= :min_score
+                        ORDER BY paradedb.score(id) DESC
+                        LIMIT :pool_size
+                    ) AS top_fragments
+                ) AS ranked
+                WHERE rn = 1
+                ORDER BY best_score DESC
+                LIMIT :k OFFSET :offset
+                """
+            )
+
+            params: dict = {
+                "search_query": sanitized,
+                "min_score": float(min_score),
+                "pool_size": int(pool_size),
+                "k": int(k),
+                "offset": int(offset),
+            }
+            if document_ids:
+                params["doc_ids"] = list(document_ids)
+
+            result = await database_session.execute(sql, params)
+            rows = result.fetchall()
+
+            hits = [
+                DocumentSimilarityHit(
+                    document_id=row.document_id,
+                    score=max(float(row.best_score), 0.0),
+                    matched_fragments=int(row.matched_fragments),
+                    best_fragment_content=row.best_fragment_content,
+                )
+                for row in rows
+            ]
+
+            logger.debug(
+                "The document-level BM25 search completed.",
+                extra={"k": k, "offset": offset, "results": len(hits)},
+            )
+            return hits
+
+        except DatabaseException:
+            raise
+        except SQLAlchemyError as e:
+            logger.exception(
+                "Database error during document-level BM25 search.",
+                extra={"k": k, "offset": offset},
+            )
+            raise DatabaseException("Failed to run document-level BM25 search.") from e
 
     async def get_most_relevant_fragments_bm25(
             self,

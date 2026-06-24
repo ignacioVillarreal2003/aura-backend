@@ -13,7 +13,7 @@ class ArtifactDecisionBrief(CreatedAuditModel, SoftDeleteModel):
     )
     title = models.CharField(max_length=500, default="", blank=True)
     query = models.TextField(default="", blank=True)
-    problem = models.TextField(default="", blank=True)
+    description = models.TextField(default="", blank=True)
     context = models.TextField(default="", blank=True)
     risks = models.TextField(default="", blank=True)
     recommendation = models.TextField(default="", blank=True)

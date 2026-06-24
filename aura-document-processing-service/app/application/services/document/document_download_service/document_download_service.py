@@ -17,6 +17,7 @@ from app.application.services.document.document_download_service.interfaces.docu
     DocumentDownloadServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
+from app.domain.constants.document.document_mime_type import DocumentMimeType
 from app.domain.constants.document.document_status import DocumentStatus
 from app.infrastructure.http.authentication_provider.request_token import get_request_token
 from app.infrastructure.http.chat_membership.interfaces.chat_membership_provider_interface import (
@@ -224,4 +225,19 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
             if hasattr(document.mime_type, "value")
             else document.mime_type
         )
-        return content_stream, document.name, mime_str
+
+        try:
+            document_mime_type = DocumentMimeType(mime_str)
+            media_type = document_mime_type.media_type
+            filename = self._ensure_filename_extension(document.name, document_mime_type.extension)
+        except ValueError:
+            media_type = "application/octet-stream"
+            filename = document.name
+
+        return content_stream, filename, media_type
+
+    @staticmethod
+    def _ensure_filename_extension(filename: str, extension: str) -> str:
+        if filename.lower().endswith(extension.lower()):
+            return filename
+        return f"{filename}{extension}"

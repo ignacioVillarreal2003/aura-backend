@@ -10,9 +10,9 @@ from core.clients.llm_client import llm_client
 from apps.chat.exceptions import ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
 from apps.artifact.models import Artifact
-from apps.artifact_checklist.exceptions import ChecklistAccessDeniedException, ChecklistNotFoundException, \
-    LLMServiceException
-from apps.artifact_checklist.models import ArtifactChecklist
+from apps.artifact_checklist.exceptions import ChecklistAccessDeniedException, ChecklistItemNotFoundException, \
+    ChecklistNotFoundException, LLMServiceException
+from apps.artifact_checklist.models import ArtifactChecklist, ArtifactChecklistItem
 from apps.artifact_checklist.repositories.checklist_repository import checklist_repository
 from django.db import transaction
 from apps.artifact.broadcasting import broadcast_artifact_created, broadcast_artifact_progress
@@ -65,7 +65,6 @@ def _items_to_sections(items: list) -> list:
                 {
                     "text": str(it.get("text", "")),
                     "is_checked": bool(it.get("is_checked", False)),
-                    "notes": str(it.get("notes", "")),
                     "position": idx,
                 }
                 for idx, it in enumerate(sorted_items)
@@ -83,6 +82,7 @@ class ChecklistService(ArtifactCrudService):
     perm_list = perms.LIST_CHECKLISTS
     perm_manage = perms.MANAGE_CHECKLISTS
     perm_get = perms.GET_CHECKLIST
+    perm_update = perms.UPDATE_CHECKLIST
     perm_export = perms.EXPORT_CHECKLIST
     perm_manage_export = perms.MANAGE_EXPORT_CHECKLIST
     perm_delete = perms.DELETE_CHECKLIST
@@ -105,6 +105,36 @@ class ChecklistService(ArtifactCrudService):
 
     def delete_checklist(self, user: AuthenticatedUser, checklist_id: int) -> None:
         self._delete(user, checklist_id)
+
+    @transaction.atomic
+    def set_item_checked(
+            self,
+            user: AuthenticatedUser,
+            checklist_id: int,
+            item_id: int,
+            is_checked: bool,
+    ) -> ArtifactChecklistItem:
+        """Toggle a checklist item's ``is_checked`` flag.
+
+        Requires the ``UPDATE_CHECKLIST`` permission and ownership: the user must
+        be the checklist's creator or an active contributor of its source chat.
+        """
+        AccessControl.require_permissions(user, frozenset({self.perm_update}))
+        checklist = self.repository.get_by_id_for_update(checklist_id)
+        if checklist is None:
+            raise self.not_found_exc()
+        self._assert_access(user.id, checklist, require_contributor=True)
+
+        item = self.repository.get_item(checklist_id, item_id)
+        if item is None:
+            raise ChecklistItemNotFoundException()
+
+        item = self.repository.set_item_checked(item, is_checked)
+        self.logger.info(
+            "ArtifactChecklistItem check toggled",
+            extra={"user_id": user.id, self.log_id_key: checklist_id, "item_id": item_id, "is_checked": is_checked},
+        )
+        return item
 
     async def generate_checklist(
             self,

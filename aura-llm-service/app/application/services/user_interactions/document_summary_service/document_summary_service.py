@@ -1,8 +1,10 @@
+import json
 from collections.abc import AsyncIterator
 from typing import Optional
 
+from app.application.services.generation_shared.output_parsing import clean_text, split_markdown_doc
 from app.application.services.generation_shared.state.generation_state import GenerationState
-from app.application.services.generation_shared.streaming_generation_service import StreamingGenerationService
+from app.application.services.generation_shared.structured_generation_service import StructuredGenerationService
 from app.application.services.user_interactions.document_summary_service.document_summary_prompts import (
     ANSWER_HUMAN_PROMPT,
     ANSWER_SYSTEM_PROMPT,
@@ -20,6 +22,7 @@ from app.application.services.user_interactions.document_summary_service.excepti
 from app.application.services.user_interactions.document_summary_service.interfaces.document_summary_service_interface import (
     DocumentSummaryServiceInterface,
 )
+from app.application.utils.llm_json_parser import parse_json_object
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.message import Message
@@ -27,26 +30,26 @@ from app.domain.dtos.user_interactions.document_summary.document_summary_request
 from app.domain.dtos.user_interactions.document_summary.document_summary_response import DocumentSummaryResponse
 from app.domain.dtos.user_interactions.document_summary.document_summary_stream_events import (
     DocumentSummaryStreamComplete,
-    DocumentSummaryStreamDelta,
     DocumentSummaryStreamError,
     DocumentSummaryStreamEvent,
     DocumentSummaryStreamProgress,
 )
-from app.domain.field_limits import MAX_SUMMARY_CHARS
+from app.domain.field_limits import MAX_DESCRIPTION_CHARS, MAX_SUMMARY_CHARS, MAX_TITLE_CHARS
 from app.infrastructure.http.document_context_provider.interfaces.document_context_provider_interface import (
     DocumentContextProviderInterface,
 )
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface import OllamaLLMInvokerInterface
-from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_streaming_invoker_interface import (
-    OllamaLLMStreamingInvokerInterface,
-)
 
 _SUMMARY_INSTRUCTION = "Generá un resumen estructurado, completo y fiel del documento adjunto."
+_DEFAULT_TITLE = "Resumen de documentos"
+
+# (title, description, summary)
+_ParsedSummary = tuple[str, str, str]
 
 
 class DocumentSummaryService(
-    StreamingGenerationService[DocumentSummaryRequest, DocumentSummaryResponse],
+    StructuredGenerationService[DocumentSummaryRequest, _ParsedSummary, DocumentSummaryResponse],
     DocumentSummaryServiceInterface,
 ):
     label = "document_summary"
@@ -66,13 +69,11 @@ class DocumentSummaryService(
     stream_progress_event = DocumentSummaryStreamProgress
     stream_complete_event = DocumentSummaryStreamComplete
     stream_error_event = DocumentSummaryStreamError
-    stream_delta_event = DocumentSummaryStreamDelta
 
     def __init__(
             self,
             ollama_llm_facade: OllamaLLMFacadeInterface,
             ollama_llm_invoker: OllamaLLMInvokerInterface,
-            ollama_llm_streaming_invoker: OllamaLLMStreamingInvokerInterface,
             document_context_provider: DocumentContextProviderInterface,
             document_summary_settings: Optional[DocumentSummaryServiceSettings] = None,
     ) -> None:
@@ -80,7 +81,6 @@ class DocumentSummaryService(
         super().__init__(
             ollama_llm_facade=ollama_llm_facade,
             ollama_llm_invoker=ollama_llm_invoker,
-            ollama_llm_streaming_invoker=ollama_llm_streaming_invoker,
             document_context_provider=document_context_provider,
             generation_settings=settings.to_generation_settings(),
             attached_documents_settings=settings.to_attached_settings(),
@@ -100,18 +100,41 @@ class DocumentSummaryService(
             "process_documents": request.process_documents,
         }
 
-    def _postprocess_answer(self, answer: str) -> str:
-        return answer[:MAX_SUMMARY_CHARS]
+    def _parse_output(self, raw: str, request: DocumentSummaryRequest) -> _ParsedSummary:
+        try:
+            data = parse_json_object(raw)
+            title = clean_text(data.get("title"), MAX_TITLE_CHARS)
+            description = clean_text(data.get("description"), MAX_DESCRIPTION_CHARS)
+            summary = clean_text(data.get("summary"), MAX_SUMMARY_CHARS)
+            if not summary:
+                raise ValueError("Empty summary in JSON response.")
+        except (json.JSONDecodeError, ValueError, TypeError):
+            title, description, body = split_markdown_doc(raw)
+            title = clean_text(title, MAX_TITLE_CHARS)
+            description = clean_text(description, MAX_DESCRIPTION_CHARS)
+            summary = clean_text(body or raw, MAX_SUMMARY_CHARS)
+
+        if not summary:
+            raise DocumentSummaryServiceException(
+                "No se pudo extraer el resumen de la respuesta del modelo.", status_code=502
+            )
+        return title or _DEFAULT_TITLE, description, summary
+
+    def _result_log_extra(self, parsed: _ParsedSummary) -> dict:
+        return {"summary_chars": len(parsed[2])}
 
     def _build_response(
             self,
             state: GenerationState,
             request: DocumentSummaryRequest,
-            answer: str,
+            parsed: _ParsedSummary,
+            raw: str,
     ) -> DocumentSummaryResponse:
+        title, description, summary = parsed
         return DocumentSummaryResponse(
-            document_ids=request.document_ids,
-            summary=answer,
+            title=title,
+            description=description,
+            summary=summary,
             fragments=state.all_fragments,
             degraded_stages=self._degraded_stages(state),
         )

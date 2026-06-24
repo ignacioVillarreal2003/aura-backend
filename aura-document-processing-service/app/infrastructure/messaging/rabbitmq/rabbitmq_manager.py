@@ -362,6 +362,7 @@ class RabbitMQManager(RabbitMQManagerInterface):
             await self._declare_work_queue(exchange, self._settings.document_enrichment_queue, queue_args)
             await self._declare_work_queue(exchange, self._settings.document_reembed_queue, queue_args)
             await self._declare_work_queue(exchange, self._settings.document_reprocess_queue, queue_args)
+            await self._declare_work_queue(exchange, self._settings.document_purge_queue, queue_args)
 
             self._exchanges[self._settings.exchange] = exchange
             self._exchanges[self._settings.dlx_exchange] = dlx_exchange

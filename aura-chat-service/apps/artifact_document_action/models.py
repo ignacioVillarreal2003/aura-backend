@@ -12,7 +12,7 @@ class ArtifactDocumentAction(CreatedAuditModel, SoftDeleteModel):
         db_column="artifact_id",
     )
     title = models.CharField(max_length=500, default="", blank=True)
-    document_ids = models.JSONField(default=list)
+    description = models.TextField(default="", blank=True)
     instruction = models.TextField(default="", blank=True)
     action = models.CharField(max_length=32, null=True, blank=True)
     result = models.TextField(default="", blank=True)

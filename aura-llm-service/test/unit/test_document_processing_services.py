@@ -1,6 +1,7 @@
 """Tests for the document summary and action services after migration to the
-shared streaming base: default flags, synthetic instruction messages, response
-shape, action guidance, and reduction-prompt wiring."""
+shared structured (JSON) base: default flags, synthetic instruction messages,
+JSON parsing into title/description/body, action guidance, Markdown fallback,
+and reduction-prompt wiring."""
 
 import types
 
@@ -16,12 +17,21 @@ from app.domain.constants.document_action_type import DocumentActionType
 from app.domain.dtos.user_interactions.document_action.document_action_request import DocumentActionRequest
 from app.domain.dtos.user_interactions.document_action.document_action_stream_events import (
     DocumentActionStreamComplete,
-    DocumentActionStreamDelta,
 )
 from app.domain.dtos.user_interactions.document_summary.document_summary_request import DocumentSummaryRequest
 from app.domain.dtos.user_interactions.document_summary.document_summary_stream_events import (
     DocumentSummaryStreamComplete,
-    DocumentSummaryStreamDelta,
+)
+
+_SUMMARY_JSON = (
+    '{"title": "Informe técnico", '
+    '"description": "Síntesis introductoria del documento.", '
+    '"summary": "## Sección\\nContenido **clave** del resumen."}'
+)
+_ACTION_JSON = (
+    '{"title": "Fechas del documento", '
+    '"description": "Listado de fechas relevantes.", '
+    '"result": "## Resultado\\n- 01/01/2024\\n- 15/06/2024"}'
 )
 
 
@@ -39,17 +49,11 @@ class _Facade:
 
 
 class _Invoker:
+    def __init__(self, content):
+        self._content = content
+
     async def call_llm_content(self, llm, llm_input):
-        return "# Resultado\nContenido generado."
-
-
-class _Stream:
-    def __init__(self, chunks):
-        self._chunks = chunks
-
-    async def stream_llm_content(self, llm, llm_input):
-        for c in self._chunks:
-            yield c
+        return self._content
 
 
 def _frag(i, n=80):
@@ -71,12 +75,12 @@ class _Provider:
 _USER = types.SimpleNamespace(id=1)
 
 
-def _summary_svc(chunks=("Res", "umen"), frags=None):
-    return DocumentSummaryService(_Facade(), _Invoker(), _Stream(chunks), _Provider(frags or [_frag(1)]))
+def _summary_svc(content=_SUMMARY_JSON, frags=None):
+    return DocumentSummaryService(_Facade(), _Invoker(content), _Provider(frags or [_frag(1)]))
 
 
-def _action_svc(chunks=("Res", "ult"), frags=None):
-    return DocumentActionService(_Facade(), _Invoker(), _Stream(chunks), _Provider(frags or [_frag(1)]))
+def _action_svc(content=_ACTION_JSON, frags=None):
+    return DocumentActionService(_Facade(), _Invoker(content), _Provider(frags or [_frag(1)]))
 
 
 class TestDefaults:
@@ -84,6 +88,10 @@ class TestDefaults:
     def test_process_documents_by_default(self, cls):
         assert cls.default_process_documents is True
         assert cls.default_retrieve_context is False
+
+    @pytest.mark.parametrize("cls", [DocumentSummaryService, DocumentActionService])
+    def test_json_mode_enabled(self, cls):
+        assert cls.uses_json_mode is True
 
     @pytest.mark.parametrize("cls", [DocumentSummaryService, DocumentActionService])
     def test_four_reduction_prompts_with_placeholders(self, cls):
@@ -101,22 +109,31 @@ class TestSummary:
         assert state.current_message.content  # synthetic instruction present
         assert state.process_documents is True and state.retrieve_context is False
 
-    async def test_execute_returns_summary(self):
+    async def test_execute_parses_json_into_title_description_summary(self):
         svc = _summary_svc(frags=[_frag(1), _frag(2)])
         res = await svc.execute_document_summary(DocumentSummaryRequest(document_ids=[1, 2], chat_id=1), _USER)
-        assert res.summary == "# Resultado\nContenido generado."
-        assert res.document_ids == [1, 2] and len(res.fragments) == 2
+        assert res.title == "Informe técnico"
+        assert res.description == "Síntesis introductoria del documento."
+        assert res.summary == "## Sección\nContenido **clave** del resumen."
+        assert len(res.fragments) == 2
 
-    async def test_stream_emits_deltas_and_complete(self):
-        svc = _summary_svc(chunks=("Hola", " resumen"))
+    async def test_markdown_fallback_when_not_json(self):
+        svc = _summary_svc(content="# Título suelto\n\nIntro.\n\n## Cuerpo\ndetalle")
+        res = await svc.execute_document_summary(DocumentSummaryRequest(document_ids=[1], chat_id=1), _USER)
+        assert res.title == "Título suelto"
+        assert res.description == "Intro."
+        assert "## Cuerpo" in res.summary
+
+    async def test_stream_emits_complete(self):
+        svc = _summary_svc()
         events = [
             e async for e in svc.execute_document_summary_stream(
                 DocumentSummaryRequest(document_ids=[1], chat_id=1), _USER
             )
         ]
-        deltas = [e.text for e in events if isinstance(e, DocumentSummaryStreamDelta)]
-        assert deltas == ["Hola", " resumen"]
-        assert any(isinstance(e, DocumentSummaryStreamComplete) for e in events)
+        completes = [e for e in events if isinstance(e, DocumentSummaryStreamComplete)]
+        assert len(completes) == 1
+        assert completes[0].result.summary == "## Sección\nContenido **clave** del resumen."
 
 
 class TestAction:
@@ -138,23 +155,25 @@ class TestAction:
         req = DocumentActionRequest(document_ids=[1], instruction="x", chat_id=1)
         assert "No se especificó una acción" in svc._system_prompt(req)
 
-    async def test_execute_returns_result_with_action(self):
+    async def test_execute_parses_json_and_echoes_request_fields(self):
         svc = _action_svc(frags=[_frag(1)])
         req = DocumentActionRequest(
             document_ids=[1], instruction="Resume", action=DocumentActionType.summarize, chat_id=1
         )
         res = await svc.execute_document_action(req, _USER)
-        assert res.result == "# Resultado\nContenido generado."
+        assert res.title == "Fechas del documento"
+        assert res.description == "Listado de fechas relevantes."
+        assert res.result == "## Resultado\n- 01/01/2024\n- 15/06/2024"
         assert res.action == DocumentActionType.summarize
-        assert res.instruction == "Resume" and res.document_ids == [1]
+        assert res.instruction == "Resume"
 
-    async def test_stream_emits_deltas_and_complete(self):
-        svc = _action_svc(chunks=("parte1", "parte2"))
+    async def test_stream_emits_complete(self):
+        svc = _action_svc()
         events = [
             e async for e in svc.execute_document_action_stream(
                 DocumentActionRequest(document_ids=[1], instruction="x", chat_id=1), _USER
             )
         ]
-        deltas = [e.text for e in events if isinstance(e, DocumentActionStreamDelta)]
-        assert deltas == ["parte1", "parte2"]
-        assert any(isinstance(e, DocumentActionStreamComplete) for e in events)
+        completes = [e for e in events if isinstance(e, DocumentActionStreamComplete)]
+        assert len(completes) == 1
+        assert completes[0].result.result.startswith("## Resultado")

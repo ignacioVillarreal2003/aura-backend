@@ -70,7 +70,6 @@ class QuizGenerateResult:
     questions: list[dict[str, Any]]
     messages: list[dict[str, str]]
     instructions: str = ""
-    passing_score: int | None = None
     fragments: list[dict[str, Any]] = field(default_factory=list)
 
 
@@ -79,22 +78,24 @@ class LessonsLearnedGenerateResult:
     title: str
     items: list[dict[str, Any]]
     messages: list[dict[str, str]]
-    context: str = ""
+    description: str = ""
     fragments: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
 class DocumentSummaryResult:
-    document_ids: list[int]
     summary: str
+    title: str = ""
+    description: str = ""
     fragments: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
 class DocumentActionResult:
     result: str
-    document_ids: list[int]
     instruction: str
+    title: str = ""
+    description: str = ""
     action: str | None = None
     fragments: list[dict[str, Any]] = field(default_factory=list)
 
@@ -104,7 +105,7 @@ class DecisionBriefGenerateResult:
     title: str
     options: list[dict[str, Any]]
     messages: list[dict[str, str]]
-    problem: str = ""
+    description: str = ""
     context: str = ""
     risks: str = ""
     recommendation: str = ""
@@ -512,7 +513,6 @@ class LLMClient:
         return QuizGenerateResult(
             title=str(data.get("title", "")),
             instructions=str(data.get("instructions", "")),
-            passing_score=self._coerce_int(data.get("passing_score")),
             questions=data.get("questions") or [],
             messages=data.get("messages") or [],
             fragments=self.normalize_fragments(data.get("fragments")),
@@ -566,7 +566,7 @@ class LLMClient:
         )
         return LessonsLearnedGenerateResult(
             title=str(data.get("title", "")),
-            context=str(data.get("context", "")),
+            description=str(data.get("description", "")),
             items=data.get("items") or [],
             messages=data.get("messages") or [],
             fragments=self.normalize_fragments(data.get("fragments")),
@@ -620,7 +620,7 @@ class LLMClient:
         )
         return DecisionBriefGenerateResult(
             title=str(data.get("title", "")),
-            problem=str(data.get("problem", "")),
+            description=str(data.get("description", "")),
             context=str(data.get("context", "")),
             risks=str(data.get("risks", "")),
             recommendation=str(data.get("recommendation", "")),
@@ -651,8 +651,9 @@ class LLMClient:
             log_extra={"document_count": len(document_ids)},
         )
         return DocumentSummaryResult(
-            document_ids=data.get("document_ids") or document_ids,
             summary=str(data.get("summary", "")),
+            title=str(data.get("title", "")),
+            description=str(data.get("description", "")),
             fragments=self.normalize_fragments(data.get("fragments")),
         )
 
@@ -704,8 +705,9 @@ class LLMClient:
         )
         return DocumentActionResult(
             result=str(data.get("result", "")),
-            document_ids=data.get("document_ids") or document_ids,
             instruction=str(data.get("instruction", instruction)),
+            title=str(data.get("title", "")),
+            description=str(data.get("description", "")),
             action=data.get("action"),
             fragments=self.normalize_fragments(data.get("fragments")),
         )

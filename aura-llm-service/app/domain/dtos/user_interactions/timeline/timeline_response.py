@@ -3,9 +3,9 @@ from pydantic import BaseModel, Field
 from app.domain.dtos.fragment.fragment_response import FragmentResponse
 from app.domain.dtos.message import Message
 from app.domain.field_limits import (
+    MAX_DESCRIPTION_CHARS,
     MAX_ITEM_TEXT_CHARS,
     MAX_OCCURRED_LABEL_CHARS,
-    MAX_SUMMARY_CHARS,
     MAX_TIMELINE_EVENT_CHARS,
     MAX_TIMELINE_EVENTS,
     MAX_TITLE_CHARS,
@@ -13,8 +13,10 @@ from app.domain.field_limits import (
 
 
 class TimelineEvent(BaseModel):
-    event: str = Field(..., min_length=1, max_length=MAX_TIMELINE_EVENT_CHARS, description="Título corto del evento.")
-    description: str = Field(default="", max_length=MAX_ITEM_TEXT_CHARS, description="Descripción ampliada del evento.")
+    event: str = Field(..., min_length=1, max_length=MAX_TIMELINE_EVENT_CHARS, description="Título del evento.")
+    description: str = Field(
+        default="", max_length=MAX_ITEM_TEXT_CHARS, description="Descripción del evento en formato Markdown."
+    )
     occurred_label: str = Field(
         default="",
         max_length=MAX_OCCURRED_LABEL_CHARS,
@@ -26,7 +28,9 @@ class TimelineEvent(BaseModel):
 
 class TimelineGenerateResponse(BaseModel):
     title: str = Field(..., min_length=1, max_length=MAX_TITLE_CHARS, description="Título descriptivo de la línea de tiempo.")
-    summary: str = Field(default="", max_length=MAX_SUMMARY_CHARS, description="Resumen general de la cronología.")
+    description: str = Field(
+        default="", max_length=MAX_DESCRIPTION_CHARS, description="Enunciado que sintetiza de qué trata la cronología."
+    )
     events: list[TimelineEvent] = Field(
         ...,
         min_length=1,

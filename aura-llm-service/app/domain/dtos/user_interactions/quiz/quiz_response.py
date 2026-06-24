@@ -48,12 +48,6 @@ class QuizGenerateResponse(BaseModel):
     title: str = Field(..., min_length=1, max_length=MAX_TITLE_CHARS, description="Título descriptivo del cuestionario.")
     description: str = Field(default="", max_length=MAX_DESCRIPTION_CHARS, description="Breve descripción del propósito del cuestionario.")
     instructions: str = Field(default="", max_length=MAX_QUIZ_INSTRUCTIONS_CHARS, description="Instrucciones generales para el evaluado.")
-    passing_score: Optional[int] = Field(
-        default=None,
-        ge=0,
-        le=100,
-        description="Puntaje mínimo (0-100) para aprobar. Null si no aplica.",
-    )
     questions: list[QuizQuestion] = Field(..., min_length=1, max_length=MAX_QUIZ_QUESTIONS, description="Preguntas del cuestionario.")
     messages: list[Message] = Field(
         ...,

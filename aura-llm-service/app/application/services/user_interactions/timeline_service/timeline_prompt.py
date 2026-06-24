@@ -17,22 +17,22 @@ Analizar el texto del usuario y extraer los hechos relevantes ordenados cronoló
 
 # Reglas obligatorias
 
-1. Respondé EXCLUSIVAMENTE con un objeto JSON válido. Sin texto adicional, sin explicaciones, sin bloques markdown.
-2. El JSON debe seguir exactamente este esquema:
+1. Respondé EXCLUSIVAMENTE con un objeto JSON válido. Sin texto adicional, sin explicaciones, sin envoltura en bloques de código.
+2. El JSON debe seguir exactamente este esquema. Cada campo tiene un propósito y un formato específicos:
 {{
-  "title": "Título descriptivo de la línea de tiempo (máx. {settings.max_title_chars} caracteres)",
-  "summary": "Resumen breve de la cronología (1-3 frases, máx. {settings.max_summary_chars} caracteres)",
+  "title": "Título de la línea de tiempo: UNA sola oración breve y descriptiva que nombre el conjunto de hechos, sin punto final (máx. {settings.max_title_chars} caracteres)",
+  "description": "Enunciado introductorio: 1 o 2 frases en texto plano que sinteticen de qué trata la cronología y su período. No repitas el título ni enumeres los eventos (máx. {settings.max_description_chars} caracteres)",
   "events": [
     {{
-      "event": "Título corto y concreto del evento (máx. {settings.max_event_chars} caracteres)",
-      "description": "Descripción ampliada de lo ocurrido (máx. {settings.max_description_chars} caracteres)",
-      "occurred_label": "Referencia temporal del evento: si hay fecha exacta escribila en lenguaje natural (p. ej. '3 may 2024 14:30'); si es vaga usá la referencia tal como aparece (p. ej. 'madrugada del 3'). Máx. {settings.max_label_chars} caracteres."
+      "event": "Título del evento: UNA sola oración breve y concreta que nombre el hecho puntual, sin punto final (máx. {settings.max_event_chars} caracteres)",
+      "description": "Descripción del evento en formato Markdown: detallá qué ocurrió, quién intervino y dónde. Podés usar **negrita**, viñetas con '- ' y saltos de línea cuando aporten claridad (máx. {settings.max_event_description_chars} caracteres)",
+      "occurred_label": "Punto temporal del evento, interpretado del relato: si hay fecha/hora exactas escribilas en lenguaje natural (p. ej. '3 may 2024 14:30'); si es vaga, usá la referencia tal como aparece (p. ej. 'madrugada del 3'); si no hay dato temporal, dejalo en cadena vacía (máx. {settings.max_label_chars} caracteres)"
     }}
   ]
 }}
-3. Ordená los eventos del más antiguo al más reciente.
-4. Siempre completá "occurred_label" con la referencia temporal disponible; si no hay dato temporal dejalo vacío.
-5. Priorizá precisión: si el texto da fecha y hora exactas, incluílas en "occurred_label" en formato legible.
+3. Ordená los eventos del más antiguo al más reciente. La posición de cada evento se asigna automáticamente según ese orden: NO incluyas ningún campo de posición ni numeración en el JSON.
+4. "title" y "event" son oraciones breves en texto plano (sin Markdown); solo "description" del evento admite Markdown.
+5. Siempre completá "occurred_label" con la referencia temporal disponible; si el texto da fecha y hora exactas, incluílas en formato legible.
 6. Cada evento debe ser un hecho concreto y verificable, sin ambigüedad ni duplicados; usá terminología militar correcta.
 7. Cuando se aporte contexto documental, basá los eventos en él con fidelidad; no inventes hechos no respaldados.
 8. Si el usuario pide modificaciones, devolvé la línea de tiempo completa actualizada.

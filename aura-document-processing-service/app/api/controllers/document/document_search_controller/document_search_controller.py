@@ -66,9 +66,10 @@ router.add_api_route(
     operation_id="searchDocumentsByContent",
     summary="Buscar documentos por contenido",
     description=(
-        "Busca por similitud vectorial los fragmentos más parecidos a la consulta "
-        "y devuelve los documentos a los que pertenecen, ordenados por relevancia. "
-        "Solo considera documentos accesibles para el usuario."
+        "Busca los fragmentos más relevantes a la consulta y devuelve los documentos "
+        "a los que pertenecen, ordenados por relevancia y paginados. Admite dos modos: "
+        "`vector` (similitud semántica por embeddings, coseno) y `bm25` (relevancia "
+        "léxica por palabras clave). Solo considera documentos accesibles para el usuario."
     ),
     responses=_response,
 )

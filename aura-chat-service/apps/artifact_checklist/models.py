@@ -48,7 +48,6 @@ class ArtifactChecklistItem(models.Model):
     )
     text = models.CharField(max_length=500)
     is_checked = models.BooleanField(default=False)
-    notes = models.TextField(default="")
     position = models.SmallIntegerField(default=0)
     created_by = models.BigIntegerField()
     created_at = models.DateTimeField(auto_now_add=True)

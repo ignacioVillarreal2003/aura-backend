@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 
 _VALID_TYPES = {t.value for t in QuizQuestionType}
 
-_ParsedQuiz = tuple[str, str, int | None, list[QuizQuestion]]
+_ParsedQuiz = tuple[str, str, list[QuizQuestion]]
 
 
 def _parse_options(raw_options: list, settings: QuizSettings) -> list[QuizOption]:
@@ -79,22 +79,12 @@ def _parse_questions(raw_questions: list, settings: QuizSettings) -> list[QuizQu
     return questions
 
 
-def _coerce_passing_score(value: object) -> int | None:
-    if value is None:
-        return None
-    try:
-        score = int(value)
-    except (TypeError, ValueError):
-        return None
-    return max(0, min(100, score))
-
-
 def _fallback_questions(raw: str, settings: QuizSettings) -> _ParsedQuiz:
     questions = [
         QuizQuestion(question=line[:settings.max_question_chars], type=QuizQuestionType.SINGLE, options=[])
         for line in fallback_lines(raw)[:settings.max_questions]
     ]
-    return "Cuestionario de evaluación", "", None, questions
+    return "Cuestionario de evaluación", "", questions
 
 
 def _parse_llm_output(raw: str, settings: QuizSettings) -> _ParsedQuiz:
@@ -102,11 +92,10 @@ def _parse_llm_output(raw: str, settings: QuizSettings) -> _ParsedQuiz:
         data = parse_json_object(raw)
         title = clean_text(data.get("title"), settings.max_title_chars) or "Cuestionario de evaluación"
         instructions = clean_text(data.get("instructions"), settings.max_instructions_chars)
-        passing_score = _coerce_passing_score(data.get("passing_score"))
         questions = _parse_questions(data.get("questions", []), settings)
         if not questions:
             raise ValueError("No se encontraron preguntas válidas en la respuesta.")
-        return title, instructions, passing_score, questions
+        return title, instructions, questions
     except (json.JSONDecodeError, ValueError, TypeError) as e:
         logger.warning("LLM did not return valid JSON; falling back to line-by-line parsing: %s", e)
         return _fallback_questions(raw, settings)
@@ -150,14 +139,14 @@ class QuizService(
 
     def _parse_output(self, raw: str, request: QuizGenerateRequest) -> _ParsedQuiz:
         parsed = _parse_llm_output(raw, self._quiz_settings)
-        if not parsed[3]:
+        if not parsed[2]:
             raise QuizServiceException(
                 "No se pudieron extraer preguntas de la respuesta del modelo.", status_code=502
             )
         return parsed
 
     def _result_log_extra(self, parsed: _ParsedQuiz) -> dict:
-        return {"questions_count": len(parsed[3])}
+        return {"questions_count": len(parsed[2])}
 
     def _build_response(
             self,
@@ -166,11 +155,10 @@ class QuizService(
             parsed: _ParsedQuiz,
             raw: str,
     ) -> QuizGenerateResponse:
-        title, instructions, passing_score, questions = parsed
+        title, instructions, questions = parsed
         return QuizGenerateResponse(
             title=title,
             instructions=instructions,
-            passing_score=passing_score,
             questions=questions,
             messages=self._conversation_with_answer(state, raw),
             fragments=state.all_fragments,

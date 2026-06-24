@@ -55,7 +55,6 @@ def _parse_options(raw_options: list, settings: DecisionBriefSettings) -> list[D
         options.append(
             DecisionBriefOption(
                 title=title,
-                description=clean_text(entry.get("description"), settings.max_option_text_chars),
                 pros=clean_text(entry.get("pros"), settings.max_option_text_chars),
                 cons=clean_text(entry.get("cons"), settings.max_option_text_chars),
                 is_recommended=bool(entry.get("is_recommended", False)),
@@ -76,14 +75,14 @@ def _parse_llm_output(raw: str, settings: DecisionBriefSettings) -> _ParsedBrief
     try:
         data = parse_json_object(raw)
         title = clean_text(data.get("title"), settings.max_title_chars) or "Brief de decisión"
-        problem = clean_text(data.get("problem"), settings.max_narrative_chars)
+        description = clean_text(data.get("description"), settings.max_narrative_chars)
         context = clean_text(data.get("context"), settings.max_narrative_chars)
         risks = clean_text(data.get("risks"), settings.max_narrative_chars)
         recommendation = clean_text(data.get("recommendation"), settings.max_narrative_chars)
         options = _parse_options(data.get("options", []), settings)
         if not options:
             raise ValueError("No se encontraron opciones válidas en la respuesta.")
-        return title, problem, context, risks, recommendation, options
+        return title, description, context, risks, recommendation, options
     except (json.JSONDecodeError, ValueError, TypeError) as e:
         logger.warning("LLM did not return valid JSON; falling back to line-by-line parsing: %s", e)
         return _fallback_options(raw, settings)
@@ -143,10 +142,10 @@ class DecisionBriefService(
             parsed: _ParsedBrief,
             raw: str,
     ) -> DecisionBriefGenerateResponse:
-        title, problem, context, risks, recommendation, options = parsed
+        title, description, context, risks, recommendation, options = parsed
         return DecisionBriefGenerateResponse(
             title=title,
-            problem=problem,
+            description=description,
             context=context,
             risks=risks,
             recommendation=recommendation,

@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Optional
 from django.utils import timezone
 from asgiref.sync import sync_to_async
@@ -23,15 +24,89 @@ from apps.artifact_report.repositories.report_repository import report_repositor
 logger = logging.getLogger(__name__)
 
 _AUTO_TITLE_MAX_CHARS = 80
+_DESCRIPTION_MAX_CHARS = 240
+
+# Encabezado de sección numerado, p.ej. "2. MISIÓN" o "5. CONCLUSIONES Y ANÁLISIS".
+_SECTION_RE = re.compile(r"^\s*\d+\.\s*(.+?)\s*:?\s*$")
+# Marcadores entre corchetes que el modelo puede dejar: [SIN DATOS], [NIVEL], etc.
+_PLACEHOLDER_RE = re.compile(r"\[[^\]]*\]")
+# Rótulo de plantilla al inicio de la MISIÓN (p.ej. "QUIÉN – QUÉ – CUÁNDO – DÓNDE – POR QUÉ:").
+# Una corrida inicial en MAYÚSCULAS con separadores que termina en ":" es siempre una etiqueta.
+_LABEL_PREFIX_RE = re.compile(r"^[A-ZÁÉÍÓÚÑ¿?()/0-9 .–—-]{6,}:\s*")
+# Sección que mejor resume el informe, según el tipo (MISIÓN para SITREP/OPORD,
+# CONCLUSIONES para INTSUM).
+_SUMMARY_SECTION_KEYWORDS = ("MISIÓN", "MISION", "CONCLUSIONES", "RESUMEN")
+_UNIDAD_PREFIXES = ("UNIDAD:", "ORGANIZACIÓN DE TAREA:", "ORGANIZACION DE TAREA:")
 
 
-def _auto_title(report_type: str, content: str) -> str:
-    first_line = content.strip().splitlines()[0] if content.strip() else ""
-    first_line = first_line.lstrip("#").strip()
-    if first_line and len(first_line) <= _AUTO_TITLE_MAX_CHARS:
-        return first_line
-    ts = timezone.now().strftime("%Y-%m-%d %H:%M")
-    return f"{report_type} — {ts}"
+def _clean_inline(text: str) -> str:
+    text = _PLACEHOLDER_RE.sub("", text)
+    text = text.replace("*", "").replace("#", "").replace("`", "")
+    return re.sub(r"\s+", " ", text).strip(" -–—:•").strip()
+
+
+def _extract_section_body(content: str, keywords: tuple[str, ...]) -> str:
+    lines = content.splitlines()
+    start: Optional[int] = None
+    for i, line in enumerate(lines):
+        match = _SECTION_RE.match(line)
+        if match and any(kw in match.group(1).upper() for kw in keywords):
+            start = i + 1
+            break
+    if start is None:
+        return ""
+    body: list[str] = []
+    for line in lines[start:]:
+        if _SECTION_RE.match(line):
+            break
+        body.append(line)
+    return "\n".join(body)
+
+
+def _summary_text(content: str) -> str:
+    body = _extract_section_body(content, _SUMMARY_SECTION_KEYWORDS)
+    summary = _clean_inline(" ".join(ln for ln in body.splitlines() if _clean_inline(ln)))
+    summary = _LABEL_PREFIX_RE.sub("", summary).strip()
+    if summary:
+        return summary
+    # Fallback: primera línea sustantiva que no sea un metadato del encabezado.
+    for line in content.splitlines():
+        cleaned = _clean_inline(line)
+        head = line.strip().split(" ", 1)[0]
+        if len(cleaned) >= 24 and not head.endswith(":"):
+            return cleaned
+    return ""
+
+
+def _extract_unidad(content: str) -> str:
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.upper().startswith(_UNIDAD_PREFIXES):
+            value = _clean_inline(stripped.split(":", 1)[1])
+            if value:
+                return value
+    return ""
+
+
+def _truncate(text: str, limit: int) -> str:
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1].rstrip() + "…"
+
+
+def _derive_title_and_description(report_type: str, content: str) -> tuple[str, str]:
+    summary = _summary_text(content)
+    if summary:
+        sentence = re.split(r"(?<=[.;])\s", summary, maxsplit=1)[0].strip()
+        title = sentence if 0 < len(sentence) <= _AUTO_TITLE_MAX_CHARS else summary
+        return _truncate(title, _AUTO_TITLE_MAX_CHARS), _truncate(summary, _DESCRIPTION_MAX_CHARS)
+
+    unidad = _extract_unidad(content)
+    if unidad:
+        return _truncate(unidad, _AUTO_TITLE_MAX_CHARS), ""
+
+    ts = timezone.now().strftime("%d/%m/%Y %H:%M")
+    return f"Informe {report_type} — {ts}", ""
 
 
 @transaction.atomic
@@ -40,6 +115,7 @@ def _persist_generated_report(
         user_id: int,
         report_type: str,
         title: str,
+        description: str,
         retrieve_context: bool | None,
         process_documents: bool | None,
         document_ids: list[int],
@@ -63,7 +139,7 @@ def _persist_generated_report(
         content=content,
         artifact_id=artifact.id,
         title=title,
-        description="",
+        description=description,
         query=query,
     )
     return artifact, report
@@ -180,11 +256,17 @@ class ReportService(ArtifactCrudService):
             logger.error("LLM returned unknown report type: %s", rtype, extra={"user_id": user.id})
             raise LLMServiceException()
 
-        title = _auto_title(rtype, content)
+        # El LLM ahora devuelve title/description; si vienen vacíos (fallback de
+        # texto plano), los derivamos del contenido como red de seguridad.
+        title = _truncate(str(result_data.get("title", "")).strip(), _AUTO_TITLE_MAX_CHARS)
+        description = _truncate(str(result_data.get("description", "")).strip(), _DESCRIPTION_MAX_CHARS)
+        if not title:
+            title, description = _derive_title_and_description(rtype, content)
         artifact, report = await sync_to_async(_persist_generated_report)(
             user_id=user.id,
             report_type=rtype,
             title=title,
+            description=description,
             retrieve_context=retrieve_context,
             process_documents=process_documents,
             document_ids=document_ids or [],

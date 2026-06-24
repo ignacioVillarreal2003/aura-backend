@@ -55,7 +55,6 @@ class QuizRepository:
             user_id: int,
             questions: list,
             instructions: str = "",
-            pass_score: Optional[int] = None,
             artifact_id: int,
             title: str = "",
             description: str = "",
@@ -64,7 +63,6 @@ class QuizRepository:
         quiz = ArtifactQuiz.objects.create(
             created_by=user_id,
             instructions=instructions,
-            pass_score=pass_score,
             artifact_id=artifact_id,
             title=title,
             description=description,
@@ -90,6 +88,25 @@ class QuizRepository:
 
     def soft_delete(self, quiz: ArtifactQuiz, deleted_by: int) -> None:
         quiz.delete(deleted_by=deleted_by)
+
+    def get_question(self, quiz_id: int, question_id: int) -> Optional[ArtifactQuizQuestion]:
+        return (
+            ArtifactQuizQuestion.objects
+            .prefetch_related("options")
+            .filter(id=question_id, quiz_id=quiz_id)
+            .first()
+        )
+
+    def get_option(self, question_id: int, option_id: int) -> Optional[ArtifactQuizOption]:
+        return ArtifactQuizOption.objects.filter(id=option_id, question_id=question_id).first()
+
+    def set_selected_option(self, question: ArtifactQuizQuestion, option_id: Optional[int]) -> ArtifactQuizQuestion:
+        question.selected_option_id = option_id
+        question.save(update_fields=["selected_option_id"])
+        return question
+
+    def reset_answers(self, quiz_id: int) -> None:
+        ArtifactQuizQuestion.objects.filter(quiz_id=quiz_id).update(selected_option_id=None)
 
 
 quiz_repository = QuizRepository()

@@ -58,10 +58,33 @@ class QuizOptionResponse(serializers.ModelSerializer):
 
 class QuizQuestionResponse(serializers.ModelSerializer):
     options = QuizOptionResponse(many=True)
+    correct_option_ids = serializers.SerializerMethodField()
 
     class Meta:
         model = ArtifactQuizQuestion
-        fields = ["id", "text", "kind", "explanation", "position", "options"]
+        fields = ["id", "text", "kind", "explanation", "position", "options",
+                  "selected_option_id", "correct_option_ids"]
+
+    def get_correct_option_ids(self, obj) -> list[int]:
+        # Solo se revelan las opciones correctas si la pregunta ya fue respondida.
+        if obj.selected_option_id is None:
+            return []
+        return [opt.id for opt in obj.options.all() if opt.is_correct]
+
+
+class QuizAnswerRequest(serializers.Serializer):
+    option_id = serializers.IntegerField()
+
+
+class QuizAnswerResponse(serializers.Serializer):
+    question_id = serializers.IntegerField()
+    selected_option_id = serializers.IntegerField()
+    is_correct = serializers.BooleanField()
+    correct_option_ids = serializers.ListField(child=serializers.IntegerField())
+    answered_count = serializers.IntegerField()
+    correct_count = serializers.IntegerField()
+    total_questions = serializers.IntegerField()
+    score_pct = serializers.IntegerField()
 
 
 class QuizResponse(serializers.ModelSerializer):
@@ -70,6 +93,10 @@ class QuizResponse(serializers.ModelSerializer):
     process_documents = serializers.SerializerMethodField()
     document_ids = serializers.SerializerMethodField()
     source_chat_id = serializers.SerializerMethodField()
+    total_questions = serializers.SerializerMethodField()
+    answered_count = serializers.SerializerMethodField()
+    correct_count = serializers.SerializerMethodField()
+    score_pct = serializers.SerializerMethodField()
 
     class Meta:
         model = ArtifactQuiz
@@ -79,16 +106,46 @@ class QuizResponse(serializers.ModelSerializer):
             "title",
             "query",
             "instructions",
-            "pass_score",
             "retrieve_context",
             "process_documents",
             "document_ids",
             "questions",
+            "total_questions",
+            "answered_count",
+            "correct_count",
+            "score_pct",
             "source_chat_id",
             "created_by",
             "created_at",
         ]
         read_only_fields = fields
+
+    @staticmethod
+    def _progress(obj) -> tuple[int, int, int]:
+        questions = list(obj.questions.all())
+        total = len(questions)
+        answered = 0
+        correct = 0
+        for q in questions:
+            if q.selected_option_id is None:
+                continue
+            answered += 1
+            if any(o.id == q.selected_option_id and o.is_correct for o in q.options.all()):
+                correct += 1
+        return total, answered, correct
+
+    def get_total_questions(self, obj) -> int:
+        return self._progress(obj)[0]
+
+    def get_answered_count(self, obj) -> int:
+        return self._progress(obj)[1]
+
+    def get_correct_count(self, obj) -> int:
+        return self._progress(obj)[2]
+
+    def get_score_pct(self, obj) -> int:
+        total, _answered, correct = self._progress(obj)
+        return round(correct / total * 100) if total else 0
 
     def get_retrieve_context(self, obj) -> bool | None:
         return obj.artifact.retrieve_context if obj.artifact_id else None
@@ -128,7 +185,6 @@ class QuizListResponse(serializers.ModelSerializer):
             "retrieve_context",
             "process_documents",
             "document_ids",
-            "pass_score",
             "source_chat_id",
             "question_count",
             "created_by",

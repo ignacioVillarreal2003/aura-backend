@@ -24,7 +24,7 @@ class DecisionBriefOption(BaseModel):
 
 class DecisionBriefGenerateResponse(BaseModel):
     title: str = Field(..., min_length=1, max_length=MAX_TITLE_CHARS, description="Título descriptivo del brief de decisión.")
-    problem: str = Field(default="", max_length=MAX_PROSE_CHARS, description="Planteo del problema o decisión a tomar.")
+    description: str = Field(default="", max_length=MAX_PROSE_CHARS, description="Planteo del problema o decisión a tomar.")
     context: str = Field(default="", max_length=MAX_PROSE_CHARS, description="Contexto y antecedentes relevantes.")
     risks: str = Field(default="", max_length=MAX_PROSE_CHARS, description="Riesgos identificados.")
     recommendation: str = Field(default="", max_length=MAX_PROSE_CHARS, description="Recomendación ejecutiva final.")

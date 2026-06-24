@@ -18,3 +18,12 @@ class RerankerInterface(ABC):
             top_n: int,
     ) -> list[int]:
         pass
+
+    @abstractmethod
+    async def rerank_with_scores(
+            self,
+            query: str,
+            candidates: list[str],
+            top_n: int,
+    ) -> list[tuple[int, float]]:
+        pass

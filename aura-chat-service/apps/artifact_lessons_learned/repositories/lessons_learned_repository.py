@@ -41,14 +41,14 @@ class LessonsLearnedRepository:
             *,
             user_id: int,
             items: list,
-            context: str = "",
+            description: str = "",
             artifact_id: int,
             title: str = "",
             query: str = "",
     ) -> ArtifactLessonsLearned:
         ll = ArtifactLessonsLearned.objects.create(
             created_by=user_id,
-            context=context,
+            description=description,
             artifact_id=artifact_id,
             title=title,
             query=query,

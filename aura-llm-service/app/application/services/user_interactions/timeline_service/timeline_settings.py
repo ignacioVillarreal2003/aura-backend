@@ -12,8 +12,8 @@ class TimelineSettings(BaseSettings):
     )
 
     max_title_chars: int = Field(default=100, ge=1, le=1_000)
-    max_summary_chars: int = Field(default=1_000, ge=100, le=20_000)
+    max_description_chars: int = Field(default=1_000, ge=100, le=20_000)
     max_event_chars: int = Field(default=300, ge=1, le=5_000)
-    max_description_chars: int = Field(default=2_000, ge=100, le=50_000)
+    max_event_description_chars: int = Field(default=2_000, ge=100, le=50_000)
     max_label_chars: int = Field(default=100, ge=1, le=1_000)
     max_events: int = Field(default=300, ge=1, le=10_000)

@@ -7,7 +7,7 @@ from apps.artifact_report.exceptions import (
     ReportAccessDeniedException,
     ReportNotFoundException,
 )
-from apps.artifact_report.services.report_service import ReportService, _auto_title
+from apps.artifact_report.services.report_service import ReportService, _derive_title_and_description
 from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
 from core.clients.exceptions import HttpClientException
 from core.clients.llm_client import ReportGenerateResult
@@ -281,25 +281,57 @@ def test_get_report_admin_export_not_found_raises_404(mocker):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# _auto_title helper
+# _derive_title_and_description helper
 # ══════════════════════════════════════════════════════════════════════════════
 
-def test_auto_title_uses_first_line_when_short():
-    assert _auto_title("SITREP", "Primera línea\nresto del cuerpo") == "Primera línea"
+_SITREP_SAMPLE = """CLASIFICACIÓN: RESERVADO
+
+SITREP NR: 014
+DTG: 211430Z JUN 26
+UNIDAD: Escuadrón Aéreo Nº 2
+
+1. SITUACIÓN
+   a. Fuerzas propias: Patrulla en zona norte.
+
+2. MISIÓN
+   El Escuadrón Aéreo Nº 2 asegura el espacio aéreo fronterizo durante 72 horas.
+
+3. EJECUCIÓN
+   a. Concepto: vuelos de reconocimiento.
+"""
 
 
-def test_auto_title_strips_markdown_heading_marks():
-    assert _auto_title("SITREP", "#  Título con almohadilla\ncuerpo") == "Título con almohadilla"
+def test_derive_title_uses_mission_first_sentence():
+    title, description = _derive_title_and_description("SITREP", _SITREP_SAMPLE)
+    assert title.startswith("El Escuadrón Aéreo Nº 2 asegura el espacio aéreo")
+    assert "CLASIFICACIÓN" not in title
+    assert description.startswith("El Escuadrón Aéreo Nº 2 asegura")
 
 
-def test_auto_title_falls_back_when_first_line_too_long():
-    title = _auto_title("INTSUM", "x" * 81)
-    assert title.startswith("INTSUM — ")
+def test_derive_title_ignores_classification_header():
+    # La línea de clasificación nunca debe convertirse en el título (bug original).
+    title, _ = _derive_title_and_description("SITREP", _SITREP_SAMPLE)
+    assert not title.upper().startswith("CLASIFICACIÓN")
 
 
-def test_auto_title_falls_back_when_content_blank():
-    title = _auto_title("OPORD", "   \n  ")
-    assert title.startswith("OPORD — ")
+def test_derive_title_falls_back_to_unidad_when_no_mission():
+    content = "CLASIFICACIÓN: RESERVADO\n\nINTSUM NR: 003\nUNIDAD: Base Aérea Sur\n"
+    title, description = _derive_title_and_description("INTSUM", content)
+    assert title == "Base Aérea Sur"
+    assert description == ""
+
+
+def test_derive_title_falls_back_to_type_and_date_when_blank():
+    title, description = _derive_title_and_description("OPORD", "   \n  ")
+    assert title.startswith("Informe OPORD — ")
+    assert description == ""
+
+
+def test_derive_title_truncates_long_mission():
+    content = "2. MISIÓN\n   " + ("palabra " * 40)
+    title, description = _derive_title_and_description("SITREP", content)
+    assert len(title) <= 80
+    assert len(description) <= 240
 
 
 # ══════════════════════════════════════════════════════════════════════════════
