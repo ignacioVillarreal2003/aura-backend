@@ -62,7 +62,6 @@ async def test_rollback_continues_after_a_failing_cleanup():
     registry.register("survivor", object(), cleanup=survivor)
     registry.register("failing", object(), cleanup=failing)
 
-    # Must not raise even though the most-recent cleanup blows up.
     await registry.rollback()
 
     failing.assert_awaited_once()
@@ -81,6 +80,5 @@ async def test_commit_prevents_rollback_from_cleaning_up():
     registry.commit()
     await registry.rollback()
 
-    # After commit, the resource is owned by the app: rollback is a no-op.
     cleanup.assert_not_awaited()
     assert hasattr(app.state, "committed")

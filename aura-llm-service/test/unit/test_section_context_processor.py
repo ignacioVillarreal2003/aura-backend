@@ -102,7 +102,7 @@ class TestRun:
         state = _state([_group(make_fragment, 1, [100])])
         await p.run(state)
         assert state.section_summary is None
-        assert invoker.calls == 0  # no LLM work below threshold
+        assert invoker.calls == 0
 
     async def test_above_threshold_summarizes_and_caps(self, make_fragment):
         invoker = _Invoker(text="z" * 1_000)
@@ -113,11 +113,9 @@ class TestRun:
         await p.run(state)
         assert state.section_summary is not None
         assert invoker.calls == 1
-        assert len(state.section_summary) <= 500  # hard cap honored
+        assert len(state.section_summary) <= 500
 
     async def test_per_group_failure_falls_back_to_verbatim(self, make_fragment):
-        # A failing LLM call is swallowed per group; with no notes the summary is
-        # empty and we fall back to verbatim secondary rendering (no degradation flag).
         invoker = _Invoker(boom=True)
         p = SectionContextProcessor(_FakeFacade(), invoker, _settings(summarize_threshold_chars=500))
         state = _state([_group(make_fragment, 1, [600])])

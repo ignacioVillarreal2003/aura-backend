@@ -54,7 +54,7 @@ class TestNormalizeKeywords:
         assert p._normalize_keywords(123) is None
 
     def test_budget_truncates(self):
-        p = _processor(_Invoker(), max_keywords_tokens=256)  # 1024 chars budget
+        p = _processor(_Invoker(), max_keywords_tokens=256)
         terms = [f"kw{i}" for i in range(2000)]
         result = p._normalize_keywords(terms)
         assert result is not None and len(result) <= 1024
@@ -67,7 +67,7 @@ class TestTruncateField:
 
     def test_over_budget_clipped(self):
         p = _processor(_Invoker())
-        out = p._truncate_field("x" * 100, 10, "base")  # 10 * 4 = 40
+        out = p._truncate_field("x" * 100, 10, "base")
         assert len(out) <= 40
 
 
@@ -89,11 +89,10 @@ class TestParse:
 
 class TestReformulate:
     async def test_skips_call_when_nothing_to_do(self):
-        # no history -> no rewrite; keywords disabled -> no LLM call at all
-        invoker = _Invoker(boom=True)  # would raise if called
+        invoker = _Invoker(boom=True)
         p = _processor(invoker, use_keywords=False)
         result = await p.reformulate(question="q", history_messages=[])
-        assert result == result.__class__()  # default empty, not degraded
+        assert result == result.__class__()
 
     async def test_success_returns_base_and_keywords(self):
         invoker = _Invoker(content='{"base_question": "X autocontenida", "keywords": ["k1", "k2"]}')

@@ -105,8 +105,6 @@ class RagAgentWorkflow:
         if self._compiled_workflow is None:
             raise RuntimeError("Workflow not built. Call build() first.")
 
-        # Drive the compiled graph directly (single source of truth) rather than
-        # replaying node routing by hand.
         final_state: RagAgentState = state
         try:
             async for mode, chunk in self._compiled_workflow.astream(

@@ -21,7 +21,6 @@ TEST_USER_ID = 42
 TEST_USER_EMAIL = "user@test.com"
 TEST_BEARER_TOKEN = "Bearer test-jwt-token"
 
-# Derived from the Permissions class so the list cannot drift from the app.
 ALL_PERMISSIONS = [
     value
     for name, value in vars(Permissions).items()
@@ -98,7 +97,6 @@ def auth_headers(make_auth_headers):
     return make_auth_headers(permissions=ALL_PERMISSIONS)
 
 
-# ── Per-service mock helpers ──────────────────────────────────────────────────
 
 def _mock_service(app, attr: str):
     mock = AsyncMock()

@@ -52,8 +52,6 @@ class Fragment(Base):
     char_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
     bbox: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
-    # Contextualized representation: a second, document-aware embedding produced
-    # during enrichment. The original content/vector above are never modified.
     contextualized_content: Mapped[str | None] = mapped_column(Text, nullable=True)
     contextualized_vector: Mapped[Any | None] = mapped_column(
         VECTOR(dim=_get_vector_dimension()), nullable=True

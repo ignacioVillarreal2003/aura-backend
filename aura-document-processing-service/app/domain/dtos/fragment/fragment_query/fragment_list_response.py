@@ -31,7 +31,6 @@ class FragmentListResponse(BaseModel):
         max_length=MAX_FRAGMENTS_IN_LIST,
     )
 
-    # Present only in "section" mode: each primary fragment with its section context.
     groups: Optional[list[FragmentSectionGroup]] = Field(
         default=None,
         max_length=MAX_FRAGMENTS_IN_LIST,

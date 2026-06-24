@@ -14,9 +14,10 @@ class GraphContextProviderSettings(BaseSettings):
 
     enabled: bool = Field(default=True)
     url: Optional[str] = Field(default=None)
+    query_url: Optional[str] = Field(default=None)
     timeout_seconds: float = Field(default=10.0, gt=0, le=120)
 
-    @field_validator("url", mode="before")
+    @field_validator("url", "query_url", mode="before")
     @classmethod
     def _validate_url(cls, v: Optional[str]) -> Optional[str]:
         if v is None:
@@ -31,3 +32,13 @@ class GraphContextProviderSettings(BaseSettings):
     @property
     def is_active(self) -> bool:
         return self.enabled and bool(self.url)
+
+    @property
+    def resolve_query_url(self) -> Optional[str]:
+        if self.query_url:
+            return self.query_url
+        if not self.url:
+            return None
+        if self.url.endswith("/context"):
+            return f"{self.url[: -len('/context')]}/query"
+        return f"{self.url}/query"

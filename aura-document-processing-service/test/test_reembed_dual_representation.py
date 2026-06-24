@@ -71,7 +71,7 @@ class TestReembedDualRepresentation:
 
         count = await service.reembed_document(document_id=1, user=_user())
 
-        assert count == 2  # one raw + one contextual
+        assert count == 2
         repo.update_fragment_embedding.assert_awaited_once()
         repo.update_fragment_contextualized_embedding.assert_awaited_once()
 

@@ -120,8 +120,6 @@ class TestReadinessEndpoint:
                 delattr(app.state, "redis_client")
 
     def test_degraded_when_redis_check_times_out(self, app, client, monkeypatch):
-        # A dependency check that hangs must not stall the probe: the per-dependency
-        # timeout converts it into a fast 503 instead of blocking.
         import asyncio
 
         from app.api.controllers.health_controller import health_controller as hc

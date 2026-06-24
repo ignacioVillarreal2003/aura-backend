@@ -127,8 +127,6 @@ class FragmentRepository(FragmentRepositoryInterface):
         if k < 1:
             raise DatabaseException("The result count k must be at least 1.")
 
-        # Fixed column names per representation (no user input) — the contextual
-        # lane targets the document-aware vector and skips fragments that lack one.
         if representation == "contextual":
             vector_col = "contextualized_vector"
             identity_col = "contextualized_embedding_identity"
@@ -506,9 +504,6 @@ class FragmentRepository(FragmentRepositoryInterface):
         if k < 1:
             raise DatabaseException("The BM25 result count k must be at least 1.")
 
-        # Fixed field name per representation (no user input) — the contextual lane
-        # searches the document-aware text; NULLs (non-contextualized fragments)
-        # simply do not match, so they fall back to the raw lane.
         search_field = "contextualized_content" if representation == "contextual" else "content"
 
         try:
@@ -697,10 +692,6 @@ class FragmentRepository(FragmentRepositoryInterface):
             database_session: AsyncSession,
             exclude_ids: set[int],
     ) -> list[Fragment]:
-        # Only fragments that carry a section_path participate; the rest fall back
-        # to adjacency at the service layer. Each primary contributes a window
-        # centred on its index and bounded to its own section, so a coarse
-        # section_path cannot pull in an unbounded number of fragments.
         relevant = [f for f in fragments if f.section_path is not None]
         if not relevant or max_per_section <= 0:
             return []

@@ -19,7 +19,6 @@ class TestHealth:
 
 class TestReadiness:
     def test_readiness_returns_503_without_services(self, client):
-        # The test app has no real DB/Redis; /ready probes infrastructure.
         response = client.get("/api/v1/ready")
         assert response.status_code in (200, 503)
 

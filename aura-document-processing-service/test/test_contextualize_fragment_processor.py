@@ -44,7 +44,6 @@ def _make_processor(
         embedder_factory=None,
         fragment_repository=None,
 ):
-    # Note: ``name`` is a reserved MagicMock constructor kwarg, so set it explicitly.
     document = MagicMock(description=description)
     document.name = name
 
@@ -130,7 +129,6 @@ class TestContextualizeDocumentFragments:
         llm.contextualize_fragment.side_effect = RuntimeError("LLM down")
         processor, repo, _, _ = _make_processor(fragments=fragments, llm_provider=llm)
 
-        # The processor swallows per-fragment failures (gather) but records the status.
         await processor.contextualize_document_fragments(document_id=10, user=_user())
 
         repo.update_fragment_contextualization.assert_not_awaited()
@@ -159,8 +157,6 @@ class TestIncrementalBackfill:
         )
 
     async def test_skips_already_contextualized_on_active_identity(self):
-        # Re-running enrichment (a backfill pass) must not re-pay LLM/embed for
-        # fragments already done on the active identity.
         fragments = [self._done_fragment(1)]
         processor, repo, llm, embedder = _make_processor(fragments=fragments)
 

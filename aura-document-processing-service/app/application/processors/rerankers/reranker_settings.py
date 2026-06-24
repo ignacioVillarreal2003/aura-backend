@@ -21,6 +21,7 @@ class RerankerSettings(BaseSettings):
     model_name: str = Field(default="BAAI/bge-reranker-v2-m3")
     device: Optional[str] = Field(default=None)
     min_score: float = Field(default=0.35, ge=0.0, le=1.0)
+    min_score_fallback_to_topk: bool = Field(default=True)
     batch_size: int = Field(default=16, ge=1, le=512)
 
     @field_validator("device", mode="before")

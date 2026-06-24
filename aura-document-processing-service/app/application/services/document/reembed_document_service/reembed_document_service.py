@@ -72,8 +72,6 @@ class ReembedDocumentService(ReembedDocumentServiceInterface):
                 fragment for fragment in fragments
                 if fragment.embedding_identity != target_identity
             ]
-            # The contextualized representation uses the same active embedder, so it
-            # is refreshed against the same target identity when present and stale.
             contextual_stale = [
                 fragment for fragment in fragments
                 if fragment.contextualized_content

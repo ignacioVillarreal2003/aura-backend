@@ -185,9 +185,6 @@ class LlmProvider(LlmProviderInterface):
             authenticated_user: AuthenticatedUser,
             operation: str,
     ) -> TResponse:
-        # Thin observability wrapper around the real call: records latency and a
-        # stable outcome label per operation, then re-raises unchanged so error
-        # handling stays exactly as before.
         start = time.perf_counter()
         try:
             result = await self._do_post_llm_json(

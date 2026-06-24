@@ -62,12 +62,6 @@ class TestAppExceptionHandler:
 
 class TestRequestValidationHandler:
     def test_missing_required_field_returns_422(self, handler_client):
-        # Reuse the main test app fixture — hit a real endpoint with bad body
-        # A separate targeted test: POST to a route that has a Pydantic body
-        # We can't do this from the mini-app (no pydantic routes there).
-        # Use the document-classify endpoint from conftest instead — see
-        # test_document_classify_controller.py for comprehensive coverage.
-        # Here we just verify the handler shape via direct handler invocation.
         pass
 
     def test_validation_error_format(self, client, auth_headers, mock_document_classify_service):

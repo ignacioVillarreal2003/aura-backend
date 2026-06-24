@@ -23,7 +23,6 @@ _HUMAN_MSG = {"role": "human", "content": "¿Qué dice el documento?"}
 _AI_MSG = {"role": "assistant", "content": "Aquí está la respuesta."}
 
 
-# ── DocumentQuestionRequest ──────────────────────────────────────────────────
 
 class TestDocumentQuestionRequest:
     def test_valid_single_human_message(self):
@@ -59,7 +58,6 @@ class TestDocumentQuestionRequest:
             DocumentQuestionRequest(messages=[_HUMAN_MSG], chat_id=0)
 
 
-# ── ClassifyDocumentRequest ──────────────────────────────────────────────────
 
 class TestClassifyDocumentRequest:
     def test_valid_request(self):
@@ -88,7 +86,6 @@ class TestClassifyDocumentRequest:
             ClassifyDocumentRequest(document_name="doc.pdf", content="x" * 50_001)
 
 
-# ── DocumentSummaryRequest ───────────────────────────────────────────────────
 
 class TestDocumentSummaryRequest:
     def test_valid_single_document_id(self):
@@ -124,7 +121,6 @@ class TestDocumentSummaryRequest:
             DocumentSummaryRequest(document_ids=list(range(1, 52)), chat_id=1)
 
 
-# ── AgentRequest ─────────────────────────────────────────────────────────────
 
 class TestAgentRequest:
     def test_valid_single_human_message(self):
@@ -148,7 +144,6 @@ class TestAgentRequest:
         assert req.messages[-1].role.value == "human"
 
 
-# ── DocumentActionRequest ────────────────────────────────────────────────────
 
 class TestDocumentActionRequest:
     def test_valid_request(self):
@@ -184,7 +179,6 @@ class TestDocumentActionRequest:
         assert req.action is None
 
 
-# ── ContextualizeFragmentRequest ─────────────────────────────────────────────
 
 class TestContextualizeFragmentRequest:
     def test_valid_request(self):
@@ -217,7 +211,6 @@ class TestContextualizeFragmentRequest:
             ContextualizeFragmentRequest(document_summary="Resumen.", content="x" * 50_001)
 
 
-# ── ExtractEntitiesRelationsRequest ─────────────────────────────────────────
 
 class TestExtractEntitiesRelationsRequest:
     def test_valid_request(self):
@@ -266,7 +259,6 @@ class TestExtractEntitiesRelationsRequest:
         assert req.allowed_relation_types is None
 
 
-# ── TranslateGraphQueryRequest ───────────────────────────────────────────────
 
 class TestTranslateGraphQueryRequest:
     def test_valid_request(self):

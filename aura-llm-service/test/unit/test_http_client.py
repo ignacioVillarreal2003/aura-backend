@@ -90,9 +90,6 @@ async def test_upstream_status_error_is_mapped_with_status_code():
 
 @pytest.mark.asyncio
 async def test_circuit_breaker_opens_after_threshold_failures():
-    # aiobreaker semantics: with threshold T, the first T-1 failures are passed
-    # through; the T-th failing call trips the breaker and is reported as a
-    # circuit-breaker error. Subsequent calls are short-circuited (not sent).
     threshold = 3
     client = await _started_client(circuit_breaker_failure_threshold=threshold)
     try:
@@ -102,11 +99,9 @@ async def test_circuit_breaker_opens_after_threshold_failures():
             with pytest.raises(HttpClientConnectionException):
                 await client.post("http://up.test/x", json={})
 
-        # The threshold-th failure trips the breaker.
         with pytest.raises(HttpClientCircuitBreakerException):
             await client.post("http://up.test/x", json={})
 
-        # Breaker stays open: further calls are short-circuited.
         with pytest.raises(HttpClientCircuitBreakerException):
             await client.post("http://up.test/x", json={})
     finally:
@@ -119,7 +114,6 @@ async def test_upstream_4xx_does_not_trip_the_breaker():
     try:
         _install_fake_transport(client, request_mock=AsyncMock(return_value=_status_error_response(404)))
 
-        # Many 4xx responses must not open the breaker (client errors are excluded).
         for _ in range(5):
             with pytest.raises(HttpClientException) as exc_info:
                 await client.post("http://up.test/x", json={})
@@ -135,13 +129,11 @@ async def test_per_host_breaker_isolation():
     try:
         _install_fake_transport(client, request_mock=AsyncMock(side_effect=httpx.ConnectError("refused")))
 
-        # Trip the breaker for host A (first failure passes through, second trips it).
         with pytest.raises(HttpClientConnectionException):
             await client.post("http://host-a.test/x", json={})
         with pytest.raises(HttpClientCircuitBreakerException):
             await client.post("http://host-a.test/x", json={})
 
-        # Host B has its own breaker and is still closed: the failure reaches it.
         with pytest.raises(HttpClientConnectionException):
             await client.post("http://host-b.test/y", json={})
     finally:

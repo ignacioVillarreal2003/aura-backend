@@ -68,7 +68,6 @@ def _make_service(*, contextual_enabled=True):
 
 
 def _request() -> QuestionContextFragmentsRequest:
-    # context_expansion="none" keeps the test focused on the dual lane (no neighbour fetch).
     return QuestionContextFragmentsRequest(
         semantic_queries=[{"text": "q", "max_fragments": 5}],
         context_expansion="none",
@@ -94,7 +93,6 @@ class TestDualLaneRetrieval:
             authorization_header="tok",
         )
 
-        # Both lanes were queried (raw + contextual) for the single semantic query.
         representations = [
             c.kwargs.get("representation", "raw")
             for c in service._fragment_repository.get_most_similar_fragments.call_args_list
@@ -103,9 +101,7 @@ class TestDualLaneRetrieval:
 
         ids = [f.id for f in response.fragments]
         assert set(ids) == {1, 2}
-        # Fragment present in both lanes is RRF-boosted to the top.
         assert ids[0] == 1
-        # Both contents travel in the DTO.
         primary = next(f for f in response.fragments if f.id == 1)
         assert primary.contextualized_content == "ctx-1\n\nc"
 
@@ -158,5 +154,5 @@ class TestDualLaneRetrieval:
             c.kwargs.get("representation", "raw")
             for c in service._fragment_repository.get_most_similar_fragments.call_args_list
         ]
-        assert representations == ["raw"]  # single lane only
+        assert representations == ["raw"]
         assert {f.id for f in response.fragments} == {1, 2}

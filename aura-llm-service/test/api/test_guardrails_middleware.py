@@ -71,7 +71,6 @@ class TestGuardrailsMiddleware:
         response = client.post(CHAT_URL, json=VALID_CHAT_BODY, headers=auth_headers)
         assert response.status_code == 200
         mock_guardrails.check_input.assert_awaited_once_with("hola, ¿qué dice el reglamento?")
-        # The body must be replayed intact for the controller to parse it.
         request_arg = mock_general_chat_service.execute_general_chat.await_args.kwargs
         assert request_arg or mock_general_chat_service.execute_general_chat.await_args.args
 
@@ -93,7 +92,6 @@ class TestGuardrailsMiddleware:
     def test_check_failure_returns_503(
             self, client, auth_headers, mock_guardrails, mock_general_chat_service
     ):
-        # The service only raises when fail_open is disabled.
         mock_guardrails.check_input.side_effect = RuntimeError("guard caído")
         response = client.post(CHAT_URL, json=VALID_CHAT_BODY, headers=auth_headers)
         assert response.status_code == 503
@@ -105,7 +103,6 @@ class TestGuardrailsMiddleware:
         mock_guardrails.check_input.assert_not_called()
 
     def test_blocked_before_validation_errors(self, client, auth_headers, mock_guardrails):
-        # Even an invalid body gets filtered first if it carries user text.
         mock_guardrails.check_input.return_value = GuardrailsVerdict(allowed=False)
         body = {"messages": [{"role": "human", "content": "texto malicioso"}]}
         response = client.post(CHAT_URL, json=body, headers=auth_headers)

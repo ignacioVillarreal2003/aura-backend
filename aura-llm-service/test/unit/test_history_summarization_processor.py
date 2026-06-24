@@ -58,7 +58,6 @@ class TestIsNeeded:
 
     def test_not_needed_with_single_turn(self):
         proc = _proc(_Invoker())
-        # only one history message in-window -> nothing to summarize
         assert proc.is_needed(_state(turns=1, size=10_000), history_window=4) is False
 
     def test_needed_when_window_exceeds_threshold(self):
@@ -87,5 +86,5 @@ class TestRun:
         invoker = _Invoker(boom=True)
         proc = _proc(invoker)
         state = _state(turns=4, size=1_000)
-        await proc.run(state, history_window=4)  # must not raise
+        await proc.run(state, history_window=4)
         assert state.history_summary is None

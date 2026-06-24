@@ -27,10 +27,6 @@ def _render_fragments(
         *,
         use_contextualized: bool = True,
 ) -> int:
-    # RAG-retrieved chunks render their contextualized (document-aware) text so an
-    # isolated chunk is self-contained. Attached documents render the raw content
-    # verbatim — the user attached the whole document and expects it as-is, without
-    # per-chunk situating prefixes.
     used = 0
     for i, frag in enumerate(fragments, 1):
         locator = _format_fragment_locator(frag)
@@ -86,8 +82,6 @@ def build_context_block(
         max_context_chars: int,
         attached_reserve_ratio: float = 0.6,
 ) -> str:
-    # "section" expansion: primaries verbatim + secondary section context
-    # (verbatim or summarized). Other modes keep the original behaviour below.
     if state.section_groups:
         return _build_section_context_block(state, max_context_chars)
 

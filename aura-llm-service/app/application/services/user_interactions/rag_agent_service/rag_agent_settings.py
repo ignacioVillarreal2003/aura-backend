@@ -44,11 +44,14 @@ class QueryAnalyzerSettings(BaseModel):
             "Intenciones posibles:\n"
             "- 'question': el usuario pregunta o pide información sobre un tema\n"
             "- 'document_lookup': el usuario pide explícitamente un documento completo o su contenido íntegro "
-            "(p. ej. 'mostrame el reglamento X', 'traeme la resolución Y completa')\n\n"
+            "(p. ej. 'mostrame el reglamento X', 'traeme la resolución Y completa')\n"
+            "- 'relational': el usuario pregunta por vínculos entre entidades, vecinos o caminos "
+            "(p. ej. '¿cómo se conecta A con B?', '¿qué organizaciones dependen de X?', "
+            "'¿quién participa en el proyecto Y?')\n\n"
             "Devuelve un JSON con exactamente tres campos:\n"
             "- 'query': la consulta reformulada como string\n"
             f"- 'keywords': array de hasta {self.max_keywords} términos de búsqueda relevantes\n"
-            "- 'intent': 'question' o 'document_lookup'\n\n"
+            "- 'intent': 'question', 'document_lookup' o 'relational'\n\n"
             'Ejemplo: {"query": "¿Cuáles son los requisitos para la licencia por enfermedad?", '
             '"keywords": ["licencia enfermedad", "requisitos", "procedimiento", "normativa"], '
             '"intent": "question"}\n\n'
@@ -160,6 +163,9 @@ class RagAgentServiceSettings(BaseSettings):
     graph_max_terms: int = Field(default=8, ge=1, le=15)
     graph_max_entities: int = Field(default=8, ge=1, le=25)
     graph_max_relations: int = Field(default=30, ge=1, le=100)
+
+    use_graph_structured_query: bool = Field(default=False)
+    graph_query_max_results: int = Field(default=20, ge=1, le=100)
 
     document_fetcher_max_documents: int = Field(default=3, ge=1, le=10)
 

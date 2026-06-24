@@ -150,7 +150,6 @@ def _check_neo4j(violations: list[str]) -> None:
         value=settings.password.get_secret_value(),
     )
 
-    # Encryption is enabled either by a +s/+ssc URI scheme or the explicit flag.
     scheme = (urlparse(settings.uri).scheme or "").lower()
     scheme_encrypted = scheme in ("neo4j+s", "neo4j+ssc", "bolt+s", "bolt+ssc")
     if not scheme_encrypted and settings.encrypted is not True:

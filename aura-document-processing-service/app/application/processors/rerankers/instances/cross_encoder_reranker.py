@@ -15,6 +15,15 @@ from app.application.processors.rerankers.reranker_settings import RerankerSetti
 logger = logging.getLogger(__name__)
 
 
+def _record_rerank_fallback(action: str) -> None:
+    try:
+        from app.configuration.metrics import retrieval_rerank_fallback_total
+
+        retrieval_rerank_fallback_total.labels(action=action).inc()
+    except Exception:
+        logger.debug("Failed to record rerank fallback metric.", exc_info=True)
+
+
 class CrossEncoderReranker(RerankerInterface):
     _model: ClassVar[Optional[CrossEncoder]] = None
     _model_lock: ClassVar[asyncio.Lock] = asyncio.Lock()
@@ -127,11 +136,19 @@ class CrossEncoderReranker(RerankerInterface):
             ]
 
             if not selected:
-                logger.warning(
-                    "No candidates above min_score threshold; using top-k without score filter.",
-                    extra={"top_n": top_n, "min_score": self._settings.min_score},
-                )
-                selected = list(top_indexed)
+                if self._settings.min_score_fallback_to_topk:
+                    _record_rerank_fallback("topk")
+                    logger.warning(
+                        "No candidates above min_score threshold; using top-k without score filter.",
+                        extra={"top_n": top_n, "min_score": self._settings.min_score},
+                    )
+                    selected = list(top_indexed)
+                else:
+                    _record_rerank_fallback("empty")
+                    logger.info(
+                        "No candidates above min_score threshold; returning empty (fallback disabled).",
+                        extra={"top_n": top_n, "min_score": self._settings.min_score},
+                    )
 
             logger.debug(
                 "Cross-encoder reranking complete.",

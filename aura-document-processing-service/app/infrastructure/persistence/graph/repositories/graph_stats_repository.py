@@ -3,7 +3,8 @@ from neo4j.exceptions import Neo4jError
 
 from app.domain.dtos.graph.graph_stats.graph_stats_response import GraphStatsResponse
 from app.infrastructure.persistence.graph.neo4j_manager.interfaces.neo4j_manager_interface import Neo4jManagerInterface
-from app.infrastructure.persistence.graph.repositories.exceptions.graph_repository_exceptions import GraphPersistenceException
+from app.infrastructure.persistence.graph.repositories.exceptions.graph_repository_exceptions import \
+    GraphPersistenceException
 from app.infrastructure.persistence.graph.repositories.interfaces.graph_stats_repository_interface import (
     GraphStatsRepositoryInterface,
 )

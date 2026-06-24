@@ -32,21 +32,20 @@ def _resp(fragment_id, *, document_id=1, fragment_index=0):
     )
 
 
-# ── _select_section_members (pure logic) ─────────────────────────────────────
 
 class TestSelectSectionMembers:
     def test_section_window_and_boundary(self):
         primary = _frag(1, fragment_index=10, section_path="A")
         pool = [
-            _frag(2, fragment_index=11, section_path="A"),   # in window + same section
-            _frag(3, fragment_index=10, section_path="B"),   # other section -> excluded
-            _frag(4, fragment_index=100, section_path="A"),  # out of window -> excluded
-            _frag(5, fragment_index=9, section_path="A"),    # in window
+            _frag(2, fragment_index=11, section_path="A"),
+            _frag(3, fragment_index=10, section_path="B"),
+            _frag(4, fragment_index=100, section_path="A"),
+            _frag(5, fragment_index=9, section_path="A"),
         ]
         members = FragmentQueryService._select_section_members(
             primary=primary, pool=pool, seen=set(), primary_ids={1}, half=3, fallback_window=1
         )
-        assert [m.id for m in members] == [5, 2]  # ordered by fragment_index
+        assert [m.id for m in members] == [5, 2]
 
     def test_dedup_excludes_seen_and_primaries(self):
         primary = _frag(1, fragment_index=0, section_path="A")
@@ -54,13 +53,13 @@ class TestSelectSectionMembers:
         members = FragmentQueryService._select_section_members(
             primary=primary, pool=pool, seen={2}, primary_ids={1, 9}, half=3, fallback_window=1
         )
-        assert members == []  # 2 already seen, 9 is a primary
+        assert members == []
 
     def test_fallback_window_for_no_section_primary(self):
         primary = _frag(1, fragment_index=5, section_path=None)
         pool = [
-            _frag(2, fragment_index=6, section_path=None),   # within fallback window 1
-            _frag(3, fragment_index=8, section_path=None),   # outside fallback window 1
+            _frag(2, fragment_index=6, section_path=None),
+            _frag(3, fragment_index=8, section_path=None),
         ]
         members = FragmentQueryService._select_section_members(
             primary=primary, pool=pool, seen=set(), primary_ids={1}, half=6, fallback_window=1
@@ -68,7 +67,6 @@ class TestSelectSectionMembers:
         assert [m.id for m in members] == [2]
 
 
-# ── _build_section_response (grouping + dedup across primaries) ───────────────
 
 def _make_service(**section_kwargs):
     settings = FragmentQueryServiceSettings(max_section_fragments=12, **section_kwargs)
@@ -113,11 +111,8 @@ class TestBuildSectionResponse:
             accessible_doc_set={1},
         )
 
-        # Two primaries, flat list = the primaries.
         assert [f.id for f in response.fragments] == [1, 2]
         assert response.groups is not None and len(response.groups) == 2
-        # Both secondaries land in the first primary's group (rerank order); dedup
-        # leaves the second group empty.
         assert [f.id for f in response.groups[0].section_fragments] == [11, 12]
         assert response.groups[1].section_fragments == []
 

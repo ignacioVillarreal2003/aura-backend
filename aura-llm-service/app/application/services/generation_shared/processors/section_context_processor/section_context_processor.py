@@ -63,7 +63,6 @@ class SectionContextProcessor:
         if not groups:
             return
         if not self.is_needed(state):
-            # Small enough to send verbatim; the renderer handles it.
             state.section_summary = None
             return
 
@@ -85,7 +84,6 @@ class SectionContextProcessor:
 
         summary = self._assemble(notes)
         if not summary:
-            # Nothing useful extracted; fall back to verbatim rendering.
             state.section_summary = None
             return
 

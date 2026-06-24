@@ -138,19 +138,19 @@ class TestRepairLoop:
         svc = DocumentClassifyService(_Facade(), invoker)
         with pytest.raises(DocumentClassifyServiceException):
             await svc.classify_document(_classify_request(), _USER)
-        assert invoker.calls == 1  # no repair attempt for simple services
+        assert invoker.calls == 1
 
     async def test_translation_repairs_then_succeeds(self):
         invoker = _Invoker(["no json todavía", _VALID_TRANSLATE_JSON])
-        svc = GraphQueryTranslationService(_Facade(), invoker)  # default max_repair_attempts=1
+        svc = GraphQueryTranslationService(_Facade(), invoker)
         result = await svc.translate_graph_query(_translate_request(), _USER)
         assert isinstance(result, TranslateGraphQueryResponse)
         assert result.intent == QueryIntent.FIND_ENTITY
-        assert invoker.calls == 2  # original + one repair
+        assert invoker.calls == 2
 
     async def test_translation_exhausts_repair_then_raises(self):
         invoker = _Invoker(["bad", "still bad", "and bad"])
         svc = GraphQueryTranslationService(_Facade(), invoker)
         with pytest.raises(Exception):
             await svc.translate_graph_query(_translate_request(), _USER)
-        assert invoker.calls == 2  # original + 1 repair (max_repair_attempts=1)
+        assert invoker.calls == 2

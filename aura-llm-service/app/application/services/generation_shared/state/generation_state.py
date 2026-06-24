@@ -25,9 +25,6 @@ class GenerationState:
 
     fragments: list[FragmentResponse] = field(default_factory=list)
 
-    # Section expansion ("section" mode): each primary fragment with its
-    # surrounding section as secondary context. ``section_summary`` holds the
-    # condensed secondary context when it exceeds the configured threshold.
     section_groups: Optional[list[FragmentSectionGroup]] = None
     section_summary: Optional[str] = None
 

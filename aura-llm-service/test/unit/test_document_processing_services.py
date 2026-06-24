@@ -106,7 +106,7 @@ class TestSummary:
         svc = _summary_svc()
         req = DocumentSummaryRequest(document_ids=[1, 2], chat_id=1)
         state = svc._build_state(req, _USER)
-        assert state.current_message.content  # synthetic instruction present
+        assert state.current_message.content
         assert state.process_documents is True and state.retrieve_context is False
 
     async def test_execute_parses_json_into_title_description_summary(self):

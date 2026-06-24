@@ -12,11 +12,8 @@ class SectionContextSettings(BaseSettings):
         extra="ignore",
     )
 
-    # Above this total size of secondary (section) context, condense it with the
-    # LLM instead of sending it verbatim. Conservative so context never explodes.
     summarize_threshold_chars: int = Field(default=6_000, ge=500, le=200_000)
 
-    # Hard cap for the condensed secondary block after summarization.
     max_section_context_chars: int = Field(default=4_000, ge=500, le=200_000)
 
     max_concurrent_groups: int = Field(default=4, ge=1, le=32)

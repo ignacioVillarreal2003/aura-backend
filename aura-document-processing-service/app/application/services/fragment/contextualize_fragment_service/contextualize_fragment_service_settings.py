@@ -13,5 +13,4 @@ class ContextualizeFragmentServiceSettings(BaseSettings):
 
     concurrency: int = Field(default=4, ge=1, le=32)
 
-    # Upper bound for the document summary fed to the LLM as situating context.
     max_document_summary_chars: int = Field(default=2_000, ge=100, le=50_000)

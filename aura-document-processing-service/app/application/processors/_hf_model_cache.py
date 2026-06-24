@@ -18,8 +18,6 @@ _cache: dict[
 
 
 def _resolve_effective_dtype(torch_dtype: Optional[str], device: str) -> Optional[str]:
-    # Half precision only makes sense (and is well supported) on CUDA. On CPU we
-    # keep full precision to avoid slow/unsupported fp16 kernels.
     if not torch_dtype or torch_dtype == "float32":
         return None
     if device != "cuda":
@@ -52,9 +50,6 @@ def get_or_create(
             if token:
                 model_kwargs["token"] = token
             if effective_dtype is not None:
-                # Resolve to a real torch dtype (more portable across transformers
-                # versions than passing the dtype as a string). Forwarded by
-                # SentenceTransformer to transformers' from_pretrained.
                 import torch
 
                 model_kwargs["model_kwargs"] = {

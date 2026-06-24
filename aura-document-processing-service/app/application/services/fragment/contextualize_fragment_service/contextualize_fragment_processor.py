@@ -77,9 +77,6 @@ class ContextualizeFragmentProcessor(ContextualizeFragmentProcessorInterface):
             )
             return
 
-        # Incremental / idempotent: skip fragments already contextualized on the
-        # active embedding identity, so re-running enrichment (e.g. a backfill of
-        # old documents) only pays the LLM + embed cost for what is actually missing.
         active_identity = self._embedder_factory.get_active_embedding_identity()
         pending = [f for f in fragments if not self._is_already_contextualized(f, active_identity)]
         skipped = len(fragments) - len(pending)
@@ -136,7 +133,6 @@ class ContextualizeFragmentProcessor(ContextualizeFragmentProcessorInterface):
             summary = (document.description or "").strip()
             if summary:
                 return summary
-            # Fall back to the document name so retrieval still gains some context.
             return (document.name or "").strip() or None
 
     async def _load_fragments(self, document_id: int) -> list[Fragment]:

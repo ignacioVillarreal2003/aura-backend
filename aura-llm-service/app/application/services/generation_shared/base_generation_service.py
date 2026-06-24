@@ -185,8 +185,6 @@ class BaseGenerationService(ABC):
         await self._context_processor.run(state)
 
     async def _reduce_context(self, state: GenerationState) -> None:
-        # "section" mode keeps primaries verbatim and condenses only the secondary
-        # section context (when over threshold); other modes use generic reduction.
         if state.section_groups:
             await self._section_processor.run(
                 state,
@@ -290,8 +288,6 @@ class BaseGenerationService(ABC):
         holder = {"outcome": "error"}
         start = time.perf_counter()
         user_id = getattr(authenticated_user, "id", None)
-        # ``call_mode`` (sync|stream) is distinct from the request's ``mode``
-        # (rag|...) that ``_request_log_extra`` may already include.
         initiated_extra = {"user_id": user_id, "call_mode": mode, **self._request_log_extra(request)}
         self._logger.info(
             "%s generation initiated",

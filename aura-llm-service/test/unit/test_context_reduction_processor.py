@@ -40,7 +40,6 @@ class _Invoker:
             await asyncio.sleep(self._delay)
         if self._boom:
             raise RuntimeError("llm down")
-        # llm_input[-1] is the human message; its content is "{query}|{fragments}"
         return self._transform(llm_input[-1].content)
 
 
@@ -68,7 +67,7 @@ def _units(count: int, size: int) -> list[str]:
 class TestBudgetingHelpers:
     def test_batch_budget_is_min_of_chars_and_token_ceiling(self):
         p = _processor(_Invoker(), max_batch_chars=20_000, max_batch_tokens=256)
-        assert p._batch_char_budget() == 1_024  # 256 * 4
+        assert p._batch_char_budget() == 1_024
 
     def test_batch_budget_chars_wins_when_smaller(self):
         p = _processor(_Invoker(), max_batch_chars=1_000, max_batch_tokens=256)
@@ -96,7 +95,7 @@ class TestBudgetingHelpers:
     def test_fit_notes_keeps_at_least_one_note(self):
         p = _processor(_Invoker(), max_context_chars=1_000)
         fit = p._fit_notes(["a" * 5_000])
-        assert len(fit) == 1_000  # hard-cut last resort
+        assert len(fit) == 1_000
 
 
 class TestIsNeeded:
@@ -128,12 +127,12 @@ class TestReduceOutcomes:
         assert r.outcome == "fit" and not r.degraded and r.text == "\n\n".join(["ok"] * 4)
 
     async def test_converged_single_batch_over_budget(self):
-        p = _processor(_Invoker(transform=lambda t: t * 2))  # doubles -> exceeds budget
+        p = _processor(_Invoker(transform=lambda t: t * 2))
         r = await p._reduce(llm=None, fragments=["[D] " + "a" * 500], query="q", prompts=_PROMPTS)
         assert r.outcome == "converged" and r.degraded
 
     async def test_not_shrinking(self):
-        p = _processor(_Invoker(transform=lambda t: t))  # echo -> never shrinks
+        p = _processor(_Invoker(transform=lambda t: t))
         r = await p._reduce(llm=None, fragments=_units(4, 900), query="q", prompts=_PROMPTS)
         assert r.outcome == "not_shrinking" and r.degraded and r.passes_used == 2
 
@@ -150,7 +149,7 @@ class TestReduceOutcomes:
     async def test_timeout_returns_best_so_far(self):
         p = _processor(_Invoker(transform=lambda t: t, delay=0.05), deadline_seconds=0.01)
         r = await p._reduce(llm=None, fragments=_units(4, 900), query="q", prompts=_PROMPTS)
-        assert r.outcome == "timeout" and r.degraded and r.text  # best-so-far, non-empty
+        assert r.outcome == "timeout" and r.degraded and r.text
 
 
 class TestRun:

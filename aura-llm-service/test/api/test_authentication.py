@@ -33,7 +33,6 @@ class TestJwtAuthentication:
         assert response.status_code == 401
 
     def test_legacy_service_headers_are_ignored(self, client):
-        # The removed X-Service-Api-Key flow must not authenticate anything.
         headers = {
             "X-Service-Api-Key": "any-key",
             "X-User-Id": "42",

@@ -100,7 +100,7 @@ class TestPlainChat:
             )
         ]
         steps = [e.step for e in events if isinstance(e, GeneralChatStreamProgress)]
-        assert "searching" not in steps and "reformulating" not in steps  # no retrieval
+        assert "searching" not in steps and "reformulating" not in steps
         assert [e.text for e in events if isinstance(e, GeneralChatStreamDelta)] == ["Resp", "uesta"]
         assert any(isinstance(e, GeneralChatStreamComplete) for e in events)
 
@@ -121,4 +121,4 @@ class TestRagOptIn:
         assert "reformulating" in steps and "searching" in steps
         assert provider.retrieval_calls >= 1
         complete = next(e for e in events if isinstance(e, GeneralChatStreamComplete))
-        assert complete.result.fragments  # corpus fragments surfaced
+        assert complete.result.fragments

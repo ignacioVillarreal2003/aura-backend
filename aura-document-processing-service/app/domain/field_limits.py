@@ -1,10 +1,8 @@
 from typing import Final
 
-# ─── Shared ────────────────────────────────────────────────────────────────────
 
 MAX_ID: Final[int] = 2_147_483_647
 
-# ─── Document ──────────────────────────────────────────────────────────────────
 
 MAX_NAME_CHARS: Final[int] = 255
 MAX_DESCRIPTION_CHARS: Final[int] = 2_000
@@ -17,12 +15,10 @@ MAX_DOCUMENTS_IN_LIST: Final[int] = 10_000
 DEFAULT_DOCUMENT_QUERY_PAGE_SIZE: Final[int] = 20
 MAX_DOCUMENT_QUERY_PAGE_SIZE: Final[int] = 100
 
-# ─── Knowledge graph (HTTP controllers & shared KG field bounds) ───────────────
 
 MAX_ENTITY_NAME_CHARS: Final[int] = 200
 MAX_PATH_HOPS: Final[int] = 6
 
-# ─── Fragment ──────────────────────────────────────────────────────────────────
 
 MAX_FRAGMENT_CONTENT_CHARS: Final[int] = 50_000
 MAX_FRAGMENT_SUMMARY_CHARS: Final[int] = 50_000
@@ -37,7 +33,6 @@ MAX_FRAGMENT_INDEX: Final[int] = 100_000
 MAX_FRAGMENTS_IN_LIST: Final[int] = 1_000
 MAX_TOTAL_FRAGMENTS_LIST_CHARS: Final[int] = 300_000
 
-# ─── Query and retrieval ───────────────────────────────────────────────────────
 
 MAX_DOCUMENT_SEARCH_QUERY_CHARS: Final[int] = 1_000
 MAX_DOCUMENT_SEARCH_RESULTS: Final[int] = 50
@@ -55,7 +50,6 @@ MAX_FRAGMENTS_PER_QUERY_STRATEGY: Final[int] = 50
 MAX_TOTAL_FRAGMENTS: Final[int] = 100
 MAX_CONTEXT_QUERY_DOCUMENT_IDS: Final[int] = 50
 
-# ─── Post-processing ───────────────────────────────────────────────────────────
 
 MAX_POST_PROCESS_DOCUMENT_IDS: Final[int] = 10_000
 MAX_POST_PROCESS_FRAGMENTS_DOCUMENT_IDS: Final[int] = 500
@@ -65,7 +59,6 @@ MAX_MESSAGE_CHARS: Final[int] = 500
 MAX_ERROR_MESSAGE_CHARS: Final[int] = 500
 MAX_POST_PROCESS_ERROR_MESSAGE_CHARS: Final[int] = 2_000
 
-# ─── Auth / user ───────────────────────────────────────────────────────────────
 
 MAX_EMAIL_CHARS: Final[int] = 254
 MAX_ROLE_CHARS: Final[int] = 100
@@ -73,7 +66,6 @@ MAX_PERMISSION_CHARS: Final[int] = 100
 MAX_ROLES: Final[int] = 50
 MAX_PERMISSIONS: Final[int] = 200
 
-# ─── LLM provider payload ceilings ────────────────────────────────────────────
 
 MAX_LLM_DOCUMENT_NAME_CHARS: Final[int] = 255
 MAX_LLM_CLASSIFY_CONTENT_CHARS: Final[int] = 50_000

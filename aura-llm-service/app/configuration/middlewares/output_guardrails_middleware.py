@@ -135,7 +135,7 @@ class OutputGuardrailsMiddleware:
                 verdict = await guardrails.check_output("\n\n".join(texts))
                 verdict_allowed = verdict.allowed
         except (UnicodeDecodeError, json.JSONDecodeError):
-            verdict_allowed = True  # Not screenable: let it through.
+            verdict_allowed = True
         except Exception:
             logger.exception("Output guardrail screening failed; forwarding original response.")
             verdict_allowed = True

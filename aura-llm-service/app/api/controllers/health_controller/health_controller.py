@@ -8,9 +8,6 @@ from app.api.openapi.common import ErrorBodyApp
 
 logger = logging.getLogger(__name__)
 
-# Upper bound for each awaited dependency check so a single slow/hung dependency
-# (e.g. a Redis ping that never returns) cannot stall the readiness probe and
-# flap the pod out of rotation. Kept small: readiness must stay cheap.
 _DEPENDENCY_CHECK_TIMEOUT_SECONDS = 2.0
 
 

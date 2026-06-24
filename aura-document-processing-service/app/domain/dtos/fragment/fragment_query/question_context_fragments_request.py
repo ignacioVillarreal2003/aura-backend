@@ -68,10 +68,6 @@ class QuestionContextFragmentsRequest(BaseModel):
 
     adjacent_chunks: int = Field(default=1, ge=0, le=3)
 
-    # Context expansion mode applied after rerank:
-    #   "none"     -> return only the matched (primary) fragments
-    #   "adjacent" -> append ±adjacent_chunks neighbours (flat list; default, unchanged)
-    #   "section"  -> group each primary with its surrounding section as secondary context
     context_expansion: Literal["none", "adjacent", "section"] = "adjacent"
 
     @model_validator(mode="after")

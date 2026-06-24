@@ -97,10 +97,8 @@ class TestBuildContextBlock:
             )
         ]
         block = build_context_block(state, max_context_chars=5000)
-        # Attached: verbatim content, no situating prefix.
         assert "ADJUNTO CRUDO" in block
         assert "PREFIJO ADJUNTO" not in block
-        # RAG-retrieved: contextualized text.
         assert "PREFIJO RAG" in block
 
     def test_budget_limits_rag_fragments(self, make_fragment):
@@ -118,8 +116,6 @@ class TestBuildContextBlock:
         state.attached_fragments = [make_fragment(fragment_id=1, content="x" * 800)]
         state.fragments = [make_fragment(fragment_id=2, content="y" * 200)]
         block = build_context_block(state, max_context_chars=1000, attached_reserve_ratio=0.6)
-        # The attached fragment (800 chars) exceeds its 600-char reserve and is dropped,
-        # while the rag fragment fits in the remainder.
         assert "x" * 800 not in block
         assert "y" * 200 in block
 
@@ -141,7 +137,6 @@ class TestBuildGenerationMessages:
         messages = build_generation_messages(
             "system", "{context}|{input}", _state(many), history_messages_window=2, context_block="C"
         )
-        # system + 2 history + final human
         assert len(messages) == 4
         assert messages[1].content == "h3"
 
@@ -162,7 +157,6 @@ class TestBuildGenerationMessages:
             "system", "{context}|{input}", _state(many),
             history_messages_window=4, context_block="C", max_history_chars=250,
         )
-        # 3 history turns of 100 chars exceed the 250 budget; only the 2 newest fit.
         history = [m.content for m in messages[1:-1]]
         assert history == ["b" * 100, "c" * 100]
 
@@ -183,7 +177,6 @@ class TestBuildGenerationMessages:
             "system", "{context}|{input}", state,
             history_messages_window=4, context_block="CTX", max_history_chars=12_000,
         )
-        # system + summary + final human
         assert len(messages) == 3
         assert "RESUMEN PREVIO" in messages[1].content
         assert all(m.content not in ("m1", "m2") for m in messages)
@@ -216,7 +209,7 @@ class TestSectionContextBlock:
         assert "PRINCIPAL" in block
         assert "resumido" in block
         assert "RESUMEN DE SECCIÓN" in block
-        assert "SECUNDARIO" not in block  # secondary replaced by its summary
+        assert "SECUNDARIO" not in block
 
     def test_section_mode_takes_precedence_over_reduced_context(self, make_fragment):
         state = self._section_state(make_fragment)

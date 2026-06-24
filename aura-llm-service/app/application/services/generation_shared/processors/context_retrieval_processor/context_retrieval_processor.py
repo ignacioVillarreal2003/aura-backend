@@ -80,8 +80,6 @@ class ContextRetrievalProcessor:
             fragments = result.fragments[:self._settings.max_fragments]
             fragments = self._apply_char_budget(fragments)
             state.fragments = fragments
-            # In "section" mode the secondary context travels in groups; the flat
-            # ``fragments`` above are the primaries. Other modes leave this None.
             state.section_groups = getattr(result, "groups", None) or None
 
             retrieval_fragments_returned.observe(len(fragments))

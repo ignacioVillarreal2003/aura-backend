@@ -5,6 +5,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
 from app.application.processors.rerankers.reranker_factory import RerankerFactory
+from app.configuration.metrics import (
+    retrieval_lane_fragments_total,
+    retrieval_top_rerank_score,
+)
 from app.application.services.fragment.fragment_query_service.exceptions.fragment_query_service_exception import (
     FragmentQueryEmbeddingException,
     FragmentQueryInvalidRequestException,
@@ -185,11 +189,6 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 )
                 for q, vector in zip(semantic_queries, vectors, strict=True)
             ]
-            # Contextual lane: the same query embeddings searched against the
-            # document-aware (contextualized) vectors. Each lane is its own ranked
-            # list fused via RRF, so a fragment strong in both is boosted, and
-            # fragments without a contextualized vector simply fall back to the
-            # raw lane. Off by default => identical behaviour to before.
             contextual_coros = []
             if self._settings.contextual_retrieval_enabled:
                 contextual_coros = [
@@ -202,9 +201,6 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                     )
                     for q, vector in zip(semantic_queries, vectors, strict=True)
                 ]
-            # BM25 raw lane, plus a contextual lane over `contextualized_content`
-            # when dual retrieval is enabled. Both share the same ParadeDB index and
-            # are treated as one "bm25" stage for fallback purposes.
             bm25_coros = [
                 self._retrieve_bm25_isolated(
                     query_text=q.text,
@@ -248,6 +244,13 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                     bm25_ranked_lists = [r for r in bm25_results if not isinstance(r, BaseException)]
                     bm25_used = True
 
+            lane_ids = self._build_lane_membership(
+                semantic_ranked_lists=semantic_ranked_lists,
+                contextual_ranked_lists=contextual_ranked_lists,
+                bm25_ranked_lists=bm25_ranked_lists,
+                bm25_query_count=len(bm25_queries),
+            )
+
             all_ranked_lists = (
                 list(semantic_ranked_lists) + list(contextual_ranked_lists) + bm25_ranked_lists
             )
@@ -266,13 +269,16 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 fragments = fragments[:self._settings.rerank_candidate_pool_cap]
                 rerank_query = self._build_rerank_query(question_context_fragments_request)
                 top_n = question_context_fragments_request.rerank.max_fragments or len(fragments)
-                indices = await self._reranker_factory.reranker.rerank(
+                scored = await self._reranker_factory.reranker.rerank_with_scores(
                     query=rerank_query,
                     candidates=[f.content for f in fragments],
                     top_n=top_n,
                 )
-                fragments = [fragments[i] for i in indices]
+                fragments = [fragments[i] for i, _ in scored if 0 <= i < len(fragments)]
+                self._record_top_rerank_score(scored)
                 rerank_applied = True
+
+            self._record_lane_contribution(fragments, lane_ids)
 
             expansion = question_context_fragments_request.context_expansion
 
@@ -465,6 +471,48 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             ) from e
 
     @staticmethod
+    def _build_lane_membership(
+            *,
+            semantic_ranked_lists: list[list[Fragment]],
+            contextual_ranked_lists: list[list[Fragment]],
+            bm25_ranked_lists: list[list[Fragment]],
+            bm25_query_count: int,
+    ) -> dict[str, set[int]]:
+        def _ids(lists: list[list[Fragment]]) -> set[int]:
+            return {int(f.id) for lst in lists for f in lst}
+
+        return {
+            "vector_raw": _ids(list(semantic_ranked_lists)),
+            "vector_contextual": _ids(list(contextual_ranked_lists)),
+            "bm25_raw": _ids(bm25_ranked_lists[:bm25_query_count]),
+            "bm25_contextual": _ids(bm25_ranked_lists[bm25_query_count:]),
+        }
+
+    @staticmethod
+    def _record_top_rerank_score(scored: list[tuple[int, float]]) -> None:
+        if not scored:
+            return
+        try:
+            top = max(score for _, score in scored)
+            retrieval_top_rerank_score.observe(float(top))
+        except Exception:
+            logger.debug("Failed to record top rerank score metric.", exc_info=True)
+
+    @staticmethod
+    def _record_lane_contribution(
+            fragments: list[Fragment],
+            lane_ids: dict[str, set[int]],
+    ) -> None:
+        try:
+            for fragment in fragments:
+                fid = int(fragment.id)
+                for lane, ids in lane_ids.items():
+                    if fid in ids:
+                        retrieval_lane_fragments_total.labels(lane=lane).inc()
+        except Exception:
+            logger.debug("Failed to record lane contribution metric.", exc_info=True)
+
+    @staticmethod
     def _build_rerank_query(question_context_fragments_request: QuestionContextFragmentsRequest) -> str:
         if question_context_fragments_request.semantic_queries:
             return question_context_fragments_request.semantic_queries[0].text
@@ -506,8 +554,6 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             )
             pool.extend(f for f in adjacent_members if f.document_id in accessible_doc_set)
 
-        # Assign each secondary to the first primary (rerank order) whose window
-        # contains it; a global ``seen`` set guarantees no fragment is repeated.
         seen: set[int] = set()
         grouped_members: list[tuple[Fragment, list[Fragment]]] = []
         for primary in primaries:
