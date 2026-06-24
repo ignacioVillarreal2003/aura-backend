@@ -1,11 +1,13 @@
 import hashlib
 import json
 import logging
+import secrets
 from functools import lru_cache
 from typing import Optional
 import httpx
 import redis
 from django.conf import settings
+from django.http import HttpRequest
 
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authentication.authentication_exceptions import (
@@ -74,7 +76,6 @@ def _cache_user(token: str, user: AuthenticatedUser) -> None:
 
 
 class AuthenticationProvider:
-<<<<<<< HEAD
     def evaluate_service_auth(self, request: HttpRequest) -> Optional[AuthenticatedUser]:
         raw_key = request.headers.get(_HEADER_SERVICE_API_KEY)
         if raw_key is None:
@@ -106,8 +107,6 @@ class AuthenticationProvider:
         logger.debug("Service-to-service request authenticated.", extra={"path": request.path})
         return AuthenticatedUser(id=0, email="service@internal", roles=(), permissions=(), is_service=True)
 
-=======
->>>>>>> 5c00b41a (fix 6/21)
     def validate_token(self, token: str) -> AuthenticatedUser:
         cached = _get_cached_user(token)
         if cached is not None:

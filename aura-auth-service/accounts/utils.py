@@ -116,20 +116,22 @@ def get_user_permissions(user: User) -> list:
         List of permission names
     """
     if user.is_superuser:
-        return [
+        permissions = [
             _normalize_permission_name(name)
             for name in Permission.objects.values_list('name', flat=True)
             if name
         ]
+        return list(set(permissions))
 
-    return [
+    permissions = [
         _normalize_permission_name(name) for name in
         user.user_roles.filter(deleted_at__isnull=True).values_list(
             'role__permission_links__permission__name',
             flat=True,
-        ).distinct()
+        )
         if name
     ]
+    return list(set(permissions))
 
 
 def get_user_roles(user: User) -> list:
@@ -142,8 +144,9 @@ def get_user_roles(user: User) -> list:
     Returns:
         List of role names
     """
-    return [
+    roles = [
         name.lower() for name in
         user.user_roles.filter(deleted_at__isnull=True).values_list('role__name', flat=True)
         if name
     ]
+    return list(set(roles))

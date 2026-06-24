@@ -134,6 +134,7 @@ class AuthenticationProvider(AuthenticationProviderInterface):
                     "operation": "token validation",
                     "reason": "response_validation_failed",
                     "validation_error_count": len(e.errors()),
+                    "validation_errors": str(e.errors()),
                 },
             )
             raise AuthenticationProviderServiceUnavailableException(
