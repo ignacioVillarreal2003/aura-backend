@@ -7,6 +7,7 @@ from app.application.services.generation_shared.generation_messages import (
 from app.application.services.generation_shared.state.generation_state import GenerationState
 from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.message import Message
+from app.infrastructure.http.document_context_provider.dtos.fragment_list_response import FragmentSectionGroup
 
 
 def _state(messages=None) -> GenerationState:
@@ -67,6 +68,40 @@ class TestBuildContextBlock:
         state.fragments = [make_fragment(document_name="Reglamento X", content="dato")]
         block = build_context_block(state, max_context_chars=1000)
         assert "[FRAGMENTO 1 — Reglamento X]" in block
+
+    def test_prefers_contextualized_content_when_present(self, make_fragment):
+        state = _state()
+        frag = make_fragment(content="texto crudo").model_copy(
+            update={"contextualized_content": "CONTEXTO SITUACIONAL\n\ntexto crudo"}
+        )
+        state.fragments = [frag]
+        block = build_context_block(state, max_context_chars=1000)
+        assert "CONTEXTO SITUACIONAL" in block
+
+    def test_falls_back_to_raw_content_without_contextualized(self, make_fragment):
+        state = _state()
+        state.fragments = [make_fragment(content="solo crudo")]
+        block = build_context_block(state, max_context_chars=1000)
+        assert "solo crudo" in block
+
+    def test_attached_renders_raw_rag_renders_contextualized(self, make_fragment):
+        state = _state()
+        state.attached_fragments = [
+            make_fragment(fragment_id=1, content="ADJUNTO CRUDO").model_copy(
+                update={"contextualized_content": "PREFIJO ADJUNTO\n\nADJUNTO CRUDO"}
+            )
+        ]
+        state.fragments = [
+            make_fragment(fragment_id=2, content="rag crudo").model_copy(
+                update={"contextualized_content": "PREFIJO RAG\n\nrag crudo"}
+            )
+        ]
+        block = build_context_block(state, max_context_chars=5000)
+        # Attached: verbatim content, no situating prefix.
+        assert "ADJUNTO CRUDO" in block
+        assert "PREFIJO ADJUNTO" not in block
+        # RAG-retrieved: contextualized text.
+        assert "PREFIJO RAG" in block
 
     def test_budget_limits_rag_fragments(self, make_fragment):
         state = _state()
@@ -152,3 +187,40 @@ class TestBuildGenerationMessages:
         assert len(messages) == 3
         assert "RESUMEN PREVIO" in messages[1].content
         assert all(m.content not in ("m1", "m2") for m in messages)
+
+
+class TestSectionContextBlock:
+    def _section_state(self, make_fragment, summary=None):
+        state = _state()
+        primary = make_fragment(fragment_id=1, content="PRINCIPAL", document_name="Reglamento X",
+                                section_path="Cap 1", fragment_index=0)
+        secondary = make_fragment(fragment_id=2, content="SECUNDARIO", document_name="Reglamento X",
+                                  section_path="Cap 1", fragment_index=1)
+        state.fragments = [primary]
+        state.section_groups = [FragmentSectionGroup(primary=primary, section_fragments=[secondary])]
+        state.section_summary = summary
+        return state
+
+    def test_section_mode_renders_primary_and_verbatim_secondary(self, make_fragment):
+        state = self._section_state(make_fragment)
+        block = build_context_block(state, max_context_chars=2000)
+        assert "CONTEXTO PRINCIPAL" in block
+        assert "PRINCIPAL" in block
+        assert "CONTEXTO DE SECCIÓN (complementario)" in block
+        assert "SECUNDARIO" in block
+
+    def test_section_mode_uses_summary_when_present(self, make_fragment):
+        state = self._section_state(make_fragment, summary="RESUMEN DE SECCIÓN")
+        block = build_context_block(state, max_context_chars=2000)
+        assert "CONTEXTO PRINCIPAL" in block
+        assert "PRINCIPAL" in block
+        assert "resumido" in block
+        assert "RESUMEN DE SECCIÓN" in block
+        assert "SECUNDARIO" not in block  # secondary replaced by its summary
+
+    def test_section_mode_takes_precedence_over_reduced_context(self, make_fragment):
+        state = self._section_state(make_fragment)
+        state.reduced_context = "no debería usarse"
+        block = build_context_block(state, max_context_chars=2000)
+        assert "CONTEXTO PRINCIPAL" in block
+        assert "no debería usarse" not in block

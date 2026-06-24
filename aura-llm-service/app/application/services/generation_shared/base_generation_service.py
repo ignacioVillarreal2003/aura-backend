@@ -49,6 +49,12 @@ from app.application.services.generation_shared.processors.query_reformulation_p
 from app.application.services.generation_shared.processors.query_reformulation_processor.query_reformulation_settings import (
     QueryReformulationSettings,
 )
+from app.application.services.generation_shared.processors.section_context_processor.section_context_processor import (
+    SectionContextProcessor,
+)
+from app.application.services.generation_shared.processors.section_context_processor.section_context_settings import (
+    SectionContextSettings,
+)
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.message import Message
 from app.infrastructure.http.document_context_provider.interfaces.document_context_provider_interface import (
@@ -106,6 +112,7 @@ class BaseGenerationService(ABC):
             attached_documents_settings: Optional[AttachedDocumentsSettings] = None,
             context_reduction_settings: Optional[ContextReductionSettings] = None,
             history_summarization_settings: Optional[HistorySummarizationSettings] = None,
+            section_context_settings: Optional[SectionContextSettings] = None,
     ) -> None:
         self._ollama_llm_facade = ollama_llm_facade
         self._ollama_llm_invoker = ollama_llm_invoker
@@ -128,6 +135,9 @@ class BaseGenerationService(ABC):
         )
         self._history_summarization_processor = HistorySummarizationProcessor(
             ollama_llm_facade, ollama_llm_invoker, history_summarization_settings
+        )
+        self._section_processor = SectionContextProcessor(
+            ollama_llm_facade, ollama_llm_invoker, section_context_settings
         )
         self._known_exceptions: tuple[type[Exception], ...] = (
             RequestValidationException,
@@ -175,6 +185,15 @@ class BaseGenerationService(ABC):
         await self._context_processor.run(state)
 
     async def _reduce_context(self, state: GenerationState) -> None:
+        # "section" mode keeps primaries verbatim and condenses only the secondary
+        # section context (when over threshold); other modes use generic reduction.
+        if state.section_groups:
+            await self._section_processor.run(
+                state,
+                map_system_prompt=self.map_system_prompt,
+                map_human_prompt=self.map_human_prompt,
+            )
+            return
         await self._reduction_processor.run(
             state,
             map_system_prompt=self.map_system_prompt,
@@ -241,7 +260,12 @@ class BaseGenerationService(ABC):
             await self._context_processor.run(state)
             gathered = True
         if gathered:
-            if self._reduction_processor.is_needed(state):
+            needs_reduction = (
+                self._section_processor.is_needed(state)
+                if state.section_groups
+                else self._reduction_processor.is_needed(state)
+            )
+            if needs_reduction:
                 yield self.stream_progress_event(step="reducing", message=_REDUCING_MESSAGE)
             await self._reduce_context(state)
         self._log_degradations(state)

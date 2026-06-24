@@ -28,7 +28,7 @@ class TextSplitterSettings(BaseSettings):
                            "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
                            "intfloat/multilingual-e5-large",
                            "BAAI/bge-m3",
-                       ] | str = Field(default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+                       ] | str = Field(default="BAAI/bge-m3")
     huggingface_device: Literal["cpu", "cuda"] = Field(default="cpu")
     huggingface_breakpoint_threshold_type: Literal[
         "percentile",
@@ -48,7 +48,7 @@ class TextSplitterSettings(BaseSettings):
                              ] | str = Field(default="cl100k_base")
 
     docling_tokenizer_model: str = Field(
-        default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+        default="BAAI/bge-m3"
     )
     docling_max_tokens: int = Field(default=512, gt=0, le=8192)
     docling_merge_peers: bool = Field(default=True)

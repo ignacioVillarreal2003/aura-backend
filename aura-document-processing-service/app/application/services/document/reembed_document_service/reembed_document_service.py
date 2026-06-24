@@ -68,39 +68,56 @@ class ReembedDocumentService(ReembedDocumentServiceInterface):
                     database_session=session,
                 )
 
-            stale = [
+            raw_stale = [
                 fragment for fragment in fragments
                 if fragment.embedding_identity != target_identity
             ]
-            if not stale:
+            # The contextualized representation uses the same active embedder, so it
+            # is refreshed against the same target identity when present and stale.
+            contextual_stale = [
+                fragment for fragment in fragments
+                if fragment.contextualized_content
+                and fragment.contextualized_embedding_identity != target_identity
+            ]
+            if not raw_stale and not contextual_stale:
                 logger.info(
                     "No fragments require re-embedding; document is already on the active embedding identity.",
                     extra={"document_id": document_id, "model": target_model, "fragment_count": len(fragments)},
                 )
                 return 0
 
-            embeddings = await self._embed_contents([fragment.content for fragment in stale])
+            raw_embeddings = (
+                await self._embed_contents([fragment.content for fragment in raw_stale])
+                if raw_stale else []
+            )
+            contextual_embeddings = (
+                await self._embed_contents([fragment.contextualized_content for fragment in contextual_stale])
+                if contextual_stale else []
+            )
 
             await self._persist_reembeddings(
-                document_id=document_id,
                 user_id=int(user.id),
-                fragments=stale,
-                embeddings=embeddings,
+                raw_fragments=raw_stale,
+                raw_embeddings=raw_embeddings,
+                contextual_fragments=contextual_stale,
+                contextual_embeddings=contextual_embeddings,
                 target_model=target_model,
                 target_dim=target_dim,
                 target_identity=target_identity,
             )
 
+            reembedded = len(raw_stale) + len(contextual_stale)
             logger.info(
                 "Document re-embedding completed.",
                 extra={
                     "document_id": document_id,
                     "model": target_model,
-                    "reembedded_count": len(stale),
+                    "raw_reembedded_count": len(raw_stale),
+                    "contextual_reembedded_count": len(contextual_stale),
                     "total_fragments": len(fragments),
                 },
             )
-            return len(stale)
+            return reembedded
 
         except ReembedDocumentServiceException:
             raise
@@ -125,24 +142,34 @@ class ReembedDocumentService(ReembedDocumentServiceInterface):
     async def _persist_reembeddings(
             self,
             *,
-            document_id: int,
             user_id: int,
-            fragments: list[Fragment],
-            embeddings: list[list[float]],
+            raw_fragments: list[Fragment],
+            raw_embeddings: list[list[float]],
+            contextual_fragments: list[Fragment],
+            contextual_embeddings: list[list[float]],
             target_model: str,
             target_dim: int,
             target_identity: str,
     ) -> None:
-        fragment_ids = [int(fragment.id) for fragment in fragments]
+        raw_ids = [int(fragment.id) for fragment in raw_fragments]
+        contextual_ids = [int(fragment.id) for fragment in contextual_fragments]
 
         async def _operation(session: AsyncSession) -> None:
-            for fragment_id, embedding in zip(fragment_ids, embeddings, strict=True):
+            for fragment_id, embedding in zip(raw_ids, raw_embeddings, strict=True):
                 await self._fragment_repository.update_fragment_embedding(
                     fragment_id=fragment_id,
                     vector=embedding,
                     embedding_model=target_model,
                     embedding_dim=target_dim,
                     embedding_identity=target_identity,
+                    user_id=user_id,
+                    database_session=session,
+                )
+            for fragment_id, embedding in zip(contextual_ids, contextual_embeddings, strict=True):
+                await self._fragment_repository.update_fragment_contextualized_embedding(
+                    fragment_id=fragment_id,
+                    contextualized_vector=embedding,
+                    contextualized_embedding_identity=target_identity,
                     user_id=user_id,
                     database_session=session,
                 )

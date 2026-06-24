@@ -1,7 +1,7 @@
 from app.application.exceptions.app_exception import AppException
 
 
-class FragmentEnrichServiceException(AppException):
+class FragmentContextualizeServiceException(AppException):
     def __init__(
             self,
             message: str,

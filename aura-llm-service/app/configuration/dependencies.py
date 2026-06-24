@@ -14,7 +14,9 @@ from app.application.services.user_interactions.document_question_service.docume
 from app.application.services.processing.document_classify_service.document_classify_service import (
     DocumentClassifyService,
 )
-from app.application.services.processing.fragment_enrich_service.fragment_enrich_service import FragmentEnrichService
+from app.application.services.processing.fragment_contextualize_service.fragment_contextualize_service import (
+    FragmentContextualizeService,
+)
 from app.application.services.processing.graph_extraction_service.graph_extraction_service import GraphExtractionService
 from app.application.services.processing.graph_query_translation_service.graph_query_translation_service import (
     GraphQueryTranslationService,
@@ -109,7 +111,9 @@ async def startup_dependencies(app: FastAPI) -> None:
         registry.register("general_chat_service", GeneralChatService(**streaming_service_kwargs))
 
         registry.register("document_classify_service", DocumentClassifyService(**processing_service_kwargs))
-        registry.register("fragment_enrich_service", FragmentEnrichService(**processing_service_kwargs))
+        registry.register(
+            "fragment_contextualize_service", FragmentContextualizeService(**processing_service_kwargs)
+        )
         registry.register("graph_extraction_service", GraphExtractionService(**processing_service_kwargs))
         registry.register(
             "graph_query_translation_service", GraphQueryTranslationService(**processing_service_kwargs)

@@ -34,8 +34,8 @@ def openapi_tags_metadata() -> list[dict[str, str]]:
             "description": "Clasificación de documentos.",
         },
         {
-            "name": "fragment-enrich",
-            "description": "Enriquecimiento de fragmentos.",
+            "name": "fragment-contextualize",
+            "description": "Contextualización de fragmentos (Contextual Retrieval).",
         },
         {
             "name": "graph-extraction",

@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import BaseModel, Field, field_validator
 
 from app.infrastructure.http.document_context_provider.dtos.fragment_response import FragmentResponse
@@ -6,9 +8,28 @@ _MAX_FRAGMENTS_IN_LIST = 1_000
 _MAX_TOTAL_FRAGMENTS_LIST_CHARS = 300_000
 
 
+class FragmentSectionGroup(BaseModel):
+    primary: FragmentResponse
+    section_fragments: list[FragmentResponse] = Field(
+        default_factory=list,
+        max_length=_MAX_FRAGMENTS_IN_LIST,
+    )
+
+    model_config = {
+        "from_attributes": True,
+        "frozen": True,
+        "extra": "ignore",
+    }
+
+
 class FragmentListResponse(BaseModel):
     fragments: list[FragmentResponse] = Field(
         default_factory=list,
+        max_length=_MAX_FRAGMENTS_IN_LIST,
+    )
+
+    groups: Optional[list[FragmentSectionGroup]] = Field(
+        default=None,
         max_length=_MAX_FRAGMENTS_IN_LIST,
     )
 

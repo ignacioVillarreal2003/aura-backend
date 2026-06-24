@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.dtos.document.document_search.document_similarity_hit import DocumentSimilarityHit
@@ -34,6 +34,7 @@ class FragmentRepositoryInterface(ABC):
             k: int = 3,
             threshold: float = 0.3,
             document_ids: list[int] | None = None,
+            representation: Literal["raw", "contextual"] = "raw",
     ) -> list[Fragment]:
         pass
 
@@ -79,6 +80,16 @@ class FragmentRepositoryInterface(ABC):
         pass
 
     @abstractmethod
+    async def get_section_fragments(
+            self,
+            fragments: list[Fragment],
+            max_per_section: int,
+            database_session: AsyncSession,
+            exclude_ids: set[int],
+    ) -> list[Fragment]:
+        pass
+
+    @abstractmethod
     async def get_most_relevant_fragments_bm25(
             self,
             *,
@@ -88,6 +99,7 @@ class FragmentRepositoryInterface(ABC):
             min_score: float = 0.0,
             query_max_chars: int = 512,
             document_ids: list[int] | None = None,
+            representation: Literal["raw", "contextual"] = "raw",
     ) -> list[Fragment]:
         pass
 
@@ -152,6 +164,43 @@ class FragmentRepositoryInterface(ABC):
             embedding_model: str,
             embedding_dim: int,
             embedding_identity: str,
+            user_id: int,
+            database_session: AsyncSession,
+    ) -> None:
+        pass
+
+    @abstractmethod
+    async def update_fragment_contextualization(
+            self,
+            *,
+            fragment_id: int,
+            contextualized_content: str,
+            contextualized_vector: list[float],
+            contextualized_embedding_identity: str,
+            status: str,
+            user_id: int,
+            database_session: AsyncSession,
+    ) -> None:
+        pass
+
+    @abstractmethod
+    async def update_fragment_contextualized_embedding(
+            self,
+            *,
+            fragment_id: int,
+            contextualized_vector: list[float],
+            contextualized_embedding_identity: str,
+            user_id: int,
+            database_session: AsyncSession,
+    ) -> None:
+        pass
+
+    @abstractmethod
+    async def update_fragment_contextualization_status(
+            self,
+            *,
+            fragment_id: int,
+            status: str,
             user_id: int,
             database_session: AsyncSession,
     ) -> None:

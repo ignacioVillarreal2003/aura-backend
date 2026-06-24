@@ -1,7 +1,7 @@
 import logging
 import re
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Literal, Optional
 from sqlalchemy import and_, or_, select, text, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -74,6 +74,9 @@ class FragmentRepository(FragmentRepositoryInterface):
                         Fragment.id,
                         Fragment.document_id,
                         Fragment.content,
+                        Fragment.contextualized_content,
+                        Fragment.contextualized_embedding_identity,
+                        Fragment.contextualization_status,
                         Fragment.fragment_index,
                     )
                 )
@@ -111,6 +114,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             k: int = 3,
             threshold: float = 0.3,
             document_ids: list[int] | None = None,
+            representation: Literal["raw", "contextual"] = "raw",
     ) -> list[Fragment]:
         if not query_vector:
             raise DatabaseException("The search vector cannot be empty.")
@@ -123,12 +127,24 @@ class FragmentRepository(FragmentRepositoryInterface):
         if k < 1:
             raise DatabaseException("The result count k must be at least 1.")
 
+        # Fixed column names per representation (no user input) — the contextual
+        # lane targets the document-aware vector and skips fragments that lack one.
+        if representation == "contextual":
+            vector_col = "contextualized_vector"
+            identity_col = "contextualized_embedding_identity"
+            extra_filter = "AND contextualized_vector IS NOT NULL"
+        else:
+            vector_col = "vector"
+            identity_col = "embedding_identity"
+            extra_filter = ""
+
         try:
             logger.debug(
                 "Executing vector similarity search.",
                 extra={
                     "k": k,
                     "threshold": threshold,
+                    "representation": representation,
                     "doc_filter": len(document_ids) if document_ids else "none",
                 }
             )
@@ -142,12 +158,10 @@ class FragmentRepository(FragmentRepositoryInterface):
                 SELECT id,
                        document_id,
                        content,
+                       contextualized_content,
                        embedding_model,
                        embedding_dim,
                        fragment_index,
-                       summary,
-                       entities,
-                       topics,
                        page_number,
                        section_path,
                        heading,
@@ -160,13 +174,14 @@ class FragmentRepository(FragmentRepositoryInterface):
                        updated_at,
                        deleted_by,
                        deleted_at,
-                       1 - (vector <=> :query_vector) AS cosine_similarity
+                       1 - ({vector_col} <=> :query_vector) AS cosine_similarity
                 FROM fragment
                 WHERE deleted_at IS NULL
-                  AND embedding_identity = :embedding_identity
-                  AND 1 - (vector <=> :query_vector) >= :threshold
+                  AND {identity_col} = :embedding_identity
+                  AND 1 - ({vector_col} <=> :query_vector) >= :threshold
+                  {extra_filter}
                   {doc_id_clause}
-                ORDER BY vector <=> :query_vector
+                ORDER BY {vector_col} <=> :query_vector
                 LIMIT :k
                 """
             )
@@ -188,12 +203,10 @@ class FragmentRepository(FragmentRepositoryInterface):
                     id=row.id,
                     document_id=row.document_id,
                     content=row.content,
+                    contextualized_content=row.contextualized_content,
                     embedding_model=row.embedding_model,
                     embedding_dim=row.embedding_dim,
                     fragment_index=row.fragment_index,
-                    summary=row.summary,
-                    entities=row.entities,
-                    topics=row.topics,
                     page_number=row.page_number,
                     section_path=row.section_path,
                     heading=row.heading,
@@ -480,6 +493,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             min_score: float = 0.0,
             query_max_chars: int = 512,
             document_ids: list[int] | None = None,
+            representation: Literal["raw", "contextual"] = "raw",
     ) -> list[Fragment]:
         sanitized = _sanitize_bm25_search_input(query, query_max_chars)
         if not sanitized:
@@ -492,6 +506,11 @@ class FragmentRepository(FragmentRepositoryInterface):
         if k < 1:
             raise DatabaseException("The BM25 result count k must be at least 1.")
 
+        # Fixed field name per representation (no user input) — the contextual lane
+        # searches the document-aware text; NULLs (non-contextualized fragments)
+        # simply do not match, so they fall back to the raw lane.
+        search_field = "contextualized_content" if representation == "contextual" else "content"
+
         try:
             doc_id_clause = _DOC_ID_FILTER_CLAUSE if document_ids else ""
 
@@ -500,12 +519,10 @@ class FragmentRepository(FragmentRepositoryInterface):
                 SELECT id,
                        document_id,
                        content,
+                       contextualized_content,
                        embedding_model,
                        embedding_dim,
                        fragment_index,
-                       summary,
-                       entities,
-                       topics,
                        page_number,
                        section_path,
                        heading,
@@ -520,7 +537,7 @@ class FragmentRepository(FragmentRepositoryInterface):
                        deleted_at
                 FROM fragment
                 WHERE deleted_at IS NULL
-                  AND content @@@ :search_query
+                  AND {search_field} @@@ :search_query
                   {doc_id_clause}
                   AND paradedb.score(id) >= :min_score
                 ORDER BY paradedb.score(id) DESC
@@ -543,12 +560,10 @@ class FragmentRepository(FragmentRepositoryInterface):
                     id=row.id,
                     document_id=row.document_id,
                     content=row.content,
+                    contextualized_content=row.contextualized_content,
                     embedding_model=row.embedding_model,
                     embedding_dim=row.embedding_dim,
                     fragment_index=row.fragment_index,
-                    summary=row.summary,
-                    entities=row.entities,
-                    topics=row.topics,
                     page_number=row.page_number,
                     section_path=row.section_path,
                     heading=row.heading,
@@ -595,7 +610,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             for chunk in chunked_ids(document_ids):
                 result = await database_session.execute(
                     select(Fragment)
-                    .options(defer(Fragment.vector))
+                    .options(defer(Fragment.vector), defer(Fragment.contextualized_vector))
                     .where(
                         Fragment.document_id.in_(chunk),
                         Fragment.deleted_at.is_(None)
@@ -656,7 +671,7 @@ class FragmentRepository(FragmentRepositoryInterface):
 
             stmt = (
                 select(Fragment)
-                .options(defer(Fragment.vector))
+                .options(defer(Fragment.vector), defer(Fragment.contextualized_vector))
                 .where(*where_clauses)
                 .order_by(Fragment.document_id, Fragment.fragment_index)
                 .limit(MAX_FRAGMENTS_IN_LIST)
@@ -674,6 +689,64 @@ class FragmentRepository(FragmentRepositoryInterface):
         except SQLAlchemyError as e:
             logger.exception("Database error while fetching adjacent fragments.")
             raise DatabaseException("Failed to fetch adjacent fragments.") from e
+
+    async def get_section_fragments(
+            self,
+            fragments: list[Fragment],
+            max_per_section: int,
+            database_session: AsyncSession,
+            exclude_ids: set[int],
+    ) -> list[Fragment]:
+        # Only fragments that carry a section_path participate; the rest fall back
+        # to adjacency at the service layer. Each primary contributes a window
+        # centred on its index and bounded to its own section, so a coarse
+        # section_path cannot pull in an unbounded number of fragments.
+        relevant = [f for f in fragments if f.section_path is not None]
+        if not relevant or max_per_section <= 0:
+            return []
+
+        half = max(max_per_section // 2, 1)
+
+        try:
+            conditions = [
+                and_(
+                    Fragment.document_id == f.document_id,
+                    Fragment.section_path == f.section_path,
+                    Fragment.fragment_index.between(
+                        max(0, int(f.fragment_index) - half),
+                        int(f.fragment_index) + half,
+                    ),
+                )
+                for f in relevant
+            ]
+
+            where_clauses = [
+                Fragment.deleted_at.is_(None),
+                or_(*conditions),
+            ]
+            if exclude_ids:
+                where_clauses.append(Fragment.id.not_in(exclude_ids))
+
+            stmt = (
+                select(Fragment)
+                .options(defer(Fragment.vector), defer(Fragment.contextualized_vector))
+                .where(*where_clauses)
+                .order_by(Fragment.document_id, Fragment.fragment_index)
+                .limit(MAX_FRAGMENTS_IN_LIST)
+            )
+
+            result = await database_session.execute(stmt)
+            section = list(result.scalars().all())
+
+            logger.debug(
+                "Section fragments retrieved.",
+                extra={"max_per_section": max_per_section, "count": len(section)},
+            )
+            return section
+
+        except SQLAlchemyError as e:
+            logger.exception("Database error while fetching section fragments.")
+            raise DatabaseException("Failed to fetch section fragments.") from e
 
     async def create_fragments(
             self,
@@ -854,8 +927,10 @@ class FragmentRepository(FragmentRepositoryInterface):
                     load_only(
                         Fragment.id,
                         Fragment.content,
+                        Fragment.contextualized_content,
                         Fragment.embedding_model,
                         Fragment.embedding_identity,
+                        Fragment.contextualized_embedding_identity,
                         Fragment.fragment_index,
                     )
                 )
@@ -909,3 +984,101 @@ class FragmentRepository(FragmentRepositoryInterface):
                 extra={"fragment_id": fragment_id},
             )
             raise DatabaseException("Failed to update the fragment embedding.") from e
+
+    async def update_fragment_contextualized_embedding(
+            self,
+            *,
+            fragment_id: int,
+            contextualized_vector: list[float],
+            contextualized_embedding_identity: str,
+            user_id: int,
+            database_session: AsyncSession,
+    ) -> None:
+        try:
+            now = datetime.now(timezone.utc)
+            await database_session.execute(
+                update(Fragment)
+                .where(
+                    Fragment.id == fragment_id,
+                    Fragment.deleted_at.is_(None),
+                )
+                .values(
+                    contextualized_vector=contextualized_vector,
+                    contextualized_embedding_identity=contextualized_embedding_identity,
+                    updated_by=user_id,
+                    updated_at=now,
+                )
+            )
+            await database_session.flush()
+        except SQLAlchemyError as e:
+            logger.exception(
+                "Failed to update the fragment contextualized embedding.",
+                extra={"fragment_id": fragment_id},
+            )
+            raise DatabaseException("Failed to update the fragment contextualized embedding.") from e
+
+    async def update_fragment_contextualization(
+            self,
+            *,
+            fragment_id: int,
+            contextualized_content: str,
+            contextualized_vector: list[float],
+            contextualized_embedding_identity: str,
+            status: str,
+            user_id: int,
+            database_session: AsyncSession,
+    ) -> None:
+        try:
+            now = datetime.now(timezone.utc)
+            await database_session.execute(
+                update(Fragment)
+                .where(
+                    Fragment.id == fragment_id,
+                    Fragment.deleted_at.is_(None),
+                )
+                .values(
+                    contextualized_content=contextualized_content,
+                    contextualized_vector=contextualized_vector,
+                    contextualized_embedding_identity=contextualized_embedding_identity,
+                    contextualization_status=status,
+                    updated_by=user_id,
+                    updated_at=now,
+                )
+            )
+            await database_session.flush()
+        except SQLAlchemyError as e:
+            logger.exception(
+                "Failed to update the fragment contextualization.",
+                extra={"fragment_id": fragment_id},
+            )
+            raise DatabaseException("Failed to update the fragment contextualization.") from e
+
+    async def update_fragment_contextualization_status(
+            self,
+            *,
+            fragment_id: int,
+            status: str,
+            user_id: int,
+            database_session: AsyncSession,
+    ) -> None:
+        try:
+            now = datetime.now(timezone.utc)
+            await database_session.execute(
+                update(Fragment)
+                .where(
+                    Fragment.id == fragment_id,
+                    Fragment.deleted_at.is_(None),
+                )
+                .values(
+                    contextualization_status=status,
+                    updated_by=user_id,
+                    updated_at=now,
+                )
+            )
+            await database_session.flush()
+        except SQLAlchemyError as e:
+            logger.exception(
+                "Failed to update the fragment contextualization status.",
+                extra={"fragment_id": fragment_id},
+            )
+            raise DatabaseException("Failed to update the fragment contextualization status.") from e

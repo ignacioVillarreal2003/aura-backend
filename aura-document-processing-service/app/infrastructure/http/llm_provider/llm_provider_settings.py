@@ -5,8 +5,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.domain.field_limits import (
     MAX_LLM_CLASSIFY_CONTENT_CHARS,
+    MAX_LLM_CONTEXTUALIZE_CONTENT_CHARS,
     MAX_LLM_DOCUMENT_NAME_CHARS,
-    MAX_LLM_ENRICH_CONTENT_CHARS,
     MAX_LLM_EXTRACT_CONTENT_CHARS,
 )
 
@@ -21,7 +21,7 @@ class LlmProviderSettings(BaseSettings):
     )
 
     classify_document_url: str = Field(...)
-    enrich_fragment_url: str = Field(...)
+    contextualize_fragment_url: str = Field(...)
     extract_entities_relations_url: Optional[str] = Field(
         default=None,
         description=(
@@ -41,7 +41,7 @@ class LlmProviderSettings(BaseSettings):
 
     timeout_seconds: float = Field(default=120.0, gt=0, le=3600.0)
     classify_timeout_seconds: Optional[float] = Field(default=None, gt=0, le=3600.0)
-    enrich_timeout_seconds: Optional[float] = Field(default=None, gt=0, le=3600.0)
+    contextualize_timeout_seconds: Optional[float] = Field(default=None, gt=0, le=3600.0)
     extract_entities_relations_timeout_seconds: float = Field(
         default=900.0,
         gt=0,
@@ -57,7 +57,7 @@ class LlmProviderSettings(BaseSettings):
 
     max_document_name_length: int = Field(default=MAX_LLM_DOCUMENT_NAME_CHARS, ge=1, le=MAX_LLM_DOCUMENT_NAME_CHARS)
     max_classify_content_length: int = Field(default=MAX_LLM_CLASSIFY_CONTENT_CHARS, ge=1024, le=MAX_LLM_CLASSIFY_CONTENT_CHARS)
-    max_enrich_content_length: int = Field(default=MAX_LLM_ENRICH_CONTENT_CHARS, ge=256, le=MAX_LLM_ENRICH_CONTENT_CHARS)
+    max_contextualize_content_length: int = Field(default=MAX_LLM_CONTEXTUALIZE_CONTENT_CHARS, ge=256, le=MAX_LLM_CONTEXTUALIZE_CONTENT_CHARS)
     max_extract_content_length: int = Field(default=MAX_LLM_EXTRACT_CONTENT_CHARS, ge=256, le=MAX_LLM_EXTRACT_CONTENT_CHARS)
     max_translate_query_question_length: int = Field(default=4_000, ge=64, le=64_000)
 
@@ -68,7 +68,7 @@ class LlmProviderSettings(BaseSettings):
 
     @field_validator(
         "classify_document_url",
-        "enrich_fragment_url",
+        "contextualize_fragment_url",
         "extract_entities_relations_url",
         "translate_graph_query_url",
         mode="before",
@@ -91,7 +91,7 @@ class LlmProviderSettings(BaseSettings):
     def validate_urls_have_host_and_allowlist(
             self
     ) -> "LlmProviderSettings":
-        required_urls = ("classify_document_url", "enrich_fragment_url")
+        required_urls = ("classify_document_url", "contextualize_fragment_url")
         optional_urls = ("extract_entities_relations_url", "translate_graph_query_url")
 
         for name in required_urls:
@@ -131,8 +131,8 @@ class LlmProviderSettings(BaseSettings):
     def effective_classify_timeout_seconds(self) -> float:
         return float(self.classify_timeout_seconds or self.timeout_seconds)
 
-    def effective_enrich_timeout_seconds(self) -> float:
-        return float(self.enrich_timeout_seconds or self.timeout_seconds)
+    def effective_contextualize_timeout_seconds(self) -> float:
+        return float(self.contextualize_timeout_seconds or self.timeout_seconds)
 
     def effective_extract_entities_relations_timeout_seconds(self) -> float:
         return self.extract_entities_relations_timeout_seconds

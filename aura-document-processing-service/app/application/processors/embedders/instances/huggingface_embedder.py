@@ -59,6 +59,7 @@ class HuggingFaceEmbedder(BaseEmbedder):
                 normalize_embeddings=self._settings.huggingface_normalize_embeddings,
                 token=self._settings.huggingface_token,
                 max_seq_length=self._settings.huggingface_max_seq_length,
+                torch_dtype=self._settings.huggingface_torch_dtype,
             )
 
             st_model = _get_sentence_transformer(self._model)
@@ -77,6 +78,7 @@ class HuggingFaceEmbedder(BaseEmbedder):
                 extra={
                     "model": self._settings.huggingface_model,
                     "device": self._settings.huggingface_device,
+                    "torch_dtype": self._settings.huggingface_torch_dtype,
                     "normalize": self._settings.huggingface_normalize_embeddings,
                     "dimensions": self._settings.vector_dimension,
                     "max_seq_length": self._max_seq_length,

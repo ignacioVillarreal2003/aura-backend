@@ -3,7 +3,9 @@ from typing import Optional
 
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.llm_provider.dtos.classify_document_response import ClassifyDocumentResponse
-from app.infrastructure.http.llm_provider.dtos.enrich_fragment_response import EnrichFragmentResponse
+from app.infrastructure.http.llm_provider.dtos.contextualize_fragment_response import (
+    ContextualizeFragmentResponse,
+)
 from app.infrastructure.http.llm_provider.dtos.extract_entities_relations_response import (
     ExtractEntitiesRelationsResponse,
 )
@@ -24,11 +26,12 @@ class LlmProviderInterface(ABC):
         pass
 
     @abstractmethod
-    async def enrich_fragment(
+    async def contextualize_fragment(
             self,
+            document_summary: str,
             content: str,
             authenticated_user: AuthenticatedUser,
-    ) -> EnrichFragmentResponse:
+    ) -> ContextualizeFragmentResponse:
         pass
 
     @abstractmethod

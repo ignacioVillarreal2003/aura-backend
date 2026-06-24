@@ -27,7 +27,9 @@ get_document_question_service = state_dependency("document_question_service", "D
 get_document_summary_service = state_dependency("document_summary_service", "DocumentSummaryService")
 get_document_action_service = state_dependency("document_action_service", "DocumentActionService")
 get_document_classify_service = state_dependency("document_classify_service", "DocumentClassifyService")
-get_fragment_enrich_service = state_dependency("fragment_enrich_service", "FragmentEnrichService")
+get_fragment_contextualize_service = state_dependency(
+    "fragment_contextualize_service", "FragmentContextualizeService"
+)
 get_graph_extraction_service = state_dependency("graph_extraction_service", "GraphExtractionService")
 get_graph_query_translation_service = state_dependency(
     "graph_query_translation_service", "GraphQueryTranslationService"

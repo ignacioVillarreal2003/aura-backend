@@ -3,6 +3,9 @@ from typing import Optional
 
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.fragment.fragment_response import FragmentResponse
+from app.infrastructure.http.document_context_provider.dtos.fragment_list_response import (
+    FragmentSectionGroup,
+)
 from app.domain.dtos.message import Message
 
 
@@ -21,6 +24,12 @@ class GenerationState:
     keyword_question: Optional[str] = None
 
     fragments: list[FragmentResponse] = field(default_factory=list)
+
+    # Section expansion ("section" mode): each primary fragment with its
+    # surrounding section as secondary context. ``section_summary`` holds the
+    # condensed secondary context when it exceeds the configured threshold.
+    section_groups: Optional[list[FragmentSectionGroup]] = None
+    section_summary: Optional[str] = None
 
     reduced_context: Optional[str] = None
     history_summary: Optional[str] = None

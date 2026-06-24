@@ -20,8 +20,12 @@ from app.infrastructure.http.http_client.exceptions.http_client_exceptions impor
 from app.infrastructure.http.http_client.interfaces.http_client_interface import HttpClientInterface
 from app.infrastructure.http.llm_provider.dtos.classify_document_request import ClassifyDocumentRequest
 from app.infrastructure.http.llm_provider.dtos.classify_document_response import ClassifyDocumentResponse
-from app.infrastructure.http.llm_provider.dtos.enrich_fragment_request import EnrichFragmentRequest
-from app.infrastructure.http.llm_provider.dtos.enrich_fragment_response import EnrichFragmentResponse
+from app.infrastructure.http.llm_provider.dtos.contextualize_fragment_request import (
+    ContextualizeFragmentRequest,
+)
+from app.infrastructure.http.llm_provider.dtos.contextualize_fragment_response import (
+    ContextualizeFragmentResponse,
+)
 from app.infrastructure.http.llm_provider.dtos.extract_entities_relations_request import (
     ExtractEntitiesRelationsRequest,
 )
@@ -97,22 +101,22 @@ class LlmProvider(LlmProviderInterface):
                 status_code=400,
             )
 
-    def _raise_if_enrich_payload_too_large(
+    def _raise_if_contextualize_payload_too_large(
             self,
             content: str,
             user_id: int
     ) -> None:
-        if len(content) > self._settings.max_enrich_content_length:
+        if len(content) > self._settings.max_contextualize_content_length:
             logger.warning(
-                "Fragment enrichment rejected because the content exceeds the configured limit.",
+                "Fragment contextualization rejected because the content exceeds the configured limit.",
                 extra={
                     "user_id": user_id,
                     "content_length": len(content),
-                    "max_enrich_content_length": self._settings.max_enrich_content_length,
+                    "max_contextualize_content_length": self._settings.max_contextualize_content_length,
                 },
             )
             raise LlmProviderException(
-                "The fragment content exceeds the maximum length allowed for enrichment.",
+                "The fragment content exceeds the maximum length allowed for contextualization.",
                 status_code=400,
             )
 
@@ -366,54 +370,58 @@ class LlmProvider(LlmProviderInterface):
 
         return classify_document_response
 
-    async def enrich_fragment(
+    async def contextualize_fragment(
             self,
+            document_summary: str,
             content: str,
             authenticated_user: AuthenticatedUser,
-    ) -> EnrichFragmentResponse:
+    ) -> ContextualizeFragmentResponse:
         logger.info(
-            "Sending a fragment to the LLM service for enrichment.",
+            "Sending a fragment to the LLM service for contextualization.",
             extra={"user_id": authenticated_user.id},
         )
 
-        self._raise_if_enrich_payload_too_large(
+        self._raise_if_contextualize_payload_too_large(
             content=content,
             user_id=authenticated_user.id,
         )
 
         try:
-            enrich_fragment_request = EnrichFragmentRequest(content=content)
+            contextualize_fragment_request = ContextualizeFragmentRequest(
+                document_summary=document_summary,
+                content=content,
+            )
         except ValidationError as e:
             logger.warning(
-                "Fragment enrichment request failed local validation.",
+                "Fragment contextualization request failed local validation.",
                 extra={
                     "user_id": authenticated_user.id,
                     "validation_error_count": len(e.errors()),
                 },
             )
             raise LlmProviderException(
-                "The enrichment request is not valid.",
+                "The contextualization request is not valid.",
                 status_code=400,
             ) from e
 
-        enrich_fragment_response = await self._post_llm_json(
-            url=self._settings.enrich_fragment_url,
-            json_body=enrich_fragment_request.model_dump(mode="json"),
-            timeout=self._settings.effective_enrich_timeout_seconds(),
-            response_model=EnrichFragmentResponse,
+        contextualize_fragment_response = await self._post_llm_json(
+            url=self._settings.contextualize_fragment_url,
+            json_body=contextualize_fragment_request.model_dump(mode="json"),
+            timeout=self._settings.effective_contextualize_timeout_seconds(),
+            response_model=ContextualizeFragmentResponse,
             authenticated_user=authenticated_user,
-            operation="enrich_fragment",
+            operation="contextualize_fragment",
         )
 
         logger.info(
-            "The LLM service enriched the fragment successfully.",
+            "The LLM service contextualized the fragment successfully.",
             extra={
                 "user_id": authenticated_user.id,
-                "topics_count": len(enrich_fragment_response.topics),
+                "context_length": len(contextualize_fragment_response.context),
             },
         )
 
-        return enrich_fragment_response
+        return contextualize_fragment_response
 
     async def extract_entities_relations(
             self,

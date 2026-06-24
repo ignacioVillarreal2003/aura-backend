@@ -14,7 +14,7 @@ _EXCLUDED_PATH_PREFIXES = (
     "/api/openapi.json",
     "/metrics",
     "/api/v1/document-classify",
-    "/api/v1/fragment-enrich",
+    "/api/v1/fragment-contextualize",
     "/api/v1/graph-extraction",
     "/api/v1/graph-query-translation",
 )

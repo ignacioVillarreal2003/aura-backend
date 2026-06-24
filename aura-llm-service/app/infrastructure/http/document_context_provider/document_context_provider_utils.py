@@ -41,4 +41,6 @@ def parse_and_apply_limits(
         fragments=response.fragments,
         max_fragments=max_fragments,
     )
-    return FragmentListResponse(fragments=limited)
+    # ``groups`` (section mode) carries the secondary context per primary; the
+    # count limit applies to the flat primaries only, so groups pass through intact.
+    return FragmentListResponse(fragments=limited, groups=response.groups)

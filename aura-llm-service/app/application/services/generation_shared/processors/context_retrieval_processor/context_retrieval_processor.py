@@ -80,6 +80,9 @@ class ContextRetrievalProcessor:
             fragments = result.fragments[:self._settings.max_fragments]
             fragments = self._apply_char_budget(fragments)
             state.fragments = fragments
+            # In "section" mode the secondary context travels in groups; the flat
+            # ``fragments`` above are the primaries. Other modes leave this None.
+            state.section_groups = getattr(result, "groups", None) or None
 
             retrieval_fragments_returned.observe(len(fragments))
             retrieval_total.labels(outcome="success" if fragments else "empty").inc()
@@ -102,7 +105,7 @@ class ContextRetrievalProcessor:
         selected: list[FragmentResponse] = []
         used = 0
         for fragment in fragments:
-            length = len(fragment.content or "")
+            length = len(fragment.effective_content or "")
             if selected and used + length > budget:
                 break
             selected.append(fragment)
@@ -135,6 +138,7 @@ class ContextRetrievalProcessor:
             bm25_queries=bm25_queries,
             rerank=rerank,
             adjacent_chunks=self._settings.adjacent_chunks,
+            context_expansion=self._settings.context_expansion,
         )
 
     @staticmethod

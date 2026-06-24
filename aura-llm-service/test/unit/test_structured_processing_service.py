@@ -13,7 +13,9 @@ from app.application.services.processing.document_classify_service.document_clas
 from app.application.services.processing.document_classify_service.exceptions.document_classify_service_exceptions import (
     DocumentClassifyServiceException,
 )
-from app.application.services.processing.fragment_enrich_service.fragment_enrich_service import FragmentEnrichService
+from app.application.services.processing.fragment_contextualize_service.fragment_contextualize_service import (
+    FragmentContextualizeService,
+)
 from app.application.services.processing.graph_query_translation_service.graph_query_translation_service import (
     GraphQueryTranslationService,
 )
@@ -125,7 +127,7 @@ class TestErrorMapping:
 
 class TestTruncation:
     def test_truncate_helper(self):
-        svc = FragmentEnrichService(_Facade(), _Invoker(["{}"]))
+        svc = FragmentContextualizeService(_Facade(), _Invoker(["{}"]))
         assert svc._truncate("x" * 100, 10, 1, "content") == "x" * 10
         assert svc._truncate("short", 10, 1, "content") == "short"
 

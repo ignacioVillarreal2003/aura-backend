@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field, model_validator, field_validator
 
 from app.domain.field_limits import (
@@ -65,6 +67,12 @@ class QuestionContextFragmentsRequest(BaseModel):
     rerank: _RerankConfig = Field(default_factory=_RerankConfig)
 
     adjacent_chunks: int = Field(default=1, ge=0, le=3)
+
+    # Context expansion mode applied after rerank:
+    #   "none"     -> return only the matched (primary) fragments
+    #   "adjacent" -> append ±adjacent_chunks neighbours (flat list; default, unchanged)
+    #   "section"  -> group each primary with its surrounding section as secondary context
+    context_expansion: Literal["none", "adjacent", "section"] = "adjacent"
 
     @model_validator(mode="after")
     def _validate_queries(self) -> "QuestionContextFragmentsRequest":

@@ -129,8 +129,8 @@ def mock_document_action_service(app):
 
 
 @pytest.fixture
-def mock_fragment_enrich_service(app):
-    yield from _mock_service(app, "fragment_enrich_service")
+def mock_fragment_contextualize_service(app):
+    yield from _mock_service(app, "fragment_contextualize_service")
 
 
 @pytest.fixture

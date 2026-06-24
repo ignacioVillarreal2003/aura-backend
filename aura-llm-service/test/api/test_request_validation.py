@@ -10,7 +10,9 @@ from app.domain.dtos.user_interactions.document_action.document_action_request i
 from app.domain.dtos.processing.document_classify.classify_document_request import ClassifyDocumentRequest
 from app.domain.dtos.user_interactions.document_question.document_question_request import DocumentQuestionRequest
 from app.domain.dtos.user_interactions.document_summary.document_summary_request import DocumentSummaryRequest
-from app.domain.dtos.processing.fragment_enrich.enrich_fragment_request import EnrichFragmentRequest
+from app.domain.dtos.processing.fragment_contextualize.contextualize_fragment_request import (
+    ContextualizeFragmentRequest,
+)
 from app.domain.dtos.processing.graph_extraction.extract_entities_relations_request import ExtractEntitiesRelationsRequest
 from app.domain.dtos.processing.graph_query_translation.translate_graph_query_request import (
     GraphOntology,
@@ -182,28 +184,37 @@ class TestDocumentActionRequest:
         assert req.action is None
 
 
-# ── EnrichFragmentRequest ────────────────────────────────────────────────────
+# ── ContextualizeFragmentRequest ─────────────────────────────────────────────
 
-class TestEnrichFragmentRequest:
+class TestContextualizeFragmentRequest:
     def test_valid_request(self):
-        req = EnrichFragmentRequest(content="Fragmento de texto del documento.")
+        req = ContextualizeFragmentRequest(
+            document_summary="Resumen del documento.",
+            content="Fragmento de texto del documento.",
+        )
         assert req.content == "Fragmento de texto del documento."
+        assert req.document_summary == "Resumen del documento."
 
     def test_blank_content_raises(self):
         with pytest.raises(ValidationError):
-            EnrichFragmentRequest(content="   ")
+            ContextualizeFragmentRequest(document_summary="Resumen.", content="   ")
 
     def test_empty_content_raises(self):
         with pytest.raises(ValidationError):
-            EnrichFragmentRequest(content="")
+            ContextualizeFragmentRequest(document_summary="Resumen.", content="")
+
+    def test_blank_document_summary_raises(self):
+        with pytest.raises(ValidationError):
+            ContextualizeFragmentRequest(document_summary="   ", content="Texto.")
 
     def test_strips_whitespace(self):
-        req = EnrichFragmentRequest(content="  Texto.  ")
+        req = ContextualizeFragmentRequest(document_summary="  Resumen.  ", content="  Texto.  ")
         assert req.content == "Texto."
+        assert req.document_summary == "Resumen."
 
     def test_content_exceeding_max_raises(self):
         with pytest.raises(ValidationError):
-            EnrichFragmentRequest(content="x" * 50_001)
+            ContextualizeFragmentRequest(document_summary="Resumen.", content="x" * 50_001)
 
 
 # ── ExtractEntitiesRelationsRequest ─────────────────────────────────────────

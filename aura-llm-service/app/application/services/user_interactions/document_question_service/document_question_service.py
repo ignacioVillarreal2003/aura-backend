@@ -87,6 +87,7 @@ class DocumentQuestionService(
             context_retrieval_settings=settings.to_retrieval_settings(),
             attached_documents_settings=settings.to_attached_settings(),
             context_reduction_settings=settings.to_reduction_settings(),
+            section_context_settings=settings.to_section_settings(),
         )
 
     def _system_prompt(self, request: DocumentQuestionRequest) -> str:

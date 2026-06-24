@@ -62,11 +62,15 @@ class EmbedderSettings(BaseSettings):
                            "intfloat/multilingual-e5-large",
                            "sentence-transformers/distiluse-base-multilingual-cased-v2",
                            "BAAI/bge-m3",
-                       ] | str = Field(default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+                       ] | str = Field(default="BAAI/bge-m3")
     huggingface_token: Optional[str] = Field(default=None)
     huggingface_device: Literal["cpu", "cuda"] = "cpu"
     huggingface_normalize_embeddings: bool = Field(default=True)
     huggingface_max_seq_length: Optional[int] = Field(default=None, gt=0, le=8192)
+    # Compute precision for the model weights. "float16"/"bfloat16" roughly halve
+    # VRAM and speed up inference on CUDA with negligible quality loss; only applied
+    # on CUDA (ignored on CPU). Default keeps full precision (no behaviour change).
+    huggingface_torch_dtype: Literal["float32", "float16", "bfloat16"] = Field(default="float32")
     huggingface_query_instruction: str = Field(default="")
     huggingface_embed_instruction: str = Field(default="")
 
