@@ -17,6 +17,7 @@ CREATE TABLE auth_user
     last_password_change    TIMESTAMP,
     enabled                 BOOLEAN      NOT NULL DEFAULT TRUE,
     refresh_token           UUID,
+    force_logout_at         TIMESTAMPTZ,
     created_by              BIGINT       NOT NULL,
     created_at              TIMESTAMP    NOT NULL DEFAULT NOW(),
     updated_by              BIGINT,

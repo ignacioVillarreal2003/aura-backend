@@ -1,0 +1,55 @@
+# Datos de prueba para el servidor LDAP de desarrollo.
+# Cargados automaticamente por osixia/openldap en la primera inicializacion.
+#
+# Usuarios de prueba:
+#   john.doe     / Password123!  — SECRET, compartimentos ALPHA + BRAVO
+#   jane.smith   / Password123!  — CONFIDENTIAL, compartimento ALPHA
+#   no.clearance / Password123!  — Sin atributos MAC, sin email (prueba de fallbacks)
+
+# ── Unidad organizativa de usuarios ──────────────────────────────────────────
+
+dn: ou=users,dc=aura,dc=local
+objectClass: organizationalUnit
+ou: users
+
+# ── john.doe — SECRET, compartimentos ALPHA y BRAVO ──────────────────────────
+
+dn: uid=john.doe,ou=users,dc=aura,dc=local
+objectClass: inetOrgPerson
+objectClass: auraUser
+uid: john.doe
+cn: John Doe
+sn: Doe
+displayName: John Doe
+mail: john.doe@aura.local
+userPassword: Password123!
+auraClassificationLevel: SECRET
+auraCompartment: ALPHA
+auraCompartment: BRAVO
+
+# ── jane.smith — CONFIDENTIAL, compartimento ALPHA ────────────────────────────
+
+dn: uid=jane.smith,ou=users,dc=aura,dc=local
+objectClass: inetOrgPerson
+objectClass: auraUser
+uid: jane.smith
+cn: Jane Smith
+sn: Smith
+displayName: Jane Smith
+mail: jane.smith@aura.local
+userPassword: Password123!
+auraClassificationLevel: CONFIDENTIAL
+auraCompartment: ALPHA
+
+# ── no.clearance — Sin atributos MAC, sin email ───────────────────────────────
+# Prueba el fallback de generacion de email (no.clearance@ldap.local)
+# y que el sync MAC se omite sin atributos.
+
+dn: uid=no.clearance,ou=users,dc=aura,dc=local
+objectClass: inetOrgPerson
+objectClass: auraUser
+uid: no.clearance
+cn: No Clearance
+sn: Clearance
+displayName: No Clearance
+userPassword: Password123!

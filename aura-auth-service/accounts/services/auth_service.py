@@ -36,14 +36,23 @@ def _decode_and_fetch_user(token: str):
 	if not user or user.is_deleted or user.status != 'active':
 		return None
 
+	# Verificar force_logout_at: rechazar tokens emitidos antes del forzado
+	if user.force_logout_at:
+		from datetime import datetime, timezone as dt_tz
+		token_issued_at = datetime.fromtimestamp(payload.get('iat', 0), tz=dt_tz.utc)
+		if token_issued_at < user.force_logout_at:
+			return None
+
 	return user
 
 
 def _build_access_token(user: User) -> str:
-	expires_at = timezone.now() + timedelta(minutes=settings.JWT_ACCESS_LIFETIME_MINUTES)
+	now = timezone.now()
+	expires_at = now + timedelta(minutes=settings.JWT_ACCESS_LIFETIME_MINUTES)
 	payload = {
 		'user_id': user.id,
 		'is_super_admin': bool(user.is_superuser),
+		'iat': int(now.timestamp()),
 		'exp': int(expires_at.timestamp()),
 	}
 	return jwt.encode(payload, settings.JWT_SIGNING_KEY, algorithm=settings.JWT_ALGORITHM)
@@ -129,13 +138,15 @@ def authenticate_user(username: str, password: str):
 	if user.lockout_until and user.lockout_until > timezone.now():
 		return None
 
-	# Successful login — reset lockout counters and update last_login
+	# Successful login — reset lockout counters, update last_login, clear force_logout_at
 	user.failed_login_attempts = 0
 	user.lockout_until = None
 	user.account_non_locked = True
 	user.last_login = timezone.now()
+	user.force_logout_at = None
 	user.save(update_fields=[
-		'failed_login_attempts', 'lockout_until', 'account_non_locked', 'last_login', 'updated_at',
+		'failed_login_attempts', 'lockout_until', 'account_non_locked',
+		'last_login', 'force_logout_at', 'updated_at',
 	])
 
 	return user
@@ -186,6 +197,10 @@ def rotate_refresh_token(refresh_token: uuid.UUID | str, request=None) -> dict |
 	refresh.is_revoked = True
 	refresh.updated_by = refresh.user.pk
 	refresh.save(update_fields=['is_revoked', 'updated_by', 'updated_at'])
+
+	# Re-sincronizar atributos MAC desde LDAP (best-effort)
+	_try_ldap_resync(refresh.user)
+
 	new_refresh = _create_refresh_token(refresh.user, request=request)
 	access_token = _build_access_token(refresh.user)
 	return {
@@ -193,6 +208,23 @@ def rotate_refresh_token(refresh_token: uuid.UUID | str, request=None) -> dict |
 		'refresh_token': new_refresh.token,
 		'token_type': 'Bearer',
 	}
+
+
+def _try_ldap_resync(user: User) -> None:
+	"""Re-run LDAP MAC sync on token rotation. Skips silently if not an LDAP user."""
+	try:
+		from accounts.ldap_backend import AuraLDAPBackend
+		backend = AuraLDAPBackend()
+		ldap_user_obj = backend.get_user(user.pk)
+		if ldap_user_obj and hasattr(ldap_user_obj, '_ldap_user'):
+			from accounts.ldap_sync import _sync_mac_attributes
+			_sync_mac_attributes(sender=None, user=user, ldap_user=ldap_user_obj._ldap_user)
+	except Exception as exc:
+		import logging
+		logging.getLogger(__name__).debug(
+			"LDAP re-sync skipped for '%s': %s", user.username, exc
+		)
+
 
 
 def revoke_refresh_token(refresh_token: uuid.UUID | str) -> bool:
