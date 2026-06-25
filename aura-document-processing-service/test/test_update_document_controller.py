@@ -51,20 +51,22 @@ class TestUpdateDocumentSuccess:
         response = client.patch(URL, json={"name": "nuevo-nombre.pdf"}, headers=auth_headers)
         assert response.status_code == 200
 
-    def test_update_response_has_updated_fields(self, client, auth_headers, mock_update_document_service):
+    def test_update_response_has_updated_name(self, client, auth_headers, mock_update_document_service):
         mock_update_document_service.update_document_manage.return_value = _DOC
         body = client.patch(
             URL,
-            json={"name": "nuevo-nombre.pdf", "category": "contratos"},
+            json={"name": "nuevo-nombre.pdf"},
             headers=auth_headers,
         ).json()
         assert body["name"] == "nuevo-nombre.pdf"
-        assert body["category"] == "contratos"
 
-    def test_description_can_be_cleared(self, client, auth_headers, mock_update_document_service):
-        mock_update_document_service.update_document_manage.return_value = _DOC
-        response = client.patch(URL, json={"description": None}, headers=auth_headers)
-        assert response.status_code == 200
+    def test_description_is_not_editable(self, client, auth_headers, mock_update_document_service):
+        response = client.patch(URL, json={"name": "x", "description": "manual"}, headers=auth_headers)
+        assert response.status_code == 422
+
+    def test_category_is_not_editable(self, client, auth_headers, mock_update_document_service):
+        response = client.patch(URL, json={"name": "x", "category": "contratos"}, headers=auth_headers)
+        assert response.status_code == 422
 
     def test_service_unavailable_returns_503(self, client, auth_headers, app):
         original = getattr(app.state, "update_document_service", None)

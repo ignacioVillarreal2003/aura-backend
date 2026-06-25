@@ -1,4 +1,5 @@
 import logging
+import math
 from abc import abstractmethod
 
 from app.application.processors.embedders.exceptions.embedder_exception import (
@@ -8,6 +9,9 @@ from app.application.processors.embedders.exceptions.embedder_exception import (
 from app.application.processors.embedders.interfaces.embedder_interface import EmbedderInterface
 
 logger = logging.getLogger(__name__)
+
+
+_BLANK_PLACEHOLDER = " "
 
 
 class BaseEmbedder(EmbedderInterface):
@@ -24,18 +28,59 @@ class BaseEmbedder(EmbedderInterface):
         if len(text) > self._max_text_length:
             raise EmbedQueryException("The query text exceeds the maximum allowed length.")
 
-    def _validate_texts(
+    def _sanitize_documents(
             self,
             texts: list[str]
-    ) -> None:
+    ) -> list[str]:
         if not texts:
             raise EmbedDocumentsException("The document texts list cannot be empty.")
 
+        sanitized: list[str] = []
+        blank_count = 0
+        truncated_count = 0
         for text in texts:
             if not text or not text.strip():
-                raise EmbedDocumentsException("A document text cannot be empty or blank.")
+                sanitized.append(_BLANK_PLACEHOLDER)
+                blank_count += 1
+                continue
             if len(text) > self._max_text_length:
-                raise EmbedDocumentsException("A document text exceeds the maximum allowed length.")
+                text = text[: self._max_text_length]
+                truncated_count += 1
+            sanitized.append(text)
+
+        if blank_count:
+            logger.warning(
+                "Replaced blank document texts with a placeholder to keep batch alignment.",
+                extra={"blank_count": blank_count, "total": len(texts)},
+            )
+        if truncated_count:
+            logger.warning(
+                "Truncated over-length document texts to the maximum allowed length.",
+                extra={"truncated_count": truncated_count, "max_text_length": self._max_text_length},
+            )
+        return sanitized
+
+    @staticmethod
+    def _is_finite_vector(
+            vector: list[float]
+    ) -> bool:
+        if not vector:
+            return True
+        first = vector[0]
+        last = vector[-1]
+        return not (first != first or last != last
+                    or math.isinf(first) or math.isinf(last))
+
+    @staticmethod
+    def _assert_finite_embeddings(
+            embeddings: list[list[float]]
+    ) -> None:
+        for vector in embeddings:
+            if not BaseEmbedder._is_finite_vector(vector):
+                raise EmbedDocumentsException(
+                    "The embedding model produced a non-finite (NaN/Inf) vector; "
+                    "consider EMBEDDER_HUGGINGFACE_TORCH_DTYPE=bfloat16 or float32."
+                )
 
     def _embed_in_batches(
             self,

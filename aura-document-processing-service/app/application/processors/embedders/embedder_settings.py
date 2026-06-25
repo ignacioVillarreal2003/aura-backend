@@ -23,6 +23,7 @@ class EmbedderSettings(BaseSettings):
 
     max_batch_size: int = Field(default=128, ge=1, le=512)
     max_text_length: int = Field(default=8000, ge=1, le=100_000)
+    max_batch_tokens: int = Field(default=131_072, ge=0, le=4_000_000)
 
     max_retries: int = Field(default=3, ge=0, le=10)
     retry_delay: float = Field(default=1.0, gt=0, le=10.0)
@@ -39,7 +40,8 @@ class EmbedderSettings(BaseSettings):
     huggingface_device: Literal["cpu", "cuda"] = Field(default="cuda")
     huggingface_normalize_embeddings: bool = Field(default=True)
     huggingface_max_seq_length: Optional[int] = Field(default=8192, gt=0, le=8192)
-    huggingface_torch_dtype: Literal["float32", "float16", "bfloat16"] = Field(default="float16")
+
+    huggingface_torch_dtype: Literal["auto", "float32", "float16", "bfloat16"] = Field(default="auto")
     huggingface_query_instruction: str = Field(default="")
     huggingface_embed_instruction: str = Field(default="")
 

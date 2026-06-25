@@ -271,7 +271,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 top_n = question_context_fragments_request.rerank.max_fragments or len(fragments)
                 scored = await self._reranker_factory.reranker.rerank_with_scores(
                     query=rerank_query,
-                    candidates=[f.content for f in fragments],
+                    candidates=[(f.contextualized_content or f.content) for f in fragments],
                     top_n=top_n,
                 )
                 fragments = [fragments[i] for i, _ in scored if 0 <= i < len(fragments)]

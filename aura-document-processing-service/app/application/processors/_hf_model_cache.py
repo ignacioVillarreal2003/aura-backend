@@ -21,12 +21,25 @@ def _resolve_effective_dtype(torch_dtype: Optional[str], device: str) -> Optiona
     if not torch_dtype or torch_dtype == "float32":
         return None
     if device != "cuda":
-        logger.warning(
-            "Ignoring the configured half-precision dtype because the device is not CUDA; "
-            "using full precision.",
-            extra={"torch_dtype": torch_dtype, "device": device},
-        )
+        if torch_dtype != "auto":
+            logger.warning(
+                "Ignoring the configured half-precision dtype because the device is not CUDA; "
+                "using full precision.",
+                extra={"torch_dtype": torch_dtype, "device": device},
+            )
         return None
+    if torch_dtype == "auto":
+        try:
+            import torch
+
+            if torch.cuda.is_bf16_supported():
+                return "bfloat16"
+        except Exception:
+            logger.warning(
+                "Could not probe bfloat16 support; defaulting to float16.",
+                exc_info=True,
+            )
+        return "float16"
     return torch_dtype
 
 

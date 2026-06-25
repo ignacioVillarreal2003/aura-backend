@@ -15,7 +15,7 @@ class DocumentSelector(BaseModel):
         description="Si True, procesa todos los documentos de la base (de a poco). Excluyente con document_ids.",
     )
 
-    model_config = {"extra": "forbid"}
+    model_config = {"frozen": True}
 
     @field_validator("document_ids")
     @classmethod

@@ -23,9 +23,8 @@ grafo de conocimiento. Forma parte del backend **AURA** (monorepo `aura-backend`
 5. [Tests, lint y tipado](#tests-lint-y-tipado)
 6. [Observabilidad](#observabilidad)
 7. [Endpoints operativos](#endpoints-operativos)
-8. [Evaluación de modelos de embedding (plan)](#evaluación-de-modelos-de-embedding-plan)
-9. [Runbook de incidentes](#runbook-de-incidentes)
-10. [Documentación adicional](#documentación-adicional)
+8. [Runbook de incidentes](#runbook-de-incidentes)
+9. [Documentación adicional](#documentación-adicional)
 
 ---
 
@@ -225,107 +224,6 @@ Grafana/Kibana. Se propaga un `request_id` por request para correlación.
 | `GET /api/v1/ready` | readiness (chequea DB, RabbitMQ y MinIO; 200 u 503) |
 | `GET /metrics` | métricas Prometheus |
 | `GET /api/docs`, `/api/redoc`, `/api/openapi.json` | documentación interactiva del API |
-
----
-
-## Evaluación de modelos de embedding (plan)
-
-> **Estado:** plan / no implementado. Esta sección describe cómo construir, **dentro de
-> este microservicio**, un *harness* offline para comparar 3–4 modelos de embedding sobre
-> el mismo corpus y elegir el mejor con números (precision/recall y más), **sin tocar el
-> pipeline productivo ni la tabla `fragment` real**.
-
-### Objetivo
-
-Responder con datos preguntas como: *¿bge-m3 supera a e5-large en nuestro dominio? ¿cuánto
-recall@5 ganamos? ¿a qué costo de latencia/VRAM?*. Es la base para calibrar
-`FRAGMENT_QUERY_SIMILARITY_THRESHOLD`, decidir el modelo activo y justificar el retrieval
-contextual.
-
-### Alcance y aislamiento
-
-- **Offline y batch**: un CLI/job, fuera del path de request. No usa RabbitMQ ni los endpoints.
-- **No toca producción**: la columna `fragment.vector` es `VECTOR(1024)` fija; para poder
-  comparar modelos de **distinta dimensión** (p. ej. MiniLM 384, mpnet 768, e5/bge-m3 1024),
-  el harness **calcula similitud en memoria** (NumPy/coseno o FAISS) sobre un corpus cargado,
-  en vez de escribir en la tabla real. Cero side-effects en datos productivos.
-
-### Modelos candidatos (3–4)
-
-Reutilizar los ya soportados en `EmbedderSettings.huggingface_model`:
-- `BAAI/bge-m3` (1024, ventana 8192) — actual canónico.
-- `intfloat/multilingual-e5-large` (1024, 512) — requiere prefijos `query:`/`passage:`.
-- `sentence-transformers/paraphrase-multilingual-mpnet-base-v2` (768).
-- `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (384) — baseline barato.
-
-### Dataset de evaluación (*golden set*)
-
-Archivo versionado en `evaluation/datasets/golden_set.jsonl`, una consulta por línea:
-
-```json
-{"query": "¿requisitos para licencia por enfermedad?", "relevant_fragment_ids": [1203, 1204], "relevant_document_ids": [42]}
-```
-
-- Empezar con **30–50 consultas** representativas, etiquetadas a mano sobre documentos ya
-  ingeridos (los `fragment_id`/`document_id` reales salen de la DB de un entorno de prueba).
-- Crecerlo después con las consultas que reciben *feedback* 👎 (ver Capa 2 del plan de
-  métricas) para cubrir los casos donde hoy falla.
-
-### Diseño del harness
-
-Nuevo paquete `app/evaluation/` (o `scripts/eval_embeddings.py`) que **reutiliza** los
-componentes existentes:
-
-1. **Cargar corpus**: leer los `fragment.content` (y `contextualized_content`) de los
-   documentos del golden set desde Postgres (solo lectura).
-2. **Por cada modelo candidato**:
-   - Instanciar el embedder vía `EmbedderFactory`/`EmbedderSettings` (overrideando el modelo
-     en memoria, sin cambiar `.env`).
-   - Embeber el corpus una vez (passages) y cada query (con su instrucción si aplica).
-   - Indexar en memoria (NumPy matriz + coseno, o FAISS) — independiente de la dimensión.
-   - Para cada query: recuperar top-k, opcionalmente aplicar el **rerank** real
-     (`RerankerFactory`) para medir el efecto del cross-encoder.
-3. **Comparar** los ranked results contra el golden set y calcular las métricas.
-4. **Emitir** una tabla comparativa (`evaluation/results/<fecha>.md` + CSV).
-
-### Métricas a reportar
-
-Por modelo (y por variante: solo-vector / +rerank / raw vs contextual):
-
-| Familia | Métricas |
-|---|---|
-| **Calidad de ranking** | `recall@k`, `precision@k`, `MRR@k`, `hit-rate@k`, `nDCG@k` (k ∈ {1,3,5,10}) |
-| **Costo** | latencia de embed por passage/query (p50/p95), throughput (docs/s), VRAM/peso del modelo, dimensión |
-| **Comportamiento** | distribución de score coseno de los hits relevantes vs no relevantes (ayuda a fijar `similarity_threshold`) |
-
-### Salida esperada
-
-Una tabla tipo:
-
-```
-modelo            dim  recall@5  MRR@10  nDCG@10  p95_embed_ms  vram
-bge-m3           1024     0.84    0.71     0.78         42       ~1.1GB(fp16)
-e5-large         1024     0.81    0.69     0.75         38       ~0.5GB
-mpnet-base        768     0.74    0.60     0.66         22       ~0.4GB
-MiniLM-L12        384     0.66    0.52     0.58          9       ~0.1GB
-```
-
-+ una **recomendación** (modelo activo + `similarity_threshold` sugerido a partir de la
-distribución de scores).
-
-### Pasos de construcción (checklist)
-
-- [ ] Crear `evaluation/datasets/golden_set.jsonl` con 30–50 consultas etiquetadas.
-- [ ] `app/evaluation/metrics.py`: `recall@k`, `precision@k`, `mrr`, `ndcg`, `hit_rate`.
-- [ ] `app/evaluation/corpus_loader.py`: leer fragments del golden set (solo lectura).
-- [ ] `app/evaluation/runner.py`: bucle por modelo → embed → índice en memoria → consultas → métricas.
-- [ ] `scripts/eval_embeddings.py`: CLI (`--models`, `--k`, `--rerank/--no-rerank`, `--representation raw|contextual`).
-- [ ] Reportador a Markdown + CSV en `evaluation/results/`.
-- [ ] (Opcional) integrar la latencia/VRAM observadas y dejar el reporte como artefacto de CI manual.
-
-> Nota: este harness es **independiente** del retrieval productivo (`fragment_query_service`),
-> pero reutiliza sus piezas (`EmbedderFactory`, `RerankerFactory`) para que lo medido coincida
-> con lo que corre en producción.
 
 ---
 

@@ -23,13 +23,11 @@ class TextSplitterSettings(BaseSettings):
     max_text_length: int = Field(default=10_000_000, gt=0)
     min_chunk_chars: int = Field(default=150, ge=0)
 
-    huggingface_model: Literal[
-                           "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
-                           "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
-                           "intfloat/multilingual-e5-large",
-                           "BAAI/bge-m3",
-                       ] | str = Field(default="BAAI/bge-m3")
-    huggingface_device: Literal["cpu", "cuda"] = Field(default="cpu")
+    huggingface_model: str = Field(default="BAAI/bge-m3")
+    huggingface_device: Literal["cpu", "cuda"] = Field(default="cuda")
+    huggingface_normalize_embeddings: bool = Field(default=True)
+    huggingface_max_seq_length: Optional[int] = Field(default=8192, gt=0, le=8192)
+    huggingface_torch_dtype: Literal["auto", "float32", "float16", "bfloat16"] = Field(default="auto")
     huggingface_breakpoint_threshold_type: Literal[
         "percentile",
         "standard_deviation",
@@ -42,14 +40,9 @@ class TextSplitterSettings(BaseSettings):
 
     recursive_split_size: int = Field(default=512, gt=0, le=8192)
     recursive_split_overlap: int = Field(default=50, ge=0, le=8192)
-    recursive_encoding_name: Literal[
-                                 "cl100k_base",
-                                 "gpt2"
-                             ] | str = Field(default="cl100k_base")
+    recursive_encoding_name: str = Field(default="cl100k_base")
 
-    docling_tokenizer_model: str = Field(
-        default="BAAI/bge-m3"
-    )
+    docling_tokenizer_model: str = Field(default="BAAI/bge-m3")
     docling_max_tokens: int = Field(default=512, gt=0, le=8192)
     docling_merge_peers: bool = Field(default=True)
     docling_device: Literal["cpu", "cuda", "mps", "auto"] = Field(default="auto")
@@ -63,8 +56,13 @@ class TextSplitterSettings(BaseSettings):
             self
     ) -> "TextSplitterSettings":
         self._validate_common()
+
         if self.structured_fallback_type == TextSplitterType.docling_hybrid:
             raise ValueError("structured_fallback_type must be a flat-text splitter, not docling_hybrid.")
+
+        if self.active_type == TextSplitterType.docling_hybrid:
+            self._validate_docling()
+
         effective_type = (
             self.structured_fallback_type
             if self.active_type == TextSplitterType.docling_hybrid
@@ -83,12 +81,20 @@ class TextSplitterSettings(BaseSettings):
         if self.max_text_length < smallest_chunk:
             raise ValueError("max_text_length must be greater than or equal to configured split sizes.")
 
+    def _validate_docling(
+            self
+    ) -> None:
+        if (not self.docling_tokenizer_model
+                or not self.docling_tokenizer_model.strip()):
+            raise ValueError("docling_tokenizer_model is required when active_type is docling_hybrid.")
+        self.docling_tokenizer_model = self.docling_tokenizer_model.strip()
+
     def _validate_huggingface(
             self
     ) -> None:
         if (not self.huggingface_model
                 or not self.huggingface_model.strip()):
-            raise ValueError("The Hugging Face model name cannot be empty.")
+            raise ValueError("huggingface_model is required when the Hugging Face splitter is active.")
 
         self.huggingface_model = self.huggingface_model.strip()
         if self.huggingface_breakpoint_threshold_amount is not None and self.huggingface_breakpoint_threshold_amount <= 0:
@@ -101,5 +107,10 @@ class TextSplitterSettings(BaseSettings):
     def _validate_recursive(
             self
     ) -> None:
+        if (not self.recursive_encoding_name
+                or not self.recursive_encoding_name.strip()):
+            raise ValueError("recursive_encoding_name is required when the recursive splitter is active.")
+        self.recursive_encoding_name = self.recursive_encoding_name.strip()
+
         if self.recursive_split_overlap >= self.recursive_split_size:
             raise ValueError("Chunk overlap must be strictly smaller than chunk size for the recursive splitter.")

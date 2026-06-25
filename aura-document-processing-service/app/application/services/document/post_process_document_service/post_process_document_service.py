@@ -2,8 +2,8 @@ import logging
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.services.document.post_process_document_service.interfaces.post_process_document_processor_interface import (
-    PostProcessDocumentProcessorInterface,
+from app.application.services.document.post_process_document_service.interfaces.post_process_document_service_interface import (
+    PostProcessDocumentServiceInterface,
 )
 from app.application.services.document.post_process_document_service.post_process_document_service_settings import (
     PostProcessDocumentServiceSettings,
@@ -33,7 +33,7 @@ def _safe_fragment_index(fragment: Fragment) -> int:
         return 0
 
 
-class PostProcessDocumentProcessor(PostProcessDocumentProcessorInterface):
+class PostProcessDocumentService(PostProcessDocumentServiceInterface):
     def __init__(
             self,
             database_manager: DatabaseManagerInterface,

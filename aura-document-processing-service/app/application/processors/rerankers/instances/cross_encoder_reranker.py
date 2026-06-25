@@ -3,6 +3,7 @@ import logging
 import time
 from functools import partial
 from typing import Any, ClassVar, Optional
+import torch
 from sentence_transformers import CrossEncoder
 
 from app.application.processors.rerankers.exceptions.reranker_exception import (
@@ -13,6 +14,8 @@ from app.application.processors.rerankers.interfaces.reranker_interface import R
 from app.application.processors.rerankers.reranker_settings import RerankerSettings
 
 logger = logging.getLogger(__name__)
+
+_RERANK_ACTIVATION_FN = torch.nn.Sigmoid()
 
 
 def _record_rerank_fallback(action: str) -> None:
@@ -38,6 +41,7 @@ class CrossEncoderReranker(RerankerInterface):
                 "device": self._settings.device,
                 "min_score": self._settings.min_score,
                 "batch_size": self._settings.batch_size,
+                "max_length": self._settings.max_length,
             },
         )
 
@@ -52,7 +56,7 @@ class CrossEncoderReranker(RerankerInterface):
                 t0 = time.monotonic()
 
                 def _load() -> CrossEncoder:
-                    kwargs: dict[str, Any] = {}
+                    kwargs: dict[str, Any] = {"max_length": settings.max_length}
                     if settings.device is not None:
                         kwargs["device"] = settings.device
                     return CrossEncoder(settings.model_name, **kwargs)
@@ -119,6 +123,7 @@ class CrossEncoderReranker(RerankerInterface):
                 pairs,
                 batch_size=self._settings.batch_size,
                 show_progress_bar=False,
+                activation_fn=_RERANK_ACTIVATION_FN,
             )
             async with self._inference_lock:
                 scores = await loop.run_in_executor(None, predict_fn)

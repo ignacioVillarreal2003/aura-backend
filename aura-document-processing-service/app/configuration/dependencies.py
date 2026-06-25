@@ -29,8 +29,8 @@ from app.application.services.document.reembed_document_service.reembed_document
 from app.application.services.document.reprocess_document_service.reprocess_document_service import (
     ReprocessDocumentService,
 )
-from app.application.services.document.post_process_document_service.post_process_document_processor import (
-    PostProcessDocumentProcessor,
+from app.application.services.document.post_process_document_service.post_process_document_service import (
+    PostProcessDocumentService,
 )
 from app.application.services.fragment.fragment_query_service.fragment_query_service import FragmentQueryService
 from app.application.services.fragment.contextualize_fragment_service.contextualize_fragment_processor import (
@@ -343,8 +343,8 @@ async def _build_document_services(c: DependencyContainer) -> None:
     c.register("llm_provider", LlmProvider(http_client=c.http_client))
 
     c.register(
-        "post_process_document_processor",
-        PostProcessDocumentProcessor(
+        "post_process_document_service",
+        PostProcessDocumentService(
             database_manager=database_manager,
             document_repository=document_repository,
             fragment_repository=fragment_repository,
@@ -366,7 +366,7 @@ async def _build_document_services(c: DependencyContainer) -> None:
     c.register(
         "document_enrichment_service",
         DocumentEnrichmentService(
-            post_process_document_processor=c.post_process_document_processor,
+            post_process_document_service=c.post_process_document_service,
             contextualize_fragment_processor=c.contextualize_fragment_processor,
             database_manager=database_manager,
             document_repository=document_repository,

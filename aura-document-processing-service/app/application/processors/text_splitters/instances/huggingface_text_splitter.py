@@ -30,6 +30,9 @@ class HuggingFaceTextSplitter(BaseTextSplitter):
             embeddings, self._encode_lock = _get_or_create_hf_embeddings(
                 model_name=self._settings.huggingface_model,
                 device=self._settings.huggingface_device,
+                normalize_embeddings=self._settings.huggingface_normalize_embeddings,
+                max_seq_length=self._settings.huggingface_max_seq_length,
+                torch_dtype=self._settings.huggingface_torch_dtype,
             )
 
             splitter_kwargs: dict = {

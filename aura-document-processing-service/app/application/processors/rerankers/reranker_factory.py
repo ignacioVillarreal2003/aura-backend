@@ -56,12 +56,6 @@ class RerankerFactory:
 
         return self._reranker
 
-    def get_active_type(self) -> RerankerType:
-        return self._active_type
-
-    def is_supported(self, reranker_type: RerankerType) -> bool:
-        return reranker_type in _RERANKER_REGISTRY
-
     def _build_reranker(self) -> RerankerInterface:
         if self._active_type not in _RERANKER_REGISTRY:
             raise UnsupportedRerankerTypeException("That reranker type is not supported.")
