@@ -80,6 +80,7 @@ DATABASES = {
 }
 
 AUTHENTICATION_PROVIDER_URL = config("AUTHENTICATION_SERVICE_URL").strip()
+SERVICE_API_KEY = config("SERVICE_API_KEY", default="service_api_key").strip()
 AUTH_TOKEN_CACHE_TTL_SECONDS = config("AUTH_TOKEN_CACHE_TTL_SECONDS", default=60, cast=int)
 AUTH_SERVICE_TIMEOUT = config("AUTH_SERVICE_TIMEOUT", default=10, cast=float)
 

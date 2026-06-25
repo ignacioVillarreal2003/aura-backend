@@ -22,6 +22,11 @@ class MacServiceClient:
         return getattr(settings, 'DOC_COLLECTION_SERVICE_URL', '').rstrip('/')
 
     def _headers(self, user):
+        if user is None:
+            return {
+                'X-Service-Api-Key': settings.SERVICE_API_KEY,
+                'Content-Type': 'application/json',
+            }
         authorization = get_outbound_authorization(user)
         if not authorization:
             raise MacServiceError('No hay credenciales para autenticar la llamada al servicio MAC.')

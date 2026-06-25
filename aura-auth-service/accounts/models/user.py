@@ -163,6 +163,7 @@ class User(AbstractBaseUser):
     status = models.CharField(
         max_length=8,
         choices=UserStatus.choices,
+        default=UserStatus.ACTIVE,
         verbose_name='Estado',
     )
     last_login = models.DateTimeField(
@@ -181,6 +182,12 @@ class User(AbstractBaseUser):
         verbose_name='Ultimo cambio de contrasena',
     )
     refresh_token = models.UUIDField(null=True, blank=True)
+    force_logout_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Forzar cierre de sesión desde',
+        help_text='Tokens emitidos antes de este momento son rechazados inmediatamente.',
+    )
     created_by = models.ForeignKey(
         'self',
         on_delete=models.PROTECT,
