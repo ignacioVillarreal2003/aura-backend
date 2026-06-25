@@ -163,6 +163,7 @@ class User(AbstractBaseUser):
     status = models.CharField(
         max_length=8,
         choices=UserStatus.choices,
+        default=UserStatus.ACTIVE,
         verbose_name='Estado',
     )
     last_login = models.DateTimeField(

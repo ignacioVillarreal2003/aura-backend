@@ -198,6 +198,11 @@ LDAP_ATTR_CLASSIFICATION_LEVEL = config('LDAP_ATTR_CLASSIFICATION_LEVEL', defaul
 LDAP_ATTR_COMPARTMENT          = config('LDAP_ATTR_COMPARTMENT', default='auraCompartment')
 LDAP_EMAIL_FALLBACK_DOMAIN     = config('LDAP_EMAIL_FALLBACK_DOMAIN', default='ldap.local')
 
+# Atributo del LDAP a inspeccionar (ej: 'employeeType', 'title', 'memberOf')
+LDAP_ATTR_ROLE                 = config('LDAP_ATTR_ROLE', default='employeeType')
+# Valor dentro de ese atributo que indica que el usuario es un administrador del sistema
+LDAP_ROLE_ADMIN_VALUE          = config('LDAP_ROLE_ADMIN_VALUE', default='admin')
+
 AUTH_LDAP_USER_ATTR_MAP = {
     'email': LDAP_ATTR_MAIL,
     'name':  LDAP_ATTR_DISPLAY_NAME,

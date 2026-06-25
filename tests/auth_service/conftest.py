@@ -29,11 +29,7 @@ _audit_log_stub = MagicMock()
 _audit_log_stub.AuditLog = type("AuditLog", (), {"objects": MagicMock()})
 sys.modules.setdefault("accounts.models.audit_log", _audit_log_stub)
 
-import django
-from django.test.utils import setup_test_environment
-
-django.setup()
-setup_test_environment()
+# pytest-django handles setup automatically
 
 import pytest
 from rest_framework.test import APIClient

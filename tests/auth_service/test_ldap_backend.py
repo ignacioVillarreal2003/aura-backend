@@ -51,8 +51,7 @@ _audit_stub = MagicMock()
 _audit_stub.AuditLog = type("AuditLog", (), {"objects": MagicMock()})
 sys.modules.setdefault("accounts.models.audit_log", _audit_stub)
 
-import django
-django.setup()
+# django setup handled by conftest / pytest-django
 
 import jwt
 from django.conf import settings
@@ -126,18 +125,18 @@ class TestLDAPTC01:
             mock_objects.create_user.return_value = created_user
 
             backend = AuraLDAPBackend()
-            # Parchamos get_or_create_user directamente para verificar logica interna
-            with patch.object(backend, "get_or_create_user", wraps=backend.get_or_create_user):
+            # Parchamos get_or_build_user directamente para verificar logica interna
+            with patch.object(backend, "get_or_build_user", wraps=backend.get_or_build_user):
                 pass  # La logica se prueba via la llamada directa abajo
 
-        # Prueba directa de get_or_create_user
+        # Prueba directa de get_or_build_user
         from accounts.models import User
         with patch.object(User.objects, "get", side_effect=User.DoesNotExist), \
              patch.object(User.objects, "create_user", return_value=created_user) as mock_create:
             backend = AuraLDAPBackend()
-            user, created = backend.get_or_create_user("john.doe", ldap_user)
+            user, built = backend.get_or_build_user("john.doe", ldap_user)
 
-        assert created is True
+        assert built is True
         mock_create.assert_called_once_with(
             username="john.doe",
             email="john.doe@aura.local",
@@ -161,9 +160,9 @@ class TestLDAPTC02:
         with patch.object(User.objects, "get", return_value=existing), \
              patch.object(User.objects, "create_user") as mock_create:
             backend = AuraLDAPBackend()
-            user, created = backend.get_or_create_user("john.doe", ldap_user)
+            user, built = backend.get_or_build_user("john.doe", ldap_user)
 
-        assert created is False
+        assert built is False
         assert user is existing
         mock_create.assert_not_called()
 
@@ -219,7 +218,7 @@ class TestLDAPTC05:
              patch("accounts.services.mac_client.mac_client.set_user_clearance") as mock_set:
             _sync_clearance(user, "SECRET")
 
-        mock_set.assert_called_once_with(user, user.pk, "lvl-2")
+        mock_set.assert_called_once_with(None, user.pk, "lvl-2")
 
     def test_sync_clearance_level_no_encontrado_loguea_warning(self, caplog):
         """Si el nivel de LDAP no existe en MAC, se loguea un warning sin error."""
@@ -259,8 +258,8 @@ class TestLDAPTC06:
             _sync_compartments(user, ["ALPHA", "BRAVO"])
 
         assert mock_add.call_count == 2
-        mock_add.assert_any_call(user, user.pk, "c-1")
-        mock_add.assert_any_call(user, user.pk, "c-2")
+        mock_add.assert_any_call(None, user.pk, "c-1")
+        mock_add.assert_any_call(None, user.pk, "c-2")
         mock_remove.assert_not_called()
 
 
@@ -290,7 +289,7 @@ class TestLDAPTC07:
             _sync_compartments(user, ["ALPHA"])
 
         mock_add.assert_not_called()
-        mock_remove.assert_called_once_with(user, user.pk, "c-2")
+        mock_remove.assert_called_once_with(None, user.pk, "c-2")
 
 
 # ── LDAP-TC08 — Error de MAC service es best-effort ──────────────────────────
@@ -336,7 +335,7 @@ class TestLDAPTC09:
              patch.object(User.objects, "create_user", return_value=created_user) as mock_create, \
              caplog.at_level(logging.WARNING, logger="accounts.ldap_backend"):
             backend = AuraLDAPBackend()
-            user, created = backend.get_or_create_user("no.mail", ldap_user)
+            user, built = backend.get_or_build_user("no.mail", ldap_user)
 
         # Verifica que se uso el email de fallback
         call_kwargs = mock_create.call_args
@@ -422,7 +421,7 @@ class TestLDAPTC13:
         user.lockout_until = None
         user.force_logout_at = timezone.now() - timedelta(hours=1)
 
-        with patch("django.contrib.auth.authenticate", return_value=user), \
+        with patch("accounts.services.auth_service.authenticate", return_value=user), \
              patch("accounts.models.user.User.objects.get", return_value=user):
             result = authenticate_user("john.doe", "Password123!")
 
@@ -515,4 +514,119 @@ class TestLDAPTC16:
              patch("accounts.services.mac_client.mac_client.list_user_compartments", return_value=[]):
             _sync_mac_attributes(sender=None, user=user, ldap_user=ldap_user)
 
-        mock_set.assert_called_once_with(user, user.pk, "lvl-1")
+        mock_set.assert_called_once_with(None, user.pk, "lvl-1")
+
+
+# ── LDAP-TC17 — Usuario nuevo sin atributo de rol obtiene 'user' ──────────────
+
+class TestLDAPTC17:
+    def test_usuario_nuevo_sin_rol_obtiene_user(self):
+        """Un usuario nuevo sin atributo de rol en LDAP obtiene el rol 'user' por defecto."""
+        from accounts.ldap_sync import _sync_user_role
+        from accounts.models import Role, UserRole
+
+        user = _make_user(id=1, username="john.doe")
+        ldap_user = _make_ldap_user({})  # Sin atributo de rol
+
+        mock_role_user = MagicMock()
+        mock_role_user.id = 10
+        mock_role_user.name = "user"
+
+        with patch.object(Role.objects, "filter") as mock_role_filter, \
+             patch.object(UserRole.objects, "filter") as mock_ur_filter, \
+             patch.object(UserRole.objects, "create") as mock_ur_create:
+
+            mock_role_filter.return_value.first.return_value = mock_role_user
+            mock_exists_qs = MagicMock()
+            mock_exists_qs.exists.return_value = False
+            mock_ur_filter.side_effect = [[], mock_exists_qs]
+
+            _sync_user_role(user, ldap_user)
+
+            mock_role_filter.assert_called_once_with(name="user")
+            mock_ur_create.assert_called_once_with(
+                user=user,
+                role=mock_role_user,
+                created_by=user
+            )
+
+
+# ── LDAP-TC18 — Usuario nuevo con employeeType: admin obtiene 'admin' ─────────
+
+class TestLDAPTC18:
+    def test_usuario_nuevo_con_rol_admin_obtiene_admin(self):
+        """Un usuario nuevo con employeeType: admin obtiene el rol 'admin'."""
+        from accounts.ldap_sync import _sync_user_role
+        from accounts.models import Role, UserRole
+
+        user = _make_user(id=2, username="jane.smith")
+        ldap_user = _make_ldap_user({"employeeType": ["admin"]})
+
+        mock_role_admin = MagicMock()
+        mock_role_admin.id = 20
+        mock_role_admin.name = "admin"
+
+        with patch.object(Role.objects, "filter") as mock_role_filter, \
+             patch.object(UserRole.objects, "filter") as mock_ur_filter, \
+             patch.object(UserRole.objects, "create") as mock_ur_create:
+
+            mock_role_filter.return_value.first.return_value = mock_role_admin
+            mock_exists_qs = MagicMock()
+            mock_exists_qs.exists.return_value = False
+            mock_ur_filter.side_effect = [[], mock_exists_qs]
+
+            _sync_user_role(user, ldap_user)
+
+            mock_role_filter.assert_called_once_with(name="admin")
+            mock_ur_create.assert_called_once_with(
+                user=user,
+                role=mock_role_admin,
+                created_by=user
+            )
+
+
+# ── LDAP-TC19 — Promocion/Democion: Cambio de rol desactiva el anterior ───────
+
+class TestLDAPTC19:
+    def test_usuario_existente_cambia_de_rol(self):
+        """Un usuario que cambia de rol desactiva el rol anterior y activa el nuevo."""
+        from accounts.ldap_sync import _sync_user_role
+        from accounts.models import Role, UserRole
+
+        user = _make_user(id=1, username="john.doe")
+        ldap_user = _make_ldap_user({"employeeType": ["admin"]})
+
+        mock_role_admin = MagicMock()
+        mock_role_admin.id = 20
+        mock_role_admin.name = "admin"
+
+        mock_role_user = MagicMock()
+        mock_role_user.id = 10
+        mock_role_user.name = "user"
+
+        active_ur = MagicMock()
+        active_ur.role = mock_role_user
+        active_ur.role_id = 10
+        active_ur.save = MagicMock()
+
+        with patch.object(Role.objects, "filter") as mock_role_filter, \
+             patch.object(UserRole.objects, "filter") as mock_ur_filter, \
+             patch.object(UserRole.objects, "create") as mock_ur_create:
+
+            mock_role_filter.return_value.first.return_value = mock_role_admin
+            mock_exists_qs = MagicMock()
+            mock_exists_qs.exists.return_value = False
+            mock_ur_filter.side_effect = [[active_ur], mock_exists_qs]
+
+            _sync_user_role(user, ldap_user)
+
+            assert active_ur.deleted_at is not None
+            assert active_ur.deleted_by == user
+            active_ur.save.assert_called_once()
+
+            mock_ur_create.assert_called_once_with(
+                user=user,
+                role=mock_role_admin,
+                created_by=user
+            )
+

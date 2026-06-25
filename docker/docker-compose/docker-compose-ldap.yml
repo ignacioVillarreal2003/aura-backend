@@ -16,6 +16,7 @@ services:
     image: osixia/openldap:1.5.0
     container_name: aura-ldap
     hostname: aura-ldap
+    command: --copy-service
     environment:
       LDAP_ORGANISATION: "Aura"
       LDAP_DOMAIN: "aura.local"

@@ -22,21 +22,21 @@ class AuraLDAPBackend(LDAPBackend):
     """
     Backend LDAP personalizado para el esquema auth_user de Aura.
 
-    El flujo normal de LDAPBackend llama a get_or_create_user() para
-    obtener o crear el objeto User local. Esta implementaci\u00f3n usa el
+    El flujo normal de LDAPBackend llama a get_or_build_user() para
+    obtener o crear el objeto User local. Esta implementación usa el
     CustomUserManager que maneja el bootstrap de created_by.
     """
 
-    def get_or_create_user(self, username, ldap_user):
+    def get_or_build_user(self, username, ldap_user):
         """
         Crea o recupera el usuario local correspondiente al entry LDAP.
 
         Returns:
-            (User, created: bool)
+            (User, built: bool)
         """
         from accounts.models import User
 
-        # Usuario existente no eliminado \u2192 reutilizar sin crear uno nuevo
+        # Usuario existente no eliminado → reutilizar sin crear uno nuevo
         try:
             user = User.objects.get(username=username, deleted_at__isnull=True)
             return user, False
@@ -64,8 +64,8 @@ class AuraLDAPBackend(LDAPBackend):
         name = name_list[0] if name_list else username
 
         # --- Crear usuario ---
-        # password=None \u2192 CustomUserManager llama a make_password(None)
-        # que produce un hash con prefijo '!' (nunca v\u00e1lido para login local).
+        # password=None → CustomUserManager llama a make_password(None)
+        # que produce un hash con prefijo '!' (nunca válido para login local).
         # El campo password NOT NULL queda satisfecho.
         user = User.objects.create_user(
             username=username,
@@ -75,8 +75,11 @@ class AuraLDAPBackend(LDAPBackend):
         user.name = name
         user.save(update_fields=['name', 'updated_at'])
 
+
+
         logger.info(
             "Created local user from LDAP: username=%s email=%s",
             username, email,
         )
         return user, True
+
