@@ -6,6 +6,8 @@ class RagNodeName(str, Enum):
     graph_context_retriever = "graph_context_retriever"
     context_retriever = "context_retriever"
     document_fetcher = "document_fetcher"
+    context_grader = "context_grader"
+    query_refiner = "query_refiner"
     answer_synthesizer = "answer_synthesizer"
     guardrails = "guardrails"
     fallback = "fallback"

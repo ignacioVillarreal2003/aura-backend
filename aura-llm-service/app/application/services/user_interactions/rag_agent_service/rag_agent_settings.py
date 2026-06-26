@@ -59,6 +59,60 @@ class QueryAnalyzerSettings(BaseModel):
         )
 
 
+class ContextGraderSettings(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    custom_system_prompt: Optional[str] = None
+
+    @field_validator("custom_system_prompt")
+    @classmethod
+    def _check_prompt(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_optional_prompt("custom_system_prompt", v)
+
+    @property
+    def system_prompt(self) -> str:
+        if self.custom_system_prompt is not None:
+            return self.custom_system_prompt
+        return (
+            "Eres un evaluador de relevancia para un sistema de recuperación documental (RAG). "
+            "Dada una consulta y el contexto recuperado, determiná si el contexto contiene "
+            "información suficiente y pertinente para responder la consulta con fundamento.\n\n"
+            "Criterios:\n"
+            "- 'suficiente' = el contexto cubre lo que la consulta pide (aunque sea parcialmente, "
+            "pero de forma útil y fundamentada)\n"
+            "- 'insuficiente' = el contexto es irrelevante, está vacío, o no permite responder "
+            "sin inventar información\n\n"
+            "Respondé ÚNICAMENTE con un objeto JSON con dos campos:\n"
+            '- "sufficient": booleano (true/false)\n'
+            '- "reason": string breve (máx. 200 caracteres) explicando la decisión\n\n'
+            'Ejemplo: {"sufficient": false, "reason": "El contexto trata de otro tema; no menciona los requisitos consultados."}\n\n'
+            "No incluyas texto fuera del JSON."
+        )
+
+
+class QueryRefinerSettings(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    custom_system_prompt: Optional[str] = None
+
+    @field_validator("custom_system_prompt")
+    @classmethod
+    def _check_prompt(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_optional_prompt("custom_system_prompt", v)
+
+    @property
+    def system_prompt(self) -> str:
+        if self.custom_system_prompt is not None:
+            return self.custom_system_prompt
+        return (
+            "Eres un especialista en reformulación de consultas para búsqueda documental. "
+            "La búsqueda anterior no recuperó contexto suficiente. Reescribí la consulta para "
+            "mejorar la recuperación: usá sinónimos y terminología institucional/normativa "
+            "alternativa, generalizá términos demasiado específicos y explicitá el tema central. "
+            "Mantené la intención original; no inventes entidades que no estén implícitas.\n\n"
+            "Respondé ÚNICAMENTE con la consulta reformulada en una sola línea, sin comillas, "
+            "sin prefijos ni explicaciones."
+        )
+
+
 class AnswerSynthesizerSettings(BaseModel):
     model_config = ConfigDict(frozen=True)
     custom_system_prompt: Optional[str] = None
@@ -164,14 +218,19 @@ class RagAgentServiceSettings(BaseSettings):
     graph_max_entities: int = Field(default=8, ge=1, le=25)
     graph_max_relations: int = Field(default=30, ge=1, le=100)
 
-    use_graph_structured_query: bool = Field(default=False)
+    use_graph_structured_query: bool = Field(default=True)
     graph_query_max_results: int = Field(default=20, ge=1, le=100)
 
     document_fetcher_max_documents: int = Field(default=3, ge=1, le=10)
 
     use_guardrails: bool = Field(default=True)
 
+    use_context_grader: bool = Field(default=True)
+    max_retrieval_attempts: int = Field(default=1, ge=1, le=3)
+
     query_analyzer: QueryAnalyzerSettings = Field(default_factory=QueryAnalyzerSettings)
+    context_grader: ContextGraderSettings = Field(default_factory=ContextGraderSettings)
+    query_refiner: QueryRefinerSettings = Field(default_factory=QueryRefinerSettings)
     answer_synthesizer: AnswerSynthesizerSettings = Field(default_factory=AnswerSynthesizerSettings)
     guardrails: GuardrailsSettings = Field(default_factory=GuardrailsSettings)
 

@@ -16,8 +16,14 @@ from app.application.services.processing.document_classify_service.exceptions.do
 from app.application.services.processing.fragment_contextualize_service.fragment_contextualize_service import (
     FragmentContextualizeService,
 )
+from app.application.services.processing.graph_query_translation_service.exceptions.graph_query_translation_service_exceptions import (
+    GraphQueryTranslationServiceException,
+)
 from app.application.services.processing.graph_query_translation_service.graph_query_translation_service import (
     GraphQueryTranslationService,
+)
+from app.application.services.processing.graph_query_translation_service.graph_query_translation_settings import (
+    GraphQueryTranslationServiceSettings,
 )
 from app.domain.constants.document_type import DocumentType
 from app.domain.constants.graph.query_intent import QueryIntent
@@ -150,7 +156,8 @@ class TestRepairLoop:
 
     async def test_translation_exhausts_repair_then_raises(self):
         invoker = _Invoker(["bad", "still bad", "and bad"])
-        svc = GraphQueryTranslationService(_Facade(), invoker)
-        with pytest.raises(Exception):
+        settings = GraphQueryTranslationServiceSettings(_env_file=None, max_repair_attempts=1)
+        svc = GraphQueryTranslationService(_Facade(), invoker, settings)
+        with pytest.raises(GraphQueryTranslationServiceException):
             await svc.translate_graph_query(_translate_request(), _USER)
         assert invoker.calls == 2

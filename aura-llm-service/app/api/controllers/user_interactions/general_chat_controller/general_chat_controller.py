@@ -87,10 +87,10 @@ router.add_api_route(
     methods=["POST"],
     response_model=GeneralChatResponse,
     operation_id="executeGeneralChat",
-    summary="Chat de propÃ³sito general con el asistente",
+    summary="Chat de propósito general con el asistente",
     description=(
-        "EnvÃ­a un historial de mensajes al LLM y devuelve la respuesta del asistente. "
-        "No utiliza RAG ni contexto documental â€” solo el historial de conversaciÃ³n."
+        "Envía un historial de mensajes al LLM y devuelve la respuesta del asistente. "
+        "No utiliza RAG ni contexto documental — solo el historial de conversación."
     ),
     responses=_response,
 )
@@ -101,7 +101,7 @@ router.add_api_route(
     methods=["POST"],
     response_class=StreamingResponse,
     operation_id="executeGeneralChatStream",
-    summary="Chat de propÃ³sito general con el asistente (SSE)",
+    summary="Chat de propósito general con el asistente (SSE)",
     description=(
         "Server-Sent Events: JSON lines con prefijo `data: `. "
         "Tipos de evento: `delta`, `complete`, `error` (campo discriminador `type`)."

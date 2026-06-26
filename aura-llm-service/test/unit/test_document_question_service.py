@@ -136,7 +136,7 @@ class TestStream:
             )
         ]
         steps = [e.step for e in events if hasattr(e, "step")]
-        assert steps == ["reformulating", "searching", "generation"]
+        assert steps == ["processing", "reformulating", "searching", "generation"]
 
     async def test_reduction_runs_and_emits_progress_for_large_context(self):
         from app.infrastructure.http.document_context_provider.dtos.fragment_response import FragmentResponse

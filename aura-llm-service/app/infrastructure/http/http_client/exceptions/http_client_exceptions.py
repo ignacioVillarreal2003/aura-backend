@@ -5,6 +5,11 @@ class HttpClientException(AppException):
     pass
 
 
+class HttpClientServerException(HttpClientException):
+    def __init__(self, message: str, *, status_code: int) -> None:
+        super().__init__(message, status_code=status_code)
+
+
 class HttpClientNotStartedException(HttpClientException):
     def __init__(self, message: str) -> None:
         super().__init__(message, status_code=503)

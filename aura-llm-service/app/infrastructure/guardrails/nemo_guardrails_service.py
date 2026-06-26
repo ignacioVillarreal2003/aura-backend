@@ -94,9 +94,12 @@ class NemoGuardrailsService:
 
         truncated = text[: self._settings.max_input_chars]
         options = GenerationOptions(rails=["input"], log={"activated_rails": True})
-        result = await rails.generate_async(
-            messages=[{"role": "user", "content": truncated}],
-            options=options,
+        result = await asyncio.wait_for(
+            rails.generate_async(
+                messages=[{"role": "user", "content": truncated}],
+                options=options,
+            ),
+            timeout=self._settings.check_timeout_seconds,
         )
 
         activated = (result.log.activated_rails or []) if result.log else []
@@ -115,12 +118,15 @@ class NemoGuardrailsService:
 
         truncated = text[: self._settings.max_output_chars]
         options = GenerationOptions(rails=["output"], log={"activated_rails": True})
-        result = await rails.generate_async(
-            messages=[
-                {"role": "user", "content": ""},
-                {"role": "assistant", "content": truncated},
-            ],
-            options=options,
+        result = await asyncio.wait_for(
+            rails.generate_async(
+                messages=[
+                    {"role": "user", "content": ""},
+                    {"role": "assistant", "content": truncated},
+                ],
+                options=options,
+            ),
+            timeout=self._settings.check_timeout_seconds,
         )
 
         activated = (result.log.activated_rails or []) if result.log else []

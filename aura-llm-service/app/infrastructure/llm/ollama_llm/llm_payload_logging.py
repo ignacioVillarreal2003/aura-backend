@@ -12,7 +12,7 @@ def truncate(text: str, max_chars: int) -> str:
 def log_llm_input(logger: logging.Logger, llm_input: List[BaseMessage], max_chars: int) -> None:
     for index, message in enumerate(llm_input):
         content = message.content if isinstance(message.content, str) else str(message.content)
-        logger.info(
+        logger.debug(
             "LLM input message",
             extra={
                 "message_index": index,
@@ -24,7 +24,7 @@ def log_llm_input(logger: logging.Logger, llm_input: List[BaseMessage], max_char
 
 
 def log_llm_output(logger: logging.Logger, content: str, max_chars: int) -> None:
-    logger.info(
+    logger.debug(
         "LLM output message",
         extra={
             "message_chars": len(content),

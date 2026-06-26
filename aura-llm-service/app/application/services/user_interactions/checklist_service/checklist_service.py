@@ -47,10 +47,14 @@ def _parse_items(raw_items: list, settings: ChecklistSettings) -> list[Checklist
         text = clean_text(entry.get("text", ""), settings.max_item_text_chars)
         if not text:
             continue
+        try:
+            order = max(1, int(entry.get("order", 1)))
+        except (TypeError, ValueError):
+            order = 1
         items.append(
             ChecklistItem(
                 section=clean_text(entry.get("section", "General"), settings.max_section_chars) or "General",
-                order=max(1, int(entry.get("order", 1))),
+                order=order,
                 text=text,
                 is_checked=False,
             )

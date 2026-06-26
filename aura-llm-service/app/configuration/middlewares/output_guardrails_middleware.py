@@ -4,6 +4,8 @@ from typing import Optional
 from fastapi import FastAPI
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app.configuration.metrics import record_guardrails_block
+
 logger = logging.getLogger(__name__)
 
 _EXCLUDED_PATH_PREFIXES = (
@@ -150,6 +152,7 @@ class OutputGuardrailsMiddleware:
 
     @staticmethod
     async def _send_blocked(scope: Scope, send: Send, message: str) -> None:
+        record_guardrails_block("output")
         request_id = (scope.get("state") or {}).get("request_id")
         logger.warning(
             "Response blocked by the guardrails output filter.",

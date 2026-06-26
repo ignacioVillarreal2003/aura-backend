@@ -11,6 +11,7 @@ from app.infrastructure.http.http_client.exceptions.http_client_exceptions impor
     HttpClientConnectionException,
     HttpClientException,
     HttpClientNotStartedException,
+    HttpClientServerException,
     HttpClientTimeoutException,
 )
 from app.infrastructure.http.http_client.http_client import HttpClient
@@ -84,6 +85,60 @@ async def test_upstream_status_error_is_mapped_with_status_code():
         with pytest.raises(HttpClientException) as exc_info:
             await client.post("http://up.test/x", json={})
         assert exc_info.value.status_code == 503
+    finally:
+        await client.stop()
+
+
+@pytest.mark.asyncio
+async def test_retryable_5xx_is_retried_for_idempotent_method():
+    client = await _started_client(
+        retry_max_attempts=3,
+        retry_backoff_min_seconds=0.01,
+        retry_backoff_max_seconds=0.02,
+    )
+    try:
+        request_mock = AsyncMock(return_value=_status_error_response(503))
+        _install_fake_transport(client, request_mock=request_mock)
+        with pytest.raises(HttpClientServerException) as exc_info:
+            await client.get("http://up.test/x")
+        assert exc_info.value.status_code == 503
+        assert request_mock.call_count == 3
+    finally:
+        await client.stop()
+
+
+@pytest.mark.asyncio
+async def test_non_retryable_5xx_is_not_retried():
+    client = await _started_client(
+        retry_max_attempts=3,
+        retry_backoff_min_seconds=0.01,
+        retry_backoff_max_seconds=0.02,
+    )
+    try:
+        request_mock = AsyncMock(return_value=_status_error_response(500))
+        _install_fake_transport(client, request_mock=request_mock)
+        with pytest.raises(HttpClientException) as exc_info:
+            await client.get("http://up.test/x")
+        assert exc_info.value.status_code == 500
+        assert not isinstance(exc_info.value, HttpClientServerException)
+        assert request_mock.call_count == 1
+    finally:
+        await client.stop()
+
+
+@pytest.mark.asyncio
+async def test_retryable_5xx_not_retried_for_non_idempotent_method():
+    client = await _started_client(
+        retry_max_attempts=3,
+        retry_backoff_min_seconds=0.01,
+        retry_backoff_max_seconds=0.02,
+    )
+    try:
+        request_mock = AsyncMock(return_value=_status_error_response(503))
+        _install_fake_transport(client, request_mock=request_mock)
+        with pytest.raises(HttpClientServerException):
+            await client.post("http://up.test/x", json={})
+        assert request_mock.call_count == 1
     finally:
         await client.stop()
 

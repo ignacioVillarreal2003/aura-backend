@@ -92,5 +92,7 @@ def configure_logging(
     handler.setFormatter(formatter)
     root.addHandler(handler)
 
-    logging.getLogger("uvicorn").handlers = []
-    logging.getLogger("uvicorn.access").handlers = []
+    for uvicorn_logger_name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+        uvicorn_logger = logging.getLogger(uvicorn_logger_name)
+        uvicorn_logger.handlers = []
+        uvicorn_logger.propagate = True

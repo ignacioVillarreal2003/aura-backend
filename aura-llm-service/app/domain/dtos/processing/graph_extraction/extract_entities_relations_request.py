@@ -1,5 +1,5 @@
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.domain.field_limits import (
     MAX_CONTENT_CHARS,
@@ -37,11 +37,10 @@ class ExtractEntitiesRelationsRequest(BaseModel):
         le=MAX_RELATIONS_PER_FRAGMENT,
     )
 
-    model_config = {"frozen": True}
+    model_config = {"frozen": True, "extra": "forbid"}
 
-    @classmethod
+    @staticmethod
     def _validate_type_lengths(
-            cls,
             values: list[str],
             *,
             field_name: str,
@@ -56,15 +55,22 @@ class ExtractEntitiesRelationsRequest(BaseModel):
                 )
         return values
 
-    def model_post_init(self, __context: object) -> None:
-        self._validate_type_lengths(
-            list(self.allowed_entity_types),
+    @field_validator("allowed_entity_types")
+    @classmethod
+    def _validate_entity_types(cls, values: list[str]) -> list[str]:
+        return cls._validate_type_lengths(
+            values,
             field_name="allowed_entity_types",
             max_len=MAX_GRAPH_ENTITY_TYPE_CHARS,
         )
-        if self.allowed_relation_types is not None:
-            self._validate_type_lengths(
-                list(self.allowed_relation_types),
-                field_name="allowed_relation_types",
-                max_len=MAX_GRAPH_RELATION_TYPE_CHARS,
-            )
+
+    @field_validator("allowed_relation_types")
+    @classmethod
+    def _validate_relation_types(cls, values: Optional[list[str]]) -> Optional[list[str]]:
+        if values is None:
+            return None
+        return cls._validate_type_lengths(
+            values,
+            field_name="allowed_relation_types",
+            max_len=MAX_GRAPH_RELATION_TYPE_CHARS,
+        )

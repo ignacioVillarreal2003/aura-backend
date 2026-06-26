@@ -63,8 +63,6 @@ class _GraphQueryRelation(BaseModel):
 
 
 class GraphQueryProviderResponse(BaseModel):
-    """Subset of the doc-processing /graph/query response needed to render facts."""
-
     model_config = ConfigDict(extra="ignore")
 
     entities: list[_GraphQueryEntity] = Field(default_factory=list)

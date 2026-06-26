@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.domain.field_limits import (
     MAX_GRAPH_ENTITY_TYPE_CHARS,
@@ -9,6 +9,17 @@ from app.domain.field_limits import (
 )
 
 
+def _validate_type_lengths(values: list[str], *, field_name: str, max_len: int) -> list[str]:
+    for v in values:
+        if not v or not v.strip():
+            raise ValueError(f"{field_name} entries must not be blank.")
+        if len(v) > max_len:
+            raise ValueError(
+                f"{field_name} entries must not exceed {max_len} characters."
+            )
+    return values
+
+
 class GraphOntology(BaseModel):
     entity_types: list[str] = Field(
         ..., min_length=1, max_length=MAX_GRAPH_ENTITY_TYPES_PER_ONTOLOGY
@@ -17,31 +28,25 @@ class GraphOntology(BaseModel):
         default_factory=list, max_length=MAX_GRAPH_RELATION_TYPES_PER_ONTOLOGY
     )
 
+    model_config = {"frozen": True, "extra": "forbid"}
+
+    @field_validator("entity_types")
+    @classmethod
+    def _validate_entity_types(cls, values: list[str]) -> list[str]:
+        return _validate_type_lengths(
+            values, field_name="entity_types", max_len=MAX_GRAPH_ENTITY_TYPE_CHARS
+        )
+
+    @field_validator("relation_types")
+    @classmethod
+    def _validate_relation_types(cls, values: list[str]) -> list[str]:
+        return _validate_type_lengths(
+            values, field_name="relation_types", max_len=MAX_GRAPH_RELATION_TYPE_CHARS
+        )
+
 
 class TranslateGraphQueryRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=MAX_GRAPH_QUERY_QUESTION_CHARS)
     ontology: GraphOntology = Field(...)
 
-    model_config = {"frozen": True}
-
-    @classmethod
-    def _validate_lengths(cls, values: list[str], field_name: str, max_len: int) -> None:
-        for v in values:
-            if not v or not v.strip():
-                raise ValueError(f"{field_name} entries must not be blank.")
-            if len(v) > max_len:
-                raise ValueError(
-                    f"{field_name} entries must not exceed {max_len} characters."
-                )
-
-    def model_post_init(self, __context: object) -> None:
-        self._validate_lengths(
-            list(self.ontology.entity_types),
-            field_name="ontology.entity_types",
-            max_len=MAX_GRAPH_ENTITY_TYPE_CHARS,
-        )
-        self._validate_lengths(
-            list(self.ontology.relation_types),
-            field_name="ontology.relation_types",
-            max_len=MAX_GRAPH_RELATION_TYPE_CHARS,
-        )
+    model_config = {"frozen": True, "extra": "forbid"}

@@ -40,7 +40,10 @@ class HealthController(HealthControllerInterface):
         ollama_facade = getattr(request.app.state, "ollama_llm_facade", None)
         if ollama_facade is not None:
             try:
-                healthy = ollama_facade.is_healthy()
+                healthy = await asyncio.wait_for(
+                    ollama_facade.check_health(),
+                    timeout=_DEPENDENCY_CHECK_TIMEOUT_SECONDS,
+                )
                 tools_bound = ollama_facade.tools_bound if healthy else False
                 checks["ollama"] = {
                     "status": "ok" if healthy else "error",
@@ -48,7 +51,7 @@ class HealthController(HealthControllerInterface):
                 }
                 if not healthy:
                     overall_ok = False
-            except Exception as exc:
+            except (Exception, asyncio.TimeoutError) as exc:
                 logger.warning("Ollama facade health check failed", exc_info=exc)
                 checks["ollama"] = {"status": "error", "tools_bound": False}
                 overall_ok = False
@@ -124,6 +127,6 @@ router.add_api_route(
     methods=["GET"],
     operation_id="readiness",
     summary="Estado de preparación",
-    description="Verifica dependencias (cliente HTTP, Ollama) y devuelve 200 o 503.",
+    description="Verifica dependencias (cliente HTTP, Ollama, Redis) y devuelve 200 o 503.",
     responses=_response_readiness,
 )

@@ -15,4 +15,4 @@ class ChecklistSettings(BaseSettings):
     max_description_chars: int = Field(default=1_000, ge=100, le=20_000)
     max_item_text_chars: int = Field(default=500, ge=1, le=10_000)
     max_section_chars: int = Field(default=200, ge=1, le=2_000)
-    max_items: int = Field(default=20, ge=1, le=10_000)
+    max_items: int = Field(default=20, ge=1, le=200)

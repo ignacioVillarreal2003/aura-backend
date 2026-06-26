@@ -70,8 +70,6 @@ class FragmentResponse(BaseModel):
 
     @property
     def effective_content(self) -> str:
-        """Text to feed the LLM: the document-aware contextualized content when
-        available (Contextual Retrieval), otherwise the raw content."""
         return self.contextualized_content or self.content
 
     @field_validator("content", mode="before")

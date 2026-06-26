@@ -2,7 +2,13 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.message import Message
-from app.domain.field_limits import MAX_ID, MAX_MESSAGES_IN_REQUEST, MAX_INSTRUCTION_CHARS
+from app.domain.field_limits import (
+    MAX_DOCUMENT_IDS_PER_REQUEST,
+    MAX_ID,
+    MAX_INSTRUCTION_CHARS,
+    MAX_MESSAGES_IN_REQUEST,
+)
+from app.domain.validation import OptionalPrompt
 
 
 class LessonsLearnedGenerateRequest(BaseModel):
@@ -23,22 +29,20 @@ class LessonsLearnedGenerateRequest(BaseModel):
     )
     document_ids: list[int] = Field(
         default_factory=list,
-        max_length=20,
+        max_length=MAX_DOCUMENT_IDS_PER_REQUEST,
         description=(
             "IDs de documentos a adjuntar como contexto prioritario. Se usan siempre "
             "(en modo direct y rag), además del input del usuario."
         ),
     )
 
-    system_prompt: str | None = Field(
+    system_prompt: OptionalPrompt = Field(
         default=None,
-        min_length=1,
         max_length=MAX_INSTRUCTION_CHARS,
         description="Instrucción de sistema personalizada del operador.",
     )
-    response_style: str | None = Field(
+    response_style: OptionalPrompt = Field(
         default=None,
-        min_length=1,
         max_length=MAX_INSTRUCTION_CHARS,
         description="Estilo de respuesta esperado por el operador.",
     )
@@ -65,4 +69,4 @@ class LessonsLearnedGenerateRequest(BaseModel):
             raise ValueError("El último mensaje debe ser de rol 'human'.")
         return self
 
-    model_config = {"frozen": True}
+    model_config = {"frozen": True, "extra": "forbid"}

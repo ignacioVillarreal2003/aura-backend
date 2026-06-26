@@ -20,6 +20,7 @@ from app.application.services.generation_shared.processors.query_reformulation_p
     QueryReformulationSettings,
 )
 from app.application.services.generation_shared.token_estimation import chars_to_tokens
+from app.domain.field_limits import MAX_CONTENT_CHARS
 
 
 class DocumentQuestionServiceSettings(BaseSettings):
@@ -50,7 +51,7 @@ class DocumentQuestionServiceSettings(BaseSettings):
     reduction_batch_chars: int = Field(default=6_000, ge=1_000, le=20_000)
     reduction_max_passes: int = Field(default=2, ge=1, le=5)
 
-    max_response_chars: int = Field(default=10_000, ge=1_000, le=200_000)
+    max_response_chars: int = Field(default=MAX_CONTENT_CHARS, ge=1_000, le=MAX_CONTENT_CHARS)
 
     def to_generation_settings(self) -> GenerationSettings:
         return GenerationSettings(

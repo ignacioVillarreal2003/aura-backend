@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import FastAPI
 
-from app.configuration.dependency_registry import DependencyRegistry
+from app.configuration.dependency_registry import DependencyRegistry, run_committed_cleanups
 
 
 def _app() -> FastAPI:
@@ -82,3 +82,61 @@ async def test_commit_prevents_rollback_from_cleaning_up():
 
     cleanup.assert_not_awaited()
     assert hasattr(app.state, "committed")
+
+
+@pytest.mark.asyncio
+async def test_run_committed_cleanups_runs_in_reverse_order():
+    app = _app()
+    registry = DependencyRegistry(app)
+    order: list[str] = []
+
+    registry.register("first", object(), cleanup=AsyncMock(side_effect=lambda: order.append("first")))
+    registry.register("second", object(), cleanup=AsyncMock(side_effect=lambda: order.append("second")))
+    registry.commit()
+
+    await run_committed_cleanups(app)
+
+    assert order == ["second", "first"]
+
+
+@pytest.mark.asyncio
+async def test_run_committed_cleanups_continues_after_a_failing_cleanup():
+    app = _app()
+    registry = DependencyRegistry(app)
+
+    survivor = AsyncMock()
+    failing = AsyncMock(side_effect=RuntimeError("dispose failed"))
+    registry.register("survivor", object(), cleanup=survivor)
+    registry.register("failing", object(), cleanup=failing)
+    registry.commit()
+
+    await run_committed_cleanups(app)
+
+    failing.assert_awaited_once()
+    survivor.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_run_committed_cleanups_is_idempotent():
+    app = _app()
+    registry = DependencyRegistry(app)
+    cleanup = AsyncMock()
+    registry.register("resource", object(), cleanup=cleanup)
+    registry.commit()
+
+    await run_committed_cleanups(app)
+    await run_committed_cleanups(app)
+
+    cleanup.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_run_committed_cleanups_noop_without_commit():
+    app = _app()
+    registry = DependencyRegistry(app)
+    cleanup = AsyncMock()
+    registry.register("resource", object(), cleanup=cleanup)
+
+    await run_committed_cleanups(app)
+
+    cleanup.assert_not_awaited()

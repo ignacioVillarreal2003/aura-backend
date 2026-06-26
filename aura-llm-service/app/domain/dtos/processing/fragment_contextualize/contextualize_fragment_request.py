@@ -18,4 +18,4 @@ class ContextualizeFragmentRequest(BaseModel):
     def _strip_content(cls, value: str) -> str:
         return stripped_non_blank(value, "Content must not be blank.")
 
-    model_config = {"frozen": True}
+    model_config = {"frozen": True, "extra": "forbid"}

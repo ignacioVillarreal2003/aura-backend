@@ -1,5 +1,4 @@
 from enum import StrEnum
-from typing import Optional
 from pydantic import BaseModel, Field
 
 from app.domain.dtos.fragment.fragment_response import FragmentResponse

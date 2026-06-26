@@ -21,6 +21,7 @@ from app.application.services.user_interactions.general_chat_service.general_cha
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.message import Message
+from app.domain.field_limits import MAX_MESSAGE_CONTENT_CHARS
 from app.domain.dtos.user_interactions.general_chat.general_chat_request import GeneralChatRequest
 from app.domain.dtos.user_interactions.general_chat.general_chat_response import GeneralChatResponse
 from app.domain.dtos.user_interactions.general_chat.general_chat_stream_events import (
@@ -90,8 +91,8 @@ class GeneralChatService(
             "process_documents": request.process_documents,
         }
 
-    def _postprocess_answer(self, answer: str) -> str:
-        return answer[:self._general_chat_settings.max_response_chars]
+    def _response_char_limit(self) -> int:
+        return self._general_chat_settings.max_response_chars
 
     def _build_response(
             self,
@@ -101,7 +102,10 @@ class GeneralChatService(
     ) -> GeneralChatResponse:
         return GeneralChatResponse(
             answer=answer,
-            messages=[*state.messages, Message(role=MessageRole.assistant, content=answer)],
+            messages=[
+                *state.messages,
+                Message(role=MessageRole.assistant, content=answer[:MAX_MESSAGE_CONTENT_CHARS]),
+            ],
             fragments=state.all_fragments,
             degraded_stages=self._degraded_stages(state),
         )

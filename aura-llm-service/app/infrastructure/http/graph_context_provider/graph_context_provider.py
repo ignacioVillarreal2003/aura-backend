@@ -17,6 +17,7 @@ from app.infrastructure.http.graph_context_provider.graph_context_provider_setti
 from app.infrastructure.http.graph_context_provider.interfaces.graph_context_provider_interface import (
     GraphContextProviderInterface,
 )
+from app.infrastructure.http.http_client.http_request_retry import retry_idempotent_request
 from app.infrastructure.http.http_client.interfaces.http_client_interface import HttpClientInterface
 
 logger = logging.getLogger(__name__)
@@ -70,11 +71,18 @@ class GraphContextProvider(GraphContextProviderInterface):
                     "retrieve_graph_context",
                     [question or "", *terms],
             ) as span:
-                response = await self._http_client.post(
-                    url=self._settings.url,
-                    json=request_body.model_dump(exclude_none=True, mode="json"),
-                    headers=self._build_headers(authenticated_user),
-                    timeout=self._settings.timeout_seconds,
+                payload = request_body.model_dump(exclude_none=True, mode="json")
+                headers = self._build_headers(authenticated_user)
+                response = await retry_idempotent_request(
+                    lambda: self._http_client.post(
+                        url=self._settings.url,
+                        json=payload,
+                        headers=headers,
+                        timeout=self._settings.timeout_seconds,
+                    ),
+                    max_attempts=self._settings.retry_max_attempts,
+                    min_wait=self._settings.retry_backoff_min_seconds,
+                    max_wait=self._settings.retry_backoff_max_seconds,
                 )
                 result = GraphContextResult.model_validate(response.json())
                 set_span_output(span, result.context_text)
@@ -118,11 +126,18 @@ class GraphContextProvider(GraphContextProviderInterface):
 
         try:
             with retrieval_span("execute_graph_query", [question]) as span:
-                response = await self._http_client.post(
-                    url=query_url,
-                    json=request_body.model_dump(exclude_none=True, mode="json"),
-                    headers=self._build_headers(authenticated_user),
-                    timeout=self._settings.timeout_seconds,
+                payload = request_body.model_dump(exclude_none=True, mode="json")
+                headers = self._build_headers(authenticated_user)
+                response = await retry_idempotent_request(
+                    lambda: self._http_client.post(
+                        url=query_url,
+                        json=payload,
+                        headers=headers,
+                        timeout=self._settings.timeout_seconds,
+                    ),
+                    max_attempts=self._settings.retry_max_attempts,
+                    min_wait=self._settings.retry_backoff_min_seconds,
+                    max_wait=self._settings.retry_backoff_max_seconds,
                 )
                 parsed = GraphQueryProviderResponse.model_validate(response.json())
                 context_text = self._render_query_facts(parsed)

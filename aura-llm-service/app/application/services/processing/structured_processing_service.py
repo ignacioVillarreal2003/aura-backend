@@ -8,6 +8,7 @@ from pydantic import BaseModel, ValidationError
 from app.application.authorization.exceptions.authorization_exceptions import UnauthorizedException
 from app.application.exceptions.app_exception import AppException, RequestValidationException
 from app.application.utils.llm_json_parser import parse_json_object
+from app.configuration.tracing import trace_generation
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.llm.ollama_llm.exceptions.ollama_llm_invoker_exceptions import LLMInvocationError
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
@@ -73,6 +74,7 @@ class StructuredProcessingService(ABC, Generic[TRequest, TParsed, TResponse]):
     def _result_log_extra(self, result: TResponse) -> dict[str, Any]:
         return {}
 
+    @trace_generation()
     async def _generate(self, request: TRequest, authenticated_user: AuthenticatedUser) -> TResponse:
         log_extra = self._request_log_extra(request, authenticated_user)
         self._logger.info("%s initiated", self.label.capitalize(), extra=log_extra)
@@ -94,7 +96,7 @@ class StructuredProcessingService(ABC, Generic[TRequest, TParsed, TResponse]):
                 self.label,
                 extra={"user_id": authenticated_user.id, "error_type": type(e).__name__},
             )
-            raise self.exception_cls(self.unexpected_error_message) from e
+            raise self.exception_cls(self.unexpected_error_message, status_code=500) from e
 
     async def _run_with_repair(
             self,

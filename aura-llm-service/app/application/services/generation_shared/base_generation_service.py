@@ -65,6 +65,8 @@ from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface i
 
 EMPTY_RESPONSE_MESSAGE = "El modelo de lenguaje devolvió una respuesta vacía."
 
+INITIAL_PROGRESS_MESSAGE = "Procesando tu consulta..."
+
 _LOADING_DOCUMENTS_MESSAGE = "Leyendo documentos adjuntos..."
 _REFORMULATING_MESSAGE = "Interpretando y optimizando la consulta..."
 _SEARCHING_COMPLEMENT_MESSAGE = "Buscando contexto adicional en la base de conocimiento..."

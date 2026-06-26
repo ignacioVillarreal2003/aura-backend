@@ -25,6 +25,10 @@ class OllamaLLMFacadeInterface(ABC):
     def is_healthy(self) -> bool:
         pass
 
+    @abstractmethod
+    async def check_health(self) -> bool:
+        pass
+
     @property
     @abstractmethod
     def tools_bound(self) -> bool:

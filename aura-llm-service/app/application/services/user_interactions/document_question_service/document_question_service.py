@@ -23,6 +23,7 @@ from app.application.services.user_interactions.document_question_service.interf
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.message import Message
+from app.domain.field_limits import MAX_MESSAGE_CONTENT_CHARS
 from app.domain.dtos.user_interactions.document_question.document_question_request import DocumentQuestionRequest
 from app.domain.dtos.user_interactions.document_question.document_question_response import DocumentQuestionResponse
 from app.domain.dtos.user_interactions.document_question.document_question_stream_events import (
@@ -100,8 +101,8 @@ class DocumentQuestionService(
             "process_documents": request.process_documents,
         }
 
-    def _postprocess_answer(self, answer: str) -> str:
-        return answer[:self._document_question_settings.max_response_chars]
+    def _response_char_limit(self) -> int:
+        return self._document_question_settings.max_response_chars
 
     def _build_response(
             self,
@@ -112,7 +113,10 @@ class DocumentQuestionService(
         return DocumentQuestionResponse(
             question=state.current_message.content,
             answer=answer,
-            messages=[*state.messages, Message(role=MessageRole.assistant, content=answer)],
+            messages=[
+                *state.messages,
+                Message(role=MessageRole.assistant, content=answer[:MAX_MESSAGE_CONTENT_CHARS]),
+            ],
             fragments=state.all_fragments,
             degraded_stages=self._degraded_stages(state),
         )

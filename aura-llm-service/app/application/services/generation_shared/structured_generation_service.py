@@ -4,6 +4,7 @@ from typing import Any, ClassVar, Generic, TypeVar
 
 from app.application.services.generation_shared.base_generation_service import (
     EMPTY_RESPONSE_MESSAGE,
+    INITIAL_PROGRESS_MESSAGE,
     BaseGenerationService,
     GenerationRequest,
 )
@@ -13,6 +14,7 @@ from app.configuration.tracing import trace_generation
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.message import Message
+from app.domain.field_limits import MAX_MESSAGE_CONTENT_CHARS
 
 TRequest = TypeVar("TRequest", bound=GenerationRequest)
 TParsed = TypeVar("TParsed")
@@ -56,7 +58,8 @@ class StructuredGenerationService(BaseGenerationService, Generic[TRequest, TPars
 
     @staticmethod
     def _conversation_with_answer(state: GenerationState, answer: str) -> list[Message]:
-        return [*state.messages, Message(role=MessageRole.assistant, content=answer)]
+        capped = answer[:MAX_MESSAGE_CONTENT_CHARS]
+        return [*state.messages, Message(role=MessageRole.assistant, content=capped)]
 
     @trace_generation()
     async def generate(
@@ -104,6 +107,7 @@ class StructuredGenerationService(BaseGenerationService, Generic[TRequest, TPars
     ) -> AsyncIterator[Any]:
         with self._observe("stream", authenticated_user, request) as obs:
             try:
+                yield self.stream_progress_event(step="processing", message=INITIAL_PROGRESS_MESSAGE)
                 state = self._build_state(request, authenticated_user)
                 async for progress_event in self._collect_context_with_progress(state):
                     yield progress_event

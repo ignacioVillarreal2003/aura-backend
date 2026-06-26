@@ -58,7 +58,7 @@ class TestReadinessEndpoint:
 
     def test_degraded_when_ollama_unhealthy(self, app, client):
         mock_ollama = MagicMock()
-        mock_ollama.is_healthy.return_value = False
+        mock_ollama.check_health = AsyncMock(return_value=False)
         original = getattr(app.state, "ollama_llm_facade", None)
         app.state.ollama_llm_facade = mock_ollama
         try:
@@ -75,7 +75,7 @@ class TestReadinessEndpoint:
         mock_http = MagicMock()
         mock_http.health_check = AsyncMock(return_value={"status": "healthy"})
         mock_ollama = MagicMock()
-        mock_ollama.is_healthy.return_value = True
+        mock_ollama.check_health = AsyncMock(return_value=True)
         mock_ollama.tools_bound = True
         mock_redis = MagicMock()
         mock_redis.health_check = AsyncMock(return_value=True)

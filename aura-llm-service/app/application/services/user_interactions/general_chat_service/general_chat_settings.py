@@ -1,6 +1,8 @@
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.domain.field_limits import MAX_CONTENT_CHARS
+
 
 class GeneralChatSettings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -11,4 +13,4 @@ class GeneralChatSettings(BaseSettings):
         extra="ignore",
     )
 
-    max_response_chars: int = Field(default=10_000, ge=1_000, le=200_000)
+    max_response_chars: int = Field(default=MAX_CONTENT_CHARS, ge=1_000, le=MAX_CONTENT_CHARS)

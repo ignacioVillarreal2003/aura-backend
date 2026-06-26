@@ -1,8 +1,12 @@
 import asyncio
 import contextlib
+import json
+import logging
 from collections.abc import AsyncIterator
 from pydantic import BaseModel
 from starlette.responses import StreamingResponse
+
+logger = logging.getLogger(__name__)
 
 SSE_HEADERS = {
     "Cache-Control": "no-cache",
@@ -12,6 +16,13 @@ SSE_HEADERS = {
 
 _HEARTBEAT_FRAME = b": ping\n\n"
 _HEARTBEAT_INTERVAL_SECONDS = 15.0
+
+_FALLBACK_ERROR_PAYLOAD = {
+    "type": "error",
+    "message": "El servicio no pudo completar la respuesta.",
+    "code": "internal_error",
+}
+_FALLBACK_ERROR_FRAME = f"data: {json.dumps(_FALLBACK_ERROR_PAYLOAD, ensure_ascii=False)}\n\n".encode("utf-8")
 
 
 def format_sse_event(event: BaseModel) -> bytes:
@@ -37,7 +48,17 @@ def sse_response(events: AsyncIterator[BaseModel]) -> StreamingResponse:
                     event = task.result()
                 except StopAsyncIteration:
                     return
-                yield format_sse_event(event)
+                except Exception:
+                    logger.exception("SSE event source failed; emitting terminal error event.")
+                    yield _FALLBACK_ERROR_FRAME
+                    return
+                try:
+                    frame = format_sse_event(event)
+                except Exception:
+                    logger.exception("SSE event serialization failed; emitting terminal error event.")
+                    yield _FALLBACK_ERROR_FRAME
+                    return
+                yield frame
         finally:
             if pending is not None:
                 pending.cancel()
