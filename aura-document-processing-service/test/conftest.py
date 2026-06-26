@@ -1,5 +1,4 @@
 import os
-# Set before any app module is imported so EnvironmentVariables() picks up these values.
 os.environ.setdefault("AUTHENTICATION_PROVIDER_AUTHENTICATION_URL", "http://auth.test")
 
 import base64
@@ -92,7 +91,6 @@ def create_test_app() -> FastAPI:
     test_app.include_router(router, prefix="/api/v1")
     register_exception_handlers(test_app)
 
-    # Replace the real DB session dependency with a no-op mock.
     test_app.dependency_overrides[get_database_session] = _mock_db_session
 
     test_app.state.authentication_provider = FakeAuthenticationProvider()
@@ -133,7 +131,6 @@ def auth_headers(service_headers):
     return service_headers(permissions=ALL_PERMISSIONS)
 
 
-# ── Per-service mock helpers ──────────────────────────────────────────────────
 
 def _mock_service(app, attr: str):
     mock = AsyncMock()

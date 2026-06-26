@@ -8,7 +8,7 @@ Rate limiting is enforced per-user (authenticated) or per-IP (unauthenticated) u
 
 | Tier | Requests / window (default) | Applied to |
 |---|---|---|
-| Default | 60 | base (non-stream) endpoints: `/document-question`, `/document-classify`, `/fragment-enrich`, `/graph-extraction`, `/graph-query-translation`, `/general-chat`, and the structured-generation endpoints (`/report-generate`, `/checklist-generate`, `/timeline-generate`, `/quiz-generate`, `/lessons-learned-generate`, `/decision-brief-generate`) |
+| Default | 60 | base (non-stream) endpoints: `/document-question`, `/document-classify`, `/fragment-contextualize`, `/graph-extraction`, `/graph-query-translation`, `/general-chat`, and the structured-generation endpoints (`/report-generate`, `/checklist-generate`, `/timeline-generate`, `/quiz-generate`, `/lessons-learned-generate`, `/decision-brief-generate`) |
 | Strict | 20 | every `…/stream` variant, plus `/document-summary`, `/document-action` and `/rag-agent` |
 
 Window size and per-tier limits are configurable via `RATE_LIMIT_WINDOW_SECONDS`, `RATE_LIMIT_DEFAULT_PER_WINDOW` and `RATE_LIMIT_STRICT_PER_WINDOW` (see [getting-started](getting-started.md)).

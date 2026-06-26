@@ -50,7 +50,7 @@ _error = default_error_responses(
 )
 _response = {
     200: {
-        "description": "IntenciÃ³n estructurada inferida a partir de la pregunta",
+        "description": "Intención estructurada inferida a partir de la pregunta",
         "model": TranslateGraphQueryResponse,
     },
     **_error,
@@ -62,10 +62,10 @@ router.add_api_route(
     methods=["POST"],
     response_model=TranslateGraphQueryResponse,
     operation_id="translateGraphQuery",
-    summary="Traducir pregunta a intenciÃ³n de grafo",
+    summary="Traducir pregunta a intención de grafo",
     description=(
         "Traduce una pregunta en lenguaje natural a un intent estructurado y "
-        "parÃ¡metros validados sobre la ontologÃ­a del grafo. Nunca devuelve Cypher."
+        "parámetros validados sobre la ontología del grafo. Nunca devuelve Cypher."
     ),
     responses=_response,
 )

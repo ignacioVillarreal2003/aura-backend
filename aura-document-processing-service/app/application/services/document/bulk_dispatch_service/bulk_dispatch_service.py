@@ -233,9 +233,6 @@ class BulkDispatchService(BulkDispatchServiceInterface):
         )
 
     def _is_stale(self, snapshot: dict[str, Any]) -> bool:
-        # Only take over a running job when staleness can be proven from a timestamp.
-        # Missing/unparseable timestamp -> not stale, so a genuinely running job is
-        # never taken over (real jobs always carry started_at/heartbeat_at).
         timestamp = snapshot.get("heartbeat_at") or snapshot.get("started_at")
         if not timestamp:
             return False

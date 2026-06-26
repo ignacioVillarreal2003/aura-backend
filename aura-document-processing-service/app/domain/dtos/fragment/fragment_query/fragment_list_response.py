@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import BaseModel, Field, field_validator
 
 from app.domain.dtos.fragment.fragment_query.fragment_response import FragmentResponse
@@ -7,9 +9,30 @@ from app.domain.field_limits import (
 )
 
 
+class FragmentSectionGroup(BaseModel):
+    """A matched (primary) fragment together with its surrounding section as
+    secondary context. Populated only for the ``"section"`` expansion mode."""
+
+    primary: FragmentResponse
+    section_fragments: list[FragmentResponse] = Field(
+        default_factory=list,
+        max_length=MAX_FRAGMENTS_IN_LIST,
+    )
+
+    model_config = {
+        "from_attributes": True,
+        "frozen": True,
+    }
+
+
 class FragmentListResponse(BaseModel):
     fragments: list[FragmentResponse] = Field(
         default_factory=list,
+        max_length=MAX_FRAGMENTS_IN_LIST,
+    )
+
+    groups: Optional[list[FragmentSectionGroup]] = Field(
+        default=None,
         max_length=MAX_FRAGMENTS_IN_LIST,
     )
 

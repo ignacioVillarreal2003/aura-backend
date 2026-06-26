@@ -15,19 +15,19 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
     """,
     """
     CREATE INDEX entity_canonical_name IF NOT EXISTS
-    FOR (e:Entity) ON (e.canonical_name)
+        FOR (e:Entity) ON (e.canonical_name)
     """,
     """
     CREATE INDEX entity_type IF NOT EXISTS
-    FOR (e:Entity) ON (e.type)
+        FOR (e:Entity) ON (e.type)
     """,
     """
     CREATE INDEX entity_display_name IF NOT EXISTS
-    FOR (e:Entity) ON (e.display_name)
+        FOR (e:Entity) ON (e.display_name)
     """,
     """
     CREATE INDEX rel_type IF NOT EXISTS
-    FOR ()-[r:REL]-() ON (r.type)
+        FOR ()-[r:REL]-() ON (r.type)
     """,
     """
     CREATE FULLTEXT INDEX entity_fulltext IF NOT EXISTS
@@ -36,11 +36,11 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
     """,
     """
     CREATE INDEX rel_confidence IF NOT EXISTS
-    FOR ()-[r:REL]-() ON (r.confidence)
+        FOR ()-[r:REL]-() ON (r.confidence)
     """,
     """
     CREATE INDEX rel_type_confidence IF NOT EXISTS
-    FOR ()-[r:REL]-() ON (r.type, r.confidence)
+        FOR ()-[r:REL]-() ON (r.type, r.confidence)
     """,
 )
 

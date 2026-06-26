@@ -7,6 +7,7 @@ from app.application.services.generation_shared.generation_messages import (
 from app.application.services.generation_shared.state.generation_state import GenerationState
 from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.message import Message
+from app.infrastructure.http.document_context_provider.dtos.fragment_list_response import FragmentSectionGroup
 
 
 def _state(messages=None) -> GenerationState:
@@ -68,6 +69,38 @@ class TestBuildContextBlock:
         block = build_context_block(state, max_context_chars=1000)
         assert "[FRAGMENTO 1 — Reglamento X]" in block
 
+    def test_prefers_contextualized_content_when_present(self, make_fragment):
+        state = _state()
+        frag = make_fragment(content="texto crudo").model_copy(
+            update={"contextualized_content": "CONTEXTO SITUACIONAL\n\ntexto crudo"}
+        )
+        state.fragments = [frag]
+        block = build_context_block(state, max_context_chars=1000)
+        assert "CONTEXTO SITUACIONAL" in block
+
+    def test_falls_back_to_raw_content_without_contextualized(self, make_fragment):
+        state = _state()
+        state.fragments = [make_fragment(content="solo crudo")]
+        block = build_context_block(state, max_context_chars=1000)
+        assert "solo crudo" in block
+
+    def test_attached_renders_raw_rag_renders_contextualized(self, make_fragment):
+        state = _state()
+        state.attached_fragments = [
+            make_fragment(fragment_id=1, content="ADJUNTO CRUDO").model_copy(
+                update={"contextualized_content": "PREFIJO ADJUNTO\n\nADJUNTO CRUDO"}
+            )
+        ]
+        state.fragments = [
+            make_fragment(fragment_id=2, content="rag crudo").model_copy(
+                update={"contextualized_content": "PREFIJO RAG\n\nrag crudo"}
+            )
+        ]
+        block = build_context_block(state, max_context_chars=5000)
+        assert "ADJUNTO CRUDO" in block
+        assert "PREFIJO ADJUNTO" not in block
+        assert "PREFIJO RAG" in block
+
     def test_budget_limits_rag_fragments(self, make_fragment):
         state = _state()
         state.fragments = [
@@ -83,8 +116,6 @@ class TestBuildContextBlock:
         state.attached_fragments = [make_fragment(fragment_id=1, content="x" * 800)]
         state.fragments = [make_fragment(fragment_id=2, content="y" * 200)]
         block = build_context_block(state, max_context_chars=1000, attached_reserve_ratio=0.6)
-        # The attached fragment (800 chars) exceeds its 600-char reserve and is dropped,
-        # while the rag fragment fits in the remainder.
         assert "x" * 800 not in block
         assert "y" * 200 in block
 
@@ -106,7 +137,6 @@ class TestBuildGenerationMessages:
         messages = build_generation_messages(
             "system", "{context}|{input}", _state(many), history_messages_window=2, context_block="C"
         )
-        # system + 2 history + final human
         assert len(messages) == 4
         assert messages[1].content == "h3"
 
@@ -115,3 +145,75 @@ class TestBuildGenerationMessages:
             "system", "{context}|{input}", _state(), history_messages_window=0, context_block="C"
         )
         assert len(messages) == 2
+
+    def test_history_char_budget_drops_oldest(self):
+        many = [
+            Message(role=MessageRole.human, content="a" * 100),
+            Message(role=MessageRole.assistant, content="b" * 100),
+            Message(role=MessageRole.human, content="c" * 100),
+            Message(role=MessageRole.human, content="actual"),
+        ]
+        messages = build_generation_messages(
+            "system", "{context}|{input}", _state(many),
+            history_messages_window=4, context_block="C", max_history_chars=250,
+        )
+        history = [m.content for m in messages[1:-1]]
+        assert history == ["b" * 100, "c" * 100]
+
+    def test_history_budget_zero_disables_trimming(self):
+        many = [Message(role=MessageRole.human, content="x" * 100) for _ in range(3)] + [
+            Message(role=MessageRole.human, content="actual")
+        ]
+        messages = build_generation_messages(
+            "system", "{context}|{input}", _state(many),
+            history_messages_window=4, context_block="C", max_history_chars=0,
+        )
+        assert len([m for m in messages[1:-1]]) == 3
+
+    def test_history_summary_replaces_verbatim_turns(self):
+        state = _state()
+        state.history_summary = "RESUMEN PREVIO"
+        messages = build_generation_messages(
+            "system", "{context}|{input}", state,
+            history_messages_window=4, context_block="CTX", max_history_chars=12_000,
+        )
+        assert len(messages) == 3
+        assert "RESUMEN PREVIO" in messages[1].content
+        assert all(m.content not in ("m1", "m2") for m in messages)
+
+
+class TestSectionContextBlock:
+    def _section_state(self, make_fragment, summary=None):
+        state = _state()
+        primary = make_fragment(fragment_id=1, content="PRINCIPAL", document_name="Reglamento X",
+                                section_path="Cap 1", fragment_index=0)
+        secondary = make_fragment(fragment_id=2, content="SECUNDARIO", document_name="Reglamento X",
+                                  section_path="Cap 1", fragment_index=1)
+        state.fragments = [primary]
+        state.section_groups = [FragmentSectionGroup(primary=primary, section_fragments=[secondary])]
+        state.section_summary = summary
+        return state
+
+    def test_section_mode_renders_primary_and_verbatim_secondary(self, make_fragment):
+        state = self._section_state(make_fragment)
+        block = build_context_block(state, max_context_chars=2000)
+        assert "CONTEXTO PRINCIPAL" in block
+        assert "PRINCIPAL" in block
+        assert "CONTEXTO DE SECCIÓN (complementario)" in block
+        assert "SECUNDARIO" in block
+
+    def test_section_mode_uses_summary_when_present(self, make_fragment):
+        state = self._section_state(make_fragment, summary="RESUMEN DE SECCIÓN")
+        block = build_context_block(state, max_context_chars=2000)
+        assert "CONTEXTO PRINCIPAL" in block
+        assert "PRINCIPAL" in block
+        assert "resumido" in block
+        assert "RESUMEN DE SECCIÓN" in block
+        assert "SECUNDARIO" not in block
+
+    def test_section_mode_takes_precedence_over_reduced_context(self, make_fragment):
+        state = self._section_state(make_fragment)
+        state.reduced_context = "no debería usarse"
+        block = build_context_block(state, max_context_chars=2000)
+        assert "CONTEXTO PRINCIPAL" in block
+        assert "no debería usarse" not in block

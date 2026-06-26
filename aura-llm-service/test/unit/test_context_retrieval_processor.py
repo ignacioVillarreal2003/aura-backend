@@ -61,14 +61,14 @@ class TestRequestBuilding:
 
 class TestCharBudget:
     def test_disabled_by_default(self, make_fragment):
-        p = _processor(_Provider())  # max_context_chars=None
+        p = _processor(_Provider())
         frs = [make_fragment(fragment_id=i + 1, content="y" * 400) for i in range(5)]
         assert p._apply_char_budget(frs) == frs
 
     def test_drops_whole_fragments_over_budget(self, make_fragment):
         p = _processor(_Provider(), max_context_chars=1_000)
         frs = [make_fragment(fragment_id=i + 1, content="y" * 400) for i in range(5)]
-        assert len(p._apply_char_budget(frs)) == 2  # 400 + 400 = 800; +400 = 1200 > 1000
+        assert len(p._apply_char_budget(frs)) == 2
 
     def test_keeps_at_least_one(self, make_fragment):
         p = _processor(_Provider(), max_context_chars=1_000)

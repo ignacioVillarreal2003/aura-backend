@@ -137,10 +137,6 @@ class GuardrailsMiddleware:
             "Request blocked by the guardrails input filter.",
             extra={"path": path, "request_id": cls._request_id(scope)},
         )
-        # Streaming endpoints (SSE) negotiate a `text/event-stream` body; answering
-        # with a plain 400 JSON breaks the client's stream parser. Instead, open a
-        # normal 200 stream and report the block through the same event protocol the
-        # endpoint uses, so the UI can show progress then a graceful error.
         if path.endswith("/stream"):
             await cls._send_blocked_sse(scope, send, message)
             return

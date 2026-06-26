@@ -20,6 +20,8 @@ class NemoGuardrailsSettings(BaseSettings):
     max_input_chars: int = Field(default=8_000, ge=200, le=100_000)
     max_output_chars: int = Field(default=8_000, ge=200, le=100_000)
 
+    check_timeout_seconds: float = Field(default=5.0, gt=0.0, le=60.0)
+
     blocked_output_message: str = Field(
         default=(
             "La respuesta fue retenida por el filtro de seguridad. "

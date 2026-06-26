@@ -35,6 +35,7 @@ class TestDocumentSelector:
         with pytest.raises(ValidationError):
             DocumentSelector(document_ids=[0])
 
-    def test_rejects_extra_fields(self):
-        with pytest.raises(ValidationError):
-            DocumentSelector(all_documents=True, unexpected="x")
+    def test_ignores_extra_fields(self):
+        selector = DocumentSelector(all_documents=True, unexpected="x")
+        assert selector.all_documents is True
+        assert not hasattr(selector, "unexpected")

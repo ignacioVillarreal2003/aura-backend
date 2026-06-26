@@ -1,7 +1,9 @@
 import io
 import logging
 import multiprocessing
+import threading
 from concurrent.futures import ProcessPoolExecutor, TimeoutError, as_completed
+from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 from typing import Optional
 import pypdf
@@ -58,6 +60,9 @@ class ScannedPDFReader(BaseReader):
                 if self._settings.pdf_max_workers is not None
                 else max(1, multiprocessing.cpu_count() - 1)
             )
+
+            self._pool: Optional[ProcessPoolExecutor] = None
+            self._pool_lock = threading.Lock()
 
             logger.info(
                 "The scanned PDF reader was initialized successfully.",
@@ -166,11 +171,41 @@ class ScannedPDFReader(BaseReader):
             self,
             file_path: Path
     ) -> list[Image.Image]:
+        last_page = self._resolve_last_page(file_path)
         return convert_from_path(
             str(file_path),
             dpi=self._settings.pdf_dpi,
-            poppler_path=self._settings.poppler_path
+            poppler_path=self._settings.poppler_path,
+            first_page=1,
+            last_page=last_page,
         )
+
+    def _resolve_last_page(
+            self,
+            file_path: Path
+    ) -> int:
+        cap = self._settings.pdf_max_ocr_pages
+        total = self._page_count(file_path)
+        if total is not None and total > cap:
+            logger.warning(
+                "The scanned PDF exceeds the OCR page cap; only the first pages will be processed.",
+                extra={
+                    "file_name": file_path.name,
+                    "total_pages": total,
+                    "page_cap": cap,
+                }
+            )
+        return cap if total is None else min(total, cap)
+
+    @staticmethod
+    def _page_count(
+            file_path: Path
+    ) -> Optional[int]:
+        try:
+            with open(file_path, "rb") as f:
+                return len(pypdf.PdfReader(f).pages)
+        except Exception:
+            return None
 
     def _process_sequential(
             self,
@@ -229,78 +264,120 @@ class ScannedPDFReader(BaseReader):
             self,
             pages: list[Image.Image]
     ) -> list[str]:
+        try:
+            return self._run_pool_ocr(pages)
+        except BrokenProcessPool:
+            logger.warning(
+                "The OCR process pool broke; resetting it and falling back to "
+                "sequential OCR for this document.",
+            )
+            self._reset_pool()
+            return self._process_sequential(pages)
+
+    def _run_pool_ocr(
+            self,
+            pages: list[Image.Image]
+    ) -> list[str]:
         all_text: list[Optional[str]] = [None] * len(pages)
         max_in_flight = max(1, self._max_workers * 2)
         next_page_to_submit = 0
 
-        with ProcessPoolExecutor(max_workers=self._max_workers) as executor:
-            future_to_page: dict = {}
+        executor = self._get_pool()
+        future_to_page: dict = {}
 
-            while next_page_to_submit < len(pages) or future_to_page:
-                while (
-                        next_page_to_submit < len(pages)
-                        and len(future_to_page) < max_in_flight
-                ):
-                    page = pages[next_page_to_submit]
-                    try:
-                        buf = io.BytesIO()
-                        page.save(buf, format="PNG")
-                        payload: tuple[bytes, int, str, int, str | None] = (
-                            buf.getvalue(),
-                            next_page_to_submit,
-                            self._settings.tesseract_lang,
-                            self._settings.tesseract_timeout,
-                            self._settings.tesseract_path,
-                        )
-                        future = executor.submit(_ocr_page_worker, payload)
-                        future_to_page[future] = next_page_to_submit
-                    except Exception as e:
-                        logger.warning(
-                            "Failed to serialize a page for parallel OCR.",
-                            extra={
-                                "page_num": next_page_to_submit + 1,
-                                "exception_type": type(e).__name__
-                            }
-                        )
-                    finally:
-                        next_page_to_submit += 1
-
-                if not future_to_page:
-                    continue
-
-                future = next(as_completed(future_to_page))
-                page_num = future_to_page.pop(future)
+        while next_page_to_submit < len(pages) or future_to_page:
+            while (
+                    next_page_to_submit < len(pages)
+                    and len(future_to_page) < max_in_flight
+            ):
+                page = pages[next_page_to_submit]
+                page_index = next_page_to_submit
+                next_page_to_submit += 1
                 try:
-                    result_page_num, text, error = future.result(
-                        timeout=self._settings.tesseract_timeout + 5
-                    )
-                    if error:
-                        logger.warning(
-                            "The OCR worker reported a problem for a page.",
-                            extra={
-                                "page_num": result_page_num + 1
-                            }
-                        )
-                    elif text:
-                        all_text[result_page_num] = text
-                except TimeoutError:
-                    logger.warning(
-                        "OCR timed out for a page.",
-                        extra={
-                            "page_num": page_num + 1,
-                            "timeout": self._settings.tesseract_timeout
-                        }
+                    buf = io.BytesIO()
+                    page.save(buf, format="PNG")
+                    payload: tuple[bytes, int, str, int, str | None] = (
+                        buf.getvalue(),
+                        page_index,
+                        self._settings.tesseract_lang,
+                        self._settings.tesseract_timeout,
+                        self._settings.tesseract_path,
                     )
                 except Exception as e:
                     logger.warning(
-                        "OCR failed for a page.",
+                        "Failed to serialize a page for parallel OCR.",
                         extra={
-                            "page_num": page_num + 1,
+                            "page_num": page_index + 1,
                             "exception_type": type(e).__name__
                         }
                     )
+                    continue
+
+                future = executor.submit(_ocr_page_worker, payload)
+                future_to_page[future] = page_index
+
+            if not future_to_page:
+                continue
+
+            future = next(as_completed(future_to_page))
+            page_num = future_to_page.pop(future)
+            try:
+                result_page_num, text, error = future.result(
+                    timeout=self._settings.tesseract_timeout + 5
+                )
+                if error:
+                    logger.warning(
+                        "The OCR worker reported a problem for a page.",
+                        extra={
+                            "page_num": result_page_num + 1
+                        }
+                    )
+                elif text:
+                    all_text[result_page_num] = text
+            except TimeoutError:
+                logger.warning(
+                    "OCR timed out for a page.",
+                    extra={
+                        "page_num": page_num + 1,
+                        "timeout": self._settings.tesseract_timeout
+                    }
+                )
+            except BrokenProcessPool:
+                raise
+            except Exception as e:
+                logger.warning(
+                    "OCR failed for a page.",
+                    extra={
+                        "page_num": page_num + 1,
+                        "exception_type": type(e).__name__
+                    }
+                )
 
         return [t for t in all_text if t]
+
+    def _get_pool(
+            self
+    ) -> ProcessPoolExecutor:
+        pool = self._pool
+        if pool is not None:
+            return pool
+        with self._pool_lock:
+            if self._pool is None:
+                self._pool = ProcessPoolExecutor(max_workers=self._max_workers)
+                logger.info(
+                    "Initialized the persistent OCR process pool.",
+                    extra={"max_workers": self._max_workers},
+                )
+            return self._pool
+
+    def _reset_pool(
+            self
+    ) -> None:
+        with self._pool_lock:
+            pool = self._pool
+            self._pool = None
+        if pool is not None:
+            pool.shutdown(wait=False, cancel_futures=True)
 
 
 def _close_images(

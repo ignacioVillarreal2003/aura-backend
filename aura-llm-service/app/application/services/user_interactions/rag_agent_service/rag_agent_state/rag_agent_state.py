@@ -22,3 +22,7 @@ class RagAgentState(TypedDict):
     answer: str
     guardrail_passed: bool
     fallback_triggered: bool
+    retrieval_attempts: int
+    context_sufficient: bool
+    grade_reason: str
+    can_retry: bool

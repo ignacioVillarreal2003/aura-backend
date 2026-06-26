@@ -22,7 +22,7 @@ from app.infrastructure.persistence.database.repositories.interfaces.document_re
 
 logger = logging.getLogger(__name__)
 
-_EDITABLE_FIELDS = frozenset({"name", "description", "category"})
+_EDITABLE_FIELDS = frozenset({"name"})
 
 
 class UpdateDocumentService(UpdateDocumentServiceInterface):

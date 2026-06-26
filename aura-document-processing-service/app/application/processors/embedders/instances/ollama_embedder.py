@@ -87,7 +87,7 @@ class OllamaEmbedder(BaseEmbedder):
             self,
             texts: list[str]
     ) -> list[list[float]]:
-        self._validate_texts(texts)
+        texts = self._sanitize_documents(texts)
 
         if len(texts) > self._max_batch_size:
             logger.info(

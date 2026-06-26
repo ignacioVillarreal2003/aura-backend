@@ -1,7 +1,7 @@
 import logging
 from fastapi import FastAPI
 
-from app.configuration.dependency_registry import DependencyRegistry
+from app.configuration.dependency_registry import DependencyRegistry, run_committed_cleanups
 from app.application.services.user_interactions.document_action_service.document_action_service import (
     DocumentActionService,
 )
@@ -14,7 +14,9 @@ from app.application.services.user_interactions.document_question_service.docume
 from app.application.services.processing.document_classify_service.document_classify_service import (
     DocumentClassifyService,
 )
-from app.application.services.processing.fragment_enrich_service.fragment_enrich_service import FragmentEnrichService
+from app.application.services.processing.fragment_contextualize_service.fragment_contextualize_service import (
+    FragmentContextualizeService,
+)
 from app.application.services.processing.graph_extraction_service.graph_extraction_service import GraphExtractionService
 from app.application.services.processing.graph_query_translation_service.graph_query_translation_service import (
     GraphQueryTranslationService,
@@ -62,12 +64,20 @@ async def startup_dependencies(app: FastAPI) -> None:
         registry.register("http_client", http_client, cleanup=http_client.stop)
 
         redis_client = RedisClient()
-        await redis_client.initialize()
-        registry.register("redis_client", redis_client, cleanup=redis_client.dispose)
+        redis_cache_client = None
+        try:
+            await redis_client.initialize()
+            registry.register("redis_client", redis_client, cleanup=redis_client.dispose)
+            redis_cache_client = redis_client.client
+        except Exception:
+            logger.warning(
+                "Redis unavailable at startup; continuing without token cache or rate limiting.",
+                exc_info=True,
+            )
 
         registry.register(
             "authentication_provider",
-            AuthenticationProvider(http_client=http_client, redis_client=redis_client.client),
+            AuthenticationProvider(http_client=http_client, redis_client=redis_cache_client),
         )
 
         document_context_provider = DocumentContextProvider(http_client=http_client)
@@ -80,7 +90,7 @@ async def startup_dependencies(app: FastAPI) -> None:
         validate_context_budget(ollama_facade_settings, GenerationSettings())
         ollama_facade = OllamaLLMFacade(ollama_llm_facade_settings=ollama_facade_settings)
         await ollama_facade.initialize()
-        registry.register("ollama_llm_facade", ollama_facade)
+        registry.register("ollama_llm_facade", ollama_facade, cleanup=ollama_facade.aclose)
 
         nemo_guardrails = NemoGuardrailsService(ollama_llm_facade=ollama_facade)
         registry.register("nemo_guardrails", nemo_guardrails)
@@ -112,7 +122,9 @@ async def startup_dependencies(app: FastAPI) -> None:
         registry.register("general_chat_service", GeneralChatService(**streaming_service_kwargs))
 
         registry.register("document_classify_service", DocumentClassifyService(**processing_service_kwargs))
-        registry.register("fragment_enrich_service", FragmentEnrichService(**processing_service_kwargs))
+        registry.register(
+            "fragment_contextualize_service", FragmentContextualizeService(**processing_service_kwargs)
+        )
         registry.register("graph_extraction_service", GraphExtractionService(**processing_service_kwargs))
         registry.register(
             "graph_query_translation_service", GraphQueryTranslationService(**processing_service_kwargs)
@@ -154,13 +166,5 @@ async def startup_dependencies(app: FastAPI) -> None:
 
 async def shutdown_dependencies(app: FastAPI) -> None:
     logger.info("Shutting down dependencies")
-
-    state = app.state
-
-    if http_client := getattr(state, "http_client", None):
-        await http_client.stop()
-
-    if redis_client := getattr(state, "redis_client", None):
-        await redis_client.dispose()
-
+    await run_committed_cleanups(app)
     logger.info("All dependencies shut down successfully")

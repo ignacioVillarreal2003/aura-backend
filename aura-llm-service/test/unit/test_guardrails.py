@@ -60,7 +60,6 @@ class TestNemoGuardrailsService:
         assert (await service.check_input("   ")).allowed is True
 
     async def test_missing_package_degrades_to_inactive(self, monkeypatch):
-        # Force the lazy import to fail regardless of the local environment.
         import builtins
 
         real_import = builtins.__import__

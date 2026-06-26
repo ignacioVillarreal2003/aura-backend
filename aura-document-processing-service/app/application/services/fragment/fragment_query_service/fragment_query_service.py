@@ -1,10 +1,14 @@
 import asyncio
 import logging
-from typing import Any, Optional, Protocol, TypeVar
+from typing import Any, Literal, Optional, Protocol, TypeVar
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.processors.embedders.embedder_factory import EmbedderFactory
 from app.application.processors.rerankers.reranker_factory import RerankerFactory
+from app.configuration.metrics import (
+    retrieval_lane_fragments_total,
+    retrieval_top_rerank_score,
+)
 from app.application.services.fragment.fragment_query_service.exceptions.fragment_query_service_exception import (
     FragmentQueryEmbeddingException,
     FragmentQueryInvalidRequestException,
@@ -22,7 +26,10 @@ from app.application.services.fragment.fragment_query_service.interfaces.fragmen
 from app.domain.dtos.fragment.fragment_query.documents_context_fragments_request import (
     DocumentsContextFragmentsRequest,
 )
-from app.domain.dtos.fragment.fragment_query.fragment_list_response import FragmentListResponse
+from app.domain.dtos.fragment.fragment_query.fragment_list_response import (
+    FragmentListResponse,
+    FragmentSectionGroup,
+)
 from app.domain.dtos.fragment.fragment_query.fragment_response import FragmentResponse
 from app.domain.dtos.fragment.fragment_query.question_context_fragments_request import (
     QuestionContextFragmentsRequest,
@@ -182,6 +189,18 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 )
                 for q, vector in zip(semantic_queries, vectors, strict=True)
             ]
+            contextual_coros = []
+            if self._settings.contextual_retrieval_enabled:
+                contextual_coros = [
+                    self._retrieve_similar_isolated(
+                        query_vector=vector,
+                        k=q.max_fragments,
+                        document_ids=accessible_doc_ids,
+                        semaphore=retrieval_semaphore,
+                        representation="contextual",
+                    )
+                    for q, vector in zip(semantic_queries, vectors, strict=True)
+                ]
             bm25_coros = [
                 self._retrieve_bm25_isolated(
                     query_text=q.text,
@@ -191,9 +210,21 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 )
                 for q in bm25_queries
             ]
+            if self._settings.contextual_retrieval_enabled:
+                bm25_coros += [
+                    self._retrieve_bm25_isolated(
+                        query_text=q.text,
+                        k=q.max_fragments,
+                        document_ids=accessible_doc_ids,
+                        semaphore=retrieval_semaphore,
+                        representation="contextual",
+                    )
+                    for q in bm25_queries
+                ]
 
-            semantic_ranked_lists, bm25_results = await asyncio.gather(
+            semantic_ranked_lists, contextual_ranked_lists, bm25_results = await asyncio.gather(
                 asyncio.gather(*semantic_coros),
+                asyncio.gather(*contextual_coros),
                 asyncio.gather(*bm25_coros, return_exceptions=True),
             )
 
@@ -213,7 +244,16 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                     bm25_ranked_lists = [r for r in bm25_results if not isinstance(r, BaseException)]
                     bm25_used = True
 
-            all_ranked_lists = list(semantic_ranked_lists) + bm25_ranked_lists
+            lane_ids = self._build_lane_membership(
+                semantic_ranked_lists=semantic_ranked_lists,
+                contextual_ranked_lists=contextual_ranked_lists,
+                bm25_ranked_lists=bm25_ranked_lists,
+                bm25_query_count=len(bm25_queries),
+            )
+
+            all_ranked_lists = (
+                list(semantic_ranked_lists) + list(contextual_ranked_lists) + bm25_ranked_lists
+            )
             if len(all_ranked_lists) > 1:
                 fragments: list[Fragment] = _reciprocal_rank_fusion(
                     ranked_lists=all_ranked_lists,
@@ -229,16 +269,44 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 fragments = fragments[:self._settings.rerank_candidate_pool_cap]
                 rerank_query = self._build_rerank_query(question_context_fragments_request)
                 top_n = question_context_fragments_request.rerank.max_fragments or len(fragments)
-                indices = await self._reranker_factory.reranker.rerank(
+                scored = await self._reranker_factory.reranker.rerank_with_scores(
                     query=rerank_query,
-                    candidates=[f.content for f in fragments],
+                    candidates=[(f.contextualized_content or f.content) for f in fragments],
                     top_n=top_n,
                 )
-                fragments = [fragments[i] for i in indices]
+                fragments = [fragments[i] for i, _ in scored if 0 <= i < len(fragments)]
+                self._record_top_rerank_score(scored)
                 rerank_applied = True
 
+            self._record_lane_contribution(fragments, lane_ids)
+
+            expansion = question_context_fragments_request.context_expansion
+
+            if expansion == "section" and fragments:
+                response = await self._build_section_response(
+                    primaries=fragments,
+                    request=question_context_fragments_request,
+                    database_session=database_session,
+                    accessible_doc_set=accessible_doc_set,
+                )
+                logger.info(
+                    "Context fragments were retrieved successfully for the question.",
+                    extra={
+                        "fragment_count": len(response.fragments),
+                        "group_count": len(response.groups or []),
+                        "rerank_applied": rerank_applied,
+                        "bm25_used": bm25_used,
+                        "context_expansion": expansion,
+                    },
+                )
+                return response
+
             adjacent_added = 0
-            if question_context_fragments_request.adjacent_chunks > 0 and fragments:
+            if (
+                expansion == "adjacent"
+                and question_context_fragments_request.adjacent_chunks > 0
+                and fragments
+            ):
                 retrieved_ids = {f.id for f in fragments}
                 adjacent = await self._fragment_repository.get_adjacent_fragments(
                     fragments=fragments,
@@ -271,6 +339,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                     "rerank_applied": rerank_applied,
                     "bm25_used": bm25_used,
                     "adjacent_added": adjacent_added,
+                    "context_expansion": expansion,
                 },
             )
             return FragmentListResponse(fragments=fragment_responses)
@@ -402,12 +471,179 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             ) from e
 
     @staticmethod
+    def _build_lane_membership(
+            *,
+            semantic_ranked_lists: list[list[Fragment]],
+            contextual_ranked_lists: list[list[Fragment]],
+            bm25_ranked_lists: list[list[Fragment]],
+            bm25_query_count: int,
+    ) -> dict[str, set[int]]:
+        def _ids(lists: list[list[Fragment]]) -> set[int]:
+            return {int(f.id) for lst in lists for f in lst}
+
+        return {
+            "vector_raw": _ids(list(semantic_ranked_lists)),
+            "vector_contextual": _ids(list(contextual_ranked_lists)),
+            "bm25_raw": _ids(bm25_ranked_lists[:bm25_query_count]),
+            "bm25_contextual": _ids(bm25_ranked_lists[bm25_query_count:]),
+        }
+
+    @staticmethod
+    def _record_top_rerank_score(scored: list[tuple[int, float]]) -> None:
+        if not scored:
+            return
+        try:
+            top = max(score for _, score in scored)
+            retrieval_top_rerank_score.observe(float(top))
+        except Exception:
+            logger.debug("Failed to record top rerank score metric.", exc_info=True)
+
+    @staticmethod
+    def _record_lane_contribution(
+            fragments: list[Fragment],
+            lane_ids: dict[str, set[int]],
+    ) -> None:
+        try:
+            for fragment in fragments:
+                fid = int(fragment.id)
+                for lane, ids in lane_ids.items():
+                    if fid in ids:
+                        retrieval_lane_fragments_total.labels(lane=lane).inc()
+        except Exception:
+            logger.debug("Failed to record lane contribution metric.", exc_info=True)
+
+    @staticmethod
     def _build_rerank_query(question_context_fragments_request: QuestionContextFragmentsRequest) -> str:
         if question_context_fragments_request.semantic_queries:
             return question_context_fragments_request.semantic_queries[0].text
         if question_context_fragments_request.bm25_queries:
             return question_context_fragments_request.bm25_queries[0].text
         return ""
+
+    async def _build_section_response(
+            self,
+            *,
+            primaries: list[Fragment],
+            request: QuestionContextFragmentsRequest,
+            database_session: AsyncSession,
+            accessible_doc_set: set[int],
+    ) -> FragmentListResponse:
+        primary_ids = {f.id for f in primaries}
+        half = max(self._settings.max_section_fragments // 2, 1)
+        fallback_window = request.adjacent_chunks if request.adjacent_chunks > 0 else 1
+
+        with_section = [p for p in primaries if p.section_path is not None]
+        without_section = [p for p in primaries if p.section_path is None]
+
+        pool: list[Fragment] = []
+        if with_section:
+            section_members = await self._fragment_repository.get_section_fragments(
+                fragments=with_section,
+                max_per_section=self._settings.max_section_fragments,
+                database_session=database_session,
+                exclude_ids=primary_ids,
+            )
+            pool.extend(f for f in section_members if f.document_id in accessible_doc_set)
+        if without_section:
+            adjacent_members = await self._fragment_repository.get_adjacent_fragments(
+                fragments=without_section,
+                window=fallback_window,
+                database_session=database_session,
+                exclude_ids=primary_ids,
+                respect_section_boundaries=self._settings.respect_section_boundaries,
+            )
+            pool.extend(f for f in adjacent_members if f.document_id in accessible_doc_set)
+
+        seen: set[int] = set()
+        grouped_members: list[tuple[Fragment, list[Fragment]]] = []
+        for primary in primaries:
+            members = self._select_section_members(
+                primary=primary,
+                pool=pool,
+                seen=seen,
+                primary_ids=primary_ids,
+                half=half,
+                fallback_window=fallback_window,
+            )
+            for member in members:
+                seen.add(member.id)
+            grouped_members.append((primary, members))
+
+        all_fragments: list[Fragment] = list(primaries)
+        for _, members in grouped_members:
+            all_fragments.extend(members)
+        responses_by_id = await self._build_fragment_response_map(
+            fragments=all_fragments,
+            database_session=database_session,
+        )
+
+        groups: list[FragmentSectionGroup] = []
+        for primary, members in grouped_members:
+            primary_response = responses_by_id.get(primary.id)
+            if primary_response is None:
+                continue
+            groups.append(
+                FragmentSectionGroup(
+                    primary=primary_response,
+                    section_fragments=[
+                        responses_by_id[m.id] for m in members if m.id in responses_by_id
+                    ],
+                )
+            )
+
+        primary_responses = [
+            responses_by_id[p.id] for p in primaries if p.id in responses_by_id
+        ]
+        return FragmentListResponse(fragments=primary_responses, groups=groups)
+
+    @staticmethod
+    def _select_section_members(
+            *,
+            primary: Fragment,
+            pool: list[Fragment],
+            seen: set[int],
+            primary_ids: set[int],
+            half: int,
+            fallback_window: int,
+    ) -> list[Fragment]:
+        window = half if primary.section_path is not None else fallback_window
+        members: list[Fragment] = []
+        for candidate in pool:
+            if candidate.id in seen or candidate.id in primary_ids:
+                continue
+            if candidate.document_id != primary.document_id:
+                continue
+            if primary.section_path is not None and candidate.section_path != primary.section_path:
+                continue
+            if abs(int(candidate.fragment_index) - int(primary.fragment_index)) > window:
+                continue
+            members.append(candidate)
+        members.sort(key=lambda f: int(f.fragment_index))
+        return members
+
+    async def _build_fragment_response_map(
+            self,
+            fragments: list[Fragment],
+            database_session: AsyncSession,
+    ) -> dict[int, FragmentResponse]:
+        if not fragments:
+            return {}
+
+        unique: dict[int, Fragment] = {}
+        for fragment in fragments:
+            unique.setdefault(fragment.id, fragment)
+
+        document_ids = list({f.document_id for f in unique.values()})
+        documents = await self._document_repository.get_documents_by_ids(
+            document_ids=document_ids,
+            database_session=database_session,
+        )
+        docs_by_id = {doc.id: doc for doc in documents}
+        responses = self._assemble_fragment_responses(
+            fragments=list(unique.values()),
+            docs_by_id=docs_by_id,
+        )
+        return {response.id: response for response in responses}
 
     async def _build_fragment_responses(
             self,
@@ -444,10 +680,8 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                     {
                         "id": fragment.id,
                         "content": fragment.content,
+                        "contextualized_content": fragment.contextualized_content,
                         "fragment_index": fragment.fragment_index,
-                        "summary": fragment.summary,
-                        "entities": fragment.entities,
-                        "topics": list(fragment.topics) if fragment.topics else None,
                         "page_number": fragment.page_number,
                         "section_path": fragment.section_path,
                         "heading": fragment.heading,
@@ -499,6 +733,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             query_vector: list[float],
             k: int,
             document_ids: list[int] | None = None,
+            representation: Literal["raw", "contextual"] = "raw",
     ) -> list[Fragment]:
         try:
             fragments = await self._fragment_repository.get_most_similar_fragments(
@@ -508,8 +743,12 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 k=k,
                 threshold=self._settings.similarity_threshold,
                 document_ids=document_ids,
+                representation=representation,
             )
-            logger.debug("Similar fragments retrieved.", extra={"fragment_count": len(fragments)})
+            logger.debug(
+                "Similar fragments retrieved.",
+                extra={"fragment_count": len(fragments), "representation": representation},
+            )
             return fragments
         except Exception as e:
             raise FragmentQueryRetrievalException("Failed to retrieve similar fragments.") from e
@@ -520,6 +759,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             query_text: str,
             k: int,
             document_ids: list[int] | None = None,
+            representation: Literal["raw", "contextual"] = "raw",
     ) -> list[Fragment]:
         try:
             return await self._fragment_repository.get_most_relevant_fragments_bm25(
@@ -529,6 +769,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 min_score=self._settings.bm25_min_score,
                 query_max_chars=self._settings.bm25_query_max_chars,
                 document_ids=document_ids,
+                representation=representation,
             )
         except Exception as e:
             raise FragmentQueryRetrievalException("Failed to retrieve BM25-ranked fragments.") from e
@@ -540,6 +781,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             k: int,
             document_ids: list[int] | None,
             semaphore: asyncio.Semaphore,
+            representation: Literal["raw", "contextual"] = "raw",
     ) -> list[Fragment]:
         async with semaphore:
             async with self._database_manager.session() as session:
@@ -548,6 +790,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                     query_vector=query_vector,
                     k=k,
                     document_ids=document_ids,
+                    representation=representation,
                 )
 
     async def _retrieve_bm25_isolated(
@@ -557,6 +800,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
             k: int,
             document_ids: list[int] | None,
             semaphore: asyncio.Semaphore,
+            representation: Literal["raw", "contextual"] = "raw",
     ) -> list[Fragment]:
         async with semaphore:
             async with self._database_manager.session() as session:
@@ -565,6 +809,7 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                     query_text=query_text,
                     k=k,
                     document_ids=document_ids,
+                    representation=representation,
                 )
 
     async def _retrieve_documents_fragments(

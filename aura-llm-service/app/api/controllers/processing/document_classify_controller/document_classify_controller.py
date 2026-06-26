@@ -46,7 +46,7 @@ _error = default_error_responses(
 )
 _response = {
     200: {
-        "description": "ClasificaciÃ³n del documento",
+        "description": "Clasificación del documento",
         "model": ClassifyDocumentResponse,
     },
     **_error,
@@ -59,6 +59,6 @@ router.add_api_route(
     response_model=ClassifyDocumentResponse,
     operation_id="classifyDocument",
     summary="Clasificar documento",
-    description="Clasifica el tipo y categorÃ­a de un documento usando el LLM.",
+    description="Clasifica el tipo y categoría de un documento usando el LLM.",
     responses=_response,
 )

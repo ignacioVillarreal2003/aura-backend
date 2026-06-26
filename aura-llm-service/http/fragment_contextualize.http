@@ -1,0 +1,15 @@
+@llmBase = http://localhost:8001/api/v1
+@authToken = user_token_123
+
+### Contextualizar fragmento (POST /api/v1/fragment-contextualize)
+POST {{llmBase}}/fragment-contextualize
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "document_summary": "Contrato de prestación de servicios entre GAMMA CORP y un proveedor de software, con cláusulas de plazos, confidencialidad y rescisión.",
+  "content": "El artículo 5 establece que el proveedor deberá entregar el software en un plazo máximo de 90 días."
+}
+
+###

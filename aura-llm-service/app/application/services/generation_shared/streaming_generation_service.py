@@ -4,6 +4,7 @@ from typing import Any, ClassVar, Generic, Optional, TypeVar
 
 from app.application.services.generation_shared.base_generation_service import (
     EMPTY_RESPONSE_MESSAGE,
+    INITIAL_PROGRESS_MESSAGE,
     BaseGenerationService,
     GenerationRequest,
 )
@@ -51,8 +52,12 @@ class StreamingGenerationService(BaseGenerationService, Generic[TRequest, TRespo
     def _build_response(self, state: GenerationState, request: TRequest, answer: str) -> TResponse:
         pass
 
+    def _response_char_limit(self) -> Optional[int]:
+        return None
+
     def _postprocess_answer(self, answer: str) -> str:
-        return answer
+        limit = self._response_char_limit()
+        return answer[:limit] if limit is not None else answer
 
     async def _stream_pre_generation_events(
             self,
@@ -111,6 +116,7 @@ class StreamingGenerationService(BaseGenerationService, Generic[TRequest, TRespo
     ) -> AsyncIterator[Any]:
         with self._observe("stream", authenticated_user, request) as obs:
             try:
+                yield self.stream_progress_event(step="processing", message=INITIAL_PROGRESS_MESSAGE)
                 state = self._build_state(request, authenticated_user)
                 async for progress_event in self._collect_context_with_progress(state):
                     yield progress_event
@@ -124,11 +130,21 @@ class StreamingGenerationService(BaseGenerationService, Generic[TRequest, TRespo
                 )
 
                 answer = ""
+                limit = self._response_char_limit()
                 llm_messages = self._build_llm_messages(state, request)
                 llm = await self._ollama_llm_facade.get_llm_base()
                 async for delta in self._ollama_llm_streaming_invoker.stream_llm_content(llm, llm_messages):
-                    answer += delta
-                    yield self.stream_delta_event(text=delta)
+                    piece = delta
+                    if limit is not None:
+                        remaining = limit - len(answer)
+                        if remaining <= 0:
+                            break
+                        if len(piece) > remaining:
+                            piece = piece[:remaining]
+                    if not piece:
+                        continue
+                    answer += piece
+                    yield self.stream_delta_event(text=piece)
 
                 answer = answer.strip()
                 if not answer:
@@ -137,7 +153,8 @@ class StreamingGenerationService(BaseGenerationService, Generic[TRequest, TRespo
                         self.label,
                         extra=log_extra(user_id=authenticated_user.id),
                     )
-                    answer = (await self._ollama_llm_invoker.call_llm_content(llm=llm, llm_input=llm_messages)).strip()
+                    fallback = (await self._ollama_llm_invoker.call_llm_content(llm=llm, llm_input=llm_messages)).strip()
+                    answer = fallback[:limit] if limit is not None else fallback
                     if answer:
                         yield self.stream_delta_event(text=answer)
 

@@ -1,8 +1,10 @@
 import json
 import logging
 
-from app.application.services.user_interactions.report_service.exceptions.report_service_exceptions import ReportServiceException
-from app.application.services.user_interactions.report_service.interfaces.report_service_interface import ReportServiceInterface
+from app.application.services.user_interactions.report_service.exceptions.report_service_exceptions import \
+    ReportServiceException
+from app.application.services.user_interactions.report_service.interfaces.report_service_interface import \
+    ReportServiceInterface
 from app.application.services.user_interactions.report_service.report_settings import ReportSettings
 from app.application.services.user_interactions.report_service.report_prompt import (
     MAP_HUMAN_PROMPT,
@@ -11,16 +13,14 @@ from app.application.services.user_interactions.report_service.report_prompt imp
     REDUCE_SYSTEM_PROMPT,
     HUMAN_PROMPT,
     build_system_prompt,
-    current_datetime_directive,
 )
 from app.application.services.generation_shared.generation_settings import GenerationSettings
-from app.application.services.generation_shared.output_parsing import clean_text, split_markdown_doc
+from app.application.services.generation_shared.output_parsing import clean_text
 from app.application.services.generation_shared.state.generation_state import GenerationState
 from app.application.services.generation_shared.structured_generation_service import StructuredGenerationService
 from app.application.utils.llm_json_parser import parse_json_object
 from app.domain.dtos.user_interactions.report.report_request import ReportGenerateRequest, ReportType
 from app.domain.dtos.user_interactions.report.report_response import ReportGenerateResponse
-from app.domain.field_limits import MAX_DESCRIPTION_CHARS, MAX_TITLE_CHARS
 from app.domain.dtos.user_interactions.report.report_stream_events import (
     ReportStreamComplete,
     ReportStreamError,
@@ -40,8 +40,6 @@ _REPORT_GENERATION_MESSAGES: dict[ReportType, str] = {
     ReportType.OPORD: "Redactando la orden de operaciones (OPORD)...",
 }
 
-
-# (title, description, content)
 _ParsedReport = tuple[str, str, str]
 
 
@@ -80,7 +78,7 @@ class ReportService(
         self._report_settings = report_settings or ReportSettings()
 
     def _system_prompt(self, request: ReportGenerateRequest) -> str:
-        return build_system_prompt(request.report_type) + current_datetime_directive()
+        return build_system_prompt(request.report_type, self._report_settings)
 
     def _generation_progress_message(self, request: ReportGenerateRequest) -> str:
         return _REPORT_GENERATION_MESSAGES[request.report_type]
@@ -89,17 +87,16 @@ class ReportService(
         return {"report_type": request.report_type}
 
     def _parse_output(self, raw: str, request: ReportGenerateRequest) -> _ParsedReport:
-        max_content = self._report_settings.max_content_chars
+        settings = self._report_settings
+        max_content = settings.max_content_chars
         try:
             data = parse_json_object(raw)
-            title = clean_text(data.get("title"), MAX_TITLE_CHARS)
-            description = clean_text(data.get("description"), MAX_DESCRIPTION_CHARS)
+            title = clean_text(data.get("title"), settings.max_title_chars)
+            description = clean_text(data.get("description"), settings.max_description_chars)
             content = clean_text(data.get("content"), max_content)
             if not content:
                 raise ValueError("Empty content in JSON report.")
         except (json.JSONDecodeError, ValueError, TypeError):
-            # Fallback: el modelo devolvió el informe en texto plano (no JSON).
-            # Dejamos que chat-service derive título/descripción del contenido.
             title, description = "", ""
             content = clean_text(raw, max_content)
 

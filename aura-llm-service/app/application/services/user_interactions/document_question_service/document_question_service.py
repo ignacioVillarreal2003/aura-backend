@@ -5,11 +5,11 @@ from app.application.services.generation_shared.state.generation_state import Ge
 from app.application.services.generation_shared.streaming_generation_service import StreamingGenerationService
 from app.application.services.user_interactions.document_question_service.document_question_prompts import (
     ANSWER_HUMAN_PROMPT,
-    ANSWER_SYSTEM_PROMPT,
     MAP_HUMAN_PROMPT,
     MAP_SYSTEM_PROMPT,
     REDUCE_HUMAN_PROMPT,
     REDUCE_SYSTEM_PROMPT,
+    build_system_prompt,
 )
 from app.application.services.user_interactions.document_question_service.document_question_settings import (
     DocumentQuestionServiceSettings,
@@ -23,6 +23,7 @@ from app.application.services.user_interactions.document_question_service.interf
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.message import Message
+from app.domain.field_limits import MAX_MESSAGE_CONTENT_CHARS
 from app.domain.dtos.user_interactions.document_question.document_question_request import DocumentQuestionRequest
 from app.domain.dtos.user_interactions.document_question.document_question_response import DocumentQuestionResponse
 from app.domain.dtos.user_interactions.document_question.document_question_stream_events import (
@@ -33,7 +34,6 @@ from app.domain.dtos.user_interactions.document_question.document_question_strea
     DocumentQuestionStreamMeta,
     DocumentQuestionStreamProgress,
 )
-from app.domain.field_limits import MAX_CONTENT_CHARS
 from app.infrastructure.http.document_context_provider.interfaces.document_context_provider_interface import (
     DocumentContextProviderInterface,
 )
@@ -55,6 +55,7 @@ class DocumentQuestionService(
 
     default_retrieve_context = True
     default_process_documents = False
+    summarize_history = True
 
     human_prompt = ANSWER_HUMAN_PROMPT
     map_system_prompt = MAP_SYSTEM_PROMPT
@@ -76,6 +77,7 @@ class DocumentQuestionService(
             document_question_settings: Optional[DocumentQuestionServiceSettings] = None,
     ) -> None:
         settings = document_question_settings or DocumentQuestionServiceSettings()
+        self._document_question_settings = settings
         super().__init__(
             ollama_llm_facade=ollama_llm_facade,
             ollama_llm_invoker=ollama_llm_invoker,
@@ -86,10 +88,11 @@ class DocumentQuestionService(
             context_retrieval_settings=settings.to_retrieval_settings(),
             attached_documents_settings=settings.to_attached_settings(),
             context_reduction_settings=settings.to_reduction_settings(),
+            section_context_settings=settings.to_section_settings(),
         )
 
     def _system_prompt(self, request: DocumentQuestionRequest) -> str:
-        return ANSWER_SYSTEM_PROMPT
+        return build_system_prompt(self._document_question_settings)
 
     def _request_log_extra(self, request: DocumentQuestionRequest) -> dict:
         return {
@@ -98,8 +101,8 @@ class DocumentQuestionService(
             "process_documents": request.process_documents,
         }
 
-    def _postprocess_answer(self, answer: str) -> str:
-        return answer[:MAX_CONTENT_CHARS]
+    def _response_char_limit(self) -> int:
+        return self._document_question_settings.max_response_chars
 
     def _build_response(
             self,
@@ -110,7 +113,10 @@ class DocumentQuestionService(
         return DocumentQuestionResponse(
             question=state.current_message.content,
             answer=answer,
-            messages=[*state.messages, Message(role=MessageRole.assistant, content=answer)],
+            messages=[
+                *state.messages,
+                Message(role=MessageRole.assistant, content=answer[:MAX_MESSAGE_CONTENT_CHARS]),
+            ],
             fragments=state.all_fragments,
             degraded_stages=self._degraded_stages(state),
         )

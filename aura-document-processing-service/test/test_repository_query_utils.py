@@ -9,7 +9,6 @@ from app.infrastructure.persistence.database.repositories.repository_query_utils
 )
 
 
-# ── chunked_ids ─────────────────────────────────────────────────────────────────
 
 class TestChunkedIds:
     def test_empty_input_yields_nothing(self):
@@ -23,7 +22,6 @@ class TestChunkedIds:
         assert result == [[1, 2], [3, 4], [5]]
 
     def test_dedup_happens_before_chunking(self):
-        # 4 unique ids with chunk_size 2 -> exactly two chunks, no duplicates leak
         result = list(chunked_ids([1, 1, 2, 2, 3, 3, 4, 4], chunk_size=2))
         assert result == [[1, 2], [3, 4]]
 
@@ -34,11 +32,9 @@ class TestChunkedIds:
         assert DEFAULT_IN_CLAUSE_CHUNK_SIZE >= 10
 
 
-# ── _sanitize_bm25_search_input ─────────────────────────────────────────────────
 
 class TestSanitizeBm25Input:
     def test_strips_non_word_punctuation(self):
-        # special chars (parentheses, operators) become spaces and collapse
         assert _sanitize_bm25_search_input("foo & (bar) | baz", 100) == "foo bar baz"
 
     def test_keeps_allowed_punctuation(self):

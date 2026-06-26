@@ -22,6 +22,7 @@ from app.infrastructure.llm.ollama_llm.ollama_tool_manager import OllamaToolMana
 logger = logging.getLogger(__name__)
 
 _PROBE_TIMEOUT: float = 10.0
+_RUNTIME_PROBE_TIMEOUT: float = 1.5
 
 
 _OLLAMA_OPTION_KEYS = frozenset({
@@ -93,7 +94,23 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
         self._llm_json: Optional[Runnable] = None
         self._llm_with_tools: Optional[Runnable] = None
 
+        self._probe_client: Optional[httpx.AsyncClient] = None
+
         logger.info("OllamaLLMFacade created")
+
+    def _get_probe_client(self) -> httpx.AsyncClient:
+        if self._probe_client is None:
+            self._probe_client = httpx.AsyncClient()
+        return self._probe_client
+
+    async def aclose(self) -> None:
+        if self._probe_client is not None:
+            try:
+                await self._probe_client.aclose()
+            except Exception:
+                logger.warning("Failed to close the Ollama probe client.", exc_info=True)
+            finally:
+                self._probe_client = None
 
     async def initialize(self) -> None:
         async with self._init_lock:
@@ -171,6 +188,21 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
     def is_healthy(self) -> bool:
         return self._initialized and self._circuit_state == _CircuitState.CLOSED
 
+    async def check_health(self) -> bool:
+        if not self._initialized or self._circuit_state != _CircuitState.CLOSED:
+            return False
+        try:
+            client = self._get_probe_client()
+            response = await client.get(
+                f"{self._settings.base_url}/api/tags",
+                timeout=_RUNTIME_PROBE_TIMEOUT,
+            )
+            response.raise_for_status()
+            return True
+        except Exception:
+            logger.warning("Ollama runtime health probe failed.", exc_info=True)
+            return False
+
     @property
     def tools_bound(self) -> bool:
         return self._tools_bound
@@ -247,10 +279,10 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
         logger.debug("Probing Ollama connectivity", extra={"url": tags_url})
 
         try:
-            async with httpx.AsyncClient(timeout=_PROBE_TIMEOUT) as client:
-                response = await client.get(tags_url)
-                response.raise_for_status()
-                data = response.json()
+            client = self._get_probe_client()
+            response = await client.get(tags_url, timeout=_PROBE_TIMEOUT)
+            response.raise_for_status()
+            data = response.json()
         except OllamaLLMFacadeError:
             raise
         except Exception as e:

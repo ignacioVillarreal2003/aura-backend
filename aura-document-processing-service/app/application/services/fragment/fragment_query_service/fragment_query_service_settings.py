@@ -11,9 +11,13 @@ class FragmentQueryServiceSettings(BaseSettings):
         extra="ignore",
     )
 
-    similarity_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    similarity_threshold: float = Field(default=0.3, ge=0.0, le=1.0)
+
+    contextual_retrieval_enabled: bool = Field(default=True)
 
     respect_section_boundaries: bool = Field(default=True)
+
+    max_section_fragments: int = Field(default=12, ge=1, le=200)
 
     bm25_rrf_k: int = Field(default=60, ge=1, le=10_000)
     bm25_min_score: float = Field(default=0.0)

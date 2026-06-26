@@ -2,69 +2,43 @@
 
 ## Overview
 
-Every endpoint (except `/health` and `/ready`) requires authentication. The service supports two authentication modes:
-
-1. **Service-to-service** — using a shared API key + user context headers
-2. **Bearer token** — delegated to an external authentication provider
-
----
-
-## Mode 1: Service-to-Service (API Key)
-
-Used when another internal service calls `aura-llm-service` directly.
-
-### Required Headers
-
-| Header | Description |
-|---|---|
-| `X-Service-Api-Key` | Must match `SERVICE_API_KEY` env var (constant-time comparison) |
-| `X-User-Id` | Numeric user ID (`int`) |
-| `X-User-Email` | User email address |
-
-### Optional Headers
-
-| Header | Description |
-|---|---|
-| `X-User-Roles` | Comma-separated list of role strings |
-| `X-User-Permissions` | Comma-separated list of permission strings |
-
-### Example
-
-```http
-POST /api/v1/document-classify
-X-Service-Api-Key: my-secret-key
-X-User-Id: 42
-X-User-Email: user@example.com
-X-User-Permissions: LLM_DOCUMENT_CLASSIFY,LLM_DOCUMENT_QUESTION
-Content-Type: application/json
-
-{ ... }
-```
+Every endpoint requires a Bearer token except the public paths listed at the
+bottom. Authentication is **JWT/Bearer only** — the token is validated by an
+external authentication provider; there is no service-to-service API-key mode.
 
 ---
 
-## Mode 2: Bearer Token
-
-Used when the request originates from a user-facing client via the API gateway.
+## Bearer Token
 
 ```http
 Authorization: Bearer <jwt-token>
 ```
 
-The middleware forwards the token to the URL configured in `AUTHENTICATION_PROVIDER_AUTHENTICATION_URL`. If the provider returns a valid user, the request proceeds. Errors map to:
+An ASGI middleware extracts the token and forwards it to the URL configured in
+`AUTHENTICATION_PROVIDER_AUTHENTICATION_URL`. If the provider returns a valid
+user, the request proceeds and the validated user is attached to the request
+state. Validated tokens are cached in Redis for
+`AUTHENTICATION_PROVIDER_TOKEN_CACHE_TTL_SECONDS` (default 60 s), so a revoked
+token may remain accepted until the cache entry expires.
 
-| Provider Response | HTTP Status |
+Error mapping:
+
+| Situation | HTTP Status |
 |---|---|
+| Missing token / not in `Bearer <token>` format | 401 |
+| Bearer token longer than the configured maximum | 401 |
 | Invalid / expired token | 401 |
-| Access denied | 403 |
+| Access denied by the provider | 403 |
 | User not found | 404 |
-| Provider unreachable | 503 |
+| Provider unreachable / timeout / circuit open | 503 |
+| Auth provider not configured on the app | 503 |
 
 ---
 
 ## Authenticated User Object
 
-After successful authentication, a `AuthenticatedUser` model is available via `Depends(get_authenticated_user)` in every controller:
+After successful authentication, an `AuthenticatedUser` model is available via
+`Depends(get_authenticated_user)` in every controller:
 
 ```python
 class AuthenticatedUser:
@@ -85,9 +59,9 @@ Helper methods:
 
 ## Permissions
 
-Each endpoint requires a specific permission. The caller must include this permission in `X-User-Permissions` (API-key mode) or have it granted by the auth provider (Bearer mode).
-
-A `/stream` variant requires the same permission as its base endpoint.
+Each endpoint requires a specific permission, granted by the auth provider in
+the validated user. A `/stream` variant requires the same permission as its base
+endpoint.
 
 | Endpoint | Required Permission |
 |---|---|
@@ -95,7 +69,7 @@ A `/stream` variant requires the same permission as its base endpoint.
 | `POST /document-summary` (`/stream`) | `LLM_DOCUMENT_SUMMARY` |
 | `POST /document-action` (`/stream`) | `LLM_DOCUMENT_ACTION` |
 | `POST /document-classify` | `LLM_DOCUMENT_CLASSIFY` |
-| `POST /fragment-enrich` | `LLM_FRAGMENT_ENRICH` |
+| `POST /fragment-contextualize` | `LLM_FRAGMENT_CONTEXTUALIZE` |
 | `POST /graph-extraction` | `LLM_GRAPH_EXTRACTION` |
 | `POST /graph-query-translation` | `LLM_GRAPH_QUERY_TRANSLATION` |
 | `POST /general-chat` (`/stream`) | `LLM_GENERAL_CHAT` |
@@ -107,7 +81,7 @@ A `/stream` variant requires the same permission as its base endpoint.
 | `POST /lessons-learned-generate` (`/stream`) | `LLM_LESSONS_LEARNED_GENERATE` |
 | `POST /decision-brief-generate` (`/stream`) | `LLM_DECISION_BRIEF_GENERATE` |
 
-Missing or wrong permission → `403 Forbidden`.
+Missing or wrong permission → `403 Forbidden` (`UnauthorizedException`).
 
 ---
 
@@ -117,25 +91,19 @@ All auth errors follow the standard error envelope:
 
 ```json
 {
-  "error": "UnauthorizedException",
-  "message": "Missing or invalid authentication credentials"
+  "error": "AuthenticationProviderInvalidTokenException",
+  "message": "Invalid or expired token",
+  "request_id": "optional-uuid"
 }
 ```
-
-| Scenario | Status | `error` field |
-|---|---|---|
-| No auth headers / no Bearer | 401 | `AuthenticationProviderInvalidTokenException` |
-| Wrong API key | 403 | `AuthenticationProviderUnauthorizedException` |
-| Missing `X-User-Id` | 400 | validation error |
-| Non-integer `X-User-Id` | 400 | validation error |
-| Missing `X-User-Email` | 400 | validation error |
-| Insufficient permissions | 403 | `UnauthorizedException` |
 
 ---
 
 ## Public Endpoints (No Auth Required)
 
 ```
+GET /
+GET /api/health
 GET /api/v1/health
 GET /api/v1/ready
 GET /api/docs

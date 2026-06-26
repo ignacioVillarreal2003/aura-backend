@@ -34,7 +34,6 @@ from app.infrastructure.persistence.storages.document_storage.exceptions.documen
 )
 
 
-# ── Helpers ─────────────────────────────────────────────────────────────────────
 
 class _FakeUpload:
     """Minimal stand-in for Starlette's UploadFile (sync attrs + async seek/read)."""
@@ -78,7 +77,6 @@ def _rabbitmq():
     return manager
 
 
-# ── Filename / content-type / size validation ───────────────────────────────────
 
 class TestFilenameValidation:
     def test_missing_filename_rejected(self):
@@ -104,7 +102,7 @@ class TestFilenameValidation:
 
     def test_valid_filename_passes(self):
         service = _make_service()
-        service._validate_filename(_FakeUpload(filename="report.pdf"))  # no raise
+        service._validate_filename(_FakeUpload(filename="report.pdf"))
 
 
 class TestContentTypeValidation:
@@ -120,7 +118,7 @@ class TestContentTypeValidation:
 
     def test_allowed_content_type_passes(self):
         service = _make_service()
-        service._validate_content_type(_FakeUpload(content_type="application/pdf"))  # no raise
+        service._validate_content_type(_FakeUpload(content_type="application/pdf"))
 
 
 class TestSizeValidation:
@@ -139,7 +137,6 @@ class TestSizeValidation:
     def test_unknown_size_rejected(self):
         service = _make_service()
         upload = _FakeUpload(size=None)
-        # _get_file_size falls back to file.tell/seek; a closed/odd handle -> None
         upload.file = MagicMock()
         upload.file.tell.side_effect = OSError("no tell")
         with pytest.raises(CreateDocumentInvalidException):
@@ -151,7 +148,7 @@ class TestMagicNumberValidation:
         service = _make_service()
         await service._validate_magic_numbers(
             _FakeUpload(content_type="application/pdf", header=b"%PDF-1.7")
-        )  # no raise
+        )
 
     async def test_mismatched_header_rejected(self):
         service = _make_service()
@@ -162,13 +159,11 @@ class TestMagicNumberValidation:
 
     async def test_content_type_without_magic_rules_is_skipped(self):
         service = _make_service()
-        # text/plain has no magic-number rule -> always passes
         await service._validate_magic_numbers(
             _FakeUpload(content_type="text/plain", header=b"hello")
-        )  # no raise
+        )
 
 
-# ── _build_document ─────────────────────────────────────────────────────────────
 
 class TestBuildDocument:
     def test_flags_map_to_processing_statuses(self):
@@ -199,7 +194,6 @@ class TestBuildDocument:
         assert document.name == "original.pdf"
 
 
-# ── _store_object ───────────────────────────────────────────────────────────────
 
 class TestStoreObject:
     async def test_returns_object_name_on_success(self):
@@ -235,7 +229,6 @@ class TestStoreObject:
             )
 
 
-# ── _persist_document ───────────────────────────────────────────────────────────
 
 class TestPersistDocument:
     async def test_commits_and_returns_persisted_document(self):
@@ -264,7 +257,6 @@ class TestPersistDocument:
         storage.delete_document.assert_awaited_once_with("obj")
 
 
-# ── _publish_ingestion + compensation ───────────────────────────────────────────
 
 class TestPublishIngestion:
     async def test_publishes_directly_when_no_outbox(self):
@@ -316,7 +308,6 @@ class TestPublishIngestion:
                 object_name="obj",
                 database_session=session,
             )
-        # compensation: soft-delete the row + remove the stored object
         repo.soft_delete_document_by_id.assert_awaited_once()
         storage.delete_document.assert_awaited_once_with("obj")
 
@@ -343,7 +334,6 @@ class TestCompensateFailedPublish:
         storage = AsyncMock()
         service = _make_service(repo=repo, storage=storage)
 
-        # must not raise; storage cleanup still runs
         await service._compensate_failed_publish(
             document=MagicMock(id=5, created_by=7),
             object_name="obj",

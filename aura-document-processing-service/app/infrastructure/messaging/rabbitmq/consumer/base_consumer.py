@@ -130,9 +130,6 @@ class BaseConsumer(ABC, Generic[T]):
             await message.nack(requeue=False)
             return
 
-        # Re-establish the requesting user's bearer token (carried in the command)
-        # in the async context so downstream HTTP providers authenticate as that
-        # user; restored afterwards so it never leaks to the next message.
         previous_token = get_request_token()
         set_request_token(getattr(envelope.command, "auth_token", None))
         start = time.perf_counter()

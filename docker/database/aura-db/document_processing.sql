@@ -52,18 +52,20 @@ CREATE TABLE fragment
         CONSTRAINT chk_fragment_embedding_dim CHECK (embedding_dim = 1024),
     embedding_identity TEXT      NOT NULL,
     fragment_index INT         NOT NULL,
-    summary        TEXT,
-    entities       JSONB,
-    topics         TEXT[],
     page_number    INT,
     section_path   TEXT,
     heading        TEXT,
     char_start     INT,
     char_end       INT,
     bbox           JSONB,
-    enrichment_status VARCHAR(32) NOT NULL DEFAULT 'pending'
-        CONSTRAINT chk_fragment_enrichment_status
-            CHECK (enrichment_status IN ('pending', 'processed', 'failed', 'not_required')),
+    -- Contextualized representation: a second, document-aware embedding produced
+    -- during enrichment. The original `content`/`vector` are never modified.
+    contextualized_content            TEXT,
+    contextualized_vector             VECTOR(1024),
+    contextualized_embedding_identity TEXT,
+    contextualization_status VARCHAR(32) NOT NULL DEFAULT 'pending'
+        CONSTRAINT chk_fragment_contextualization_status
+            CHECK (contextualization_status IN ('pending', 'processed', 'failed', 'not_required')),
     created_by     BIGINT      NOT NULL,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_by     BIGINT,
@@ -108,7 +110,14 @@ CREATE INDEX idx_fragment_vector_hnsw
     WITH (m = 16, ef_construction = 64)
     WHERE (deleted_at IS NULL);
 
+-- HNSW index over the contextualized vector, used by the contextual retrieval lane.
+CREATE INDEX idx_fragment_ctx_vector_hnsw
+    ON fragment
+    USING hnsw (contextualized_vector vector_cosine_ops)
+    WITH (m = 16, ef_construction = 64)
+    WHERE (deleted_at IS NULL AND contextualized_vector IS NOT NULL);
+
 CREATE INDEX IF NOT EXISTS fragments_bm25_idx
     ON fragment
-    USING bm25 (id, content)
+    USING bm25 (id, content, contextualized_content)
     WITH (key_field = 'id');

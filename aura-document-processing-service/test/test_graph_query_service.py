@@ -19,7 +19,6 @@ from app.domain.dtos.graph.graph_entity.graph_relation_response import (
 from app.domain.dtos.graph.graph_query.graph_query_request import GraphQueryRequest
 
 
-# ── Builders ──────────────────────────────────────────────────────────────────
 
 def _user(user_id: int = 1) -> AuthenticatedUser:
     return AuthenticatedUser(id=user_id, email="u@test.com", roles=[], permissions=[])
@@ -76,7 +75,6 @@ def _catalog(ids):
     return catalog
 
 
-# ── execute(): access control short-circuit ─────────────────────────────────────
 
 class TestExecuteAccessControl:
     async def test_no_accessible_documents_returns_empty_unknown_without_calling_llm(self):
@@ -97,7 +95,6 @@ class TestExecuteAccessControl:
         llm.translate_graph_query.assert_not_called()
 
 
-# ── execute(): happy paths ──────────────────────────────────────────────────────
 
 class TestExecuteDispatch:
     async def test_find_entity_returns_prefix_results(self):
@@ -121,7 +118,6 @@ class TestExecuteDispatch:
 
         assert response.intent == QueryIntent.FIND_ENTITY
         assert [e.canonical_name for e in response.entities] == ["bob smith"]
-        # canonical name is lowercased + whitespace-collapsed before the repo call
         entity_repo.search_by_name_prefix.assert_awaited_once()
         assert entity_repo.search_by_name_prefix.await_args.kwargs["canonical_prefix"] == "bob smith"
         entity_repo.fulltext_search.assert_not_called()
@@ -149,8 +145,6 @@ class TestExecuteDispatch:
         assert [e.canonical_name for e in response.entities] == ["bob"]
 
     async def test_empty_dispatch_triggers_question_level_fulltext_fallback(self):
-        # FILTER_BY_TYPE returns no entities -> service retries with a fulltext search
-        # over the raw question.
         entity_repo = AsyncMock()
         entity_repo.list_by_type = AsyncMock(return_value=[])
         entity_repo.fulltext_search = AsyncMock(return_value=[_entity("acme")])
@@ -173,8 +167,6 @@ class TestExecuteDispatch:
         entity_repo.fulltext_search.assert_awaited_once()
 
     async def test_invalid_intent_params_fall_back_to_fulltext_and_unknown_intent(self):
-        # LIST_BY_DOCUMENT with a non-numeric document_id raises the internal parameter
-        # error, which execute() catches and answers with a fulltext fallback.
         entity_repo = AsyncMock()
         entity_repo.fulltext_search = AsyncMock(return_value=[_entity("topic")])
         llm = AsyncMock()
@@ -196,7 +188,6 @@ class TestExecuteDispatch:
         assert [e.canonical_name for e in response.entities] == ["topic"]
 
 
-# ── _dispatch_intent helpers ────────────────────────────────────────────────────
 
 class TestDispatchHelpers:
     async def test_filter_by_type_requires_entity_type(self):
@@ -244,7 +235,6 @@ class TestDispatchHelpers:
         assert relations == []
 
 
-# ── _fulltext_fallback is non-fatal ─────────────────────────────────────────────
 
 class TestFulltextFallback:
     async def test_repository_error_is_swallowed_and_returns_empty(self):
@@ -258,7 +248,6 @@ class TestFulltextFallback:
         assert result == []
 
 
-# ── Pure parameter helpers ──────────────────────────────────────────────────────
 
 class TestParameterHelpers:
     def test_clamp_results_bounds(self):
@@ -280,7 +269,6 @@ class TestParameterHelpers:
     def test_read_optional_entity_type(self):
         assert GraphQueryService._read_optional_entity_type({"t": "person"}, "t") == EntityType.PERSON
         assert GraphQueryService._read_optional_entity_type({"t": ""}, "t") is None
-        # unknown strings parse to OTHER, never raise
         assert GraphQueryService._read_optional_entity_type({"t": "alien"}, "t") == EntityType.OTHER
 
     def test_read_required_entity_type_missing_raises(self):
@@ -332,12 +320,11 @@ class TestMergeLlmParameterAliases:
 
 class TestBuildNodes:
     def test_dedups_entities_and_adds_relation_endpoints(self):
-        entities = [_entity("bob"), _entity("bob")]  # duplicate
+        entities = [_entity("bob"), _entity("bob")]
         relations = [_relation("bob", "acme")]
         nodes = GraphQueryService._build_nodes(entities, relations)
 
         names = sorted(n.canonical_name for n in nodes)
-        # "bob" deduped once, "acme" pulled in from the relation endpoint
         assert names == ["acme", "bob"]
 
 

@@ -12,7 +12,8 @@ from app.infrastructure.persistence.graph.repositories.graph_record_mappers impo
     map_entity_node,
     map_relationship,
 )
-from app.infrastructure.persistence.graph.repositories.exceptions.graph_repository_exceptions import GraphPersistenceException
+from app.infrastructure.persistence.graph.repositories.exceptions.graph_repository_exceptions import \
+    GraphPersistenceException
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,8 @@ class GraphPathRepository(GraphPathRepositoryInterface):
     ) -> list[GraphPath]:
         if not accessible_document_ids:
             return []
-        hops_ceiling = self._absolute_max_hops if only_shortest else min(self._absolute_max_hops, _MAX_ALL_SIMPLE_PATHS_HOPS)
+        hops_ceiling = self._absolute_max_hops if only_shortest else min(self._absolute_max_hops,
+                                                                         _MAX_ALL_SIMPLE_PATHS_HOPS)
         clamped_hops = max(1, min(int(max_hops), hops_ceiling))
         path_match = (
             _SHORTEST_PATH_CLAUSE.format(max_hops=clamped_hops)

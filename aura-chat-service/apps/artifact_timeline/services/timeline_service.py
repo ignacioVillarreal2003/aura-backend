@@ -27,7 +27,7 @@ def _normalize_events(events: list) -> list:
     normalized = []
     for idx, ev in enumerate(events):
         normalized.append({
-            "title": str(ev.get("title", ev.get("event", ""))),
+            "title": str(ev.get("title", "")),
             "description": str(ev.get("description", "")),
             "occurred_label": str(ev.get("occurred_label", "")),
             "position": idx,

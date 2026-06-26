@@ -15,4 +15,4 @@ class DecisionBriefSettings(BaseSettings):
     max_narrative_chars: int = Field(default=4_000, ge=100, le=100_000)
     max_option_title_chars: int = Field(default=300, ge=1, le=2_000)
     max_option_text_chars: int = Field(default=2_000, ge=100, le=50_000)
-    max_options: int = Field(default=50, ge=1, le=1_000)
+    max_options: int = Field(default=10, ge=1, le=10)

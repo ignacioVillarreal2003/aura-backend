@@ -11,7 +11,6 @@ from app.api.dependencies.rate_limiter import (
 from app.api.dependencies.rate_limiter_settings import RateLimiterSettings
 
 
-# ── Builders ────────────────────────────────────────────────────────────────────
 
 def _redis(*, allowed=1, retry_after=0, eval_error=None):
     client = MagicMock()
@@ -42,7 +41,6 @@ def use_settings(monkeypatch):
     return _apply
 
 
-# ── RateLimiterSettings ─────────────────────────────────────────────────────────
 
 class TestRateLimiterSettings:
     def test_defaults_match_previous_hardcoded_values(self):
@@ -68,12 +66,10 @@ class TestRateLimiterSettings:
             RateLimiterSettings(strict_rate=100, default_rate=50)
 
 
-# ── Fail-open / fail-closed policy ──────────────────────────────────────────────
 
 class TestBackendUnavailablePolicy:
     async def test_missing_redis_fails_open_by_default(self, use_settings):
         use_settings(fail_open=True)
-        # No raise -> request allowed through.
         await _check_rate_limit(_request(redis_client=None), limit=20)
 
     async def test_missing_redis_fails_closed_when_configured(self, use_settings):
@@ -85,7 +81,7 @@ class TestBackendUnavailablePolicy:
     async def test_redis_error_fails_open_when_configured(self, use_settings):
         use_settings(fail_open=True)
         redis = _redis(eval_error=RuntimeError("connection reset"))
-        await _check_rate_limit(_request(redis_client=redis, user_id=1), limit=20)  # no raise
+        await _check_rate_limit(_request(redis_client=redis, user_id=1), limit=20)
 
     async def test_redis_error_fails_closed_when_configured(self, use_settings):
         use_settings(fail_open=False)
@@ -95,13 +91,12 @@ class TestBackendUnavailablePolicy:
         assert exc.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
 
 
-# ── Limit enforcement ───────────────────────────────────────────────────────────
 
 class TestLimitEnforcement:
     async def test_allowed_request_passes(self, use_settings):
         use_settings()
         redis = _redis(allowed=1)
-        await _check_rate_limit(_request(redis_client=redis, user_id=7), limit=60)  # no raise
+        await _check_rate_limit(_request(redis_client=redis, user_id=7), limit=60)
 
     async def test_blocked_request_raises_429_with_retry_after(self, use_settings):
         use_settings()
@@ -115,7 +110,6 @@ class TestLimitEnforcement:
         use_settings(window_seconds=30)
         redis = _redis(allowed=1)
         await _check_rate_limit(_request(redis_client=redis, user_id=7), limit=60)
-        # eval positional args: (lua, numkeys, key, now, window, limit, member)
         args = redis.client.eval.await_args.args
         assert args[4] == 30
         assert args[5] == 60
@@ -130,7 +124,6 @@ class TestLimitEnforcement:
         assert key == "rl:9.9.9.9:/p"
 
 
-# ── make_rate_limiter dependency ────────────────────────────────────────────────
 
 class TestMakeRateLimiter:
     async def test_returns_dependency_that_enforces_limit(self, use_settings):

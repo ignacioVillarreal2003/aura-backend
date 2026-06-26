@@ -48,7 +48,6 @@ def record_llm_usage(
         if output_tokens:
             llm_tokens_total.labels(model=safe_model, direction="output").inc(output_tokens)
     except Exception:
-        # Metrics must never break a request.
         logger.debug("Failed to record LLM usage metrics.", exc_info=True)
 
 

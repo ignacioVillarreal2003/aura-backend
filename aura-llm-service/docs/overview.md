@@ -4,7 +4,7 @@
 
 `aura-llm-service` is an internal FastAPI microservice that wraps a locally-hosted Ollama LLM and exposes structured endpoints for language-model tasks: answering questions about documents, summarising, executing free-form instructions, classifying documents, enriching text fragments, extracting knowledge-graph entities, translating natural-language graph queries, and running agentic workflows.
 
-All endpoints are **internal-only** — they require either a service-to-service API key or a validated Bearer token forwarded by the API gateway.
+All endpoints are **internal-only** — they require a validated Bearer token forwarded by the API gateway (see [authentication.md](authentication.md)).
 
 ---
 
@@ -17,14 +17,14 @@ All endpoints are **internal-only** — they require either a service-to-service
 │  ┌─────────────────────────────────────────────────────┐ │
 │  │  Middleware layer                                   │ │
 │  │  • Logging (request ID, latency)                   │ │
-│  │  • Authentication (API key / Bearer token)         │ │
+│  │  • Authentication (Bearer token)                   │ │
 │  └───────────────────────┬─────────────────────────────┘ │
 │                          │                               │
 │  ┌───────────────────────▼─────────────────────────────┐ │
 │  │  Controllers  (app/api/controllers/)                │ │
 │  │  • Validate request body (Pydantic v2)              │ │
 │  │  • Check permissions (Authorizer)                   │ │
-│  │  • Apply rate limit / idempotency key               │ │
+│  │  • Apply rate limit                                 │ │
 │  └───────────────────────┬─────────────────────────────┘ │
 │                          │                               │
 │  ┌───────────────────────▼─────────────────────────────┐ │
@@ -59,11 +59,12 @@ All endpoints are **internal-only** — they require either a service-to-service
 | Web framework | FastAPI + Uvicorn |
 | Data validation | Pydantic v2 |
 | LLM orchestration | LangChain Core + LangGraph |
-| LLM backend | Ollama (local, default model `gemma3:1b`) |
+| LLM backend | Ollama (local; model via `OLLAMA_LLM_FACADE_MODEL_NAME`) |
 | HTTP client | httpx (async) |
 | Rate limiting | Redis (sorted-set sliding window) |
 | Metrics | Prometheus (`prometheus-fastapi-instrumentator`) |
-| Structured logging | `python-json-logger` |
+| Structured logging | custom JSON formatter (stdlib `logging`) |
+| Tracing | OpenInference → Phoenix (OTLP), optional |
 
 ---
 
@@ -81,7 +82,7 @@ requires the same permission as its base endpoint.
 | POST | `/api/v1/document-summary` (`/stream`) | `LLM_DOCUMENT_SUMMARY` | 20 / min |
 | POST | `/api/v1/document-action` (`/stream`) | `LLM_DOCUMENT_ACTION` | 20 / min |
 | POST | `/api/v1/document-classify` | `LLM_DOCUMENT_CLASSIFY` | 60 / min |
-| POST | `/api/v1/fragment-enrich` | `LLM_FRAGMENT_ENRICH` | 60 / min |
+| POST | `/api/v1/fragment-contextualize` | `LLM_FRAGMENT_CONTEXTUALIZE` | 60 / min |
 | POST | `/api/v1/graph-extraction` | `LLM_GRAPH_EXTRACTION` | 60 / min |
 | POST | `/api/v1/graph-query-translation` | `LLM_GRAPH_QUERY_TRANSLATION` | 60 / min |
 | POST | `/api/v1/general-chat` (`/stream`) | `LLM_GENERAL_CHAT` | 60 / min |

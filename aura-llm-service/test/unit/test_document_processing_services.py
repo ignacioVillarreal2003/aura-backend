@@ -106,7 +106,7 @@ class TestSummary:
         svc = _summary_svc()
         req = DocumentSummaryRequest(document_ids=[1, 2], chat_id=1)
         state = svc._build_state(req, _USER)
-        assert state.current_message.content  # synthetic instruction present
+        assert state.current_message.content
         assert state.process_documents is True and state.retrieve_context is False
 
     async def test_execute_parses_json_into_title_description_summary(self):
@@ -148,12 +148,16 @@ class TestAction:
         req = DocumentActionRequest(
             document_ids=[1], instruction="x", action=DocumentActionType.compare, chat_id=1
         )
-        assert "ACCIÓN: COMPARACIÓN" in svc._system_prompt(req)
+        prompt = svc._system_prompt(req)
+        assert "comparación detallada" in prompt
+        assert "convergencias y divergencias" in prompt
 
     def test_system_prompt_default_guidance_without_action(self):
         svc = _action_svc()
         req = DocumentActionRequest(document_ids=[1], instruction="x", chat_id=1)
-        assert "No se especificó una acción" in svc._system_prompt(req)
+        prompt = svc._system_prompt(req)
+        assert "Ejecutar la instrucción del usuario de forma precisa" in prompt
+        assert "única fuente" in prompt
 
     async def test_execute_parses_json_and_echoes_request_fields(self):
         svc = _action_svc(frags=[_frag(1)])

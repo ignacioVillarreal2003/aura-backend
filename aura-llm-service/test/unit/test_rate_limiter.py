@@ -36,16 +36,15 @@ def _make_request(eval_result=None, eval_error=None, with_redis=True, path="/api
             redis_client.client.eval = AsyncMock(return_value=eval_result)
         request.app.state.redis_client = redis_client
     else:
-        request.app.state = SimpleNamespace()  # no redis_client attribute
+        request.app.state = SimpleNamespace()
 
     return request
 
 
 @pytest.mark.asyncio
 async def test_no_redis_client_is_noop():
-    # Rate limiting must not block requests when Redis is not configured.
     request = _make_request(with_redis=False)
-    await _check_rate_limit(request, limit=10)  # must not raise
+    await _check_rate_limit(request, limit=10)
 
 
 @pytest.mark.asyncio
@@ -60,7 +59,6 @@ async def test_blocked_request_raises_429_with_retry_after():
     import time
 
     now = time.time()
-    # allowed=0 → over the limit; oldest score drives the Retry-After hint.
     request = _make_request(eval_result=[0, str(now)])
 
     with pytest.raises(HTTPException) as exc_info:
@@ -73,15 +71,14 @@ async def test_blocked_request_raises_429_with_retry_after():
 
 @pytest.mark.asyncio
 async def test_redis_error_fails_open():
-    # A Redis outage must not take the API down: fail-open (allow the request).
     request = _make_request(eval_error=redis_exceptions.RedisError("boom"))
-    await _check_rate_limit(request, limit=1)  # must not raise
+    await _check_rate_limit(request, limit=1)
 
 
 @pytest.mark.asyncio
 async def test_os_error_fails_open():
     request = _make_request(eval_error=OSError("connection reset"))
-    await _check_rate_limit(request, limit=1)  # must not raise
+    await _check_rate_limit(request, limit=1)
 
 
 @pytest.mark.asyncio
@@ -92,7 +89,6 @@ async def test_authenticated_user_identity_is_used_in_key():
     await _check_rate_limit(request, limit=10)
 
     args, _ = request.app.state.redis_client.client.eval.call_args
-    # Script, numkeys, then KEYS[1] = the rate-limit key.
     key = args[2]
     assert "42" in key
 
@@ -120,6 +116,5 @@ async def test_limiters_resolve_configured_limit_per_request(monkeypatch, factor
 
 
 def test_make_rate_limiter_defaults_to_default_tier_for_unknown_kind():
-    # Any kind other than "strict" resolves to the default limit (defensive).
     limiter = make_rate_limiter("something-else")
     assert callable(limiter)

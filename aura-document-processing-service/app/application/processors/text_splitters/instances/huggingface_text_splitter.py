@@ -27,14 +27,12 @@ class HuggingFaceTextSplitter(BaseTextSplitter):
         self._splitter: Optional[SemanticChunker] = None
 
         try:
-            # The shared cache returns (embeddings, encode_lock). The lock serializes
-            # access to this model instance, which may be shared with the embedder
-            # (same model/device key) and is not safe to drive concurrently from
-            # multiple threads / a single CUDA context. Held around the semantic
-            # split calls, which is where the model actually runs (see split_text).
             embeddings, self._encode_lock = _get_or_create_hf_embeddings(
                 model_name=self._settings.huggingface_model,
                 device=self._settings.huggingface_device,
+                normalize_embeddings=self._settings.huggingface_normalize_embeddings,
+                max_seq_length=self._settings.huggingface_max_seq_length,
+                torch_dtype=self._settings.huggingface_torch_dtype,
             )
 
             splitter_kwargs: dict = {
@@ -101,9 +99,6 @@ class HuggingFaceTextSplitter(BaseTextSplitter):
         try:
             segments = self._pre_segment(text)
 
-            # Only the semantic split drives the embedding model; pre-segmentation,
-            # token-limit enforcement and short-chunk merging use the tokenizer /
-            # char splitter (CPU) and stay outside the lock.
             raw_chunks: list[str] = []
             with self._encode_lock:
                 for segment in segments:

@@ -13,9 +13,17 @@ from app.application.services.processing.document_classify_service.document_clas
 from app.application.services.processing.document_classify_service.exceptions.document_classify_service_exceptions import (
     DocumentClassifyServiceException,
 )
-from app.application.services.processing.fragment_enrich_service.fragment_enrich_service import FragmentEnrichService
+from app.application.services.processing.fragment_contextualize_service.fragment_contextualize_service import (
+    FragmentContextualizeService,
+)
+from app.application.services.processing.graph_query_translation_service.exceptions.graph_query_translation_service_exceptions import (
+    GraphQueryTranslationServiceException,
+)
 from app.application.services.processing.graph_query_translation_service.graph_query_translation_service import (
     GraphQueryTranslationService,
+)
+from app.application.services.processing.graph_query_translation_service.graph_query_translation_settings import (
+    GraphQueryTranslationServiceSettings,
 )
 from app.domain.constants.document_type import DocumentType
 from app.domain.constants.graph.query_intent import QueryIntent
@@ -125,7 +133,7 @@ class TestErrorMapping:
 
 class TestTruncation:
     def test_truncate_helper(self):
-        svc = FragmentEnrichService(_Facade(), _Invoker(["{}"]))
+        svc = FragmentContextualizeService(_Facade(), _Invoker(["{}"]))
         assert svc._truncate("x" * 100, 10, 1, "content") == "x" * 10
         assert svc._truncate("short", 10, 1, "content") == "short"
 
@@ -136,19 +144,20 @@ class TestRepairLoop:
         svc = DocumentClassifyService(_Facade(), invoker)
         with pytest.raises(DocumentClassifyServiceException):
             await svc.classify_document(_classify_request(), _USER)
-        assert invoker.calls == 1  # no repair attempt for simple services
+        assert invoker.calls == 1
 
     async def test_translation_repairs_then_succeeds(self):
         invoker = _Invoker(["no json todavía", _VALID_TRANSLATE_JSON])
-        svc = GraphQueryTranslationService(_Facade(), invoker)  # default max_repair_attempts=1
+        svc = GraphQueryTranslationService(_Facade(), invoker)
         result = await svc.translate_graph_query(_translate_request(), _USER)
         assert isinstance(result, TranslateGraphQueryResponse)
         assert result.intent == QueryIntent.FIND_ENTITY
-        assert invoker.calls == 2  # original + one repair
+        assert invoker.calls == 2
 
     async def test_translation_exhausts_repair_then_raises(self):
         invoker = _Invoker(["bad", "still bad", "and bad"])
-        svc = GraphQueryTranslationService(_Facade(), invoker)
-        with pytest.raises(Exception):
+        settings = GraphQueryTranslationServiceSettings(_env_file=None, max_repair_attempts=1)
+        svc = GraphQueryTranslationService(_Facade(), invoker, settings)
+        with pytest.raises(GraphQueryTranslationServiceException):
             await svc.translate_graph_query(_translate_request(), _USER)
-        assert invoker.calls == 2  # original + 1 repair (max_repair_attempts=1)
+        assert invoker.calls == 2

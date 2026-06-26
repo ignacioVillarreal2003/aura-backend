@@ -44,14 +44,14 @@ def _parse_events(raw_events: list, settings: TimelineSettings) -> list[Timeline
     for entry in raw_events[:settings.max_events]:
         if not isinstance(entry, dict):
             continue
-        event_title = clean_text(entry.get("event"), settings.max_event_chars)
+        event_title = clean_text(entry.get("title"), settings.max_event_title_chars)
         if not event_title:
             continue
         events.append(
             TimelineEvent(
-                event=event_title,
+                title=event_title,
                 description=clean_text(entry.get("description"), settings.max_event_description_chars),
-                occurred_label=clean_text(entry.get("occurred_label"), settings.max_label_chars),
+                occurred_label=clean_text(entry.get("occurred_label"), settings.max_event_occurred_label_chars),
             )
         )
     return events
@@ -59,7 +59,7 @@ def _parse_events(raw_events: list, settings: TimelineSettings) -> list[Timeline
 
 def _fallback_events(raw: str, settings: TimelineSettings) -> _ParsedTimeline:
     events = [
-        TimelineEvent(event=line[:settings.max_event_chars], description="", occurred_label="")
+        TimelineEvent(title=line[:settings.max_event_title_chars], description="", occurred_label="")
         for line in fallback_lines(raw)[:settings.max_events]
     ]
     return "Línea de tiempo", "", events

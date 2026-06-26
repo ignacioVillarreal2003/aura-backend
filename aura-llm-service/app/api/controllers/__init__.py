@@ -16,7 +16,7 @@ from app.api.controllers.user_interactions import (
 )
 from app.api.controllers.processing import (
     document_classify_controller,
-    fragment_enrich_controller,
+    fragment_contextualize_controller,
     graph_extraction_controller,
     graph_query_translation_controller,
 )
@@ -54,9 +54,9 @@ router.include_router(
 )
 
 router.include_router(
-    fragment_enrich_controller.router,
-    prefix="/fragment-enrich",
-    tags=["fragment-enrich"],
+    fragment_contextualize_controller.router,
+    prefix="/fragment-contextualize",
+    tags=["fragment-contextualize"],
 )
 
 router.include_router(

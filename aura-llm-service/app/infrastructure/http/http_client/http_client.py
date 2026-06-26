@@ -5,7 +5,7 @@ from datetime import timedelta
 from typing import Any, Awaitable, Callable, Optional, Union
 from urllib.parse import urlparse
 import httpx
-from aiobreaker import CircuitBreaker, CircuitBreakerError
+from aiobreaker import CircuitBreaker, CircuitBreakerError, CircuitBreakerState
 from fastapi import HTTPException, Request, status
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
@@ -14,6 +14,7 @@ from app.infrastructure.http.http_client.exceptions.http_client_exceptions impor
     HttpClientConnectionException,
     HttpClientException,
     HttpClientNotStartedException,
+    HttpClientServerException,
     HttpClientTimeoutException,
 )
 from app.infrastructure.http.http_client.http_client_settings import HttpClientSettings
@@ -140,7 +141,8 @@ class HttpClient(HttpClientInterface):
                             httpx.NetworkError,
                             httpx.RemoteProtocolError,
                             HttpClientTimeoutException,
-                            HttpClientConnectionException
+                            HttpClientConnectionException,
+                            HttpClientServerException
                         )
                     ),
                     before_sleep=_on_retry,
@@ -294,14 +296,15 @@ class HttpClient(HttpClientInterface):
                 "error": "HTTP client not started"
             }
 
+        closed_state = CircuitBreakerState.CLOSED.name.lower()
         breakers = {
             host: {
-                "state": str(breaker.current_state),
+                "state": breaker.current_state.name.lower(),
                 "failure_count": breaker.fail_counter,
             }
             for host, breaker in self._breakers.items()
         }
-        is_healthy = all(b["state"] == "closed" for b in breakers.values())
+        is_healthy = all(b["state"] == closed_state for b in breakers.values())
 
         return {
             "status": "healthy" if is_healthy else "degraded",
@@ -420,6 +423,11 @@ class HttpClient(HttpClientInterface):
                     "elapsed_ms": elapsed_ms
                 }
             )
+            if status_code in self._settings.retry_on_server_error_status_set:
+                raise HttpClientServerException(
+                    "Upstream service returned a retryable server error response.",
+                    status_code=status_code
+                ) from e
             raise HttpClientException(
                 "Upstream service returned an error response.",
                 status_code=status_code

@@ -2,7 +2,7 @@ from datetime import datetime
 from functools import lru_cache
 from typing import Any
 from pgvector.sqlalchemy import VECTOR
-from sqlalchemy.dialects.postgresql import JSONB, ARRAY
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from sqlalchemy import Integer, DateTime, Text, ForeignKey, BigInteger, String
 from sqlalchemy.orm import Mapped, mapped_column
@@ -45,10 +45,6 @@ class Fragment(Base):
 
     fragment_index: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
-    entities: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
-    topics: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True)
-
     page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     section_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     heading: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -56,7 +52,13 @@ class Fragment(Base):
     char_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
     bbox: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
-    enrichment_status: Mapped[str] = mapped_column(
+    contextualized_content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    contextualized_vector: Mapped[Any | None] = mapped_column(
+        VECTOR(dim=_get_vector_dimension()), nullable=True
+    )
+    contextualized_embedding_identity: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    contextualization_status: Mapped[str] = mapped_column(
         String(32), nullable=False, server_default=ProcessingStatus.pending.value
     )
 

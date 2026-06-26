@@ -50,7 +50,7 @@ _error = default_error_responses(
 )
 _response = {
     200: {
-        "description": "Entidades y relaciones extraÃ­das del fragmento",
+        "description": "Entidades y relaciones extraídas del fragmento",
         "model": ExtractEntitiesRelationsResponse,
     },
     **_error,

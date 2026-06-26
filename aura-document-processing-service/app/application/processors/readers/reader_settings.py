@@ -23,6 +23,7 @@ class ReaderSettings(BaseSettings):
     pdf_dpi: int = Field(default=300, ge=72, le=600)
     pdf_use_parallel: bool = Field(default=True)
     pdf_max_workers: Optional[int] = Field(default=None, ge=1, le=16)
+    pdf_max_ocr_pages: int = Field(default=500, ge=1, le=5_000)
 
     docling_enabled: bool = Field(default=True)
     docling_device: Literal["cpu", "cuda", "mps", "auto"] = "auto"

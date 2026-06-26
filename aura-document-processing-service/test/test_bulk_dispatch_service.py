@@ -100,7 +100,6 @@ class TestBulkDispatchService:
 
     async def test_unavailable_operation_raises(self):
         store = _store()
-        # graph publisher not provided -> graph_extract unavailable
         service = _make_service(store=store, reembed=AsyncMock())
 
         with pytest.raises(BulkOperationUnavailableException):

@@ -94,9 +94,12 @@ class NemoGuardrailsService:
 
         truncated = text[: self._settings.max_input_chars]
         options = GenerationOptions(rails=["input"], log={"activated_rails": True})
-        result = await rails.generate_async(
-            messages=[{"role": "user", "content": truncated}],
-            options=options,
+        result = await asyncio.wait_for(
+            rails.generate_async(
+                messages=[{"role": "user", "content": truncated}],
+                options=options,
+            ),
+            timeout=self._settings.check_timeout_seconds,
         )
 
         activated = (result.log.activated_rails or []) if result.log else []
@@ -115,12 +118,15 @@ class NemoGuardrailsService:
 
         truncated = text[: self._settings.max_output_chars]
         options = GenerationOptions(rails=["output"], log={"activated_rails": True})
-        result = await rails.generate_async(
-            messages=[
-                {"role": "user", "content": ""},
-                {"role": "assistant", "content": truncated},
-            ],
-            options=options,
+        result = await asyncio.wait_for(
+            rails.generate_async(
+                messages=[
+                    {"role": "user", "content": ""},
+                    {"role": "assistant", "content": truncated},
+                ],
+                options=options,
+            ),
+            timeout=self._settings.check_timeout_seconds,
         )
 
         activated = (result.log.activated_rails or []) if result.log else []
@@ -151,13 +157,6 @@ class NemoGuardrailsService:
                 return None
 
             llm = await self._ollama_llm_facade.get_llm_base()
-            # Dedicated configuration for the guardrails classifier ONLY.
-            # The base model is a reasoning model: by default it spends its whole
-            # token budget on the (hidden) "thinking" channel and returns an empty
-            # `content`, which NeMo reads as "not allowed" and blocks everything.
-            # Disabling reasoning and capping the output forces a fast, plain
-            # "No"/"Yes" answer. `.bind()` returns a NEW runnable and does NOT
-            # mutate the shared base LLM, so the normal app flow is unaffected.
             llm = llm.bind(reasoning=False, num_predict=8, temperature=0.0)
             try:
                 from nemoguardrails.integrations.langchain.llm_adapter import LangChainLLMAdapter

@@ -1,47 +1,33 @@
-# Modelos de Chunking de HuggingFace (Sentence Transformers)
+# Modelos del Text Splitter semántico (HuggingFace)
 
-## sentence-transformers/all-MiniLM-L6-v2
+El splitter semántico (`SemanticChunker`) usa un modelo de embeddings para detectar los cortes.
+Por defecto comparte el **mismo modelo que el embedder** (`BAAI/bge-m3`) para no cargar dos copias
+en VRAM. Se configura con `TEXT_SPLITTER_HUGGINGFACE_MODEL`.
 
-Modelo de embeddings liviano de la familia Sentence Transformers, pensado para generar vectores semánticos a partir de oraciones y párrafos cortos.
+## BAAI/bge-m3 (default)
 
-**Características principales**
+Modelo de retrieval multilingüe de referencia (Beijing Academy of AI). Es el default tanto del
+embedder como del tokenizer de Docling y del splitter semántico.
 
-* Diseñado para encoder de oraciones y párrafos cortos
-* Muy rápido en GPU y CPU
-* Baja latencia → ideal para chunking en tiempo real
-* Buen baseline semántico
+| Feature | Value |
+| --- | --- |
+| Parameters | 570M |
+| Context | 8192 tokens |
+| Embedding dimension | 1024 |
+| Architecture | XLM-RoBERTa |
+| Size | ~2.3GB |
 
-**Especificaciones**
+**Por qué para chunking:** al compartir el modelo del embedder, el cálculo de breakpoints semánticos
+usa exactamente la misma representación que luego indexará el fragment → cortes coherentes con el
+espacio de retrieval, sin coste extra de VRAM.
 
-| Feature                | Value                              |
-| ---------------------- | ---------------------------------- |
-| Dimensión de embedding | 384                                |
-| Arquitectura base      | MiniLM-L6-H384                     |
-| Contexto efectivo      | ~256 tokens                        |
-| Tipo de uso            | Sentence / short paragraph encoder |
-| Tamaño aproximado      | ~90MB                              |
+## Alternativas (configurables)
 
----
+| Modelo | Dim | Context | Notas |
+| --- | --- | --- | --- |
+| `intfloat/multilingual-e5-large` | 1024 | 512 | Requiere prefijos `query:`/`passage:`; ventana corta. |
+| `sentence-transformers/paraphrase-multilingual-mpnet-base-v2` | 768 | 128 | Más liviano; menor calidad multilingüe. |
 
-## intfloat/multilingual-e5-base
-
-Modelo de embeddings de Microsoft optimizado para retrieval semántico multilingüe con mejor comprensión contextual que MiniLM.
-
-**Características principales**
-
-* Multilingüe (muy importante para español)
-* Mejor captura de contexto semántico
-* Ideal para tareas tipo RAG
-* Requiere prefijos (`query:` / `passage:`) para máximo rendimiento
-
-**Especificaciones**
-
-| Feature                | Value               |
-| ---------------------- | ------------------- |
-| Dimensión de embedding | 768                 |
-| Arquitectura base      | XLM-RoBERTa         |
-| Contexto               | 512 tokens          |
-| Tipo de uso            | Retrieval semántico |
-| Tamaño aproximado      | ~1.1GB              |
-
----
+> Si se cambia el modelo del splitter sin alinear los parámetros del embedder, se pierde el
+> compartido de instancia (se cargarían dos modelos). Mantener `model/device/normalize/max_seq/dtype`
+> iguales en `TEXT_SPLITTER_HUGGINGFACE_*` y `EMBEDDER_HUGGINGFACE_*`.

@@ -9,7 +9,6 @@ from app.application.processors.readers.constants.reader_type import ReaderType
 from app.application.processors.readers.exceptions.reader_exception import (
     ReaderFileNotFoundException,
     ReaderInitializationException,
-    UnsupportedReaderException
 )
 from app.application.processors.readers.interfaces.reader_interface import ReaderInterface
 from app.application.processors.readers.reader_settings import ReaderSettings
@@ -71,45 +70,12 @@ class ReaderFactory:
             }
         )
 
-    def get_reader(
-            self,
-            file_path: Path,
-            *,
-            prefer_docling: bool = False
-    ) -> ReaderInterface:
-        readers = self.get_capable_readers(file_path, prefer_docling=prefer_docling)
-
-        if not readers:
-            logger.error(
-                "No reader could handle the file.",
-                extra={
-                    "file_name": file_path.name
-                }
-            )
-            raise UnsupportedReaderException("No reader is available for this file.")
-
-        logger.info(
-            "A reader was selected for the file.",
-            extra={
-                "file_name": file_path.name,
-                "reader_type": type(readers[0]).__name__,
-                "prefer_docling": prefer_docling
-            }
-        )
-        return readers[0]
-
     def get_capable_readers(
             self,
             file_path: Path,
             *,
             prefer_docling: bool = False
     ) -> list[ReaderInterface]:
-        """Return every reader that claims the file, in priority order.
-
-        Lets callers fall back to the next capable reader when the preferred one
-        fails at read time (a reader's can_handle is best-effort, e.g. Docling
-        accepts by extension without opening the file).
-        """
         if not file_path.exists():
             raise ReaderFileNotFoundException("The file was not found.")
 
@@ -148,17 +114,6 @@ class ReaderFactory:
                 )
 
         return capable
-
-    def is_supported(
-            self,
-            reader_type: ReaderType
-    ) -> bool:
-        return reader_type in self._reader_cache
-
-    def available_types(
-            self
-    ) -> list[ReaderType]:
-        return list(self._reader_cache.keys())
 
     def _build_priority_list(
             self

@@ -18,6 +18,7 @@ class GenerationSettings(BaseSettings):
     )
 
     history_messages_window: int = Field(default=4, ge=0, le=20)
+    max_history_chars: int = Field(default=3_000, ge=0, le=200_000)
     max_context_chars: int = Field(default=DEFAULT_MAX_CONTEXT_CHARS, ge=1_000, le=50_000)
     max_context_tokens: int = Field(default=chars_to_tokens(DEFAULT_MAX_CONTEXT_CHARS), ge=256, le=32_768)
     attached_reserve_ratio: float = Field(default=0.6, ge=0.0, le=1.0)

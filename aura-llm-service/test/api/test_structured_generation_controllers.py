@@ -117,7 +117,7 @@ CASES = [
         permission="LLM_TIMELINE_GENERATE",
         response=TimelineGenerateResponse(
             title="Cronología de eventos",
-            events=[TimelineEvent(event="Inicio de la operación", occurred_label="Día 1")],
+            events=[TimelineEvent(title="Inicio de la operación", occurred_label="Día 1")],
             messages=_MESSAGES,
             fragments=[],
         ),

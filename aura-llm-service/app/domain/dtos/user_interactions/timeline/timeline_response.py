@@ -13,7 +13,7 @@ from app.domain.field_limits import (
 
 
 class TimelineEvent(BaseModel):
-    event: str = Field(..., min_length=1, max_length=MAX_TIMELINE_EVENT_CHARS, description="Título del evento.")
+    title: str = Field(..., min_length=1, max_length=MAX_TIMELINE_EVENT_CHARS, description="Título del evento.")
     description: str = Field(
         default="", max_length=MAX_ITEM_TEXT_CHARS, description="Descripción del evento en formato Markdown."
     )

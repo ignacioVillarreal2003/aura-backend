@@ -14,4 +14,4 @@ class LessonsLearnedSettings(BaseSettings):
     max_title_chars: int = Field(default=100, ge=1, le=1_000)
     max_narrative_chars: int = Field(default=4_000, ge=100, le=100_000)
     max_observation_chars: int = Field(default=2_000, ge=100, le=50_000)
-    max_items: int = Field(default=300, ge=1, le=10_000)
+    max_items: int = Field(default=100, ge=1, le=100)
