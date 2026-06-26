@@ -51,9 +51,6 @@ class DoclingReader(BaseReader):
                 device=device,
             )
 
-            # When set (Docker images), Docling loads its layout/tableformer models from
-            # this pre-downloaded path instead of fetching them from the network on the
-            # first conversion. Left unset in local dev so Docling uses its default cache.
             if reader_settings.docling_artifacts_path:
                 pipeline_options.artifacts_path = reader_settings.docling_artifacts_path
 

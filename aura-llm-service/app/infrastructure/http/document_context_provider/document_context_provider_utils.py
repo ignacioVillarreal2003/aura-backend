@@ -41,4 +41,4 @@ def parse_and_apply_limits(
         fragments=response.fragments,
         max_fragments=max_fragments,
     )
-    return FragmentListResponse(fragments=limited)
+    return FragmentListResponse(fragments=limited, groups=response.groups)

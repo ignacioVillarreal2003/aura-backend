@@ -1,29 +1,9 @@
 # Modelos de Embedding de HuggingFace (Sentence Transformers)
 
-## paraphrase-multilingual-MiniLM-L12-v2
+> **Default actual: `BAAI/bge-m3`** (1024-dim). Es el modelo recomendado y el que usan por defecto
+> el embedder, el tokenizer de Docling y el splitter semántico.
 
-Modelo multilingüe liviano de la familia MiniLM, optimizado para similitud semántica y paráfrasis.
-
-**Características principales**
-
-- Multilingüe (50+ idiomas incluyendo español)
-- Muy liviano y rápido en CPU
-- Buena relación rendimiento/recursos
-- Ideal para entornos con recursos limitados
-
-**Especificaciones**
-
-| Feature             | Value     |
-| ------------------- | --------- |
-| Parameters          | 118M      |
-| Context             | 128 tokens|
-| Embedding dimension | 384       |
-| Architecture        | MiniLM-L12|
-| Size                | ~470MB    |
-
----
-
-## BAAI/bge-m3
+## BAAI/bge-m3 (default)
 
 Modelo de la familia BGE de Beijing Academy of AI, referente actual en retrieval multilingüe.
 

@@ -45,7 +45,6 @@ def _make_service(*, settings=None, embedder_factory=None, graph_pub=None, enric
     )
 
 
-# ── _read_document: reader fallback chain ───────────────────────────────────────
 
 class TestReadDocument:
     async def test_no_capable_readers_raises(self):
@@ -91,7 +90,6 @@ class TestReadDocument:
             await service._read_document(_document(), Path("f.pdf"))
 
 
-# ── _clean_text ─────────────────────────────────────────────────────────────────
 
 class TestCleanText:
     async def test_returns_cleaned_text(self):
@@ -119,7 +117,6 @@ class TestCleanText:
             await service._clean_text(_document(), "raw")
 
 
-# ── _embed_chunks ───────────────────────────────────────────────────────────────
 
 class TestEmbedChunks:
     async def test_returns_embeddings_on_success(self):
@@ -134,7 +131,7 @@ class TestEmbedChunks:
 
     async def test_count_mismatch_raises(self):
         embedder = AsyncMock()
-        embedder.aembed_documents = AsyncMock(return_value=[[0.1]])  # only one for two chunks
+        embedder.aembed_documents = AsyncMock(return_value=[[0.1]])
         factory = MagicMock()
         factory.embedder = embedder
         service = _make_service(embedder_factory=factory)
@@ -151,7 +148,6 @@ class TestEmbedChunks:
             await service._embed_chunks(_document(), ["a"])
 
 
-# ── _build_fragments ────────────────────────────────────────────────────────────
 
 class TestBuildFragments:
     def _embedder_factory(self):
@@ -176,16 +172,14 @@ class TestBuildFragments:
     def test_mismatched_lengths_raise(self):
         service = _make_service(embedder_factory=self._embedder_factory())
         with pytest.raises(ValueError):
-            # strict=True zip raises when chunk/embedding counts differ
             service._build_fragments(_document(), [_chunk("only")], [[0.1], [0.2]])
 
 
-# ── Post-ingestion event publishing (best-effort) ───────────────────────────────
 
 class TestPublishEvents:
     async def test_enrichment_noop_when_publisher_absent(self):
         service = _make_service(enrich_pub=None)
-        await service._publish_document_enrichment_event(_document(), _user())  # no raise
+        await service._publish_document_enrichment_event(_document(), _user())
 
     async def test_enrichment_published_when_present(self):
         pub = AsyncMock()
@@ -197,26 +191,25 @@ class TestPublishEvents:
         pub = AsyncMock()
         pub.publish = AsyncMock(side_effect=RuntimeError("broker down"))
         service = _make_service(enrich_pub=pub)
-        await service._publish_document_enrichment_event(_document(), _user())  # no raise
+        await service._publish_document_enrichment_event(_document(), _user())
 
     async def test_graph_noop_when_publisher_absent(self):
         service = _make_service(graph_pub=None)
-        await service._publish_graph_extraction_event(_document(), _user())  # no raise
+        await service._publish_graph_extraction_event(_document(), _user())
 
     async def test_graph_failure_is_swallowed(self):
         pub = AsyncMock()
         pub.publish = AsyncMock(side_effect=RuntimeError("broker down"))
         service = _make_service(graph_pub=pub)
-        await service._publish_graph_extraction_event(_document(), _user())  # no raise
+        await service._publish_graph_extraction_event(_document(), _user())
 
 
-# ── _cleanup_temp_file ──────────────────────────────────────────────────────────
 
 class TestCleanupTempFile:
     async def test_missing_file_is_noop(self):
         path = MagicMock(spec=Path)
         path.exists = MagicMock(return_value=False)
-        await DocumentIngestionService._cleanup_temp_file(path)  # no raise
+        await DocumentIngestionService._cleanup_temp_file(path)
         path.unlink.assert_not_called()
 
     async def test_existing_file_is_unlinked(self):
@@ -229,4 +222,4 @@ class TestCleanupTempFile:
         path = MagicMock(spec=Path)
         path.exists = MagicMock(return_value=True)
         path.unlink = MagicMock(side_effect=OSError("locked"))
-        await DocumentIngestionService._cleanup_temp_file(path)  # no raise
+        await DocumentIngestionService._cleanup_temp_file(path)

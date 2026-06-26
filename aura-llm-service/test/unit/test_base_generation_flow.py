@@ -140,18 +140,18 @@ class TestFlagResolution:
         assert state.retrieve_context is True and state.process_documents is False
 
     def test_none_uses_service_default(self):
-        svc = _struct()  # base defaults are False
+        svc = _struct()
         state = svc._build_state(_request(retrieve_context=None, process_documents=None), None)
         assert state.retrieve_context is False and state.process_documents is False
 
     def test_mode_no_longer_infers_retrieval(self):
         svc = _struct()
-        state = svc._build_state(_request(mode="rag"), None)  # no flag -> default
+        state = svc._build_state(_request(mode="rag"), None)
         assert state.retrieve_context is False
 
     def test_document_ids_no_longer_infers_process(self):
         svc = _struct()
-        state = svc._build_state(_request(document_ids=[1, 2]), None)  # no flag -> default
+        state = svc._build_state(_request(document_ids=[1, 2]), None)
         assert state.process_documents is False
 
     def test_subclass_default_applies(self):
@@ -223,10 +223,10 @@ class TestStreamingGenerate:
         assert len(completes) == 1 and completes[0].result == {"answer": "Hola mundo"}
 
     async def test_stream_empty_falls_back_to_non_stream(self):
-        svc = self._svc([])  # stream yields nothing
+        svc = self._svc([])
         events = [e async for e in svc.generate_stream(_request(), types.SimpleNamespace(id=1))]
         deltas = [e.text for e in events if isinstance(e, _Delta)]
-        assert deltas == ["resultado"]  # non-stream fallback emitted once
+        assert deltas == ["resultado"]
         assert any(isinstance(e, _Complete) for e in events)
 
     async def test_generate_sync_returns_answer(self):

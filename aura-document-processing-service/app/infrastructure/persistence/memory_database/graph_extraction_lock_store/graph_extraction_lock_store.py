@@ -57,6 +57,4 @@ class GraphExtractionLockStore(GraphExtractionLockStoreInterface):
         if job_id is None:
             await self._redis.delete(self._lock_key(document_id))
         else:
-            # Release only if this job still owns the lock, so a job that overran
-            # its TTL cannot delete a lock since re-acquired by another job.
             await self._redis.eval(_RELEASE_IF_OWNER_SCRIPT, 1, self._lock_key(document_id), job_id)  # type: ignore[misc]

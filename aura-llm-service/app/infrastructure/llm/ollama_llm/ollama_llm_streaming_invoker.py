@@ -61,8 +61,8 @@ class OllamaLLMStreamingInvoker(OllamaLLMStreamingInvokerInterface):
         gen: AsyncIterator[Any] | None = None
         first_chunk: Any = _STREAM_EMPTY
 
-        try:
-            async with llm_slot():
+        async with llm_slot():
+            try:
                 async for attempt in AsyncRetrying(
                         stop=stop_after_attempt(self._settings.max_retry_attempts),
                         wait=wait_exponential(
@@ -74,49 +74,39 @@ class OllamaLLMStreamingInvoker(OllamaLLMStreamingInvokerInterface):
                         reraise=True,
                 ):
                     with attempt:
+                        if gen is not None:
+                            await gen.aclose()
                         gen = llm.astream(llm_input)
                         first_chunk = await anext(gen, _STREAM_EMPTY)
 
-        except LLMInvocationError:
-            raise
-        except _RETRYABLE_EXCEPTIONS as e:
-            logger.error(
-                "LLM stream failed after retries",
-                extra={"error_type": type(e).__name__, "error_message": str(e)},
-            )
-            raise LLMInvocationError(
-                "LLM failed to respond after multiple retry attempts. Please try again later."
-            ) from e
-        except Exception as e:
-            logger.exception(
-                "Unexpected error while establishing LLM stream",
-                extra={"error_type": type(e).__name__},
-            )
-            raise LLMInvocationError("LLM could not process the streaming request.") from e
+            except LLMInvocationError:
+                raise
+            except _RETRYABLE_EXCEPTIONS as e:
+                logger.error(
+                    "LLM stream failed after retries",
+                    extra={"error_type": type(e).__name__, "error_message": str(e)},
+                )
+                raise LLMInvocationError(
+                    "LLM failed to respond after multiple retry attempts. Please try again later."
+                ) from e
+            except Exception as e:
+                logger.exception(
+                    "Unexpected error while establishing LLM stream",
+                    extra={"error_type": type(e).__name__},
+                )
+                raise LLMInvocationError("LLM could not process the streaming request.") from e
 
-        if first_chunk is _STREAM_EMPTY:
-            logger.debug("LLM returned an empty stream")
-            return
+            if first_chunk is _STREAM_EMPTY:
+                logger.debug("LLM returned an empty stream")
+                return
 
-        total_chars = 0
-        payload_buffer: list[str] = []
-        payload_buffered_chars = 0
-        usage: tuple[Optional[int], Optional[int]] = (None, None)
-        try:
-            usage = self._merge_usage(usage, first_chunk)
-            text = self._chunk_to_text(first_chunk)
-            if text:
-                total_chars += len(text)
-                if total_chars > self._settings.max_stream_response_chars:
-                    raise LLMInvocationError("Streaming response exceeded maximum allowed size.")
-                if self._settings.log_payloads and payload_buffered_chars < self._settings.log_payload_max_chars:
-                    payload_buffer.append(text)
-                    payload_buffered_chars += len(text)
-                yield text
-
-            async for chunk in gen:
-                usage = self._merge_usage(usage, chunk)
-                text = self._chunk_to_text(chunk)
+            total_chars = 0
+            payload_buffer: list[str] = []
+            payload_buffered_chars = 0
+            usage: tuple[Optional[int], Optional[int]] = (None, None)
+            try:
+                usage = self._merge_usage(usage, first_chunk)
+                text = self._chunk_to_text(first_chunk)
                 if text:
                     total_chars += len(text)
                     if total_chars > self._settings.max_stream_response_chars:
@@ -126,34 +116,46 @@ class OllamaLLMStreamingInvoker(OllamaLLMStreamingInvokerInterface):
                         payload_buffered_chars += len(text)
                     yield text
 
-        except LLMInvocationError:
-            raise
-        except _RETRYABLE_EXCEPTIONS as e:
-            logger.error(
-                "LLM stream interrupted mid-stream — cannot retry",
-                extra={"error_type": type(e).__name__, "error_message": str(e)},
-            )
-            raise LLMInvocationError("LLM connection was interrupted mid-stream.") from e
-        except Exception as e:
-            logger.exception(
-                "Unexpected error during LLM streaming",
-                extra={"error_type": type(e).__name__},
-            )
-            raise LLMInvocationError("LLM could not process the streaming request.") from e
-        finally:
-            record_llm_usage(
-                model=model_name_of(llm),
-                input_tokens=usage[0],
-                output_tokens=usage[1],
-                duration_seconds=time.perf_counter() - started,
-            )
-            if gen is not None:
-                await gen.aclose()
+                async for chunk in gen:
+                    usage = self._merge_usage(usage, chunk)
+                    text = self._chunk_to_text(chunk)
+                    if text:
+                        total_chars += len(text)
+                        if total_chars > self._settings.max_stream_response_chars:
+                            raise LLMInvocationError("Streaming response exceeded maximum allowed size.")
+                        if self._settings.log_payloads and payload_buffered_chars < self._settings.log_payload_max_chars:
+                            payload_buffer.append(text)
+                            payload_buffered_chars += len(text)
+                        yield text
 
-        if self._settings.log_payloads:
-            log_llm_output(logger, "".join(payload_buffer), self._settings.log_payload_max_chars)
+            except LLMInvocationError:
+                raise
+            except _RETRYABLE_EXCEPTIONS as e:
+                logger.error(
+                    "LLM stream interrupted mid-stream — cannot retry",
+                    extra={"error_type": type(e).__name__, "error_message": str(e)},
+                )
+                raise LLMInvocationError("LLM connection was interrupted mid-stream.") from e
+            except Exception as e:
+                logger.exception(
+                    "Unexpected error during LLM streaming",
+                    extra={"error_type": type(e).__name__},
+                )
+                raise LLMInvocationError("LLM could not process the streaming request.") from e
+            finally:
+                record_llm_usage(
+                    model=model_name_of(llm),
+                    input_tokens=usage[0],
+                    output_tokens=usage[1],
+                    duration_seconds=time.perf_counter() - started,
+                )
+                if gen is not None:
+                    await gen.aclose()
 
-        logger.debug("LLM streaming completed successfully", extra={"total_chars": total_chars})
+            if self._settings.log_payloads:
+                log_llm_output(logger, "".join(payload_buffer), self._settings.log_payload_max_chars)
+
+            logger.debug("LLM streaming completed successfully", extra={"total_chars": total_chars})
 
     @staticmethod
     def _merge_usage(

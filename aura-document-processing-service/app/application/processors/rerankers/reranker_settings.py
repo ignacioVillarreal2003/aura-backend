@@ -18,10 +18,13 @@ class RerankerSettings(BaseSettings):
     )
 
     active_type: RerankerType = Field(default=RerankerType.cross_encoder)
+
     model_name: str = Field(default="BAAI/bge-reranker-v2-m3")
     device: Optional[str] = Field(default=None)
     min_score: float = Field(default=0.35, ge=0.0, le=1.0)
-    batch_size: int = Field(default=16, ge=1, le=512)
+    min_score_fallback_to_topk: bool = Field(default=True)
+    batch_size: int = Field(default=64, ge=1, le=512)
+    max_length: int = Field(default=1024, ge=64, le=8192)
 
     @field_validator("device", mode="before")
     @classmethod

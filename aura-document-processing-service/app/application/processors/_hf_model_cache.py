@@ -12,9 +12,35 @@ def get_sentence_transformer(embeddings: HuggingFaceEmbeddings):
     return getattr(embeddings, "client", None) or getattr(embeddings, "_client", None)
 
 _cache: dict[
-    tuple[str, str, bool, Optional[str], Optional[int]],
+    tuple[str, str, bool, Optional[str], Optional[int], Optional[str]],
     tuple[HuggingFaceEmbeddings, threading.Lock],
 ] = {}
+
+
+def _resolve_effective_dtype(torch_dtype: Optional[str], device: str) -> Optional[str]:
+    if not torch_dtype or torch_dtype == "float32":
+        return None
+    if device != "cuda":
+        if torch_dtype != "auto":
+            logger.warning(
+                "Ignoring the configured half-precision dtype because the device is not CUDA; "
+                "using full precision.",
+                extra={"torch_dtype": torch_dtype, "device": device},
+            )
+        return None
+    if torch_dtype == "auto":
+        try:
+            import torch
+
+            if torch.cuda.is_bf16_supported():
+                return "bfloat16"
+        except Exception:
+            logger.warning(
+                "Could not probe bfloat16 support; defaulting to float16.",
+                exc_info=True,
+            )
+        return "float16"
+    return torch_dtype
 
 
 def get_or_create(
@@ -23,8 +49,10 @@ def get_or_create(
         normalize_embeddings: bool = True,
         token: str | None = None,
         max_seq_length: Optional[int] = None,
+        torch_dtype: Optional[str] = None,
 ) -> tuple[HuggingFaceEmbeddings, threading.Lock]:
-    key = (model_name, device, normalize_embeddings, token, max_seq_length)
+    effective_dtype = _resolve_effective_dtype(torch_dtype, device)
+    key = (model_name, device, normalize_embeddings, token, max_seq_length, effective_dtype)
     cached = _cache.get(key)
     if cached is not None:
         return cached
@@ -34,6 +62,12 @@ def get_or_create(
             model_kwargs: dict = {"device": device}
             if token:
                 model_kwargs["token"] = token
+            if effective_dtype is not None:
+                import torch
+
+                model_kwargs["model_kwargs"] = {
+                    "torch_dtype": getattr(torch, effective_dtype),
+                }
             embeddings = HuggingFaceEmbeddings(
                 model_name=model_name,
                 model_kwargs=model_kwargs,

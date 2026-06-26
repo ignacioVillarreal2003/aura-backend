@@ -48,7 +48,7 @@ class TestHelpers:
         )
         ordered = p._round_robin_by_document(frs, requested_ids=[2, 1])
         head = [(f.document_id, f.fragment_index) for f in ordered[:2]]
-        assert head == [(2, 0), (1, 0)]  # requested order first, one per doc
+        assert head == [(2, 0), (1, 0)]
 
     def test_budget_count_keeps_documents_represented(self, make_fragment):
         p = _processor(_Provider(), max_fragments=4)
@@ -65,7 +65,7 @@ class TestHelpers:
         p = _processor(_Provider(), max_chars=500, fair_distribution=False)
         frs = [make_fragment(fragment_id=i + 1, content="y" * 200) for i in range(5)]
         selected = p._apply_budget(frs)
-        assert len(selected) == 2  # 200 + 200 = 400; +200 = 600 > 500
+        assert len(selected) == 2
 
     def test_char_budget_keeps_at_least_one(self, make_fragment):
         p = _processor(_Provider(), max_chars=500, fair_distribution=False)

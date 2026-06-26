@@ -11,7 +11,8 @@ from app.infrastructure.persistence.graph.repositories.interfaces.graph_entity_r
     GraphEntityRepositoryInterface,
 )
 from app.infrastructure.persistence.graph.repositories.graph_record_mappers import map_entity_node
-from app.infrastructure.persistence.graph.repositories.exceptions.graph_repository_exceptions import GraphPersistenceException
+from app.infrastructure.persistence.graph.repositories.exceptions.graph_repository_exceptions import \
+    GraphPersistenceException
 
 logger = logging.getLogger(__name__)
 

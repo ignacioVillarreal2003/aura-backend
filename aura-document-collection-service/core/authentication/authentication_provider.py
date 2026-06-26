@@ -15,6 +15,7 @@ from core.authentication.authentication_exceptions import (
     AuthenticationProviderServiceUnavailableException,
     AuthenticationProviderUnauthorizedException,
     AuthenticationProviderUserNotFoundException,
+    ServiceAuthenticationRejected,
 )
 
 logger = logging.getLogger(__name__)
@@ -73,6 +74,9 @@ def _cache_user(token: str, user: AuthenticatedUser) -> None:
         )
     except Exception:
         logger.warning("Redis token cache write failed; token will not be cached.", exc_info=True)
+
+
+_HEADER_SERVICE_API_KEY = "X-Service-Api-Key"
 
 
 class AuthenticationProvider:

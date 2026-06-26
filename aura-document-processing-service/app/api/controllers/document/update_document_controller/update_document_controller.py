@@ -63,13 +63,12 @@ router.add_api_route(
     methods=["PATCH"],
     response_model=DocumentResponse,
     operation_id="updateDocumentManage",
-    summary="Actualizar metadata de un documento (manage)",
+    summary="Actualizar el título de un documento (manage)",
     description=(
-        "Actualiza parcialmente la metadata editable de cualquier documento (nombre, "
-        "descripción y categoría) sin volver a subir el archivo y sin restricción de "
-        "pertenencia al chat. Solo se aplican los campos presentes en el cuerpo "
-        "(semántica PATCH); debe enviarse al menos uno. 'description' puede enviarse "
-        "como null para limpiarla. Requiere permiso de administración."
+        "Actualiza el título (nombre) de cualquier documento sin volver a subir el "
+        "archivo y sin restricción de pertenencia al chat. La descripción y la categoría "
+        "se generan por post-procesamiento y no son editables manualmente. "
+        "Requiere permiso de administración."
     ),
     responses=_response,
 )

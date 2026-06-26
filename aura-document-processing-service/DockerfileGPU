@@ -17,20 +17,21 @@ COPY requirements/base.txt requirements/requirements.gpu.txt ./requirements/
 
 RUN pip install --no-cache-dir -r requirements/requirements.gpu.txt
 
-ARG TEXT_SPLITTER_HF_MODEL="intfloat/multilingual-e5-large"
-ARG EMBEDDER_HF_MODEL="intfloat/multilingual-e5-large"
-ARG RERANKER_MODEL="BAAI/bge-reranker-v2-m3"
+# The runtime .env is the single source of truth for which models get baked:
+# whatever EMBEDDER_HUGGINGFACE_MODEL / TEXT_SPLITTER_* / RERANKER_MODEL_NAME the
+# service loads at startup is exactly what download_models.py caches here.
+ARG MODELS_ENV_FILE="env/.env.docker.gpu"
 ARG TIKTOKEN_ENCODING="cl100k_base"
 
 COPY scripts/download_models.py ./scripts/download_models.py
+COPY ${MODELS_ENV_FILE} ./models.env
 
 RUN mkdir -p /opt/cache \
     && python scripts/download_models.py \
-    --sentence-transformer "$TEXT_SPLITTER_HF_MODEL" \
-    --sentence-transformer "$EMBEDDER_HF_MODEL" \
-    --cross-encoder "$RERANKER_MODEL" \
+    --env-file ./models.env \
     --tiktoken "$TIKTOKEN_ENCODING" \
-    --docling-output /opt/cache/huggingface/docling
+    --docling-output /opt/cache/huggingface/docling \
+    && rm -f ./models.env
 
 
 FROM python:3.13-slim AS runtime

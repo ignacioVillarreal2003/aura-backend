@@ -5,11 +5,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.application.services.document.document_enrichment_service.interfaces.document_enrichment_service_interface import (
     DocumentEnrichmentServiceInterface,
 )
-from app.application.services.document.post_process_document_service.interfaces.post_process_document_processor_interface import (
-    PostProcessDocumentProcessorInterface,
+from app.application.services.document.post_process_document_service.interfaces.post_process_document_service_interface import (
+    PostProcessDocumentServiceInterface,
 )
-from app.application.services.fragment.post_process_fragment_service.interfaces.post_process_fragment_processor_interface import (
-    PostProcessFragmentProcessorInterface,
+from app.application.services.fragment.contextualize_fragment_service.interfaces.contextualize_fragment_processor_interface import (
+    ContextualizeFragmentProcessorInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.processing_status import ProcessingStatus
@@ -27,13 +27,13 @@ class DocumentEnrichmentService(DocumentEnrichmentServiceInterface):
     def __init__(
             self,
             *,
-            post_process_document_processor: PostProcessDocumentProcessorInterface,
-            post_process_fragment_processor: PostProcessFragmentProcessorInterface,
+            post_process_document_service: PostProcessDocumentServiceInterface,
+            contextualize_fragment_processor: ContextualizeFragmentProcessorInterface,
             database_manager: DatabaseManagerInterface,
             document_repository: DocumentRepositoryInterface,
     ) -> None:
-        self._document_processor = post_process_document_processor
-        self._fragment_processor = post_process_fragment_processor
+        self._document_service = post_process_document_service
+        self._fragment_processor = contextualize_fragment_processor
         self._database_manager = database_manager
         self._document_repository = document_repository
 
@@ -51,7 +51,7 @@ class DocumentEnrichmentService(DocumentEnrichmentServiceInterface):
         first_error: Optional[BaseException] = None
 
         try:
-            await self._document_processor.process_document_metadata(
+            await self._document_service.process_document_metadata(
                 document_id=document_id,
                 user=user,
             )
@@ -63,14 +63,14 @@ class DocumentEnrichmentService(DocumentEnrichmentServiceInterface):
             )
 
         try:
-            await self._fragment_processor.process_document_fragments(
+            await self._fragment_processor.contextualize_document_fragments(
                 document_id=document_id,
                 user=user,
             )
         except Exception as e:
             first_error = first_error or e
             logger.exception(
-                "Fragment enrichment failed.",
+                "Fragment contextualization failed.",
                 extra={"document_id": document_id},
             )
 

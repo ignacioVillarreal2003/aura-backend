@@ -67,6 +67,29 @@ messages_consumed_total = Counter(
     ["queue", "result"],
 )
 
+
+_RERANK_SCORE_BUCKETS = (0.0, 0.1, 0.2, 0.3, 0.35, 0.5, 0.7, 0.85, 0.95, 1.0)
+
+retrieval_top_rerank_score = Histogram(
+    "aura_retrieval_top_rerank_score",
+    "Top cross-encoder score per question retrieval (relevance-confidence proxy).",
+    buckets=_RERANK_SCORE_BUCKETS,
+)
+
+retrieval_lane_fragments_total = Counter(
+    "aura_retrieval_lane_fragments_total",
+    "Final retrieved fragments attributed to each lane that surfaced them "
+    "(vector_raw, vector_contextual, bm25_raw, bm25_contextual).",
+    ["lane"],
+)
+
+retrieval_rerank_fallback_total = Counter(
+    "aura_retrieval_rerank_fallback_total",
+    "Reranks where the whole candidate pool scored below min_score "
+    "(poor-match queries), by the action taken.",
+    ["action"],
+)
+
 message_processing_duration_seconds = Histogram(
     "aura_message_processing_duration_seconds",
     "Time spent in the message handler (_process) per queue.",

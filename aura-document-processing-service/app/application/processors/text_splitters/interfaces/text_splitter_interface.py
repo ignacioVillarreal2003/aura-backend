@@ -13,9 +13,6 @@ class TextSplitterInterface(ABC):
     def __init__(self, text_splitter_settings: "TextSplitterSettings") -> None:
         pass
 
-    def is_file_based(self) -> bool:
-        return False
-
     def supports(self, file_path: Path) -> bool:
         return True
 

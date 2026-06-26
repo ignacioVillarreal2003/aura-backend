@@ -25,10 +25,14 @@ DATABASES = {
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.auth",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.admin",
     "rest_framework",
     "drf_spectacular",
     "django_filters",
     "accounts.apps.AccountsConfig",
+    "documents.apps.DocumentsConfig",
 ]
 
 ROOT_URLCONF = "urls_test"

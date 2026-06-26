@@ -7,15 +7,16 @@ from app.application.services.generation_shared.state.generation_state import Ge
 from app.application.services.generation_shared.structured_generation_service import StructuredGenerationService
 from app.application.services.user_interactions.document_summary_service.document_summary_prompts import (
     ANSWER_HUMAN_PROMPT,
-    ANSWER_SYSTEM_PROMPT,
     MAP_HUMAN_PROMPT,
     MAP_SYSTEM_PROMPT,
     REDUCE_HUMAN_PROMPT,
     REDUCE_SYSTEM_PROMPT,
+    build_system_prompt,
 )
 from app.application.services.user_interactions.document_summary_service.document_summary_settings import (
-    DocumentSummaryServiceSettings,
+    DocumentSummarySettings,
 )
+from app.application.services.generation_shared.generation_settings import GenerationSettings
 from app.application.services.user_interactions.document_summary_service.exceptions.document_summary_service_exceptions import (
     DocumentSummaryServiceException,
 )
@@ -34,7 +35,6 @@ from app.domain.dtos.user_interactions.document_summary.document_summary_stream_
     DocumentSummaryStreamEvent,
     DocumentSummaryStreamProgress,
 )
-from app.domain.field_limits import MAX_DESCRIPTION_CHARS, MAX_SUMMARY_CHARS, MAX_TITLE_CHARS
 from app.infrastructure.http.document_context_provider.interfaces.document_context_provider_interface import (
     DocumentContextProviderInterface,
 )
@@ -44,7 +44,6 @@ from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface i
 _SUMMARY_INSTRUCTION = "Generá un resumen estructurado, completo y fiel del documento adjunto."
 _DEFAULT_TITLE = "Resumen de documentos"
 
-# (title, description, summary)
 _ParsedSummary = tuple[str, str, str]
 
 
@@ -75,23 +74,22 @@ class DocumentSummaryService(
             ollama_llm_facade: OllamaLLMFacadeInterface,
             ollama_llm_invoker: OllamaLLMInvokerInterface,
             document_context_provider: DocumentContextProviderInterface,
-            document_summary_settings: Optional[DocumentSummaryServiceSettings] = None,
+            generation_settings: Optional[GenerationSettings] = None,
+            document_summary_settings: Optional[DocumentSummarySettings] = None,
     ) -> None:
-        settings = document_summary_settings or DocumentSummaryServiceSettings()
         super().__init__(
             ollama_llm_facade=ollama_llm_facade,
             ollama_llm_invoker=ollama_llm_invoker,
             document_context_provider=document_context_provider,
-            generation_settings=settings.to_generation_settings(),
-            attached_documents_settings=settings.to_attached_settings(),
-            context_reduction_settings=settings.to_reduction_settings(),
+            generation_settings=generation_settings,
         )
+        self._document_summary_settings = document_summary_settings or DocumentSummarySettings()
 
     def _request_messages(self, request: DocumentSummaryRequest) -> list[Message]:
         return [Message(role=MessageRole.human, content=_SUMMARY_INSTRUCTION)]
 
     def _system_prompt(self, request: DocumentSummaryRequest) -> str:
-        return ANSWER_SYSTEM_PROMPT
+        return build_system_prompt(self._document_summary_settings)
 
     def _request_log_extra(self, request: DocumentSummaryRequest) -> dict:
         return {
@@ -101,18 +99,19 @@ class DocumentSummaryService(
         }
 
     def _parse_output(self, raw: str, request: DocumentSummaryRequest) -> _ParsedSummary:
+        settings = self._document_summary_settings
         try:
             data = parse_json_object(raw)
-            title = clean_text(data.get("title"), MAX_TITLE_CHARS)
-            description = clean_text(data.get("description"), MAX_DESCRIPTION_CHARS)
-            summary = clean_text(data.get("summary"), MAX_SUMMARY_CHARS)
+            title = clean_text(data.get("title"), settings.max_title_chars)
+            description = clean_text(data.get("description"), settings.max_description_chars)
+            summary = clean_text(data.get("summary"), settings.max_summary_chars)
             if not summary:
                 raise ValueError("Empty summary in JSON response.")
         except (json.JSONDecodeError, ValueError, TypeError):
             title, description, body = split_markdown_doc(raw)
-            title = clean_text(title, MAX_TITLE_CHARS)
-            description = clean_text(description, MAX_DESCRIPTION_CHARS)
-            summary = clean_text(body or raw, MAX_SUMMARY_CHARS)
+            title = clean_text(title, settings.max_title_chars)
+            description = clean_text(description, settings.max_description_chars)
+            summary = clean_text(body or raw, settings.max_summary_chars)
 
         if not summary:
             raise DocumentSummaryServiceException(

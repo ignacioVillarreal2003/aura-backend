@@ -10,6 +10,9 @@ Django: 5.x
 
 from pathlib import Path
 from decouple import config, Csv
+from django.core.exceptions import ImproperlyConfigured
+import ldap
+import os
 
 # Service root (3 levels up: settings/ -> aura_auth_service/ -> <service root>)
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -207,6 +210,50 @@ CACHES = {
         'KEY_PREFIX': 'auth_throttle',
     },
 }
+
+# ── LDAP ──────────────────────────────────────────────────────────────────────
+from django_auth_ldap.config import LDAPSearch
+
+AUTH_LDAP_SERVER_URI    = config('LDAP_SERVER_URI', default='ldap://localhost:389')
+AUTH_LDAP_BIND_DN       = config('LDAP_BIND_DN', default='cn=admin,dc=aura,dc=local')
+AUTH_LDAP_BIND_PASSWORD = config('LDAP_BIND_PASSWORD', default='admin_password')
+
+_ldap_uid_attr = config('LDAP_ATTR_UID', default='uid')
+AUTH_LDAP_USER_SEARCH = LDAPSearch(
+    config('LDAP_USER_SEARCH_BASE', default='ou=users,dc=aura,dc=local'),
+    ldap.SCOPE_SUBTREE,
+    f'({_ldap_uid_attr}=%(user)s)',
+)
+
+# Nombres de atributos LDAP — ajustar al schema real del servidor corporativo
+# Solo requiere cambiar estas variables de entorno; sin cambios de código.
+LDAP_ATTR_UID                  = _ldap_uid_attr
+LDAP_ATTR_MAIL                 = config('LDAP_ATTR_MAIL', default='mail')
+LDAP_ATTR_DISPLAY_NAME         = config('LDAP_ATTR_DISPLAY_NAME', default='displayName')
+LDAP_ATTR_CLASSIFICATION_LEVEL = config('LDAP_ATTR_CLASSIFICATION_LEVEL', default='auraClassificationLevel')
+LDAP_ATTR_COMPARTMENT          = config('LDAP_ATTR_COMPARTMENT', default='auraCompartment')
+LDAP_EMAIL_FALLBACK_DOMAIN     = config('LDAP_EMAIL_FALLBACK_DOMAIN', default='ldap.local')
+
+# Atributo del LDAP a inspeccionar (ej: 'employeeType', 'title', 'memberOf')
+LDAP_ATTR_ROLE                 = config('LDAP_ATTR_ROLE', default='employeeType')
+# Valor dentro de ese atributo que indica que el usuario es un administrador del sistema
+LDAP_ROLE_ADMIN_VALUE          = config('LDAP_ROLE_ADMIN_VALUE', default='admin')
+
+AUTH_LDAP_USER_ATTR_MAP = {
+    'email': LDAP_ATTR_MAIL,
+    'name':  LDAP_ATTR_DISPLAY_NAME,
+}
+AUTH_LDAP_ALWAYS_UPDATE_USER = True
+
+# ── Authentication backends ───────────────────────────────────────────────────
+# Orden: AuraLDAPBackend primero (usuarios regulares + admins con cuenta LDAP)
+#        ModelBackend como fallback (superadmin local, service accounts internos)
+#
+# Para deshabilitar auth local en el futuro, eliminar ModelBackend de la lista.
+AUTHENTICATION_BACKENDS = [
+    'accounts.ldap_backend.AuraLDAPBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
 
 # CORS Configuration
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000,http://localhost:4200', cast=Csv())

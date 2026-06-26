@@ -83,6 +83,34 @@ def _clean(values: list[str]) -> list[str]:
     return seen
 
 
+_ENV_SENTENCE_TRANSFORMER_KEYS = (
+    "EMBEDDER_HUGGINGFACE_MODEL",
+    "TEXT_SPLITTER_HUGGINGFACE_MODEL",
+    "TEXT_SPLITTER_DOCLING_TOKENIZER_MODEL",
+)
+_ENV_CROSS_ENCODER_KEYS = ("RERANKER_MODEL_NAME",)
+
+
+def _parse_env_file(path: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    with open(path, "r", encoding="utf-8") as handle:
+        for raw_line in handle:
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key:
+                values[key] = value
+    return values
+
+
+def _models_from_env(path: str, keys) -> list[str]:
+    env = _parse_env_file(path)
+    return [env[key] for key in keys if env.get(key, "").strip()]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -108,10 +136,28 @@ def main() -> int:
         default="",
         help="Directory to pre-download Docling's models (layout/tableformer) into; empty skips.",
     )
+    parser.add_argument(
+        "--env-file",
+        default="",
+        help=(
+            "Runtime .env file to read model names from "
+            "(EMBEDDER_HUGGINGFACE_MODEL, TEXT_SPLITTER_HUGGINGFACE_MODEL, "
+            "TEXT_SPLITTER_DOCLING_TOKENIZER_MODEL, RERANKER_MODEL_NAME). "
+            "This is the source of truth: whatever the service loads gets baked."
+        ),
+    )
     args = parser.parse_args()
 
-    sentence_transformers = _clean(args.sentence_transformer)
-    cross_encoders = _clean(args.cross_encoder)
+    sentence_transformer_args = list(args.sentence_transformer)
+    cross_encoder_args = list(args.cross_encoder)
+    if args.env_file.strip():
+        env_path = args.env_file.strip()
+        logger.info("Reading model names from env file: %s", env_path)
+        sentence_transformer_args += _models_from_env(env_path, _ENV_SENTENCE_TRANSFORMER_KEYS)
+        cross_encoder_args += _models_from_env(env_path, _ENV_CROSS_ENCODER_KEYS)
+
+    sentence_transformers = _clean(sentence_transformer_args)
+    cross_encoders = _clean(cross_encoder_args)
     tiktoken_encodings = _clean(args.tiktoken)
     docling_output = args.docling_output.strip()
 

@@ -75,7 +75,7 @@ class TestSettingsMapping:
     def test_profile_maps_to_shared_settings(self):
         s = DocumentQuestionServiceSettings()
         assert s.to_retrieval_settings().semantic_fragments_per_lane == 5
-        assert s.to_retrieval_settings().max_fragments == 8  # rerank cap
+        assert s.to_retrieval_settings().max_fragments == 8
         assert s.to_reduction_settings().max_batch_chars == 6_000
         assert s.to_attached_settings().max_fragments == 10
         assert s.to_generation_settings().max_context_chars == 12_000
@@ -103,7 +103,6 @@ class TestSync:
         assert res.answer == "Respuesta basada en la documentación."
         assert res.question == "¿Qué dice el documento?"
         assert [f.id for f in res.fragments] == [1, 2]
-        # response carries the conversation plus the assistant turn
         assert res.messages[-1].role == MessageRole.assistant
 
 
@@ -127,7 +126,7 @@ class TestStream:
         events = [e async for e in svc.execute_document_question_stream(req, _USER)]
         meta = next(e for e in events if isinstance(e, DocumentQuestionStreamMeta))
         doc_ids = {f.document_id for f in meta.fragments}
-        assert 9 in doc_ids  # attached document fetched and surfaced
+        assert 9 in doc_ids
 
     async def test_progress_steps_are_granular(self):
         svc = _svc()
@@ -137,8 +136,7 @@ class TestStream:
             )
         ]
         steps = [e.step for e in events if hasattr(e, "step")]
-        # corpus retrieval is on by default -> reformulating + searching, then generation
-        assert steps == ["reformulating", "searching", "generation"]
+        assert steps == ["processing", "reformulating", "searching", "generation"]
 
     async def test_reduction_runs_and_emits_progress_for_large_context(self):
         from app.infrastructure.http.document_context_provider.dtos.fragment_response import FragmentResponse
@@ -148,13 +146,13 @@ class TestStream:
                 document={"id": 1, "name": "DocX"},
             )
             for i in range(1, 4)
-        ]  # together exceed max_context_chars (12000)
+        ]
         provider = _Provider(q_frags=big, doc_frags=[])
         reduce_calls = {"map": 0}
 
         class _MapInvoker:
             async def call_llm_content(self, llm, llm_input):
-                if "extracción de información" in llm_input[0].content:
+                if "aislar los pasajes relevantes" in llm_input[0].content:
                     reduce_calls["map"] += 1
                     return "pasaje relevante"
                 return "Respuesta final."
@@ -167,4 +165,4 @@ class TestStream:
         ]
         steps = [e.step for e in events if hasattr(e, "step")]
         assert "reducing" in steps
-        assert reduce_calls["map"] >= 1  # MAP stage actually invoked
+        assert reduce_calls["map"] >= 1

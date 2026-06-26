@@ -122,8 +122,6 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 database_session=database_session,
             )
 
-            # The temp file is no longer needed once persisted; clear the handle so the
-            # outer error handlers do not try to delete it a second time.
             await self._cleanup_temp_file(temp_path)
             temp_path = None
 

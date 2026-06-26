@@ -38,6 +38,41 @@ def _can_see_full_user_edit(request, obj):
     )
 
 
+@admin.action(description='Forzar cierre de sesión inmediato')
+def force_logout(modeladmin, request, queryset):
+    """Invalida inmediatamente todas las sesiones activas de los usuarios seleccionados.
+
+    Setea force_logout_at=now() para que cualquier access token emitido antes
+    de ese momento sea rechazado al validarse, y revoca todos los refresh tokens.
+    """
+    from accounts.models import RefreshToken
+
+    now = timezone.now()
+    count = 0
+    for user in queryset:
+        user.force_logout_at = now
+        user.save(update_fields=['force_logout_at', 'updated_at'])
+        RefreshToken.objects.filter(user=user, is_revoked=False).update(
+            is_revoked=True,
+            updated_at=now,
+        )
+        log_audit(
+            actor=request.user,
+            action='FORCE_LOGOUT',
+            entity_type='auth_user',
+            entity_id=user.pk,
+            entity_label=user.username,
+            source='admin',
+        )
+        count += 1
+
+    modeladmin.message_user(
+        request,
+        f'Sesión forzada para {count} usuario(s). Sus tokens quedan invalidados de inmediato.',
+        messages.SUCCESS,
+    )
+
+
 @admin.register(User)
 class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
     """
@@ -88,7 +123,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
 
     form = UserAdminForm
     change_form_template = 'admin/accounts/user/change_form.html'
-    actions = ['action_force_logout']
+    actions = [force_logout]
     actions_selection_counter = False
 
     fieldsets = (

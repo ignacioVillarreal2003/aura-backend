@@ -63,7 +63,7 @@ class ContextReductionProcessor:
         fragments = state.all_fragments
         if not fragments:
             return False
-        total = sum(len(f.content) for f in fragments)
+        total = sum(len(f.effective_content) for f in fragments)
         return total > self._settings.max_context_chars
 
     async def run(
@@ -146,7 +146,7 @@ class ContextReductionProcessor:
         units: list[str] = []
         for frag in fragments:
             label = f"[{frag.document.name}] "
-            content = frag.content
+            content = frag.effective_content
             chunk_budget = max(1, budget - len(label))
             if len(content) <= chunk_budget:
                 units.append(f"{label}{content}")

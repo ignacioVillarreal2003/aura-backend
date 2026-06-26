@@ -32,7 +32,6 @@ def _user() -> AuthenticatedUser:
     return AuthenticatedUser(id=1, email="u@test.com", roles=[], permissions=[])
 
 
-# ── llm_result_from_status ──────────────────────────────────────────────────────
 
 class TestLlmResultFromStatus:
     @pytest.mark.parametrize(
@@ -43,7 +42,6 @@ class TestLlmResultFromStatus:
         assert llm_result_from_status(status) == expected
 
 
-# ── observe_stage ───────────────────────────────────────────────────────────────
 
 class TestObserveStage:
     def test_records_duration_on_success(self):
@@ -62,7 +60,6 @@ class TestObserveStage:
         assert _histogram_count(name, {"stage": "boom_stage"}) == before + 1
 
 
-# ── LLM provider wrapper increments the right outcome ───────────────────────────
 
 class TestLlmProviderMetrics:
     def _provider(self):
@@ -121,7 +118,6 @@ class TestLlmProviderMetrics:
         assert after == before + 1
 
 
-# ── Ingestion pipeline instrumentation ──────────────────────────────────────────
 
 class TestIngestionMetrics:
     def _service(self):

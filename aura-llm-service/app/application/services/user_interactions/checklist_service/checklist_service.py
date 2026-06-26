@@ -23,7 +23,6 @@ from app.application.services.generation_shared.output_parsing import clean_text
 from app.application.services.generation_shared.structured_generation_service import StructuredGenerationService
 from app.domain.dtos.user_interactions.checklist.checklist_request import ChecklistGenerateRequest
 from app.domain.dtos.user_interactions.checklist.checklist_response import ChecklistGenerateResponse, ChecklistItem
-from app.domain.field_limits import MAX_DESCRIPTION_CHARS
 from app.domain.dtos.user_interactions.checklist.checklist_stream_events import (
     ChecklistStreamComplete,
     ChecklistStreamError,
@@ -37,7 +36,6 @@ from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface i
 
 logger = logging.getLogger(__name__)
 
-# (title, description, items)
 _ParsedChecklist = tuple[str, str, list[ChecklistItem]]
 
 
@@ -49,10 +47,14 @@ def _parse_items(raw_items: list, settings: ChecklistSettings) -> list[Checklist
         text = clean_text(entry.get("text", ""), settings.max_item_text_chars)
         if not text:
             continue
+        try:
+            order = max(1, int(entry.get("order", 1)))
+        except (TypeError, ValueError):
+            order = 1
         items.append(
             ChecklistItem(
                 section=clean_text(entry.get("section", "General"), settings.max_section_chars) or "General",
-                order=max(1, int(entry.get("order", 1))),
+                order=order,
                 text=text,
                 is_checked=False,
             )
@@ -77,7 +79,7 @@ def _parse_llm_output(raw: str, settings: ChecklistSettings) -> _ParsedChecklist
     try:
         data = parse_json_object(raw)
         title = clean_text(data.get("title", "Checklist"), settings.max_title_chars) or "Checklist"
-        description = clean_text(data.get("description", ""), MAX_DESCRIPTION_CHARS)
+        description = clean_text(data.get("description", ""), settings.max_description_chars)
         items = _parse_items(data.get("items", []), settings)
         if not items:
             raise ValueError("No se encontraron ítems válidos en la respuesta.")

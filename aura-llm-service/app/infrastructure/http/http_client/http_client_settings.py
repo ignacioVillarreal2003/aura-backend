@@ -26,6 +26,7 @@ class HttpClientSettings(BaseSettings):
     retry_backoff_min_seconds: float = Field(default=1.0, gt=0, le=30.0)
     retry_backoff_max_seconds: float = Field(default=10.0, gt=0, le=60.0)
     retry_enabled_http_methods: str = Field(default="GET,HEAD,OPTIONS,PUT")
+    retry_on_server_error_statuses: str = Field(default="502,503,504")
 
     circuit_breaker_failure_threshold: int = Field(default=5, ge=1, le=20)
     circuit_breaker_recovery_timeout_seconds: int = Field(default=60, gt=0, le=600)
@@ -83,6 +84,22 @@ class HttpClientSettings(BaseSettings):
     def retry_enabled_method_set(self) -> frozenset[str]:
         methods = {m.strip().upper() for m in self.retry_enabled_http_methods.split(",") if m.strip()}
         return frozenset(methods)
+
+    @cached_property
+    def retry_on_server_error_status_set(self) -> frozenset[int]:
+        statuses: set[int] = set()
+        for raw in self.retry_on_server_error_statuses.split(","):
+            token = raw.strip()
+            if not token:
+                continue
+            try:
+                statuses.add(int(token))
+            except ValueError:
+                logger.warning(
+                    "Ignoring non-numeric value in retry_on_server_error_statuses.",
+                    extra={"value": token},
+                )
+        return frozenset(statuses)
 
     @property
     def merged_request_headers(self) -> dict[str, str]:

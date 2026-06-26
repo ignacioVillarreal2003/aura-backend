@@ -21,6 +21,12 @@ class TestRouting:
             == RagNodeName.document_fetcher.value
         )
 
+    def test_relational_intent_goes_to_context_retriever(self):
+        assert (
+            _route_after_graph_retriever({"intent": "relational"})
+            == RagNodeName.context_retriever.value
+        )
+
     def test_no_context_routes_to_fallback(self):
         state = {"retrieved_fragments": [], "graph_facts": ""}
         assert _route_after_retrieval(state) == RagNodeName.fallback.value
@@ -52,6 +58,10 @@ class TestQueryAnalyzerParsing:
     def test_unknown_intent_defaults_to_question(self):
         raw = '{"query": "q", "keywords": [], "intent": "inventado"}'
         assert self._parse(raw)["intent"] == "question"
+
+    def test_relational_intent_is_preserved(self):
+        raw = '{"query": "q", "keywords": [], "intent": "relational"}'
+        assert self._parse(raw)["intent"] == "relational"
 
     def test_garbage_falls_back_to_original_query(self):
         result = self._parse("sin json")

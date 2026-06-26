@@ -3,6 +3,9 @@ from typing import Optional
 
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.dtos.fragment.fragment_response import FragmentResponse
+from app.infrastructure.http.document_context_provider.dtos.fragment_list_response import (
+    FragmentSectionGroup,
+)
 from app.domain.dtos.message import Message
 
 
@@ -22,7 +25,11 @@ class GenerationState:
 
     fragments: list[FragmentResponse] = field(default_factory=list)
 
+    section_groups: Optional[list[FragmentSectionGroup]] = None
+    section_summary: Optional[str] = None
+
     reduced_context: Optional[str] = None
+    history_summary: Optional[str] = None
 
     reformulation_degraded: bool = False
     retrieval_degraded: bool = False

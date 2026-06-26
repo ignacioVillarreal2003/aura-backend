@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.domain.constants.document_action_type import DocumentActionType
 from app.domain.field_limits import MAX_ID, MAX_DOCUMENT_IDS_PER_REQUEST, MAX_INSTRUCTION_CHARS
-from app.domain.validation import stripped_non_blank
+from app.domain.validation import OptionalPrompt, stripped_non_blank
 
 
 class DocumentActionRequest(BaseModel):
@@ -16,15 +16,13 @@ class DocumentActionRequest(BaseModel):
         le=MAX_ID,
         description="ID del chat fuente. Informativo; el contexto se toma de document_ids.",
     )
-    system_prompt: str | None = Field(
+    system_prompt: OptionalPrompt = Field(
         default=None,
-        min_length=1,
         max_length=MAX_INSTRUCTION_CHARS,
         description="Instrucción de sistema personalizada del operador.",
     )
-    response_style: str | None = Field(
+    response_style: OptionalPrompt = Field(
         default=None,
-        min_length=1,
         max_length=MAX_INSTRUCTION_CHARS,
         description="Estilo de respuesta esperado por el operador.",
     )
@@ -51,4 +49,4 @@ class DocumentActionRequest(BaseModel):
             raise ValueError("Document identifiers must not contain duplicates.")
         return self
 
-    model_config = {"frozen": True}
+    model_config = {"frozen": True, "extra": "forbid"}

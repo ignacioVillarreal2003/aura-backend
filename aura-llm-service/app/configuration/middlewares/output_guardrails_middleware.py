@@ -4,6 +4,8 @@ from typing import Optional
 from fastapi import FastAPI
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app.configuration.metrics import record_guardrails_block
+
 logger = logging.getLogger(__name__)
 
 _EXCLUDED_PATH_PREFIXES = (
@@ -14,7 +16,7 @@ _EXCLUDED_PATH_PREFIXES = (
     "/api/openapi.json",
     "/metrics",
     "/api/v1/document-classify",
-    "/api/v1/fragment-enrich",
+    "/api/v1/fragment-contextualize",
     "/api/v1/graph-extraction",
     "/api/v1/graph-query-translation",
 )
@@ -135,7 +137,7 @@ class OutputGuardrailsMiddleware:
                 verdict = await guardrails.check_output("\n\n".join(texts))
                 verdict_allowed = verdict.allowed
         except (UnicodeDecodeError, json.JSONDecodeError):
-            verdict_allowed = True  # Not screenable: let it through.
+            verdict_allowed = True
         except Exception:
             logger.exception("Output guardrail screening failed; forwarding original response.")
             verdict_allowed = True
@@ -150,6 +152,7 @@ class OutputGuardrailsMiddleware:
 
     @staticmethod
     async def _send_blocked(scope: Scope, send: Send, message: str) -> None:
+        record_guardrails_block("output")
         request_id = (scope.get("state") or {}).get("request_id")
         logger.warning(
             "Response blocked by the guardrails output filter.",

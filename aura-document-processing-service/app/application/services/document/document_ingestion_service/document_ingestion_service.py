@@ -70,9 +70,6 @@ class _ChunkingOutcome:
     chunk_overlap: Optional[int]
 
 
-# Maps a stage-typed ingestion failure to the pipeline stage that raised it, so
-# `pipeline_stage_failures_total` attributes failures precisely even though
-# read/clean/split all happen inside the single `chunk` timing stage.
 _FAILURE_STAGE_BY_EXCEPTION: dict[type[Exception], str] = {
     DocumentIngestionServiceReadException: "read",
     DocumentIngestionServiceCleanException: "clean",

@@ -28,8 +28,6 @@ class TestRagAgentAuth:
         assert response.status_code == 403
 
     def test_wrong_permission_returns_403(self, client, make_auth_headers, mock_rag_agent_service):
-        # The rag-agent endpoint shares the LLM_AGENT permission, so use an
-        # unrelated permission to exercise the 403 path.
         response = client.post(URL, json=VALID_BODY, headers=make_auth_headers(permissions=["LLM_DOCUMENT_QUESTION"]))
         assert response.status_code == 403
 

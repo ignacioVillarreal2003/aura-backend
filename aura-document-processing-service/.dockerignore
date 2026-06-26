@@ -35,6 +35,11 @@ htmlcov/
 # Environment files (secrets must come from env vars / secrets manager)
 .env
 .env.*
+# ...except the docker-targeted env files: the build reads them as the source of
+# truth for which models to bake. They're copied into the builder stage only and
+# removed in the same layer, so they never reach the final image.
+!env/.env.docker
+!env/.env.docker.gpu
 
 # Database
 db.sqlite3

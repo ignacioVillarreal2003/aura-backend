@@ -18,14 +18,14 @@ class OllamaLLMFacadeSettings(BaseSettings):
     model_name: str = Field(...)
     base_url: str = Field(...)
 
-    temperature: float = Field(default=0.3, ge=0.0, le=2.0)
+    temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     top_p: Optional[float] = Field(default=0.9, ge=0.0, le=1.0)
     top_k: Optional[int] = Field(default=40, ge=1, le=500)
-    repeat_penalty: Optional[float] = Field(default=1.1, ge=0.0, le=2.0)
+    repeat_penalty: Optional[float] = Field(default=1.05, ge=0.0, le=2.0)
     seed: Optional[int] = Field(default=None, ge=0)
 
-    num_ctx: int = Field(default=8_192, ge=512, le=131_072)
-    num_predict: Optional[int] = Field(default=None, le=32_768)
+    num_ctx: int = Field(default=24_576, ge=512, le=131_072)
+    num_predict: Optional[int] = Field(default=6_144, le=32_768)
 
     prompt_overhead_tokens: int = Field(default=2_048, ge=0, le=32_768)
     output_reserve_tokens: int = Field(default=1_024, ge=1, le=32_768)
@@ -34,8 +34,8 @@ class OllamaLLMFacadeSettings(BaseSettings):
     circuit_failure_threshold: int = Field(default=3, ge=1, le=20)
     circuit_recovery_cooldown_seconds: float = Field(default=30.0, gt=0, le=600.0)
 
-    request_timeout: Optional[float] = Field(default=600.0, gt=0, le=3600.0)
-    keep_alive: Optional[Union[int, str]] = Field(default=None)
+    request_timeout: Optional[float] = Field(default=300.0, gt=0, le=3600.0)
+    keep_alive: Optional[Union[int, str]] = Field(default="30m")
 
     @field_validator("model_name", mode="before")
     @classmethod

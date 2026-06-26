@@ -62,12 +62,6 @@ class TestAppExceptionHandler:
 
 class TestRequestValidationHandler:
     def test_missing_required_field_returns_422(self, handler_client):
-        # Reuse the main test app fixture — hit a real endpoint with bad body
-        # A separate targeted test: POST to a route that has a Pydantic body
-        # We can't do this from the mini-app (no pydantic routes there).
-        # Use the document-classify endpoint from conftest instead — see
-        # test_document_classify_controller.py for comprehensive coverage.
-        # Here we just verify the handler shape via direct handler invocation.
         pass
 
     def test_validation_error_format(self, client, auth_headers, mock_document_classify_service):
@@ -103,3 +97,22 @@ class TestGeneralExceptionHandler:
         body = handler_client.get("/raise-generic-exception").json()
         assert body["error"] == "InternalServerError"
         assert "message" in body
+
+
+class TestRoutingErrorsUseAppEnvelope:
+    """Starlette raises the base HTTPException for unmatched routes/methods;
+    the handler must be registered for it so 404/405 share the app envelope."""
+
+    def test_unknown_path_uses_app_envelope(self, handler_client):
+        response = handler_client.get("/does-not-exist")
+        assert response.status_code == 404
+        body = response.json()
+        assert body["error"] == "HttpError"
+        assert body["message"] == "Not Found"
+
+    def test_method_not_allowed_uses_app_envelope(self, handler_client):
+        response = handler_client.post("/raise-http-exception")
+        assert response.status_code == 405
+        body = response.json()
+        assert body["error"] == "HttpError"
+        assert body["message"] == "Method Not Allowed"

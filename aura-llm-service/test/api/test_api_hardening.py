@@ -17,7 +17,6 @@ from app.infrastructure.http.http_client.http_client import HttpClient
 from app.infrastructure.http.request_id_context import get_request_id, set_request_id
 
 
-# ── Body size limit ───────────────────────────────────────────────────────────
 
 def _body_limit_app(max_body_bytes: int) -> FastAPI:
     app = FastAPI()
@@ -47,13 +46,11 @@ def test_declared_content_length_over_limit_is_rejected():
 
 def test_chunked_body_over_limit_is_rejected():
     client = TestClient(_body_limit_app(max_body_bytes=100))
-    # An iterator body is sent chunked, without a Content-Length header.
     response = client.post("/echo", content=iter([b"x" * 60, b"x" * 60]))
     assert response.status_code == 413
     assert response.json()["error"] == "RequestBodyTooLarge"
 
 
-# ── SSE heartbeat ─────────────────────────────────────────────────────────────
 
 class _Event(BaseModel):
     type: str = "delta"
@@ -98,7 +95,6 @@ def test_sse_emits_events_without_heartbeat_when_fast():
     assert response.content.count(b"data: ") == 2
 
 
-# ── X-Request-ID propagation ──────────────────────────────────────────────────
 
 def test_logging_middleware_sets_request_id_contextvar():
     app = FastAPI()

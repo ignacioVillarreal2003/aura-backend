@@ -34,6 +34,7 @@ from app.infrastructure.http.http_client.exceptions.http_client_exceptions impor
     HttpClientException,
     HttpClientTimeoutException,
 )
+from app.infrastructure.http.http_client.http_request_retry import retry_idempotent_request
 from app.infrastructure.http.http_client.interfaces.http_client_interface import HttpClientInterface
 
 logger = logging.getLogger(__name__)
@@ -85,11 +86,18 @@ class DocumentContextProvider(DocumentContextProviderInterface):
                     "retrieve_fragments_by_question",
                     [q.text for q in request.semantic_queries] + [q.text for q in request.bm25_queries],
             ) as span:
-                response = await self._http_client.post(
-                    url=self._settings.question_context_fragments_url,
-                    json=request.model_dump(exclude_none=True, mode="json"),
-                    headers=self._build_headers(authenticated_user),
-                    timeout=self._settings.timeout_seconds,
+                payload = request.model_dump(exclude_none=True, mode="json")
+                headers = self._build_headers(authenticated_user)
+                response = await retry_idempotent_request(
+                    lambda: self._http_client.post(
+                        url=self._settings.question_context_fragments_url,
+                        json=payload,
+                        headers=headers,
+                        timeout=self._settings.timeout_seconds,
+                    ),
+                    max_attempts=self._settings.retry_max_attempts,
+                    min_wait=self._settings.retry_backoff_min_seconds,
+                    max_wait=self._settings.retry_backoff_max_seconds,
                 )
                 max_fragments = calculate_question_response_max_fragments(request)
                 fragments = parse_and_apply_limits(
@@ -142,11 +150,18 @@ class DocumentContextProvider(DocumentContextProviderInterface):
                     "retrieve_fragments_by_document",
                     [f"document_ids: {document_ids}"],
             ) as span:
-                response = await self._http_client.post(
-                    url=self._settings.document_context_fragments_url,
-                    json=request_body.model_dump(),
-                    headers=self._build_headers(authenticated_user),
-                    timeout=self._settings.timeout_seconds,
+                payload = request_body.model_dump()
+                headers = self._build_headers(authenticated_user)
+                response = await retry_idempotent_request(
+                    lambda: self._http_client.post(
+                        url=self._settings.document_context_fragments_url,
+                        json=payload,
+                        headers=headers,
+                        timeout=self._settings.timeout_seconds,
+                    ),
+                    max_attempts=self._settings.retry_max_attempts,
+                    min_wait=self._settings.retry_backoff_min_seconds,
+                    max_wait=self._settings.retry_backoff_max_seconds,
                 )
 
                 fragments = parse_and_apply_limits(

@@ -67,14 +67,14 @@ _error = default_error_responses(
 )
 _response = {
     200: {
-        "description": "AcciÃ³n ejecutada",
+        "description": "Acción ejecutada",
         "model": DocumentActionResponse,
     },
     **_error,
 }
 _response_stream = {
     200: {
-        "description": "Stream SSE de la acciÃ³n",
+        "description": "Stream SSE de la acción",
         "content": {"text/event-stream": {}},
     },
     **_error,
@@ -86,8 +86,8 @@ router.add_api_route(
     methods=["POST"],
     response_model=DocumentActionResponse,
     operation_id="executeDocumentAction",
-    summary="Ejecutar acciÃ³n sobre documento",
-    description="Ejecuta una acciÃ³n estructurada sobre los fragmentos del documento usando el LLM.",
+    summary="Ejecutar acción sobre documento",
+    description="Ejecuta una acción estructurada sobre los fragmentos del documento usando el LLM.",
     responses=_response,
 )
 
@@ -97,7 +97,7 @@ router.add_api_route(
     methods=["POST"],
     response_class=StreamingResponse,
     operation_id="executeDocumentActionStream",
-    summary="Ejecutar acciÃ³n sobre documento (SSE)",
+    summary="Ejecutar acción sobre documento (SSE)",
     description=(
         "Server-Sent Events: JSON lines con prefijo `data: `. "
         "Tipos de evento: `progress`, `delta`, `complete`, `error` (campo discriminador `type`). "

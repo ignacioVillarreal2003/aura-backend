@@ -1,7 +1,11 @@
+import asyncio
 import logging
 from typing import Optional
 import redis.asyncio as aioredis
+import redis.exceptions as redis_exceptions
 from redis.asyncio.connection import ConnectionPool
+from redis.asyncio.retry import Retry
+from redis.backoff import ExponentialBackoff
 
 from app.infrastructure.persistence.memory_database.redis_client.redis_client_settings import RedisClientSettings
 
@@ -13,6 +17,7 @@ class RedisClient:
         self._settings = redis_client_settings or RedisClientSettings()
         self._pool: Optional[ConnectionPool] = None
         self._client: Optional[aioredis.Redis] = None
+        self._lock = asyncio.Lock()
 
     @property
     def client(self) -> aioredis.Redis:
@@ -23,23 +28,40 @@ class RedisClient:
         return self._client
 
     async def initialize(self) -> None:
-        self._pool = aioredis.ConnectionPool.from_url(
-            self._settings.url.get_secret_value(),
-            max_connections=self._settings.max_connections,
-            socket_connect_timeout=self._settings.socket_connect_timeout,
-            socket_timeout=self._settings.socket_timeout,
-            health_check_interval=self._settings.health_check_interval,
-            decode_responses=True,
-        )
-        self._client = aioredis.Redis(connection_pool=self._pool)
-        await self._ping()
-        logger.info(
-            "Redis client initialized.",
-            extra={
-                "url": self._redacted_url(),
-                "max_connections": self._settings.max_connections,
-            },
-        )
+        async with self._lock:
+            if self._client is not None:
+                logger.debug("Redis client already initialized; skipping.")
+                return
+
+            pool = aioredis.ConnectionPool.from_url(
+                self._settings.url.get_secret_value(),
+                max_connections=self._settings.max_connections,
+                socket_connect_timeout=self._settings.socket_connect_timeout,
+                socket_timeout=self._settings.socket_timeout,
+                socket_keepalive=True,
+                health_check_interval=self._settings.health_check_interval,
+                retry=Retry(ExponentialBackoff(), self._settings.retry_attempts),
+                retry_on_error=[redis_exceptions.ConnectionError, redis_exceptions.TimeoutError],
+                decode_responses=True,
+            )
+            client = aioredis.Redis(connection_pool=pool)
+
+            try:
+                await client.ping()
+            except Exception:
+                await client.aclose()
+                await pool.aclose()
+                raise
+
+            self._pool = pool
+            self._client = client
+            logger.info(
+                "Redis client initialized.",
+                extra={
+                    "url": self._redacted_url(),
+                    "max_connections": self._settings.max_connections,
+                },
+            )
 
     async def dispose(self) -> None:
         if self._client is not None:

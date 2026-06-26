@@ -54,8 +54,6 @@ class TestGraphStatsRepository:
         await repo.get_stats()
 
         manager.execute_read.assert_awaited()
-        # The manager API has no session(); accessing it must fail rather than
-        # silently auto-create (which is how the original bug went unnoticed).
         assert not hasattr(manager, "session")
 
     @pytest.mark.asyncio

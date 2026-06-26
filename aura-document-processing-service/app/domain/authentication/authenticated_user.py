@@ -1,14 +1,25 @@
 from collections.abc import Set as AbstractSet
-from pydantic import BaseModel, Field, PrivateAttr
+from typing import Annotated
+from pydantic import BaseModel, Field, PrivateAttr, StringConstraints
 
+from app.domain.field_limits import (
+    MAX_EMAIL_CHARS,
+    MAX_PERMISSION_CHARS,
+    MAX_PERMISSIONS,
+    MAX_ROLE_CHARS,
+    MAX_ROLES,
+)
 from app.domain.types import UserId
+
+_Role = Annotated[str, StringConstraints(max_length=MAX_ROLE_CHARS)]
+_Permission = Annotated[str, StringConstraints(max_length=MAX_PERMISSION_CHARS)]
 
 
 class AuthenticatedUser(BaseModel):
     id: UserId = Field(...)
-    email: str | None = Field(default=None)
-    roles: list[str] = Field(default_factory=list)
-    permissions: list[str] = Field(default_factory=list)
+    email: str | None = Field(default=None, max_length=MAX_EMAIL_CHARS)
+    roles: list[_Role] = Field(default_factory=list, max_length=MAX_ROLES)
+    permissions: list[_Permission] = Field(default_factory=list, max_length=MAX_PERMISSIONS)
 
     _roles_set: frozenset[str] = PrivateAttr()
     _permissions_set: frozenset[str] = PrivateAttr()

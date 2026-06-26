@@ -6,9 +6,13 @@ All endpoints except `/health` and `/ready` require authentication (see [authent
 Rate-limited endpoints return `429 Too Many Requests` with a `Retry-After` header when exceeded.  
 All request bodies are `application/json`.
 
-> **Note:** the `Idempotency-Key` header mentioned for some endpoints is a
-> planned feature and is **not yet implemented** — sending it currently has no
-> effect (see [rate-limiting.md](rate-limiting.md#idempotency-keys)).
+> **Note:** the `Idempotency-Key` header is a planned feature and is **not yet
+> implemented** — sending it currently has no effect (see
+> [rate-limiting.md](rate-limiting.md#idempotency-keys)).
+>
+> **SSE streaming:** every `/stream` endpoint emits `progress` events whose
+> `message` field is human-readable Spanish and whose `step` field is a stable
+> machine id — render `message`, not `step`.
 
 ---
 
@@ -70,8 +74,7 @@ Each entry's `status` is one of `ok`/`healthy`, `error` (failed or timed out) or
 Answers a question based on retrieved document fragments.
 
 **Permission:** `LLM_DOCUMENT_QUESTION`  
-**Rate limit:** 60 / min  
-**Idempotency-Key:** supported (optional header)
+**Rate limit:** 60 / min
 
 **Request body**
 
@@ -79,9 +82,9 @@ Answers a question based on retrieved document fragments.
 |---|---|---|---|
 | `messages` | `Message[]` | yes | 1–50 items; last message must have `role = "human"` |
 | `chat_id` | `int` | yes | 1–2 147 483 647 |
-| `document_ids` | `int[]` | no | max 20; attached as priority context |
-| `system_prompt` | `string` | no | 1–16 000 chars; overrides the default prompt |
-| `response_style` | `string` | no | 1–16 000 chars |
+| `document_ids` | `int[]` | no | max 50; attached as priority context (only loaded when `process_documents` is true) |
+| `system_prompt` | `string` | no | 1–10 000 chars; overrides the default prompt |
+| `response_style` | `string` | no | 1–10 000 chars |
 | `retrieve_context` | `bool` | no | force RAG retrieval on/off; omit for service default |
 | `process_documents` | `bool` | no | process full attached documents; omit for service default |
 
@@ -133,10 +136,16 @@ Same as `/document-question` but streams the answer as [Server-Sent Events](http
 **Rate limit:** 20 / min  
 **Response content-type:** `text/event-stream`
 
-Each event is a JSON object on a `data:` line:
+Each event is a JSON object on a `data:` line. Every stream starts with an
+initial `processing` progress event, then emits a `progress` event before each
+pipeline stage:
 
 ```
-data: {"type": "progress", "step": 1, "message": "Recuperando fragmentos..."}
+data: {"type": "progress", "step": "processing", "message": "Procesando tu consulta..."}
+
+data: {"type": "progress", "step": "reformulating", "message": "Interpretando y optimizando la consulta..."}
+
+data: {"type": "progress", "step": "searching", "message": "Buscando información relevante en los documentos..."}
 
 data: {"type": "meta", "question": "¿Cuáles son las cláusulas?", "fragments": [...]}
 
@@ -151,8 +160,8 @@ data: {"type": "complete", "result": { <DocumentQuestionResponse> }}
 
 | `type` | Fields | Description |
 |---|---|---|
-| `progress` | `step: int`, `message: str` | Processing step update |
-| `meta` | `question: str`, `fragments: FragmentResponse[]` | Retrieved context info |
+| `progress` | `step: str`, `message: str` | Pipeline-stage update. `step` is a machine id (e.g. `processing`, `reformulating`, `searching`, `reducing`, `generation`); `message` is the human-readable Spanish text — display `message`, not `step`. |
+| `meta` | `question: str`, `fragments: FragmentResponse[]` | Retrieved context info (document-question only) |
 | `delta` | `text: str` (1–50 000 chars) | Incremental answer token(s) |
 | `complete` | `result: DocumentQuestionResponse` | Final full response |
 | `error` | `message: str`, `code?: str` | Stream-level error |
@@ -167,8 +176,6 @@ Generates a summary of one or more documents identified by their IDs.
 
 **Permission:** `LLM_DOCUMENT_SUMMARY`  
 **Rate limit:** 20 / min  
-**Idempotency-Key:** supported
-
 **Request body**
 
 | Field | Type | Required | Constraints |
@@ -188,12 +195,14 @@ Generates a summary of one or more documents identified by their IDs.
 
 | Field | Type | Description |
 |---|---|---|
-| `document_ids` | `int[]` | IDs that were summarised |
+| `title` | `string` | Short title (may be empty; ≤ 100 chars) |
+| `description` | `string` | Short description (may be empty; ≤ 1 000 chars) |
 | `summary` | `string` | Generated summary (1–10 000 chars) |
 | `fragments` | `FragmentResponse[]` | Source fragments used |
+| `degraded_stages` | `string[]` | Context-pipeline stages that degraded (empty when none); a non-empty list means the answer may be partial |
 
 A streaming variant `POST /document-summary/stream` (`text/event-stream`) emits
-the same SSE event types described under Document Question.
+`progress` / `complete` / `error` events.
 
 ---
 
@@ -205,8 +214,6 @@ Executes a free-form or templated action over one or more documents (e.g. extrac
 
 **Permission:** `LLM_DOCUMENT_ACTION`  
 **Rate limit:** 20 / min  
-**Idempotency-Key:** supported
-
 **Request body**
 
 | Field | Type | Required | Constraints |
@@ -242,13 +249,16 @@ Executes a free-form or templated action over one or more documents (e.g. extrac
 
 | Field | Type | Description |
 |---|---|---|
+| `title` | `string` | Short title (may be empty; ≤ 100 chars) |
+| `description` | `string` | Short description (may be empty; ≤ 1 000 chars) |
 | `result` | `string` | LLM output (1–50 000 chars) |
-| `document_ids` | `int[]` | IDs processed |
 | `instruction` | `string` | Original instruction |
 | `action` | `DocumentActionType?` | Action type if provided |
+| `fragments` | `FragmentResponse[]` | Source fragments used |
+| `degraded_stages` | `string[]` | Context-pipeline stages that degraded (empty when none) |
 
 A streaming variant `POST /document-action/stream` (`text/event-stream`) emits
-the same SSE event types described under Document Question.
+`progress` / `delta` / `complete` / `error` events.
 
 ---
 
@@ -260,8 +270,6 @@ Classifies a document by type and category based on its name and content.
 
 **Permission:** `LLM_DOCUMENT_CLASSIFY`  
 **Rate limit:** 60 / min  
-**Idempotency-Key:** supported
-
 **Request body**
 
 | Field | Type | Required | Constraints |
@@ -289,26 +297,28 @@ Classifies a document by type and category based on its name and content.
 
 ---
 
-## Fragment Enrich
+## Fragment Contextualize
 
-### POST /fragment-enrich
+### POST /fragment-contextualize
 
-Enriches a text fragment with a summary, extracted entities, and topics.
+Generates a short contextual prefix for a fragment, given the parent document's
+summary — used to improve retrieval (contextual embeddings).
 
-**Permission:** `LLM_FRAGMENT_ENRICH`  
-**Rate limit:** 60 / min  
-**Idempotency-Key:** supported
+**Permission:** `LLM_FRAGMENT_CONTEXTUALIZE`  
+**Rate limit:** 60 / min
 
 **Request body**
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
+| `document_summary` | `string` | yes | 1–2 000 chars, stripped, non-blank |
 | `content` | `string` | yes | 1–50 000 chars, stripped, non-blank |
 
 **Example request**
 ```json
 {
-  "content": "El artículo 5 establece que el proveedor deberá entregar el software en un plazo máximo de 90 días..."
+  "document_summary": "Contrato de prestación de servicios entre GAMMA CORP y un proveedor de software.",
+  "content": "El artículo 5 establece que el proveedor deberá entregar el software en un plazo máximo de 90 días."
 }
 ```
 
@@ -316,9 +326,7 @@ Enriches a text fragment with a summary, extracted entities, and topics.
 
 | Field | Type | Description |
 |---|---|---|
-| `summary` | `string` | Brief summary (1–10 000 chars) |
-| `entities` | `dict[string, any]` | Key-value entity map (max 200 keys; key ≤ 255 chars; value ≤ 1 000 chars) |
-| `topics` | `string[]` | List of topics (max 100; each ≤ 500 chars) |
+| `context` | `string` | Contextual prefix for the fragment (1–2 000 chars) |
 
 ---
 
@@ -330,8 +338,6 @@ Extracts named entities and their relations from a text fragment according to a 
 
 **Permission:** `LLM_GRAPH_EXTRACTION`  
 **Rate limit:** 60 / min  
-**Idempotency-Key:** supported
-
 **Request body**
 
 | Field | Type | Required | Constraints |
@@ -394,8 +400,6 @@ Translates a natural-language question into a structured graph query intent.
 
 **Permission:** `LLM_GRAPH_QUERY_TRANSLATION`  
 **Rate limit:** 60 / min  
-**Idempotency-Key:** supported
-
 **Request body**
 
 | Field | Type | Required | Constraints |
@@ -459,9 +463,9 @@ any explicitly attached documents).
 |---|---|---|---|
 | `messages` | `Message[]` | yes | 1–50 items; last message must have `role = "human"` |
 | `chat_id` | `int` | yes | 1–2 147 483 647 |
-| `document_ids` | `int[]` | no | max 20; attached as priority context |
-| `system_prompt` | `string` | no | 1–16 000 chars |
-| `response_style` | `string` | no | 1–16 000 chars |
+| `document_ids` | `int[]` | no | max 50; attached as priority context (only loaded when `process_documents` is true) |
+| `system_prompt` | `string` | no | 1–10 000 chars |
+| `response_style` | `string` | no | 1–10 000 chars |
 | `retrieve_context` | `bool` | no | force RAG retrieval on/off |
 | `process_documents` | `bool` | no | process full attached documents |
 
@@ -469,10 +473,13 @@ any explicitly attached documents).
 
 | Field | Type | Description |
 |---|---|---|
+| `answer` | `string` | LLM answer (1–50 000 chars) |
 | `messages` | `Message[]` | Full conversation history including the assistant's answer |
+| `fragments` | `FragmentResponse[]` | Source fragments used (empty unless retrieval/attachment ran) |
+| `degraded_stages` | `string[]` | Context-pipeline stages that degraded (empty when none) |
 
 A streaming variant `POST /general-chat/stream` (`text/event-stream`) emits
-`delta` / `complete` / `error` events.
+`progress` / `delta` / `complete` / `error` events.
 
 ---
 
@@ -480,11 +487,14 @@ A streaming variant `POST /general-chat/stream` (`text/event-stream`) emits
 
 ### POST /rag-agent
 
-Executes the full RAG (Retrieval-Augmented Generation) pipeline: analyses the query, retrieves document context, evaluates its sufficiency, reasons over the answer, and synthesises a final response.
+Executes the full RAG (Retrieval-Augmented Generation) pipeline as a LangGraph
+workflow: analyses the query, retrieves graph + document context, **grades the
+context's sufficiency and (if weak) refines the query and re-retrieves** a
+bounded number of times (Corrective-RAG), synthesises the answer, and runs an
+answer guardrail before returning.
 
 **Permission:** `LLM_AGENT`  
-**Rate limit:** 20 / min  
-**Idempotency-Key:** supported
+**Rate limit:** 20 / min
 
 **Request body**
 
@@ -492,18 +502,42 @@ Executes the full RAG (Retrieval-Augmented Generation) pipeline: analyses the qu
 |---|---|---|---|
 | `messages` | `Message[]` | yes | 1–50 items; last message must have `role = "human"` |
 | `chat_id` | `int` | yes | 1–2 147 483 647 |
-| `system_prompt` | `string` | no | 1–16 000 chars |
-| `response_style` | `string` | no | 1–16 000 chars |
+| `system_prompt` | `string` | no | 1–10 000 chars |
+| `response_style` | `string` | no | 1–10 000 chars |
 | `retrieve_context` | `bool` | no | force RAG retrieval on/off |
 | `process_documents` | `bool` | no | process full attached documents |
+
+> The agent request has **no** `document_ids` field.
 
 **Response 200**
 
 | Field | Type | Description |
 |---|---|---|
-| `messages` | `Message[]` | Full conversation history including synthesised answer |
+| `messages` | `Message[]` | Conversation with the synthesised assistant answer |
+| `fragments` | `FragmentResponse[]` | Source fragments used (may be empty) |
 
-A streaming variant `POST /rag-agent/stream` (`text/event-stream`) is also available.
+### POST /rag-agent/stream
+
+Streaming variant (`text/event-stream`). Emits an initial `processing` event,
+then a `progress` event **before each pipeline node runs** (real-time status),
+then a `complete` (or `error`).
+
+```
+data: {"type": "progress", "step": "processing", "message": "Procesando tu consulta..."}
+
+data: {"type": "progress", "step": "query_analyzer", "message": "Analizando y reformulando la consulta..."}
+
+data: {"type": "progress", "step": "context_retriever", "message": "Buscando información relevante en los documentos..."}
+
+data: {"type": "progress", "step": "context_grader", "message": "Evaluando si el contexto recuperado es suficiente..."}
+
+data: {"type": "complete", "result": { <AgentResponse> }}
+```
+
+`step` is the node id; possible values: `processing`, `query_analyzer`,
+`graph_context_retriever`, `context_retriever`, `document_fetcher`,
+`context_grader`, `query_refiner`, `answer_synthesizer`, `guardrails`,
+`fallback`. As everywhere, display `message` (Spanish), not `step`.
 
 ---
 
@@ -531,9 +565,9 @@ They share one request contract and differ only in the document they produce
 | `messages` | `Message[]` | yes | 1–50 items; last message must have `role = "human"` |
 | `chat_id` | `int` | yes | 1–2 147 483 647 |
 | `report_type` | `"SITREP"` \| `"INTSUM"` \| `"OPORD"` | report only | required by `/report-generate` |
-| `document_ids` | `int[]` | no | max 20; attached as priority context |
-| `system_prompt` | `string` | no | 1–16 000 chars |
-| `response_style` | `string` | no | 1–16 000 chars |
+| `document_ids` | `int[]` | no | max 50; attached as priority context (only loaded when `process_documents` is true) |
+| `system_prompt` | `string` | no | 1–10 000 chars |
+| `response_style` | `string` | no | 1–10 000 chars |
 | `retrieve_context` | `bool` | no | force RAG retrieval on/off |
 | `process_documents` | `bool` | no | process full attached documents |
 

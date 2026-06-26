@@ -11,8 +11,9 @@ class RedisClientSettings(BaseSettings):
         extra="ignore",
     )
 
-    url: SecretStr = Field(default="redis://127.0.0.1:6379/2")
+    url: SecretStr = Field(...)
     max_connections: int = Field(default=10, ge=1, le=200)
     socket_connect_timeout: float = Field(default=5.0, ge=0.5, le=30.0)
     socket_timeout: float = Field(default=10.0, ge=0.5, le=60.0)
     health_check_interval: int = Field(default=30, ge=0, le=300)
+    retry_attempts: int = Field(default=3, ge=0, le=10)

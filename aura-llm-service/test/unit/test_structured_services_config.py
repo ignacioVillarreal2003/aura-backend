@@ -38,14 +38,12 @@ def test_has_all_four_reduction_prompts(service_cls):
 
 @pytest.mark.parametrize("service_cls", _SERVICES)
 def test_reduction_prompts_use_processor_placeholders(service_cls):
-    # ContextReductionProcessor formats human prompts with {query}/{fragments}.
     for attr in ("map_human_prompt", "reduce_human_prompt"):
         value = getattr(service_cls, attr)
         assert "{query}" in value and "{fragments}" in value
-        assert "{input}" not in value  # would KeyError during reduction
+        assert "{input}" not in value
 
 
 @pytest.mark.parametrize("service_cls", _SERVICES)
 def test_answer_human_prompt_uses_generation_placeholders(service_cls):
-    # build_generation_messages formats the human prompt with {context}/{input}.
     assert "{context}" in service_cls.human_prompt and "{input}" in service_cls.human_prompt

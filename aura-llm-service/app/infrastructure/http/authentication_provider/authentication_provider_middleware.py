@@ -1,9 +1,7 @@
+import json
 import logging
-from typing import Callable, Optional
-from fastapi import Request, Response
-from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.types import ASGIApp
+from typing import Optional
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.authentication_provider.exceptions.authentication_provider_exception import (
@@ -16,190 +14,221 @@ from app.infrastructure.http.authentication_provider.exceptions.authentication_p
 from app.infrastructure.http.authentication_provider.interfaces.authentication_provider_interface import (
     AuthenticationProviderInterface
 )
-from app.infrastructure.http.authentication_provider.request_token import set_request_token
+from app.infrastructure.http.authentication_provider.request_token import reset_request_token, set_request_token
 
 logger = logging.getLogger(__name__)
 
-WWW_AUTH = {
-    "WWW-Authenticate": "Bearer"
-}
+_AUTHORIZATION_HEADER = b"authorization"
 
 
-def _error_response(
-        request: Request,
+async def _send_error(
+        send: Send,
+        request_id: Optional[str],
         status_code: int,
         error: str,
         message: str,
         *,
         www_authenticate: bool = False,
-) -> JSONResponse:
-    request_id = getattr(request.state, "request_id", None)
+) -> None:
     content: dict = {"error": error, "message": message}
     if request_id:
         content["request_id"] = request_id
-    headers: dict = {}
+    body = json.dumps(content, ensure_ascii=False).encode("utf-8")
+    headers = [
+        (b"content-type", b"application/json"),
+        (b"content-length", str(len(body)).encode("latin-1")),
+    ]
     if www_authenticate:
-        headers.update(WWW_AUTH)
+        headers.append((b"www-authenticate", b"Bearer"))
     if request_id:
-        headers["X-Request-ID"] = request_id
-    return JSONResponse(status_code=status_code, content=content, headers=headers)
+        headers.append((b"x-request-id", request_id.encode("latin-1")))
+    await send({"type": "http.response.start", "status": status_code, "headers": headers})
+    await send({"type": "http.response.body", "body": body})
 
 
-class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
+class AuthenticationProviderMiddleware:
     def __init__(
             self,
             app: ASGIApp,
             excluded_paths: Optional[list[str]] = None,
     ) -> None:
-        super().__init__(app)
+        self.app = app
         self.excluded_paths: list[str] = excluded_paths or []
 
-    async def dispatch(
+    async def __call__(
             self,
-            request: Request,
-            call_next: Callable
-    ) -> Response:
-        if request.method == "OPTIONS":
-            return await call_next(request)
+            scope: Scope,
+            receive: Receive,
+            send: Send
+    ) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
 
-        if self._is_excluded(request.url.path):
+        if scope.get("method") == "OPTIONS":
+            await self.app(scope, receive, send)
+            return
+
+        path = scope.get("path", "")
+        if self._is_excluded(path):
             logger.debug(
                 "Skipping authentication for this path.",
                 extra={
-                    "path": request.url.path
+                    "path": path
                 }
             )
-            return await call_next(request)
+            await self.app(scope, receive, send)
+            return
+
+        request_id = (scope.get("state") or {}).get("request_id")
+        app_state = scope["app"].state
 
         provider: Optional[AuthenticationProviderInterface] = getattr(
-            request.app.state, "authentication_provider", None
+            app_state, "authentication_provider", None
         )
         if provider is None:
             logger.error(
                 "Authentication provider is not configured on the application.",
                 extra={
-                    "path": request.url.path
+                    "path": path
                 }
             )
-            return _error_response(
-                request, 503,
+            await _send_error(
+                send, request_id, 503,
                 "service_not_configured", "Authentication service not configured",
             )
+            return
 
-        token = self._extract_token(request)
+        token = self._extract_token(scope, path)
 
         if not token:
             logger.warning(
                 "Protected route called without credentials.",
                 extra={
-                    "path": request.url.path
+                    "path": path
                 }
             )
-            return _error_response(
-                request, 401,
+            await _send_error(
+                send, request_id, 401,
                 "missing_token", "Authentication required",
                 www_authenticate=True,
             )
+            return
 
-        settings = getattr(request.app.state, "authentication_provider_settings", None)
+        settings = getattr(app_state, "authentication_provider_settings", None)
         if settings is not None and len(token) > settings.max_bearer_token_characters:
             logger.warning(
                 "Rejected a bearer token that exceeds the configured maximum length.",
                 extra={
-                    "path": request.url.path,
+                    "path": path,
                     "error_code": "token_too_long",
                 },
             )
-            return _error_response(
-                request, 401,
+            await _send_error(
+                send, request_id, 401,
                 "token_too_long", "Bearer token is too long",
                 www_authenticate=True,
             )
+            return
 
-        return await self._validate_jwt(request, call_next, token, provider)
+        await self._validate_jwt(scope, receive, send, token, provider, request_id, path)
 
     async def _validate_jwt(
             self,
-            request: Request,
-            call_next: Callable,
+            scope: Scope,
+            receive: Receive,
+            send: Send,
             token: str,
-            authentication_provider: AuthenticationProviderInterface
-    ) -> Response:
+            authentication_provider: AuthenticationProviderInterface,
+            request_id: Optional[str],
+            path: str,
+    ) -> None:
         try:
             authenticated_user = await authentication_provider.validate_token(token)
-            request.state.authenticated_user = AuthenticatedUser.model_validate(authenticated_user)
-            bearer = token if token.lower().startswith("bearer ") else f"Bearer {token}"
-            request.state.authorization_header_outbound = bearer
-            set_request_token(bearer)
-            logger.debug(
-                "Request authenticated with a valid bearer token.",
-                extra={
-                    "user_id": authenticated_user.id,
-                    "path": request.url.path
-                }
-            )
-            return await call_next(request)
-
         except AuthenticationProviderInvalidTokenException:
             logger.warning(
                 "Bearer token is invalid or has expired.",
                 extra={
-                    "path": request.url.path,
+                    "path": path,
                     "error_code": "invalid_token",
                 }
             )
-            return _error_response(
-                request, 401,
+            await _send_error(
+                send, request_id, 401,
                 "invalid_token", "Invalid or expired token",
                 www_authenticate=True,
             )
+            return
         except AuthenticationProviderUnauthorizedException:
             logger.warning(
                 "Access was forbidden by the authentication service.",
                 extra={
-                    "path": request.url.path,
+                    "path": path,
                     "error_code": "unauthorized",
                 }
             )
-            return _error_response(request, 403, "unauthorized", "Access forbidden")
+            await _send_error(send, request_id, 403, "unauthorized", "Access forbidden")
+            return
         except AuthenticationProviderUserNotFoundException:
             logger.warning(
                 "No user was found for this token.",
                 extra={
-                    "path": request.url.path,
+                    "path": path,
                     "error_code": "user_not_found",
                 }
             )
-            return _error_response(request, 404, "user_not_found", "User not found")
+            await _send_error(send, request_id, 404, "user_not_found", "User not found")
+            return
         except AuthenticationProviderServiceUnavailableException:
             logger.error(
                 "Authentication service is unavailable.",
                 extra={
-                    "path": request.url.path,
+                    "path": path,
                     "error_code": "service_unavailable",
                 }
             )
-            return _error_response(
-                request, 503,
+            await _send_error(
+                send, request_id, 503,
                 "service_unavailable", "Authentication service temporarily unavailable",
             )
+            return
         except AuthenticationProviderException:
             logger.exception(
                 "Authentication failed with an unexpected provider error.",
                 extra={
-                    "path": request.url.path,
+                    "path": path,
                     "error_code": "authentication_error",
                 }
             )
-            return _error_response(request, 500, "authentication_error", "Authentication error")
+            await _send_error(send, request_id, 500, "authentication_error", "Authentication error")
+            return
         except Exception:
             logger.exception(
                 "Unexpected error while processing authentication.",
                 extra={
-                    "path": request.url.path
+                    "path": path
                 }
             )
-            return _error_response(request, 500, "internal_error", "Internal server error")
+            await _send_error(send, request_id, 500, "internal_error", "Internal server error")
+            return
+
+        state = scope.setdefault("state", {})
+        state["authenticated_user"] = AuthenticatedUser.model_validate(authenticated_user)
+        bearer = token if token.lower().startswith("bearer ") else f"Bearer {token}"
+        state["authorization_header_outbound"] = bearer
+        context_token = set_request_token(bearer)
+        logger.debug(
+            "Request authenticated with a valid bearer token.",
+            extra={
+                "user_id": authenticated_user.id,
+                "path": path
+            }
+        )
+
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            reset_request_token(context_token)
 
     def _is_excluded(
             self,
@@ -217,9 +246,14 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _extract_token(
-            request: Request
+            scope: Scope,
+            path: str
     ) -> Optional[str]:
-        auth = request.headers.get("Authorization", "")
+        auth = ""
+        for key, value in scope.get("headers", []):
+            if key.lower() == _AUTHORIZATION_HEADER:
+                auth = value.decode("latin-1")
+                break
         parts = auth.split()
         if len(parts) == 2 and parts[0].lower() == "bearer":
             return parts[1]
@@ -227,7 +261,7 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
             logger.warning(
                 "Authorization header is present but not in Bearer format.",
                 extra={
-                    "path": request.url.path
+                    "path": path
                 }
             )
         return None

@@ -1,4 +1,5 @@
 import logging
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +28,7 @@ _DOCLING_SUPPORTED_EXTENSIONS: frozenset[str] = frozenset({
 class DoclingHybridTextSplitter(TextSplitterInterface):
     def __init__(self, text_splitter_settings: TextSplitterSettings) -> None:
         self._settings = text_splitter_settings
+        self._convert_lock = threading.Lock()
         try:
             self._converter = self._build_converter()
             self._chunker = self._build_chunker()
@@ -48,9 +50,6 @@ class DoclingHybridTextSplitter(TextSplitterInterface):
             },
         )
 
-    def is_file_based(self) -> bool:
-        return True
-
     def supports(self, file_path: Path) -> bool:
         return file_path.suffix.lower() in _DOCLING_SUPPORTED_EXTENSIONS
 
@@ -66,7 +65,8 @@ class DoclingHybridTextSplitter(TextSplitterInterface):
             )
 
         try:
-            result = self._converter.convert(str(file_path))
+            with self._convert_lock:
+                result = self._converter.convert(str(file_path))
             document = getattr(result, "document", None)
             if document is None:
                 raise TextSplitterExecutionException(

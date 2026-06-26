@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Literal, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 _MAX_ID = 2_147_483_647
@@ -62,6 +62,7 @@ class QuestionContextFragmentsRequest(BaseModel):
 
     rerank: RerankConfig = Field(default_factory=RerankConfig)
     adjacent_chunks: int = Field(default=0, ge=0, le=3)
+    context_expansion: Literal["none", "adjacent", "section"] = "adjacent"
 
     @model_validator(mode="after")
     def _validate_queries(self) -> "QuestionContextFragmentsRequest":

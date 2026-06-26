@@ -35,6 +35,10 @@ class RagAgentStateBuilder:
             answer="",
             guardrail_passed=True,
             fallback_triggered=False,
+            retrieval_attempts=0,
+            context_sufficient=True,
+            grade_reason="",
+            can_retry=False,
         )
 
     @staticmethod
