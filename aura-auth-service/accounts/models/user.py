@@ -1,5 +1,7 @@
 """User model and manager aligned with auth_db schema."""
 
+from functools import cached_property
+
 from django.apps import apps
 from django.contrib.auth.hashers import make_password, check_password
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
@@ -41,7 +43,6 @@ class CustomUserManager(BaseUserManager):
                         lockout_until,
                         credentials_non_expired,
                         last_password_change,
-                        refresh_token,
                         created_by,
                         created_at,
                         updated_by,
@@ -52,7 +53,7 @@ class CustomUserManager(BaseUserManager):
                         nextval({seq_expr}),
                         %s, %s, %s, %s, %s, %s,
                         %s, %s, %s, %s,
-                        %s, %s, %s,
+                        %s, %s,
                         currval({seq_expr}),
                         %s, %s, %s, %s, %s
                     )
@@ -71,7 +72,6 @@ class CustomUserManager(BaseUserManager):
                         extra_fields.get('lockout_until'),
                         extra_fields.get('credentials_non_expired', True),
                         extra_fields.get('last_password_change', now),
-                        extra_fields.get('refresh_token'),
                         now,
                         extra_fields.get('updated_by_id'),
                         now,
@@ -180,7 +180,11 @@ class User(AbstractBaseUser):
         blank=True,
         verbose_name='Ultimo cambio de contrasena',
     )
-    refresh_token = models.UUIDField(null=True, blank=True)
+    tokens_valid_after = models.DateTimeField(
+        default=timezone.now,
+        verbose_name='Tokens válidos desde',
+        help_text='Access tokens issued before this instant are rejected (revocation cutoff).',
+    )
     created_by = models.ForeignKey(
         'self',
         on_delete=models.PROTECT,
@@ -234,7 +238,11 @@ class User(AbstractBaseUser):
         self.soft_delete(deleted_by=deleted_by)
         return None
 
-    @property
+    # ``cached_property``: these were plain properties that hit the DB on every
+    # access, and they are read many times per request (DRF/admin permission
+    # checks, get_user_permissions, etc.). Caching is per-instance, so it lives
+    # exactly for the lifetime of the User loaded for the current request.
+    @cached_property
     def is_staff(self) -> bool:
         if not self.pk:
             return False
@@ -243,7 +251,7 @@ class User(AbstractBaseUser):
             deleted_at__isnull=True,
         ).exists()
 
-    @property
+    @cached_property
     def is_superuser(self) -> bool:
         if not self.pk:
             return False

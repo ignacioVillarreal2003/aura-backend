@@ -4,6 +4,24 @@ from authservice.settings import *  # noqa: F401, F403
 
 TEST_RUNNER = 'authservice.test_runner.AuthDbTestRunner'
 
+# Disable throttling under tests: the throttle state lives in LocMemCache and
+# would otherwise leak across test methods (in-process), causing flaky 429s.
+REST_FRAMEWORK = {  # noqa: F405
+    **REST_FRAMEWORK,  # noqa: F405
+    'DEFAULT_THROTTLE_RATES': {
+        'login': None,
+        'refresh': None,
+        'change_password': None,
+        'user_lookup': None,
+    },
+}
+
+# Keep the permissions cache in-process during tests (no Redis dependency).
+CACHES = {  # noqa: F405
+    **CACHES,  # noqa: F405
+    'permissions': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'},
+}
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',

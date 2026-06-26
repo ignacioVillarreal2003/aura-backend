@@ -1,14 +1,12 @@
 """Auth API views for login, refresh, validate, and logout."""
 
-import secrets
-
-from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.throttling import AnonRateThrottle
+from rest_framework.throttling import AnonRateThrottle, ScopedRateThrottle
 from rest_framework.views import APIView
 
 from accounts.admin_parts.utils.audit import log_audit
@@ -20,16 +18,17 @@ from accounts.api.serializers import (
     LogoutSerializer,
     RefreshSerializer,
     TokenResponseSerializer,
-    UserDetailSerializer,
     UserListResponseSerializer,
     ValidateResponseSerializer,
 )
+from accounts.api.permissions import IsServiceOrUserViewer, can_view_user_directory
+from accounts.authentication import JWTAuthentication
 from accounts.models import RefreshToken, User
 from accounts.services.auth_service import (
     authenticate_user,
     get_user_info,
-    introspect_token,
     issue_tokens_for_user,
+    revoke_all_sessions,
     revoke_refresh_token,
     rotate_refresh_token,
 )
@@ -38,31 +37,6 @@ from notifications.services.notification_client import emit_event_async
 
 class LoginRateThrottle(AnonRateThrottle):
     scope = 'login'
-
-
-def _require_authenticated(request):
-    """Returns None if the request carries valid credentials, or a 401 Response.
-
-    Accepts either a service-to-service X-Service-Api-Key header or a
-    user-issued Bearer token. Error messages deliberately avoid hinting
-    which path failed to limit information leakage.
-    """
-    service_key = request.headers.get('X-Service-Api-Key')
-    if service_key:
-        expected = getattr(settings, 'SERVICE_API_KEY', '')
-        if expected and secrets.compare_digest(service_key.strip(), str(expected)):
-            return None
-        return Response({'detail': 'Invalid service API key.'}, status=status.HTTP_401_UNAUTHORIZED)
-
-    auth_header = request.headers.get('Authorization', '')
-    if not auth_header.startswith('Bearer '):
-        return Response(
-            {'detail': 'Authorization header missing or invalid.'},
-            status=status.HTTP_401_UNAUTHORIZED,
-        )
-    if not introspect_token(auth_header.split(' ', 1)[1]):
-        return Response({'detail': 'Invalid or expired token.'}, status=status.HTTP_401_UNAUTHORIZED)
-    return None
 
 
 def _is_new_device_login(user, request) -> bool:
@@ -76,7 +50,7 @@ def _is_new_device_login(user, request) -> bool:
 
 class LoginView(APIView):
     authentication_classes = []
-    permission_classes = []
+    permission_classes = [AllowAny]
     throttle_classes = [LoginRateThrottle]
 
     @extend_schema(
@@ -132,7 +106,9 @@ class LoginView(APIView):
 
 class RefreshView(APIView):
     authentication_classes = []
-    permission_classes = []
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'refresh'
 
     @extend_schema(
         summary='Refresh token',
@@ -155,7 +131,7 @@ class RefreshView(APIView):
 
 class LogoutView(APIView):
     authentication_classes = []
-    permission_classes = []
+    permission_classes = [AllowAny]
 
     @extend_schema(
         summary='Logout',
@@ -183,8 +159,11 @@ class LogoutView(APIView):
 
 
 class ValidateView(APIView):
+    # Open by design: this IS the token introspection endpoint — it validates
+    # the token carried in the request and returns user info. It must not
+    # require prior authentication.
     authentication_classes = []
-    permission_classes = []
+    permission_classes = [AllowAny]
 
     @extend_schema(
         summary='Validate token',
@@ -208,8 +187,11 @@ class ValidateView(APIView):
 
 
 class UserLookupView(APIView):
-    authentication_classes = []
-    permission_classes = []
+    # Free-text search is an enumeration / PII vector: restrict to services and
+    # users holding ADMIN_USERS_VIEW (a plain end user cannot enumerate).
+    permission_classes = [IsServiceOrUserViewer]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'user_lookup'
 
     @extend_schema(
         summary='Lookup users',
@@ -230,9 +212,6 @@ class UserLookupView(APIView):
         tags=['Auth'],
     )
     def get(self, request):
-        if error := _require_authenticated(request):
-            return error
-
         q = request.query_params.get('q', '').strip()
         if not q:
             return Response({'detail': 'Query parameter "q" is required.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -254,8 +233,8 @@ class UserLookupView(APIView):
 
 
 class UsersByIdsView(APIView):
-    authentication_classes = []
-    permission_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'user_lookup'
 
     @extend_schema(
         summary='Get users by IDs',
@@ -275,9 +254,6 @@ class UsersByIdsView(APIView):
         tags=['Auth'],
     )
     def get(self, request):
-        if error := _require_authenticated(request):
-            return error
-
         ids_param = request.query_params.get('ids', '').strip()
         if not ids_param:
             return Response({'detail': 'Query parameter "ids" is required.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -291,12 +267,16 @@ class UsersByIdsView(APIView):
             return Response({'count': 0, 'results': []}, status=status.HTTP_200_OK)
 
         users = User.objects.filter(pk__in=ids, deleted_at__isnull=True)
+        # by-ids is a benign resolve-known-ids lookup (used to display names), so
+        # any authenticated principal may call it — but email (PII) is only
+        # exposed to services / users with ADMIN_USERS_VIEW.
+        include_email = can_view_user_directory(request.user)
         results = [
             {
                 'id':       u.id,
                 'username': u.username,
                 'name':     u.name,
-                'email':    u.email,
+                **({'email': u.email} if include_email else {}),
             }
             for u in users
         ]
@@ -304,8 +284,12 @@ class UsersByIdsView(APIView):
 
 
 class ChangePasswordView(APIView):
-    authentication_classes = []
-    permission_classes = []
+    # Real end users only (not service keys); the JWT principal IS the account
+    # whose password changes.
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'change_password'
 
     @extend_schema(
         summary='Change password',
@@ -324,27 +308,7 @@ class ChangePasswordView(APIView):
         tags=['Auth'],
     )
     def post(self, request):
-        auth_header = request.headers.get('Authorization', '')
-        if not auth_header.startswith('Bearer '):
-            return Response(
-                {'detail': 'Authorization header missing or invalid.'},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
-        token = auth_header.split(' ', 1)[1]
-        payload = introspect_token(token)
-        if not payload:
-            return Response(
-                {'detail': 'Invalid or expired token.'},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
-
-        try:
-            user = User.objects.get(pk=payload['user_id'], deleted_at__isnull=True)
-        except User.DoesNotExist:
-            return Response(
-                {'detail': 'User not found.'},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
+        user = request.user
 
         serializer = ChangePasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -359,8 +323,10 @@ class ChangePasswordView(APIView):
         user.last_password_change = timezone.now()
         user.save(update_fields=['password', 'last_password_change'])
 
-        # Revoke all active refresh tokens — forces re-login
-        RefreshToken.objects.filter(user=user, is_revoked=False).update(is_revoked=True)
+        # End every session: revoke refresh tokens AND invalidate all
+        # outstanding access tokens (tokens_valid_after cutoff) — forces re-login
+        # and closes the stolen-access-token window.
+        revoke_all_sessions(user)
 
         emit_event_async(
             event_type='auth.password.changed',

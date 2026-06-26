@@ -25,7 +25,7 @@ def _custom_get_app_list(self, request, app_label=None):
     can_view_users = has_permission(request, 'ADMIN_USERS_VIEW')
 
     # Models shown in Gestión de usuarios (accounts app), in order.
-    # CustomGroup is excluded — groups are managed via MAC collections.
+    # (Grouping is handled by MAC collections, not by an accounts model.)
     _accounts_allowed = {'User', 'Role', 'Permission'}
     desired_order = ['User']
     if can_view_roles:
@@ -125,7 +125,7 @@ def _custom_get_app_list(self, request, app_label=None):
 
     for app in app_list:
         if app.get('app_label') == 'accounts':
-            # Show only allowed models; CustomGroup is intentionally excluded.
+            # Show only allowed models.
             allowed = _accounts_allowed if can_view_roles else {'User'}
             app['models'] = [
                 m for m in app['models'] if m.get('object_name') in allowed

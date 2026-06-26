@@ -1,7 +1,7 @@
 """Role admin configuration."""
 
 from django import forms
-from django.contrib import admin, messages
+from django.contrib import admin
 from django.contrib.admin.widgets import FilteredSelectMultiple
 from django.utils.html import format_html
 from accounts.models import Role, Permission, PermissionInRole
@@ -72,23 +72,6 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
             role = Role.objects.get(pk=object_id)
             extra_context['title'] = f'Rol - {role.name.capitalize()}'
             extra_context['subtitle'] = None
-            if role.name in ('admin', 'superadmin'):
-                other_name = 'superadmin' if role.name == 'admin' else 'admin'
-                try:
-                    other_role = Role.objects.get(name=other_name)
-                    my_count = PermissionInRole.objects.filter(role=role).count()
-                    other_count = PermissionInRole.objects.filter(role=other_role).count()
-                    if my_count == other_count and request.method == 'GET':
-                        messages.warning(
-                            request,
-                            f'Advertencia: "{role.name}" y "{other_name}" tienen los mismos '
-                            f'{my_count} permisos. Ejecutá '
-                            f'"python manage.py fix_admin_permissions --execute" '
-                            f'para agregar los permisos exclusivos que le faltan a superadmin '
-                            f'(chat, gestión de admins, edición de roles/notificaciones, etc.).',
-                        )
-                except Role.DoesNotExist:
-                    pass
         except Role.DoesNotExist:
             pass
         return super().change_view(request, object_id, form_url, extra_context)

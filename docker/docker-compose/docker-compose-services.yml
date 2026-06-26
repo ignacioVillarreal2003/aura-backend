@@ -103,7 +103,11 @@ services:
         condition: service_healthy
       aura_db:
         condition: service_healthy
-    healthcheck: *healthcheck-metrics
+    healthcheck:
+      <<: *healthcheck-defaults
+      test:
+        - CMD-SHELL
+        - python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5)"
     restart: unless-stopped
     deploy:
       replicas: 1

@@ -89,23 +89,6 @@ class ChatClient:
             logger.error('Chat client GET %s failed: %s', path, exc)
             raise ChatServiceError(f'No se pudo conectar al servicio de chat: {exc}')
 
-    def _delete(self, user, path):
-        base = self._base_url()
-        if not base:
-            raise ChatServiceError('CHAT_SERVICE_URL no configurado.')
-        try:
-            resp = requests.delete(
-                f'{base}{path}',
-                headers=self._headers(user),
-                timeout=_TIMEOUT,
-            )
-            return self._handle(resp)
-        except ChatServiceError:
-            raise
-        except Exception as exc:
-            logger.error('Chat client DELETE %s failed: %s', path, exc)
-            raise ChatServiceError(f'No se pudo conectar al servicio de chat: {exc}')
-
     # ── Chats ────────────────────────────────────────────────────────────────
 
     def get_chats(self, user, page=1, page_size=20, search=None, ordering='-created_at'):
@@ -151,23 +134,17 @@ class ChatClient:
         return self._get(user, f'/api/v1/chats/{chat_id}/')
 
     def get_chat_messages(self, user, chat_id):
-        """GET /api/v1/chats/{chat_id}/messages/manage/ — full history
-        without requiring membership (admin view)."""
-        data = self._get(user, f'/api/v1/chats/{chat_id}/messages/manage/')
+        """GET /api/v1/messages/manage/?chat_id={chat_id} — full history
+        without requiring membership (admin view, MANAGE_MESSAGES).
+
+        NOTE: there is no per-chat ``/chats/{id}/messages/manage/`` route in
+        aura-chat-service — chat messages are served by the artifact_message
+        app mounted at ``/api/v1/messages/`` and the admin endpoint takes the
+        chat as a ``chat_id`` query parameter (see MessageManageView)."""
+        data = self._get(user, '/api/v1/messages/manage/', params={'chat_id': chat_id})
         if isinstance(data, dict):
             return data.get('results', [])
         return data or []
-
-    def get_chat_share_links(self, user, chat_id):
-        """GET /api/v1/chats/{chat_id}/share-links/."""
-        data = self._get(user, f'/api/v1/chats/{chat_id}/share-links/')
-        if isinstance(data, dict):
-            return data.get('results', [])
-        return data or []
-
-    def delete_share_link(self, user, chat_id, link_id):
-        """DELETE /api/v1/chats/{chat_id}/share-links/{link_id}/."""
-        return self._delete(user, f'/api/v1/chats/{chat_id}/share-links/{link_id}/')
 
     def get_chat_members(self, user, chat_id):
         """GET /api/v1/chats/{chat_id}/members/manage/."""

@@ -148,28 +148,25 @@
     </table>
   {% endif %}
 
-  <p class="section-title">Enlaces de compartición</p>
-  {% if share_links_error %}
-    <p class="service-unavailable">{{ share_links_error }}</p>
-  {% elif not share_links %}
-    <p class="empty-note">Sin enlaces activos.</p>
+  <p class="section-title">Documentos del chat</p>
+  {% if documents_error %}
+    <p class="service-unavailable">{{ documents_error }}</p>
+  {% elif not document_rows %}
+    <p class="empty-note">Sin documentos.</p>
   {% else %}
-    <table class="links-table">
+    <table class="members-table">
       <thead>
-        <tr><th>Token</th><th>Vence</th><th></th></tr>
+        <tr><th>Nombre</th><th>Tipo</th><th>Tamaño</th><th>Estado</th><th>Subido por</th><th>Fecha</th></tr>
       </thead>
       <tbody>
-        {% for link in share_links %}
+        {% for doc in document_rows %}
         <tr>
-          <td><code>{{ link.token }}</code></td>
-          <td>{{ link.expires_label }}</td>
-          <td>
-            <form method="post" action="{{ link.revoke_url }}" style="margin:0;"
-                  onsubmit="return confirm('¿Revocar este enlace de compartición?');">
-              {% csrf_token %}
-              <button type="submit" class="revoke-btn">Revocar</button>
-            </form>
-          </td>
+          <td>{{ doc.name }}</td>
+          <td>{{ doc.mime_type }}</td>
+          <td>{{ doc.size }}</td>
+          <td>{{ doc.status }}</td>
+          <td>{{ doc.uploaded_by }}</td>
+          <td>{{ doc.created_at }}</td>
         </tr>
         {% endfor %}
       </tbody>

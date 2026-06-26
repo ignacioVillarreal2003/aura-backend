@@ -1,22 +1,38 @@
-FROM python:3.13-slim
+FROM python:3.13-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /application
 
-COPY requirements.txt .
+# Non-root runtime user (matches the convention of the other services).
+RUN addgroup --system app && adduser --system --ingroup app app
 
+FROM base AS dependencies
+
+# No system build deps needed: every requirement ships as a wheel
+# (psycopg2-binary bundles libpq).
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+FROM dependencies AS runtime
 
-RUN mkdir -p logs
+COPY --chown=app:app . .
 
-RUN python manage.py collectstatic --noinput
+# collectstatic needs neither DB nor network. Normalize the entrypoint line
+# endings (the repo may be checked out on Windows), make it executable, and
+# hand ownership of everything to the unprivileged user.
+RUN python manage.py collectstatic --noinput \
+    && sed -i 's/\r$//' docker-entrypoint.sh \
+    && chmod +x docker-entrypoint.sh \
+    && chown -R app:app /application
 
-# Normalize line endings (in case the repo was checked out on Windows) and make
-# the entrypoint executable.
-RUN sed -i 's/\r$//' docker-entrypoint.sh && chmod +x docker-entrypoint.sh
+USER app
 
 EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5)"]
 
 ENTRYPOINT ["/application/docker-entrypoint.sh"]
 

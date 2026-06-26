@@ -48,9 +48,8 @@ class UserAdminForm(forms.ModelForm):
 
     class Meta:
         model = User
-        # custom_groups is not a model field — it is a manual cross-DB relation
-        # managed via raw SQL on aura_db (see UserAdmin.save_related).
-        # The form field below is declared explicitly and populated/saved manually.
+        # MAC assignments (compartment_ids above) are not model fields — they are
+        # declared explicitly on the form and populated/saved manually.
         exclude = []
 
     def __init__(self, *args, **kwargs):

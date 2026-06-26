@@ -4,8 +4,7 @@ Database router for aura-auth-service.
 Routing rules:
   - notifications app           → aura_db  (all models)
   - documents app               → aura_db  (all models)
-  - accounts.CustomGroup        → aura_db  (single model within accounts app)
-  - implicit M2M through tables → aura_db  (identified by db_table name)
+  - chat app                    → aura_db  (all models)
   - everything else             → auth_db  (Django default)
 
 aura_db schema is owned by docker/aura-db/init.sql — no Django migrations run there.
@@ -19,12 +18,12 @@ class AuraDbRouter:
     _aura_apps = {'notifications', 'documents', 'chat'}
 
     # Individual model names (lowercase) inside the accounts app that live in aura_db.
-    _aura_account_models = {'customgroup'}
+    _aura_account_models: set[str] = set()
 
-    # db_table names that always route to aura_db.
-    # Used for implicit M2M through-tables whose app_label inherits from the
-    # source model (accounts) but whose physical table is in aura_db.
-    _aura_tables = {'auth_user_custom_groups', 'custom_groups_documents'}
+    # db_table names that always route to aura_db (e.g. implicit M2M through
+    # tables whose app_label inherits from accounts but whose physical table is
+    # in aura_db). None currently.
+    _aura_tables: set[str] = set()
 
     def _is_aura_db(self, model):
         app = model._meta.app_label

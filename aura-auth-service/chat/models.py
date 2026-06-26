@@ -53,29 +53,3 @@ class ArtifactMessage(models.Model):
         verbose_name = 'Mensaje'
         verbose_name_plural = 'Mensajes'
         ordering = ['created_at']
-
-
-class ChatMembership(models.Model):
-    id = models.BigAutoField(primary_key=True)
-    # Cross-DB ref: auth_user.id lives in auth_db.
-    member_id = models.BigIntegerField(verbose_name='Miembro (user ID)')
-    chat = models.ForeignKey(
-        Chat,
-        on_delete=models.DO_NOTHING,
-        related_name='memberships',
-        db_column='chat_id',
-    )
-    status = models.CharField(max_length=20, verbose_name='Estado')
-    joined_at = models.DateTimeField(null=True, blank=True, verbose_name='Se unió el')
-    left_at = models.DateTimeField(null=True, blank=True, verbose_name='Salió el')
-    created_by = models.BigIntegerField(verbose_name='Creado por (user ID)')
-    created_at = models.DateTimeField(verbose_name='Creado el')
-    deleted_by = models.BigIntegerField(null=True, blank=True)
-    deleted_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        managed = False
-        db_table = 'chat_membership'
-        app_label = 'chat'
-        verbose_name = 'Membresía'
-        verbose_name_plural = 'Membresías'

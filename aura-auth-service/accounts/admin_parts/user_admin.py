@@ -88,7 +88,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
 
     form = UserAdminForm
     change_form_template = 'admin/accounts/user/change_form.html'
-    actions = None
+    actions = ['action_force_logout']
     actions_selection_counter = False
 
     fieldsets = (
@@ -159,6 +159,38 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
         )
     mac_profile_link.short_description = 'Perfil MAC'
     mac_profile_link.allow_tags = True
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        # Never expose Django's bulk hard-delete (users are soft-deleted).
+        actions.pop('delete_selected', None)
+        # Force-logout is a privileged, security-sensitive action.
+        if not (_is_effective_superadmin(request) or has_permission(request, 'ADMIN_USERS_EDIT_ADMIN')):
+            actions.pop('action_force_logout', None)
+        return actions
+
+    def action_force_logout(self, request, queryset):
+        """Revoke every active session of the selected users (refresh tokens +
+        access tokens via the tokens_valid_after cutoff). Used for incident
+        response (e.g. a compromised account)."""
+        from accounts.services.auth_service import revoke_all_sessions
+
+        count = 0
+        for user in queryset:
+            revoke_all_sessions(user)
+            count += 1
+            log_audit(
+                actor=request.user,
+                action='UPDATE',
+                entity_type='auth_user',
+                entity_id=user.pk,
+                entity_label=user.username,
+                details={'force_logout': True},
+                source='admin',
+                request=request,
+            )
+        messages.success(request, f'Se cerraron todas las sesiones de {count} usuario(s).')
+    action_force_logout.short_description = 'Cerrar todas las sesiones (forzar logout)'
 
     def get_readonly_fields(self, request, obj=None):
         if obj:
@@ -363,10 +395,10 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
         return bool(request.user and request.user.is_staff)
 
     class Media:
-        js = ('accounts/admin/user_password.js', 'accounts/admin/user_form.js')
+        js = ('accounts/admin/user_password.js',)
 
         css = {
-            "all": ("admin/custom.css",)
+            "all": ("accounts/admin/custom.css",)
         }
 
     def add_view(self, request, form_url='', extra_context=None):

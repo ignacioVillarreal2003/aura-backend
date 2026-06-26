@@ -7,8 +7,12 @@ from django.conf import settings
 from django.conf.urls.static import static  # noqa: F401
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
+from accounts.api.health import liveness, readiness
+
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('health/live', liveness, name='health-live'),
+    path('health/ready', readiness, name='health-ready'),
     path('auth/', include('accounts.api.urls')),
     path('', include('django_prometheus.urls')),
 ]

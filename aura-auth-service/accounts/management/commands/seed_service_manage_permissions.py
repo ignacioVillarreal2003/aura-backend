@@ -82,7 +82,10 @@ class Command(BaseCommand):
         try:
             superadmin_role = Role.objects.get(name='superadmin')
         except Role.DoesNotExist:
-            raise CommandError('Rol "superadmin" no encontrado. Ejecuta primero setup_db.')
+            raise CommandError(
+                'Rol "superadmin" no encontrado. La BD debe estar inicializada con su '
+                'esquema y semilla (docker/database/auth-db/init.sql + data.sql).'
+            )
 
         admin_role = Role.objects.filter(name='admin').first()
         if admin_role is None:

@@ -36,12 +36,11 @@ from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 from django.db import connections
-from django.http import Http404, HttpResponseNotAllowed, HttpResponseRedirect, StreamingHttpResponse
+from django.http import Http404, HttpResponseRedirect, StreamingHttpResponse
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
 
 from accounts.admin_parts.common import _is_super_admin_user, _is_effective_superadmin, has_permission
-from accounts.admin_parts.utils.audit import log_audit
 from accounts.services.chat_client import ChatServiceError, chat_client
 from chat.models import Chat
 
@@ -259,28 +258,6 @@ def _load_chat_messages(request, chat_id):
     return rows, None
 
 
-def _load_chat_share_links(request, chat_id):
-    try:
-        links = chat_client.get_chat_share_links(request.user, chat_id)
-    except ChatServiceError as exc:
-        logger.warning('chat_management_admin: failed to load share links for chat %s: %s', chat_id, exc)
-        return [], 'Servicio no disponible.'
-    except Exception:
-        logger.exception('chat_management_admin: unexpected error loading share links for chat %s', chat_id)
-        return [], 'Servicio no disponible.'
-
-    rows = []
-    for link in links:
-        if not link.get('is_active', True):
-            continue
-        rows.append({
-            'token': link.get('token', ''),
-            'expires_label': _format_chat_dt(link.get('expires_at')) if link.get('expires_at') else 'Sin vencimiento',
-            'revoke_url': reverse('admin:chat_management_revoke_link', args=[chat_id, link.get('id')]),
-        })
-    return rows, None
-
-
 def _load_chat_members(request, chat_id):
     try:
         members = chat_client.get_chat_members(request.user, chat_id)
@@ -304,6 +281,65 @@ def _load_chat_members(request, chat_id):
     return rows, None
 
 
+_DOC_STATUS_LABELS = {
+    'processed': 'Procesado',
+    'uploaded': 'Cargado',
+    'failed': 'Fallido',
+}
+
+
+def _format_size(num_bytes):
+    if not num_bytes:
+        return '—'
+    size = float(num_bytes)
+    for unit in ('B', 'KB', 'MB', 'GB', 'TB'):
+        if size < 1024.0:
+            return f'{size:.1f} {unit}'
+        size /= 1024.0
+    return f'{size:.1f} PB'
+
+
+def _load_chat_documents(chat_id):
+    """Documents uploaded to this chat, read straight from aura_db.
+
+    The ``document`` table carries a ``chat_id`` FK (see
+    docker/database/aura-db/document_processing.sql), so this is a direct DB
+    read with no chat-service dependency — unlike the messages/members panels,
+    it never shows "servicio no disponible". Soft-deleted rows are excluded."""
+    try:
+        with connections['aura_db'].cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id, name, mime_type, file_size_bytes, status, created_by, created_at
+                FROM document
+                WHERE chat_id = %s AND deleted_at IS NULL
+                ORDER BY created_at DESC
+                """,
+                [chat_id],
+            )
+            rows = cursor.fetchall()
+    except Exception:
+        logger.exception('chat_management_admin: failed to load documents for chat %s', chat_id)
+        return [], 'No se pudieron cargar los documentos.'
+
+    creator_ids = [r[5] for r in rows if r[5]]
+    usernames = _resolve_usernames_batch(creator_ids)
+
+    docs = [
+        {
+            'id': r[0],
+            'name': r[1],
+            'mime_type': r[2] or '—',
+            'size': _format_size(r[3]),
+            'status': _DOC_STATUS_LABELS.get((r[4] or '').lower(), r[4] or '—'),
+            'uploaded_by': usernames.get(r[5], f'#{r[5]}') if r[5] else '—',
+            'created_at': _format_chat_dt(r[6]),
+        }
+        for r in rows
+    ]
+    return docs, None
+
+
 def _chat_detail_view(request, chat_id):
     _check_chat_access(request)
 
@@ -313,8 +349,8 @@ def _chat_detail_view(request, chat_id):
         raise Http404('Chat no encontrado.')
 
     message_rows, messages_error = _load_chat_messages(request, chat_id)
-    share_links, share_links_error = _load_chat_share_links(request, chat_id)
     member_rows, members_error = _load_chat_members(request, chat_id)
+    document_rows, documents_error = _load_chat_documents(chat_id)
 
     ctx = _ctx(
         request,
@@ -325,41 +361,14 @@ def _chat_detail_view(request, chat_id):
         last_message_at=_format_chat_dt(chat_obj.last_message_at),
         message_rows=message_rows,
         messages_error=messages_error,
-        share_links=share_links,
-        share_links_error=share_links_error,
         member_rows=member_rows,
         members_error=members_error,
+        document_rows=document_rows,
+        documents_error=documents_error,
         back_url=reverse('admin:chat_management_list'),
         opts=Chat._meta,
     )
     return TemplateResponse(request, 'admin/chat_management/detail.html', ctx)
-
-
-# ── Revoke share link (destructive -> POST only, audited) ──────────────────
-
-def _chat_revoke_share_link_view(request, chat_id, link_id):
-    if request.method != 'POST':
-        return HttpResponseNotAllowed(['POST'])
-    _check_chat_access(request)
-
-    try:
-        chat_client.delete_share_link(request.user, chat_id, link_id)
-    except ChatServiceError as exc:
-        messages.error(request, f'No se pudo revocar el enlace: {exc}')
-    else:
-        messages.success(request, 'Enlace de compartición revocado correctamente.')
-        log_audit(
-            actor=request.user,
-            action='DELETE',
-            entity_type='chat_share_link',
-            entity_id=str(link_id),
-            entity_label=f'{request.user.username} revocó un enlace de compartición del chat #{chat_id}',
-            details={'chat_id': chat_id, 'link_id': link_id},
-            source='admin',
-            request=request,
-        )
-
-    return HttpResponseRedirect(reverse('admin:chat_management_detail', args=[chat_id]))
 
 
 # ── Export (manage) — streams the chat-service admin export ────────────────────
@@ -400,11 +409,6 @@ def _chat_management_get_urls(self):
     custom_urls = [
         path('chats/', self.admin_view(_chat_list_view), name='chat_management_list'),
         path('chats/<int:chat_id>/', self.admin_view(_chat_detail_view), name='chat_management_detail'),
-        path(
-            'chats/<int:chat_id>/revoke/<str:link_id>/',
-            self.admin_view(_chat_revoke_share_link_view),
-            name='chat_management_revoke_link',
-        ),
         path(
             'chats/<int:chat_id>/export/<str:fmt>/',
             self.admin_view(_chat_export_view),

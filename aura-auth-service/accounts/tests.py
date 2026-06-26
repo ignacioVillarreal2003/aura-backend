@@ -17,10 +17,7 @@ from rest_framework.test import APIClient
 
 from accounts.models import User, Role, Permission, UserRole, PermissionInRole
 from accounts.utils import (
-    assign_role_to_user,
-    assign_permission_to_role,
     user_has_permission,
-    user_has_role,
     get_user_permissions,
     get_user_roles,
 )
@@ -165,50 +162,6 @@ class PermissionModelTest(TestCase):
         self.assertEqual(self.permission.name, 'user.create')
 
 
-class UserRoleRelationshipTest(TestCase):
-    """Test User-Role relationships."""
-
-    def setUp(self):
-        self.bootstrap_user = User.objects.create_superuser(
-            username='admin',
-            email='admin@example.com',
-            password='adminpass',
-        )
-        self.user = User.objects.create_user(
-            username='john',
-            email='john@example.com',
-            password='pass',
-            created_by=self.bootstrap_user,
-        )
-        self.role = Role.objects.create(name='manager', description='Manager role')
-
-    def test_assign_role_to_user(self):
-        user_role = assign_role_to_user(self.user, self.role, created_by=self.bootstrap_user)
-
-        self.assertEqual(user_role.user, self.user)
-        self.assertEqual(user_role.role, self.role)
-        self.assertEqual(user_role.created_by, self.bootstrap_user)
-
-    def test_user_has_role(self):
-        assign_role_to_user(self.user, self.role, created_by=self.bootstrap_user)
-
-        self.assertTrue(user_has_role(self.user, 'manager'))
-        self.assertFalse(user_has_role(self.user, 'user'))
-
-
-class PermissionInRoleRelationshipTest(TestCase):
-    """Test Role-Permission relationships."""
-
-    def setUp(self):
-        self.role = Role.objects.create(name='VIEWER', description='Viewer role')
-        self.permission = Permission.objects.create(name='user.read')
-
-    def test_assign_permission_to_role(self):
-        role_perm = assign_permission_to_role(self.role, self.permission)
-        self.assertEqual(role_perm.role, self.role)
-        self.assertEqual(role_perm.permission, self.permission)
-
-
 class PermissionUtilsTest(TestCase):
     def setUp(self):
         self.bootstrap_user = User.objects.create_superuser(
@@ -226,8 +179,8 @@ class PermissionUtilsTest(TestCase):
         self.permission = Permission.objects.create(name='post.edit')
 
     def test_user_permissions_flow(self):
-        assign_role_to_user(self.user, self.role, created_by=self.bootstrap_user)
-        assign_permission_to_role(self.role, self.permission)
+        UserRole.objects.create(user=self.user, role=self.role, created_by=self.bootstrap_user)
+        PermissionInRole.objects.create(role=self.role, permission=self.permission)
 
         self.assertTrue(user_has_permission(self.user, 'post.edit'))
         self.assertIn('POST_EDIT', get_user_permissions(self.user))
@@ -364,6 +317,7 @@ class RotateRefreshTokenTest(TestCase):
         type(user).is_superuser = PropertyMock(return_value=False)
 
         old_refresh = MagicMock()
+        old_refresh.is_revoked = False
         old_refresh.expires_at = timezone.now() + timedelta(days=1)
         old_refresh.user = user
         old_refresh.user.pk = user.pk
@@ -393,6 +347,7 @@ class RotateRefreshTokenTest(TestCase):
     def test_expired_token_returns_none(self, mock_rt_cls):
         user = _make_user()
         old_refresh = MagicMock()
+        old_refresh.is_revoked = False
         old_refresh.expires_at = timezone.now() - timedelta(seconds=1)
         old_refresh.user = user
         old_refresh.user.pk = user.pk
@@ -403,9 +358,8 @@ class RotateRefreshTokenTest(TestCase):
         result = rotate_refresh_token(str(uuid.uuid4()))
 
         self.assertIsNone(result)
-        # Token should have been marked revoked
-        self.assertTrue(old_refresh.is_revoked)
-        old_refresh.save.assert_called_once()
+        # The atomic claim revokes via an UPDATE (not a model .save()).
+        mock_rt_cls.objects.filter.return_value.update.assert_called_once()
 
 
 class RevokeRefreshTokenTest(TestCase):
@@ -424,8 +378,9 @@ class RevokeRefreshTokenTest(TestCase):
         result = revoke_refresh_token(str(uuid.uuid4()))
 
         self.assertTrue(result)
-        self.assertTrue(refresh.is_revoked)
-        refresh.save.assert_called_once()
+        # revoke_all_sessions revokes refresh tokens via an UPDATE and bumps the
+        # user's tokens_valid_after cutoff (a single user.save).
+        mock_rt_cls.objects.filter.return_value.update.assert_called_once()
         user.save.assert_called_once()
 
     @patch('accounts.services.auth_service.RefreshToken')
@@ -441,10 +396,9 @@ class RevokeRefreshTokenTest(TestCase):
 class GetUserInfoTest(TestCase):
     """Unit tests for auth_service.get_user_info."""
 
-    @patch('accounts.services.auth_service.get_user_permissions', return_value=['PERM_A'])
-    @patch('accounts.services.auth_service.get_user_roles', return_value=['admin'])
+    @patch('accounts.services.auth_service.get_roles_and_permissions', return_value=(['admin'], ['PERM_A']))
     @patch('accounts.services.auth_service.User')
-    def test_valid_token_returns_user_info(self, mock_user_cls, mock_roles, mock_perms):
+    def test_valid_token_returns_user_info(self, mock_user_cls, mock_rp):
         user = _make_user(id=42)
         type(user).is_deleted = PropertyMock(return_value=False)
         mock_user_cls.objects.filter.return_value.first.return_value = user
@@ -507,10 +461,9 @@ class GetUserInfoTest(TestCase):
 class IntrospectTokenTest(TestCase):
     """Unit tests for auth_service.introspect_token."""
 
-    @patch('accounts.services.auth_service.get_user_permissions', return_value=[])
-    @patch('accounts.services.auth_service.get_user_roles', return_value=[])
+    @patch('accounts.services.auth_service.get_roles_and_permissions', return_value=([], []))
     @patch('accounts.services.auth_service.User')
-    def test_valid_token_returns_payload(self, mock_user_cls, mock_roles, mock_perms):
+    def test_valid_token_returns_payload(self, mock_user_cls, mock_rp):
         user = _make_user(id=5)
         type(user).is_deleted = PropertyMock(return_value=False)
         type(user).is_superuser = PropertyMock(return_value=False)
@@ -723,122 +676,78 @@ class ValidateViewTest(TestCase):
 
 
 class UserLookupViewTest(TestCase):
-    """Tests for GET /auth/users/lookup."""
+    """Integration tests for GET /auth/users/lookup (free-text ?q=, gated by M3)."""
 
     def setUp(self):
         self.client = APIClient()
-        self.token = 'Bearer validaccesstoken'
+        self.svc = {'HTTP_X_SERVICE_API_KEY': settings.SERVICE_API_KEY}
+        self.boot = User.objects.create_superuser('boot', 'boot@example.com', 'pw')
+        self.john = User.objects.create_user(
+            'john', 'john@example.com', 'pw', created_by=self.boot, name='John Doe',
+        )
 
-    def _user_obj(self, **kwargs):
-        u = MagicMock(spec=User)
-        u.id = kwargs.get('id', 1)
-        u.username = kwargs.get('username', 'john')
-        u.name = kwargs.get('name', 'John Doe')
-        u.email = kwargs.get('email', 'john@example.com')
-        return u
-
-    # ------------------------------------------------------------------
-    # Auth guard
-    # ------------------------------------------------------------------
-    def test_missing_bearer_returns_401(self):
-        resp = self.client.get(LOOKUP_URL)
+    def test_missing_auth_returns_401(self):
+        resp = self.client.get(LOOKUP_URL + '?q=john')
         self.assertEqual(resp.status_code, 401)
 
-    @patch('accounts.api.views.introspect_token', return_value=None)
-    def test_invalid_token_returns_401(self, mock_intro):
-        resp = self.client.get(LOOKUP_URL, HTTP_AUTHORIZATION=self.token)
-        self.assertEqual(resp.status_code, 401)
+    def test_regular_user_forbidden(self):
+        # M3: a plain end user (no ADMIN_USERS_VIEW) cannot enumerate the directory.
+        token = _make_access_token(user_id=self.john.id)
+        resp = self.client.get(LOOKUP_URL + '?q=john', HTTP_AUTHORIZATION=f'Bearer {token}')
+        self.assertEqual(resp.status_code, 403)
 
-    # ------------------------------------------------------------------
-    # Parameter validation
-    # ------------------------------------------------------------------
-    @patch('accounts.api.views.introspect_token', return_value={'user_id': 1})
-    def test_no_params_returns_400(self, mock_intro):
-        resp = self.client.get(LOOKUP_URL, HTTP_AUTHORIZATION=self.token)
-        self.assertEqual(resp.status_code, 400)
-        self.assertIn('Provide exactly one', resp.data['detail'])
+    def test_service_key_can_lookup_by_username(self):
+        resp = self.client.get(LOOKUP_URL + '?q=john', **self.svc)
+        self.assertEqual(resp.status_code, 200)
+        self.assertGreaterEqual(resp.data['count'], 1)
+        self.assertIn('john', [r['username'] for r in resp.data['results']])
 
-    @patch('accounts.api.views.introspect_token', return_value={'user_id': 1})
-    @patch('accounts.api.views.User')
-    def test_multiple_params_returns_400(self, mock_user_cls, mock_intro):
-        resp = self.client.get(
-            LOOKUP_URL + '?username=john&email=john@example.com',
-            HTTP_AUTHORIZATION=self.token,
-        )
-        self.assertEqual(resp.status_code, 400)
-        self.assertIn('only one', resp.data['detail'])
+    def test_service_key_can_lookup_by_email(self):
+        resp = self.client.get(LOOKUP_URL + '?q=john@example', **self.svc)
+        self.assertEqual(resp.status_code, 200)
+        self.assertGreaterEqual(resp.data['count'], 1)
 
-    @patch('accounts.api.views.introspect_token', return_value={'user_id': 1})
-    @patch('accounts.api.views.User')
-    def test_invalid_id_type_returns_400(self, mock_user_cls, mock_intro):
-        qs = MagicMock()
-        qs.filter.return_value = qs
-        mock_user_cls.objects.filter.return_value = qs
-        resp = self.client.get(
-            LOOKUP_URL + '?id=notanint',
-            HTTP_AUTHORIZATION=self.token,
-        )
+    def test_missing_q_returns_400(self):
+        resp = self.client.get(LOOKUP_URL, **self.svc)
         self.assertEqual(resp.status_code, 400)
 
-    # ------------------------------------------------------------------
-    # Successful lookups
-    # ------------------------------------------------------------------
-    @patch('accounts.api.views.introspect_token', return_value={'user_id': 1})
-    @patch('accounts.api.views.User')
-    def test_lookup_by_id_returns_user(self, mock_user_cls, mock_intro):
-        user = self._user_obj(id=7)
-        qs = MagicMock()
-        qs.filter.return_value = [user]
-        mock_user_cls.objects.filter.return_value = qs
-
-        resp = self.client.get(LOOKUP_URL + '?id=7', HTTP_AUTHORIZATION=self.token)
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.data['count'], 1)
-        self.assertEqual(resp.data['results'][0]['id'], 7)
-
-    @patch('accounts.api.views.introspect_token', return_value={'user_id': 1})
-    @patch('accounts.api.views.User')
-    def test_lookup_by_username_returns_matches(self, mock_user_cls, mock_intro):
-        user = self._user_obj(username='john')
-        qs = MagicMock()
-        outer_qs = MagicMock()
-        outer_qs.filter.return_value = [user]
-        mock_user_cls.objects.filter.return_value = outer_qs
-
-        resp = self.client.get(LOOKUP_URL + '?username=john', HTTP_AUTHORIZATION=self.token)
-        self.assertEqual(resp.status_code, 200)
-        self.assertGreaterEqual(resp.data['count'], 0)
-
-    @patch('accounts.api.views.introspect_token', return_value={'user_id': 1})
-    @patch('accounts.api.views.User')
-    def test_lookup_by_email_returns_matches(self, mock_user_cls, mock_intro):
-        user = self._user_obj(email='john@example.com')
-        qs = MagicMock()
-        qs.filter.return_value = [user]
-        mock_user_cls.objects.filter.return_value = qs
-
-        resp = self.client.get(LOOKUP_URL + '?email=john', HTTP_AUTHORIZATION=self.token)
-        self.assertEqual(resp.status_code, 200)
-
-    @patch('accounts.api.views.introspect_token', return_value={'user_id': 1})
-    @patch('accounts.api.views.User')
-    def test_lookup_by_name_returns_matches(self, mock_user_cls, mock_intro):
-        user = self._user_obj(name='John Doe')
-        qs = MagicMock()
-        qs.filter.return_value = [user]
-        mock_user_cls.objects.filter.return_value = qs
-
-        resp = self.client.get(LOOKUP_URL + '?name=John', HTTP_AUTHORIZATION=self.token)
-        self.assertEqual(resp.status_code, 200)
-
-    @patch('accounts.api.views.introspect_token', return_value={'user_id': 1})
-    @patch('accounts.api.views.User')
-    def test_lookup_no_results_returns_empty(self, mock_user_cls, mock_intro):
-        qs = MagicMock()
-        qs.filter.return_value = []
-        mock_user_cls.objects.filter.return_value = qs
-
-        resp = self.client.get(LOOKUP_URL + '?username=nobody', HTTP_AUTHORIZATION=self.token)
+    def test_no_match_returns_empty(self):
+        resp = self.client.get(LOOKUP_URL + '?q=zzznobodyzzz', **self.svc)
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data['count'], 0)
         self.assertEqual(resp.data['results'], [])
+
+
+class UsersByIdsViewTest(TestCase):
+    """Integration tests for GET /auth/users/by-ids (M3 email minimisation)."""
+
+    BY_IDS_URL = '/auth/users/by-ids'
+
+    def setUp(self):
+        self.client = APIClient()
+        self.svc = {'HTTP_X_SERVICE_API_KEY': settings.SERVICE_API_KEY}
+        self.boot = User.objects.create_superuser('boot', 'boot@example.com', 'pw')
+        self.john = User.objects.create_user(
+            'john', 'john@example.com', 'pw', created_by=self.boot, name='John',
+        )
+
+    def test_service_key_includes_email(self):
+        resp = self.client.get(f'{self.BY_IDS_URL}?ids={self.john.id}', **self.svc)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['count'], 1)
+        self.assertEqual(resp.data['results'][0]['email'], 'john@example.com')
+
+    def test_regular_user_hides_email(self):
+        # M3: by-ids is allowed for any authenticated principal, but email (PII)
+        # is only returned to services / ADMIN_USERS_VIEW holders.
+        token = _make_access_token(user_id=self.john.id)
+        resp = self.client.get(
+            f'{self.BY_IDS_URL}?ids={self.john.id}', HTTP_AUTHORIZATION=f'Bearer {token}',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn('email', resp.data['results'][0])
+        self.assertEqual(resp.data['results'][0]['username'], 'john')
+
+    def test_missing_ids_returns_400(self):
+        resp = self.client.get(self.BY_IDS_URL, **self.svc)
+        self.assertEqual(resp.status_code, 400)

@@ -1,5 +1,7 @@
 """Serializers for auth API endpoints."""
 
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 
@@ -47,6 +49,15 @@ class UserListResponseSerializer(serializers.Serializer):
 class ChangePasswordSerializer(serializers.Serializer):
     current_password = serializers.CharField(max_length=255)
     new_password = serializers.CharField(max_length=255, min_length=8)
+
+    def validate_new_password(self, value):
+        # Enforce the project's AUTH_PASSWORD_VALIDATORS (length, common,
+        # numeric, similarity) — previously only min_length was checked.
+        try:
+            validate_password(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(list(exc.messages))
+        return value
 
     def validate(self, attrs):
         if attrs['current_password'] == attrs['new_password']:

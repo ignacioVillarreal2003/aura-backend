@@ -31,6 +31,15 @@ from documents.services.document_processing_client import (
     download_document as download_document_remote,
     start_bulk_job as start_bulk_job_remote,
 )
+from documents.repositories.document_meta_repository import (
+    _get_doc_meta,
+    _save_doc_meta,
+    _batch_get_doc_meta_all,
+)
+from documents.repositories.document_mac_repository import (
+    _get_doc_mac_assignments,
+    _db_assign_strict_mac_collection,
+)
 
 _ADMIN_LEVEL_RE = re.compile(r'^__admin_level_(\d+)__$')
 _ADMIN_COMP_RE = re.compile(r'^__admin_comp_(\d+)__$')
@@ -47,68 +56,8 @@ _current_admin_actor: 'contextvars.ContextVar' = contextvars.ContextVar(
     'document_admin_current_actor', default=None
 )
 
-# ── Local meta table (default DB) — immune to processing-service overwrites ───
-
-_meta_table_ensured = False
-
-
-def _ensure_meta_table():
-    global _meta_table_ensured
-    if _meta_table_ensured:
-        return
-    try:
-        with connections['default'].cursor() as cursor:
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS document_admin_meta (
-                    document_id BIGINT PRIMARY KEY,
-                    admin_name  VARCHAR(255) NOT NULL DEFAULT '',
-                    admin_description TEXT NOT NULL DEFAULT ''
-                )
-            """)
-        _meta_table_ensured = True
-    except Exception:
-        pass
-
-
-def _save_doc_meta(doc_id, name, description):
-    _ensure_meta_table()
-    try:
-        with connections['default'].cursor() as cursor:
-            cursor.execute("""
-                INSERT INTO document_admin_meta (document_id, admin_name, admin_description)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (document_id) DO UPDATE
-                SET admin_name = EXCLUDED.admin_name,
-                    admin_description = EXCLUDED.admin_description
-            """, [doc_id, name or '', description or ''])
-    except Exception:
-        pass
-
-
-def _get_doc_meta(doc_id):
-    _ensure_meta_table()
-    try:
-        with connections['default'].cursor() as cursor:
-            cursor.execute(
-                "SELECT admin_name, admin_description FROM document_admin_meta WHERE document_id = %s",
-                [doc_id],
-            )
-            row = cursor.fetchone()
-            return {'name': row[0], 'description': row[1]} if row else None
-    except Exception:
-        return None
-
-
-def _batch_get_doc_meta_all():
-    _ensure_meta_table()
-    try:
-        with connections['default'].cursor() as cursor:
-            cursor.execute(
-                "SELECT document_id, admin_name, admin_description FROM document_admin_meta"
-            )
-            return {row[0]: {'name': row[1], 'description': row[2]} for row in cursor.fetchall()}
-    except Exception:
-        return {}
+# Admin-local document meta (document_admin_meta) now lives in
+# documents/repositories/document_meta_repository.py (imported above).
 
 
 def _format_processing_dt(value):
@@ -131,109 +80,8 @@ def _format_processing_dt(value):
         return str(value)
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _get_doc_mac_assignments(doc_id):
-    """Return (current_level_id, current_comp_ids_set) for a document."""
-    current_level_id = None
-    current_comp_ids = set()
-    try:
-        with connections['aura_db'].cursor() as cursor:
-            cursor.execute("""
-                SELECT dc.classification_level_id
-                FROM document_in_document_collection dic
-                JOIN document_collection dc ON dic.document_collection_id = dc.id
-                WHERE dic.document_id = %s
-                  AND dic.deleted_at IS NULL
-                  AND dc.deleted_at IS NULL
-                  AND dc.classification_level_id IS NOT NULL
-                LIMIT 1
-            """, [doc_id])
-            row = cursor.fetchone()
-            if row:
-                current_level_id = row[0]
-            cursor.execute("""
-                SELECT DISTINCT dcc.compartment_id
-                FROM document_in_document_collection dic
-                JOIN document_collection dc ON dic.document_collection_id = dc.id
-                JOIN document_collection_compartment dcc ON dcc.document_collection_id = dc.id
-                WHERE dic.document_id = %s
-                  AND dic.deleted_at IS NULL
-                  AND dc.deleted_at IS NULL
-            """, [doc_id])
-            current_comp_ids = {row[0] for row in cursor.fetchall()}
-    except Exception:
-        pass
-    return current_level_id, current_comp_ids
-
-
-def _db_assign_strict_mac_collection(doc_id, level_id, comp_ids, actor_user_id):
-    """Assign document to a single strict MAC collection and remove old MAC/admin links."""
-    if level_id is None:
-        return
-        
-    sorted_ids = sorted(comp_ids)
-    if sorted_ids:
-        key = '_'.join(str(i) for i in sorted_ids)
-        name = f'__mac_{level_id}_comp_{key}__'
-    else:
-        name = f'__mac_{level_id}__'
-        
-    with connections['aura_db'].cursor() as cursor:
-        # 1. Find or create the exact collection
-        cursor.execute(
-            "SELECT id FROM document_collection WHERE name = %s AND deleted_at IS NULL LIMIT 1",
-            [name],
-        )
-        row = cursor.fetchone()
-        if row:
-            col_id = row[0]
-        else:
-            cursor.execute(
-                """INSERT INTO document_collection (name, classification_level_id, created_by, created_at)
-                   VALUES (%s, %s, %s, NOW()) RETURNING id""",
-                [name, level_id, actor_user_id],
-            )
-            col_id = cursor.fetchone()[0]
-            for comp_id in sorted_ids:
-                cursor.execute(
-                    """INSERT INTO document_collection_compartment
-                           (document_collection_id, compartment_id, created_by, created_at)
-                       VALUES (%s, %s, %s, NOW())
-                       ON CONFLICT ON CONSTRAINT doc_coll_comp_coll_compartment_unique DO NOTHING""",
-                    [col_id, comp_id, actor_user_id],
-                )
-        
-        # 2. Link document to the strict collection
-        cursor.execute(
-            """
-            INSERT INTO document_in_document_collection
-                (document_collection_id, document_id, created_by, created_at)
-            SELECT %s, %s, %s, NOW()
-            WHERE NOT EXISTS (
-                SELECT 1 FROM document_in_document_collection
-                WHERE document_collection_id = %s AND document_id = %s AND deleted_at IS NULL
-            )
-            """,
-            [col_id, doc_id, actor_user_id, col_id, doc_id],
-        )
-        
-        # 3. Unlink document from ANY other __mac_, __admin_level_, or __admin_comp_ collection
-        cursor.execute(
-            """UPDATE document_in_document_collection
-               SET deleted_at = NOW(), deleted_by = %s
-               WHERE document_id = %s
-                 AND deleted_at IS NULL
-                 AND document_collection_id != %s
-                 AND document_collection_id IN (
-                     SELECT id FROM document_collection
-                     WHERE (LEFT(name, 6) = '__mac_' 
-                         OR LEFT(name, 14) = '__admin_level_' 
-                         OR LEFT(name, 13) = '__admin_comp_')
-                       AND deleted_at IS NULL
-                 )""",
-            [actor_user_id, doc_id, col_id],
-        )
+# ── MAC collection assignment helpers now live in
+#    documents/repositories/document_mac_repository.py (imported above).
 
 
 # ── Forms ─────────────────────────────────────────────────────────────────────
@@ -941,6 +789,41 @@ class DocumentAdmin(admin.ModelAdmin):
     def action_graph_extract(self, request, queryset):
         self._run_bulk(request, queryset, 'graph_extract', 'extracción de grafo')
     action_graph_extract.short_description = 'Reextraer el grafo de los documentos seleccionados'
+
+    def get_deleted_objects(self, objs, request):
+        """Bypass Django's ``NestedObjects`` cascade collector on the delete
+        confirmation page.
+
+        Deletion in this admin is a *soft-delete delegated to
+        document-processing* (see ``delete_model`` / ``delete_queryset``), not
+        a real Django cascade. Running the default collector is therefore both
+        misleading (it would preview hard-deletes that never happen) and fatal:
+        it traverses the reverse M2M declared by
+        ``accounts.CustomGroup.documents`` (``related_name='groups'``) and
+        queries its through table ``custom_groups_documents``. That table is
+        routed to ``aura_db`` (see ``authservice.db_routers``) and is not
+        provisioned by any init.sql, so the collector raises
+        ``ProgrammingError: relation "custom_groups_documents" does not exist``
+        before our ``delete_model`` ever runs.
+
+        We return a minimal, accurate preview (just the document(s)) and no
+        protected/cascade objects, while still honouring delete permissions so
+        Django can block unauthorized deletes as usual.
+        """
+        objs = list(objs)
+        deletable_objects = []
+        for obj in objs:
+            meta = _get_doc_meta(obj.pk)
+            display_name = meta['name'] if meta else obj.name
+            deletable_objects.append(
+                format_html('{}: {}', self.model._meta.verbose_name, display_name)
+            )
+        model_count = {self.model._meta.verbose_name_plural: len(objs)}
+        perms_needed = set()
+        if not all(self.has_delete_permission(request, obj) for obj in objs):
+            perms_needed.add(self.model._meta.verbose_name)
+        protected = []
+        return deletable_objects, model_count, perms_needed, protected
 
     def delete_model(self, request, obj):
         try:

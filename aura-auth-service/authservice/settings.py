@@ -32,8 +32,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django_prometheus',
-    'django_extensions',
-    
+
     # Third-party apps
     'corsheaders',
     'rest_framework',
@@ -47,6 +46,10 @@ INSTALLED_APPS = [
     'chat.apps.ChatConfig',
 ]
 
+# Developer tooling (shell_plus, etc.) — only loaded in development.
+if DEBUG:
+    INSTALLED_APPS += ['django_extensions']
+
 # Local apps whose tables are owned by docker/auth-db/init.sql or docker/aura-db/init.sql.
 # Setting to None disables Django migrations entirely for these apps.
 _LOCAL_APPS = ['accounts', 'documents', 'notifications', 'chat']
@@ -54,6 +57,7 @@ MIGRATION_MODULES = {app: None for app in _LOCAL_APPS}
 
 MIDDLEWARE = [
     'django_prometheus.middleware.PrometheusBeforeMiddleware',
+    'accounts.middleware.request_id_middleware.RequestIDMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
@@ -114,6 +118,7 @@ else:
             'HOST': config('DB_HOST', default='localhost'),
             'PORT': config('DB_PORT', default='5433'),
             'CONN_MAX_AGE': 600,
+            'CONN_HEALTH_CHECKS': True,
             'OPTIONS': {
                 'connect_timeout': 10,
                 'options': '-c statement_timeout=30000'
@@ -127,6 +132,7 @@ else:
             'HOST': config('AURA_DB_HOST', default='localhost', cast=str),
             'PORT': config('AURA_DB_PORT', default='5432', cast=str),
             'CONN_MAX_AGE': 600,
+            'CONN_HEALTH_CHECKS': True,
             'OPTIONS': {
                 'connect_timeout': 10,
                 'options': '-c statement_timeout=30000',
@@ -174,20 +180,52 @@ AUTH_USER_MODEL = 'accounts.User'
 # Database routers
 DATABASE_ROUTERS = ['authservice.db_routers.AuraDbRouter']
 
+# Cache configuration.
+#  - default:     in-process (LocMem) — used by DRF throttling; behaviour unchanged.
+#  - permissions: short-lived Redis cache of computed roles/permissions for the
+#    /auth/validate hot path. Isolated in its own alias and Redis DB index so a
+#    Redis outage degrades only this cache (callers fall back to a direct DB
+#    compute) and never affects throttling.
+PERMISSIONS_CACHE_TTL = config('PERMISSIONS_CACHE_TTL', default=60, cast=int)
+PERMISSIONS_CACHE_REDIS_URL = config('PERMISSIONS_CACHE_REDIS_URL', default='redis://memory_db:6379/1')
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+    },
+    'permissions': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': PERMISSIONS_CACHE_REDIS_URL,
+        'KEY_PREFIX': 'auth_perms',
+        'TIMEOUT': PERMISSIONS_CACHE_TTL,
+    },
+}
+
 # CORS Configuration
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000,http://localhost:4200', cast=Csv())
 
 # REST Framework Configuration
 REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'accounts.authentication.JWTAuthentication',
+        'accounts.authentication.ServiceKeyAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'EXCEPTION_HANDLER': 'accounts.api.exception_handler.custom_exception_handler',
     'DEFAULT_THROTTLE_CLASSES': [],
     'DEFAULT_THROTTLE_RATES': {
         'login': config('LOGIN_RATE_LIMIT', default='5/minute'),
+        'refresh': config('REFRESH_RATE_LIMIT', default='20/minute'),
+        'change_password': config('CHANGE_PASSWORD_RATE_LIMIT', default='5/minute'),
+        'user_lookup': config('USER_LOOKUP_RATE_LIMIT', default='60/minute'),
     },
 }
 
@@ -199,7 +237,7 @@ SPECTACULAR_SETTINGS = {
 }
 
 # JWT Configuration
-JWT_ACCESS_LIFETIME_MINUTES = config('JWT_ACCESS_LIFETIME_MINUTES', default=60, cast=int)
+JWT_ACCESS_LIFETIME_MINUTES = config('JWT_ACCESS_LIFETIME_MINUTES', default=15, cast=int)
 JWT_ALGORITHM = config('JWT_ALGORITHM', default='HS256')
 # JWT_SIGNING_KEY must be set independently — never share with SECRET_KEY
 JWT_SIGNING_KEY = config('JWT_SIGNING_KEY', default=None)
@@ -297,13 +335,19 @@ LOGGING = {
         },
         'json': {
             '()': 'pythonjsonlogger.jsonlogger.JsonFormatter',
-            'format': '%(asctime)s %(levelname)s %(name)s %(module)s %(message)s'
+            'format': '%(asctime)s %(levelname)s %(name)s %(module)s %(request_id)s %(message)s'
+        },
+    },
+    'filters': {
+        'request_id': {
+            '()': 'accounts.middleware.request_id_middleware.RequestIDLogFilter',
         },
     },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
             'formatter': 'json',
+            'filters': ['request_id'],
         },
     },
     'root': {
@@ -331,12 +375,22 @@ ENVIRONMENT = config('ENVIRONMENT', default='development')
 SESSION_COOKIE_AGE = 3600
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 
+# Trust the reverse-proxy (nginx gateway) X-Forwarded-Proto header so Django
+# detects HTTPS correctly behind the gateway. Harmless under DEBUG. The gateway
+# already forwards this header (see aura-gateway/nginx.conf).
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 # Security Settings (for production)
 if not DEBUG:
-    SECURE_SSL_REDIRECT = True
+    # Configurable so a prod rollout can keep HTTPS redirect OFF until TLS
+    # termination is actually in place (avoids a redirect loop / lockout when
+    # DEBUG is first flipped to False before TLS exists).
+    SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=True, cast=bool)
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    SECURE_BROWSER_XSS_FILTER = True
-    SECURE_CONTENT_SECURITY_POLICY = {
-        'default-src': ("'self'",),
-    }
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REFERRER_POLICY = 'strict-origin'
+    X_FRAME_OPTIONS = 'DENY'
+    SECURE_HSTS_SECONDS = config('SECURE_HSTS_SECONDS', default=31536000, cast=int)
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = config('SECURE_HSTS_INCLUDE_SUBDOMAINS', default=True, cast=bool)
+    SECURE_HSTS_PRELOAD = config('SECURE_HSTS_PRELOAD', default=True, cast=bool)
