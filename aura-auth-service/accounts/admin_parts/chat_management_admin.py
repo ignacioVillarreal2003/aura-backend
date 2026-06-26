@@ -36,7 +36,7 @@ from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 from django.db import connections
-from django.http import Http404, HttpResponseNotAllowed, HttpResponseRedirect
+from django.http import Http404, HttpResponseNotAllowed, HttpResponseRedirect, StreamingHttpResponse
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
 
@@ -362,6 +362,34 @@ def _chat_revoke_share_link_view(request, chat_id, link_id):
     return HttpResponseRedirect(reverse('admin:chat_management_detail', args=[chat_id]))
 
 
+# ── Export (manage) — streams the chat-service admin export ────────────────────
+
+def _chat_export_view(request, chat_id, fmt):
+    _check_chat_access(request)
+    if fmt not in ('pdf', 'markdown'):
+        raise Http404('Formato de exportación no soportado.')
+
+    try:
+        upstream = chat_client.export_chat(request.user, chat_id, fmt)
+    except ChatServiceError as exc:
+        messages.error(request, f'No se pudo exportar el chat: {exc}')
+        return HttpResponseRedirect(reverse('admin:chat_management_detail', args=[chat_id]))
+
+    response = StreamingHttpResponse(
+        upstream.iter_content(chunk_size=8192),
+        content_type=upstream.headers.get(
+            'Content-Type',
+            'application/pdf' if fmt == 'pdf' else 'text/markdown',
+        ),
+    )
+    disposition = upstream.headers.get('Content-Disposition')
+    if not disposition:
+        ext = 'pdf' if fmt == 'pdf' else 'md'
+        disposition = f'attachment; filename="chat_{chat_id}.{ext}"'
+    response['Content-Disposition'] = disposition
+    return response
+
+
 # ── URL registration (same admin.site.get_urls monkeypatch as mac_admin.py) ─
 
 _prev_get_urls = admin.site.get_urls
@@ -376,6 +404,11 @@ def _chat_management_get_urls(self):
             'chats/<int:chat_id>/revoke/<str:link_id>/',
             self.admin_view(_chat_revoke_share_link_view),
             name='chat_management_revoke_link',
+        ),
+        path(
+            'chats/<int:chat_id>/export/<str:fmt>/',
+            self.admin_view(_chat_export_view),
+            name='chat_management_export',
         ),
     ]
     return custom_urls + urls

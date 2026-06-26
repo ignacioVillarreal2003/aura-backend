@@ -8,6 +8,7 @@ from core.authentication.authentication_exceptions import (
     AuthenticationProviderServiceUnavailableException,
     AuthenticationProviderUnauthorizedException,
     AuthenticationProviderUserNotFoundException,
+    ServiceAuthenticationRejected,
 )
 from core.authentication.authentication_provider import authentication_provider
 from core.authentication.request_token import reset_request_token, set_request_token
@@ -30,6 +31,23 @@ class AuthenticationMiddleware:
         if self._is_excluded(request.path, excluded_paths):
             request.authenticated_user = None
             return self.get_response(request)
+
+        # S2S API Key authentication check (takes priority)
+        if "X-Service-Api-Key" in request.headers:
+            try:
+                service_user = authentication_provider.evaluate_service_auth(request)
+                if service_user is not None:
+                    request.authenticated_user = service_user
+                    logger.debug(
+                        "Request authenticated via service API key.",
+                        extra={"path": request.path},
+                    )
+                    return self.get_response(request)
+            except ServiceAuthenticationRejected as e:
+                return JsonResponse(
+                    {"error": e.error_code, "detail": e.detail, "status_code": e.status_code},
+                    status=e.status_code,
+                )
 
         token = self._extract_token(request)
         if not token:

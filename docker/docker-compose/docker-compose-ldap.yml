@@ -1,0 +1,54 @@
+# Servidor LDAP de prueba para desarrollo y testing.
+#
+# Este archivo es independiente de los compose de infrastructure, services y observability.
+# Solo se levanta cuando se necesita para desarrollo o ejecucion de tests LDAP.
+#
+# Uso:
+#   docker compose -f docker/docker-compose/docker-compose-ldap.yml up -d
+#
+# Interfaces:
+#   - OpenLDAP : ldap://localhost:389
+#   - phpLDAPadmin : http://localhost:8085
+#     Login: cn=admin,dc=aura,dc=local / admin_password
+
+services:
+  ldap-server:
+    image: osixia/openldap:1.5.0
+    container_name: aura-ldap
+    hostname: aura-ldap
+    command: --copy-service
+    environment:
+      LDAP_ORGANISATION: "Aura"
+      LDAP_DOMAIN: "aura.local"
+      LDAP_ADMIN_PASSWORD: "admin_password"
+      LDAP_CONFIG_PASSWORD: "config_password"
+      LDAP_READONLY_USER: "false"
+      LDAP_TLS: "false"
+    volumes:
+      - ../ldap/aura.schema:/container/service/slapd/assets/config/bootstrap/schema/aura.schema:ro
+      - ../ldap/bootstrap.ldif:/container/service/slapd/assets/config/bootstrap/ldif/50-bootstrap.ldif:ro
+      - ldap-data:/var/lib/ldap
+      - ldap-config:/etc/ldap/slapd.d
+    ports:
+      - "389:389"
+    healthcheck:
+      test: ["CMD", "ldapsearch", "-x", "-H", "ldap://localhost", "-b", "dc=aura,dc=local", "-D", "cn=admin,dc=aura,dc=local", "-w", "admin_password"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  phpldapadmin:
+    image: osixia/phpldapadmin:0.9.0
+    container_name: aura-phpldapadmin
+    environment:
+      PHPLDAPADMIN_LDAP_HOSTS: "ldap-server"
+      PHPLDAPADMIN_HTTPS: "false"
+    ports:
+      - "8085:80"
+    depends_on:
+      ldap-server:
+        condition: service_healthy
+
+volumes:
+  ldap-data:
+  ldap-config:

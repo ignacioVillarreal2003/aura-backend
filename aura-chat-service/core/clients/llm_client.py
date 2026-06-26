@@ -906,8 +906,33 @@ class LLMClient:
                 raise HttpClientException(
                     "Invalid SSE payload from LLM (trailing)",
                 ) from e
-            if isinstance(obj, dict):
-                yield obj
+    async def evaluate_feedback(
+            self,
+            user_query: str,
+            assistant_response: str,
+            chat_history: list[dict[str, str]],
+            user: AuthenticatedUser,
+            fragments: list[dict[str, Any]] | None = None,
+            feedback_reason: str | None = None,
+            feedback_comment: str | None = None,
+            mode: str = "direct",
+    ) -> dict[str, Any]:
+        payload = {
+            "user_query": user_query,
+            "assistant_response": assistant_response,
+            "chat_history": chat_history,
+            "fragments": fragments,
+            "feedback_reason": feedback_reason,
+            "feedback_comment": feedback_comment,
+            "mode": mode,
+        }
+        return await self._generate(
+            url=settings.LLM_FEEDBACK_EVALUATION_URL,
+            context="feedback-evaluate",
+            payload=payload,
+            user=user,
+            log_extra={"feedback_reason": feedback_reason},
+        )
 
     def _build_agent_result(self, data: dict[str, Any]) -> AgentRunResult:
         out_messages = data.get("messages") or []

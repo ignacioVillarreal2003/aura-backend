@@ -32,13 +32,18 @@ class FeedbackService:
     ) -> ArtifactFeedback:
         AccessControl.require_permissions(user, frozenset({SET_MESSAGE_FEEDBACK}))
         _require_ai_artifact(user.id, artifact_id)
-        return feedback_repository.set(
+        fb = feedback_repository.set(
             artifact_id=artifact_id,
             created_by=user.id,
             value=value,
             reason=reason,
             comment=comment,
         )
+        if value == -1:
+            from apps.artifact.services.feedback_evaluation_service import feedback_evaluation_service
+            feedback_evaluation_service.trigger_evaluation(fb.id)
+        return fb
+
 
     def delete_feedback(self, user: AuthenticatedUser, artifact_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({SET_MESSAGE_FEEDBACK}))

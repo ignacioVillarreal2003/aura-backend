@@ -71,7 +71,7 @@ MAX_EMAIL_CHARS: Final[int] = 254
 MAX_ROLE_CHARS: Final[int] = 100
 MAX_PERMISSION_CHARS: Final[int] = 100
 MAX_ROLES: Final[int] = 50
-MAX_PERMISSIONS: Final[int] = 200
+MAX_PERMISSIONS: Final[int] = 1_000
 
 
 MAX_POST_PROCESS_SNAPSHOT_ERRORS: Final[int] = 1_000

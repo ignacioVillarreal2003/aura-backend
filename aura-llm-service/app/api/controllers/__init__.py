@@ -12,6 +12,7 @@ from app.api.controllers.user_interactions import (
     quiz_controller,
     lessons_learned_controller,
     decision_brief_controller,
+    feedback_evaluation_controller,
 )
 from app.api.controllers.processing import (
     document_classify_controller,
@@ -117,3 +118,10 @@ router.include_router(
     prefix="/decision-brief-generate",
     tags=["decision-brief"],
 )
+
+router.include_router(
+    feedback_evaluation_controller.router,
+    prefix="/feedback-evaluate",
+    tags=["feedback-evaluate"],
+)
+

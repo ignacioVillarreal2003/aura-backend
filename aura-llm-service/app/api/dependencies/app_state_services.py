@@ -42,3 +42,5 @@ get_timeline_service = state_dependency("timeline_service", "Timeline service")
 get_quiz_service = state_dependency("quiz_service", "Quiz service")
 get_lessons_learned_service = state_dependency("lessons_learned_service", "Lessons-learned service")
 get_decision_brief_service = state_dependency("decision_brief_service", "Decision-brief service")
+get_feedback_evaluation_service = state_dependency("feedback_evaluation_service", "FeedbackEvaluationService")
+

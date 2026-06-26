@@ -13,3 +13,4 @@ drf-spectacular
 django-prometheus
 python-json-logger
 whitenoise
+django-auth-ldap==5.1.0
