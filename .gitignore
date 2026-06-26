@@ -38,6 +38,11 @@ lib64/
 # Virtual environments
 .venv/
 venv/
+Lib/
+pyvenv.cfg
+# Windows venv bin dir accidentally committed under the auth service
+# (scoped so it doesn't shadow the legitimate docker/scripts/).
+aura-auth-service/scripts/
 
 # Testing / coverage
 .pytest_cache/
