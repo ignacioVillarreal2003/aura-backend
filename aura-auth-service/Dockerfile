@@ -1,7 +1,8 @@
 FROM python:3.13-slim AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    DJANGO_SETTINGS_MODULE=aura_auth_service.settings.development
 
 WORKDIR /application
 
@@ -36,5 +37,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
 
 ENTRYPOINT ["/application/docker-entrypoint.sh"]
 
-CMD ["gunicorn", "authservice.wsgi:application", "--bind", "0.0.0.0:8000", \
-     "--worker-class", "gthread", "--workers", "2", "--threads", "4", "--timeout", "60"]
+CMD ["gunicorn", "aura_auth_service.wsgi:application", "-c", "gunicorn.conf.py"]
