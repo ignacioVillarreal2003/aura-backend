@@ -70,7 +70,7 @@ def _sync_mac_attributes(sender, user, ldap_user, **kwargs):
 
 def _sync_user_role(user, ldap_user) -> None:
     """Sincroniza el rol del usuario desde LDAP basado en LDAP_ATTR_ROLE."""
-    from accounts.models import Role, UserRole
+    from apps.accounts.models import Role, UserRole
     from django.utils import timezone
 
     role_attr = getattr(settings, 'LDAP_ATTR_ROLE', 'employeeType')
@@ -126,7 +126,7 @@ def _sync_clearance(user, level_name: str | None) -> None:
     if not level_name:
         return
 
-    from accounts.services.mac_client import mac_client
+    from apps.accounts.services.mac_client import mac_client
 
     # Llamamos con user=None para indicar autenticación S2S via API Key
     levels = mac_client.list_classification_levels(user=None)
@@ -150,7 +150,7 @@ def _sync_compartments(user, compartment_names: list[str]) -> None:
     if not compartment_names:
         return
 
-    from accounts.services.mac_client import mac_client
+    from apps.accounts.services.mac_client import mac_client
 
     # Llamamos con user=None para indicar autenticación S2S via API Key
     all_compartments  = mac_client.list_compartments(user=None)

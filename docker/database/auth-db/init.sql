@@ -16,7 +16,7 @@ CREATE TABLE auth_user
     credentials_non_expired BOOLEAN      NOT NULL DEFAULT TRUE,
     last_password_change    TIMESTAMP,
     enabled                 BOOLEAN      NOT NULL DEFAULT TRUE,
-    tokens_valid_after      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    refresh_token           UUID,
     force_logout_at         TIMESTAMPTZ,
     created_by              BIGINT       NOT NULL,
     created_at              TIMESTAMP    NOT NULL DEFAULT NOW(),

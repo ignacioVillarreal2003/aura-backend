@@ -34,7 +34,7 @@ class AuraLDAPBackend(LDAPBackend):
         Returns:
             (User, built: bool)
         """
-        from accounts.models import User
+        from apps.accounts.models import User
 
         # Usuario existente no eliminado → reutilizar sin crear uno nuevo
         try:

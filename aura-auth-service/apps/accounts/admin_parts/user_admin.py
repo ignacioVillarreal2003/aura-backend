@@ -45,7 +45,7 @@ def force_logout(modeladmin, request, queryset):
     Setea force_logout_at=now() para que cualquier access token emitido antes
     de ese momento sea rechazado al validarse, y revoca todos los refresh tokens.
     """
-    from accounts.models import RefreshToken
+    from apps.accounts.models import RefreshToken
 
     now = timezone.now()
     count = 0

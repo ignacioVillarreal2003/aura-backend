@@ -251,7 +251,7 @@ AUTH_LDAP_ALWAYS_UPDATE_USER = True
 #
 # Para deshabilitar auth local en el futuro, eliminar ModelBackend de la lista.
 AUTHENTICATION_BACKENDS = [
-    'accounts.ldap_backend.AuraLDAPBackend',
+    'apps.accounts.ldap_backend.AuraLDAPBackend',
     'django.contrib.auth.backends.ModelBackend',
 ]
 
