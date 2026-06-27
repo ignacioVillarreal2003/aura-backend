@@ -1,4 +1,4 @@
-"""Role admin configuration."""
+"""Configuracion del admin de roles."""
 
 from django import forms
 from django.contrib import admin
@@ -33,7 +33,7 @@ class RoleAdminForm(forms.ModelForm):
 
 @admin.register(Role)
 class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
-    """Admin for Role model."""
+    """Admin del modelo Role."""
 
     form = RoleAdminForm
     list_display = ('name', 'description_short', 'permission_count', 'permissions_names')
@@ -198,7 +198,6 @@ class RoleAdmin(HelpTextStripMixin, admin.ModelAdmin):
         )
         if not names:
             return format_html('<span style="color:#bbb">—</span>')
-        # Show first 4 inline; rest as tooltip
         visible = names[:4]
         rest = names[4:]
         chips = ''.join(

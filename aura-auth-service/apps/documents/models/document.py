@@ -1,4 +1,4 @@
-"""Document model mapped to the shared aura_db `document` table."""
+"""Modelo Document, mapeado a la tabla document de aura_db."""
 
 from django.db import models
 from django.utils import timezone
@@ -6,6 +6,9 @@ from django.utils import timezone
 
 class Document(models.Model):
     id = models.BigAutoField(primary_key=True)
+    # Tiene valor solo en documentos que un usuario subio dentro de un chat
+    # (privados); los de admin/coleccion lo tienen en NULL
+    chat_id = models.BigIntegerField(null=True, blank=True, verbose_name='Chat')
     name = models.CharField(max_length=255, verbose_name='Nombre')
     description = models.TextField(blank=True, verbose_name='Descripción')
     file_size_bytes = models.BigIntegerField(default=0, verbose_name='Tamaño (bytes)')

@@ -1,4 +1,4 @@
-"""Authentication service functions for token issuance and introspection."""
+"""Funciones de autenticacion: emision e introspeccion de tokens."""
 
 import uuid
 from datetime import timedelta
@@ -15,12 +15,9 @@ from apps.accounts.request_token import get_request_token
 from apps.accounts.services.permission_cache import get_roles_and_permissions
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
 
 def _decode_and_fetch_user(token: str):
-    """Decode a JWT and return the active User, or None on any failure."""
+    """Decodifica el JWT y devuelve el usuario activo, o None si algo falla."""
     try:
         payload = jwt.decode(
             token,
@@ -38,15 +35,6 @@ def _decode_and_fetch_user(token: str):
     if not user or user.is_deleted or user.status != 'active':
         return None
 
-    # Token revocation gate: reject any access token issued before the user's
-    # ``tokens_valid_after`` cutoff. The cutoff is advanced by
-    # ``revoke_all_sessions`` on logout / password change / admin force-logout,
-    # which immediately invalidates every outstanding access token for the user
-    # (bounded only by downstream validate caches). Tokens minted before this
-    # feature shipped carry no ``iat`` and are allowed through until they expire
-    # naturally — a backward-compatible rollout that avoids a mass re-login.
-    # Comparison is at whole-second granularity (``iat`` is integer epoch
-    # seconds) so a freshly minted token is never wrongly rejected.
     iat = payload.get('iat')
     valid_after = getattr(user, 'tokens_valid_after', None)
     if iat is not None and valid_after is not None and iat < int(valid_after.timestamp()):
@@ -90,26 +78,17 @@ def _create_refresh_token(user: User, request=None) -> RefreshToken:
     return refresh
 
 
-# ---------------------------------------------------------------------------
-# Inter-service authorization
-# ---------------------------------------------------------------------------
 
 def mint_access_token(user: User) -> str:
-    """Mint a short-lived access token for an internal service-to-service call.
-
-    Used when an action originates from a context that has no end-user bearer
-    token to forward (e.g. the Django admin, authenticated via session cookie).
-    """
+    """Genera un access token corto para una llamada entre servicios."""
     return _build_access_token(user)
 
 
 def get_outbound_authorization(user: User | None = None) -> str | None:
-    """Return the ``Authorization`` header value for an outbound inter-service call.
+    """Devuelve el header Authorization para una llamada saliente.
 
-    Prefers forwarding the caller's own bearer token so the downstream service
-    acts with the real user's identity and permissions. When no token is being
-    forwarded — typically Django admin flows authenticated via session cookie —
-    a short-lived JWT is minted for the acting user instead.
+    Reenvia el token del usuario si lo hay; si no (por ejemplo desde el admin),
+    genera uno corto para el usuario que esta actuando.
     """
     forwarded = get_request_token()
     if forwarded:
@@ -119,17 +98,11 @@ def get_outbound_authorization(user: User | None = None) -> str | None:
     return None
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
 
 def authenticate_user(username: str, password: str):
     user = authenticate(username=username, password=password)
 
     if not user:
-        # Atomically increment failed attempts to avoid a lost-update race under
-        # concurrent failed logins (which could otherwise let an attacker stay
-        # below the lockout threshold via parallel tries).
         try:
             u = User.objects.get(username=username, deleted_at__isnull=True)
         except User.DoesNotExist:
@@ -155,7 +128,6 @@ def authenticate_user(username: str, password: str):
     if user.lockout_until and user.lockout_until > timezone.now():
         return None
 
-    # Successful login — reset lockout counters and update last_login
     user.failed_login_attempts = 0
     user.lockout_until = None
     user.account_non_locked = True
@@ -183,17 +155,10 @@ def issue_tokens_for_user(user: User, request=None) -> dict:
 
 
 def issue_service_token_for_user(user: User) -> str:
-    """Mint a short-lived access token for `user`, with no refresh token and
-    no RefreshToken row, for outbound admin-initiated service-to-service
-    calls (e.g. Django admin -> chat-service) where the inbound request has
-    no Bearer token to forward — admin pages are session-authenticated, not
-    JWT-authenticated.
+    """Genera un access token corto para llamadas del admin a otros servicios.
 
-    The downstream service validates this exactly like any user-issued
-    access token (GET /auth/validate), so the real RBAC roles/permissions of
-    `user` are what gets enforced there — this is not a blanket
-    service-trust bypass like the X-Service-Api-Key headers used for the MAC
-    and document-processing clients.
+    El servicio destino lo valida igual que cualquier token de usuario, asi que
+    se respetan los roles y permisos reales de ese usuario.
     """
     return _build_access_token(user)
 
@@ -204,14 +169,10 @@ def rotate_refresh_token(refresh_token: uuid.UUID | str, request=None) -> dict |
     row = RefreshToken.objects.filter(token=token_value).first()
     if not row:
         return None
-    # Reuse of an already-revoked refresh token signals possible theft (the
-    # legitimate client already rotated it). Kill every session for safety.
+    # Si reusan un refresh ya revocado, puede ser robo: cierro todas las sesiones
     if row.is_revoked:
         revoke_all_sessions(row.user)
         return None
-    # Atomically claim the token: this conditional UPDATE flips is_revoked
-    # false->true and only ONE concurrent caller can win, preventing a
-    # double-rotation race that would mint two valid token pairs.
     claimed = RefreshToken.objects.filter(pk=row.pk, is_revoked=False).update(
         is_revoked=True, updated_by=row.user_id, updated_at=now,
     )
@@ -228,12 +189,10 @@ def rotate_refresh_token(refresh_token: uuid.UUID | str, request=None) -> dict |
 
 
 def revoke_all_sessions(user: User) -> None:
-    """Invalidate every active session for ``user``.
+    """Invalida todas las sesiones activas del usuario.
 
-    Revokes all active refresh tokens AND advances ``tokens_valid_after`` so
-    every outstanding access token (``iat`` < cutoff) is rejected by
-    ``_decode_and_fetch_user`` on the next validate. Shared by logout, password
-    change and the admin force-logout action.
+    Revoca los refresh tokens y adelanta tokens_valid_after para que tambien
+    se rechacen los access tokens ya emitidos.
     """
     now = timezone.now()
     RefreshToken.objects.filter(user=user, is_revoked=False).update(
@@ -250,21 +209,12 @@ def revoke_refresh_token(refresh_token: uuid.UUID | str) -> bool:
     refresh = RefreshToken.objects.filter(token=token_value, is_revoked=False).first()
     if not refresh:
         return False
-    # Logout ends the session: revoke refresh tokens AND kill outstanding access
-    # tokens via the tokens_valid_after cutoff (consistent with the single-active
-    # -session model that login already enforces).
     revoke_all_sessions(refresh.user)
     return True
 
 
 def authenticate_access_token(token: str) -> User | None:
-    """Return the active ``User`` for a valid access token, or ``None``.
-
-    Used by the DRF ``JWTAuthentication`` class so views rely on the standard
-    authentication/permission pipeline instead of parsing the Authorization
-    header by hand. Applies the same revocation gate as every other validate
-    path (see ``_decode_and_fetch_user``).
-    """
+    """Devuelve el usuario activo de un access token valido, o None."""
     return _decode_and_fetch_user(token)
 
 

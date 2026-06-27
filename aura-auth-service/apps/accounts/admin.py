@@ -1,6 +1,5 @@
-"""Register accounts admin modules."""
+"""Registra los modulos del admin de accounts."""
 
-# Import submodules to register admin classes and site config.
 from apps.accounts.admin_parts import user_admin as _user_admin  # noqa: F401
 from apps.accounts.admin_parts import rbac_admin as _rbac_admin  # noqa: F401
 from apps.accounts.admin_parts import site_config as _site_config  # noqa: F401

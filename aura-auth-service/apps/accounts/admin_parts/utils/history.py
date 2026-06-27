@@ -1,4 +1,4 @@
-"""Shared helper for building rich entity-history pages from AuditLog."""
+"""Arma las paginas de historial de una entidad a partir del audit_log."""
 
 _ACTION_LABELS = {
     'CREATE': ('Creó',     '#16a34a'),
@@ -32,7 +32,7 @@ def _fmt(v):
 
 
 def build_entity_history(entity_type, entity_id):
-    """Return a list of processed AuditLog entries ready for the history template."""
+    """Devuelve las entradas del audit_log listas para la plantilla de historial."""
     from apps.accounts.models import AuditLog
 
     raw = list(

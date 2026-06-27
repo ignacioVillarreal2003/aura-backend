@@ -1,10 +1,7 @@
-"""DRF authentication backends for the auth API.
+"""Backends de autenticacion de DRF para la API.
 
-Wired as ``DEFAULT_AUTHENTICATION_CLASSES`` (see settings) so views use the
-standard DRF auth/permission pipeline instead of parsing the Authorization
-header by hand. ``JWTAuthentication`` resolves a real ``User``;
-``ServiceKeyAuthentication`` resolves a non-user ``ServiceAccount`` principal
-for trusted service-to-service calls.
+JWTAuthentication resuelve un User real; ServiceKeyAuthentication resuelve un
+ServiceAccount para llamadas de confianza entre servicios.
 """
 
 import logging
@@ -20,12 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class ServiceAccount:
-    """Minimal authenticated principal for service-to-service requests.
-
-    Not a DB-backed user — it only needs to satisfy DRF's ``IsAuthenticated``
-    (``is_authenticated`` truthy). Views that require a real end user must
-    authenticate with ``JWTAuthentication`` instead.
-    """
+    """Identidad minima para peticiones entre servicios (no es un usuario real)."""
 
     is_authenticated = True
     is_active = True
@@ -40,9 +32,7 @@ class ServiceAccount:
 
 
 class JWTAuthentication(BaseAuthentication):
-    """Bearer access-token authentication. Returns ``None`` when no Bearer
-    header is present (so other backends can try); raises only when a Bearer
-    token is present but invalid/expired/revoked."""
+    """Autenticacion por bearer token. Devuelve None si no hay header Bearer."""
 
     def authenticate(self, request):
         auth_header = request.headers.get("Authorization", "")
@@ -68,10 +58,7 @@ class JWTAuthentication(BaseAuthentication):
 
 
 class ServiceKeyAuthentication(BaseAuthentication):
-    """Service-to-service authentication via the ``X-Service-Api-Key`` header.
-
-    Returns ``None`` when the header is absent (so Bearer auth can run);
-    raises when the header is present but the key is wrong."""
+    """Autenticacion entre servicios con el header X-Service-Api-Key."""
 
     def authenticate(self, request):
         api_key = request.headers.get("X-Service-Api-Key")

@@ -1,28 +1,12 @@
-"""
-Database router for aura-auth-service.
-
-Routing rules:
-  - notifications app           → aura_db  (all models)
-  - documents app               → aura_db  (all models)
-  - chat app                    → aura_db  (all models)
-  - everything else             → auth_db  (Django default)
-
-aura_db schema is owned by docker/aura-db/init.sql — no Django migrations run there.
-auth_db schema is owned by docker/auth-db/init.sql — same rule for local apps.
-"""
+"""Router que manda notifications, documents y chat a aura_db; el resto a auth_db."""
 
 
 class AuraDbRouter:
 
-    # Apps where every model lives in aura_db.
     _aura_apps = {'notifications', 'documents', 'chat'}
 
-    # Individual model names (lowercase) inside the accounts app that live in aura_db.
     _aura_account_models: set[str] = set()
 
-    # db_table names that always route to aura_db (e.g. implicit M2M through
-    # tables whose app_label inherits from apps.accounts but whose physical table is
-    # in aura_db). None currently.
     _aura_tables: set[str] = set()
 
     def _is_aura_db(self, model):
@@ -46,15 +30,10 @@ class AuraDbRouter:
         return None
 
     def allow_relation(self, obj1, obj2, **hints):
-        # Allow all relations — cross-DB FKs are converted to plain BigInt in
-        # the models, so no SQL-level FK constraints exist across databases.
         return None
 
     def allow_migrate(self, db, app_label, model_name=None, **hints):
-        # Never run any Django migrations against aura_db — its schema is
-        # owned exclusively by docker/aura-db/init.sql.
+        # Nunca migrar sobre aura_db, su esquema lo crea init.sql
         if db == 'aura_db':
             return False
-        # Local app tables (accounts, documents, notifications) are also
-        # owned by init.sql, blocked via MIGRATION_MODULES=None in settings.
         return None

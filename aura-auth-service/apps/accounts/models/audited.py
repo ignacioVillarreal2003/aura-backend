@@ -1,14 +1,11 @@
-"""Shared audited base model for accounts-related tables."""
+"""Modelo base con campos de auditoria."""
 
 from django.db import models
 from django.utils import timezone
 
 
 class AuditedModel(models.Model):
-    """
-    Abstract base model for custom tables that keep audit fields.
-    created_by / updated_by / deleted_by store auth_user.id (BigInt).
-    """
+    """Base abstracta con campos de auditoria (created_by, updated_by, etc.)."""
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name='Creado',

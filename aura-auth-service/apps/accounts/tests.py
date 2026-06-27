@@ -1,8 +1,4 @@
-"""
-Tests for accounts models, views, and services.
-
-Run with: python manage.py test accounts
-"""
+"""Tests de los modelos, vistas y servicios de accounts."""
 
 import uuid
 import jwt
@@ -23,12 +19,9 @@ from apps.accounts.utils import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Helper builders
-# ---------------------------------------------------------------------------
 
 def _make_user(**kwargs):
-    """Return a non-saved MagicMock that looks like a User instance."""
+    """Devuelve un MagicMock que parece un usuario, sin guardarlo."""
     user = MagicMock(spec=User)
     user.id = kwargs.get('id', 1)
     user.pk = user.id
@@ -45,7 +38,7 @@ def _make_user(**kwargs):
 
 
 def _make_access_token(user_id=1, expired=False):
-    """Build a real JWT for test assertions."""
+    """Arma un JWT real para usar en los tests."""
     if expired:
         exp = int((timezone.now() - timedelta(hours=1)).timestamp())
     else:
@@ -54,12 +47,9 @@ def _make_access_token(user_id=1, expired=False):
     return jwt.encode(payload, settings.JWT_SIGNING_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
-# ===========================================================================
-# MODEL TESTS (using real DB — these already exist, kept + extended)
-# ===========================================================================
 
 class UserModelTest(TestCase):
-    """Test custom User model."""
+    """Tests del modelo User."""
 
     def setUp(self):
         self.bootstrap_user = User.objects.create_superuser(
@@ -133,7 +123,7 @@ class UserModelTest(TestCase):
 
 
 class RoleModelTest(TestCase):
-    """Test Role model."""
+    """Tests del modelo Role."""
 
     def setUp(self):
         self.role = Role.objects.create(
@@ -150,7 +140,7 @@ class RoleModelTest(TestCase):
 
 
 class PermissionModelTest(TestCase):
-    """Test Permission model."""
+    """Tests del modelo Permission."""
 
     def setUp(self):
         self.permission = Permission.objects.create(
@@ -187,12 +177,9 @@ class PermissionUtilsTest(TestCase):
         self.assertIn('editor', get_user_roles(self.user))
 
 
-# ===========================================================================
-# AUTH SERVICE TESTS (fully mocked)
-# ===========================================================================
 
 class AuthenticateUserTest(TestCase):
-    """Unit tests for auth_service.authenticate_user."""
+    """Tests de auth_service.authenticate_user."""
 
     @patch('apps.accounts.services.auth_service.authenticate')
     def test_valid_credentials_return_user(self, mock_auth):
@@ -212,7 +199,6 @@ class AuthenticateUserTest(TestCase):
     @patch('apps.accounts.services.auth_service.authenticate')
     def test_deleted_user_returns_none(self, mock_auth):
         user = _make_user(is_deleted=True)
-        # is_deleted is a property; make it return True
         type(user).is_deleted = PropertyMock(return_value=True)
         mock_auth.return_value = user
         from apps.accounts.services.auth_service import authenticate_user
@@ -248,7 +234,7 @@ class AuthenticateUserTest(TestCase):
 
     @patch('apps.accounts.services.auth_service.authenticate')
     def test_lockout_until_past_allows_login(self, mock_auth):
-        """lockout_until in the past should NOT block the user."""
+        """Un lockout_until en el pasado no debe bloquear al usuario."""
         user = _make_user(lockout_until=timezone.now() - timedelta(minutes=1))
         type(user).is_deleted = PropertyMock(return_value=False)
         mock_auth.return_value = user
@@ -258,7 +244,7 @@ class AuthenticateUserTest(TestCase):
 
 
 class IssueTokensForUserTest(TestCase):
-    """Unit tests for auth_service.issue_tokens_for_user."""
+    """Tests de auth_service.issue_tokens_for_user."""
 
     def _mock_qs(self):
         qs = MagicMock()
@@ -271,11 +257,9 @@ class IssueTokensForUserTest(TestCase):
         user = _make_user()
         type(user).is_superuser = PropertyMock(return_value=False)
 
-        # objects.filter(...).update(...) chain
         qs = self._mock_qs()
         mock_rt_cls.objects.filter.return_value = qs
 
-        # objects.create(...)
         token_val = str(uuid.uuid4())
         mock_refresh = MagicMock()
         mock_refresh.token = token_val
@@ -309,7 +293,7 @@ class IssueTokensForUserTest(TestCase):
 
 
 class RotateRefreshTokenTest(TestCase):
-    """Unit tests for auth_service.rotate_refresh_token."""
+    """Tests de auth_service.rotate_refresh_token."""
 
     @patch('apps.accounts.services.auth_service.RefreshToken')
     def test_valid_token_returns_new_pair(self, mock_rt_cls):
@@ -358,12 +342,11 @@ class RotateRefreshTokenTest(TestCase):
         result = rotate_refresh_token(str(uuid.uuid4()))
 
         self.assertIsNone(result)
-        # The atomic claim revokes via an UPDATE (not a model .save()).
         mock_rt_cls.objects.filter.return_value.update.assert_called_once()
 
 
 class RevokeRefreshTokenTest(TestCase):
-    """Unit tests for auth_service.revoke_refresh_token."""
+    """Tests de auth_service.revoke_refresh_token."""
 
     @patch('apps.accounts.services.auth_service.RefreshToken')
     def test_valid_token_revokes_and_returns_true(self, mock_rt_cls):
@@ -378,8 +361,6 @@ class RevokeRefreshTokenTest(TestCase):
         result = revoke_refresh_token(str(uuid.uuid4()))
 
         self.assertTrue(result)
-        # revoke_all_sessions revokes refresh tokens via an UPDATE and bumps the
-        # user's tokens_valid_after cutoff (a single user.save).
         mock_rt_cls.objects.filter.return_value.update.assert_called_once()
         user.save.assert_called_once()
 
@@ -394,7 +375,7 @@ class RevokeRefreshTokenTest(TestCase):
 
 
 class GetUserInfoTest(TestCase):
-    """Unit tests for auth_service.get_user_info."""
+    """Tests de auth_service.get_user_info."""
 
     @patch('apps.accounts.services.auth_service.get_roles_and_permissions', return_value=(['admin'], ['PERM_A']))
     @patch('apps.accounts.services.auth_service.User')
@@ -459,7 +440,7 @@ class GetUserInfoTest(TestCase):
 
 
 class IntrospectTokenTest(TestCase):
-    """Unit tests for auth_service.introspect_token."""
+    """Tests de auth_service.introspect_token."""
 
     @patch('apps.accounts.services.auth_service.get_roles_and_permissions', return_value=([], []))
     @patch('apps.accounts.services.auth_service.User')
@@ -496,9 +477,6 @@ class IntrospectTokenTest(TestCase):
         self.assertIsNone(result)
 
 
-# ===========================================================================
-# VIEW TESTS (using APIClient + mocked service layer)
-# ===========================================================================
 
 LOGIN_URL = '/auth/login'
 REFRESH_URL = '/auth/refresh'
@@ -514,14 +492,11 @@ _FAKE_TOKENS = {
 
 
 class LoginViewTest(TestCase):
-    """Tests for POST /auth/login."""
+    """Tests de POST /auth/login."""
 
     def setUp(self):
         self.client = APIClient()
 
-    # ------------------------------------------------------------------
-    # Patch targets: the names as imported inside accounts.api.views
-    # ------------------------------------------------------------------
     @patch('apps.accounts.api.views.log_audit')
     @patch('apps.accounts.api.views.issue_tokens_for_user', return_value=_FAKE_TOKENS)
     @patch('apps.accounts.api.views.authenticate_user')
@@ -546,7 +521,7 @@ class LoginViewTest(TestCase):
     @patch('apps.accounts.api.views.log_audit')
     @patch('apps.accounts.api.views.authenticate_user', return_value=None)
     def test_inactive_user_return_401(self, mock_auth, mock_log):
-        """authenticate_user already returns None for inactive users."""
+        """authenticate_user ya devuelve None para usuarios inactivos."""
         resp = self.client.post(LOGIN_URL, {'username': 'inactive', 'password': 'pass'}, format='json')
         self.assertEqual(resp.status_code, 401)
 
@@ -579,7 +554,7 @@ class LoginViewTest(TestCase):
 
 
 class RefreshViewTest(TestCase):
-    """Tests for POST /auth/refresh."""
+    """Tests de POST /auth/refresh."""
 
     def setUp(self):
         self.client = APIClient()
@@ -599,7 +574,7 @@ class RefreshViewTest(TestCase):
 
     @patch('apps.accounts.api.views.rotate_refresh_token', return_value=None)
     def test_expired_token_returns_401(self, mock_rotate):
-        """Expired tokens are indistinguishable from invalid at the view layer."""
+        """Para la vista, un token vencido es lo mismo que uno invalido."""
         resp = self.client.post(REFRESH_URL, {'refresh_token': self.valid_token}, format='json')
         self.assertEqual(resp.status_code, 401)
 
@@ -613,7 +588,7 @@ class RefreshViewTest(TestCase):
 
 
 class LogoutViewTest(TestCase):
-    """Tests for POST /auth/logout."""
+    """Tests de POST /auth/logout."""
 
     def setUp(self):
         self.client = APIClient()
@@ -638,7 +613,7 @@ class LogoutViewTest(TestCase):
 
 
 class ValidateViewTest(TestCase):
-    """Tests for GET /auth/validate."""
+    """Tests de GET /auth/validate."""
 
     def setUp(self):
         self.client = APIClient()
@@ -676,7 +651,7 @@ class ValidateViewTest(TestCase):
 
 
 class UserLookupViewTest(TestCase):
-    """Integration tests for GET /auth/users/lookup (free-text ?q=, gated by M3)."""
+    """Tests de GET /auth/users/lookup."""
 
     def setUp(self):
         self.client = APIClient()
@@ -691,7 +666,6 @@ class UserLookupViewTest(TestCase):
         self.assertEqual(resp.status_code, 401)
 
     def test_regular_user_forbidden(self):
-        # M3: a plain end user (no ADMIN_USERS_VIEW) cannot enumerate the directory.
         token = _make_access_token(user_id=self.john.id)
         resp = self.client.get(LOOKUP_URL + '?q=john', HTTP_AUTHORIZATION=f'Bearer {token}')
         self.assertEqual(resp.status_code, 403)
@@ -719,7 +693,7 @@ class UserLookupViewTest(TestCase):
 
 
 class UsersByIdsViewTest(TestCase):
-    """Integration tests for GET /auth/users/by-ids (M3 email minimisation)."""
+    """Tests de GET /auth/users/by-ids."""
 
     BY_IDS_URL = '/auth/users/by-ids'
 
@@ -738,8 +712,6 @@ class UsersByIdsViewTest(TestCase):
         self.assertEqual(resp.data['results'][0]['email'], 'john@example.com')
 
     def test_regular_user_hides_email(self):
-        # M3: by-ids is allowed for any authenticated principal, but email (PII)
-        # is only returned to services / ADMIN_USERS_VIEW holders.
         token = _make_access_token(user_id=self.john.id)
         resp = self.client.get(
             f'{self.BY_IDS_URL}?ids={self.john.id}', HTTP_AUTHORIZATION=f'Bearer {token}',

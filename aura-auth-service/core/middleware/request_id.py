@@ -1,11 +1,4 @@
-"""Per-request correlation ID.
-
-Generates (or accepts, via the inbound ``X-Request-ID`` header) a short id,
-exposes it through a ContextVar so any log record can be tagged with it, and
-echoes it back on the response ``X-Request-ID`` header. This lets a single
-request be traced across log lines — and, when the gateway forwards the
-header, across services.
-"""
+"""ID de correlacion por peticion para poder seguirla en los logs."""
 from __future__ import annotations
 
 import contextvars
@@ -25,8 +18,7 @@ def get_request_id() -> Optional[str]:
 
 
 class RequestIDMiddleware:
-    """Assigns a request id (inbound header or a fresh uuid) for the duration
-    of the request and echoes it on the response."""
+    """Asigna un id a cada peticion y lo devuelve en la respuesta."""
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -48,8 +40,7 @@ class RequestIDMiddleware:
 
 
 class RequestIDLogFilter(logging.Filter):
-    """Inject the current request id into every log record so the JSON
-    formatter can emit it. Records outside a request context get ``-``."""
+    """Agrega el request id a cada registro de log."""
 
     def filter(self, record):
         record.request_id = get_request_id() or "-"

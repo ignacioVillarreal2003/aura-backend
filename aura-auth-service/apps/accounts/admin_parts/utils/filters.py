@@ -1,4 +1,4 @@
-"""Admin filters for accounts app."""
+"""Filtros del admin para la app accounts."""
 
 from django.contrib import admin
 

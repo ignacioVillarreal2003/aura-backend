@@ -1,4 +1,4 @@
-"""Token models for auth service."""
+"""Modelos de tokens del servicio de autenticacion."""
 
 import uuid
 from django.db import models
@@ -7,7 +7,7 @@ from apps.accounts.models.user import User
 
 
 class RefreshToken(AuditedModel):
-    """Refresh token table for auth sessions."""
+    """Tabla de refresh tokens de las sesiones."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     token = models.CharField(

@@ -1,4 +1,4 @@
-"""Common admin utilities for accounts app."""
+"""Utilidades comunes del admin de la app accounts."""
 
 from apps.accounts.admin_parts.utils.filters import CreatedDateFilter, StatusFilter
 from apps.accounts.admin_parts.utils.audit import (

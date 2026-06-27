@@ -1,4 +1,4 @@
-"""Authentication service functions for token issuance and introspection."""
+"""Funciones de autenticacion: emision e introspeccion de tokens."""
 
 import uuid
 from datetime import timedelta
@@ -13,12 +13,9 @@ from accounts.request_token import get_request_token
 from accounts.utils import get_user_permissions, get_user_roles
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
 
 def _decode_and_fetch_user(token: str):
-	"""Decode a JWT and return the active User, or None on any failure."""
+	"""Decodifica el JWT y devuelve el usuario activo, o None si algo falla."""
 	try:
 		payload = jwt.decode(
 			token,
@@ -36,7 +33,6 @@ def _decode_and_fetch_user(token: str):
 	if not user or user.is_deleted or user.status != 'active':
 		return None
 
-	# Verificar force_logout_at: rechazar tokens emitidos antes del forzado
 	if user.force_logout_at:
 		from datetime import datetime, timezone as dt_tz
 		token_issued_at = datetime.fromtimestamp(payload.get('iat', 0), tz=dt_tz.utc)
@@ -82,27 +78,14 @@ def _create_refresh_token(user: User, request=None) -> RefreshToken:
 	return refresh
 
 
-# ---------------------------------------------------------------------------
-# Inter-service authorization
-# ---------------------------------------------------------------------------
 
 def mint_access_token(user: User) -> str:
-	"""Mint a short-lived access token for an internal service-to-service call.
-
-	Used when an action originates from a context that has no end-user bearer
-	token to forward (e.g. the Django admin, authenticated via session cookie).
-	"""
+	"""Genera un access token corto para una llamada entre servicios."""
 	return _build_access_token(user)
 
 
 def get_outbound_authorization(user: User | None = None) -> str | None:
-	"""Return the ``Authorization`` header value for an outbound inter-service call.
-
-	Prefers forwarding the caller's own bearer token so the downstream service
-	acts with the real user's identity and permissions. When no token is being
-	forwarded — typically Django admin flows authenticated via session cookie —
-	a short-lived JWT is minted for the acting user instead.
-	"""
+	"""Devuelve el header Authorization para una llamada saliente."""
 	forwarded = get_request_token()
 	if forwarded:
 		return forwarded
@@ -111,15 +94,11 @@ def get_outbound_authorization(user: User | None = None) -> str | None:
 	return None
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
 
 def authenticate_user(username: str, password: str):
 	user = authenticate(username=username, password=password)
 
 	if not user:
-		# Increment failed attempts for the matching user (if they exist)
 		try:
 			u = User.objects.get(username=username, deleted_at__isnull=True)
 			u.failed_login_attempts = (u.failed_login_attempts or 0) + 1
@@ -138,7 +117,6 @@ def authenticate_user(username: str, password: str):
 	if user.lockout_until and user.lockout_until > timezone.now():
 		return None
 
-	# Successful login — reset lockout counters, update last_login, clear force_logout_at
 	user.failed_login_attempts = 0
 	user.lockout_until = None
 	user.account_non_locked = True
@@ -168,18 +146,7 @@ def issue_tokens_for_user(user: User, request=None) -> dict:
 
 
 def issue_service_token_for_user(user: User) -> str:
-	"""Mint a short-lived access token for `user`, with no refresh token and
-	no RefreshToken row, for outbound admin-initiated service-to-service
-	calls (e.g. Django admin -> chat-service) where the inbound request has
-	no Bearer token to forward — admin pages are session-authenticated, not
-	JWT-authenticated.
-
-	The downstream service validates this exactly like any user-issued
-	access token (GET /auth/validate), so the real RBAC roles/permissions of
-	`user` are what gets enforced there — this is not a blanket
-	service-trust bypass like the X-Service-Api-Key headers used for the MAC
-	and document-processing clients.
-	"""
+	"""Genera un access token corto para llamadas del admin a otros servicios."""
 	return _build_access_token(user)
 
 
@@ -198,7 +165,6 @@ def rotate_refresh_token(refresh_token: uuid.UUID | str, request=None) -> dict |
 	refresh.updated_by = refresh.user.pk
 	refresh.save(update_fields=['is_revoked', 'updated_by', 'updated_at'])
 
-	# Re-sincronizar atributos MAC desde LDAP (best-effort)
 	_try_ldap_resync(refresh.user)
 
 	new_refresh = _create_refresh_token(refresh.user, request=request)
@@ -211,7 +177,7 @@ def rotate_refresh_token(refresh_token: uuid.UUID | str, request=None) -> dict |
 
 
 def _try_ldap_resync(user: User) -> None:
-	"""Re-run LDAP MAC sync on token rotation. Skips silently if not an LDAP user."""
+	"""Vuelve a sincronizar MAC desde LDAP al rotar el token."""
 	try:
 		from accounts.ldap_backend import AuraLDAPBackend
 		backend = AuraLDAPBackend()

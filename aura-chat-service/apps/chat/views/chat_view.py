@@ -257,6 +257,30 @@ class ChatViewSet(ViewSet):
         return Response({"unarchived": count})
 
     @extend_schema(
+        tags=["Chats"],
+        summary="Delete chats",
+        description=(
+                "Deletes one or more chats. Borrar es una acción global, por eso solo se "
+                "eliminan los chats de los que el usuario es dueño/creador; el resto se omite."
+        ),
+        request=BulkChatIdsRequest,
+        responses={
+            200: OpenApiResponse(
+                description="JSON object: `deleted` = number of chats deleted.",
+            ),
+            **standard_error_responses(400, 401),
+        },
+    )
+    @action(detail=False, methods=["post"], url_path="delete")
+    def delete_bulk(self, request: Request) -> Response:
+        serializer = BulkChatIdsRequest(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        count = chat_service.delete_chats(
+            user=request.user, chat_ids=serializer.validated_data["ids"]
+        )
+        return Response({"deleted": count})
+
+    @extend_schema(
         methods=["POST"],
         tags=["Chats"],
         summary="Lock chat",

@@ -20,6 +20,7 @@ urlpatterns = [
     path("archived/", _v.as_view({"get": "archived"}), name="chat-archived"),
     path("archive/", _v.as_view({"post": "archive"}), name="chat-archive"),
     path("unarchive/", _v.as_view({"post": "unarchive"}), name="chat-unarchive"),
+    path("delete/", _v.as_view({"post": "delete_bulk"}), name="chat-delete-bulk"),
     path("<int:chat_id>/", _v.as_view({"get": "retrieve", "patch": "partial_update", "delete": "destroy"}),
          name="chat-detail"),
     path("<int:chat_id>/pin/", _v.as_view({"post": "pin", "delete": "pin"}), name="chat-pin"),
