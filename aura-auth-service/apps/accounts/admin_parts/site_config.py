@@ -1,4 +1,4 @@
-"""Admin site configuration."""
+"""Configuracion del sitio admin."""
 
 from django.contrib import admin
 from django.contrib.auth.models import Group
@@ -6,12 +6,10 @@ from django.urls import reverse
 from apps.accounts.admin_parts.common import _is_super_admin_user, _is_admin_user, _is_effective_superadmin, has_permission
 
 
-# Customize admin site
 admin.site.site_header = 'Administración'
 admin.site.site_title = 'Admin Aura Auth'
 admin.site.index_title = 'Panel de Administración'
 
-# Unregister Group from Django auth
 admin.site.unregister(Group)
 
 
@@ -24,8 +22,6 @@ def _custom_get_app_list(self, request, app_label=None):
     can_view_chats = has_permission(request, 'ADMIN_CHAT_VIEW') or _is_effective_superadmin(request)
     can_view_users = has_permission(request, 'ADMIN_USERS_VIEW')
 
-    # Models shown in Gestión de usuarios (accounts app), in order.
-    # (Grouping is handled by MAC collections, not by an accounts model.)
     _accounts_allowed = {'User', 'Role', 'Permission'}
     desired_order = ['User']
     if can_view_roles:
@@ -52,7 +48,6 @@ def _custom_get_app_list(self, request, app_label=None):
         },
     ]
 
-    # Grupos section: classification levels and compartments.
     if can_manage_mac:
         grupos_models = [
             {
@@ -78,7 +73,6 @@ def _custom_get_app_list(self, request, app_label=None):
             }
         )
 
-    # Gestión section: documents, chats and audit log.
     if can_view_users or can_view_audit or can_view_chats:
         gestion_models = [
             {
@@ -120,12 +114,10 @@ def _custom_get_app_list(self, request, app_label=None):
         'notifications': 4,
     }
 
-    # Labels to suppress from the auto-generated app list (merged into Gestión).
     _hidden_apps = {'documents', 'chat', 'auditoria'}
 
     for app in app_list:
         if app.get('app_label') == 'accounts':
-            # Show only allowed models.
             allowed = _accounts_allowed if can_view_roles else {'User'}
             app['models'] = [
                 m for m in app['models'] if m.get('object_name') in allowed

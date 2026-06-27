@@ -140,7 +140,7 @@
 <div id="content-main">
   <h1>Dashboard Administrativo</h1>
 
-  <!-- ── Microservicios ── -->
+  <!-- Microservicios -->
   <p class="section-title">Microservicios</p>
   <div class="health-grid">
     {% for svc in services_health %}
@@ -156,7 +156,7 @@
     {% endfor %}
   </div>
 
-  <!-- ── Infraestructura ── -->
+  <!-- Infraestructura -->
   <p class="section-title">Infraestructura</p>
   <div class="health-grid">
     {% for svc in infra_health %}
@@ -172,7 +172,7 @@
     {% endfor %}
   </div>
 
-  <!-- ── Usuarios ── -->
+  <!-- Usuarios -->
   <p class="section-title">Usuarios</p>
   <div class="dashboard-grid">
     <section class="dashboard-card">
@@ -237,7 +237,7 @@
     </section>
   </div>
 
-  <!-- ── Autenticación ── -->
+  <!-- Autenticación -->
   <p class="section-title">Autenticación (últimas 24 h)</p>
   <div class="dashboard-grid">
     <section class="dashboard-card">
@@ -266,7 +266,7 @@
     </section>
   </div>
 
-  <!-- ── Chat ── -->
+  <!-- Chat -->
   <p class="section-title">Chat</p>
   <div class="dashboard-grid">
     {% if kpis.chat_available %}
@@ -288,7 +288,7 @@
     {% endif %}
   </div>
 
-  <!-- ── Documentos ── -->
+  <!-- Documentos -->
   <p class="section-title">Documentos</p>
   <div class="dashboard-grid">
     <section class="dashboard-card">
@@ -321,7 +321,7 @@
     </section>
   </div>
 
-  <!-- ── Notificaciones ── -->
+  <!-- Notificaciones -->
   <p class="section-title">Notificaciones</p>
   <div class="dashboard-grid">
     <section class="dashboard-card">
@@ -344,7 +344,7 @@
     </section>
   </div>
 
-  <!-- ── Grafo de conocimiento ── -->
+  <!-- Grafo de conocimiento -->
   <p class="section-title">Grafo de conocimiento (Neo4j)</p>
   <div class="dashboard-grid">
     {% if neo4j_stats.available %}
@@ -365,7 +365,7 @@
     {% endif %}
   </div>
 
-  <!-- ── Tablas ── -->
+  <!-- Tablas -->
   <div class="dashboard-layout" style="margin-top:20px">
     <section class="dashboard-card">
       <h3>Usuarios por rol</h3>

@@ -1,11 +1,11 @@
-"""User admin form."""
+"""Formulario del admin de usuarios."""
 
 from django import forms
 from apps.accounts.models import Role, User
 
 
 class RoleRadioSelect(forms.RadioSelect):
-    """RadioSelect that stamps data-role-name on each <input> so JS can detect the role."""
+    """RadioSelect que agrega data-role-name a cada input para el JS."""
 
     def create_option(self, name, value, label, selected, index, **kwargs):
         option = super().create_option(name, value, label, selected, index, **kwargs)
@@ -48,8 +48,6 @@ class UserAdminForm(forms.ModelForm):
 
     class Meta:
         model = User
-        # MAC assignments (compartment_ids above) are not model fields — they are
-        # declared explicitly on the form and populated/saved manually.
         exclude = []
 
     def __init__(self, *args, **kwargs):

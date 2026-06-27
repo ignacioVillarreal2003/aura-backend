@@ -1,4 +1,4 @@
-"""Dashboard admin custom view with operational KPIs."""
+"""Vista del dashboard del admin con indicadores operativos."""
 
 import concurrent.futures
 import socket
@@ -26,7 +26,6 @@ from apps.notifications.models import Notification
 logger = logging.getLogger(__name__)
 
 
-# ── Microservice health panel ────────────────────────────────────────────────
 _HEALTH_TARGETS = (
     ('Chat', lambda: f"{settings.CHAT_SERVICE_URL.rstrip('/')}/api/v1/health"),
     ('Procesamiento de documentos', lambda: f"{settings.DOCUMENT_PROCESSING_URL.rstrip('/')}/api/v1/health"),
@@ -58,7 +57,7 @@ def _check_one_service_health(name, url, timeout):
 
 
 def _poll_services_health():
-    """Polls every microservice's /health concurrently. Never raises."""
+    """Consulta el /health de cada microservicio en paralelo. No lanza errores."""
     timeout = getattr(settings, 'SERVICE_HEALTH_CHECK_TIMEOUT_SECONDS', 3)
     jobs = [(name, url_fn()) for name, url_fn in _HEALTH_TARGETS]
 
@@ -86,7 +85,6 @@ def _poll_services_health():
     return services
 
 
-# ── Infrastructure health panel ──────────────────────────────────────────────
 
 def _check_db_health(name: str, alias: str) -> dict:
     try:
@@ -119,7 +117,7 @@ def _check_http_infra(name: str, url: str, timeout: int) -> dict:
 
 
 def _poll_infra_health() -> list:
-    """Checks databases, cache, queue, storage and search engine. Never raises."""
+    """Chequea bases de datos, cache, cola, storage y buscador. No lanza errores."""
     timeout = getattr(settings, 'SERVICE_HEALTH_CHECK_TIMEOUT_SECONDS', 3)
 
     jobs = [
@@ -151,18 +149,9 @@ def _poll_infra_health() -> list:
     return result
 
 
-# ── Knowledge graph stats ────────────────────────────────────────────────────
 
 def _get_graph_stats(user) -> dict:
-    """Graph stats via document-processing's GET /graph/stats/manage endpoint.
-
-    Replaces the previous direct-to-Neo4j HTTP query so the dashboard uses the
-    official contract and the user's RBAC. Maps the response to the keys the
-    template already expects (node_count, rel_count, available). Never raises.
-
-    Note: `total_entities` counts entity nodes specifically (not every node, as
-    the old direct query did), so the figure may be lower but more meaningful.
-    """
+    """Estadisticas del grafo via document-processing. No lanza errores."""
     try:
         from apps.documents.services.document_processing_client import get_graph_stats
         data = get_graph_stats(user) or {}
@@ -178,7 +167,7 @@ def _get_graph_stats(user) -> dict:
 
 
 def _dashboard_overview_view(request):
-    """Render a lightweight admin dashboard using existing project data."""
+    """Arma el dashboard del admin con datos del proyecto."""
 
     if not has_permission(request, 'ADMIN_DASHBOARD_VIEW'):
         raise PermissionDenied
@@ -193,7 +182,6 @@ def _dashboard_overview_view(request):
 
     active_users_qs = User.objects.filter(deleted_at__isnull=True)
 
-    # Separate regular users (role "user") from elevated accounts (admin / superadmin).
     try:
         elevated_user_ids = set(
             UserRole.objects.filter(
@@ -211,7 +199,6 @@ def _dashboard_overview_view(request):
 
     users_locked = active_users_qs.filter(lockout_until__gt=now).count()
 
-    # Users who existed before the 30d window but have not logged in.
     users_inactive_30d = 0
     try:
         users_inactive_30d = active_users_qs.filter(
@@ -222,7 +209,6 @@ def _dashboard_overview_view(request):
     except Exception:
         logger.warning('Dashboard: users_inactive_30d unavailable.')
 
-    # Unique users who completed a successful login in the last 24 h.
     active_users_24h = 0
     try:
         active_users_24h = (
@@ -274,7 +260,6 @@ def _dashboard_overview_view(request):
     except Exception:
         logger.warning('Dashboard: login audit metrics unavailable.')
 
-    # ── Chat metrics ─────────────────────────────────────────────────────────
     chats_total = 0
     chats_active_24h = 0
     messages_7d = 0
@@ -294,7 +279,6 @@ def _dashboard_overview_view(request):
         chat_available = False
         logger.warning('Dashboard: chat metrics unavailable.')
 
-    # ── Document metrics ──────────────────────────────────────────────────────
     documents_total = 0
     documents_failed = 0
     total_storage_bytes = 0
@@ -310,7 +294,6 @@ def _dashboard_overview_view(request):
         documents_available = False
         logger.warning('Dashboard: document metrics unavailable.')
 
-    # ── Notification metrics ──────────────────────────────────────────────────
     notification_qs = Notification.objects.filter(deleted_at__isnull=True)
     notifications_7d = 0
     notifications_read_rate_7d = 0
@@ -328,10 +311,8 @@ def _dashboard_overview_view(request):
         notifications_available = False
         logger.warning('Dashboard: notifications metrics unavailable because aura_db connection failed.')
 
-    # ── Knowledge graph stats (non-critical) ─────────────────────────────────
     neo4j_stats = _get_graph_stats(request.user)
 
-    # ── Table data ────────────────────────────────────────────────────────────
     users_by_role = list(
         UserRole.objects.filter(deleted_at__isnull=True)
         .values('role__name')

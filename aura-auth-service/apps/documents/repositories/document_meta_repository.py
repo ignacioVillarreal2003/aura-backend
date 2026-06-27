@@ -1,12 +1,7 @@
-"""Data access for the admin-local ``document_admin_meta`` table.
+"""Acceso a la tabla local document_admin_meta.
 
-Extracted verbatim from ``documents/admin.py`` (M9: keep the admin thin —
-presentation in the admin, data access here). Behaviour is unchanged.
-
-The document-processing service asynchronously overwrites a document's
-``description`` (enrichment), so the admin keeps its own name/description in a
-small table on the *default* DB. This is immune to those upstream overwrites
-and survives them, keeping the admin's edited values visible in the panel.
+El servicio de procesamiento pisa la descripcion de los documentos, asi que el
+admin guarda su propio nombre y descripcion en esta tabla aparte.
 """
 from django.db import connections
 

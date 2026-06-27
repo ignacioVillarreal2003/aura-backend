@@ -1,11 +1,4 @@
-"""Client for internal calls to aura-notification-service.
-
-The notification service exposes a single internal endpoint for producers:
-``POST /api/v1/internal/events/`` authenticated with the ``X-Internal-Token``
-header. Producers send a semantic ``event_type`` plus ``recipient_ids`` and a
-``context`` dict; the service resolves templates, channels and user
-preferences on its side.
-"""
+"""Cliente para las llamadas internas al servicio de notificaciones."""
 
 import logging
 import threading
@@ -18,11 +11,11 @@ logger = logging.getLogger(__name__)
 
 
 class NotificationServiceError(Exception):
-    """Raised when a synchronous notification service call fails (admin flows)."""
+    """Se lanza cuando falla una llamada sincronica al servicio de notificaciones."""
 
 
 def _normalize_base_url(url: str) -> str:
-    """Force plain HTTP for local endpoints to avoid broken TLS redirects in dev."""
+    """Fuerza HTTP en endpoints locales para evitar redirecciones TLS rotas en dev."""
 
     parsed = urlsplit(url.rstrip('/'))
     if parsed.hostname in {'localhost', '127.0.0.1'} and parsed.scheme == 'https':
@@ -55,13 +48,7 @@ def _build_payload(*, event_type, recipient_ids, actor_id=None, actor_name='', c
 
 
 def emit_event(*, event_type, recipient_ids, actor_id=None, actor_name='', context=None, link_url=None) -> dict:
-    """
-    Emit a notification event synchronously.
-
-    Returns the service response body (``created``, ``skipped``, ``pending_email``,
-    ``outcomes``). Raises NotificationServiceError on any failure — use this for
-    admin flows where the caller needs feedback.
-    """
+    """Emite un evento de notificacion de forma sincronica (para el admin)."""
     base_url = _normalize_base_url(settings.NOTIFICATION_SERVICE_URL)
     payload = _build_payload(
         event_type=event_type,
@@ -105,11 +92,9 @@ def emit_event(*, event_type, recipient_ids, actor_id=None, actor_name='', conte
 
 
 def emit_event_async(*, event_type, recipient_ids, actor_id=None, actor_name='', context=None, link_url=None) -> None:
-    """
-    Fire-and-forget event emission for request-path flows (login, password change).
+    """Emite un evento sin esperar respuesta (login, cambio de contrasena).
 
-    Never raises: a notification failure must not break authentication. Errors
-    are logged only.
+    Nunca lanza errores: un fallo de notificacion no debe romper el login.
     """
 
     def _send():
@@ -131,13 +116,7 @@ def emit_event_async(*, event_type, recipient_ids, actor_id=None, actor_name='',
 
 
 def create_notifications_from_admin(*, receiver_ids, message, target_scope, target_label, actor_user_id, actor_name=''):
-    """
-    Send an admin broadcast through the notification service.
-
-    ``target_scope``/``target_label`` are kept inside ``context`` so the admin
-    panel can keep splitting individual vs group sends when reading the
-    ``data`` JSONB column back. Raises NotificationServiceError on failure.
-    """
+    """Envia una notificacion masiva del admin a traves del servicio."""
     context = {
         'message': message,
         'target_scope': target_scope,

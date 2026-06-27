@@ -1,15 +1,9 @@
-"""Data access for a document's MAC (Mandatory Access Control) collection
-assignment, against ``aura_db``.
-
-Extracted verbatim from ``documents/admin.py`` (M9: keep the admin thin). The
-"strict MAC collection" naming convention (``__mac_<level>_comp_<ids>__``) and
-the unlink-from-other-MAC logic are unchanged.
-"""
+"""Acceso a datos de la asignacion MAC de un documento, sobre aura_db."""
 from django.db import connections
 
 
 def _get_doc_mac_assignments(doc_id):
-    """Return (current_level_id, current_comp_ids_set) for a document."""
+    """Devuelve (nivel_actual, conjunto_de_agrupaciones) de un documento."""
     current_level_id = None
     current_comp_ids = set()
     try:
@@ -43,7 +37,7 @@ def _get_doc_mac_assignments(doc_id):
 
 
 def _db_assign_strict_mac_collection(doc_id, level_id, comp_ids, actor_user_id):
-    """Assign document to a single strict MAC collection and remove old MAC/admin links."""
+    """Asigna el documento a una unica coleccion MAC y quita los vinculos viejos."""
     if level_id is None:
         return
 
@@ -55,7 +49,6 @@ def _db_assign_strict_mac_collection(doc_id, level_id, comp_ids, actor_user_id):
         name = f'__mac_{level_id}__'
 
     with connections['aura_db'].cursor() as cursor:
-        # 1. Find or create the exact collection
         cursor.execute(
             "SELECT id FROM document_collection WHERE name = %s AND deleted_at IS NULL LIMIT 1",
             [name],
@@ -79,7 +72,6 @@ def _db_assign_strict_mac_collection(doc_id, level_id, comp_ids, actor_user_id):
                     [col_id, comp_id, actor_user_id],
                 )
 
-        # 2. Link document to the strict collection
         cursor.execute(
             """
             INSERT INTO document_in_document_collection
@@ -93,7 +85,6 @@ def _db_assign_strict_mac_collection(doc_id, level_id, comp_ids, actor_user_id):
             [col_id, doc_id, actor_user_id, col_id, doc_id],
         )
 
-        # 3. Unlink document from ANY other __mac_, __admin_level_, or __admin_comp_ collection
         cursor.execute(
             """UPDATE document_in_document_collection
                SET deleted_at = NOW(), deleted_by = %s

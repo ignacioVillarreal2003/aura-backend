@@ -1,17 +1,7 @@
-"""Client for internal admin calls to aura-document-processing-service.
+"""Cliente para las llamadas del admin al servicio de procesamiento de documentos.
 
-Authentication model: every call is authenticated with a Bearer JWT obtained
-via ``accounts.services.auth_service.get_outbound_authorization`` — it forwards
-the caller's own token when present (rare in the session-authenticated Django
-admin) and otherwise mints a short-lived JWT for the acting user. The
-downstream service validates it against this service's ``GET /auth/validate``
-and enforces the user's REAL RBAC permissions, so the ``*_MANAGE`` permissions
-seeded by ``manage.py seed_service_manage_permissions`` must be present for
-these calls to succeed.
-
-The document-processing auth middleware accepts ONLY Bearer tokens (no
-X-Service-Api-Key trust headers), which is why this client does not use the
-service-trust header pattern.
+Cada llamada usa un Bearer JWT del usuario, asi que el servicio destino valida
+sus permisos reales (necesita los permisos *_MANAGE).
 """
 
 import logging
@@ -24,16 +14,13 @@ from apps.accounts.services.auth_service import get_outbound_authorization
 
 logger = logging.getLogger(__name__)
 
-# Connect / read timeout split. Read timeout falls back to the configured
-# processing timeout (uploads/reprocess can be slow); cheap GETs cap it lower.
 _CONNECT_TIMEOUT = 10
 
 
 class DocumentProcessingServiceError(Exception):
-    """Raised when the document-processing service cannot complete a call."""
+    """Se lanza cuando falla una llamada al servicio de procesamiento."""
 
 
-# Bulk operation -> URL segment under /api/v1/.
 _BULK_SEGMENTS = {
     'reprocess': 'document-reprocess',
     'reembed': 'document-reembed',
@@ -71,7 +58,7 @@ def _extract_error_message(response: requests.Response) -> str:
 
 
 def _auth_headers(actor_user, *, json_body: bool = False) -> dict:
-    """Build the Authorization header for an admin-initiated call."""
+    """Arma el header Authorization para una llamada del admin."""
     authorization = get_outbound_authorization(actor_user)
     if not authorization:
         raise DocumentProcessingServiceError(
@@ -84,8 +71,7 @@ def _auth_headers(actor_user, *, json_body: bool = False) -> dict:
 
 
 def _handle_error(response: requests.Response) -> None:
-    """Raise DocumentProcessingServiceError for non-OK responses (except 404,
-    which several callers want to special-case before this is reached)."""
+    """Lanza el error ante respuestas no-OK (el 404 lo maneja cada llamador)."""
     if response.status_code in (401, 403):
         raise DocumentProcessingServiceError(
             'Permisos insuficientes en el servicio de procesamiento para esta acción.'
@@ -107,7 +93,7 @@ def _handle_error(response: requests.Response) -> None:
 
 
 def _request(method: str, path: str, actor_user, *, json_payload=None, timeout_cap=None):
-    """Perform a JSON request and return the parsed body (or None for 204)."""
+    """Hace una peticion JSON y devuelve el cuerpo (o None si es 204)."""
     base = _base_url()
     if not base:
         raise DocumentProcessingServiceError('DOCUMENT_PROCESSING_URL no configurado.')
@@ -146,10 +132,9 @@ def _request(method: str, path: str, actor_user, *, json_payload=None, timeout_c
         return None
 
 
-# ── Create (unchanged contract; used by documents/admin.py add flow) ──────────
 
 def create_document_from_admin(*, raw_document, actor_user, chat_id=None, name=None, description=None):
-    """Create a document in document-processing using the acting user's JWT."""
+    """Crea un documento en el servicio usando el JWT del usuario."""
     url = f"{_base_url()}/api/v1/create-document"
     content_type = (
         getattr(raw_document, 'content_type', None)
@@ -166,7 +151,6 @@ def create_document_from_admin(*, raw_document, actor_user, chat_id=None, name=N
     if description:
         data['description'] = description
 
-    # Multipart upload: do not set Content-Type (requests sets the boundary).
     headers = _auth_headers(actor_user)
 
     logger.info(
@@ -199,12 +183,9 @@ def create_document_from_admin(*, raw_document, actor_user, chat_id=None, name=N
     return response.json()
 
 
-# ── Read (manage) ─────────────────────────────────────────────────────────────
 
 def get_document(document_id, actor_user) -> dict:
-    """GET /api/v1/document-query/manage/document/{id} — full metadata.
-
-    Raises DocumentProcessingServiceError (incl. on 404)."""
+    """Devuelve la metadata completa de un documento."""
     base = _base_url()
     if not base:
         raise DocumentProcessingServiceError('DOCUMENT_PROCESSING_URL no configurado.')
@@ -235,13 +216,9 @@ def get_document(document_id, actor_user) -> dict:
     return response.json()
 
 
-# ── Update (manage) ───────────────────────────────────────────────────────────
 
 def update_document(document_id, actor_user, *, name=None, description=None, category=None) -> dict:
-    """PATCH /api/v1/update-document/manage/document/{id}.
-
-    Sends only provided fields (PATCH semantics; at least one required).
-    ``description`` may be passed as '' to clear it (sent as null)."""
+    """Actualiza un documento; solo manda los campos que se pasan."""
     payload = {}
     if name is not None:
         payload['name'] = name
@@ -261,13 +238,9 @@ def update_document(document_id, actor_user, *, name=None, description=None, cat
     )
 
 
-# ── Soft delete (manage) ──────────────────────────────────────────────────────
 
 def delete_document(document_id, actor_user) -> None:
-    """DELETE /api/v1/delete-document/manage/soft/document/{id}.
-
-    A 404 (already gone upstream) is treated as a successful no-op so a local
-    cleanup can still proceed."""
+    """Borra (logico) un documento; un 404 se trata como exito."""
     base = _base_url()
     if not base:
         raise DocumentProcessingServiceError('DOCUMENT_PROCESSING_URL no configurado.')
@@ -301,10 +274,9 @@ def delete_document(document_id, actor_user) -> None:
     _handle_error(response)
 
 
-# ── Restore (manage) ──────────────────────────────────────────────────────────
 
 def restore_document(document_id, actor_user) -> dict:
-    """POST /api/v1/restore-document/manage/document/{id}."""
+    """Restaura un documento eliminado."""
     return _request(
         'POST',
         f"/api/v1/restore-document/manage/document/{document_id}",
@@ -313,13 +285,9 @@ def restore_document(document_id, actor_user) -> dict:
     )
 
 
-# ── Download (manage) — streaming ─────────────────────────────────────────────
 
 def download_document(document_id, actor_user) -> requests.Response:
-    """GET /api/v1/document-download/manage/document/{id}/download.
-
-    Returns a streaming ``requests.Response`` (caller must iterate and close).
-    Raises DocumentProcessingServiceError on failure."""
+    """Descarga el archivo de un documento (respuesta en streaming)."""
     base = _base_url()
     if not base:
         raise DocumentProcessingServiceError('DOCUMENT_PROCESSING_URL no configurado.')
@@ -351,7 +319,6 @@ def download_document(document_id, actor_user) -> requests.Response:
     return response
 
 
-# ── Bulk operations (manage) ──────────────────────────────────────────────────
 
 def _selector(document_ids=None, all_documents=False) -> dict:
     if all_documents:
@@ -366,9 +333,7 @@ def start_bulk_job(
     operation, actor_user, *, document_ids=None, all_documents=False,
     prefer_docling=True, enrich=False, graph_extract=False,
 ) -> dict:
-    """POST /api/v1/{segment}/manage — encola una operación masiva.
-
-    Returns BulkStartResponse {job_id, operation, total, queued}."""
+    """Encola una operacion masiva sobre documentos."""
     segment = _BULK_SEGMENTS.get(operation)
     if segment is None:
         raise DocumentProcessingServiceError(f'Operación masiva desconocida: {operation}')
@@ -383,7 +348,7 @@ def start_bulk_job(
 
 
 def get_bulk_job_status(operation, actor_user) -> dict:
-    """GET /api/v1/{segment}/manage/status — BulkJobStatusResponse."""
+    """Estado de una operacion masiva."""
     segment = _BULK_SEGMENTS.get(operation)
     if segment is None:
         raise DocumentProcessingServiceError(f'Operación masiva desconocida: {operation}')
@@ -391,15 +356,14 @@ def get_bulk_job_status(operation, actor_user) -> dict:
 
 
 def stop_bulk_job(operation, actor_user) -> dict:
-    """DELETE /api/v1/{segment}/manage/stop — BulkJobStatusResponse."""
+    """Detiene una operacion masiva."""
     segment = _BULK_SEGMENTS.get(operation)
     if segment is None:
         raise DocumentProcessingServiceError(f'Operación masiva desconocida: {operation}')
     return _request('DELETE', f"/api/v1/{segment}/manage/stop", actor_user, timeout_cap=30)
 
 
-# ── Graph stats (manage) ──────────────────────────────────────────────────────
 
 def get_graph_stats(actor_user) -> dict:
-    """GET /api/v1/graph/stats/manage — GraphStatsResponse."""
+    """Estadisticas del grafo de conocimiento."""
     return _request('GET', "/api/v1/graph/stats/manage", actor_user, timeout_cap=30)

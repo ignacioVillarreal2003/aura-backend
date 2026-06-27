@@ -1,12 +1,7 @@
-"""Liveness and readiness probes.
+"""Probes de liveness y readiness.
 
-Plain unauthenticated Django views (no DRF, no DB writes), kept cheap so an
-orchestrator can poll them frequently:
-
-* ``/health/live``  — process is up (always 200). Use for liveness restarts.
-* ``/health/ready`` — process can serve traffic: ``auth_db`` (the hard
-  dependency for login/validate) must be reachable. ``aura_db`` is probed and
-  reported but does NOT gate readiness, since auth core works without it.
+/health/live indica que el proceso esta vivo; /health/ready exige que auth_db
+este accesible (aura_db se reporta pero no condiciona el readiness).
 """
 
 import logging
@@ -34,7 +29,7 @@ def liveness(request):
 
 def readiness(request):
     auth_db_ok = _db_ok('default')
-    aura_db_ok = _db_ok('aura_db')  # reported only — not a readiness gate
+    aura_db_ok = _db_ok('aura_db')  # se reporta pero no condiciona el readiness
     ready = auth_db_ok
     return JsonResponse(
         {

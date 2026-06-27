@@ -1,4 +1,4 @@
-"""Auth API views for login, refresh, validate, and logout."""
+"""Vistas de la API de autenticacion: login, refresh, validate y logout."""
 
 from django.db.models import Q
 from django.utils import timezone
@@ -36,8 +36,7 @@ from apps.notifications.services.notification_client import emit_event_async
 
 
 def _is_new_device_login(user, request) -> bool:
-    """A login counts as new-device when no previous refresh token (revoked or
-    not) was issued with the same user agent."""
+    """Es un dispositivo nuevo si nunca hubo un refresh token con ese user agent."""
     user_agent = request.META.get('HTTP_USER_AGENT', '')
     if not user_agent:
         return False
@@ -155,9 +154,7 @@ class LogoutView(APIView):
 
 
 class ValidateView(APIView):
-    # Open by design: this IS the token introspection endpoint — it validates
-    # the token carried in the request and returns user info. It must not
-    # require prior authentication.
+    # Abierto a proposito: este es el endpoint que valida el token de la peticion
     authentication_classes = []
     permission_classes = [AllowAny]
 
@@ -183,8 +180,6 @@ class ValidateView(APIView):
 
 
 class UserLookupView(APIView):
-    # Free-text search is an enumeration / PII vector: restrict to services and
-    # users holding ADMIN_USERS_VIEW (a plain end user cannot enumerate).
     permission_classes = [IsServiceOrUserViewer]
     throttle_classes = [ScopedRedisThrottle]
     throttle_scope = 'user_lookup'
@@ -263,9 +258,6 @@ class UsersByIdsView(APIView):
             return Response({'count': 0, 'results': []}, status=status.HTTP_200_OK)
 
         users = User.objects.filter(pk__in=ids, deleted_at__isnull=True)
-        # by-ids is a benign resolve-known-ids lookup (used to display names), so
-        # any authenticated principal may call it — but email (PII) is only
-        # exposed to services / users with ADMIN_USERS_VIEW.
         include_email = can_view_user_directory(request.user)
         results = [
             {
@@ -280,8 +272,6 @@ class UsersByIdsView(APIView):
 
 
 class ChangePasswordView(APIView):
-    # Real end users only (not service keys); the JWT principal IS the account
-    # whose password changes.
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     throttle_classes = [ScopedRedisThrottle]
@@ -319,9 +309,6 @@ class ChangePasswordView(APIView):
         user.last_password_change = timezone.now()
         user.save(update_fields=['password', 'last_password_change'])
 
-        # End every session: revoke refresh tokens AND invalidate all
-        # outstanding access tokens (tokens_valid_after cutoff) — forces re-login
-        # and closes the stolen-access-token window.
         revoke_all_sessions(user)
 
         emit_event_async(

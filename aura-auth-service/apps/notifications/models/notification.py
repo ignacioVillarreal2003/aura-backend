@@ -1,9 +1,4 @@
-"""
-Notification models for aura-auth-service admin.
-
-These are managed=False mirrors of tables owned by docker/database/aura-db/notification.sql.
-All reads/writes are routed to aura_db via AuraDbRouter.
-"""
+"""Modelos de notificaciones (espejos managed=False de tablas de aura_db)."""
 
 from django.db import models
 from django.utils import timezone
@@ -33,10 +28,7 @@ class NotificationStatus(models.TextChoices):
 
 
 class Notification(models.Model):
-    """
-    Mirror of the notification table in aura_db.
-    Schema is owned by docker/database/aura-db/notification.sql.
-    """
+    """Espejo de la tabla notification de aura_db."""
 
     id = models.BigAutoField(primary_key=True)
     receiver_id = models.BigIntegerField(
@@ -83,7 +75,7 @@ class Notification(models.Model):
 
     @property
     def target_scope(self):
-        """Admin broadcast scope (`individual` / `group`), stored in the data JSONB."""
+        """Alcance del envio del admin (individual o group), guardado en data."""
         return (self.data or {}).get('target_scope')
 
     @property
@@ -97,7 +89,7 @@ class Notification(models.Model):
 
 
 class IndividualNotification(Notification):
-    """Proxy model for individual admin broadcasts in admin."""
+    """Modelo proxy para los envios individuales del admin."""
 
     class Meta:
         proxy = True
@@ -107,7 +99,7 @@ class IndividualNotification(Notification):
 
 
 class GroupNotification(Notification):
-    """Proxy model for group admin broadcasts in admin."""
+    """Modelo proxy para los envios grupales del admin."""
 
     class Meta:
         proxy = True

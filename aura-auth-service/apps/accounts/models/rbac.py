@@ -1,11 +1,11 @@
-"""RBAC models for roles, permissions, and relationships."""
+"""Modelos de roles, permisos y sus relaciones."""
 
 from django.db import models
 from apps.accounts.models.user import User
 
 
 class Role(models.Model):
-    """Role model aligned with role table."""
+    """Modelo de rol (tabla role)."""
 
     id = models.AutoField(primary_key=True)
     name = models.CharField(
@@ -28,7 +28,7 @@ class Role(models.Model):
 
 
 class Permission(models.Model):
-    """Permission model aligned with permission table."""
+    """Modelo de permiso (tabla permission)."""
 
     id = models.AutoField(primary_key=True)
     name = models.CharField(
@@ -53,7 +53,7 @@ class Permission(models.Model):
 
 
 class UserRole(models.Model):
-    """User-role relationship aligned with auth_user_in_role table."""
+    """Relacion usuario-rol (tabla auth_user_in_role)."""
 
     id = models.AutoField(primary_key=True)
     user = models.ForeignKey(
@@ -100,7 +100,7 @@ class UserRole(models.Model):
 
 
 class PermissionInRole(models.Model):
-    """Role-permission relationship aligned with permission_in_role table."""
+    """Relacion rol-permiso (tabla permission_in_role)."""
 
     id = models.AutoField(primary_key=True)
     role = models.ForeignKey(

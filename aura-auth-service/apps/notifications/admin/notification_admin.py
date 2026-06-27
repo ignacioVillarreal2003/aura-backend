@@ -1,4 +1,4 @@
-﻿"""Notification admin for aura-auth-service Django admin panel."""
+﻿"""Admin de notificaciones del panel de Django."""
 
 import json
 from django.contrib import admin, messages
@@ -25,7 +25,7 @@ from apps.notifications.services.notification_client import (
 
 
 class BaseNotificationAdmin(admin.ModelAdmin):
-    """Shared admin behavior for notification sections."""
+    """Comportamiento compartido de las secciones de notificaciones."""
 
     list_display = (
         'receiver_display',
@@ -131,13 +131,7 @@ class BaseNotificationAdmin(admin.ModelAdmin):
         return _is_admin_or_super_user(request.user)
 
     def _report_send_result(self, request, result):
-        """Surface every counter returned by the notification service for a
-        send operation, instead of only the `created` count.
-
-        `result` is the JSON body of `POST /api/v1/internal/events/`, which
-        may include `created`, `skipped` (recipient already had this exact
-        notification) and `pending_email` (queued for async email delivery).
-        """
+        """Muestra todos los contadores que devuelve el servicio al enviar."""
         if not isinstance(result, dict):
             result = {}
         created = result.get('created', 0) or 0
@@ -226,10 +220,10 @@ class BaseNotificationAdmin(admin.ModelAdmin):
 
 @admin.register(IndividualNotification)
 class IndividualNotificationAdmin(BaseNotificationAdmin):
-    """Admin section: Individuales."""
+    """Seccion del admin: notificaciones individuales."""
 
     def _privileged_user_ids(self):
-        """Return a plain list of user IDs that hold admin or superadmin roles."""
+        """Lista de ids de usuarios con rol admin o superadmin."""
         return list(
             UserRole.objects.filter(
                 role__name__in=['admin', 'superadmin'],
@@ -238,7 +232,7 @@ class IndividualNotificationAdmin(BaseNotificationAdmin):
         )
 
     def _recipients_queryset(self, request):
-        """Active users the current actor is allowed to target."""
+        """Usuarios activos a los que el actor puede enviar."""
         base = User.objects.filter(deleted_at__isnull=True, status='active')
         if _is_effective_superadmin(request):
             return base.order_by('username')
@@ -314,7 +308,7 @@ class IndividualNotificationAdmin(BaseNotificationAdmin):
 
 @admin.register(GroupNotification)
 class GroupNotificationAdmin(BaseNotificationAdmin):
-    """Admin section: Grupales."""
+    """Seccion del admin: notificaciones grupales."""
 
     def get_queryset(self, request):
         return Notification.objects.filter(

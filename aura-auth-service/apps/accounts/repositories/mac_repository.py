@@ -1,14 +1,4 @@
-"""MAC (Mandatory Access Control) data & service access for the admin.
-
-Extracted verbatim from apps.accounts/admin_parts/mac_admin.py (M9: keep the admin
-thin — presentation in the admin, data/service access here). Two kinds of
-helpers live here, both used by the MAC admin views:
-
-* direct ``aura_db`` SQL (collection / level / compartment <-> document links);
-* document-collection service calls via ``mac_client``.
-
-Behaviour is unchanged.
-"""
+"""Acceso a datos MAC para el admin: SQL directo sobre aura_db y llamadas a mac_client."""
 import logging
 
 from apps.accounts.services.mac_client import MacServiceError, mac_client
@@ -17,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 def _delete_collections_for_level(user, level_id):
-    """Null out the level FK on all collections (including soft-deleted) so the level can be hard-deleted."""
+    """Saca el nivel de todas las colecciones para poder borrarlo."""
     from django.db import connections
     with connections['aura_db'].cursor() as cursor:
         cursor.execute(
@@ -27,7 +17,7 @@ def _delete_collections_for_level(user, level_id):
 
 
 def _delete_collections_for_comp(user, compartment_id):
-    """Remove all junction rows for this compartment so it can be hard-deleted."""
+    """Borra las filas de union de esta agrupacion para poder eliminarla."""
     from django.db import connections
     with connections['aura_db'].cursor() as cursor:
         cursor.execute(
@@ -37,7 +27,7 @@ def _delete_collections_for_comp(user, compartment_id):
 
 
 def _get_all_level_doc_ids():
-    """Return set of document IDs already assigned to any classification level collection."""
+    """Ids de documentos asignados a alguna coleccion con nivel."""
     from django.db import connections
     try:
         with connections['aura_db'].cursor() as cursor:
@@ -57,7 +47,7 @@ def _get_all_level_doc_ids():
 
 
 def _get_level_doc_ids(level_id):
-    """Return set of document IDs in any collection at this classification level."""
+    """Ids de documentos en colecciones de este nivel."""
     from django.db import connections
     try:
         with connections['aura_db'].cursor() as cursor:
@@ -78,7 +68,7 @@ def _get_level_doc_ids(level_id):
 
 
 def _get_comp_doc_ids(compartment_id):
-    """Return set of document IDs in any collection that has this compartment."""
+    """Ids de documentos en colecciones que tienen esta agrupacion."""
     from django.db import connections
     try:
         with connections['aura_db'].cursor() as cursor:
@@ -101,7 +91,7 @@ def _get_comp_doc_ids(compartment_id):
 
 
 def _db_ensure_mac_collection(level_id, comp_ids, actor_user_id):
-    """Find or create a combined MAC collection with both a classification level and compartments."""
+    """Busca o crea una coleccion MAC combinada (nivel + agrupaciones)."""
     from django.db import connections
     sorted_ids = sorted(comp_ids)
     key = '_'.join(str(i) for i in sorted_ids)
@@ -132,7 +122,7 @@ def _db_ensure_mac_collection(level_id, comp_ids, actor_user_id):
 
 
 def _db_link_doc_direct(collection_id, document_id, actor_user_id):
-    """Link a document to a collection (idempotent) via direct DB insert."""
+    """Vincula un documento a una coleccion (idempotente)."""
     from django.db import connections
     with connections['aura_db'].cursor() as cursor:
         cursor.execute(
@@ -148,7 +138,7 @@ def _db_link_doc_direct(collection_id, document_id, actor_user_id):
 
 
 def _db_sync_mac_collection_for_doc(doc_id, actor_user_id):
-    """Rebuild the combined MAC collection link based on current admin single-dimension assignments."""
+    """Rearma el vinculo a la coleccion MAC combinada del documento."""
     from django.db import connections
     try:
         with connections['aura_db'].cursor() as cursor:
@@ -199,7 +189,7 @@ def _db_sync_mac_collection_for_doc(doc_id, actor_user_id):
 
 
 def _get_or_create_admin_collection_for_level(user, level_id, level_name):
-    """Find or create the dedicated admin collection for a classification level."""
+    """Busca o crea la coleccion admin de un nivel."""
     admin_name = f'__admin_level_{level_id}__'
     try:
         collections = mac_client.list_document_collections(user)
@@ -216,12 +206,10 @@ def _get_or_create_admin_collection_for_level(user, level_id, level_name):
 
 
 def _get_or_create_admin_collection_for_comp(user, compartment_id):
-    """Find or create the dedicated admin collection for a compartment.
+    """Busca o crea la coleccion admin de una agrupacion.
 
-    The document collection API requires a classification_level_id on every
-    collection, so we use the lowest-rank available level as a technical
-    requirement. The actual access control for the document is governed by
-    the compartment membership, not by this level.
+    La API exige un nivel en cada coleccion, asi que uso el de menor rango;
+    el acceso real lo define la agrupacion, no ese nivel.
     """
     admin_name = f'__admin_comp_{compartment_id}__'
     try:
@@ -246,7 +234,7 @@ def _get_or_create_admin_collection_for_comp(user, compartment_id):
 
 
 def _remove_doc_from_level_collections(user, doc_id, level_id):
-    """Remove a document from all collections at the given classification level."""
+    """Saca un documento de todas las colecciones de ese nivel."""
     from django.db import connections
     try:
         with connections['aura_db'].cursor() as cursor:
@@ -275,7 +263,7 @@ def _remove_doc_from_level_collections(user, doc_id, level_id):
 
 
 def _remove_doc_from_comp_collections(user, doc_id, compartment_id):
-    """Remove a document from all collections that have the given compartment."""
+    """Saca un documento de todas las colecciones con esa agrupacion."""
     from django.db import connections
     try:
         with connections['aura_db'].cursor() as cursor:

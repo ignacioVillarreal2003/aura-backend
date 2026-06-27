@@ -1,4 +1,4 @@
-"""Notifications models package (auth-service mirror)."""
+"""Paquete de modelos de notificaciones."""
 
 from apps.notifications.models.notification import (
     Notification,

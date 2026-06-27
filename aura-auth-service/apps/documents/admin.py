@@ -1,4 +1,4 @@
-"""Django Admin for Document model."""
+"""Admin de Django para el modelo Document."""
 
 import contextvars
 import json
@@ -12,7 +12,7 @@ from django.contrib.admin.exceptions import DisallowedModelAdminToField
 from django.contrib.admin.options import IS_POPUP_VAR, TO_FIELD_VAR
 from django.core.exceptions import PermissionDenied
 from django.db import connections, router, transaction
-from django.http import HttpResponseRedirect, StreamingHttpResponse
+from django.http import Http404, HttpResponseRedirect, StreamingHttpResponse
 from django.urls import path, reverse
 from django.utils.translation import gettext as _
 from django.utils.html import format_html, format_html_join
@@ -44,26 +44,16 @@ from apps.documents.repositories.document_mac_repository import (
 _ADMIN_LEVEL_RE = re.compile(r'^__admin_level_(\d+)__$')
 _ADMIN_COMP_RE = re.compile(r'^__admin_comp_(\d+)__$')
 
-# Readonly field callables registered via `readonly_fields` only ever receive
-# `obj` (Django's contract — see django.contrib.admin.utils.lookup_field),
-# never `request`. `processing_status_display` needs `request.user` to build
-# the document-processing service headers. A plain `self._current_request =
-# request` attribute would be unsafe: `DocumentAdmin` is a single instance
-# shared across every request/thread. A ContextVar — the same mechanism
-# accounts/request_token.py already uses for this exact problem — is
-# per-thread/per-task, so it's safe even under threaded WSGI workers.
+# Uso un ContextVar (no un atributo) porque el DocumentAdmin es una sola
+# instancia compartida entre peticiones y necesito el usuario actual por hilo
 _current_admin_actor: 'contextvars.ContextVar' = contextvars.ContextVar(
     'document_admin_current_actor', default=None
 )
 
-# Admin-local document meta (document_admin_meta) now lives in
-# documents/repositories/document_meta_repository.py (imported above).
 
 
 def _format_processing_dt(value):
-    """Format an ISO timestamp coming from document-processing-service's
-    JSON response for display. Defensive: the value may be a string, an
-    already-parsed datetime, or missing."""
+    """Formatea una fecha ISO para mostrarla; tolera texto, datetime o vacio."""
     if not value:
         return '—'
     try:
@@ -80,11 +70,8 @@ def _format_processing_dt(value):
         return str(value)
 
 
-# ── MAC collection assignment helpers now live in
-#    documents/repositories/document_mac_repository.py (imported above).
 
 
-# ── Forms ─────────────────────────────────────────────────────────────────────
 
 class DocumentUploadForm(forms.ModelForm):
     name = forms.CharField(max_length=255, label='Nombre')
@@ -117,14 +104,9 @@ class DocumentChangeForm(forms.ModelForm):
         pass
 
 
-# ── Admin ─────────────────────────────────────────────────────────────────────
 
 class DeletedDocumentsFilter(admin.SimpleListFilter):
-    """Sidebar toggle to view soft-deleted documents (for restore).
-
-    The actual queryset switch lives in DocumentAdmin.get_queryset, which reads
-    the same ``deleted`` GET param; this filter only renders the toggle link.
-    """
+    """Filtro lateral para ver los documentos eliminados (y restaurarlos)."""
     title = 'Mostrar'
     parameter_name = 'deleted'
 
@@ -176,18 +158,14 @@ class DocumentAdmin(admin.ModelAdmin):
     )
 
     def get_queryset(self, request):
-        qs = super().get_queryset(request)
+        qs = super().get_queryset(request).filter(chat_id__isnull=True)
         if request.GET.get('deleted') == '1':
             return qs.filter(deleted_at__isnull=False)
         return qs.filter(deleted_at__isnull=True)
 
     def get_actions(self, request):
         actions = super().get_actions(request)
-        # Never expose Django's bulk "delete selected" — deletion goes through
-        # the per-object flow (delete_model) so it can call the service first.
         actions.pop('delete_selected', None)
-        # Heavy bulk operations are superadmin-only (the permission is too, so a
-        # plain admin would just get a 403); hide them to avoid dead options.
         if not _is_super_admin_user(request.user):
             for name in ('action_reprocess', 'action_reembed', 'action_enrich', 'action_graph_extract'):
                 actions.pop(name, None)
@@ -237,7 +215,7 @@ class DocumentAdmin(admin.ModelAdmin):
         return ('id',)
 
     def get_object(self, request, object_id, from_field=None):
-        """Patch name/description from local meta so form shows admin values."""
+        """Toma nombre y descripcion del meta local para mostrarlos en el form."""
         obj = super().get_object(request, object_id, from_field)
         if obj is not None:
             meta = _get_doc_meta(obj.pk)
@@ -246,7 +224,6 @@ class DocumentAdmin(admin.ModelAdmin):
                 obj.description = meta['description']
         return obj
 
-    # ── List view ────────────────────────────────────────────────────────────
 
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
@@ -254,7 +231,6 @@ class DocumentAdmin(admin.ModelAdmin):
 
         self._doc_meta_map = _batch_get_doc_meta_all()
 
-        # Batch-fetch collection assignments using direct column queries.
         try:
             with connections['aura_db'].cursor() as cursor:
                 cursor.execute("""
@@ -301,21 +277,14 @@ class DocumentAdmin(admin.ModelAdmin):
 
         return super().changelist_view(request, extra_context)
 
-    # ── Change / add view ─────────────────────────────────────────────────────
 
     def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
         extra_context = extra_context or {}
-        # Set before any rendering happens in this request/thread so
-        # `processing_status_display` (invoked later in this same call stack
-        # while rendering the change form) can read it back. See the
-        # `_current_admin_actor` comment above for why this isn't a plain
-        # instance attribute.
         _current_admin_actor.set(request.user)
 
         if object_id:
             doc_id = int(object_id)
 
-            # Title uses meta name when available.
             meta = _get_doc_meta(doc_id)
             if meta:
                 display_name = meta['name']
@@ -327,7 +296,6 @@ class DocumentAdmin(admin.ModelAdmin):
             extra_context['title'] = f'Modificar documento - {display_name}'
             extra_context['subtitle'] = None
 
-            # Current MAC assignments.
             current_level_id, current_comp_ids = _get_doc_mac_assignments(doc_id)
 
             try:
@@ -353,7 +321,6 @@ class DocumentAdmin(admin.ModelAdmin):
                 'show_change_groups_panel': True,
             })
 
-            # Handle change POST.
             if request.method == 'POST':
                 name = request.POST.get('name', '').strip()
                 description = request.POST.get('description', '') or ''
@@ -364,19 +331,11 @@ class DocumentAdmin(admin.ModelAdmin):
                         reverse('admin:documents_document_change', args=[object_id])
                     )
 
-                # Capture before-state for audit (meta already fetched above for title).
                 prev_name = meta['name'] if meta else ''
                 prev_description = (meta['description'] if meta else '') or ''
 
-                # Save to local meta (survives processing-service overwrites:
-                # the async enrichment overwrites `description` upstream, so this
-                # cache keeps the admin's values visible in the panel).
                 _save_doc_meta(doc_id, name, description)
 
-                # Propagate to document-processing (source of truth) via the
-                # manage endpoint instead of a raw UPDATE on the shared aura_db.
-                # Non-fatal: the local meta above already preserves what the
-                # admin sees, so a service outage degrades gracefully.
                 try:
                     update_document_remote(doc_id, request.user, name=name, description=description)
                 except DocumentProcessingServiceError as exc:
@@ -386,7 +345,6 @@ class DocumentAdmin(admin.ModelAdmin):
                         f'procesamiento no aplicó el cambio: {exc}',
                     )
 
-                # Update MAC assignment directly via strict collection logic
                 new_level_id_raw = request.POST.get('classification_level_id', '').strip()
                 new_level_id = int(new_level_id_raw) if new_level_id_raw else None
                 new_comp_ids = set(int(c) for c in request.POST.getlist('compartment_ids') if c)
@@ -394,7 +352,6 @@ class DocumentAdmin(admin.ModelAdmin):
                 if new_level_id is not None:
                     _db_assign_strict_mac_collection(doc_id, new_level_id, new_comp_ids, request.user.pk)
 
-                # Build audit details — only include fields that actually changed.
                 level_name_map = {l['id']: l['name'] for l in all_levels}
                 comp_name_map = {c['id']: c['name'] for c in all_compartments}
                 changes = {}
@@ -432,7 +389,6 @@ class DocumentAdmin(admin.ModelAdmin):
                 return HttpResponseRedirect(reverse('admin:documents_document_changelist'))
 
         else:
-            # Add view context.
             try:
                 all_levels = sorted(
                     mac_client.list_classification_levels(request.user),
@@ -529,10 +485,8 @@ class DocumentAdmin(admin.ModelAdmin):
 
         document_id = response_payload.get('id')
 
-        # Save to local meta so processing-service overwrites don't affect us.
         if name_from_form or description_from_form:
             _save_doc_meta(document_id, name_from_form, description_from_form)
-            # Best-effort update on aura_db too.
             try:
                 with connections['aura_db'].cursor() as cursor:
                     cursor.execute(
@@ -547,13 +501,11 @@ class DocumentAdmin(admin.ModelAdmin):
         except Document.DoesNotExist:
             new_object = Document(pk=document_id, name=name_from_form)
 
-        # Assign MAC groups via strict collection logic
         cl_id_raw = request.POST.get('classification_level_id', '').strip()
         comp_ids_raw_list = [int(c) for c in request.POST.getlist('compartment_ids') if c]
         if cl_id_raw:
             _db_assign_strict_mac_collection(document_id, int(cl_id_raw), comp_ids_raw_list, request.user.pk)
 
-        # Build audit details with resolved names.
         try:
             _audit_levels = mac_client.list_classification_levels(request.user)
             _level_name_map = {l['id']: l['name'] for l in _audit_levels}
@@ -586,7 +538,6 @@ class DocumentAdmin(admin.ModelAdmin):
 
         return self.response_add(request, new_object)
 
-    # ── List display helpers ──────────────────────────────────────────────────
 
     def name_display(self, obj):
         meta = getattr(self, '_doc_meta_map', {}).get(obj.pk)
@@ -655,12 +606,10 @@ class DocumentAdmin(admin.ModelAdmin):
     created_by_display.short_description = 'Subido por'
 
     def processing_status_display(self, obj):
-        """Best-effort live status from document-processing-service.
+        """Estado de procesamiento, consultado al servicio de documentos.
 
-        Only registered on the change-form fieldsets (see `get_fieldsets` /
-        the add-view branch, which omits it) — never on `list_display` — so
-        it costs exactly one extra HTTP call per detail-page view, not one
-        per row in the changelist.
+        Solo se usa en el detalle, nunca en el listado, para no hacer una
+        llamada HTTP por fila.
         """
         if obj is None or obj.pk is None:
             return '-'
@@ -684,8 +633,6 @@ class DocumentAdmin(admin.ModelAdmin):
 
         rows = (
             ('Estado', data.get('status') or '—'),
-            ('Tipo', data.get('type') or '—'),
-            ('Categoría', data.get('category') or '—'),
             ('Enriquecimiento', data.get('enrichment_status') or '—'),
             ('Grafo', data.get('graph_status') or '—'),
             ('Procesamiento iniciado', _format_processing_dt(data.get('processing_started_at'))),
@@ -698,7 +645,6 @@ class DocumentAdmin(admin.ModelAdmin):
         )
     processing_status_display.short_description = 'Estado de procesamiento'
 
-    # ── Download (manage) ──────────────────────────────────────────────────────
 
     def download_link(self, obj):
         if obj is None or obj.pk is None:
@@ -710,6 +656,8 @@ class DocumentAdmin(admin.ModelAdmin):
     def download_file_view(self, request, document_id):
         if not self.has_view_permission(request):
             raise PermissionDenied
+        if not self.get_queryset(request).filter(pk=document_id).exists():
+            raise Http404('Documento no encontrado.')
         try:
             upstream = download_document_remote(document_id, request.user)
         except DocumentProcessingServiceError as exc:
@@ -729,7 +677,6 @@ class DocumentAdmin(admin.ModelAdmin):
             response['Content-Length'] = content_length
         return response
 
-    # ── Bulk operations (manage) — changelist actions ───────────────────────────
 
     def _run_bulk(self, request, queryset, operation, label):
         document_ids = list(queryset.values_list('id', flat=True))
@@ -791,24 +738,11 @@ class DocumentAdmin(admin.ModelAdmin):
     action_graph_extract.short_description = 'Reextraer el grafo de los documentos seleccionados'
 
     def get_deleted_objects(self, objs, request):
-        """Bypass Django's ``NestedObjects`` cascade collector on the delete
-        confirmation page.
+        """Evita el colector de cascada de Django en la pagina de confirmacion.
 
-        Deletion in this admin is a *soft-delete delegated to
-        document-processing* (see ``delete_model`` / ``delete_queryset``), not
-        a real Django cascade. Running the default collector is therefore both
-        misleading (it would preview hard-deletes that never happen) and fatal:
-        it traverses the reverse M2M declared by
-        ``accounts.CustomGroup.documents`` (``related_name='groups'``) and
-        queries its through table ``custom_groups_documents``. That table is
-        routed to ``aura_db`` (see ``aura_auth_service.db_routers``) and is not
-        provisioned by any init.sql, so the collector raises
-        ``ProgrammingError: relation "custom_groups_documents" does not exist``
-        before our ``delete_model`` ever runs.
-
-        We return a minimal, accurate preview (just the document(s)) and no
-        protected/cascade objects, while still honouring delete permissions so
-        Django can block unauthorized deletes as usual.
+        Aca el borrado es logico y delegado al servicio de documentos, no una
+        cascada real, asi que devuelvo solo el documento como vista previa y
+        respeto los permisos de borrado.
         """
         objs = list(objs)
         deletable_objects = []
@@ -896,7 +830,7 @@ class DocumentAdmin(admin.ModelAdmin):
 
         context = {
             **self.admin_site.each_context(request),
-            'title': f'Historial — {entity_name}',
+            'title': f'Historial - {entity_name}',
             'entries': entries,
             'back_url': back_url,
             'entity_name': entity_name,

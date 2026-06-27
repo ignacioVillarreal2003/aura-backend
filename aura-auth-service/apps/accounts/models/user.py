@@ -1,4 +1,4 @@
-"""User model and manager aligned with auth_db schema."""
+"""Modelo y manager de usuario, alineados al esquema de auth_db."""
 
 from functools import cached_property
 
@@ -15,9 +15,7 @@ class UserStatus(models.TextChoices):
 
 
 class CustomUserManager(BaseUserManager):
-    """
-    Manager for custom User model aligned to auth_db schema.
-    """
+    """Manager del modelo de usuario."""
 
     def _bootstrap_create_user(self, username, email, password=None, **extra_fields):
         now = timezone.now()
@@ -133,9 +131,7 @@ class CustomUserManager(BaseUserManager):
 
 
 class User(AbstractBaseUser):
-    """
-    Custom User model aligned with auth_user table.
-    """
+    """Modelo de usuario (tabla auth_user)."""
 
     id = models.AutoField(primary_key=True)
     username = models.CharField(
@@ -241,10 +237,9 @@ class User(AbstractBaseUser):
         self.soft_delete(deleted_by=deleted_by)
         return None
 
-    # ``cached_property``: these were plain properties that hit the DB on every
-    # access, and they are read many times per request (DRF/admin permission
-    # checks, get_user_permissions, etc.). Caching is per-instance, so it lives
-    # exactly for the lifetime of the User loaded for the current request.
+    # ``cached_property``: estas propiedades golpeaban la BD en cada acceso y se
+    # leen muchas veces por request (permisos de DRF/admin). El cache es por
+    # instancia, asi que vive solo durante el request actual del usuario.
     @cached_property
     def is_staff(self) -> bool:
         if not self.pk:

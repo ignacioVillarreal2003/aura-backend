@@ -1,15 +1,7 @@
-"""Resilient, Redis-backed DRF throttles.
+"""Throttles de DRF sobre Redis, compartidos entre workers.
 
-DRF's stock throttles use the ``default`` cache (LocMem), which is per-process:
-with multiple gunicorn workers the configured rate is effectively multiplied by
-the worker count and reset on every restart. These throttles use the dedicated
-Redis ``throttle`` cache instead, so the limit is shared and accurate across
-workers.
-
-They *fail open*: if Redis is unavailable the throttle allows the request rather
-than 500-ing. This preserves the original design intent that a Redis outage must
-never break auth — the per-account DB lockout (see ``auth_service``) remains the
-hard brute-force backstop and does not depend on Redis.
+Si Redis no responde dejan pasar la peticion en vez de fallar; el bloqueo de
+cuenta en la base de datos sigue frenando los ataques de fuerza bruta.
 """
 
 import logging
@@ -23,7 +15,7 @@ _throttle_cache = caches['throttle']
 
 
 class _ResilientMixin:
-    """Route throttle state to the Redis ``throttle`` cache, failing open."""
+    """Usa la cache Redis de throttle y deja pasar si falla."""
 
     cache = _throttle_cache
 
@@ -31,8 +23,6 @@ class _ResilientMixin:
         try:
             return super().allow_request(request, view)
         except Exception:
-            # Redis unreachable: degrade gracefully instead of erroring the
-            # request. The DB account-lockout still bounds brute force.
             logger.warning('throttle cache unavailable; failing open', exc_info=True)
             return True
 

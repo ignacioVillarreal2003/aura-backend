@@ -1,4 +1,4 @@
-"""Auth API URL routes."""
+"""Rutas de la API de autenticacion."""
 
 from django.urls import path
 from apps.accounts.api.views import (

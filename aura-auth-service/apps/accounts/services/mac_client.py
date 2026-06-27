@@ -1,4 +1,4 @@
-"""HTTP client for the Document Collection (MAC) service."""
+"""Cliente HTTP para el servicio de colecciones de documentos (MAC)."""
 
 import logging
 
@@ -151,7 +151,6 @@ class MacServiceClient:
             logger.error('MAC client DELETE %s failed: %s', path, exc)
             raise MacServiceError(f'No se pudo conectar al servicio MAC: {exc}')
 
-    # ── Classification Levels ─────────────────────────────────────────────────
 
     def list_classification_levels(self, user):
         data = self._get(user, '/api/v1/classification-levels/')
@@ -171,7 +170,6 @@ class MacServiceClient:
     def delete_classification_level(self, user, level_id):
         return self._delete(user, f'/api/v1/classification-levels/{level_id}/')
 
-    # ── Compartments ──────────────────────────────────────────────────────────
 
     def list_compartments(self, user):
         data = self._get(user, '/api/v1/compartments/')
@@ -191,7 +189,6 @@ class MacServiceClient:
     def delete_compartment(self, user, compartment_id):
         return self._delete(user, f'/api/v1/compartments/{compartment_id}/')
 
-    # ── Document Collections ───────────────────────────────────────────────────
 
     def list_document_collections(self, user):
         data = self._get(user, '/api/v1/document-collections/')
@@ -233,7 +230,6 @@ class MacServiceClient:
             user, f'/api/v1/document-collections/{collection_id}/documents/{doc_id}/'
         )
 
-    # ── User Authorizations ───────────────────────────────────────────────────
 
     def get_user_authorization(self, user, target_user_id):
         return self._get(user, f'/api/v1/user-authorizations/{target_user_id}/')

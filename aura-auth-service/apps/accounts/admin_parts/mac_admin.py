@@ -1,8 +1,7 @@
-"""Admin views for MAC (Mandatory Access Control) — Classification Levels,
-Compartments, Document Collections, and User MAC profiles.
+"""Vistas del admin para MAC: niveles, agrupaciones y perfiles MAC de usuario.
 
-All data comes from the Document Collection service REST API via mac_client.
-No Django ORM models are used for MAC data.
+Todos los datos vienen del servicio de colecciones via mac_client, no de modelos
+de Django.
 """
 
 import json
@@ -34,7 +33,6 @@ from apps.accounts.repositories.mac_repository import (
 logger = logging.getLogger(__name__)
 
 
-# ── helpers ───────────────────────────────────────────────────────────────────
 
 def _check_superadmin(request):
     if not (has_permission(request, 'ADMIN_MAC_USER_PROFILE') or _is_effective_superadmin(request)):
@@ -50,10 +48,6 @@ def _ctx(request, **extra):
     return {**admin.site.each_context(request), **extra}
 
 
-# ── MAC data/service-access helpers now live in
-#    accounts/repositories/mac_repository.py (imported above).
-
-# ── Classification Levels views ───────────────────────────────────────────────
 
 def _cl_list_view(request):
     _check_admin_or_superadmin(request)
@@ -429,7 +423,6 @@ def _cl_edit_view(request, level_id):
     return TemplateResponse(request, 'admin/mac/classification_levels/edit.html', ctx)
 
 
-# ── Compartments views ────────────────────────────────────────────────────────
 
 def _comp_list_view(request):
     _check_admin_or_superadmin(request)
@@ -698,7 +691,6 @@ def _comp_edit_view(request, compartment_id):
     return TemplateResponse(request, 'admin/mac/compartments/edit.html', ctx)
 
 
-# ── User MAC profile view ─────────────────────────────────────────────────────
 
 def _user_mac_view(request, user_id):
     _check_superadmin(request)
@@ -832,7 +824,6 @@ def _user_mac_view(request, user_id):
     return TemplateResponse(request, 'admin/mac/user_mac.html', ctx)
 
 
-# ── History views ─────────────────────────────────────────────────────────────
 
 def _cl_history_view(request, level_id):
     _check_admin_or_superadmin(request)
@@ -850,7 +841,7 @@ def _cl_history_view(request, level_id):
 
     ctx = _ctx(
         request,
-        title=f'Historial — Nivel {level_name}',
+        title=f'Historial - Nivel {level_name}',
         entries=entries,
         back_url=back_url,
         entity_name=level_name,
@@ -876,7 +867,7 @@ def _comp_history_view(request, compartment_id):
 
     ctx = _ctx(
         request,
-        title=f'Historial — Agrupación {comp_name}',
+        title=f'Historial - Agrupación {comp_name}',
         entries=entries,
         back_url=back_url,
         entity_name=comp_name,
@@ -886,7 +877,6 @@ def _comp_history_view(request, compartment_id):
     return TemplateResponse(request, 'admin/history/entity_history.html', ctx)
 
 
-# ── URL registration ──────────────────────────────────────────────────────────
 
 _prev_get_urls = admin.site.get_urls
 
@@ -894,7 +884,6 @@ _prev_get_urls = admin.site.get_urls
 def _mac_get_urls(self):
     urls = _prev_get_urls()
     custom_urls = [
-        # Classification Levels
         path(
             'mac/classification-levels/',
             self.admin_view(_cl_list_view),
@@ -915,7 +904,6 @@ def _mac_get_urls(self):
             self.admin_view(_cl_history_view),
             name='mac_classification_levels_history',
         ),
-        # Compartments
         path(
             'mac/compartments/',
             self.admin_view(_comp_list_view),
@@ -936,7 +924,6 @@ def _mac_get_urls(self):
             self.admin_view(_comp_history_view),
             name='mac_compartments_history',
         ),
-        # User MAC
         path(
             'mac/user/<int:user_id>/',
             self.admin_view(_user_mac_view),

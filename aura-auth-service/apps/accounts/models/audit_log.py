@@ -1,13 +1,10 @@
-"""AuditLog model — mirrors the audit_log table in auth_db."""
+"""Modelo AuditLog (tabla audit_log de auth_db)."""
 
 from django.db import models
 
 
 class AuditLog(models.Model):
-    """
-    Immutable audit trail for every significant action in the system.
-    Rows are never updated or deleted — only appended.
-    """
+    """Registro de auditoria: solo se agregan filas, no se modifican ni borran."""
 
     timestamp = models.DateTimeField(auto_now_add=True, verbose_name='Fecha/Hora')
     actor_id = models.BigIntegerField(null=True, blank=True, verbose_name='ID actor')
