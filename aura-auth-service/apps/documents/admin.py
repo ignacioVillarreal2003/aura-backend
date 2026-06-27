@@ -714,6 +714,135 @@ class DocumentAdmin(admin.ModelAdmin):
             response['Content-Length'] = content_length
         return response
 
+    # ── Bulk upload (create several documents in one request) ───────────────────
+
+    def bulk_upload_view(self, request, extra_context=None):
+        if not self.has_add_permission(request):
+            raise PermissionDenied
+        _current_admin_actor.set(request.user)
+
+        try:
+            all_levels = sorted(
+                mac_client.list_classification_levels(request.user),
+                key=lambda x: x.get('rank', 0),
+            )
+        except Exception:
+            all_levels = []
+        try:
+            all_compartments = mac_client.list_compartments(request.user)
+        except Exception:
+            all_compartments = []
+
+        def _render(form):
+            from django.template.response import TemplateResponse
+            context = {
+                **self.admin_site.each_context(request),
+                'title': 'Subir varios documentos',
+                'opts': self.model._meta,
+                'form': form,
+                'levels_for_doc': all_levels,
+                'compartments_json_doc': json.dumps([
+                    {'id': str(c['id']), 'label': c['name']} for c in all_compartments
+                ]),
+                'changelist_url': reverse('admin:documents_document_changelist'),
+            }
+            if extra_context:
+                context.update(extra_context)
+            return TemplateResponse(
+                request, 'admin/documents/document/bulk_upload.html', context
+            )
+
+        if request.method != 'POST':
+            return _render(DocumentBulkUploadForm())
+
+        form = DocumentBulkUploadForm(request.POST, request.FILES)
+        raw_documents = request.FILES.getlist('files')
+        if not form.is_valid():
+            return _render(form)
+        if not raw_documents:
+            form.add_error(None, 'Selecciona al menos un archivo.')
+            return _render(form)
+
+        enrich = bool(form.cleaned_data.get('enrich', False))
+        graph_extract = bool(form.cleaned_data.get('graph_extract', False))
+
+        try:
+            result = bulk_create_documents_from_admin(
+                raw_documents=raw_documents,
+                actor_user=request.user,
+                enrich=enrich,
+                graph_extract=graph_extract,
+            )
+        except DocumentProcessingServiceError as exc:
+            form.add_error(None, str(exc))
+            return _render(form)
+
+        result = result or {}
+        items = result.get('items', []) or []
+        created_items = [it for it in items if it.get('status') == 'created']
+        failed_items = [it for it in items if it.get('status') != 'created']
+
+        # Optionally assign the same MAC level / compartments to every document
+        # that was created, mirroring the single-upload flow.
+        cl_id_raw = request.POST.get('classification_level_id', '').strip()
+        comp_ids = [int(c) for c in request.POST.getlist('compartment_ids') if c]
+        if cl_id_raw and created_items:
+            for it in created_items:
+                doc_id = it.get('id')
+                if not doc_id:
+                    continue
+                try:
+                    _db_assign_strict_mac_collection(
+                        doc_id, int(cl_id_raw), comp_ids, request.user.pk
+                    )
+                except Exception:
+                    logger.exception('No se pudo asignar MAC al documento %s en carga masiva.', doc_id)
+
+        # Persist the admin-visible name (filename) for each created document on
+        # aura_db, matching the single-upload behaviour.
+        for it in created_items:
+            doc_id = it.get('id')
+            name = it.get('name')
+            if doc_id and name:
+                try:
+                    with connections['aura_db'].cursor() as cursor:
+                        cursor.execute(
+                            'UPDATE document SET name = %s WHERE id = %s',
+                            [name, doc_id],
+                        )
+                except Exception:
+                    pass
+
+        if created_items:
+            log_audit(
+                actor=request.user, action='CREATE', entity_type='Document',
+                entity_id=','.join(str(it.get('id')) for it in created_items[:50]),
+                entity_label=f'{request.user.username} subió {len(created_items)} documento(s) en lote',
+                details={
+                    'total': result.get('total', len(items)),
+                    'created': len(created_items),
+                    'failed': len(failed_items),
+                    'enriquecer': enrich,
+                    'extraer_grafo': graph_extract,
+                },
+                source='admin', request=request,
+            )
+            messages.success(
+                request, f'{len(created_items)} documento(s) creado(s) correctamente.'
+            )
+        if failed_items:
+            detail = '; '.join(
+                f"{it.get('filename') or '—'}: {it.get('error') or 'error desconocido'}"
+                for it in failed_items[:10]
+            )
+            messages.error(
+                request, f'{len(failed_items)} documento(s) no se pudieron crear. {detail}'
+            )
+        if not items:
+            messages.warning(request, 'No se procesó ningún documento.')
+
+        return HttpResponseRedirect(reverse('admin:documents_document_changelist'))
+
     # ── Bulk operations (manage) — changelist actions ───────────────────────────
 
     def _run_bulk(self, request, queryset, operation, label):

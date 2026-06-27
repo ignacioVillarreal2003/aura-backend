@@ -160,7 +160,8 @@
       "Bash(.venv/Scripts/python.exe -m pytest test/unit/test_graph_context_retriever_node.py test/unit/test_rag_agent_workflow.py -q)",
       "Bash(.venv/Scripts/python.exe -m pytest test/unit -q)",
       "Bash(.venv/Scripts/python.exe -m ruff check app/infrastructure/http/graph_context_provider/ app/application/services/user_interactions/rag_agent_service/nodes/graph_context_retriever_node/ app/application/services/user_interactions/rag_agent_service/rag_agent_settings.py app/application/services/user_interactions/rag_agent_service/constants/rag_query_intent.py test/unit/test_graph_context_retriever_node.py)",
-      "Bash(grep -vE '^\\\\s|^$|Found|fixable')"
+      "Bash(grep -vE '^\\\\s|^$|Found|fixable')",
+      "Bash(python -m py_compile apps/documents/admin.py)"
     ]
   }
 }
