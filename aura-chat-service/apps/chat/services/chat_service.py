@@ -212,6 +212,18 @@ class ChatService:
         logger.info("Chats unarchived.", extra={"chat_ids": chat_ids, "user_id": user.id, "count": count})
         return count
 
+    def delete_chats(self, user: AuthenticatedUser, chat_ids: list[int]) -> int:
+        AccessControl.require_permissions(user, frozenset({DELETE_CHAT}))
+        deleted = 0
+        for chat_id in chat_ids:
+            try:
+                self.delete_chat(user=user, chat_id=chat_id)
+                deleted += 1
+            except (ChatNotFoundException, ChatAccessDeniedException):
+                continue
+        logger.info("Chats deleted (bulk).", extra={"user_id": user.id, "count": deleted})
+        return deleted
+
     def pin_chat(self, user: AuthenticatedUser, chat_id: int) -> None:
         AccessControl.require_permissions(user, frozenset({PIN_CHAT}))
         chat = chat_repository.get_by_id(chat_id)
