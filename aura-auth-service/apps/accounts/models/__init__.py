@@ -1,4 +1,4 @@
-"""Accounts models package."""
+"""Paquete de modelos de accounts."""
 
 from apps.accounts.models.audited import AuditedModel
 from apps.accounts.models.user import User, UserStatus, CustomUserManager

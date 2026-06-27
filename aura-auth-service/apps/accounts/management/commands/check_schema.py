@@ -1,16 +1,5 @@
-"""Management command: check_schema
-
-Validates that every ``managed = False`` model's columns actually exist in the
-database it is routed to. Those tables are owned by ``docker/*-db/init.sql`` —
-not by Django migrations — so model<->schema drift stays silent until a query
-blows up at runtime (it bit us before with ``custom_groups_documents`` and
-``tokens_valid_after``).
-
-Run it against a database initialised from ``init.sql`` (locally or in CI) to
-catch drift early:
-
-    python manage.py check_schema
-"""
+"""Comando check_schema: verifica que las columnas de los modelos managed=False
+existan en la base, para detectar diferencias con el esquema de init.sql."""
 import sys
 
 from django.apps import apps
@@ -19,7 +8,7 @@ from django.db import connections, router
 
 
 class Command(BaseCommand):
-    help = "Check that managed=False models match their DB tables (schema drift)."
+    help = "Verifica que los modelos managed=False coincidan con sus tablas."
 
     def handle(self, *args, **options):
         errors = 0

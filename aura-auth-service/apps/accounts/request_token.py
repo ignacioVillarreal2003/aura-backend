@@ -1,12 +1,4 @@
-"""Per-request holder for the caller's raw bearer token.
-
-Inter-service calls forward the *user's* token so the downstream service can
-validate it (against the shared Redis cache / auth service) and act with the
-real user's permissions — instead of self-asserting identity via trust headers.
-A ContextVar keeps the token available to the outbound HTTP clients without
-threading it through every service/method signature. It is set by the bearer
-token middleware and reset when the request ends.
-"""
+"""Guarda el bearer token de la peticion actual para reenviarlo a otros servicios."""
 from __future__ import annotations
 
 import contextvars

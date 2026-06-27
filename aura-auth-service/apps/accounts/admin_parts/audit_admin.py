@@ -1,4 +1,4 @@
-"""Admin view for Auditoría — reads audit_log table from auth_db."""
+"""Vista de auditoria: lee la tabla audit_log de auth_db."""
 
 import html as _html
 import logging
@@ -59,9 +59,6 @@ def _audit_list_view(request):
     qs = AuditLog.objects.all()
 
     if not (has_permission(request, 'ADMIN_AUDIT_VIEW_ALL') or _is_effective_superadmin(request)):
-        # Admin sees only entries originating from non-elevated admin sessions.
-        # Elevated-admin actions (source='superadmin') are hidden to prevent
-        # plain admins from observing superadmin-level operations.
         qs = qs.filter(source='admin')
 
     if search:

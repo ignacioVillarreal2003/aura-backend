@@ -1,4 +1,4 @@
-"""User admin configuration."""
+"""Configuracion del admin de usuarios."""
 
 import json
 import logging
@@ -75,9 +75,7 @@ def force_logout(modeladmin, request, queryset):
 
 @admin.register(User)
 class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
-    """
-    Custom admin for User model.
-    """
+    """Admin a medida para el modelo User."""
 
     class RoleFilter(admin.SimpleListFilter):
         title = 'Rol'
@@ -197,17 +195,13 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
 
     def get_actions(self, request):
         actions = super().get_actions(request)
-        # Never expose Django's bulk hard-delete (users are soft-deleted).
         actions.pop('delete_selected', None)
-        # Force-logout is a privileged, security-sensitive action.
         if not (_is_effective_superadmin(request) or has_permission(request, 'ADMIN_USERS_EDIT_ADMIN')):
             actions.pop('action_force_logout', None)
         return actions
 
     def action_force_logout(self, request, queryset):
-        """Revoke every active session of the selected users (refresh tokens +
-        access tokens via the tokens_valid_after cutoff). Used for incident
-        response (e.g. a compromised account)."""
+        """Cierra todas las sesiones activas de los usuarios seleccionados."""
         from apps.accounts.services.auth_service import revoke_all_sessions
 
         count = 0
@@ -334,7 +328,6 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             else:
                 form.base_fields.pop('classification_level_id', None)
         else:
-            # Role is determined by URL param — remove the radio field
             form.base_fields.pop('roles', None)
 
             role_type = request.GET.get('role', 'user')
@@ -546,7 +539,6 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
                 cl_id = (form.cleaned_data.get('classification_level_id') or '').strip()
                 comp_ids = request.POST.getlist('compartment_ids')
 
-                # Capture before-state for change detection
                 try:
                     auth_data = mac_client.get_user_authorization(request.user, obj.pk)
                     current_comp_ids = {
@@ -564,7 +556,6 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
                     current_comp_ids = set()
                     prev_level_id = ''
 
-                # Apply clearance change
                 if cl_id:
                     try:
                         mac_client.set_user_clearance(request.user, obj.pk, int(cl_id))
@@ -576,7 +567,6 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
                     except Exception:
                         pass
 
-                # Apply compartment changes
                 new_comp_ids = set(int(c) for c in comp_ids if c)
                 for cid in new_comp_ids - current_comp_ids:
                     try:
@@ -589,7 +579,6 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
                     except Exception as exc:
                         logger.warning('Could not remove compartment %s for user %s: %s', cid, obj.pk, exc)
 
-                # Audit: nivel (only if changed)
                 if cl_id != prev_level_id:
                     if cl_id:
                         nivel_nombre = cl_id
@@ -603,7 +592,6 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
                     else:
                         changes['nivel'] = None
 
-                # Audit: agrupaciones (only if changed)
                 if new_comp_ids != current_comp_ids:
                     try:
                         all_compartments = mac_client.list_compartments(request.user)
@@ -690,7 +678,6 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
             )
 
     def delete_model(self, request, obj):
-        # Soft-delete active role assignments before soft-deleting the user.
         UserRole.objects.filter(user=obj, deleted_at__isnull=True).update(
             deleted_at=timezone.now(),
             deleted_by_id=request.user.pk,
@@ -741,7 +728,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
 
         context = {
             **self.admin_site.each_context(request),
-            'title': f'Historial — {entity_name}',
+            'title': f'Historial - {entity_name}',
             'entries': entries,
             'back_url': back_url,
             'entity_name': entity_name,

@@ -1,4 +1,4 @@
-"""Audit helpers for accounts admin."""
+"""Helpers de auditoria para el admin de accounts."""
 
 import logging
 
@@ -11,19 +11,7 @@ def log_audit(actor, action: str, entity_type: str,
               entity_id=None, entity_label: str = None,
               details: dict = None, source: str = 'admin',
               request=None) -> None:
-    """
-    Append one row to audit_log.
-
-    :param actor:        User instance or None (system action).
-    :param action:       Verb in uppercase: CREATE, UPDATE, DELETE, LOGIN, LOGOUT, etc.
-    :param entity_type:  Logical name of the affected model (e.g. 'auth_user', 'role').
-    :param entity_id:    PK of the affected record (will be coerced to str).
-    :param entity_label: Human-readable identifier cached at write time (e.g. username).
-    :param details:      Optional dict with extra context (changed fields, old values, …).
-    :param source:       'admin' | 'superadmin' | 'api' — where the action originated.
-    :param request:      Current HttpRequest; when provided, auto-upgrades source to
-                         'superadmin' for real superadmins and elevated admins.
-    """
+    """Agrega una fila al registro de auditoria (audit_log)."""
     if source == 'admin':
         if request is not None and _is_effective_superadmin(request):
             source = 'superadmin'
@@ -48,26 +36,21 @@ def log_audit(actor, action: str, entity_type: str,
             source=source,
         )
     except Exception as exc:
-        # Audit failures must NEVER break the main operation.
         logger.error('log_audit failed: %s', exc, exc_info=True)
 
 
 def _apply_audit_fields(obj, actor, is_create: bool):
     if is_create:
         if hasattr(obj, 'created_by_id'):
-            # FK field (e.g. User.created_by → User): assign the object itself
             if not obj.created_by_id:
                 obj.created_by = actor
         else:
-            # BigInt field: store the user's pk
             if not obj.created_by:
                 obj.created_by = getattr(actor, 'pk', actor)
 
     if hasattr(obj, 'updated_by_id'):
-        # FK field
         obj.updated_by = actor
     else:
-        # BigInt field
         obj.updated_by = getattr(actor, 'pk', actor)
 
 
@@ -95,7 +78,7 @@ def _is_admin_or_super_user(user: User) -> bool:
 
 
 def _is_effective_superadmin(request) -> bool:
-    """True for real superadmins AND for admins currently in elevated (sudo) mode."""
+    """True para superadmins reales y para admins en modo elevado."""
     user = getattr(request, 'user', None)
     if _is_super_admin_user(user):
         return True

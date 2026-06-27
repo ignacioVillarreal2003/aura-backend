@@ -1,12 +1,4 @@
-"""
-Base settings for the aura_auth_service project — shared across all environments.
-Environment overrides live in development.py / production.py / test.py.
-
-Environment-based configuration using python-decouple.
-Database: PostgreSQL 17
-Python: 3.13
-Django: 5.x
-"""
+"""Configuracion base, compartida por todos los entornos."""
 
 from pathlib import Path
 from decouple import config, Csv
@@ -14,19 +6,14 @@ from django.core.exceptions import ImproperlyConfigured
 import ldap
 import os
 
-# Service root (3 levels up: settings/ -> aura_auth_service/ -> <service root>)
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-me-in-production')
 
-# SECURITY WARNING: don't run with debug turned on in production!
-# OFF by default; development.py turns it on, production.py keeps it off.
 DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='127.0.0.1,localhost,host.docker.internal', cast=Csv())
 
-# Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -36,21 +23,18 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django_prometheus',
 
-    # Third-party apps
     'corsheaders',
     'rest_framework',
     'django_filters',
     'drf_spectacular',
-    
-    # Local apps
+
     'apps.accounts.apps.AccountsConfig',
     'apps.documents.apps.DocumentsConfig',
     'apps.notifications.apps.NotificationsConfig',
     'apps.chat.apps.ChatConfig',
 ]
 
-# Local apps whose tables are owned by docker/auth-db/init.sql or docker/aura-db/init.sql.
-# Setting to None disables Django migrations entirely for these apps.
+# Las tablas de estas apps las crea init.sql, no las migraciones de Django
 _LOCAL_APPS = ['accounts', 'documents', 'notifications', 'chat']
 MIGRATION_MODULES = {app: None for app in _LOCAL_APPS}
 
@@ -90,9 +74,6 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'aura_auth_service.wsgi.application'
-
-# Database Configuration
-# Default: PostgreSQL auth_db from docker-compose
 
 DB_ENGINE = config('DB_ENGINE', default='django.db.backends.postgresql')
 
@@ -140,7 +121,6 @@ else:
         }
     }
 
-# Password validation
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -156,42 +136,26 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-# Internationalization
 LANGUAGE_CODE = 'es-es'
 TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-# Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# Media files
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-# Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Custom User Model
 AUTH_USER_MODEL = 'accounts.User'
 
-# Database routers
 DATABASE_ROUTERS = ['aura_auth_service.db_routers.AuraDbRouter']
 
-# Cache configuration.
-#  - default:     in-process (LocMem) — used by DRF throttling; behaviour unchanged.
-#  - permissions: short-lived Redis cache of computed roles/permissions for the
-#    /auth/validate hot path. Isolated in its own alias and Redis DB index so a
-#    Redis outage degrades only this cache (callers fall back to a direct DB
-#    compute) and never affects throttling.
 PERMISSIONS_CACHE_TTL = config('PERMISSIONS_CACHE_TTL', default=60, cast=int)
 PERMISSIONS_CACHE_REDIS_URL = config('PERMISSIONS_CACHE_REDIS_URL', default='redis://memory_db:6379/1')
 
-# Dedicated Redis DB index (2) for DRF throttling so rate limits are shared and
-# accurate across gunicorn workers (LocMem would be per-process). Isolated from
-# the permissions cache (index 1). The throttles fail open on a Redis outage —
-# see core.throttling — so this never becomes a hard dependency for auth.
 THROTTLE_CACHE_REDIS_URL = config('THROTTLE_CACHE_REDIS_URL', default='redis://memory_db:6379/2')
 
 CACHES = {
@@ -211,7 +175,6 @@ CACHES = {
     },
 }
 
-# ── LDAP ──────────────────────────────────────────────────────────────────────
 from django_auth_ldap.config import LDAPSearch
 
 AUTH_LDAP_SERVER_URI    = config('LDAP_SERVER_URI', default='ldap://localhost:389')
@@ -225,8 +188,6 @@ AUTH_LDAP_USER_SEARCH = LDAPSearch(
     f'({_ldap_uid_attr}=%(user)s)',
 )
 
-# Nombres de atributos LDAP — ajustar al schema real del servidor corporativo
-# Solo requiere cambiar estas variables de entorno; sin cambios de código.
 LDAP_ATTR_UID                  = _ldap_uid_attr
 LDAP_ATTR_MAIL                 = config('LDAP_ATTR_MAIL', default='mail')
 LDAP_ATTR_DISPLAY_NAME         = config('LDAP_ATTR_DISPLAY_NAME', default='displayName')
@@ -234,9 +195,7 @@ LDAP_ATTR_CLASSIFICATION_LEVEL = config('LDAP_ATTR_CLASSIFICATION_LEVEL', defaul
 LDAP_ATTR_COMPARTMENT          = config('LDAP_ATTR_COMPARTMENT', default='auraCompartment')
 LDAP_EMAIL_FALLBACK_DOMAIN     = config('LDAP_EMAIL_FALLBACK_DOMAIN', default='ldap.local')
 
-# Atributo del LDAP a inspeccionar (ej: 'employeeType', 'title', 'memberOf')
 LDAP_ATTR_ROLE                 = config('LDAP_ATTR_ROLE', default='employeeType')
-# Valor dentro de ese atributo que indica que el usuario es un administrador del sistema
 LDAP_ROLE_ADMIN_VALUE          = config('LDAP_ROLE_ADMIN_VALUE', default='admin')
 
 AUTH_LDAP_USER_ATTR_MAP = {
@@ -245,20 +204,13 @@ AUTH_LDAP_USER_ATTR_MAP = {
 }
 AUTH_LDAP_ALWAYS_UPDATE_USER = True
 
-# ── Authentication backends ───────────────────────────────────────────────────
-# Orden: AuraLDAPBackend primero (usuarios regulares + admins con cuenta LDAP)
-#        ModelBackend como fallback (superadmin local, service accounts internos)
-#
-# Para deshabilitar auth local en el futuro, eliminar ModelBackend de la lista.
 AUTHENTICATION_BACKENDS = [
     'apps.accounts.ldap_backend.AuraLDAPBackend',
     'django.contrib.auth.backends.ModelBackend',
 ]
 
-# CORS Configuration
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000,http://localhost:4200', cast=Csv())
 
-# REST Framework Configuration
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'apps.accounts.authentication.JWTAuthentication',
@@ -290,29 +242,20 @@ SPECTACULAR_SETTINGS = {
     'SERVE_INCLUDE_SCHEMA': False,
 }
 
-# JWT Configuration
 JWT_ACCESS_LIFETIME_MINUTES = config('JWT_ACCESS_LIFETIME_MINUTES', default=15, cast=int)
 JWT_ALGORITHM = config('JWT_ALGORITHM', default='HS256')
-# JWT_SIGNING_KEY must be set independently — never share with SECRET_KEY
-# Falls back to SECRET_KEY here; production.py enforces an explicit value.
 JWT_SIGNING_KEY = config('JWT_SIGNING_KEY', default=None) or SECRET_KEY
 
-# Login lockout policy
 LOGIN_MAX_ATTEMPTS = config('LOGIN_MAX_ATTEMPTS', default=5, cast=int)
 LOGIN_LOCKOUT_MINUTES = config('LOGIN_LOCKOUT_MINUTES', default=15, cast=int)
 
-# Refresh token lifetime
 REFRESH_TOKEN_LIFETIME_DAYS = config('REFRESH_TOKEN_LIFETIME_DAYS', default=7, cast=int)
 
-# Document Processing Service
 DOCUMENT_PROCESSING_URL = config(
     'DOCUMENT_PROCESSING_URL',
     default='http://localhost:8000',
 )
 
-# Shared key for *inbound* generic service-to-service calls (e.g. notification
-# service enriching email recipients via the user lookup endpoint). Outbound
-# inter-service calls forward/mint a JWT instead — see accounts.services.auth_service.
 SERVICE_API_KEY = config('SERVICE_API_KEY', default='service_api_key')
 DOCUMENT_PROCESSING_TIMEOUT_SECONDS = config(
     'DOCUMENT_PROCESSING_TIMEOUT_SECONDS',
@@ -320,7 +263,6 @@ DOCUMENT_PROCESSING_TIMEOUT_SECONDS = config(
     cast=int,
 )
 
-# Notification Service (used by Django admin notification flows)
 NOTIFICATION_SERVICE_URL = config(
     'NOTIFICATION_SERVICE_URL',
     default='http://localhost:8004',
@@ -335,34 +277,26 @@ NOTIFICATION_SERVICE_TIMEOUT_SECONDS = config(
     cast=int,
 )
 
-# Document Collection Service (MAC — Mandatory Access Control)
 DOC_COLLECTION_SERVICE_URL = config('DOC_COLLECTION_SERVICE_URL', default='http://localhost:8005')
 
-# Chat Service (used by Django admin Chat section: messages, share links, members)
 CHAT_SERVICE_URL = config('CHAT_SERVICE_URL', default='http://localhost:8003')
 
-# LLM Service — referenced only for the admin dashboard health panel today;
-# no functional client exists yet (no admin feature reads from it directly).
 LLM_SERVICE_URL = config('LLM_SERVICE_URL', default='http://localhost:8001')
 
-# Dashboard health panel — per-service timeout for the concurrent health poll.
 SERVICE_HEALTH_CHECK_TIMEOUT_SECONDS = config(
     'SERVICE_HEALTH_CHECK_TIMEOUT_SECONDS',
     default=3,
     cast=int,
 )
 
-# Neo4j HTTP API (dashboard graph stats)
 NEO4J_HTTP_URL = config('NEO4J_HTTP_URL', default='http://neo4j:7474')
 NEO4J_HTTP_USER = config('NEO4J_HTTP_USER', default='neo4j')
 NEO4J_HTTP_PASSWORD = config('NEO4J_HTTP_PASSWORD', default='aura_password')
 
-# RabbitMQ management API (dashboard queue depth)
 RABBITMQ_MGMT_URL = config('RABBITMQ_MGMT_URL', default='http://queue:15672')
 RABBITMQ_MGMT_USER = config('RABBITMQ_MGMT_USER', default='aura_root')
 RABBITMQ_MGMT_PASSWORD = config('RABBITMQ_MGMT_PASSWORD', default='aura_password')
 
-# Logging Configuration
 _LOG_LEVEL = config('LOG_LEVEL', default='INFO')
 
 LOGGING = {
@@ -412,14 +346,9 @@ LOGGING = {
     },
 }
 
-# Environment
 ENVIRONMENT = config('ENVIRONMENT', default='development')
 
-# Session — 1 hour for admin/superadmin panel
 SESSION_COOKIE_AGE = 3600
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 
-# Trust the reverse-proxy (nginx gateway) X-Forwarded-Proto header so Django
-# detects HTTPS correctly behind the gateway. Harmless under DEBUG. The gateway
-# already forwards this header (see aura-gateway/nginx.conf).
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')

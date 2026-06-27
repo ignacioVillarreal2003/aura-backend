@@ -1,4 +1,4 @@
-"""Production settings — security hardened. DEBUG is off."""
+"""Configuracion de produccion, con seguridad reforzada y DEBUG apagado."""
 
 from decouple import config
 from django.core.exceptions import ImproperlyConfigured
@@ -7,15 +7,9 @@ from .base import *  # noqa: F401, F403
 
 DEBUG = False
 
-# In production the JWT signing key MUST be set explicitly — never silently fall
-# back to SECRET_KEY (see base.py).
 if not config('JWT_SIGNING_KEY', default=None):
     raise ImproperlyConfigured('JWT_SIGNING_KEY must be set in production.')
 
-# Security hardening. SECURE_SSL_REDIRECT is configurable so a rollout can keep
-# the HTTPS redirect OFF until TLS termination is actually in place (avoids a
-# redirect loop / lockout). The gateway already forwards X-Forwarded-Proto, and
-# SECURE_PROXY_SSL_HEADER is set in base.py.
 SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=True, cast=bool)
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True

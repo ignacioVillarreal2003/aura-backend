@@ -1,4 +1,4 @@
-"""Admin forms for the notifications section in aura-auth-service."""
+"""Formularios del admin para la seccion de notificaciones."""
 
 from django import forms
 from django.contrib.admin.widgets import FilteredSelectMultiple
@@ -7,7 +7,7 @@ from apps.accounts.models import User, Role, UserRole
 
 
 class SendNotificationForm(forms.Form):
-    """Form for sending one notification per selected user from the Django admin."""
+    """Formulario para enviar una notificacion a cada usuario elegido."""
 
     recipients = forms.ModelMultipleChoiceField(
         queryset=User.objects.none(),
@@ -32,7 +32,7 @@ class SendNotificationForm(forms.Form):
 
 
 class SendGroupNotificationForm(forms.Form):
-    """Create notifications targeting users by classification levels, compartments, and/or roles."""
+    """Crea notificaciones segmentadas por niveles, agrupaciones o roles."""
 
     levels = forms.MultipleChoiceField(
         choices=[],
@@ -78,7 +78,7 @@ class SendGroupNotificationForm(forms.Form):
         return cleaned_data
 
     def resolve_target_user_ids(self) -> list[int]:
-        """Resolve users targeted by selected levels, compartments, and/or roles."""
+        """Resuelve los usuarios segun los niveles, agrupaciones y roles elegidos."""
         level_ids = [int(lid) for lid in (self.cleaned_data.get('levels') or [])]
         compartment_ids = [int(cid) for cid in (self.cleaned_data.get('compartments') or [])]
         roles = self.cleaned_data.get('roles')

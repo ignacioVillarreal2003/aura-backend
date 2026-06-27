@@ -1,4 +1,4 @@
-"""Privilege elevation service — allows admins to temporarily gain superadmin capabilities."""
+"""Elevacion de privilegios: deja a un admin actuar como superadmin por un rato."""
 
 from django.conf import settings
 from django.utils import timezone
@@ -9,11 +9,7 @@ ELEVATION_START_KEY = 'elevation_started_at'
 
 
 def elevate_to_superadmin(request, superadmin_password: str) -> bool:
-    """
-    Validates the superadmin password. If correct, marks the session as elevated.
-    The caller's own user identity is preserved; only the session flags change.
-    Returns True if elevation succeeded.
-    """
+    """Valida la contrasena de superadmin y marca la sesion como elevada."""
     from apps.accounts.models import User
     from django.contrib.auth.hashers import check_password as django_check_password
 
@@ -37,14 +33,14 @@ def elevate_to_superadmin(request, superadmin_password: str) -> bool:
 
 
 def drop_elevation(request) -> None:
-    """Removes elevation keys from the session."""
+    """Quita las claves de elevacion de la sesion."""
     for key in (ELEVATION_SESSION_KEY, REAL_USER_SESSION_KEY, ELEVATION_START_KEY):
         request.session.pop(key, None)
     request.session.modified = True
 
 
 def is_elevated(request) -> bool:
-    """Returns True if the current session is in elevated mode and has not timed out."""
+    """True si la sesion esta elevada y todavia no expiro."""
     if not request.session.get(ELEVATION_SESSION_KEY):
         return False
 
@@ -82,10 +78,7 @@ def is_elevated(request) -> bool:
 
 
 def close_stale_elevation(user) -> None:
-    """
-    Called on login. If this user had an active elevation that was never formally
-    ended (session expired or browser was closed), log ELEVATION_END automatically.
-    """
+    """Al iniciar sesion, cierra una elevacion anterior que quedo sin terminar."""
     try:
         from apps.accounts.models import AuditLog
         last_start = AuditLog.objects.filter(
@@ -117,5 +110,5 @@ def close_stale_elevation(user) -> None:
 
 
 def get_real_user(request):
-    """Returns the real admin user even during elevation (always the logged-in user)."""
+    """Devuelve el usuario admin real, incluso durante la elevacion."""
     return request.user

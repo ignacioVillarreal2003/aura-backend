@@ -1,14 +1,10 @@
-"""Middleware that attaches elevation context to every request."""
+"""Middleware que agrega el contexto de elevacion a cada peticion."""
 
 from apps.accounts.services.elevation_service import is_elevated, get_real_user
 
 
 class ElevationMiddleware:
-    """
-    Attaches elevation context to every request.
-    Sets request.is_elevated and request.real_user so views and admin can access them easily.
-    Auto-drops the session if the elevation window has expired.
-    """
+    """Deja request.is_elevated y request.real_user disponibles en cada peticion."""
 
     def __init__(self, get_response):
         self.get_response = get_response

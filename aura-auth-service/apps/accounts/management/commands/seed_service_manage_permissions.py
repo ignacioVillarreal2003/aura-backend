@@ -1,31 +1,5 @@
-"""
-Management command: seed_service_manage_permissions
-
-Crea (si faltan) los permisos ``*_MANAGE`` que los servicios downstream
-(aura-document-processing-service) ya exigen en sus endpoints de
-administración, y los asigna a los roles ``admin`` y/o ``superadmin``.
-
-Por qué hace falta: los servicios validan el token del usuario contra
-``GET /auth/validate`` de este servicio y aplican los permisos REALES del
-usuario (no hay bypass por API key — el middleware de document-processing
-solo acepta Bearer JWT). Para que el panel admin pueda llamar a los
-endpoints ``manage`` en nombre del usuario, el permiso correspondiente debe
-existir como fila ``Permission`` y estar asignado al rol del usuario.
-
-Notas de diseño:
-  - Los nombres se guardan en forma dotted/minúscula (convención existente,
-    p. ej. ``chat.view``). ``accounts.utils._normalize_permission_name`` los
-    entrega normalizados a UPPER_SNAKE (``DOCUMENT_QUERY_MANAGE``), que es lo
-    que comprueba el ``Authorizer`` de document-processing.
-  - Un ``superadmin`` (rol que define ``User.is_superuser``) ya recibe TODAS
-    las filas ``Permission`` existentes vía ``get_user_permissions``; aun así
-    se asignan explícitamente para que el panel de roles muestre el estado
-    real.
-  - Las operaciones masivas/pesadas (reprocess, reembed, enrich,
-    graph-extract) se reservan a ``superadmin``. El resto (consulta, edición,
-    borrado, restauración, descarga, stats del grafo) se asigna también a
-    ``admin``, alineado con lo que el panel de documentos ya permite a un
-    admin.
+"""Crea los permisos *_MANAGE que exigen los servicios downstream y los asigna
+a los roles admin y superadmin.
 
 Uso:
     python manage.py seed_service_manage_permissions --list
@@ -38,7 +12,6 @@ from django.core.management.base import BaseCommand, CommandError
 from apps.accounts.models import Permission, PermissionInRole, Role
 
 
-# (name, description) — asignados a admin Y superadmin
 _ADMIN_AND_SUPER = [
     ('document.query.manage',    'Consultar cualquier documento sin restricción de chat (admin)'),
     ('document.update.manage',   'Editar metadata de cualquier documento (admin)'),
@@ -48,7 +21,6 @@ _ADMIN_AND_SUPER = [
     ('graph.stats.manage',       'Ver estadísticas del grafo de conocimiento (admin)'),
 ]
 
-# (name, description) — solo superadmin (operaciones masivas/pesadas)
 _SUPER_ONLY = [
     ('document.reprocess.manage', 'Reprocesar documentos en masa (superadmin)'),
     ('document.reembed.manage',   'Regenerar embeddings de documentos en masa (superadmin)'),
@@ -111,7 +83,6 @@ class Command(BaseCommand):
         elif options['execute']:
             self._cmd_execute(superadmin_role, admin_role)
 
-    # ── --list ──────────────────────────────────────────────────────────────
     def _cmd_list(self, existing, super_assigned, admin_assigned):
         self.stdout.write('\n=== PERMISOS *_MANAGE DE SERVICIOS ===\n')
         self.stdout.write(f'  {"Permiso":<30} {"En DB":<7} {"Admin":<7} {"Superadmin"}\n')
@@ -128,7 +99,6 @@ class Command(BaseCommand):
         in_super = '✓' if name in super_assigned else '—'
         self.stdout.write(f'  {name:<30} {in_db:<7} {in_admin:<7} {in_super}\n')
 
-    # ── --dry-run ───────────────────────────────────────────────────────────
     def _cmd_dry_run(self, existing, super_assigned, admin_assigned, admin_role):
         to_create = [
             n for n, _ in (_ADMIN_AND_SUPER + _SUPER_ONLY) if n not in existing
@@ -151,7 +121,6 @@ class Command(BaseCommand):
         ))
         self.stdout.write('\nEjecutá --execute para aplicar.\n')
 
-    # ── --execute ───────────────────────────────────────────────────────────
     def _cmd_execute(self, superadmin_role, admin_role):
         created = 0
         assigned = 0

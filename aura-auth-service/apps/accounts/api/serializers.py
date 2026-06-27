@@ -1,4 +1,4 @@
-"""Serializers for auth API endpoints."""
+"""Serializers de los endpoints de la API de autenticacion."""
 
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -18,7 +18,6 @@ class LogoutSerializer(serializers.Serializer):
     refresh_token = serializers.UUIDField()
 
 
-# Response serializers
 class TokenResponseSerializer(serializers.Serializer):
     access_token = serializers.CharField()
     refresh_token = serializers.UUIDField()
@@ -51,8 +50,6 @@ class ChangePasswordSerializer(serializers.Serializer):
     new_password = serializers.CharField(max_length=255, min_length=8)
 
     def validate_new_password(self, value):
-        # Enforce the project's AUTH_PASSWORD_VALIDATORS (length, common,
-        # numeric, similarity) — previously only min_length was checked.
         try:
             validate_password(value)
         except DjangoValidationError as exc:

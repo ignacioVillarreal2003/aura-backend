@@ -1,4 +1,4 @@
-"""Admin views for privilege elevation (elevate / drop-elevation)."""
+"""Vistas del admin para elevar y bajar privilegios."""
 
 from django import forms
 from django.contrib import admin

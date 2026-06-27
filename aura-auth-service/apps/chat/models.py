@@ -1,10 +1,4 @@
-"""
-Chat models — managed=False mirrors of tables owned by docker/aura-db/init.sql.
-All reads/writes are routed to aura_db via AuraDbRouter.
-
-Cross-DB references (fields pointing to auth_db tables) are stored as plain
-BigIntegerField — no SQL FK constraint.
-"""
+"""Modelos de chat (espejos managed=False de tablas de aura_db)."""
 
 from django.db import models
 
@@ -15,7 +9,7 @@ class Chat(models.Model):
     system_prompt = models.TextField(null=True, blank=True, verbose_name='Prompt de sistema')
     response_style = models.TextField(null=True, blank=True, verbose_name='Estilo de respuesta')
     last_message_at = models.DateTimeField(null=True, blank=True, verbose_name='Último mensaje')
-    # Cross-DB ref: auth_user.id lives in auth_db; Chat lives in aura_db.
+    # Referencia a auth_user.id, que vive en la otra base
     created_by = models.BigIntegerField(verbose_name='Creado por (user ID)')
     created_at = models.DateTimeField(verbose_name='Creado el')
     updated_by = models.BigIntegerField(null=True, blank=True)
@@ -36,7 +30,7 @@ class Chat(models.Model):
 
 
 class ArtifactMessage(models.Model):
-    """Mirror of artifact_message — one message record per artifact of type MESSAGE."""
+    """Espejo de artifact_message: un registro por mensaje."""
     id = models.BigAutoField(primary_key=True)
     artifact_id = models.BigIntegerField()
     message = models.TextField(verbose_name='Mensaje')

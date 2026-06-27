@@ -1,4 +1,4 @@
-﻿"""Permission admin configuration."""
+﻿"""Configuracion del admin de permisos."""
 
 from django.contrib import admin
 from apps.accounts.models import Permission
@@ -9,7 +9,7 @@ from apps.accounts.admin_parts.utils.permissions import has_permission
 
 @admin.register(Permission)
 class PermissionAdmin(HelpTextStripMixin, admin.ModelAdmin):
-    """Admin for Permission model."""
+    """Admin del modelo Permission."""
 
     change_form_template = 'admin/accounts/permission/change_form.html'
 

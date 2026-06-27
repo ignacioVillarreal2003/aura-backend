@@ -1,4 +1,4 @@
-"""Management command to revoke and delete expired refresh tokens."""
+"""Comando para revocar y borrar refresh tokens vencidos."""
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
@@ -6,16 +6,14 @@ from apps.accounts.models import RefreshToken
 
 
 class Command(BaseCommand):
-    help = 'Revoke expired refresh tokens and delete revoked ones older than 30 days.'
+    help = 'Revoca los refresh tokens vencidos y borra los revocados de mas de 30 dias.'
 
     def handle(self, *args, **options):
         now = timezone.now()
 
-        # Mark expired-but-not-revoked tokens as revoked
         expired = RefreshToken.objects.filter(expires_at__lte=now, is_revoked=False)
         count_revoked = expired.update(is_revoked=True, updated_at=now)
 
-        # Delete tokens that have been revoked for more than 30 days
         cutoff = now - timezone.timedelta(days=30)
         deleted, _ = RefreshToken.objects.filter(
             is_revoked=True,

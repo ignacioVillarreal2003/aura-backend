@@ -1,9 +1,4 @@
-"""Middleware that captures the incoming Bearer token into a ContextVar.
-
-This runs before DRF authentication so that outbound HTTP clients can
-forward the user's JWT to downstream services without needing the request
-object threaded through every layer.
-"""
+"""Middleware que guarda el Bearer token de la peticion para reenviarlo despues."""
 from __future__ import annotations
 
 from apps.accounts.request_token import reset_request_token, set_request_token

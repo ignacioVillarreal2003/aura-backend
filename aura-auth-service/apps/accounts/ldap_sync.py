@@ -1,17 +1,7 @@
-"""
-LDAP post-authentication MAC sync.
+"""Sincroniza nivel y compartimentos desde LDAP hacia el servicio MAC en cada login.
 
-Conecta la se\u00f1al populate_user de django-auth-ldap para sincronizar
-classification_level y compartments desde LDAP hacia el servicio MAC
-en cada autenticaci\u00f3n LDAP exitosa.
-
-LDAP es la fuente de verdad:
-- El sync sobrescribe cualquier cambio previo realizado manualmente
-  en el panel de admin.
-- Los cambios manuales se mantienen hasta el pr\u00f3ximo login del usuario.
-
-La sincronizaci\u00f3n es best-effort: un fallo en el MAC service NO impide
-el login. El error queda registrado en el log para su diagn\u00f3stico.
+LDAP es la fuente de verdad y pisa los cambios hechos a mano en el panel. Si el
+servicio MAC falla no se corta el login, solo se registra el error en el log.
 """
 
 import logging
@@ -22,17 +12,8 @@ from django_auth_ldap.backend import populate_user
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Signal handler (p\u00fablico para poder ser invocado desde _try_ldap_resync)
-# ---------------------------------------------------------------------------
-
 def _sync_mac_attributes(sender, user, ldap_user, **kwargs):
-    """Fired after every successful LDAP authentication.
-
-    Args:
-        user:      instancia de accounts.User ya guardada en la BD.
-        ldap_user: objeto LDAPUser de django-auth-ldap con los atributos del entry.
-    """
+    """Se dispara despues de cada login LDAP exitoso."""
     try:
         _sync_user_role(user, ldap_user)
     except Exception as exc:
@@ -77,12 +58,10 @@ def _sync_user_role(user, ldap_user) -> None:
     admin_val = getattr(settings, 'LDAP_ROLE_ADMIN_VALUE', 'admin')
 
     role_values = ldap_user.attrs.get(role_attr, [])
-    # Búsqueda insensible a mayúsculas/minúsculas
     is_admin = any(str(val).strip().lower() == admin_val.lower() for val in role_values)
 
     target_role_name = 'admin' if is_admin else 'user'
 
-    # Exclusión explícita de superadmin (nunca puede ser asignado dinámicamente)
     if target_role_name == 'superadmin':
         target_role_name = 'user'
 
@@ -91,7 +70,6 @@ def _sync_user_role(user, ldap_user) -> None:
         logger.error("Target role '%s' not found in database.", target_role_name)
         return
 
-    # Desactivar roles activos previos que no sean el target_role o superadmin
     active_roles = UserRole.objects.filter(user=user, deleted_at__isnull=True)
     for active_role in active_roles:
         if active_role.role.name == 'superadmin':
@@ -102,7 +80,6 @@ def _sync_user_role(user, ldap_user) -> None:
             active_role.save()
             logger.info("Deactivated role '%s' for LDAP user '%s'", active_role.role.name, user.username)
 
-    # Asignar el rol objetivo si no lo tiene activo ya
     has_role = UserRole.objects.filter(user=user, role=target_role, deleted_at__isnull=True).exists()
     if not has_role:
         UserRole.objects.create(
@@ -113,9 +90,6 @@ def _sync_user_role(user, ldap_user) -> None:
         logger.info("Assigned role '%s' to LDAP user '%s'", target_role_name, user.username)
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 def _first(lst):
     return lst[0] if lst else None
@@ -128,7 +102,6 @@ def _sync_clearance(user, level_name: str | None) -> None:
 
     from apps.accounts.services.mac_client import mac_client
 
-    # Llamamos con user=None para indicar autenticación S2S via API Key
     levels = mac_client.list_classification_levels(user=None)
     match  = next((l for l in levels if l['name'].lower() == level_name.lower()), None)
 
@@ -152,13 +125,11 @@ def _sync_compartments(user, compartment_names: list[str]) -> None:
 
     from apps.accounts.services.mac_client import mac_client
 
-    # Llamamos con user=None para indicar autenticación S2S via API Key
     all_compartments  = mac_client.list_compartments(user=None)
     current_entries   = mac_client.list_user_compartments(user=None, target_user_id=user.pk)
     current_names_low = {c['compartment']['name'].lower() for c in current_entries}
     ldap_names_low    = {n.lower() for n in compartment_names}
 
-    # Agregar compartimentos presentes en LDAP pero ausentes en MAC
     for name in compartment_names:
         if name.lower() not in current_names_low:
             match = next(
@@ -174,7 +145,6 @@ def _sync_compartments(user, compartment_names: list[str]) -> None:
                     name, user.username,
                 )
 
-    # Revocar compartimentos presentes en MAC pero ya no en LDAP
     for entry in current_entries:
         entry_name = entry['compartment']['name']
         if entry_name.lower() not in ldap_names_low:
@@ -190,9 +160,6 @@ def _sync_compartments(user, compartment_names: list[str]) -> None:
                 )
 
 
-# ---------------------------------------------------------------------------
-# Registration
-# ---------------------------------------------------------------------------
 
 def connect_signals() -> None:
     """Conecta la se\u00f1al LDAP. Llamado desde AccountsConfig.ready()."""

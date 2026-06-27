@@ -1,33 +1,9 @@
-"""Admin views for Chat management — list, detail, share-link revocation.
+"""Vistas del admin para gestionar chats: listado, detalle y exportacion.
 
-Replaces the previous `ChatAdmin(admin.ModelAdmin)` (chat/admin.py) with a
-fully custom view pattern, following accounts/admin_parts/mac_admin.py: no
-ModelAdmin, no QuerySet-backed ChangeList — plain Django views registered
-via the same `admin.site.get_urls` monkeypatch, rendering their own
-templates.
-
-Data sources:
-  - List view: aura-chat-service `GET /api/v1/chats/manage/` (via
-    chat_client.get_chats()), with a deliberate fallback to the local
-    aura_db `Chat` ORM mirror if the service call fails — this is the one
-    place in this module that tolerates chat-service being down, since
-    there's a local mirror to fall back to. A yellow banner makes the
-    fallback visible to the admin rather than silently serving stale data.
-  - Detail view: the chat's own identity fields (name, creator, timestamps)
-    still come from the local `Chat` ORM mirror — same as the previous
-    ChatAdmin.change_view did. Messages, share links and members are
-    chat-service-API-backed only, with no fallback (there is no local
-    mirror for chat_message-level detail beyond what raw SQL already
-    reads, and inventing one here would duplicate, not simplify, the
-    previous implementation) — each panel independently shows "servicio no
-    disponible" on failure instead of breaking the page.
-
-Note on permissions: this section is intentionally **stricter** than
-mac_admin.py's `_check_admin_or_superadmin` — the previous
-ChatAdmin.has_view_permission required superadmin *or* an elevated admin
-session, not plain admin. Chat contents are more sensitive than MAC
-configuration, so that restriction is preserved here verbatim as
-`_check_chat_access` rather than reusing the looser MAC-style check.
+El listado usa el chat-service y, si no responde, cae al espejo local en
+aura_db (mostrando un aviso). El detalle saca los datos del chat de la base
+local y los mensajes/miembros del chat-service. El acceso es solo para
+superadmin o admin con permiso, porque el contenido de los chats es sensible.
 """
 
 import logging
@@ -48,11 +24,6 @@ logger = logging.getLogger(__name__)
 
 _PAGE_SIZE = 20
 
-# Safe whitelist for the ORM-fallback ordering — chat-service validates
-# `ordering` itself and silently ignores anything not in its own
-# ALLOWED_ORDERINGS, but Django's `.order_by()` raises FieldError on an
-# unknown field, which would surface as a 500 if we passed the raw,
-# user-controlled `?o=` value straight through in the fallback branch.
 _FALLBACK_ORDERING = {
     'created_at': 'created_at',
     '-created_at': '-created_at',
@@ -63,7 +34,6 @@ _FALLBACK_ORDERING = {
 }
 
 
-# ── Permission check ────────────────────────────────────────────────────────
 
 def _check_chat_access(request):
     if not (has_permission(request, 'ADMIN_CHAT_VIEW') or _is_effective_superadmin(request)):
@@ -74,8 +44,6 @@ def _ctx(request, **extra):
     return {**admin.site.each_context(request), **extra}
 
 
-# ── Local-data helpers (auth_user lives in this service's own DB — never
-#    fetched from apps.chat-service, which doesn't own it) ───────────────────────
 
 def _resolve_username(user_id):
     if user_id is None:
@@ -100,12 +68,7 @@ def _resolve_usernames_batch(user_ids):
 
 
 def _resolve_user_ids_by_username(search_term):
-    """Used only by the ORM fallback path, to replicate the original
-    name-OR-creator-username search semantics. The chat-service API path
-    only matches chat `name` — confirmed against
-    aura-chat-service/apps/chat/repositories/chat_repository.py `list_all`,
-    which does `qs.filter(name__icontains=search)` and nothing else;
-    chat-service has no way to filter by a username it doesn't own."""
+    """Busca ids de usuario por username, solo para el fallback ORM."""
     try:
         with connections['default'].cursor() as cursor:
             cursor.execute(
@@ -119,8 +82,7 @@ def _resolve_user_ids_by_username(search_term):
 
 
 def _format_chat_dt(value):
-    """Format a timestamp that may arrive as an ISO string (chat-service
-    JSON response) or a native datetime (local ORM row)."""
+    """Formatea una fecha que puede venir como texto ISO o como datetime."""
     if not value:
         return '—'
     try:
@@ -137,7 +99,6 @@ def _format_chat_dt(value):
         return str(value)
 
 
-# ── List view ────────────────────────────────────────────────────────────────
 
 def _chat_list_view(request):
     _check_chat_access(request)
@@ -199,8 +160,6 @@ def _chat_list_view(request):
                 'creator_username': usernames.get(c.created_by, f"#{c.created_by}"),
                 'created_at': _format_chat_dt(c.created_at),
                 'last_message_at': _format_chat_dt(c.last_message_at),
-                # Not available from the local mirror — chat-service owns
-                # is_locked/member_count and isn't reachable right now.
                 'is_locked': False,
                 'member_count': '—',
             }
@@ -227,7 +186,6 @@ def _chat_list_view(request):
     return TemplateResponse(request, 'admin/chat_management/list.html', ctx)
 
 
-# ── Detail view ──────────────────────────────────────────────────────────────
 
 def _load_chat_messages(request, chat_id):
     try:
@@ -300,12 +258,7 @@ def _format_size(num_bytes):
 
 
 def _load_chat_documents(chat_id):
-    """Documents uploaded to this chat, read straight from aura_db.
-
-    The ``document`` table carries a ``chat_id`` FK (see
-    docker/database/aura-db/document_processing.sql), so this is a direct DB
-    read with no chat-service dependency — unlike the messages/members panels,
-    it never shows "servicio no disponible". Soft-deleted rows are excluded."""
+    """Documentos subidos a este chat, leidos directo de aura_db."""
     try:
         with connections['aura_db'].cursor() as cursor:
             cursor.execute(
@@ -354,7 +307,7 @@ def _chat_detail_view(request, chat_id):
 
     ctx = _ctx(
         request,
-        title=f'Chat — {chat_obj.name}',
+        title=f'Chat - {chat_obj.name}',
         chat=chat_obj,
         creator_username=_resolve_username(chat_obj.created_by),
         created_at=_format_chat_dt(chat_obj.created_at),
@@ -371,7 +324,6 @@ def _chat_detail_view(request, chat_id):
     return TemplateResponse(request, 'admin/chat_management/detail.html', ctx)
 
 
-# ── Export (manage) — streams the chat-service admin export ────────────────────
 
 def _chat_export_view(request, chat_id, fmt):
     _check_chat_access(request)
@@ -399,7 +351,6 @@ def _chat_export_view(request, chat_id, fmt):
     return response
 
 
-# ── URL registration (same admin.site.get_urls monkeypatch as mac_admin.py) ─
 
 _prev_get_urls = admin.site.get_urls
 

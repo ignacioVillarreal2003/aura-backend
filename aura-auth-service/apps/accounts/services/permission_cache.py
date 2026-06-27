@@ -1,19 +1,7 @@
-"""Short-lived per-user cache of computed roles/permissions.
+"""Cache corta por usuario de roles y permisos para el endpoint /auth/validate.
 
-Used only by the token-validation hot path (``/auth/validate`` / introspect),
-which every other service hits on (nearly) every request. Caching the computed
-roles + permissions per user removes a burst of ``auth_db`` queries per
-validate.
-
-Design notes:
-* Scope is deliberately the cross-service validate path only — the Django
-  admin's own permission checks keep using the uncached helpers so they stay
-  immediate. Downstream services already cache validate results too, so RBAC
-  changes are eventually-consistent within the combined TTLs regardless.
-* Graceful degradation: any Redis error falls back to a direct DB compute, so
-  a cache outage slows validation down but never breaks it.
-* Consistency: entries expire after ``PERMISSIONS_CACHE_TTL`` seconds;
-  ``invalidate`` is also called on direct role assignment for immediacy.
+Si Redis falla se calcula directo de la base, asi que una caida de la cache
+solo hace mas lento el validate pero no lo rompe.
 """
 import logging
 
@@ -31,7 +19,7 @@ def _cache():
 
 
 def get_roles_and_permissions(user) -> tuple[list, list]:
-    """Return ``(roles, permissions)`` for ``user``, from cache when possible."""
+    """Devuelve (roles, permisos) del usuario, usando la cache si se puede."""
     key = _KEY.format(user_id=user.id)
     try:
         cached = _cache().get(key)
@@ -51,7 +39,7 @@ def get_roles_and_permissions(user) -> tuple[list, list]:
 
 
 def invalidate(user_id) -> None:
-    """Drop a user's cached roles/permissions (e.g. after a role change)."""
+    """Borra los roles/permisos cacheados de un usuario."""
     try:
         _cache().delete(_KEY.format(user_id=user_id))
     except Exception:
