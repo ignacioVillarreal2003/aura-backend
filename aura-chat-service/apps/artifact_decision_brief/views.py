@@ -164,7 +164,7 @@ class DecisionBriefGenerateView(APIView):
                 )
             message = await sync_to_async(_transcribe_audio)(d["audio"])
         else:
-            message = d["message"]
+            message = d.get("message", "")
 
         async with ai_reply_lock_guard(chat_id):
             brief, messages, fragments = await decision_brief_service.generate_decision_brief(

@@ -25,6 +25,8 @@ from apps.artifact.llm_context import build_chat_history
 
 logger = logging.getLogger(__name__)
 
+_DOCUMENTS_ONLY_INSTRUCTION = "Generá el resumen para la toma de decisiones a partir del o los documentos adjuntos."
+
 
 def _normalize_options(options: list) -> list:
     normalized = []
@@ -136,7 +138,8 @@ class DecisionBriefService(ArtifactCrudService):
         response_style = chat.response_style if chat else None
         history = await sync_to_async(build_chat_history)(chat_id)
 
-        messages = history + [{"role": "human", "content": message}]
+        human_text = message.strip() if message else _DOCUMENTS_ONLY_INSTRUCTION
+        messages = history + [{"role": "human", "content": human_text}]
         result_data: dict | None = None
         try:
             async for event in llm_client.generate_decision_brief_stream_events(

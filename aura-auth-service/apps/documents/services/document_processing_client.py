@@ -148,8 +148,17 @@ def _request(method: str, path: str, actor_user, *, json_payload=None, timeout_c
 
 # ── Create (unchanged contract; used by documents/admin.py add flow) ──────────
 
-def create_document_from_admin(*, raw_document, actor_user, chat_id=None, name=None, description=None):
-    """Create a document in document-processing using the acting user's JWT."""
+def create_document_from_admin(
+    *, raw_document, actor_user, chat_id=None, name=None,
+    enrich=False, graph_extract=False,
+):
+    """Create a document in document-processing using the acting user's JWT.
+
+    Description is intentionally NOT accepted here: it is generated automatically
+    downstream (enrichment). ``enrich`` (LLM fragment enrichment) and
+    ``graph_extract`` (knowledge-graph extraction) map to the matching flags on
+    the service's CreateDocumentRequest; both default to False (same as the
+    service)."""
     url = f"{_base_url()}/api/v1/create-document"
     content_type = (
         getattr(raw_document, 'content_type', None)
@@ -158,20 +167,22 @@ def create_document_from_admin(*, raw_document, actor_user, chat_id=None, name=N
     )
 
     files = {'file': (raw_document.name, raw_document, content_type)}
-    data = {}
+    data = {
+        'enrich': 'true' if enrich else 'false',
+        'graph_extract': 'true' if graph_extract else 'false',
+    }
     if chat_id:
         data['chat_id'] = str(chat_id)
     if name:
         data['name'] = name
-    if description:
-        data['description'] = description
 
     # Multipart upload: do not set Content-Type (requests sets the boundary).
     headers = _auth_headers(actor_user)
 
     logger.info(
-        '[doc-processing] POST %s | file=%s size=%s bytes | chat_id=%s actor=%s',
-        url, raw_document.name, getattr(raw_document, 'size', '?'), data.get('chat_id'), actor_user.pk,
+        '[doc-processing] POST %s | file=%s size=%s bytes | chat_id=%s enrich=%s graph_extract=%s actor=%s',
+        url, raw_document.name, getattr(raw_document, 'size', '?'), data.get('chat_id'),
+        data['enrich'], data['graph_extract'], actor_user.pk,
     )
 
     try:
@@ -192,6 +203,71 @@ def create_document_from_admin(*, raw_document, actor_user, chat_id=None, name=N
     except requests.RequestException as exc:
         raise DocumentProcessingServiceError(
             'Ocurrió un error al enviar el documento al servicio de procesamiento.'
+        ) from exc
+
+    logger.info('[doc-processing] response status=%s body=%s', response.status_code, response.text[:500])
+    _handle_error(response)
+    return response.json()
+
+
+# ── Bulk create (unchanged contract; used by documents/admin.py bulk add flow) ─
+
+def bulk_create_documents_from_admin(
+    *, raw_documents, actor_user, chat_id=None,
+    enrich=False, graph_extract=False,
+):
+    """Create several documents in one call to document-processing.
+
+    Mirrors ``create_document_from_admin`` but sends every file under the same
+    ``file`` multipart field (FastAPI binds the repeated field to a list). The
+    same processing options apply to the whole batch; no per-file name is sent
+    (each document keeps its filename). Returns BulkCreateDocumentResponse
+    {total, created, failed, items}."""
+    url = f"{_base_url()}/api/v1/bulk-create-document"
+
+    files = []
+    for raw_document in raw_documents:
+        content_type = (
+            getattr(raw_document, 'content_type', None)
+            or mimetypes.guess_type(raw_document.name)[0]
+            or 'application/octet-stream'
+        )
+        files.append(('files', (raw_document.name, raw_document, content_type)))
+
+    data = {
+        'enrich': 'true' if enrich else 'false',
+        'graph_extract': 'true' if graph_extract else 'false',
+    }
+    if chat_id:
+        data['chat_id'] = str(chat_id)
+
+    # Multipart upload: do not set Content-Type (requests sets the boundary).
+    headers = _auth_headers(actor_user)
+
+    logger.info(
+        '[doc-processing] POST %s | files=%s | chat_id=%s enrich=%s graph_extract=%s actor=%s',
+        url, [getattr(f, 'name', '?') for f in raw_documents], data.get('chat_id'),
+        data['enrich'], data['graph_extract'], actor_user.pk,
+    )
+
+    try:
+        response = requests.post(
+            url, files=files, data=data, headers=headers,
+            timeout=(_CONNECT_TIMEOUT, _read_timeout()),
+        )
+    except requests.ConnectionError as exc:
+        raise DocumentProcessingServiceError(
+            'No fue posible conectar con el servicio de procesamiento de documentos. '
+            'Verifica que el contenedor aura-document-processing-service esté activo en el puerto 8000.'
+        ) from exc
+    except requests.ReadTimeout as exc:
+        raise DocumentProcessingServiceError(
+            'El servicio de procesamiento de documentos tardó demasiado en responder. '
+            'Si es la primera carga, es posible que esté inicializando modelos; intenta nuevamente.'
+        ) from exc
+    except requests.RequestException as exc:
+        raise DocumentProcessingServiceError(
+            'Ocurrió un error al enviar los documentos al servicio de procesamiento.'
         ) from exc
 
     logger.info('[doc-processing] response status=%s body=%s', response.status_code, response.text[:500])

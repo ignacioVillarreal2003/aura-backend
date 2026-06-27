@@ -13,8 +13,9 @@ def parse_create_document_request(
         enrich: bool = Form(False),
         graph_extract: bool = Form(False),
         name: Optional[str] = Form(None),
-        description: Optional[str] = Form(None),
 ) -> CreateDocumentRequest:
+    # Description is intentionally not accepted at creation: it is generated
+    # automatically downstream (enrichment).
     try:
         return CreateDocumentRequest(
             chat_id=ChatId(chat_id) if chat_id is not None else None,
@@ -22,7 +23,6 @@ def parse_create_document_request(
             enrich=enrich,
             graph_extract=graph_extract,
             name=name,
-            description=description,
         )
     except ValidationError as e:
         raise RequestValidationError(errors=e.errors()) from e

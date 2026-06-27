@@ -217,7 +217,7 @@ class QuizGenerateView(APIView):
                 )
             message = await sync_to_async(_transcribe_audio)(d["audio"])
         else:
-            message = d["message"]
+            message = d.get("message", "")
 
         async with ai_reply_lock_guard(chat_id):
             quiz, messages, fragments = await quiz_service.generate_quiz(

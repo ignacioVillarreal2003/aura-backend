@@ -531,6 +531,7 @@ FROM role r
                                          'REMOVE_MEMBER',
                                          'LEAVE_CHAT',
                                          'UPDATE_MEMBER_ROLE',
+                                         'ADMIN_USERS_VIEW',
                                          'LIST_MESSAGES',
                                          'SEND_MESSAGE',
                                          'DELETE_MESSAGE',

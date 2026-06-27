@@ -57,6 +57,7 @@ class ReportService(
 
     default_process_documents = True
     default_retrieve_context = False
+    documents_only_instruction = "Generá el informe a partir del o los documentos adjuntos."
 
     human_prompt = HUMAN_PROMPT
     map_system_prompt = MAP_SYSTEM_PROMPT

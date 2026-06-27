@@ -198,7 +198,7 @@ class ChecklistGenerateView(APIView):
                 )
             message = await sync_to_async(_transcribe_audio)(d["audio"])
         else:
-            message = d["message"]
+            message = d.get("message", "")
 
         async with ai_reply_lock_guard(chat_id):
             checklist, messages, fragments = await checklist_service.generate_checklist(

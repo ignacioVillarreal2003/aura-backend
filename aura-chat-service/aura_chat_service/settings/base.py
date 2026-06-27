@@ -24,6 +24,7 @@ INSTALLED_APPS = [
     "django_prometheus",
     "apps.chat",
     "apps.artifact_message",
+    "apps.peer_message",
     "apps.membership",
     "apps.artifact_report",
     "apps.artifact_checklist",

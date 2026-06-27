@@ -25,6 +25,8 @@ from apps.artifact.llm_context import build_chat_history
 
 logger = logging.getLogger(__name__)
 
+_DOCUMENTS_ONLY_INSTRUCTION = "Extraé las lecciones aprendidas a partir del o los documentos adjuntos."
+
 
 def _normalize_items(items: list) -> list:
     valid_categories = {c.value for c in ArtifactLessonsLearnedItem.Category}
@@ -128,7 +130,8 @@ class LessonsLearnedService(ArtifactCrudService):
         response_style = chat.response_style if chat else None
         history = await sync_to_async(build_chat_history)(chat_id)
 
-        messages = history + [{"role": "human", "content": message}]
+        human_text = message.strip() if message else _DOCUMENTS_ONLY_INSTRUCTION
+        messages = history + [{"role": "human", "content": human_text}]
         result_data: dict | None = None
         try:
             async for event in llm_client.generate_lessons_learned_stream_events(

@@ -4,6 +4,7 @@ from app.api.controllers.fragment import (
     fragment_query_router,
 )
 from app.api.controllers.document import (
+    bulk_create_document_router,
     create_document_router,
     delete_document_router,
     document_download_router,
@@ -44,6 +45,12 @@ router.include_router(
     create_document_router,
     prefix="/create-document",
     tags=["create-document"],
+)
+
+router.include_router(
+    bulk_create_document_router,
+    prefix="/bulk-create-document",
+    tags=["bulk-create-document"],
 )
 
 router.include_router(

@@ -24,6 +24,7 @@ from apps.documents.models import Document
 from apps.documents.services.document_processing_client import (
     DocumentProcessingServiceError,
     create_document_from_admin,
+    bulk_create_documents_from_admin,
     delete_document as delete_document_remote,
     get_document as get_document_remote,
     update_document as update_document_remote,
@@ -88,11 +89,15 @@ def _format_processing_dt(value):
 
 class DocumentUploadForm(forms.ModelForm):
     name = forms.CharField(max_length=255, label='Nombre')
-    description = forms.CharField(
-        label='Descripción', required=False,
-        widget=forms.Textarea(attrs={'rows': 4}),
-    )
     raw_collection = forms.FileField(label='Archivo', required=True)
+    enrich = forms.BooleanField(
+        label='Enriquecer fragmentos (LLM)', required=False, initial=False,
+        help_text='Contextualiza los fragmentos con el LLM al procesar el documento.',
+    )
+    graph_extract = forms.BooleanField(
+        label='Extraer grafo de conocimiento', required=False, initial=False,
+        help_text='Extrae entidades y relaciones para el grafo de conocimiento.',
+    )
 
     class Meta:
         model = Document
@@ -100,6 +105,20 @@ class DocumentUploadForm(forms.ModelForm):
 
     def _post_clean(self):
         pass
+
+
+class DocumentBulkUploadForm(forms.Form):
+    """Form for the bulk-upload page. The file field accepts many files; the
+    processing options (enrich / graph_extract) apply to the whole batch, the
+    same way the single-upload form exposes them."""
+    enrich = forms.BooleanField(
+        label='Enriquecer fragmentos (LLM)', required=False, initial=False,
+        help_text='Contextualiza los fragmentos con el LLM al procesar cada documento.',
+    )
+    graph_extract = forms.BooleanField(
+        label='Extraer grafo de conocimiento', required=False, initial=False,
+        help_text='Extrae entidades y relaciones para el grafo de conocimiento.',
+    )
 
 
 class DocumentChangeForm(forms.ModelForm):
@@ -138,6 +157,7 @@ class DeletedDocumentsFilter(admin.SimpleListFilter):
 @admin.register(Document)
 class DocumentAdmin(admin.ModelAdmin):
     change_form_template = 'admin/documents/document/change_form.html'
+    change_list_template = 'admin/documents/document/change_list.html'
     list_display = (
         'name_display',
         'description_short',
@@ -197,6 +217,11 @@ class DocumentAdmin(admin.ModelAdmin):
         urls = super().get_urls()
         custom = [
             path(
+                'bulk-upload/',
+                self.admin_site.admin_view(self.bulk_upload_view),
+                name='documents_document_bulk_upload',
+            ),
+            path(
                 '<int:document_id>/download-file/',
                 self.admin_site.admin_view(self.download_file_view),
                 name='documents_document_download_file',
@@ -211,7 +236,11 @@ class DocumentAdmin(admin.ModelAdmin):
         if obj is None:
             return (
                 ('Subir documento', {
-                    'fields': ('name', 'description', 'raw_collection'),
+                    'fields': ('name', 'raw_collection'),
+                }),
+                ('Procesamiento', {
+                    'fields': ('enrich', 'graph_extract'),
+                    'description': 'Opciones de procesamiento del documento al crearlo.',
                 }),
             )
         return self.fieldsets
@@ -496,14 +525,18 @@ class DocumentAdmin(admin.ModelAdmin):
 
         raw_collection = form.cleaned_data['raw_collection']
         name_from_form = form.cleaned_data.get('name', '').strip()
-        description_from_form = form.cleaned_data.get('description', '') or ''
+        enrich_from_form = bool(form.cleaned_data.get('enrich', False))
+        graph_extract_from_form = bool(form.cleaned_data.get('graph_extract', False))
 
+        # Description is no longer set on creation: it is generated automatically
+        # by the processing service (enrichment). The admin only provides the name.
         try:
             response_payload = create_document_from_admin(
                 raw_document=raw_collection,
                 actor_user=request.user,
                 name=name_from_form or None,
-                description=description_from_form or None,
+                enrich=enrich_from_form,
+                graph_extract=graph_extract_from_form,
             )
         except DocumentProcessingServiceError as exc:
             form.add_error(None, str(exc))
@@ -529,15 +562,15 @@ class DocumentAdmin(admin.ModelAdmin):
 
         document_id = response_payload.get('id')
 
-        # Save to local meta so processing-service overwrites don't affect us.
-        if name_from_form or description_from_form:
-            _save_doc_meta(document_id, name_from_form, description_from_form)
-            # Best-effort update on aura_db too.
+        # Persist only the admin-chosen name on aura_db. Description is generated
+        # automatically downstream, so it is not written here (and no local meta
+        # row is saved, to avoid masking the auto-generated description).
+        if name_from_form:
             try:
                 with connections['aura_db'].cursor() as cursor:
                     cursor.execute(
-                        'UPDATE document SET name = %s, description = %s WHERE id = %s',
-                        [name_from_form, description_from_form, document_id],
+                        'UPDATE document SET name = %s WHERE id = %s',
+                        [name_from_form, document_id],
                     )
             except Exception:
                 pass
@@ -567,8 +600,10 @@ class DocumentAdmin(admin.ModelAdmin):
 
         doc_name = name_from_form or new_object.name
         audit_details = {'nombre': doc_name}
-        if description_from_form:
-            audit_details['descripción'] = description_from_form
+        if enrich_from_form:
+            audit_details['enriquecer'] = True
+        if graph_extract_from_form:
+            audit_details['extraer_grafo'] = True
         if cl_id_raw:
             audit_details['nivel'] = _level_name_map.get(int(cl_id_raw), cl_id_raw)
         if comp_ids_raw_list:
@@ -728,6 +763,135 @@ class DocumentAdmin(admin.ModelAdmin):
         if content_length:
             response['Content-Length'] = content_length
         return response
+
+    # ── Bulk upload (create several documents in one request) ───────────────────
+
+    def bulk_upload_view(self, request, extra_context=None):
+        if not self.has_add_permission(request):
+            raise PermissionDenied
+        _current_admin_actor.set(request.user)
+
+        try:
+            all_levels = sorted(
+                mac_client.list_classification_levels(request.user),
+                key=lambda x: x.get('rank', 0),
+            )
+        except Exception:
+            all_levels = []
+        try:
+            all_compartments = mac_client.list_compartments(request.user)
+        except Exception:
+            all_compartments = []
+
+        def _render(form):
+            from django.template.response import TemplateResponse
+            context = {
+                **self.admin_site.each_context(request),
+                'title': 'Subir varios documentos',
+                'opts': self.model._meta,
+                'form': form,
+                'levels_for_doc': all_levels,
+                'compartments_json_doc': json.dumps([
+                    {'id': str(c['id']), 'label': c['name']} for c in all_compartments
+                ]),
+                'changelist_url': reverse('admin:documents_document_changelist'),
+            }
+            if extra_context:
+                context.update(extra_context)
+            return TemplateResponse(
+                request, 'admin/documents/document/bulk_upload.html', context
+            )
+
+        if request.method != 'POST':
+            return _render(DocumentBulkUploadForm())
+
+        form = DocumentBulkUploadForm(request.POST, request.FILES)
+        raw_documents = request.FILES.getlist('files')
+        if not form.is_valid():
+            return _render(form)
+        if not raw_documents:
+            form.add_error(None, 'Selecciona al menos un archivo.')
+            return _render(form)
+
+        enrich = bool(form.cleaned_data.get('enrich', False))
+        graph_extract = bool(form.cleaned_data.get('graph_extract', False))
+
+        try:
+            result = bulk_create_documents_from_admin(
+                raw_documents=raw_documents,
+                actor_user=request.user,
+                enrich=enrich,
+                graph_extract=graph_extract,
+            )
+        except DocumentProcessingServiceError as exc:
+            form.add_error(None, str(exc))
+            return _render(form)
+
+        result = result or {}
+        items = result.get('items', []) or []
+        created_items = [it for it in items if it.get('status') == 'created']
+        failed_items = [it for it in items if it.get('status') != 'created']
+
+        # Optionally assign the same MAC level / compartments to every document
+        # that was created, mirroring the single-upload flow.
+        cl_id_raw = request.POST.get('classification_level_id', '').strip()
+        comp_ids = [int(c) for c in request.POST.getlist('compartment_ids') if c]
+        if cl_id_raw and created_items:
+            for it in created_items:
+                doc_id = it.get('id')
+                if not doc_id:
+                    continue
+                try:
+                    _db_assign_strict_mac_collection(
+                        doc_id, int(cl_id_raw), comp_ids, request.user.pk
+                    )
+                except Exception:
+                    logger.exception('No se pudo asignar MAC al documento %s en carga masiva.', doc_id)
+
+        # Persist the admin-visible name (filename) for each created document on
+        # aura_db, matching the single-upload behaviour.
+        for it in created_items:
+            doc_id = it.get('id')
+            name = it.get('name')
+            if doc_id and name:
+                try:
+                    with connections['aura_db'].cursor() as cursor:
+                        cursor.execute(
+                            'UPDATE document SET name = %s WHERE id = %s',
+                            [name, doc_id],
+                        )
+                except Exception:
+                    pass
+
+        if created_items:
+            log_audit(
+                actor=request.user, action='CREATE', entity_type='Document',
+                entity_id=','.join(str(it.get('id')) for it in created_items[:50]),
+                entity_label=f'{request.user.username} subió {len(created_items)} documento(s) en lote',
+                details={
+                    'total': result.get('total', len(items)),
+                    'created': len(created_items),
+                    'failed': len(failed_items),
+                    'enriquecer': enrich,
+                    'extraer_grafo': graph_extract,
+                },
+                source='admin', request=request,
+            )
+            messages.success(
+                request, f'{len(created_items)} documento(s) creado(s) correctamente.'
+            )
+        if failed_items:
+            detail = '; '.join(
+                f"{it.get('filename') or '—'}: {it.get('error') or 'error desconocido'}"
+                for it in failed_items[:10]
+            )
+            messages.error(
+                request, f'{len(failed_items)} documento(s) no se pudieron crear. {detail}'
+            )
+        if not items:
+            messages.warning(request, 'No se procesó ningún documento.')
+
+        return HttpResponseRedirect(reverse('admin:documents_document_changelist'))
 
     # ── Bulk operations (manage) — changelist actions ───────────────────────────
 

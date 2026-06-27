@@ -69,6 +69,20 @@ CREATE TABLE chat_share_link
     CONSTRAINT uq_share_link_token UNIQUE (token)
 );
 
+CREATE TABLE chat_peer_message
+(
+    id         BIGSERIAL PRIMARY KEY,
+    chat_id    BIGINT      NOT NULL
+        CONSTRAINT fk_chat_peer_message_chat REFERENCES chat (id) ON DELETE CASCADE,
+    message    TEXT        NOT NULL,
+    created_by BIGINT      NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_by BIGINT,
+    updated_at TIMESTAMPTZ,
+    deleted_by BIGINT,
+    deleted_at TIMESTAMPTZ
+);
+
 CREATE TABLE artifact
 (
     id             BIGSERIAL PRIMARY KEY,
@@ -435,6 +449,11 @@ CREATE INDEX idx_chat_membership_deleted_at ON chat_membership (deleted_at);
 
 CREATE INDEX idx_share_link_chat ON chat_share_link (chat_id);
 CREATE INDEX idx_share_link_token ON chat_share_link (token);
+
+CREATE INDEX idx_chat_peer_message_chat_created
+    ON chat_peer_message (chat_id, created_at DESC) WHERE deleted_at IS NULL;
+CREATE INDEX idx_chat_peer_message_deleted_at ON chat_peer_message (deleted_at);
+CREATE INDEX idx_chat_peer_message_created_by ON chat_peer_message (created_by);
 
 
 CREATE UNIQUE INDEX idx_assistant_name_active ON assistant (name) WHERE deleted_at IS NULL;

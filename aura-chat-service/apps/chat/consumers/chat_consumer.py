@@ -22,6 +22,7 @@ from apps.chat.ws_rate_limit import (
 )
 from apps.membership.repositories.membership_repository import membership_repository
 from apps.membership.models.chat_membership import ChatMembership
+from apps.peer_message.services.peer_message_service import peer_message_service
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.exceptions import ServiceUnavailableException
 
@@ -216,6 +217,14 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 await self._handle_chat_message(content)
             elif msg_type == "chat.typing":
                 await self._handle_typing(content)
+            elif msg_type == "peer.message":
+                await self._handle_peer_message(content)
+            elif msg_type == "peer.message.edit":
+                await self._handle_peer_message_edit(content)
+            elif msg_type == "peer.message.delete":
+                await self._handle_peer_message_delete(content)
+            elif msg_type == "peer.typing":
+                await self._handle_peer_typing(content)
             else:
                 await self.send_json({
                     "type": "error",
@@ -515,6 +524,132 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 "is_typing": is_typing,
             },
         )
+
+    # ── Peer chat (human-to-human, no AI) ─────────────────────────────────────
+    async def _run_peer_service(self, fn, *args) -> bool:
+        """Run a peer_message_service call off the event loop. On a known service
+        error, relays its detail/error_code to the caller; otherwise logs and
+        sends a generic error. The service broadcasts success to the group."""
+        try:
+            await database_sync_to_async(fn)(*args)
+            return True
+        except Exception as e:  # noqa: BLE001 - surfaced to the client below
+            detail = getattr(e, "detail", None)
+            error_code = getattr(e, "error_code", None)
+            if detail is None:
+                logger.exception(
+                    "Unhandled error in peer chat operation.",
+                    extra={"chat_id": self.chat_id, "user_id": getattr(self.user, "id", None)},
+                )
+                detail = "Failed to process message."
+            out = {"type": "error", "detail": str(detail)}
+            if error_code:
+                out["error_code"] = error_code
+            await self.send_json(out)
+            return False
+
+    async def _handle_peer_message(self, content: dict):
+        text = content.get("message", "")
+        text = text.strip() if isinstance(text, str) else ""
+        if not text:
+            await self.send_json({"type": "error", "detail": "Message cannot be empty"})
+            return
+        if len(text) > _MAX_MESSAGE_LENGTH:
+            await self.send_json({
+                "type": "error",
+                "error_code": "message_too_long",
+                "detail": f"Message exceeds {_MAX_MESSAGE_LENGTH} characters.",
+            })
+            return
+        if not await self._enforce_rate_limit():
+            return
+        await self._run_peer_service(
+            peer_message_service.create, self.user, self.chat_id, text
+        )
+
+    async def _handle_peer_message_edit(self, content: dict):
+        message_id = content.get("id")
+        if not isinstance(message_id, int):
+            await self.send_json({"type": "error", "detail": "'id' must be an integer."})
+            return
+        text = content.get("message", "")
+        text = text.strip() if isinstance(text, str) else ""
+        if not text:
+            await self.send_json({"type": "error", "detail": "Message cannot be empty"})
+            return
+        if len(text) > _MAX_MESSAGE_LENGTH:
+            await self.send_json({
+                "type": "error",
+                "error_code": "message_too_long",
+                "detail": f"Message exceeds {_MAX_MESSAGE_LENGTH} characters.",
+            })
+            return
+        await self._run_peer_service(
+            peer_message_service.update, self.user, self.chat_id, message_id, text
+        )
+
+    async def _handle_peer_message_delete(self, content: dict):
+        message_id = content.get("id")
+        if not isinstance(message_id, int):
+            await self.send_json({"type": "error", "detail": "'id' must be an integer."})
+            return
+        await self._run_peer_service(
+            peer_message_service.delete, self.user, self.chat_id, message_id
+        )
+
+    async def _handle_peer_typing(self, content: dict):
+        is_typing = content.get("is_typing")
+        if not isinstance(is_typing, bool):
+            await self.send_json({"type": "error", "detail": "'is_typing' must be a boolean."})
+            return
+        allowed = await database_sync_to_async(check_typing_rate_limit)(self.user.id)
+        if not allowed:
+            return
+        await self.channel_layer.group_send(
+            self.group_name,
+            {"type": "peer_typing", "user_id": self.user.id, "is_typing": is_typing},
+        )
+
+    async def peer_message_created(self, event):
+        await self.send_json({
+            "type": "peer_message_created",
+            "id": event["id"],
+            "chat_id": event["chat_id"],
+            "message": event["message"],
+            "created_by": event["created_by"],
+            "created_at": event["created_at"],
+            "updated_at": event.get("updated_at"),
+            "is_edited": event.get("is_edited", False),
+        })
+
+    async def peer_message_updated(self, event):
+        await self.send_json({
+            "type": "peer_message_updated",
+            "id": event["id"],
+            "chat_id": event["chat_id"],
+            "message": event["message"],
+            "created_by": event["created_by"],
+            "created_at": event["created_at"],
+            "updated_at": event.get("updated_at"),
+            "is_edited": event.get("is_edited", True),
+        })
+
+    async def peer_message_deleted(self, event):
+        await self.send_json({
+            "type": "peer_message_deleted",
+            "id": event["id"],
+            "deleted_by": event.get("deleted_by"),
+        })
+
+    async def peer_typing(self, event):
+        if self.user is None:
+            return
+        if event["user_id"] != self.user.id:
+            await self.send_json({
+                "type": "peer_typing",
+                "user_id": event["user_id"],
+                "is_typing": event["is_typing"],
+            })
 
     async def user_message(self, event):
         await self.send_json({

@@ -224,7 +224,8 @@ class CreateDocumentService(CreateDocumentServiceInterface):
         return Document(
             chat_id=create_document_request.chat_id,
             name=create_document_request.name or raw_document.filename,
-            description=create_document_request.description,
+            # Description is generated automatically by enrichment, never set at creation.
+            description=None,
             mime_type=document_mime_type,
             status=DocumentStatus.uploaded,
             storage_url=object_name,

@@ -13,6 +13,9 @@ from app.application.services.document.document_download_service.interfaces.docu
 from app.application.services.document.document_query_service.interfaces.document_query_service_interface import (
     DocumentQueryServiceInterface,
 )
+from app.application.services.document.bulk_create_document_service.interfaces.bulk_create_document_service_interface import (
+    BulkCreateDocumentServiceInterface,
+)
 from app.application.services.document.bulk_dispatch_service.interfaces.bulk_dispatch_service_interface import (
     BulkDispatchServiceInterface,
 )
@@ -103,6 +106,13 @@ async def get_restore_document_service(request: Request) -> RestoreDocumentServi
     svc = getattr(request.app.state, "restore_document_service", None)
     if svc is None:
         raise _unavailable("RestoreDocumentService")
+    return svc
+
+
+async def get_bulk_create_document_service(request: Request) -> BulkCreateDocumentServiceInterface:
+    svc = getattr(request.app.state, "bulk_create_document_service", None)
+    if svc is None:
+        raise _unavailable("BulkCreateDocumentService")
     return svc
 
 

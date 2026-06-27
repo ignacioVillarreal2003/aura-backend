@@ -1,6 +1,9 @@
 from app.api.controllers.document.create_document_controller.create_document_controller import (
     router as create_document_router,
 )
+from app.api.controllers.document.bulk_create_document_controller.bulk_create_document_controller import (
+    router as bulk_create_document_router,
+)
 from app.api.controllers.document.delete_document_controller.delete_document_controller import (
     router as delete_document_router,
 )
@@ -30,6 +33,7 @@ from app.api.controllers.document.restore_document_controller.restore_document_c
 )
 
 __all__ = [
+    "bulk_create_document_router",
     "create_document_router",
     "delete_document_router",
     "document_download_router",

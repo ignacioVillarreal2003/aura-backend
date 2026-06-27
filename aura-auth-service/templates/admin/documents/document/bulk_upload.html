@@ -1,0 +1,147 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+  &rsaquo; <a href="{{ changelist_url }}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; Subir varios documentos
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+  .bulk-upload-wrap { max-width: 760px; }
+  .bulk-upload-wrap .help { color:#666;font-size:12px;margin-top:4px; }
+  .bulk-upload-wrap fieldset { margin-bottom:18px; }
+  .bulk-upload-wrap .form-row { padding:10px 0; }
+  .doc-groups-section .search-container { margin-bottom:12px; }
+  .doc-groups-section .search-input { width:100%;padding:9px 12px;border:1px solid #ccc;border-radius:4px;font-size:13px;box-sizing:border-box;background:#fff; }
+  .doc-groups-section .search-input:focus { outline:none;border-color:#417690;box-shadow:0 0 0 2px rgba(65,118,144,.12); }
+  .doc-groups-section .dual-panel-container { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
+  .doc-groups-section .panel { display:flex;flex-direction:column;border:1px solid #ccc;border-radius:4px;background:#fff;min-height:200px; }
+  .doc-groups-section .panel-header { background:#f5f5f5;padding:10px 12px;border-bottom:1px solid #ddd;font-weight:600;font-size:12px;color:#333;text-transform:uppercase;letter-spacing:.2px; }
+  .doc-groups-section .panel-content { flex:1;overflow-y:auto;max-height:280px; }
+  .doc-groups-section .panel-item { padding:9px 12px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:8px;cursor:pointer; }
+  .doc-groups-section .panel-item:last-child { border-bottom:none; }
+  .doc-groups-section .panel-item:hover { background:#f8fbff; }
+  .doc-groups-section .panel-item input[type="checkbox"] { margin:0;cursor:pointer; }
+  .doc-groups-section .panel-item label { margin:0;cursor:pointer;flex:1;font-size:13px; }
+  .doc-groups-section .empty-panel { padding:12px;color:#888;font-size:12px; }
+  @media (max-width:900px) { .doc-groups-section .dual-panel-container { grid-template-columns:1fr; } }
+</style>
+
+<div class="bulk-upload-wrap">
+  {% if form.non_field_errors %}
+  <p class="errornote">
+    {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+  </p>
+  {% endif %}
+
+  <form method="post" enctype="multipart/form-data" novalidate>
+    {% csrf_token %}
+
+    <fieldset class="module aligned">
+      <h2>Subir documentos</h2>
+      <div class="form-row">
+        <label for="id_bulk_files" class="required">Archivos:</label>
+        <input type="file" name="files" id="id_bulk_files" multiple required>
+        <p class="help">Selecciona uno o más archivos. Cada uno se crea de forma independiente.</p>
+      </div>
+    </fieldset>
+
+    <fieldset class="module aligned">
+      <h2>Procesamiento</h2>
+      <p class="help" style="margin:0 0 8px 0">Estas opciones se aplican a todos los archivos del lote.</p>
+      <div class="form-row">
+        {{ form.enrich }} <label for="{{ form.enrich.id_for_label }}" style="display:inline">{{ form.enrich.label }}</label>
+        <p class="help">{{ form.enrich.help_text }}</p>
+      </div>
+      <div class="form-row">
+        {{ form.graph_extract }} <label for="{{ form.graph_extract.id_for_label }}" style="display:inline">{{ form.graph_extract.label }}</label>
+        <p class="help">{{ form.graph_extract.help_text }}</p>
+      </div>
+    </fieldset>
+
+    <fieldset class="module aligned">
+      <h2>Grupos</h2>
+      <div class="form-row">
+        <div style="display:flex;align-items:center;gap:12px">
+          <label for="id_bulk_level" style="min-width:110px;flex-shrink:0;font-size:13px">Nivel máximo:</label>
+          <select name="classification_level_id" id="id_bulk_level" style="max-width:300px;width:100%">
+            <option value="">-- Sin nivel --</option>
+            {% for level in levels_for_doc %}
+            <option value="{{ level.id }}">{{ level.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <p class="help">Si seleccionas un nivel, se asigna a todos los documentos creados.</p>
+      </div>
+      <div class="form-row doc-groups-section" style="margin-top:12px">
+        <div style="width:100%">
+          <p style="margin:0 0 10px 0;font-size:13px">Agrupaciones:</p>
+          <select name="compartment_ids" id="id_bulk_comp_ids" multiple style="display:none"></select>
+          <div class="search-container">
+            <input type="text" class="search-input" id="search-bulk-comps" placeholder="Buscar agrupación...">
+          </div>
+          <div class="dual-panel-container">
+            <div class="panel">
+              <div class="panel-header">Sin asignar</div>
+              <div class="panel-content" id="available-bulk-comps"></div>
+            </div>
+            <div class="panel">
+              <div class="panel-header">Asignadas</div>
+              <div class="panel-content" id="selected-bulk-comps"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </fieldset>
+
+    <div class="submit-row">
+      <input type="submit" value="Subir documentos" class="default">
+      <a href="{{ changelist_url }}" class="button cancel-link">Cancelar</a>
+    </div>
+  </form>
+</div>
+
+<script>
+(function() {
+  var compartmentsData = {{ compartments_json_doc|safe }};
+  var hiddenSelect = document.getElementById('id_bulk_comp_ids');
+  var availPanel = document.getElementById('available-bulk-comps');
+  var selPanel = document.getElementById('selected-bulk-comps');
+  var searchInput = document.getElementById('search-bulk-comps');
+  compartmentsData.forEach(function(item) {
+    var opt = document.createElement('option');
+    opt.value = item.id; opt.textContent = item.label;
+    hiddenSelect.appendChild(opt);
+  });
+  function getSelectedIds() { return new Set(Array.from(hiddenSelect.options).filter(o => o.selected).map(o => o.value)); }
+  function render(filter) {
+    filter = (filter || '').toLowerCase();
+    availPanel.innerHTML = ''; selPanel.innerHTML = '';
+    var selectedIds = getSelectedIds();
+    compartmentsData.forEach(function(item) {
+      var id = String(item.id);
+      var isSelected = selectedIds.has(id);
+      if (!isSelected && filter && !item.label.toLowerCase().includes(filter)) return;
+      var row = document.createElement('div'); row.className = 'panel-item';
+      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = isSelected; cb.id = 'bulkcomp-' + id;
+      var lbl = document.createElement('label'); lbl.setAttribute('for', cb.id); lbl.textContent = item.label;
+      row.appendChild(cb); row.appendChild(lbl);
+      cb.addEventListener('change', function(e) {
+        var opt = Array.from(hiddenSelect.options).find(o => o.value === id);
+        if (opt) opt.selected = e.target.checked;
+        render(searchInput.value);
+      });
+      (isSelected ? selPanel : availPanel).appendChild(row);
+    });
+    if (!availPanel.children.length) availPanel.innerHTML = '<div class="empty-panel">Sin agrupaciones disponibles</div>';
+    if (!selPanel.children.length) selPanel.innerHTML = '<div class="empty-panel">Sin agrupaciones asignadas</div>';
+  }
+  searchInput.addEventListener('input', function() { render(this.value); });
+  render('');
+})();
+</script>
+{% endblock %}

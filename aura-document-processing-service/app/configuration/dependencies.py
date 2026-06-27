@@ -19,6 +19,9 @@ from app.application.services.document.document_ingestion_service.document_inges
 from app.application.services.document.document_enrichment_service.document_enrichment_service import (
     DocumentEnrichmentService,
 )
+from app.application.services.document.bulk_create_document_service.bulk_create_document_service import (
+    BulkCreateDocumentService,
+)
 from app.application.services.document.bulk_dispatch_service.bulk_dispatch_service import BulkDispatchService
 from app.application.services.document.delete_document_service.delete_document_service import DeleteDocumentService
 from app.application.services.document.restore_document_service.restore_document_service import RestoreDocumentService
@@ -456,6 +459,14 @@ async def _build_document_services(c: DependencyContainer) -> None:
             document_storage=c.document_storage,
             rabbitmq_manager=rabbitmq_manager,
             outbox_lite=outbox_lite,
+        ),
+    )
+
+    c.register(
+        "bulk_create_document_service",
+        BulkCreateDocumentService(
+            create_document_service=c.create_document_service,
+            database_manager=database_manager,
         ),
     )
 

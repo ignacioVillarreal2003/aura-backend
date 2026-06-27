@@ -26,6 +26,7 @@ urlpatterns = [
     path("api/v1/health/startup", startup, name="health-startup"),
     path("api/v1/chats/", include("apps.chat.urls")),
     path("api/v1/messages/", include("apps.artifact_message.urls")),
+    path("api/v1/chats/<int:chat_id>/peer-messages/", include("apps.peer_message.urls")),
     path("api/v1/chats/<int:chat_id>/members/", include("apps.membership.urls")),
     path("api/v1/memberships/me/", include("apps.membership.me_urls")),
     path(

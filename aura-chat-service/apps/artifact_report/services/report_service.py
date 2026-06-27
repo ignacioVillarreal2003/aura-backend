@@ -23,6 +23,8 @@ from apps.artifact_report.repositories.report_repository import report_repositor
 
 logger = logging.getLogger(__name__)
 
+_DOCUMENTS_ONLY_INSTRUCTION = "Generá el informe a partir del o los documentos adjuntos."
+
 _AUTO_TITLE_MAX_CHARS = 80
 _DESCRIPTION_MAX_CHARS = 240
 
@@ -205,7 +207,8 @@ class ReportService(ArtifactCrudService):
         response_style = chat.response_style if chat else None
         history = await sync_to_async(build_chat_history)(chat_id)
 
-        messages = history + [{"role": "human", "content": message}]
+        human_text = message.strip() if message else _DOCUMENTS_ONLY_INSTRUCTION
+        messages = history + [{"role": "human", "content": human_text}]
         result_data: dict | None = None
         try:
             async for event in llm_client.generate_report_stream_events(

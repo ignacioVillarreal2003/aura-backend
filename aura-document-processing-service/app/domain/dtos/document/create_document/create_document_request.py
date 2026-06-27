@@ -1,7 +1,7 @@
 from typing import Optional
 from pydantic import BaseModel, Field
 
-from app.domain.field_limits import MAX_ID, MAX_NAME_CHARS, MAX_DESCRIPTION_CHARS
+from app.domain.field_limits import MAX_ID, MAX_NAME_CHARS
 from app.domain.types import ChatId
 
 
@@ -11,7 +11,8 @@ class CreateDocumentRequest(BaseModel):
     enrich: bool = False
     graph_extract: bool = False
     name: Optional[str] = Field(default=None, max_length=MAX_NAME_CHARS)
-    description: Optional[str] = Field(default=None, max_length=MAX_DESCRIPTION_CHARS)
+    # description is intentionally omitted: it is generated automatically by the
+    # enrichment pipeline and cannot be provided at creation.
 
     model_config = {
         "frozen": True,

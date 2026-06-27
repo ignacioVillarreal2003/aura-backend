@@ -21,8 +21,7 @@ class ReportType(StrEnum):
 class ReportGenerateRequest(BaseModel):
     report_type: ReportType = Field(..., description="Tipo de informe a generar.")
     messages: list[Message] = Field(
-        ...,
-        min_length=1,
+        default_factory=list,
         max_length=MAX_MESSAGES_IN_REQUEST,
         description=(
             "Historial de conversación. El último mensaje debe ser de rol 'human' "
@@ -73,7 +72,9 @@ class ReportGenerateRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_last_message_is_human(self) -> "ReportGenerateRequest":
-        if self.messages[-1].role != MessageRole.human:
+        if not self.messages and not self.document_ids:
+            raise ValueError("Debe enviar al menos un mensaje o adjuntar un documento.")
+        if self.messages and self.messages[-1].role != MessageRole.human:
             raise ValueError("El último mensaje debe ser de rol 'human'.")
         return self
 

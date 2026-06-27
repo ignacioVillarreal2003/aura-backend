@@ -160,7 +160,7 @@ class TimelineGenerateView(APIView):
                 )
             message = await sync_to_async(_transcribe_audio)(d["audio"])
         else:
-            message = d["message"]
+            message = d.get("message", "")
 
         async with ai_reply_lock_guard(chat_id):
             timeline, messages, fragments = await timeline_service.generate_timeline(

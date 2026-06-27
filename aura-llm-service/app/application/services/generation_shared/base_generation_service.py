@@ -56,6 +56,7 @@ from app.application.services.generation_shared.processors.section_context_proce
     SectionContextSettings,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
+from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.message import Message
 from app.infrastructure.http.document_context_provider.interfaces.document_context_provider_interface import (
     DocumentContextProviderInterface,
@@ -91,6 +92,10 @@ class BaseGenerationService(ABC):
     default_retrieve_context: ClassVar[bool] = False
     default_process_documents: ClassVar[bool] = False
     summarize_history: ClassVar[bool] = False
+
+    # Instrucción usada como input cuando el usuario adjunta documentos pero no
+    # escribe ningún prompt. Vacía: el servicio exige siempre un mensaje del usuario.
+    documents_only_instruction: ClassVar[str] = ""
 
     human_prompt: ClassVar[str]
     map_system_prompt: ClassVar[str]
@@ -168,7 +173,12 @@ class BaseGenerationService(ABC):
         return default if value is None else bool(value)
 
     def _request_messages(self, request: Any) -> list[Message]:
-        return list(request.messages)
+        messages = list(getattr(request, "messages", None) or [])
+        if messages:
+            return messages
+        if self.documents_only_instruction:
+            return [Message(role=MessageRole.human, content=self.documents_only_instruction)]
+        return messages
 
     def _build_state(self, request: Any, authenticated_user: AuthenticatedUser) -> GenerationState:
         retrieve_context = self._resolve_flag(request, "retrieve_context", self.default_retrieve_context)

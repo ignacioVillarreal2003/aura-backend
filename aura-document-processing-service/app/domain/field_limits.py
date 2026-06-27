@@ -10,6 +10,9 @@ MAX_MIME_TYPE_CHARS: Final[int] = 256
 MIN_FILE_SIZE_BYTES: Final[int] = 1
 MAX_DOCUMENTS_IN_LIST: Final[int] = 10_000
 
+# Maximum number of files accepted in a single bulk-create upload request.
+MAX_BULK_CREATE_DOCUMENTS: Final[int] = 50
+
 DEFAULT_DOCUMENT_QUERY_PAGE_SIZE: Final[int] = 20
 MAX_DOCUMENT_QUERY_PAGE_SIZE: Final[int] = 100
 

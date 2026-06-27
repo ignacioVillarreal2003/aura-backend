@@ -27,6 +27,8 @@ from apps.artifact.llm_context import build_chat_history
 
 logger = logging.getLogger(__name__)
 
+_DOCUMENTS_ONLY_INSTRUCTION = "Generá el cuestionario a partir del o los documentos adjuntos."
+
 
 def _normalize_questions(questions: list) -> list:
     from apps.artifact_quiz.models import ArtifactQuizQuestion
@@ -209,7 +211,8 @@ class QuizService(ArtifactCrudService):
         system_prompt = chat.system_prompt if chat else None
         response_style = chat.response_style if chat else None
         history = await sync_to_async(build_chat_history)(chat_id)
-        messages = history + [{"role": "human", "content": message}]
+        human_text = message.strip() if message else _DOCUMENTS_ONLY_INSTRUCTION
+        messages = history + [{"role": "human", "content": human_text}]
         result_data: dict | None = None
         try:
             async for event in llm_client.generate_quiz_stream_events(

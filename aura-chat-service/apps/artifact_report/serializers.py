@@ -8,7 +8,7 @@ from core.validators.audio import MAX_AUDIO_MB as _MAX_AUDIO_MB, SUPPORTED_AUDIO
 
 class GenerateReportRequest(serializers.Serializer):
     type = serializers.ChoiceField(choices=ArtifactReport.Type.choices)
-    message = serializers.CharField(allow_blank=False, max_length=4000, required=False)
+    message = serializers.CharField(allow_blank=True, max_length=4000, required=False)
     audio = serializers.FileField(required=False)
     chat_id = serializers.IntegerField()
     retrieve_context = serializers.BooleanField(
@@ -44,8 +44,9 @@ class GenerateReportRequest(serializers.Serializer):
     def validate(self, attrs):
         has_text = bool(attrs.get("message"))
         has_audio = bool(attrs.get("audio"))
-        if not has_text and not has_audio:
-            raise serializers.ValidationError("Provide either 'message' (text) or 'audio' (file).")
+        has_docs = bool(attrs.get("document_ids"))
+        if not has_text and not has_audio and not has_docs:
+            raise serializers.ValidationError("Provide 'message' (text), 'audio' (file), or 'document_ids'.")
         if has_text and has_audio:
             raise serializers.ValidationError("Provide only one: 'message' or 'audio'.")
         return attrs

@@ -18,6 +18,10 @@ def openapi_tags_metadata() -> list[dict[str, str]]:
             "description": "Alta de documentos por multipart con límite estricto.",
         },
         {
+            "name": "bulk-create-document",
+            "description": "Alta de varios documentos en una sola solicitud multipart.",
+        },
+        {
             "name": "update-document",
             "description": "Actualización parcial (PATCH) de la metadata editable de un documento.",
         },

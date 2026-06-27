@@ -106,9 +106,29 @@ def trace_generation(name: Optional[str] = None):
         if inspect.isasyncgenfunction(method):
             @functools.wraps(method)
             async def gen_wrapper(self, *args, **kwargs):
-                with generation_span(_resolve_name(self), _request_input(args)):
+                # Streaming: el async generator lo consume Starlette en otra Task,
+                # así que NO usamos start_as_current_span (el attach/detach de
+                # contextvars cruzaría de contexto y rompería con
+                # "Token was created in a different Context"). Creamos el span
+                # suelto y lo cerramos en finally.
+                if not _active:
                     async for item in method(self, *args, **kwargs):
                         yield item
+                    return
+
+                from opentelemetry import trace
+
+                tracer = trace.get_tracer(_TRACER_NAME)
+                span = tracer.start_span(_resolve_name(self))
+                span.set_attribute(_SPAN_KIND_ATTR, "CHAIN")
+                input_value = _request_input(args)
+                if input_value:
+                    span.set_attribute(_INPUT_VALUE_ATTR, input_value)
+                try:
+                    async for item in method(self, *args, **kwargs):
+                        yield item
+                finally:
+                    span.end()
 
             return gen_wrapper
 
