@@ -37,7 +37,7 @@ def _decode_and_fetch_user(token: str):
 
     iat = payload.get('iat')
     valid_after = getattr(user, 'force_logout_at', None)
-    if iat is not None and valid_after is not None and iat < int(valid_after.timestamp()):
+    if iat is not None and valid_after is not None and iat <= int(valid_after.timestamp()):
         return None
 
     return user
