@@ -23,7 +23,7 @@ def make_mock_user(**kwargs):
     user.account_non_locked = kwargs.get("account_non_locked", True)
     user.lockout_until = kwargs.get("lockout_until", None)
     user.is_superuser = kwargs.get("is_superuser", False)
-    user.tokens_valid_after = kwargs.get("tokens_valid_after", None)
+    user.force_logout_at = kwargs.get("force_logout_at", None)
     return user
 
 

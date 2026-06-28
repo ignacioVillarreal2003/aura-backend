@@ -68,8 +68,8 @@ class TestUserModel:
     def test_is_deleted_property_false_for_active(self, regular_user):
         assert regular_user.is_deleted is False
 
-    def test_tokens_valid_after_none_on_creation(self, regular_user):
-        assert regular_user.tokens_valid_after is None
+    def test_force_logout_at_none_on_creation(self, regular_user):
+        assert regular_user.force_logout_at is None
 
     def test_created_by_field_persists(self, regular_user, bootstrap_user):
         regular_user.refresh_from_db()

@@ -1,9 +1,17 @@
 import uuid
-from datetime import timedelta
+from datetime import timedelta, timezone as dt_timezone
 
 import pytest
 from django.conf import settings
 from django.utils import timezone
+
+
+def _as_aware(value):
+    """auth_user.last_login/lockout_until son TIMESTAMP (naive) en init.sql; con
+    USE_TZ=True se leen naive. Los volvemos aware (UTC) para poder comparar."""
+    if value is not None and timezone.is_naive(value):
+        return value.replace(tzinfo=dt_timezone.utc)
+    return value
 
 from apps.accounts.models import User, RefreshToken
 from apps.accounts.services.auth_service import (
@@ -39,7 +47,7 @@ class TestAuthenticateUserIntegration:
         before = timezone.now()
         authenticate_user("testuser", "testpass123")
         regular_user.refresh_from_db()
-        assert regular_user.last_login >= before
+        assert _as_aware(regular_user.last_login) >= before
 
     def test_inactive_user_returns_none(self, regular_user):
         regular_user.status = "inactive"
@@ -63,7 +71,7 @@ class TestAuthenticateUserIntegration:
             authenticate_user("testuser", "badpassword")
         regular_user.refresh_from_db()
         assert regular_user.lockout_until is not None
-        assert regular_user.lockout_until > timezone.now()
+        assert _as_aware(regular_user.lockout_until) > timezone.now()
 
 
 # ---------------------------------------------------------------------------
@@ -133,10 +141,10 @@ class TestRevokeAllSessionsIntegration:
         revoke_all_sessions(regular_user)
         assert RefreshToken.objects.filter(user=regular_user, is_revoked=False).count() == 0
 
-    def test_updates_tokens_valid_after(self, regular_user):
+    def test_updates_force_logout_at(self, regular_user):
         revoke_all_sessions(regular_user)
         regular_user.refresh_from_db()
-        assert regular_user.tokens_valid_after is not None
+        assert regular_user.force_logout_at is not None
 
     def test_access_token_before_revocation_is_blocked(self, regular_user):
         from apps.accounts.services.auth_service import get_user_info

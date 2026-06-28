@@ -204,7 +204,7 @@ class TestChangePasswordViewIntegration:
         regular_user.refresh_from_db()
         assert not regular_user.check_password("testpass123")
 
-    def test_change_password_updates_tokens_valid_after(self, api_client, regular_user):
+    def test_change_password_updates_force_logout_at(self, api_client, regular_user):
         tokens = issue_tokens_for_user(regular_user)
         api_client.post(
             CHANGE_PASSWORD_URL,
@@ -213,7 +213,7 @@ class TestChangePasswordViewIntegration:
             HTTP_AUTHORIZATION=f"Bearer {tokens['access_token']}",
         )
         regular_user.refresh_from_db()
-        assert regular_user.tokens_valid_after is not None
+        assert regular_user.force_logout_at is not None
 
     def test_change_password_missing_current_returns_400(self, api_client, regular_user):
         tokens = issue_tokens_for_user(regular_user)

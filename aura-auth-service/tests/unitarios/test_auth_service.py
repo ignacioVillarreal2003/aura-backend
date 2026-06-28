@@ -439,7 +439,7 @@ class TestGetUserInfo:
 
     @patch(f"{_AUTH_SVC}.User")
     def test_force_logout_blocks_old_token(self, mock_user_cls):
-        """Tokens emitidos antes de tokens_valid_after deben ser rechazados."""
+        """Tokens emitidos antes de force_logout_at deben ser rechazados."""
         import jwt as pyjwt
         from django.conf import settings
         past_iat = int((timezone.now() - timedelta(hours=2)).timestamp())
@@ -448,7 +448,7 @@ class TestGetUserInfo:
         token = pyjwt.encode(payload, settings.JWT_SIGNING_KEY, algorithm=settings.JWT_ALGORITHM)
         user = make_mock_user(id=10)
         type(user).is_deleted = PropertyMock(return_value=False)
-        user.tokens_valid_after = timezone.now() - timedelta(hours=1)
+        user.force_logout_at = timezone.now() - timedelta(hours=1)
         mock_user_cls.objects.filter.return_value.first.return_value = user
         from apps.accounts.services.auth_service import get_user_info
         assert get_user_info(token) is None
