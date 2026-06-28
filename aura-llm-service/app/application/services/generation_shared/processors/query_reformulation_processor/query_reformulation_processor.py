@@ -13,7 +13,9 @@ from app.application.services.generation_shared.processors.processor_observabili
 )
 from app.application.services.generation_shared.processors.query_reformulation_processor.query_reformulation_prompts import (
     REFORMULATION_HUMAN_PROMPT,
-    REFORMULATION_SYSTEM_PROMPT,
+    REFORMULATION_KEYWORDS_HUMAN_PROMPT,
+    build_reformulation_keywords_system_prompt,
+    build_reformulation_system_prompt,
 )
 from app.application.services.generation_shared.processors.query_reformulation_processor.query_reformulation_settings import (
     QueryReformulationSettings,
@@ -37,6 +39,7 @@ _STAGE = "query_reformulation"
 class QueryReformulation:
     base_question: Optional[str] = None
     keyword_question: Optional[str] = None
+    history_relevant: bool = True
     degraded: bool = False
 
 
@@ -58,6 +61,7 @@ class QueryReformulationProcessor:
         )
         state.base_question = result.base_question
         state.keyword_question = result.keyword_question
+        state.history_relevant = result.history_relevant
         if result.degraded:
             state.reformulation_degraded = True
 
@@ -81,21 +85,19 @@ class QueryReformulationProcessor:
         if not should_rewrite and not use_keywords:
             return QueryReformulation()
 
-        history_text = (
-            format_history_messages(history_window, history_messages)
-            if has_history
-            else "(sin historial previo)"
-        )
-
         with timed(_STAGE), generation_span(_STAGE, question):
+            if should_rewrite:
+                system_prompt = build_reformulation_system_prompt(self._settings)
+                human_prompt = REFORMULATION_HUMAN_PROMPT.format(
+                    history_messages=format_history_messages(history_window, history_messages),
+                    question=question,
+                )
+            else:
+                system_prompt = build_reformulation_keywords_system_prompt(self._settings)
+                human_prompt = REFORMULATION_KEYWORDS_HUMAN_PROMPT.format(question=question)
             llm_input = [
-                SystemMessage(content=REFORMULATION_SYSTEM_PROMPT),
-                HumanMessage(
-                    content=REFORMULATION_HUMAN_PROMPT.format(
-                        history_messages=history_text,
-                        question=question,
-                    )
-                ),
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=human_prompt),
             ]
 
             try:
@@ -129,6 +131,7 @@ class QueryReformulationProcessor:
                 keywords_count=keywords_count,
                 base_len=len(result.base_question or ""),
                 kw_len=len(result.keyword_question or ""),
+                history_relevant=result.history_relevant,
             )
             if empty:
                 extra["reason"] = "empty"
@@ -154,7 +157,27 @@ class QueryReformulationProcessor:
         if use_keywords:
             keyword_question = self._normalize_keywords(data.get("keywords"))
 
-        return QueryReformulation(base_question=base_question, keyword_question=keyword_question)
+        history_relevant = True
+        if should_rewrite:
+            history_relevant = self._coerce_bool(data.get("history_relevant"), default=True)
+
+        return QueryReformulation(
+            base_question=base_question,
+            keyword_question=keyword_question,
+            history_relevant=history_relevant,
+        )
+
+    @staticmethod
+    def _coerce_bool(value: Any, *, default: bool) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"true", "1", "yes", "si", "sí"}:
+                return True
+            if normalized in {"false", "0", "no"}:
+                return False
+        return default
 
     def _truncate_field(self, text: str, max_tokens: int, field: str) -> str:
         max_chars = tokens_to_chars(max_tokens)

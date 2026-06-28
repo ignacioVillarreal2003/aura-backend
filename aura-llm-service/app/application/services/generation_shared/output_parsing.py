@@ -17,13 +17,6 @@ def fallback_lines(raw: str) -> list[str]:
 
 
 def split_markdown_doc(raw: str) -> tuple[str, str, str]:
-    """Split a Markdown document into (title, description, body).
-
-    Used as a fallback when an LLM was asked for JSON {title, description, body}
-    but returned plain Markdown instead: the first heading (or first line) is the
-    title, the first paragraph after it is the description (lead), and the body is
-    everything after the title line (so the title is not repeated inside it).
-    """
     text = (raw or "").strip()
     if not text:
         return "", "", ""

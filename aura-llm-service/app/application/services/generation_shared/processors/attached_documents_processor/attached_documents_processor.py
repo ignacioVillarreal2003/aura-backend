@@ -8,6 +8,7 @@ from app.application.services.generation_shared.processors.attached_documents_pr
 )
 from app.application.services.generation_shared.processors.processor_observability import (
     attached_documents_dropped_total,
+    attached_fetch_failures_total,
     attached_fetch_total,
     attached_fragments_selected,
     log_extra,
@@ -15,6 +16,13 @@ from app.application.services.generation_shared.processors.processor_observabili
 )
 from app.configuration.tracing import generation_span
 from app.domain.dtos.fragment.fragment_response import FragmentResponse
+from app.infrastructure.http.document_context_provider.exceptions.document_context_provider_exception import (
+    DocumentContextProviderError,
+    DocumentContextProviderInvalidResponseException,
+    DocumentContextProviderTimeoutException,
+    DocumentContextProviderUnauthorizedException,
+    DocumentContextProviderUnavailableException,
+)
 from app.infrastructure.http.document_context_provider.interfaces.document_context_provider_interface import (
     DocumentContextProviderInterface,
 )
@@ -22,6 +30,18 @@ from app.infrastructure.http.document_context_provider.interfaces.document_conte
 logger = logging.getLogger(__name__)
 
 _STAGE = "attached_documents"
+
+
+def _failure_reason(error: Exception) -> str:
+    if isinstance(error, DocumentContextProviderTimeoutException):
+        return "timeout"
+    if isinstance(error, DocumentContextProviderUnavailableException):
+        return "unavailable"
+    if isinstance(error, DocumentContextProviderUnauthorizedException):
+        return "unauthorized"
+    if isinstance(error, DocumentContextProviderInvalidResponseException):
+        return "invalid_response"
+    return "unknown"
 
 
 class AttachedDocumentsProcessor:
@@ -63,12 +83,14 @@ class AttachedDocumentsProcessor:
                 authenticated_user=state.authenticated_user,
                 document_ids=document_ids,
             )
+        except DocumentContextProviderError as error:
+            self._record_fetch_failure(
+                state, _failure_reason(error), level=logging.WARNING, document_count=len(document_ids)
+            )
+            return None
         except Exception:
-            logger.warning(
-                "Attached document retrieval failed; continuing without attachments. "
-                "Answer quality may degrade: explicitly attached documents are missing.",
-                extra=log_extra(user_id=state.authenticated_user.id, document_count=len(document_ids)),
-                exc_info=True,
+            self._record_fetch_failure(
+                state, "unexpected", level=logging.ERROR, document_count=len(document_ids)
             )
             return None
 
@@ -80,6 +102,27 @@ class AttachedDocumentsProcessor:
             )
             return []
         return fragments
+
+    def _record_fetch_failure(
+            self,
+            state: GenerationState,
+            reason: str,
+            *,
+            level: int,
+            document_count: int,
+    ) -> None:
+        attached_fetch_failures_total.labels(reason=reason).inc()
+        logger.log(
+            level,
+            "Attached document retrieval failed; continuing without attachments. "
+            "Answer quality may degrade: explicitly attached documents are missing.",
+            extra=log_extra(
+                reason=reason,
+                user_id=state.authenticated_user.id,
+                document_count=document_count,
+            ),
+            exc_info=True,
+        )
 
     def _select_fragments(
             self,

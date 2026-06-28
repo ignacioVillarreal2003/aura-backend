@@ -61,13 +61,13 @@ class TestBuildContextBlock:
             )
         ]
         block = build_context_block(state, max_context_chars=1000)
-        assert "[FRAGMENTO 1 — Reglamento X · pág. 4 · Disposiciones generales]" in block
+        assert "[FUENTE — Reglamento X · Disposiciones generales · pág. 4]" in block
 
     def test_fragment_header_without_metadata_stays_plain(self, make_fragment):
         state = _state()
         state.fragments = [make_fragment(document_name="Reglamento X", content="dato")]
         block = build_context_block(state, max_context_chars=1000)
-        assert "[FRAGMENTO 1 — Reglamento X]" in block
+        assert "[FUENTE — Reglamento X]" in block
 
     def test_prefers_contextualized_content_when_present(self, make_fragment):
         state = _state()
@@ -180,6 +180,26 @@ class TestBuildGenerationMessages:
         assert len(messages) == 3
         assert "RESUMEN PREVIO" in messages[1].content
         assert all(m.content not in ("m1", "m2") for m in messages)
+
+    def test_irrelevant_history_drops_verbatim_turns(self):
+        state = _state()
+        state.history_relevant = False
+        messages = build_generation_messages(
+            "system", "{context}|{input}", state, history_messages_window=4, context_block="CTX"
+        )
+        assert len(messages) == 2
+        assert messages[-1].content == "CTX|pregunta actual"
+
+    def test_irrelevant_history_drops_summary(self):
+        state = _state()
+        state.history_relevant = False
+        state.history_summary = "RESUMEN PREVIO"
+        messages = build_generation_messages(
+            "system", "{context}|{input}", state,
+            history_messages_window=4, context_block="CTX", max_history_chars=12_000,
+        )
+        assert len(messages) == 2
+        assert "RESUMEN PREVIO" not in messages[-1].content
 
 
 class TestSectionContextBlock:

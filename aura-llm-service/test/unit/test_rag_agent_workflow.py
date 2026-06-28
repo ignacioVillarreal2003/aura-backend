@@ -80,7 +80,7 @@ class TestBuildDocumentContext:
             make_fragment(fragment_id=2, document_id=7, document_name="Doc A", fragment_index=0, content="primero"),
         ]
         context = build_document_context(fragments, max_context_chars=1000)
-        assert "Documento #7 — Doc A" in context
+        assert "[FUENTE — Doc A]" in context
         assert context.index("primero") < context.index("segundo")
 
     def test_empty_returns_empty_string(self):
@@ -100,16 +100,16 @@ class TestBuildDocumentContext:
             make_fragment(content="texto", page_number=3, heading="Introducción"),
         ]
         context = build_document_context(fragments, max_context_chars=1000)
-        assert "[Fragmento 1 · pág. 3 · Introducción]" in context
+        assert "[FUENTE — Documento de prueba · Introducción · pág. 3]" in context
 
     def test_fragment_header_falls_back_to_section_path(self, make_fragment):
         fragments = [
             make_fragment(content="texto", section_path="Capítulo 1 > Sección 2"),
         ]
         context = build_document_context(fragments, max_context_chars=1000)
-        assert "[Fragmento 1 · Capítulo 1 > Sección 2]" in context
+        assert "[FUENTE — Documento de prueba · Capítulo 1 > Sección 2]" in context
 
     def test_fragment_header_without_metadata_stays_plain(self, make_fragment):
         fragments = [make_fragment(content="texto")]
         context = build_document_context(fragments, max_context_chars=1000)
-        assert "[Fragmento 1]" in context
+        assert "[FUENTE — Documento de prueba]" in context

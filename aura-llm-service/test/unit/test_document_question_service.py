@@ -77,7 +77,9 @@ class TestSettingsMapping:
         assert s.to_retrieval_settings().semantic_fragments_per_lane == 5
         assert s.to_retrieval_settings().max_fragments == 8
         assert s.to_reduction_settings().max_batch_chars == 6_000
-        assert s.to_attached_settings().max_fragments == 10
+        assert s.to_attached_settings().max_fragments == 100
+        assert s.to_reduction_settings().max_passes == 3
+        assert s.to_reduction_settings().deadline_seconds == 120.0
         assert s.to_generation_settings().max_context_chars == 12_000
 
 
@@ -152,7 +154,7 @@ class TestStream:
 
         class _MapInvoker:
             async def call_llm_content(self, llm, llm_input):
-                if "aislar los pasajes relevantes" in llm_input[0].content:
+                if "etapa **Map**" in llm_input[0].content:
                     reduce_calls["map"] += 1
                     return "pasaje relevante"
                 return "Respuesta final."

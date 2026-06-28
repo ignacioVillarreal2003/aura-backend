@@ -93,8 +93,6 @@ class BaseGenerationService(ABC):
     default_process_documents: ClassVar[bool] = False
     summarize_history: ClassVar[bool] = False
 
-    # Instrucción usada como input cuando el usuario adjunta documentos pero no
-    # escribe ningún prompt. Vacía: el servicio exige siempre un mensaje del usuario.
     documents_only_instruction: ClassVar[str] = ""
 
     human_prompt: ClassVar[str]
@@ -216,6 +214,8 @@ class BaseGenerationService(ABC):
         "reformulation_degraded",
         "retrieval_degraded",
         "reduction_degraded",
+        "section_degraded",
+        "history_degraded",
         "attached_degraded",
     )
 
@@ -241,22 +241,17 @@ class BaseGenerationService(ABC):
         )
 
     async def _collect_context(self, state: GenerationState) -> None:
-        if self.summarize_history:
-            await self._summarize_history(state)
         if state.process_documents:
             await self._attached_processor.run(state)
         if state.retrieve_context:
             await self._retrieve_rag_context(state)
         if state.process_documents or state.retrieve_context:
             await self._reduce_context(state)
+        if self.summarize_history:
+            await self._summarize_history(state)
         self._log_degradations(state)
 
     async def _collect_context_with_progress(self, state: GenerationState) -> AsyncIterator[Any]:
-        if self.summarize_history and self._history_summarization_processor.is_needed(
-            state, self._generation_settings.history_messages_window
-        ):
-            yield self.stream_progress_event(step="summarizing_history", message=_SUMMARIZING_HISTORY_MESSAGE)
-            await self._summarize_history(state)
         gathered = False
         if state.process_documents:
             yield self.stream_progress_event(step="loading_documents", message=_LOADING_DOCUMENTS_MESSAGE)
@@ -278,6 +273,15 @@ class BaseGenerationService(ABC):
             if needs_reduction:
                 yield self.stream_progress_event(step="reducing", message=_REDUCING_MESSAGE)
             await self._reduce_context(state)
+        if (
+            self.summarize_history
+            and state.history_relevant
+            and self._history_summarization_processor.is_needed(
+                state, self._generation_settings.history_messages_window
+            )
+        ):
+            yield self.stream_progress_event(step="summarizing_history", message=_SUMMARIZING_HISTORY_MESSAGE)
+            await self._summarize_history(state)
         self._log_degradations(state)
 
     def _build_llm_messages(self, state: GenerationState, request: Any) -> list:

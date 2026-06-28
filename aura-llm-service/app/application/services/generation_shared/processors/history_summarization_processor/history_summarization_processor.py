@@ -1,9 +1,7 @@
 import logging
 from typing import Optional
-
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.application.services.generation_shared.generation_observability import log_extra
 from app.application.services.generation_shared.processors.history_summarization_processor.history_summarization_prompts import (
     HUMAN_PROMPT,
     SYSTEM_PROMPT,
@@ -11,14 +9,22 @@ from app.application.services.generation_shared.processors.history_summarization
 from app.application.services.generation_shared.processors.history_summarization_processor.history_summarization_settings import (
     HistorySummarizationSettings,
 )
+from app.application.services.generation_shared.processors.processor_observability import (
+    history_summarization_total,
+    log_extra,
+    timed,
+)
 from app.application.services.generation_shared.processors.query_reformulation_processor.query_reformulation_utils import (
     format_history_messages,
 )
 from app.application.services.generation_shared.state.generation_state import GenerationState
+from app.configuration.tracing import generation_span
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface import OllamaLLMInvokerInterface
 
 logger = logging.getLogger(__name__)
+
+_STAGE = "history_summarization"
 
 
 class HistorySummarizationProcessor:
@@ -42,25 +48,40 @@ class HistorySummarizationProcessor:
     async def run(self, state: GenerationState, history_window: int) -> None:
         if not self.is_needed(state, history_window):
             return
-        try:
-            history_text = format_history_messages(history_window, state.history_messages)
-            llm = await self._ollama_llm_facade.get_llm_base()
-            if self._settings.temperature is not None:
-                llm = llm.bind(temperature=self._settings.temperature)
-            llm_input = [
-                SystemMessage(content=SYSTEM_PROMPT),
-                HumanMessage(content=HUMAN_PROMPT.format(history=history_text)),
-            ]
-            summary = (await self._ollama_llm_invoker.call_llm_content(llm=llm, llm_input=llm_input)).strip()
+        if not state.history_relevant:
+            history_summarization_total.labels(outcome="skipped_irrelevant").inc()
+            return
+
+        with timed(_STAGE), generation_span(_STAGE, state.current_message.content):
+            try:
+                history_text = format_history_messages(history_window, state.history_messages)
+                llm = await self._ollama_llm_facade.get_llm_base()
+                if self._settings.temperature is not None:
+                    llm = llm.bind(temperature=self._settings.temperature)
+                llm_input = [
+                    SystemMessage(content=SYSTEM_PROMPT),
+                    HumanMessage(content=HUMAN_PROMPT.format(
+                        history=history_text,
+                        query=state.current_message.content,
+                    )),
+                ]
+                summary = (await self._ollama_llm_invoker.call_llm_content(llm=llm, llm_input=llm_input)).strip()
+            except Exception:
+                history_summarization_total.labels(outcome="failure").inc()
+                state.history_degraded = True
+                logger.warning(
+                    "History summarization failed; falling back to deterministic trimming.",
+                    extra=log_extra(history_messages=len(state.history_messages)),
+                    exc_info=True,
+                )
+                return
+
             if summary:
                 state.history_summary = summary[: self._settings.max_summary_chars]
+                history_summarization_total.labels(outcome="success").inc()
                 logger.info(
                     "Conversation history summarized.",
                     extra=log_extra(history_messages=len(state.history_messages), summary_chars=len(state.history_summary)),
                 )
-        except Exception:
-            logger.warning(
-                "History summarization failed; falling back to deterministic trimming.",
-                extra=log_extra(history_messages=len(state.history_messages)),
-                exc_info=True,
-            )
+            else:
+                history_summarization_total.labels(outcome="empty").inc()

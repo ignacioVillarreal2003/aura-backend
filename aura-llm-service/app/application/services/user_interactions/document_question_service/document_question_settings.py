@@ -1,5 +1,4 @@
 from typing import Literal
-
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -45,11 +44,13 @@ class DocumentQuestionServiceSettings(BaseSettings):
     section_summarize_threshold_chars: int = Field(default=6_000, ge=500, le=200_000)
     section_max_context_chars: int = Field(default=4_000, ge=500, le=200_000)
 
-    max_attached_fragments: int = Field(default=10, ge=1, le=200)
+    max_attached_fragments: int = Field(default=100, ge=1, le=200)
 
     max_context_chars: int = Field(default=12_000, ge=1_000, le=50_000)
     reduction_batch_chars: int = Field(default=6_000, ge=1_000, le=20_000)
-    reduction_max_passes: int = Field(default=2, ge=1, le=5)
+    reduction_max_passes: int = Field(default=3, ge=1, le=5)
+    reduction_max_concurrent_batches: int = Field(default=6, ge=1, le=32)
+    reduction_deadline_seconds: float = Field(default=120.0, gt=0, le=600.0)
 
     max_response_chars: int = Field(default=MAX_CONTENT_CHARS, ge=1_000, le=MAX_CONTENT_CHARS)
 
@@ -94,4 +95,6 @@ class DocumentQuestionServiceSettings(BaseSettings):
             max_batch_chars=self.reduction_batch_chars,
             max_passes=self.reduction_max_passes,
             max_context_chars=self.max_context_chars,
+            max_concurrent_batches=self.reduction_max_concurrent_batches,
+            deadline_seconds=self.reduction_deadline_seconds,
         )

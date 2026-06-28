@@ -2,6 +2,8 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.application.services.generation_shared.prompts.answer_guidance import ANSWER_GUIDANCE
+
 _PROMPT_MAX_CHARS = 10_000
 
 _DEFAULT_SENSITIVE_PATTERNS: tuple[str, ...] = (
@@ -127,16 +129,15 @@ class AnswerSynthesizerSettings(BaseModel):
         if self.custom_system_prompt is not None:
             return self.custom_system_prompt
         return (
-            "Eres un asistente especializado en documentación institucional, normativa legal y procedimientos "
-            "administrativos. Tu función es sintetizar una respuesta clara y precisa basándote EXCLUSIVAMENTE "
-            "en el contexto documental proporcionado.\n\n"
+            "Sos AURA, un asistente especializado en documentación institucional, normativa legal y "
+            "procedimientos administrativos. Tu función es sintetizar una respuesta clara y precisa "
+            "basándote EXCLUSIVAMENTE en el contexto documental proporcionado.\n\n"
             "Instrucciones obligatorias:\n"
-            "1. Responde únicamente con información presente en el contexto\n"
-            "2. Cita las fuentes usando el formato [Documento #ID] al final de cada afirmación relevante; "
-            "cuando el fragmento indique página o sección, inclúyelas (p. ej. [Documento #12, pág. 3])\n"
-            "3. Mantén un lenguaje técnico, formal y preciso\n"
-            "4. Si el contexto contiene información parcial o contradictoria, señálalo claramente\n"
-            "5. No inventes ni extrapoles información que no esté en el contexto"
+            "1. Respondé únicamente con información presente en el contexto.\n"
+            "2. Mantené un lenguaje técnico, formal y preciso, en el idioma del usuario.\n"
+            "3. Si el contexto contiene información parcial o contradictoria, señalalo claramente.\n"
+            "4. No inventes ni extrapoles información que no esté en el contexto.\n\n"
+            f"{ANSWER_GUIDANCE}"
         )
 
 

@@ -1,3 +1,4 @@
+from app.application.services.generation_shared.prompts.answer_guidance import ANSWER_GUIDANCE
 from app.application.services.user_interactions.general_chat_service.general_chat_settings import GeneralChatSettings
 
 _DEFAULT_SYSTEM_PROMPT = """
@@ -16,7 +17,7 @@ Recibís la conversación con el usuario y, cuando existe, contexto documental: 
 
 # USO DEL CONTEXTO DOCUMENTAL
 
-* Cuando haya contexto documental relevante, fundamentá la respuesta en él e indicá de qué documento proviene cada dato relevante.
+* Cuando haya contexto documental relevante, fundamentá la respuesta en él.
 * Si el contexto no es relevante para la consulta, ignoralo; no lo fuerces.
 * Si falta información para responder con precisión, decilo y pedí la aclaración mínima necesaria.
 
@@ -203,4 +204,4 @@ Consolidá la información preservando todo lo relevante para la consulta, sigui
 
 
 def build_system_prompt(settings: GeneralChatSettings) -> str:
-    return _DEFAULT_SYSTEM_PROMPT
+    return f"{_DEFAULT_SYSTEM_PROMPT}\n\n{ANSWER_GUIDANCE}"

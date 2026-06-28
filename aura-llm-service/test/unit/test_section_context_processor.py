@@ -105,6 +105,11 @@ class TestRun:
         assert invoker.calls == 0
 
     async def test_above_threshold_summarizes_and_caps(self, make_fragment):
+        from app.application.services.generation_shared.processors.processor_observability import (
+            section_context_total,
+        )
+
+        before = section_context_total.labels(outcome="summarized")._value.get()
         invoker = _Invoker(text="z" * 1_000)
         p = SectionContextProcessor(
             _FakeFacade(), invoker, _settings(summarize_threshold_chars=500, max_section_context_chars=500)
@@ -114,6 +119,7 @@ class TestRun:
         assert state.section_summary is not None
         assert invoker.calls == 1
         assert len(state.section_summary) <= 500
+        assert section_context_total.labels(outcome="summarized")._value.get() == before + 1
 
     async def test_per_group_failure_falls_back_to_verbatim(self, make_fragment):
         invoker = _Invoker(boom=True)
@@ -127,4 +133,44 @@ class TestRun:
         state = _state([_group(make_fragment, 1, [600])])
         await p.run(state)
         assert state.section_summary is None
-        assert state.reduction_degraded is True
+        assert state.section_degraded is True
+        assert state.reduction_degraded is False
+
+    async def test_uses_own_default_prompts_when_artifact_omits_them(self, make_fragment):
+        from app.application.services.generation_shared.processors.section_context_processor.section_context_prompts import (
+            SECTION_MAP_SYSTEM_PROMPT,
+        )
+
+        captured = {}
+
+        class _CapturingInvoker:
+            calls = 0
+
+            async def call_llm_content(self, llm, llm_input):
+                type(self).calls += 1
+                captured["system"] = llm_input[0].content
+                captured["human"] = llm_input[1].content
+                return "NOTA"
+
+        p = SectionContextProcessor(_FakeFacade(), _CapturingInvoker(), _settings(summarize_threshold_chars=500))
+        state = _state([_group(make_fragment, 1, [600])])
+        await p.run(state)  # sin map_system_prompt/map_human_prompt → usa defaults propios
+        assert captured["system"] == SECTION_MAP_SYSTEM_PROMPT
+        assert "pregunta" in captured["human"]  # {query} formateado
+
+    async def test_artifact_prompts_take_precedence(self, make_fragment):
+        captured = {}
+
+        class _CapturingInvoker:
+            async def call_llm_content(self, llm, llm_input):
+                captured["system"] = llm_input[0].content
+                return "NOTA"
+
+        p = SectionContextProcessor(_FakeFacade(), _CapturingInvoker(), _settings(summarize_threshold_chars=500))
+        state = _state([_group(make_fragment, 1, [600])])
+        await p.run(
+            state,
+            map_system_prompt="SYSTEM DEL ARTEFACTO",
+            map_human_prompt="{query}|{fragments}",
+        )
+        assert captured["system"] == "SYSTEM DEL ARTEFACTO"

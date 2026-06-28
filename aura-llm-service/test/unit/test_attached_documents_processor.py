@@ -9,14 +9,20 @@ from app.application.services.generation_shared.processors.attached_documents_pr
 from app.application.services.generation_shared.state.generation_state import GenerationState
 from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.message import Message
+from app.infrastructure.http.document_context_provider.exceptions.document_context_provider_exception import (
+    DocumentContextProviderTimeoutException,
+)
 
 
 class _Provider:
-    def __init__(self, fragments=None, boom=False):
+    def __init__(self, fragments=None, boom=False, error=None):
         self._fragments = fragments or []
         self._boom = boom
+        self._error = error
 
     async def retrieve_context_fragments_by_document(self, authenticated_user, document_ids):
+        if self._error is not None:
+            raise self._error
         if self._boom:
             raise RuntimeError("context service down")
         return types.SimpleNamespace(fragments=self._fragments)
@@ -81,8 +87,14 @@ class TestRun:
         await p.run(st)
         assert len(st.attached_fragments) == 3 and st.attached_degraded is False
 
-    async def test_run_marks_degraded_on_fetch_failure(self):
+    async def test_run_marks_degraded_on_unexpected_error(self):
         p = _processor(_Provider(boom=True))
+        st = _state([1, 2])
+        await p.run(st)
+        assert st.attached_fragments == [] and st.attached_degraded is True
+
+    async def test_run_marks_degraded_on_known_provider_error(self):
+        p = _processor(_Provider(error=DocumentContextProviderTimeoutException("t")))
         st = _state([1, 2])
         await p.run(st)
         assert st.attached_fragments == [] and st.attached_degraded is True

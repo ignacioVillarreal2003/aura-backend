@@ -4,31 +4,30 @@ from typing import Optional
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
 
-from app.application.services.generation_shared.processors.context_reduction_processor.context_reduction_prompts import (
-    MAP_HUMAN_PROMPT,
-    MAP_SYSTEM_PROMPT,
+from app.application.services.generation_shared.processors.processor_observability import (
+    section_context_output_chars,
+    section_context_total,
+    timed,
+)
+from app.application.services.generation_shared.processors.section_context_processor.section_context_prompts import (
+    SECTION_MAP_HUMAN_PROMPT,
+    SECTION_MAP_SYSTEM_PROMPT,
 )
 from app.application.services.generation_shared.processors.section_context_processor.section_context_settings import (
     SectionContextSettings,
 )
 from app.application.services.generation_shared.state.generation_state import GenerationState
+from app.configuration.tracing import generation_span
 from app.infrastructure.http.document_context_provider.dtos.fragment_list_response import FragmentSectionGroup
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface import OllamaLLMInvokerInterface
 
 logger = logging.getLogger(__name__)
 
+_STAGE = "section_context"
+
 
 class SectionContextProcessor:
-    """Handles the secondary (section) context of the "section" expansion mode.
-
-    Primaries are always kept verbatim by the renderer. This processor only acts
-    on the secondary fragments: it leaves them verbatim when small, and condenses
-    them with the LLM (query-aware, per group) when they exceed a conservative
-    threshold, so the prompt can never explode with section context. No-op unless
-    the state carries section groups.
-    """
-
     def __init__(
             self,
             ollama_llm_facade: OllamaLLMFacadeInterface,
@@ -66,36 +65,42 @@ class SectionContextProcessor:
             state.section_summary = None
             return
 
-        system_prompt = map_system_prompt or MAP_SYSTEM_PROMPT
-        human_prompt = map_human_prompt or MAP_HUMAN_PROMPT
+        # Prioridad: prompts del artefacto (servicio) → defaults propios de la sección.
+        system_prompt = map_system_prompt or SECTION_MAP_SYSTEM_PROMPT
+        human_prompt = map_human_prompt or SECTION_MAP_HUMAN_PROMPT
         query = state.current_message.content
 
-        try:
-            llm = await self._build_llm()
-            notes = await self._summarize_groups(llm, groups, query, system_prompt, human_prompt)
-        except Exception:
-            logger.warning(
-                "Section context summarization failed; falling back to verbatim secondary context.",
-                exc_info=True,
+        with timed(_STAGE), generation_span(_STAGE, query):
+            try:
+                llm = await self._build_llm()
+                notes = await self._summarize_groups(llm, groups, query, system_prompt, human_prompt)
+            except Exception:
+                section_context_total.labels(outcome="degraded").inc()
+                logger.warning(
+                    "Section context summarization failed; falling back to verbatim secondary context.",
+                    exc_info=True,
+                )
+                state.section_degraded = True
+                state.section_summary = None
+                return
+
+            summary = self._assemble(notes)
+            if not summary:
+                section_context_total.labels(outcome="empty").inc()
+                state.section_summary = None
+                return
+
+            state.section_summary = summary[: self._settings.max_section_context_chars]
+            section_context_total.labels(outcome="summarized").inc()
+            section_context_output_chars.observe(len(state.section_summary))
+            logger.info(
+                "Section context condensed.",
+                extra={
+                    "groups": len(groups),
+                    "summarized_groups": len(notes),
+                    "output_chars": len(state.section_summary),
+                },
             )
-            state.reduction_degraded = True
-            state.section_summary = None
-            return
-
-        summary = self._assemble(notes)
-        if not summary:
-            state.section_summary = None
-            return
-
-        state.section_summary = summary[: self._settings.max_section_context_chars]
-        logger.info(
-            "Section context condensed.",
-            extra={
-                "groups": len(groups),
-                "summarized_groups": len(notes),
-                "output_chars": len(state.section_summary),
-            },
-        )
 
     async def _summarize_groups(
             self,

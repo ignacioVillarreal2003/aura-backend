@@ -86,6 +86,24 @@ class TestParse:
         result = p._parse(raw, should_rewrite=True, use_keywords=False)
         assert result.keyword_question is None
 
+    def test_history_relevant_defaults_true_when_absent(self):
+        p = _processor(_Invoker())
+        raw = '{"base_question": "r", "keywords": ["a"]}'
+        result = p._parse(raw, should_rewrite=True, use_keywords=True)
+        assert result.history_relevant is True
+
+    def test_history_relevant_read_when_should_rewrite(self):
+        p = _processor(_Invoker())
+        raw = '{"base_question": "r", "keywords": ["a"], "history_relevant": false}'
+        result = p._parse(raw, should_rewrite=True, use_keywords=True)
+        assert result.history_relevant is False
+
+    def test_history_relevant_ignored_without_history(self):
+        p = _processor(_Invoker())
+        raw = '{"keywords": ["a"], "history_relevant": false}'
+        result = p._parse(raw, should_rewrite=False, use_keywords=True)
+        assert result.history_relevant is True
+
 
 class TestReformulate:
     async def test_skips_call_when_nothing_to_do(self):
@@ -100,6 +118,15 @@ class TestReformulate:
         result = await p.reformulate(question="X", history_messages=_HISTORY)
         assert result.base_question == "X autocontenida"
         assert result.keyword_question == "k1 k2"
+        assert result.degraded is False
+
+    async def test_no_history_returns_keywords_only(self):
+        invoker = _Invoker(content='{"keywords": ["k1", "k2"]}')
+        p = _processor(invoker)
+        result = await p.reformulate(question="X", history_messages=[])
+        assert result.base_question is None
+        assert result.keyword_question == "k1 k2"
+        assert result.history_relevant is True
         assert result.degraded is False
 
     async def test_llm_error_is_degraded(self):
@@ -134,3 +161,12 @@ class TestRun:
         await p.run(st)
         assert st.reformulation_degraded is True
         assert st.base_question is None and st.keyword_question is None
+
+    async def test_run_sets_history_irrelevant(self):
+        invoker = _Invoker(
+            content='{"base_question": "r", "keywords": ["a"], "history_relevant": false}'
+        )
+        p = _processor(invoker)
+        st = self._state()
+        await p.run(st)
+        assert st.history_relevant is False

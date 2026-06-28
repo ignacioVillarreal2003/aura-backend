@@ -88,3 +88,29 @@ class TestRun:
         state = _state(turns=4, size=1_000)
         await proc.run(state, history_window=4)
         assert state.history_summary is None
+        assert state.history_degraded is True
+
+    async def test_skips_when_history_irrelevant(self):
+        invoker = _Invoker()
+        proc = _proc(invoker)
+        state = _state(turns=4, size=1_000)  # is_needed True
+        state.history_relevant = False
+        await proc.run(state, history_window=4)
+        assert invoker.calls == 0
+        assert state.history_summary is None
+
+    async def test_passes_query_to_prompt(self):
+        captured = {}
+
+        class _Capturing:
+            calls = 0
+
+            async def call_llm_content(self, llm, llm_input):
+                type(self).calls += 1
+                captured["human"] = llm_input[1].content
+                return "resumen"
+
+        proc = HistorySummarizationProcessor(_Facade(), _Capturing(), _SETTINGS)
+        state = _state(turns=4, size=1_000)
+        await proc.run(state, history_window=4)
+        assert "pregunta actual" in captured["human"]

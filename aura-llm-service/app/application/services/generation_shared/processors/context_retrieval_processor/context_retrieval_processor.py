@@ -14,6 +14,9 @@ from app.application.services.generation_shared.processors.processor_observabili
 )
 from app.configuration.tracing import retrieval_span
 from app.domain.dtos.fragment.fragment_response import FragmentResponse
+from app.infrastructure.http.document_context_provider.dtos.fragment_list_response import (
+    FragmentSectionGroup,
+)
 from app.infrastructure.http.document_context_provider.dtos.question_context_fragments_request import (
     BM25Query,
     QuestionContextFragmentsRequest,
@@ -21,6 +24,8 @@ from app.infrastructure.http.document_context_provider.dtos.question_context_fra
     SemanticQuery,
 )
 from app.infrastructure.http.document_context_provider.exceptions.document_context_provider_exception import (
+    DocumentContextProviderError,
+    DocumentContextProviderInvalidResponseException,
     DocumentContextProviderTimeoutException,
     DocumentContextProviderUnauthorizedException,
     DocumentContextProviderUnavailableException,
@@ -41,6 +46,8 @@ def _failure_reason(error: Exception) -> str:
         return "unavailable"
     if isinstance(error, DocumentContextProviderUnauthorizedException):
         return "unauthorized"
+    if isinstance(error, DocumentContextProviderInvalidResponseException):
+        return "invalid_response"
     return "unknown"
 
 
@@ -63,24 +70,20 @@ class ContextRetrievalProcessor:
                     authenticated_user=state.authenticated_user,
                     request=request,
                 )
-            except Exception as error:
-                reason = _failure_reason(error)
-                retrieval_total.labels(outcome="failure").inc()
-                retrieval_failures_total.labels(reason=reason).inc()
-                state.retrieval_degraded = True
-                state.fragments = []
-                logger.warning(
-                    "Fragment retrieval failed; proceeding without context.",
-                    extra=log_extra(reason=reason, user_id=state.authenticated_user.id),
-                    exc_info=True,
-                )
+            except DocumentContextProviderError as error:
+                self._mark_failed(state, _failure_reason(error), level=logging.WARNING)
+                return
+            except Exception:
+                self._mark_failed(state, "unexpected", level=logging.ERROR)
                 return
 
             returned = len(result.fragments)
             fragments = result.fragments[:self._settings.max_fragments]
             fragments = self._apply_char_budget(fragments)
             state.fragments = fragments
-            state.section_groups = getattr(result, "groups", None) or None
+            state.section_groups = self._consistent_section_groups(
+                getattr(result, "groups", None), fragments
+            )
 
             retrieval_fragments_returned.observe(len(fragments))
             retrieval_total.labels(outcome="success" if fragments else "empty").inc()
@@ -95,6 +98,30 @@ class ContextRetrievalProcessor:
                     rerank=request.rerank.enabled,
                 ),
             )
+
+    def _mark_failed(self, state: GenerationState, reason: str, *, level: int) -> None:
+        retrieval_total.labels(outcome="failure").inc()
+        retrieval_failures_total.labels(reason=reason).inc()
+        state.retrieval_degraded = True
+        state.fragments = []
+        state.section_groups = None
+        logger.log(
+            level,
+            "Fragment retrieval failed; proceeding without context.",
+            extra=log_extra(reason=reason, user_id=state.authenticated_user.id),
+            exc_info=True,
+        )
+
+    @staticmethod
+    def _consistent_section_groups(
+            groups: Optional[list[FragmentSectionGroup]],
+            kept_fragments: list[FragmentResponse],
+    ) -> Optional[list[FragmentSectionGroup]]:
+        if not groups:
+            return None
+        kept_ids = {fragment.id for fragment in kept_fragments}
+        filtered = [group for group in groups if group.primary.id in kept_ids]
+        return filtered or None
 
     def _apply_char_budget(self, fragments: list[FragmentResponse]) -> list[FragmentResponse]:
         budget = self._settings.max_context_chars

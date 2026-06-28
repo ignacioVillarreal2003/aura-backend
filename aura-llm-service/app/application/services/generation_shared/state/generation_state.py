@@ -30,10 +30,13 @@ class GenerationState:
 
     reduced_context: Optional[str] = None
     history_summary: Optional[str] = None
+    history_relevant: bool = True
 
     reformulation_degraded: bool = False
     retrieval_degraded: bool = False
     reduction_degraded: bool = False
+    section_degraded: bool = False
+    history_degraded: bool = False
     attached_degraded: bool = False
 
     @classmethod

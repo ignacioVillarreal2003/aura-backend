@@ -61,10 +61,21 @@ reduction_outcome_total = Counter(
     labelnames=("outcome",),
 )
 
+history_summarization_total = Counter(
+    "aura_history_summarization_total",
+    "Conversation history summarization outcomes.",
+    labelnames=("outcome",),
+)
+
 attached_fetch_total = Counter(
     "aura_attached_documents_fetch_total",
     "Attached document fetch outcomes.",
     labelnames=("outcome",),
+)
+attached_fetch_failures_total = Counter(
+    "aura_attached_documents_fetch_failures_total",
+    "Attached document fetch failures by reason.",
+    labelnames=("reason",),
 )
 attached_documents_dropped_total = Counter(
     "aura_attached_documents_dropped_total",
@@ -74,6 +85,17 @@ attached_fragments_selected = Histogram(
     "aura_attached_documents_fragments_selected",
     "Attached fragments selected after budgeting.",
     buckets=(0, 1, 2, 5, 10, 20, 40, 60, 100),
+)
+
+section_context_total = Counter(
+    "aura_section_context_total",
+    "Section context condensation outcomes.",
+    labelnames=("outcome",),
+)
+section_context_output_chars = Histogram(
+    "aura_section_context_output_chars",
+    "Characters of the condensed section context.",
+    buckets=(0, 250, 500, 1_000, 2_000, 4_000, 8_000),
 )
 
 

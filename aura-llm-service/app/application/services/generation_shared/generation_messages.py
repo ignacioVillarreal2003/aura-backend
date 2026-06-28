@@ -10,13 +10,13 @@ _NO_CONTEXT_PLACEHOLDER = (
 )
 
 
-def _format_fragment_locator(fragment: FragmentResponse) -> str:
-    parts: list[str] = []
-    if fragment.page_number is not None:
-        parts.append(f"pág. {fragment.page_number}")
+def _format_fragment_source(fragment: FragmentResponse) -> str:
+    parts: list[str] = [fragment.document.name]
     section = fragment.heading or fragment.section_path
     if section:
         parts.append(section)
+    if fragment.page_number is not None:
+        parts.append(f"pág. {fragment.page_number}")
     return " · ".join(parts)
 
 
@@ -28,9 +28,8 @@ def _render_fragments(
         use_contextualized: bool = True,
 ) -> int:
     used = 0
-    for i, frag in enumerate(fragments, 1):
-        locator = _format_fragment_locator(frag)
-        header = f"[FRAGMENTO {i} — {frag.document.name}" + (f" · {locator}" if locator else "") + "]"
+    for frag in fragments:
+        header = f"[FUENTE — {_format_fragment_source(frag)}]"
         body = frag.effective_content if use_contextualized else frag.content
         entry = f"\n{header}\n{body}"
         if used + len(entry) > budget:
@@ -136,7 +135,9 @@ def build_generation_messages(
 ) -> list[BaseMessage]:
     messages: list[BaseMessage] = [SystemMessage(content=system_prompt)]
 
-    if state.history_summary:
+    if not state.history_relevant:
+        pass
+    elif state.history_summary:
         messages.append(
             HumanMessage(content=f"(Resumen de la conversación previa)\n{state.history_summary}")
         )

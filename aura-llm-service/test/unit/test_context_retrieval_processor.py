@@ -9,6 +9,9 @@ from app.application.services.generation_shared.processors.context_retrieval_pro
 from app.application.services.generation_shared.state.generation_state import GenerationState
 from app.domain.constants.message_role import MessageRole
 from app.domain.dtos.message import Message
+from app.infrastructure.http.document_context_provider.dtos.fragment_list_response import (
+    FragmentSectionGroup,
+)
 from app.infrastructure.http.document_context_provider.exceptions.document_context_provider_exception import (
     DocumentContextProviderTimeoutException,
     DocumentContextProviderUnavailableException,
@@ -16,14 +19,15 @@ from app.infrastructure.http.document_context_provider.exceptions.document_conte
 
 
 class _Provider:
-    def __init__(self, fragments=None, error=None):
+    def __init__(self, fragments=None, error=None, groups=None):
         self._fragments = fragments or []
         self._error = error
+        self._groups = groups
 
     async def retrieve_context_fragments_by_question_request(self, authenticated_user, request):
         if self._error is not None:
             raise self._error
-        return types.SimpleNamespace(fragments=self._fragments)
+        return types.SimpleNamespace(fragments=self._fragments, groups=self._groups)
 
 
 def _processor(provider, **overrides) -> ContextRetrievalProcessor:
@@ -101,9 +105,37 @@ class TestRun:
         await p.run(st)
         assert st.retrieval_degraded is True
 
+    async def test_unexpected_error_marks_degraded(self):
+        p = _processor(_Provider(error=RuntimeError("boom")))
+        st = _state()
+        await p.run(st)
+        assert st.fragments == [] and st.retrieval_degraded is True
+        assert st.section_groups is None
+
     async def test_run_applies_char_budget(self, make_fragment):
         frs = [make_fragment(fragment_id=i + 1, content="y" * 400) for i in range(5)]
         p = _processor(_Provider(fragments=frs), max_fragments=50, max_context_chars=1_000)
         st = _state()
         await p.run(st)
         assert len(st.fragments) == 2
+
+    async def test_section_groups_filtered_to_kept_fragments(self, make_fragment):
+        frs = [make_fragment(fragment_id=i + 1) for i in range(3)]
+        groups = [
+            FragmentSectionGroup(primary=frs[0], section_fragments=[]),
+            FragmentSectionGroup(primary=frs[2], section_fragments=[]),
+        ]
+        p = _processor(_Provider(fragments=frs, groups=groups), max_fragments=2)
+        st = _state()
+        await p.run(st)
+        assert [f.id for f in st.fragments] == [1, 2]
+        assert st.section_groups is not None
+        assert [g.primary.id for g in st.section_groups] == [1]
+
+    async def test_section_groups_none_when_all_primaries_dropped(self, make_fragment):
+        frs = [make_fragment(fragment_id=i + 1) for i in range(3)]
+        groups = [FragmentSectionGroup(primary=frs[2], section_fragments=[])]
+        p = _processor(_Provider(fragments=frs, groups=groups), max_fragments=1)
+        st = _state()
+        await p.run(st)
+        assert st.section_groups is None

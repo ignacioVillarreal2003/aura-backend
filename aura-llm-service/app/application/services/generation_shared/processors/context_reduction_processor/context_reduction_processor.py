@@ -181,6 +181,7 @@ class ContextReductionProcessor:
             prompts: "_ReductionPrompts",
     ) -> _ReductionResult:
         start = time.monotonic()
+        deadline_at = start + self._settings.deadline_seconds
         budget = self._settings.max_context_chars
         input_chars = sum(len(unit) for unit in fragments)
 
@@ -193,7 +194,8 @@ class ContextReductionProcessor:
         outcome = "empty"
 
         while True:
-            if passes > 0 and (time.monotonic() - start) > self._settings.deadline_seconds:
+            now = time.monotonic()
+            if passes > 0 and now >= deadline_at:
                 outcome = "timeout"
                 break
 
@@ -202,8 +204,20 @@ class ContextReductionProcessor:
             human_prompt = prompts.map_human if is_map else prompts.reduce_human
 
             batches = self._batches(current)
-            with generation_span(f"{_STAGE}.pass_{passes}"):
-                notes, failed = await self._run_pass(llm, batches, query, system_prompt, human_prompt)
+            try:
+                with generation_span(f"{_STAGE}.pass_{passes}"):
+                    if is_map:
+                        notes, failed = await self._run_pass(
+                            llm, batches, query, system_prompt, human_prompt
+                        )
+                    else:
+                        notes, failed = await asyncio.wait_for(
+                            self._run_pass(llm, batches, query, system_prompt, human_prompt),
+                            timeout=deadline_at - now,
+                        )
+            except asyncio.TimeoutError:
+                outcome = "timeout"
+                break
 
             passes += 1
             total_batches += len(batches)
@@ -278,7 +292,17 @@ class ContextReductionProcessor:
             selected.append(note)
             used += addition
         combined = _NOTE_SEPARATOR.join(selected)
-        return combined[:budget]
+        if len(combined) <= budget:
+            return combined
+        return self._clip_to_budget(combined, budget)
+
+    @staticmethod
+    def _clip_to_budget(text: str, budget: int) -> str:
+        clipped = text[:budget]
+        boundary = max(clipped.rfind(" "), clipped.rfind("\n"))
+        if boundary >= int(budget * 0.8):
+            clipped = clipped[:boundary]
+        return clipped.rstrip()
 
     async def _extract(
             self,
