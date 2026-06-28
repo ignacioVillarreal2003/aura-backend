@@ -41,6 +41,14 @@ def test_list_classification_levels_no_permission_returns_403(api_client, mocker
     assert response.status_code == 403
 
 
+def test_list_classification_levels_returns_pagination_keys(api_client, mocker):
+    mocker.patch(f"{_SVC}.list_classification_levels", return_value=[make_classification_level()])
+    response = api_client.get("/api/v1/classification-levels/")
+    assert response.status_code == 200
+    assert "count" in response.data
+    assert "results" in response.data
+
+
 # ---------------------------------------------------------------------------
 # Create  POST /api/v1/classification-levels/
 # ---------------------------------------------------------------------------
@@ -81,6 +89,12 @@ def test_create_classification_level_rank_zero_returns_400(api_client, mocker):
     assert response.status_code == 400
 
 
+def test_create_classification_level_rank_negative_returns_400(api_client, mocker):
+    mocker.patch(f"{_SVC}.create_classification_level")
+    response = api_client.post("/api/v1/classification-levels/", {"name": "X", "rank": -1}, format="json")
+    assert response.status_code == 400
+
+
 def test_create_classification_level_duplicate_returns_409(api_client, mocker):
     mocker.patch(f"{_SVC}.create_classification_level", side_effect=DuplicateClassificationLevelException())
     response = api_client.post(
@@ -105,6 +119,20 @@ def test_create_classification_level_no_permission_returns_403(api_client, mocke
 def test_create_classification_level_unauthenticated(anon_client):
     response = anon_client.post("/api/v1/classification-levels/", {"name": "X", "rank": 1}, format="json")
     assert response.status_code == 401
+
+
+def test_create_classification_level_returns_id_and_name(api_client, mocker):
+    level = make_classification_level(level_id=10, name="CLASSIFIED", rank=2)
+    mocker.patch(f"{_SVC}.create_classification_level", return_value=level)
+    response = api_client.post(
+        "/api/v1/classification-levels/",
+        {"name": "CLASSIFIED", "rank": 2},
+        format="json",
+    )
+    assert response.status_code == 201
+    assert response.data["id"] == 10
+    assert response.data["name"] == "CLASSIFIED"
+    assert response.data["rank"] == 2
 
 
 # ---------------------------------------------------------------------------
@@ -172,6 +200,14 @@ def test_update_classification_level_no_permission_returns_403(api_client, mocke
     mocker.patch(f"{_SVC}.update_classification_level", side_effect=InsufficientPermissionsException())
     response = api_client.patch("/api/v1/classification-levels/1/", {"rank": 2}, format="json")
     assert response.status_code == 403
+
+
+def test_update_classification_level_rank_update_returns_200(api_client, mocker):
+    level = make_classification_level(name="TOP SECRET", rank=9)
+    mocker.patch(f"{_SVC}.update_classification_level", return_value=level)
+    response = api_client.patch("/api/v1/classification-levels/1/", {"rank": 9}, format="json")
+    assert response.status_code == 200
+    assert response.data["rank"] == 9
 
 
 # ---------------------------------------------------------------------------

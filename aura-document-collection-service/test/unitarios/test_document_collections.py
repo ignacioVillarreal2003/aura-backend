@@ -41,6 +41,13 @@ def test_list_document_collections_no_permission_returns_403(api_client, mocker)
     assert response.status_code == 403
 
 
+def test_list_document_collections_returns_pagination_keys(api_client, mocker):
+    mocker.patch(f"{_SVC}.list_document_collections", return_value=[make_document_collection()])
+    response = api_client.get("/api/v1/document-collections/")
+    assert "count" in response.data
+    assert "results" in response.data
+
+
 # ---------------------------------------------------------------------------
 # Create  POST /api/v1/document-collections/
 # ---------------------------------------------------------------------------
@@ -143,6 +150,17 @@ def test_create_document_collection_unauthenticated(anon_client):
     assert response.status_code == 401
 
 
+def test_create_document_collection_single_compartment_returns_201(api_client, mocker):
+    collection = make_document_collection(name="Single Compartment")
+    mocker.patch(f"{_SVC}.create_document_collection", return_value=collection)
+    response = api_client.post(
+        "/api/v1/document-collections/",
+        {"name": "Single Compartment", "classification_level_id": 1, "compartment_ids": [42]},
+        format="json",
+    )
+    assert response.status_code == 201
+
+
 # ---------------------------------------------------------------------------
 # Retrieve  GET /api/v1/document-collections/{id}/
 # ---------------------------------------------------------------------------
@@ -172,6 +190,15 @@ def test_retrieve_document_collection_no_permission_returns_403(api_client, mock
 def test_retrieve_document_collection_unauthenticated(anon_client):
     response = anon_client.get("/api/v1/document-collections/1/")
     assert response.status_code == 401
+
+
+def test_retrieve_document_collection_returns_all_fields(api_client, mocker):
+    collection = make_document_collection(collection_id=8, name="Full Fields")
+    mocker.patch(f"{_SVC}.get_document_collection", return_value=collection)
+    response = api_client.get("/api/v1/document-collections/8/")
+    assert response.status_code == 200
+    for field in ("id", "name", "created_by", "created_at"):
+        assert field in response.data
 
 
 # ---------------------------------------------------------------------------
@@ -239,6 +266,33 @@ def test_update_document_collection_no_permission_returns_403(api_client, mocker
     mocker.patch(f"{_SVC}.update_document_collection", side_effect=InsufficientPermissionsException())
     response = api_client.patch("/api/v1/document-collections/1/", {"name": "X"}, format="json")
     assert response.status_code == 403
+
+
+def test_update_document_collection_compartments_returns_200(api_client, mocker):
+    collection = make_document_collection(name="Updated Compartments")
+    mocker.patch(f"{_SVC}.update_document_collection", return_value=collection)
+    response = api_client.patch(
+        "/api/v1/document-collections/1/",
+        {"compartment_ids": [10, 11]},
+        format="json",
+    )
+    assert response.status_code == 200
+
+
+def test_update_document_collection_unauthenticated(anon_client):
+    response = anon_client.patch("/api/v1/document-collections/1/", {"name": "X"}, format="json")
+    assert response.status_code == 401
+
+
+def test_update_document_collection_classification_level_returns_200(api_client, mocker):
+    collection = make_document_collection(name="Reclassified")
+    mocker.patch(f"{_SVC}.update_document_collection", return_value=collection)
+    response = api_client.patch(
+        "/api/v1/document-collections/1/",
+        {"classification_level_id": 3},
+        format="json",
+    )
+    assert response.status_code == 200
 
 
 # ---------------------------------------------------------------------------

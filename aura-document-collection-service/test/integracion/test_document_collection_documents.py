@@ -171,3 +171,47 @@ def test_remove_document_link_not_found_raises(admin, collection, document):
         document_collection_document_service.remove_document_collection_document(
             admin, collection.id, document.id
         )
+
+
+# ---------------------------------------------------------------------------
+# New tests
+# ---------------------------------------------------------------------------
+
+def test_list_documents_returns_multiple_docs(admin, collection):
+    doc1 = Document.objects.create(name="TEST_Doc1", **_DOC_DEFAULTS)
+    doc2 = Document.objects.create(name="TEST_Doc2", **_DOC_DEFAULTS)
+    document_collection_document_service.add_document_collection_document(
+        admin, collection.id, document_id=doc1.id
+    )
+    document_collection_document_service.add_document_collection_document(
+        admin, collection.id, document_id=doc2.id
+    )
+    qs = document_collection_document_service.list_document_collection_documents(admin, collection.id)
+    assert qs.count() == 2
+
+
+def test_remove_document_sets_deleted_by(admin, collection, document):
+    document_collection_document_service.add_document_collection_document(
+        admin, collection.id, document_id=document.id
+    )
+    document_collection_document_service.remove_document_collection_document(
+        admin, collection.id, document.id
+    )
+    deleted = DocumentInDocumentCollection.objects.all_with_deleted().get(
+        document_collection_id=collection.id,
+        document_id=document.id,
+    )
+    assert deleted.deleted_by == admin.id
+
+
+def test_add_document_after_remove_succeeds(admin, collection, document):
+    document_collection_document_service.add_document_collection_document(
+        admin, collection.id, document_id=document.id
+    )
+    document_collection_document_service.remove_document_collection_document(
+        admin, collection.id, document.id
+    )
+    link = document_collection_document_service.add_document_collection_document(
+        admin, collection.id, document_id=document.id
+    )
+    assert DocumentInDocumentCollection.objects.filter(id=link.id).exists()

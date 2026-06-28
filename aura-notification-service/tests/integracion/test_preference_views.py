@@ -1,5 +1,5 @@
 """
-Tests for user preference endpoints:
+Tests de integración para endpoints de preferencias:
   GET /PUT /api/v1/me/notification-preferences/
 """
 import pytest
@@ -50,6 +50,51 @@ class TestGlobalPreferenceGetView:
         assert response.data["inapp_enabled"] is True
         assert response.data["email_enabled"] is True
         svc.get_global.assert_called_once_with(99)
+
+    def test_response_includes_all_preference_fields(self, api_client, auth_headers, make_preference):
+        prefs = make_preference()
+        with patch(_PREFS_SVC) as svc:
+            svc.get_global.return_value = prefs
+            response = api_client.get(
+                self.URL,
+                **auth_headers(permissions=[NOTIFICATION_PREFERENCES_GLOBAL_GET]),
+            )
+        assert response.status_code == 200
+        assert "inapp_enabled" in response.data
+        assert "email_enabled" in response.data
+        assert "mute_until" in response.data
+
+    def test_service_called_with_authenticated_user_id(self, api_client, auth_headers, make_preference):
+        prefs = make_preference(user_id=77)
+        with patch(_PREFS_SVC) as svc:
+            svc.get_global.return_value = prefs
+            api_client.get(
+                self.URL,
+                **auth_headers(user_id=77, permissions=[NOTIFICATION_PREFERENCES_GLOBAL_GET]),
+            )
+        svc.get_global.assert_called_once_with(77)
+
+    def test_email_disabled_reflected_in_response(self, api_client, auth_headers, make_preference):
+        prefs = make_preference(email_enabled=False)
+        with patch(_PREFS_SVC) as svc:
+            svc.get_global.return_value = prefs
+            response = api_client.get(
+                self.URL,
+                **auth_headers(permissions=[NOTIFICATION_PREFERENCES_GLOBAL_GET]),
+            )
+        assert response.data["email_enabled"] is False
+
+    def test_mute_until_present_when_muted(self, api_client, auth_headers, make_preference):
+        from datetime import datetime, timezone
+        future = datetime(2099, 1, 1, tzinfo=timezone.utc)
+        prefs = make_preference(mute_until=future)
+        with patch(_PREFS_SVC) as svc:
+            svc.get_global.return_value = prefs
+            response = api_client.get(
+                self.URL,
+                **auth_headers(permissions=[NOTIFICATION_PREFERENCES_GLOBAL_GET]),
+            )
+        assert response.data["mute_until"] is not None
 
 
 class TestGlobalPreferencePutView:
@@ -144,3 +189,35 @@ class TestGlobalPreferencePutView:
             )
 
         assert response.status_code == 200
+
+    def test_enables_email_after_being_disabled(self, api_client, auth_headers, make_preference):
+        updated = make_preference(email_enabled=True)
+        with patch(_PREFS_SVC) as svc:
+            svc.upsert_global.return_value = updated
+            response = api_client.put(
+                self.URL, {"email_enabled": True}, format="json",
+                **auth_headers(permissions=[NOTIFICATION_PREFERENCES_GLOBAL_PUT]),
+            )
+        assert response.status_code == 200
+        assert response.data["email_enabled"] is True
+
+    def test_response_contains_inapp_enabled_field(self, api_client, auth_headers, make_preference):
+        prefs = make_preference()
+        with patch(_PREFS_SVC) as svc:
+            svc.upsert_global.return_value = prefs
+            response = api_client.put(
+                self.URL, {}, format="json",
+                **auth_headers(permissions=[NOTIFICATION_PREFERENCES_GLOBAL_PUT]),
+            )
+        assert "inapp_enabled" in response.data
+
+    def test_upsert_called_with_correct_user_id(self, api_client, auth_headers, make_preference):
+        prefs = make_preference(user_id=33)
+        with patch(_PREFS_SVC) as svc:
+            svc.upsert_global.return_value = prefs
+            api_client.put(
+                self.URL, {"inapp_enabled": True}, format="json",
+                **auth_headers(user_id=33, permissions=[NOTIFICATION_PREFERENCES_GLOBAL_PUT]),
+            )
+        call_kwargs = svc.upsert_global.call_args[1]
+        assert call_kwargs["user_id"] == 33

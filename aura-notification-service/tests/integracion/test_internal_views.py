@@ -1,5 +1,5 @@
 """
-Tests for the internal event emission endpoint:
+Tests de integración para el endpoint de emisión interna de eventos:
   POST /api/v1/internal/events/
 """
 import pytest
@@ -120,7 +120,6 @@ class TestInternalEventEmissionView:
         assert response.status_code == 400
 
     def test_non_silenceable_event_dispatched_without_mocking(self, api_client, internal_token_header):
-        """auth.password.changed is non-silenceable — verify the endpoint accepts it."""
         payload = {
             "event_type": "auth.password.changed",
             "recipient_ids": [42],
@@ -133,3 +132,34 @@ class TestInternalEventEmissionView:
 
         assert response.status_code == 201
         assert response.data["event_type"] == "auth.password.changed"
+
+    def test_response_body_has_event_type_field(self, api_client, internal_token_header):
+        outcomes = [_outcome(10, notification_id=1, channels={"inapp": "sent"})]
+        with patch(_SVC) as svc:
+            svc.emit_event.return_value = outcomes
+            response = api_client.post(URL, VALID_PAYLOAD, format="json", **internal_token_header)
+        assert "event_type" in response.data
+
+    def test_single_recipient_returns_single_outcome(self, api_client, internal_token_header):
+        outcomes = [_outcome(10, notification_id=1, channels={"inapp": "sent"})]
+        payload = {**VALID_PAYLOAD, "recipient_ids": [10]}
+        with patch(_SVC) as svc:
+            svc.emit_event.return_value = outcomes
+            response = api_client.post(URL, payload, format="json", **internal_token_header)
+        assert len(response.data["outcomes"]) == 1
+
+    def test_actor_id_optional(self, api_client, internal_token_header):
+        payload = {k: v for k, v in VALID_PAYLOAD.items() if k != "actor_id"}
+        outcomes = [_outcome(10, notification_id=1, channels={"inapp": "sent"})]
+        with patch(_SVC) as svc:
+            svc.emit_event.return_value = outcomes
+            response = api_client.post(URL, payload, format="json", **internal_token_header)
+        assert response.status_code == 201
+
+    def test_context_optional(self, api_client, internal_token_header):
+        payload = {k: v for k, v in VALID_PAYLOAD.items() if k != "context"}
+        outcomes = [_outcome(10, notification_id=1, channels={"inapp": "sent"})]
+        with patch(_SVC) as svc:
+            svc.emit_event.return_value = outcomes
+            response = api_client.post(URL, payload, format="json", **internal_token_header)
+        assert response.status_code == 201

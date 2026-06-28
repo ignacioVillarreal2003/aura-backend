@@ -1,5 +1,5 @@
 """
-Tests for the public event type catalogue:
+Tests de integración para el catálogo público de tipos de eventos:
   GET /api/v1/event-types/
 """
 import pytest
@@ -20,6 +20,9 @@ EXPECTED_EVENT_TYPES = {
     EventType.ADMIN_BROADCAST,
     EventType.SYSTEM_ANNOUNCEMENT,
 }
+
+VALID_SEVERITIES = {"info", "success", "warning", "critical"}
+VALID_TYPES = {"system", "admin", "event"}
 
 
 class TestEventTypeCatalogueView:
@@ -89,7 +92,28 @@ class TestEventTypeCatalogueView:
         response = api_client.get(URL)
 
         for entry in response.data:
-            assert "channels" not in entry, (
-                "Public catalogue must not expose per-user channel states. "
-                "Use /me/notification-preferences/event-types/ for that."
+            assert "channels" not in entry
+
+    def test_exactly_nine_event_types_returned(self, api_client):
+        response = api_client.get(URL)
+        assert len(response.data) == 9
+
+    def test_severity_values_are_valid(self, api_client):
+        response = api_client.get(URL)
+        for entry in response.data:
+            assert entry["severity"] in VALID_SEVERITIES, (
+                f"Event {entry['event_type']} has invalid severity: {entry['severity']}"
             )
+
+    def test_type_values_are_valid(self, api_client):
+        response = api_client.get(URL)
+        for entry in response.data:
+            assert entry["type"] in VALID_TYPES, (
+                f"Event {entry['event_type']} has invalid type: {entry['type']}"
+            )
+
+    def test_document_events_correct_severity(self, api_client):
+        response = api_client.get(URL)
+        by_type = {e["event_type"]: e for e in response.data}
+        assert by_type[EventType.DOCUMENT_PROCESSING_DONE]["severity"] == "success"
+        assert by_type[EventType.DOCUMENT_PROCESSING_FAILED]["severity"] == "critical"

@@ -53,6 +53,23 @@ def test_list_documents_unauthenticated(anon_client):
     assert response.status_code == 401
 
 
+def test_list_documents_returns_pagination_keys(api_client, mocker):
+    mocker.patch(f"{_SVC}.list_document_collection_documents", return_value=[make_document_link()])
+    response = api_client.get(_LIST_URL)
+    assert "count" in response.data
+    assert "results" in response.data
+
+
+def test_list_documents_returns_correct_fields(api_client, mocker):
+    mocker.patch(f"{_SVC}.list_document_collection_documents", return_value=[make_document_link()])
+    response = api_client.get(_LIST_URL)
+    assert response.status_code == 200
+    assert len(response.data["results"]) == 1
+    link_data = response.data["results"][0]
+    assert "id" in link_data
+    assert "document_id" in link_data
+
+
 # ---------------------------------------------------------------------------
 # Create  POST /api/v1/document-collections/{pk}/documents/
 # ---------------------------------------------------------------------------
@@ -111,6 +128,15 @@ def test_add_document_unauthenticated(anon_client):
     assert response.status_code == 401
 
 
+def test_add_document_returns_all_fields(api_client, mocker):
+    link = make_document_link(link_id=20, document_id=5, collection_id=1)
+    mocker.patch(f"{_SVC}.add_document_collection_document", return_value=link)
+    response = api_client.post(_CREATE_URL, {"document_id": 5}, format="json")
+    assert response.status_code == 201
+    assert response.data["id"] == 20
+    assert response.data["document_id"] == 5
+
+
 # ---------------------------------------------------------------------------
 # Destroy  DELETE /api/v1/document-collections/{pk}/documents/{pk}/
 # ---------------------------------------------------------------------------
@@ -143,3 +169,10 @@ def test_remove_document_no_permission_returns_403(api_client, mocker):
 def test_remove_document_unauthenticated(anon_client):
     response = anon_client.delete(_DESTROY_URL)
     assert response.status_code == 401
+
+
+def test_remove_document_wrong_collection_not_found_returns_404(api_client, mocker):
+    mocker.patch(f"{_SVC}.remove_document_collection_document", side_effect=CollectionNotFoundException())
+    response = api_client.delete("/api/v1/document-collections/999/documents/5/")
+    assert response.status_code == 404
+    assert response.data["error"] == "document_collection_not_found"

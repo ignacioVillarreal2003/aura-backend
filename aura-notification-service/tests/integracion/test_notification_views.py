@@ -1,5 +1,5 @@
 """
-Tests for notification inbox endpoints:
+Tests de integración para endpoints de la bandeja de notificaciones:
   GET    /api/v1/notifications/
   GET    /api/v1/notifications/unread-count/
   GET    /api/v1/notifications/<pk>/
@@ -132,6 +132,29 @@ class TestNotificationListView:
             args, _ = svc.list_for_user.call_args
             assert args[0] == 99
 
+    def test_multiple_status_filters_combined(self, api_client, auth_headers):
+        with patch(_SVC) as svc:
+            svc.list_for_user.return_value = _mock_qs()
+            api_client.get(
+                f"{self.URL}?status=unread&status=read",
+                **auth_headers(permissions=[NOTIFICATION_INBOX_LIST]),
+            )
+            _, kwargs = svc.list_for_user.call_args
+            status_in = set(kwargs["status_in"])
+            assert "unread" in status_in
+            assert "read" in status_in
+
+    def test_pagination_next_link_when_more_pages(self, api_client, auth_headers, make_notification):
+        items = [make_notification(id=i) for i in range(1, 22)]
+        with patch(_SVC) as svc:
+            svc.list_for_user.return_value = _mock_qs(items)
+            response = api_client.get(
+                self.URL,
+                **auth_headers(permissions=[NOTIFICATION_INBOX_LIST]),
+            )
+        assert response.status_code == 200
+        assert response.data["next"] is not None
+
 
 class TestNotificationUnreadCountView:
     URL = "/api/v1/notifications/unread-count/"
@@ -226,6 +249,19 @@ class TestNotificationDetailGetView:
         assert response.status_code == 404
         svc.get_for_user.assert_called_once_with(99, 1)
 
+    def test_all_serializer_fields_present(self, api_client, auth_headers, make_notification):
+        notif = make_notification(id=7)
+        with patch(_SVC) as svc:
+            svc.get_for_user.return_value = notif
+            response = api_client.get(
+                self.url(7),
+                **auth_headers(permissions=[NOTIFICATION_DETAIL_GET]),
+            )
+
+        assert response.status_code == 200
+        expected_keys = {"id", "event_type", "message", "severity", "status", "read_at", "created_at"}
+        assert expected_keys.issubset(response.data.keys())
+
 
 class TestNotificationDetailPatchView:
     def url(self, pk=1):
@@ -297,6 +333,16 @@ class TestNotificationDetailPatchView:
 
         assert response.status_code == 404
         assert response.data["error"] == "notification_not_found"
+
+    def test_service_called_with_correct_args(self, api_client, auth_headers, make_notification):
+        updated = make_notification(id=5, status="read")
+        with patch(_SVC) as svc:
+            svc.update_status.return_value = updated
+            api_client.patch(
+                self.url(5), {"status": "read"}, format="json",
+                **auth_headers(user_id=77, permissions=[NOTIFICATION_STATUS_PATCH]),
+            )
+        svc.update_status.assert_called_once_with(77, 5, "read")
 
 
 class TestNotificationDetailDeleteView:
@@ -421,3 +467,29 @@ class TestMarkAllReadView:
 
         assert response.status_code == 200
         assert response.data["updated"] == 0
+
+    def test_until_id_forwarded_as_integer(self, api_client, auth_headers):
+        with patch(_SVC) as svc:
+            svc.mark_all_read.return_value = 3
+            api_client.post(
+                self.URL, {"until_id": 500}, format="json",
+                **auth_headers(user_id=10, permissions=[NOTIFICATION_MARK_ALL_READ_POST]),
+            )
+        svc.mark_all_read.assert_called_once_with(10, until_id=500)
+
+    def test_non_integer_until_id_returns_400(self, api_client, auth_headers):
+        with patch(_SVC):
+            response = api_client.post(
+                self.URL, {"until_id": "abc"}, format="json",
+                **auth_headers(permissions=[NOTIFICATION_MARK_ALL_READ_POST]),
+            )
+        assert response.status_code == 400
+
+    def test_response_has_updated_key(self, api_client, auth_headers):
+        with patch(_SVC) as svc:
+            svc.mark_all_read.return_value = 5
+            response = api_client.post(
+                self.URL, {}, format="json",
+                **auth_headers(permissions=[NOTIFICATION_MARK_ALL_READ_POST]),
+            )
+        assert "updated" in response.data

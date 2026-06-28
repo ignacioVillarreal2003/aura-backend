@@ -6,6 +6,7 @@ from apps.document_collections.services.document_collection_service import docum
 from apps.user_authorizations.models import UserClearance, UserCompartment
 from apps.user_authorizations.services.user_authorization_service import user_authorization_service
 from core.domain.document_collection_exceptions import (
+    ClassificationLevelNotFoundException,
     DuplicateUserCompartmentException,
     UserClearanceNotFoundException,
     UserCompartmentNotFoundException,
@@ -182,3 +183,58 @@ def test_accessible_collections_missing_compartment_returns_empty(admin, level, 
     user_authorization_service.add_user_compartment(admin, _TARGET_USER_ID, compartment_id=compartment_b.id)
     qs = user_authorization_service.get_accessible_collections(admin, _TARGET_USER_ID)
     assert not qs.filter(id=collection.id).exists()
+
+
+# ---------------------------------------------------------------------------
+# New tests
+# ---------------------------------------------------------------------------
+
+def test_set_clearance_level_not_found_raises(admin):
+    with pytest.raises(ClassificationLevelNotFoundException):
+        user_authorization_service.set_user_clearance(admin, _TARGET_USER_ID, classification_level_id=999999)
+
+
+def test_accessible_collections_multiple_compartments_all_required(admin, level, compartment, compartment_b):
+    collection_two = document_collection_service.create_document_collection(
+        admin,
+        name="TEST_Two_Comp_Collection",
+        classification_level_id=level.id,
+        compartment_ids=[compartment.id, compartment_b.id],
+    )
+    user_authorization_service.set_user_clearance(admin, _TARGET_USER_ID, classification_level_id=level.id)
+    user_authorization_service.add_user_compartment(admin, _TARGET_USER_ID, compartment_id=compartment.id)
+    qs = user_authorization_service.get_accessible_collections(admin, _TARGET_USER_ID)
+    assert not qs.filter(id=collection_two.id).exists()
+    user_authorization_service.add_user_compartment(admin, _TARGET_USER_ID, compartment_id=compartment_b.id)
+    qs = user_authorization_service.get_accessible_collections(admin, _TARGET_USER_ID)
+    assert qs.filter(id=collection_two.id).exists()
+
+
+def test_get_user_authorization_compartment_list_correct(admin, compartment, compartment_b):
+    user_authorization_service.add_user_compartment(admin, _TARGET_USER_ID, compartment_id=compartment.id)
+    user_authorization_service.add_user_compartment(admin, _TARGET_USER_ID, compartment_id=compartment_b.id)
+    result = user_authorization_service.get_user_authorization(admin, _TARGET_USER_ID)
+    compartment_ids = {c.compartment_id for c in result["compartments"]}
+    assert compartment.id in compartment_ids
+    assert compartment_b.id in compartment_ids
+
+
+def test_accessible_documents_returns_docs_in_accessible_collection(admin, level, compartment, collection):
+    from apps.document_collection_documents.models import Document
+    from apps.document_collection_documents.services.document_collection_document_service import (
+        document_collection_document_service,
+    )
+    doc = Document.objects.create(
+        name="TEST_Accessible_Doc",
+        mime_type="application/octet-stream",
+        storage_url="test://url",
+        file_size_bytes=0,
+        created_by=1,
+    )
+    document_collection_document_service.add_document_collection_document(
+        admin, collection.id, document_id=doc.id
+    )
+    user_authorization_service.set_user_clearance(admin, _TARGET_USER_ID, classification_level_id=level.id)
+    user_authorization_service.add_user_compartment(admin, _TARGET_USER_ID, compartment_id=compartment.id)
+    qs = user_authorization_service.get_accessible_collections(admin, _TARGET_USER_ID)
+    assert qs.filter(id=collection.id).exists()

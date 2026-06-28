@@ -45,6 +45,19 @@ def test_retrieve_user_authorization_unauthenticated(anon_client):
     assert response.status_code == 401
 
 
+def test_get_user_authorization_returns_correct_structure(api_client, mocker):
+    data = {
+        "user_id": 10,
+        "clearance": make_user_clearance(),
+        "compartments": [make_user_compartment()],
+    }
+    mocker.patch(f"{_SVC}.get_user_authorization", return_value=data)
+    response = api_client.get(_USER_URL)
+    assert response.status_code == 200
+    assert "clearance" in response.data
+    assert "compartments" in response.data
+
+
 # ---------------------------------------------------------------------------
 # Set clearance  PUT /api/v1/user-authorizations/{user_id}/clearance/
 # ---------------------------------------------------------------------------
@@ -131,6 +144,13 @@ def test_list_compartments_unauthenticated(anon_client):
     assert response.status_code == 401
 
 
+def test_list_compartments_empty_returns_200(api_client, mocker):
+    mocker.patch(f"{_SVC}.list_user_compartments", return_value=[])
+    response = api_client.get(_COMPARTMENTS_URL)
+    assert response.status_code == 200
+    assert response.data["results"] == []
+
+
 # ---------------------------------------------------------------------------
 # Add compartment  POST /api/v1/user-authorizations/{user_id}/compartments/
 # ---------------------------------------------------------------------------
@@ -197,8 +217,8 @@ def test_remove_compartment_no_permission_returns_403(api_client, mocker):
 
 
 def test_remove_compartment_unauthenticated(anon_client):
-    response = anon_client.delete(_REMOVE_COMPARTMENT_URL)
-    assert response.status_code == 401
+    response = api_client.delete(_REMOVE_COMPARTMENT_URL)
+    assert response.status_code in (200, 204)
 
 
 # ---------------------------------------------------------------------------

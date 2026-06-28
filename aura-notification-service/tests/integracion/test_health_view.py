@@ -1,5 +1,5 @@
 """
-Tests for the health check endpoint:
+Tests de integración para el endpoint de health check:
   GET /api/v1/health
 """
 import pytest
@@ -14,7 +14,6 @@ _KOMBU_CONN = "kombu.Connection"
 
 
 def _redis_ok():
-    """Returns a mock Redis client that responds to ping and close."""
     mock_redis = MagicMock()
     client = MagicMock()
     client.ping.return_value = True
@@ -23,7 +22,6 @@ def _redis_ok():
 
 
 def _kombu_ok():
-    """Returns a mock Kombu connection that connects successfully."""
     conn = MagicMock()
     conn.__enter__ = MagicMock(return_value=conn)
     conn.__exit__ = MagicMock(return_value=False)
@@ -136,3 +134,46 @@ class TestHealthCheckView:
 
         checks = response.data["checks"]
         assert set(checks.keys()) == {"database", "redis", "broker"}
+
+    def test_200_status_code_when_all_healthy(self, api_client):
+        with (
+            patch(_DB),
+            patch(_REDIS, _redis_ok()),
+            patch(_KOMBU_CONN, return_value=_kombu_ok()),
+        ):
+            response = api_client.get(URL)
+        assert response.status_code == 200
+
+    def test_503_status_code_when_any_dependency_fails(self, api_client):
+        with (
+            patch(_DB) as mock_db,
+            patch(_REDIS, _redis_ok()),
+            patch(_KOMBU_CONN, return_value=_kombu_ok()),
+        ):
+            mock_db.ensure_connection.side_effect = OperationalError("DB down")
+            response = api_client.get(URL)
+        assert response.status_code == 503
+
+    def test_status_field_ok_string_when_healthy(self, api_client):
+        with (
+            patch(_DB),
+            patch(_REDIS, _redis_ok()),
+            patch(_KOMBU_CONN, return_value=_kombu_ok()),
+        ):
+            response = api_client.get(URL)
+        assert response.data["status"] == "ok"
+
+    def test_status_field_degraded_string_when_any_fail(self, api_client):
+        mock_redis = MagicMock()
+        mock_redis.Redis.from_url.return_value.ping.side_effect = Exception("down")
+        with (
+            patch(_DB),
+            patch(_REDIS, mock_redis),
+            patch(_KOMBU_CONN, return_value=_kombu_ok()),
+        ):
+            response = api_client.get(URL)
+        assert response.data["status"] == "degraded"
+
+    def test_post_not_allowed(self, api_client):
+        response = api_client.post(URL, {}, format="json")
+        assert response.status_code == 405

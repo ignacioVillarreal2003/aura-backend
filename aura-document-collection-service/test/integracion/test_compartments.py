@@ -112,3 +112,39 @@ def test_delete_compartment_in_use_raises(admin):
     )
     with pytest.raises(CompartmentInUseException):
         compartment_service.delete_compartment(admin, compartment.id)
+
+
+# ---------------------------------------------------------------------------
+# New tests
+# ---------------------------------------------------------------------------
+
+def test_list_compartments_ordered_by_name(admin):
+    compartment_service.create_compartment(admin, name="TEST_ZZZ_COMP", description="")
+    compartment_service.create_compartment(admin, name="TEST_AAA_COMP", description="")
+    compartments = list(
+        Compartment.objects.filter(name__startswith="TEST_").order_by("name")
+    )
+    names = [c.name for c in compartments]
+    assert names == sorted(names)
+
+
+def test_update_compartment_only_description(admin):
+    compartment = compartment_service.create_compartment(admin, name="TEST_DESC_ONLY", description="old desc")
+    original_name = compartment.name
+    compartment_service.update_compartment(admin, compartment.id, description="new desc")
+    compartment.refresh_from_db()
+    assert compartment.name == original_name
+    assert compartment.description == "new desc"
+
+
+def test_delete_compartment_in_use_raises_integration(admin):
+    level = classification_level_service.create_classification_level(admin, name="TEST_LEVEL_Y", rank=1055)
+    compartment = compartment_service.create_compartment(admin, name="TEST_USED_COMP", description="")
+    document_collection_service.create_document_collection(
+        admin,
+        name="TEST_Uses_Compartment",
+        classification_level_id=level.id,
+        compartment_ids=[compartment.id],
+    )
+    with pytest.raises(CompartmentInUseException):
+        compartment_service.delete_compartment(admin, compartment.id)

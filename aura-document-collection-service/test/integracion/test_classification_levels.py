@@ -100,3 +100,48 @@ def test_delete_classification_level_removes_from_db(admin):
 def test_delete_classification_level_not_found_raises(admin):
     with pytest.raises(ClassificationLevelNotFoundException):
         classification_level_service.delete_classification_level(admin, 999999)
+
+
+# ---------------------------------------------------------------------------
+# New tests
+# ---------------------------------------------------------------------------
+
+def test_delete_classification_level_in_use_raises(admin):
+    from apps.compartments.services.compartment_service import compartment_service
+    from apps.document_collections.services.document_collection_service import document_collection_service
+    level = classification_level_service.create_classification_level(admin, name="TEST_IN_USE_LEVEL", rank=1030)
+    compartment = compartment_service.create_compartment(admin, name="TEST_IU_COMP", description="")
+    document_collection_service.create_document_collection(
+        admin,
+        name="TEST_IU_Collection",
+        classification_level_id=level.id,
+        compartment_ids=[compartment.id],
+    )
+    with pytest.raises(ClassificationLevelInUseException):
+        classification_level_service.delete_classification_level(admin, level.id)
+
+
+def test_list_classification_levels_ordered_by_rank(admin):
+    classification_level_service.create_classification_level(admin, name="TEST_RANK_B", rank=1040)
+    classification_level_service.create_classification_level(admin, name="TEST_RANK_A", rank=1035)
+    levels = list(
+        ClassificationLevel.objects.filter(name__startswith="TEST_RANK_").order_by("rank")
+    )
+    assert levels[0].rank < levels[1].rank
+
+
+def test_update_classification_level_only_name_no_rank_change(admin):
+    level = classification_level_service.create_classification_level(admin, name="TEST_NORANK", rank=1045)
+    original_rank = level.rank
+    classification_level_service.update_classification_level(admin, level.id, name="TEST_NORANK_UPDATED")
+    level.refresh_from_db()
+    assert level.name == "TEST_NORANK_UPDATED"
+    assert level.rank == original_rank
+
+
+def test_create_and_get_roundtrip(admin):
+    level = classification_level_service.create_classification_level(admin, name="TEST_ROUNDTRIP", rank=1050)
+    fetched = classification_level_service.get_classification_level(admin, level.id)
+    assert fetched.id == level.id
+    assert fetched.name == level.name
+    assert fetched.rank == level.rank

@@ -204,3 +204,42 @@ def test_delete_document_collection_sets_deleted_by(admin, collection):
 def test_delete_document_collection_not_found_raises(admin):
     with pytest.raises(CollectionNotFoundException):
         document_collection_service.delete_document_collection(admin, 999999)
+
+
+# ---------------------------------------------------------------------------
+# New tests
+# ---------------------------------------------------------------------------
+
+def test_create_document_collection_multiple_compartments(admin, level, compartment_a, compartment_b):
+    collection = document_collection_service.create_document_collection(
+        admin,
+        name="TEST_Two_Compartments",
+        classification_level_id=level.id,
+        compartment_ids=[compartment_a.id, compartment_b.id],
+    )
+    assert collection.compartments.count() == 2
+
+
+def test_list_document_collections_excludes_deleted(admin, level, compartment_a):
+    collection = document_collection_service.create_document_collection(
+        admin,
+        name="TEST_To_Be_Deleted",
+        classification_level_id=level.id,
+        compartment_ids=[compartment_a.id],
+    )
+    document_collection_service.delete_document_collection(admin, collection.id)
+    assert not DocumentCollection.objects.filter(id=collection.id).exists()
+
+
+def test_delete_document_collection_twice_raises(admin, collection):
+    document_collection_service.delete_document_collection(admin, collection.id)
+    with pytest.raises(CollectionNotFoundException):
+        document_collection_service.delete_document_collection(admin, collection.id)
+
+
+def test_update_document_collection_adds_compartment(admin, collection, compartment_b):
+    document_collection_service.update_document_collection(
+        admin, collection.id, compartment_ids=[compartment_b.id]
+    )
+    linked_ids = list(collection.compartments.values_list("id", flat=True))
+    assert compartment_b.id in linked_ids

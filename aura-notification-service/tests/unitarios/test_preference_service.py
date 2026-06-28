@@ -1,9 +1,9 @@
 """
-Tests for PreferenceService business logic.
+Tests unitarios para PreferenceService.
 """
 import pytest
 from datetime import datetime, timezone
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from apps.notification.events.registry import EventDefinition
 from apps.notification.models import NotificationPreference
@@ -12,6 +12,7 @@ from apps.notification.services.preference_service import PreferenceService, Pre
 NOW = datetime(2024, 5, 10, 12, 0, 0, tzinfo=timezone.utc)
 FUTURE = datetime(2099, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
 PAST = datetime(2000, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+NOW_EXACT = NOW  # boundary alias
 
 
 def make_event(
@@ -114,6 +115,45 @@ class TestPreferenceDecide:
         assert decision.delivered is False
         assert decision.reason == "event_disabled"
 
+    def test_mute_at_exact_boundary_does_not_suppress(self):
+        # mute_until == now: condition is now < mute_until, so NOT muted
+        event = make_event(is_silenceable=True)
+        prefs = make_prefs(mute_until=NOW)
+
+        decision = svc.decide(42, event, "inapp", prefs=prefs, now=NOW)
+
+        assert decision.delivered is True
+
+    def test_decide_uses_db_prefs_when_not_passed(self):
+        event = make_event(is_silenceable=True)
+        default_prefs = make_prefs(inapp_enabled=True)
+
+        with patch.object(svc, "get_global", return_value=default_prefs) as mock_get:
+            decision = svc.decide(42, event, "inapp", prefs=None, now=NOW)
+
+        mock_get.assert_called_once_with(42)
+        assert decision.delivered is True
+
+    def test_inapp_and_email_both_disabled_suppresses_both(self):
+        event = make_event(is_silenceable=True, default_channels=("inapp", "email"))
+        prefs = make_prefs(inapp_enabled=False, email_enabled=False)
+
+        inapp_decision = svc.decide(42, event, "inapp", prefs=prefs, now=NOW)
+        email_decision = svc.decide(42, event, "email", prefs=prefs, now=NOW)
+
+        assert inapp_decision.delivered is False
+        assert email_decision.delivered is False
+
+    def test_non_silenceable_ignores_all_global_flags(self):
+        event = make_event(is_silenceable=False, default_channels=("inapp", "email"))
+        prefs = make_prefs(inapp_enabled=False, email_enabled=False, mute_until=FUTURE)
+
+        inapp_decision = svc.decide(42, event, "inapp", prefs=prefs, now=NOW)
+        email_decision = svc.decide(42, event, "email", prefs=prefs, now=NOW)
+
+        assert inapp_decision.delivered is True
+        assert email_decision.delivered is True
+
 
 class TestPreferenceGetGlobal:
     def test_returns_existing_preferences_from_db(self):
@@ -137,4 +177,77 @@ class TestPreferenceGetGlobal:
         assert result.user_id == 42
         assert result.inapp_enabled is True
         assert result.email_enabled is True
+        assert result.mute_until is None
+
+
+class TestPreferenceGetGlobalMap:
+    def test_returns_map_keyed_by_user_id(self):
+        p1 = NotificationPreference(user_id=1)
+        p2 = NotificationPreference(user_id=2)
+        mock_qs = MagicMock()
+        mock_qs.__iter__ = MagicMock(return_value=iter([p1, p2]))
+
+        with patch.object(NotificationPreference.objects, "filter", return_value=mock_qs):
+            result = svc.get_global_map([1, 2])
+
+        assert result[1] is p1
+        assert result[2] is p2
+
+    def test_fills_missing_users_with_defaults(self):
+        p1 = NotificationPreference(user_id=1)
+        mock_qs = MagicMock()
+        mock_qs.__iter__ = MagicMock(return_value=iter([p1]))
+
+        with patch.object(NotificationPreference.objects, "filter", return_value=mock_qs):
+            result = svc.get_global_map([1, 2])
+
+        assert result[1] is p1
+        assert result[2].user_id == 2
+        assert result[2].inapp_enabled is True
+
+    def test_empty_user_list_returns_empty_map(self):
+        mock_qs = MagicMock()
+        mock_qs.__iter__ = MagicMock(return_value=iter([]))
+
+        with patch.object(NotificationPreference.objects, "filter", return_value=mock_qs):
+            result = svc.get_global_map([])
+
+        assert result == {}
+
+
+class TestPreferenceUpsertGlobal:
+    def test_upsert_creates_row_when_not_exists(self):
+        new_prefs = NotificationPreference(user_id=10)
+        with patch.object(
+            NotificationPreference.objects, "get_or_create",
+            return_value=(new_prefs, True),
+        ):
+            with patch.object(new_prefs, "save"):
+                result = svc.upsert_global(10, inapp_enabled=False)
+
+        assert result.inapp_enabled is False
+
+    def test_upsert_updates_inapp_enabled(self):
+        existing = NotificationPreference(user_id=10)
+        existing.inapp_enabled = True
+        with patch.object(
+            NotificationPreference.objects, "get_or_create",
+            return_value=(existing, False),
+        ):
+            with patch.object(existing, "save"):
+                result = svc.upsert_global(10, inapp_enabled=False)
+
+        assert result.inapp_enabled is False
+
+    def test_clear_mute_sets_mute_until_to_none(self):
+        from datetime import datetime, timezone
+        existing = NotificationPreference(user_id=10)
+        existing.mute_until = datetime(2099, 1, 1, tzinfo=timezone.utc)
+        with patch.object(
+            NotificationPreference.objects, "get_or_create",
+            return_value=(existing, False),
+        ):
+            with patch.object(existing, "save"):
+                result = svc.upsert_global(10, clear_mute=True)
+
         assert result.mute_until is None

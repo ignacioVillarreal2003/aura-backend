@@ -41,6 +41,13 @@ def test_list_compartments_no_permission_returns_403(api_client, mocker):
     assert response.status_code == 403
 
 
+def test_list_compartments_returns_pagination_keys(api_client, mocker):
+    mocker.patch(f"{_SVC}.list_compartments", return_value=[make_compartment()])
+    response = api_client.get("/api/v1/compartments/")
+    assert "count" in response.data
+    assert "results" in response.data
+
+
 # ---------------------------------------------------------------------------
 # Create  POST /api/v1/compartments/
 # ---------------------------------------------------------------------------
@@ -94,6 +101,20 @@ def test_create_compartment_unauthenticated(anon_client):
     assert response.status_code == 401
 
 
+def test_create_compartment_returns_id_name_description(api_client, mocker):
+    compartment = make_compartment(compartment_id=7, name="GOLF", description="Golf unit")
+    mocker.patch(f"{_SVC}.create_compartment", return_value=compartment)
+    response = api_client.post(
+        "/api/v1/compartments/",
+        {"name": "GOLF", "description": "Golf unit"},
+        format="json",
+    )
+    assert response.status_code == 201
+    assert response.data["id"] == 7
+    assert response.data["name"] == "GOLF"
+    assert response.data["description"] == "Golf unit"
+
+
 # ---------------------------------------------------------------------------
 # Retrieve  GET /api/v1/compartments/{id}/
 # ---------------------------------------------------------------------------
@@ -123,6 +144,16 @@ def test_retrieve_compartment_no_permission_returns_403(api_client, mocker):
 def test_retrieve_compartment_unauthenticated(anon_client):
     response = anon_client.get("/api/v1/compartments/1/")
     assert response.status_code == 401
+
+
+def test_retrieve_compartment_returns_correct_fields(api_client, mocker):
+    compartment = make_compartment(compartment_id=5, name="HOTEL", description="Hotel desc")
+    mocker.patch(f"{_SVC}.get_compartment", return_value=compartment)
+    response = api_client.get("/api/v1/compartments/5/")
+    assert response.status_code == 200
+    assert "id" in response.data
+    assert "name" in response.data
+    assert "description" in response.data
 
 
 # ---------------------------------------------------------------------------
@@ -159,6 +190,17 @@ def test_update_compartment_no_permission_returns_403(api_client, mocker):
     mocker.patch(f"{_SVC}.update_compartment", side_effect=InsufficientPermissionsException())
     response = api_client.patch("/api/v1/compartments/1/", {"description": "new desc"}, format="json")
     assert response.status_code == 403
+
+
+def test_update_compartment_empty_name_returns_400(api_client, mocker):
+    mocker.patch(f"{_SVC}.update_compartment")
+    response = api_client.patch("/api/v1/compartments/1/", {"name": ""}, format="json")
+    assert response.status_code == 400
+
+
+def test_update_compartment_unauthenticated(anon_client):
+    response = anon_client.patch("/api/v1/compartments/1/", {"name": "X"}, format="json")
+    assert response.status_code == 401
 
 
 # ---------------------------------------------------------------------------
