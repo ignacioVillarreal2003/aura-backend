@@ -353,13 +353,20 @@ class MessageService:
             chat_id: int,
             retrieve_context: bool | None = None,
             process_documents: bool | None = None,
+            document_ids: list[int] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         flags = {"retrieve_context": retrieve_context, "process_documents": process_documents}
         if mode == ChatAIMode.GENERAL_CHAT:
-            return self.iter_general_chat_stream_group_payloads(user, chat_id, **flags)
+            return self.iter_general_chat_stream_group_payloads(
+                user, chat_id, document_ids=document_ids, **flags
+            )
         if mode == ChatAIMode.RAG_AGENT:
+            # El agente RAG resuelve por sí mismo qué documentos usar; su request
+            # no admite `document_ids`, así que no se reenvían.
             return self.iter_rag_agent_stream_group_payloads(user, chat_id, **flags)
-        return self.iter_document_question_stream_group_payloads(user, chat_id, **flags)
+        return self.iter_document_question_stream_group_payloads(
+            user, chat_id, document_ids=document_ids, **flags
+        )
 
     async def iter_document_question_stream_group_payloads(
             self,
@@ -367,6 +374,7 @@ class MessageService:
             chat_id: int,
             retrieve_context: bool | None = None,
             process_documents: bool | None = None,
+            document_ids: list[int] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         messages = await self._build_llm_messages(chat_id)
         system_prompt, response_style = await self._get_chat_prompt_style(chat_id)
@@ -377,6 +385,7 @@ class MessageService:
                     messages, user, chat_id=chat_id,
                     system_prompt=system_prompt, response_style=response_style,
                     retrieve_context=retrieve_context, process_documents=process_documents,
+                    document_ids=document_ids,
                 ),
                 complete_extractor=self._extract_document_question_complete,
                 stream_url_setting_name="LLM_DOCUMENT_QUESTION_STREAM_URL",
@@ -389,6 +398,7 @@ class MessageService:
             chat_id: int,
             retrieve_context: bool | None = None,
             process_documents: bool | None = None,
+            document_ids: list[int] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         messages = await self._build_llm_messages(chat_id)
         system_prompt, response_style = await self._get_chat_prompt_style(chat_id)
@@ -399,6 +409,7 @@ class MessageService:
                     messages, user, chat_id=chat_id,
                     system_prompt=system_prompt, response_style=response_style,
                     retrieve_context=retrieve_context, process_documents=process_documents,
+                    document_ids=document_ids,
                 ),
                 complete_extractor=self._extract_general_chat_complete,
                 stream_url_setting_name="LLM_GENERAL_CHAT_STREAM_URL",
@@ -443,6 +454,7 @@ class MessageService:
         }
         if assistant_msg:
             event["id"] = assistant_msg.id
+            event["artifact_id"] = assistant_msg.artifact_id
             event["sender_type"] = assistant_msg.sender_type
             event["created_by"] = assistant_msg.created_by
             event["created_at"] = assistant_msg.created_at.isoformat()

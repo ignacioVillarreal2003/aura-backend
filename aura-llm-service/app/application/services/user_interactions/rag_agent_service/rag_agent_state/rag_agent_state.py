@@ -13,6 +13,11 @@ class RagAgentState(TypedDict):
     chat_id: int
     operator_system_prompt: Optional[str]
     response_style: Optional[str]
+    # Flags tri-estado del operador (None = default del agente, basado en el intent).
+    # retrieve_context gobierna la recuperación RAG/grafo; process_documents gobierna
+    # la traída del contenido completo de los documentos más relevantes.
+    retrieve_context: Optional[bool]
+    process_documents: Optional[bool]
     query: str
     keywords: List[str]
     intent: str

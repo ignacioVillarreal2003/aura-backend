@@ -26,6 +26,8 @@ class RagAgentStateBuilder:
             chat_id=agent_request.chat_id,
             operator_system_prompt=agent_request.system_prompt,
             response_style=agent_request.response_style,
+            retrieve_context=agent_request.retrieve_context,
+            process_documents=agent_request.process_documents,
             query="",
             keywords=[],
             intent="",

@@ -59,11 +59,15 @@ class ContextReductionProcessor:
         self._ollama_llm_facade = ollama_llm_facade
         self._ollama_llm_invoker = ollama_llm_invoker
 
-    def is_needed(self, state: GenerationState) -> bool:
-        fragments = state.all_fragments
-        if not fragments:
+    def is_needed(
+            self,
+            state: GenerationState,
+            fragments: Optional[list[FragmentResponse]] = None,
+    ) -> bool:
+        target = state.all_fragments if fragments is None else fragments
+        if not target:
             return False
-        total = sum(len(f.effective_content) for f in fragments)
+        total = sum(len(f.effective_content) for f in target)
         return total > self._settings.max_context_chars
 
     async def run(
@@ -73,8 +77,12 @@ class ContextReductionProcessor:
             map_human_prompt: Optional[str] = None,
             reduce_system_prompt: Optional[str] = None,
             reduce_human_prompt: Optional[str] = None,
+            fragments: Optional[list[FragmentResponse]] = None,
     ) -> None:
-        if not self.is_needed(state):
+        # `fragments` permite reducir un subconjunto concreto (p. ej. solo el
+        # documento del turno de process_documents), en vez de todo el contexto.
+        target = state.all_fragments if fragments is None else fragments
+        if not self.is_needed(state, target):
             return
 
         prompts = _ReductionPrompts(
@@ -86,7 +94,7 @@ class ContextReductionProcessor:
 
         with timed(_STAGE), generation_span(_STAGE, state.current_message.content):
             llm = await self._build_llm()
-            fragment_units = self._fragment_units(state.all_fragments)
+            fragment_units = self._fragment_units(target)
             query = state.current_message.content
             result = await self._reduce(llm, fragment_units, query, prompts)
 

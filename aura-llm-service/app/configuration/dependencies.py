@@ -33,7 +33,7 @@ from app.application.services.user_interactions.lessons_learned_service.lessons_
 from app.application.services.user_interactions.decision_brief_service.decision_brief_service import (
     DecisionBriefService,
 )
-from app.application.services.user_interactions.feedback_evaluation_service.feedback_evaluation_service import (
+from app.application.services.processing.feedback_evaluation_service.feedback_evaluation_service import (
     FeedbackEvaluationService,
 )
 from app.application.services.generation_shared.generation_settings import GenerationSettings

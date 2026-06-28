@@ -37,24 +37,43 @@ class DocumentFetcherNode(RagNodeInterface):
         keywords: List[str] = state.get("keywords", [])
         authenticated_user: AuthenticatedUser = state["authenticated_user"]
 
+        # Puede encadenarse después del context_retriever cuando el operador pide
+        # ambos: en ese caso se preservan y mergean los fragmentos ya recuperados.
+        existing: List[FragmentResponse] = list(state.get("retrieved_fragments") or [])
+
         if not query:
             logger.warning("No query available for document fetcher")
-            return {"retrieved_fragments": [], "context": ""}
+            return {"retrieved_fragments": existing, "context": state.get("context", "")}
 
         try:
-            fragments = await self._fetch(authenticated_user, query, keywords)
-            context = build_document_context(fragments, self._settings.max_context_chars)
+            fetched = await self._fetch(authenticated_user, query, keywords)
+            combined = self._merge_fragments(existing, fetched)
+            context = build_document_context(combined, self._settings.max_context_chars)
             logger.info(
                 "Documents fetched",
                 extra={
-                    "fragments_count": len(fragments),
-                    "documents_count": len({f.document_id for f in fragments}),
+                    "fragments_count": len(fetched),
+                    "documents_count": len({f.document_id for f in fetched}),
+                    "merged_total": len(combined),
                 },
             )
-            return {"retrieved_fragments": fragments, "context": context}
+            return {"retrieved_fragments": combined, "context": context}
         except Exception:
-            logger.error("Document fetch failed — returning empty context", exc_info=True)
-            return {"retrieved_fragments": [], "context": ""}
+            logger.error("Document fetch failed — keeping existing context", exc_info=True)
+            return {"retrieved_fragments": existing, "context": state.get("context", "")}
+
+    @staticmethod
+    def _merge_fragments(
+            existing: List[FragmentResponse],
+            new: List[FragmentResponse],
+    ) -> List[FragmentResponse]:
+        seen: set[int] = {f.id for f in existing}
+        merged = list(existing)
+        for fragment in new:
+            if fragment.id not in seen:
+                seen.add(fragment.id)
+                merged.append(fragment)
+        return merged
 
     async def _fetch(
             self,

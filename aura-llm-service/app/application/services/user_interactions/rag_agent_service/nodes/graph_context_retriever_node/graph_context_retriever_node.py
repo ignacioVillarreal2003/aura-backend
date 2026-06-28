@@ -24,6 +24,11 @@ class GraphContextRetrieverNode(RagNodeInterface):
         logger.debug("GraphContextRetrieverNode initialized")
 
     async def process(self, state: RagAgentState) -> Dict[str, Any]:
+        # El operador desactivó explícitamente la recuperación de contexto: no se
+        # consulta el grafo de conocimiento (parte del knowledge base).
+        if state.get("retrieve_context") is False:
+            return {"graph_facts": ""}
+
         if self._provider is None or not self._provider.is_active:
             return {"graph_facts": ""}
 

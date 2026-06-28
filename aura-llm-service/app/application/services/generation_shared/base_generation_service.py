@@ -195,6 +195,21 @@ class BaseGenerationService(ABC):
         await self._context_processor.run(state)
 
     async def _reduce_context(self, state: GenerationState) -> None:
+        # Dos flujos independientes que pueden correr juntos:
+        #  • process_documents: condensá (map-reduce) SOLO el documento del turno,
+        #    para usarlo entero aunque exceda el presupuesto.
+        #  • retrieve_context: resumí/incluí los fragmentos recuperados y sus vecinos
+        #    (secciones), sobre todos los documentos accesibles.
+        attached = state.attached_fragments
+        if attached:
+            await self._reduction_processor.run(
+                state,
+                map_system_prompt=self.map_system_prompt,
+                map_human_prompt=self.map_human_prompt,
+                reduce_system_prompt=self.reduce_system_prompt,
+                reduce_human_prompt=self.reduce_human_prompt,
+                fragments=attached,
+            )
         if state.section_groups:
             await self._section_processor.run(
                 state,
@@ -202,13 +217,16 @@ class BaseGenerationService(ABC):
                 map_human_prompt=self.map_human_prompt,
             )
             return
-        await self._reduction_processor.run(
-            state,
-            map_system_prompt=self.map_system_prompt,
-            map_human_prompt=self.map_human_prompt,
-            reduce_system_prompt=self.reduce_system_prompt,
-            reduce_human_prompt=self.reduce_human_prompt,
-        )
+        if not attached:
+            # RAG sin agrupación por secciones (y sin documento del turno): reducí
+            # los fragmentos recuperados.
+            await self._reduction_processor.run(
+                state,
+                map_system_prompt=self.map_system_prompt,
+                map_human_prompt=self.map_human_prompt,
+                reduce_system_prompt=self.reduce_system_prompt,
+                reduce_human_prompt=self.reduce_human_prompt,
+            )
 
     _DEGRADATION_FLAGS: ClassVar[tuple[str, ...]] = (
         "reformulation_degraded",
@@ -265,11 +283,15 @@ class BaseGenerationService(ABC):
             await self._context_processor.run(state)
             gathered = True
         if gathered:
-            needs_reduction = (
-                self._section_processor.is_needed(state)
-                if state.section_groups
-                else self._reduction_processor.is_needed(state)
-            )
+            attached = state.attached_fragments
+            needs_reduction = False
+            if attached and self._reduction_processor.is_needed(state, fragments=attached):
+                needs_reduction = True
+            if state.section_groups:
+                if self._section_processor.is_needed(state):
+                    needs_reduction = True
+            elif not attached and self._reduction_processor.is_needed(state):
+                needs_reduction = True
             if needs_reduction:
                 yield self.stream_progress_event(step="reducing", message=_REDUCING_MESSAGE)
             await self._reduce_context(state)

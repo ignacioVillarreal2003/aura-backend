@@ -76,11 +76,70 @@ def _build_section_context_block(state: GenerationState, max_context_chars: int)
     return "\n".join(parts)
 
 
+def _build_document_and_rag_block(
+        state: GenerationState,
+        max_context_chars: int,
+        attached_reserve_ratio: float,
+) -> str:
+    """Compone los dos flujos independientes: el documento del turno
+    (process_documents) como fuente prioritaria —su síntesis map-reduce si se
+    condensó, o sus fragmentos crudos— más el contexto recuperado
+    (retrieve_context): fragmentos relevantes y sus vecinos de sección.
+    """
+    rag_primaries = state.rag_only_fragments
+    secondary = [
+        fragment
+        for group in (state.section_groups or [])
+        for fragment in group.section_fragments
+    ]
+    has_rag = bool(rag_primaries or secondary or state.section_summary)
+
+    parts: list[str] = []
+    used = 0
+
+    # ── Documento del turno (process_documents) ──
+    doc_budget = max_context_chars if not has_rag else int(max_context_chars * attached_reserve_ratio)
+    if state.reduced_context:
+        body = state.reduced_context[:doc_budget]
+        parts.append("=== SÍNTESIS DE CONTEXTO DOCUMENTAL (documento del turno, varias pasadas) ===")
+        parts.append(body)
+        used += len(body)
+    else:
+        parts.append("=== DOCUMENTO DEL TURNO (FUENTE PRIORITARIA) ===")
+        used += _render_fragments(parts, state.attached_fragments, doc_budget, use_contextualized=False)
+
+    # ── Contexto recuperado (retrieve_context): fragmentos + vecinos ──
+    if has_rag:
+        if state.section_summary:
+            remaining = max(0, max_context_chars - used)
+            summary = state.section_summary[:remaining]
+            parts.append("=== CONTEXTO RECUPERADO (complementario, resumido) ===")
+            parts.append(summary)
+            used += len(summary)
+        else:
+            if rag_primaries:
+                parts.append("=== CONTEXTO RECUPERADO (COMPLEMENTARIO) ===")
+                used += _render_fragments(parts, rag_primaries, max_context_chars - used)
+            if secondary:
+                parts.append("=== CONTEXTO DE SECCIÓN (vecinos) ===")
+                _render_fragments(parts, secondary, max_context_chars - used)
+
+    parts.append("=== FIN DE CONTEXTO ===")
+    return "\n".join(parts)
+
+
 def build_context_block(
         state: GenerationState,
         max_context_chars: int,
         attached_reserve_ratio: float = 0.6,
 ) -> str:
+    # Con documento del turno (process_documents) presente, componé ambos flujos:
+    # el documento como fuente prioritaria + el contexto recuperado con sus vecinos.
+    if state.attached_fragments:
+        return _build_document_and_rag_block(state, max_context_chars, attached_reserve_ratio)
+
+    # Solo RAG: secciones (fragmentos + vecinos) o, si no hay agrupación, síntesis
+    # reducida / fragmentos crudos.
     if state.section_groups:
         return _build_section_context_block(state, max_context_chars)
 
@@ -91,22 +150,12 @@ def build_context_block(
             "=== FIN DE CONTEXTO ==="
         )
 
-    attached = state.attached_fragments
     rag = state.rag_only_fragments
-    if not attached and not rag:
+    if not rag:
         return _NO_CONTEXT_PLACEHOLDER
 
-    parts: list[str] = []
-    used = 0
-    if attached:
-        reserve = max_context_chars if not rag else int(max_context_chars * attached_reserve_ratio)
-        parts.append("=== DOCUMENTOS ADJUNTOS (FUENTE PRIORITARIA) ===")
-        used += _render_fragments(parts, attached, reserve, use_contextualized=False)
-
-    if rag:
-        parts.append("=== CONTEXTO DOCUMENTAL RECUPERADO (COMPLEMENTARIO) ===")
-        _render_fragments(parts, rag, max_context_chars - used)
-
+    parts: list[str] = ["=== CONTEXTO DOCUMENTAL RECUPERADO (COMPLEMENTARIO) ==="]
+    _render_fragments(parts, rag, max_context_chars)
     parts.append("=== FIN DE CONTEXTO ===")
     return "\n".join(parts)
 

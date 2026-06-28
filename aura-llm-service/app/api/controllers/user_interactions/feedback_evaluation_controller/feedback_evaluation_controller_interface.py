@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from app.application.services.user_interactions.feedback_evaluation_service.interfaces.feedback_evaluation_service_interface import (
+from app.application.services.processing.feedback_evaluation_service.interfaces.feedback_evaluation_service_interface import (
     FeedbackEvaluationServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser

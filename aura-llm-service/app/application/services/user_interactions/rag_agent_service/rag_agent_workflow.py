@@ -65,10 +65,54 @@ def _with_progress(node_name: str, fn: _NodeFn) -> _NodeFn:
     return _runner
 
 
-def _route_after_graph_retriever(state: RagAgentState) -> str:
-    if state.get("intent") == RagQueryIntent.document_lookup.value:
+def _retrieve_context_enabled(state: RagAgentState) -> bool:
+    """¿Corre la recuperación RAG/grafo del knowledge base?
+
+    Tri-estado: si el operador fijó el flag se respeta; si viene en None se usa el
+    default del agente (recuperar salvo que el intent sea pedir un documento entero).
+    """
+    flag = state.get("retrieve_context")
+    if flag is not None:
+        return flag
+    return state.get("intent") != RagQueryIntent.document_lookup.value
+
+
+def _process_documents_enabled(state: RagAgentState) -> bool:
+    """¿Corre la traída del contenido completo de los documentos más relevantes?
+
+    Tri-estado: respeta el flag del operador; en None usa el default del agente
+    (traer documentos completos solo cuando el intent es un pedido de documento).
+    """
+    flag = state.get("process_documents")
+    if flag is not None:
+        return flag
+    return state.get("intent") == RagQueryIntent.document_lookup.value
+
+
+def _select_retrieval(state: RagAgentState) -> str:
+    """Primer nodo de recuperación a ejecutar según los flags (o el default por intent).
+
+    Si ambos están activos, se entra por `context_retriever` y luego se encadena al
+    `document_fetcher` (los fragmentos se mergean). Si ninguno aplica, se salta
+    directo a la síntesis.
+    """
+    if _retrieve_context_enabled(state):
+        return RagNodeName.context_retriever.value
+    if _process_documents_enabled(state):
         return RagNodeName.document_fetcher.value
-    return RagNodeName.context_retriever.value
+    return RagNodeName.answer_synthesizer.value
+
+
+def _route_after_context_retriever_grader(state: RagAgentState) -> str:
+    if _process_documents_enabled(state):
+        return RagNodeName.document_fetcher.value
+    return RagNodeName.context_grader.value
+
+
+def _route_after_context_retriever_plain(state: RagAgentState) -> str:
+    if _process_documents_enabled(state):
+        return RagNodeName.document_fetcher.value
+    return _route_after_retrieval(state)
 
 
 def _route_after_retrieval(state: RagAgentState) -> str:
@@ -226,18 +270,30 @@ class RagAgentWorkflow:
             RagNodeName.graph_context_retriever.value,
         )
 
+        # Entrada a la recuperación según los flags del operador (o el default por
+        # intent). Si no aplica ninguno, se salta directo a la síntesis.
         self._graph.add_conditional_edges(
             RagNodeName.graph_context_retriever.value,
-            _route_after_graph_retriever,
+            _select_retrieval,
             {
                 RagNodeName.context_retriever.value: RagNodeName.context_retriever.value,
                 RagNodeName.document_fetcher.value: RagNodeName.document_fetcher.value,
+                RagNodeName.answer_synthesizer.value: RagNodeName.answer_synthesizer.value,
             },
         )
 
         if self._settings.use_context_grader:
-            for retrieval_node in (RagNodeName.context_retriever.value, RagNodeName.document_fetcher.value):
-                self._graph.add_edge(retrieval_node, RagNodeName.context_grader.value)
+            # context_retriever encadena al document_fetcher si también se pidió
+            # procesar documentos; si no, pasa al grader.
+            self._graph.add_conditional_edges(
+                RagNodeName.context_retriever.value,
+                _route_after_context_retriever_grader,
+                {
+                    RagNodeName.document_fetcher.value: RagNodeName.document_fetcher.value,
+                    RagNodeName.context_grader.value: RagNodeName.context_grader.value,
+                },
+            )
+            self._graph.add_edge(RagNodeName.document_fetcher.value, RagNodeName.context_grader.value)
             self._graph.add_conditional_edges(
                 RagNodeName.context_grader.value,
                 _route_after_grader,
@@ -247,17 +303,35 @@ class RagAgentWorkflow:
                     RagNodeName.fallback.value: RagNodeName.fallback.value,
                 },
             )
-            self._graph.add_edge(RagNodeName.query_refiner.value, RagNodeName.context_retriever.value)
+            # Tras refinar la consulta se re-entra a la recuperación honrando los flags.
+            self._graph.add_conditional_edges(
+                RagNodeName.query_refiner.value,
+                _select_retrieval,
+                {
+                    RagNodeName.context_retriever.value: RagNodeName.context_retriever.value,
+                    RagNodeName.document_fetcher.value: RagNodeName.document_fetcher.value,
+                    RagNodeName.answer_synthesizer.value: RagNodeName.answer_synthesizer.value,
+                },
+            )
         else:
-            for retrieval_node in (RagNodeName.context_retriever.value, RagNodeName.document_fetcher.value):
-                self._graph.add_conditional_edges(
-                    retrieval_node,
-                    _route_after_retrieval,
-                    {
-                        RagNodeName.answer_synthesizer.value: RagNodeName.answer_synthesizer.value,
-                        RagNodeName.fallback.value: RagNodeName.fallback.value,
-                    },
-                )
+            # context_retriever → document_fetcher (si se pidió) o directo a síntesis/fallback.
+            self._graph.add_conditional_edges(
+                RagNodeName.context_retriever.value,
+                _route_after_context_retriever_plain,
+                {
+                    RagNodeName.document_fetcher.value: RagNodeName.document_fetcher.value,
+                    RagNodeName.answer_synthesizer.value: RagNodeName.answer_synthesizer.value,
+                    RagNodeName.fallback.value: RagNodeName.fallback.value,
+                },
+            )
+            self._graph.add_conditional_edges(
+                RagNodeName.document_fetcher.value,
+                _route_after_retrieval,
+                {
+                    RagNodeName.answer_synthesizer.value: RagNodeName.answer_synthesizer.value,
+                    RagNodeName.fallback.value: RagNodeName.fallback.value,
+                },
+            )
 
         if self._settings.use_guardrails:
             self._graph.add_edge(RagNodeName.answer_synthesizer.value, RagNodeName.guardrails.value)

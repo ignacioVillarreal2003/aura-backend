@@ -215,10 +215,11 @@ class LLMClient:
             response_style: str | None = None,
             retrieve_context: bool | None = None,
             process_documents: bool | None = None,
+            document_ids: list[int] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         payload = self._apply_overrides(
             {"messages": messages, "chat_id": chat_id}, system_prompt, response_style,
-            retrieve_context, process_documents,
+            retrieve_context, process_documents, document_ids,
         )
         async for event in self._generate_stream(
                 url=settings.LLM_DOCUMENT_QUESTION_STREAM_URL,
@@ -264,10 +265,11 @@ class LLMClient:
             response_style: str | None = None,
             retrieve_context: bool | None = None,
             process_documents: bool | None = None,
+            document_ids: list[int] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         payload = self._apply_overrides(
             {"messages": messages, "chat_id": chat_id}, system_prompt, response_style,
-            retrieve_context, process_documents,
+            retrieve_context, process_documents, document_ids,
         )
         async for event in self._generate_stream(
                 url=settings.LLM_GENERAL_CHAT_STREAM_URL,

@@ -5,25 +5,29 @@ from app.application.services.user_interactions.rag_agent_service.nodes.query_an
 )
 from app.application.services.user_interactions.rag_agent_service.rag_agent_settings import QueryAnalyzerSettings
 from app.application.services.user_interactions.rag_agent_service.rag_agent_workflow import (
-    _route_after_graph_retriever,
+    _process_documents_enabled,
+    _retrieve_context_enabled,
+    _route_after_context_retriever_grader,
     _route_after_guardrails,
     _route_after_retrieval,
+    _select_retrieval,
 )
 
 
 class TestRouting:
+    # ── Default por intent (flags en None) ──────────────────────────────
     def test_question_intent_goes_to_context_retriever(self):
-        assert _route_after_graph_retriever({"intent": "question"}) == RagNodeName.context_retriever.value
+        assert _select_retrieval({"intent": "question"}) == RagNodeName.context_retriever.value
 
     def test_document_lookup_intent_goes_to_document_fetcher(self):
         assert (
-            _route_after_graph_retriever({"intent": "document_lookup"})
+            _select_retrieval({"intent": "document_lookup"})
             == RagNodeName.document_fetcher.value
         )
 
     def test_relational_intent_goes_to_context_retriever(self):
         assert (
-            _route_after_graph_retriever({"intent": "relational"})
+            _select_retrieval({"intent": "relational"})
             == RagNodeName.context_retriever.value
         )
 
@@ -37,6 +41,35 @@ class TestRouting:
 
     def test_guardrail_rejection_routes_to_fallback(self):
         assert _route_after_guardrails({"guardrail_passed": False}) == RagNodeName.fallback.value
+
+    # ── Flags explícitos del operador ───────────────────────────────────
+    def test_explicit_process_documents_overrides_question_intent(self):
+        state = {"intent": "question", "retrieve_context": False, "process_documents": True}
+        assert _select_retrieval(state) == RagNodeName.document_fetcher.value
+
+    def test_explicit_retrieve_context_overrides_lookup_intent(self):
+        state = {"intent": "document_lookup", "retrieve_context": True, "process_documents": False}
+        assert _select_retrieval(state) == RagNodeName.context_retriever.value
+
+    def test_both_disabled_skips_to_synthesizer(self):
+        state = {"intent": "question", "retrieve_context": False, "process_documents": False}
+        assert _select_retrieval(state) == RagNodeName.answer_synthesizer.value
+
+    def test_both_enabled_chains_context_then_document_fetcher(self):
+        state = {"intent": "question", "retrieve_context": True, "process_documents": True}
+        assert _select_retrieval(state) == RagNodeName.context_retriever.value
+        # Tras recuperar contexto, encadena al fetcher de documentos completos.
+        assert _route_after_context_retriever_grader(state) == RagNodeName.document_fetcher.value
+
+    def test_flag_resolution_tristate(self):
+        # None → default por intent
+        assert _retrieve_context_enabled({"intent": "question"}) is True
+        assert _retrieve_context_enabled({"intent": "document_lookup"}) is False
+        assert _process_documents_enabled({"intent": "document_lookup"}) is True
+        assert _process_documents_enabled({"intent": "question"}) is False
+        # Explícito gana
+        assert _retrieve_context_enabled({"intent": "document_lookup", "retrieve_context": True}) is True
+        assert _process_documents_enabled({"intent": "question", "process_documents": True}) is True
 
 
 class TestQueryAnalyzerParsing:

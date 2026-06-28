@@ -30,6 +30,10 @@ logger = logging.getLogger(__name__)
 
 _MAX_MESSAGE_LENGTH = 10_000
 
+# Tope defensivo de documentos adjuntos por mensaje de chat (alineado con el
+# límite que valida el LLM service).
+_MAX_ATTACHED_DOCUMENT_IDS = 20
+
 _LOCK_REFRESH_INTERVAL_SECONDS = 30.0
 
 # Refresh the Redis connection/presence lease well within their TTL so that a
@@ -244,7 +248,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         pre = await self._validate_send_preconditions(content)
         if pre is None:
             return
-        text, mode, retrieve_context, process_documents = pre
+        text, mode, retrieve_context, process_documents, document_ids = pre
 
         if not await self._enforce_rate_limit():
             return
@@ -258,11 +262,13 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         if not await self._persist_user_message(text, lock_token):
             return
 
-        self._spawn_ai_reply_task(mode, retrieve_context, process_documents, lock_token)
+        self._spawn_ai_reply_task(
+            mode, retrieve_context, process_documents, document_ids, lock_token
+        )
 
     async def _validate_send_preconditions(
             self, content: dict
-    ) -> tuple[str, str, bool | None, bool | None] | None:
+    ) -> tuple[str, str, bool | None, bool | None, list[int]] | None:
         """Run all send guards. Returns (text, mode) or sends an error and returns None.
 
         Validates membership/role BEFORE acquiring the AI lock so a reader (or a
@@ -321,7 +327,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         mode = ChatAIMode.normalize(content.get("mode"))
         retrieve_context = self._optional_bool(content.get("retrieve_context"))
         process_documents = self._optional_bool(content.get("process_documents"))
-        return text, mode, retrieve_context, process_documents
+        document_ids = self._parse_document_ids(content.get("document_ids"))
+        return text, mode, retrieve_context, process_documents, document_ids
 
     @staticmethod
     def _optional_bool(value: object) -> bool | None:
@@ -331,6 +338,28 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         falls back to None so the LLM service applies its own default.
         """
         return value if isinstance(value, bool) else None
+
+    @staticmethod
+    def _parse_document_ids(value: object) -> list[int]:
+        """Sanitiza los ids de documentos adjuntos del payload WS.
+
+        Conserva enteros positivos únicos (preservando el orden) y descarta todo
+        lo demás. Estos ids habilitan el procesamiento del documento completo
+        (map-reduce) en el LLM cuando `process_documents` está activo.
+        """
+        if not isinstance(value, list):
+            return []
+        seen: set[int] = set()
+        result: list[int] = []
+        for item in value:
+            if isinstance(item, bool):
+                continue
+            if isinstance(item, int) and item > 0 and item not in seen:
+                seen.add(item)
+                result.append(item)
+            if len(result) >= _MAX_ATTACHED_DOCUMENT_IDS:
+                break
+        return result
 
     async def _enforce_rate_limit(self) -> bool:
         allowed = await database_sync_to_async(check_message_rate_limit)(
@@ -408,10 +437,13 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             mode: str,
             retrieve_context: bool | None,
             process_documents: bool | None,
+            document_ids: list[int],
             lock_token: str,
     ) -> None:
         task = asyncio.create_task(
-            self._run_ai_reply(mode, retrieve_context, process_documents, lock_token)
+            self._run_ai_reply(
+                mode, retrieve_context, process_documents, document_ids, lock_token
+            )
         )
         # Hold a process-level strong reference so the reply survives even if this
         # consumer disconnects before the stream finishes.
@@ -446,6 +478,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             mode: str,
             retrieve_context: bool | None,
             process_documents: bool | None,
+            document_ids: list[int],
             lock_token: str,
     ):
         if self.group_name is None or self.chat_id is None:
@@ -462,6 +495,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                         mode, self.user, self.chat_id,
                         retrieve_context=retrieve_context,
                         process_documents=process_documents,
+                        document_ids=document_ids,
                 ):
                     now = asyncio.get_running_loop().time()
                     if now - last_lock_refresh >= _LOCK_REFRESH_INTERVAL_SECONDS:
@@ -655,6 +689,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         await self.send_json({
             "type": "user_message",
             "id": event["id"],
+            "artifact_id": event.get("artifact_id"),
             "message": event["message"],
             "sender_type": event["sender_type"],
             "created_by": event["created_by"],
@@ -697,6 +732,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         }
         if "id" in event:
             payload["id"] = event["id"]
+            payload["artifact_id"] = event.get("artifact_id")
             payload["sender_type"] = event["sender_type"]
             payload["created_by"] = event["created_by"]
             payload["created_at"] = event["created_at"]
