@@ -23,6 +23,10 @@ logger = logging.getLogger(__name__)
 _CACHE_PREFIX = "auth_token:"
 
 _HEADER_SERVICE_API_KEY = "X-Service-Api-Key"
+_HEADER_USER_ID = "X-User-Id"
+_HEADER_USER_EMAIL = "X-User-Email"
+_HEADER_USER_ROLES = "X-User-Roles"
+_HEADER_USER_PERMISSIONS = "X-User-Permissions"
 
 
 def _token_cache_ttl() -> int:
@@ -106,8 +110,32 @@ class AuthenticationProvider:
         if not secrets.compare_digest(api_key, str(settings.SERVICE_API_KEY)):
             raise ServiceAuthenticationRejected(403, "invalid_service_key", "Invalid service API key")
 
+        # Gateway "on-behalf-of-user" model: the service key authenticates the
+        # caller (a trusted internal service) and the X-User-* headers carry the
+        # impersonated end user, whose permissions are then enforced normally.
+        raw_user_id = request.headers.get(_HEADER_USER_ID)
+        if not raw_user_id or not raw_user_id.strip():
+            raise ServiceAuthenticationRejected(400, "missing_user_id", "X-User-Id header required")
+        try:
+            user_id = int(raw_user_id.strip())
+        except (TypeError, ValueError):
+            raise ServiceAuthenticationRejected(400, "invalid_user_id", "X-User-Id must be an integer")
+
+        email = request.headers.get(_HEADER_USER_EMAIL)
+        if not email or not email.strip():
+            raise ServiceAuthenticationRejected(400, "missing_user_email", "X-User-Email header required")
+
+        roles = tuple(_parse_comma_list(request.headers.get(_HEADER_USER_ROLES)))
+        permissions = tuple(_parse_comma_list(request.headers.get(_HEADER_USER_PERMISSIONS)))
+
         logger.debug("Service-to-service request authenticated.", extra={"path": request.path})
-        return AuthenticatedUser(id=0, email="service@internal", roles=(), permissions=(), is_service=True)
+        return AuthenticatedUser(
+            id=user_id,
+            email=email.strip(),
+            roles=roles,
+            permissions=permissions,
+            is_service=False,
+        )
 
     def validate_token(self, token: str) -> AuthenticatedUser:
         cached = _get_cached_user(token)

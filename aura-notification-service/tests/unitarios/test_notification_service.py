@@ -144,21 +144,21 @@ class TestUpdateStatus:
         n = make_notification()
         with (
             patch.object(svc, "get_for_user", return_value=n),
-            patch.object(n, "mark_read"),
+            patch.object(n, "mark_read") as mock_mark_read,
             patch(_REALTIME),
         ):
             result = svc.update_status(42, 1, NotificationStatus.READ)
-        n.mark_read.assert_called_once()
+            mock_mark_read.assert_called_once()
 
     def test_mark_unread_calls_mark_unread(self):
         n = make_notification(status=NotificationStatus.READ)
         with (
             patch.object(svc, "get_for_user", return_value=n),
-            patch.object(n, "mark_unread"),
+            patch.object(n, "mark_unread") as mock_mark_unread,
             patch(_REALTIME),
         ):
             svc.update_status(42, 1, NotificationStatus.UNREAD)
-        n.mark_unread.assert_called_once()
+            mock_mark_unread.assert_called_once()
 
     def test_raises_validation_for_invalid_status(self):
         with pytest.raises(ValidationException):
