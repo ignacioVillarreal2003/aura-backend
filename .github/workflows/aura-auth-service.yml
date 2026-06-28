@@ -71,10 +71,10 @@ jobs:
           pip install pytest pytest-django pytest-mock
 
       - name: Run unit tests
-        # --no-migrations: create tables directly from models (syncdb), bypassing
-        # the django.contrib.admin migration that FKs to auth_user which doesn't
-        # exist when AUTH_USER_MODEL is a custom model.
-        run: python -m pytest tests/unitarios/ -q --no-migrations
+        # DB setup is driven by the django_db_setup fixture (tests/conftest.py),
+        # which runs init.sql before migrating. The health tests are marked
+        # django_db (/health/ready checks DB connectivity).
+        run: python -m pytest tests/unitarios/ -q
 
   integracion-tests:
     name: Integration tests
@@ -113,8 +113,8 @@ jobs:
           pip install pytest pytest-django pytest-mock
 
       - name: Run integration tests
-        # --no-migrations: create tables via syncdb instead of running migration
-        # files. The django.contrib.admin migration adds a FK constraint to
-        # auth_user, which doesn't exist when AUTH_USER_MODEL is a custom model
-        # and the local AuthDbTestRunner's init.sql is not run in CI.
-        run: python -m pytest tests/integracion/ -q --no-migrations
+        # DB setup is driven by the django_db_setup fixture (tests/conftest.py),
+        # which swaps in AuthDbCreation to run docker/database/auth-db/init.sql
+        # before migrating, so the managed=False accounts tables (auth_user, ...)
+        # exist before contrib's django_admin_log FK is created.
+        run: python -m pytest tests/integracion/ -q

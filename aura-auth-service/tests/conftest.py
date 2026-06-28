@@ -34,6 +34,35 @@ def make_access_token(user_id=1, expired=False):
     return jwt.encode(payload, settings.JWT_SIGNING_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
+@pytest.fixture(scope="session")
+def django_db_setup(request, django_test_environment, django_db_blocker):
+    """Replica AuthDbTestRunner bajo pytest: corre init.sql antes de migrar.
+
+    pytest-django ignora TEST_RUNNER, así que sin esto las tablas managed=False
+    de accounts (auth_user, refresh_tokens, role, ...) nunca se crean y el FK de
+    django_admin_log a auth_user falla. Intercambiamos la clase de creación por
+    AuthDbCreation (que corre init.sql) y dejamos que setup_databases haga el
+    resto. keepdb=False fuerza BD fresca porque init.sql usa CREATE TABLE sin
+    IF NOT EXISTS.
+    """
+    from django.db import connections
+    from django.test.utils import setup_databases, teardown_databases
+    from aura_auth_service.test_runner import AuthDbCreation
+
+    connections["default"].creation.__class__ = AuthDbCreation
+    with django_db_blocker.unblock():
+        db_cfg = setup_databases(
+            verbosity=request.config.option.verbose,
+            interactive=False,
+            keepdb=False,
+        )
+
+    yield
+
+    with django_db_blocker.unblock():
+        teardown_databases(db_cfg, verbosity=request.config.option.verbose)
+
+
 @pytest.fixture
 def api_client():
     return APIClient()
