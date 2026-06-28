@@ -1,0 +1,97 @@
+name: aura-document-collection-service CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "aura-document-collection-service/**"
+      - ".github/workflows/aura-document-collection-service.yml"
+  pull_request:
+    paths:
+      - "aura-document-collection-service/**"
+      - ".github/workflows/aura-document-collection-service.yml"
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: aura-document-collection-service
+
+# DB_NAME and AUTHENTICATION_SERVICE_URL have no defaults in base.py, so they
+# must be provided even for jobs that never open a DB connection.
+env:
+  SECRET_KEY: ci-secret-key-not-for-production
+  DB_NAME: doc_collection_db
+  DB_USER: postgres
+  DB_PASSWORD: postgres
+  DB_HOST: localhost
+  DB_PORT: "5432"
+  SERVICE_API_KEY: ci-service-api-key
+  AUTHENTICATION_SERVICE_URL: http://localhost:9999
+
+jobs:
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    # No database service needed: unit tests mock the service layer entirely
+    # and carry no @pytest.mark.django_db marks.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            aura-document-collection-service/requirements.txt
+            aura-document-collection-service/requirements-test.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-test.txt
+
+      - name: Run unit tests
+        run: python -m pytest test/unitarios/ -q
+
+  integracion-tests:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            aura-document-collection-service/requirements.txt
+            aura-document-collection-service/requirements-test.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-test.txt
+
+      - name: Run integration tests
+        # --reuse-db is already in pytest.ini addopts; on a fresh CI container the
+        # test DB doesn't exist so pytest-django creates it and runs migrations.
+        # TEST.NAME = DB_NAME in test settings, so the test DB is "doc_collection_db".
+        run: python -m pytest test/integracion/ -q
