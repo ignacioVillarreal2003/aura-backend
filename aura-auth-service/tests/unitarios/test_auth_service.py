@@ -28,9 +28,11 @@ class TestAuthenticateUser:
     @patch(f"{_AUTH_SVC}.authenticate")
     def test_invalid_credentials_return_none(self, mock_auth):
         mock_auth.return_value = None
+        from apps.accounts.models import User as RealUser
         from apps.accounts.services.auth_service import authenticate_user
         with patch(f"{_AUTH_SVC}.User") as mock_user_cls:
-            mock_user_cls.objects.get.side_effect = Exception("DoesNotExist")
+            mock_user_cls.DoesNotExist = RealUser.DoesNotExist
+            mock_user_cls.objects.get.side_effect = RealUser.DoesNotExist
             result = authenticate_user("testuser", "wrongpass")
         assert result is None
 

@@ -35,7 +35,22 @@ jobs:
   unit-tests:
     name: Unit tests
     runs-on: ubuntu-latest
-    # No database service needed: unit tests mock the service and auth layers.
+    # PostgreSQL is needed because test_health.py marks tests with django_db
+    # (the /health/ready endpoint verifies DB connectivity).
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: aura_root
+          POSTGRES_PASSWORD: aura_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v4
 
@@ -56,7 +71,10 @@ jobs:
           pip install pytest pytest-django pytest-mock
 
       - name: Run unit tests
-        run: python -m pytest tests/unitarios/ -q
+        # --no-migrations: create tables directly from models (syncdb), bypassing
+        # the django.contrib.admin migration that FKs to auth_user which doesn't
+        # exist when AUTH_USER_MODEL is a custom model.
+        run: python -m pytest tests/unitarios/ -q --no-migrations
 
   integracion-tests:
     name: Integration tests
@@ -95,8 +113,8 @@ jobs:
           pip install pytest pytest-django pytest-mock
 
       - name: Run integration tests
-        # TEST.NAME = "test_auth_db" (set in settings/test.py).
-        # pytest-django creates this DB on the postgres service using aura_root
-        # (superuser) before running migrations. aura_db uses SQLite in-memory
-        # (also set in settings/test.py) so no second postgres DB is needed.
-        run: python -m pytest tests/integracion/ -q
+        # --no-migrations: create tables via syncdb instead of running migration
+        # files. The django.contrib.admin migration adds a FK constraint to
+        # auth_user, which doesn't exist when AUTH_USER_MODEL is a custom model
+        # and the local AuthDbTestRunner's init.sql is not run in CI.
+        run: python -m pytest tests/integracion/ -q --no-migrations

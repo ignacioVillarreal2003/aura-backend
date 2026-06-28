@@ -470,6 +470,7 @@ class TestUserLookupViewUnit:
 
     def test_no_match_returns_empty_results(self, api_client, mocker):
         from django.conf import settings
+        mocker.patch("apps.accounts.models.User.objects.filter").return_value.filter.return_value = []
         resp = api_client.get(
             LOOKUP_URL + "?q=xyzzzznobodymatch",
             HTTP_X_SERVICE_API_KEY=settings.SERVICE_API_KEY,
