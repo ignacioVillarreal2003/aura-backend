@@ -10,6 +10,10 @@ admin.site.site_header = 'Administración'
 admin.site.site_title = 'Admin Aura Auth'
 admin.site.index_title = 'Panel de Administración'
 
+# Quita el enlace "Ver el sitio" del header del admin (apuntaba a "/", que no
+# lleva a ningún lado en este servicio).
+admin.site.site_url = None
+
 admin.site.unregister(Group)
 
 

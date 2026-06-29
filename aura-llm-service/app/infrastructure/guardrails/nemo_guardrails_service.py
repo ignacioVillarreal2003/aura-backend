@@ -157,7 +157,12 @@ class NemoGuardrailsService:
                 return None
 
             llm = await self._ollama_llm_facade.get_llm_base()
-            llm = llm.bind(reasoning=False, num_predict=8, temperature=0.0)
+            llm = llm.bind(
+                reasoning=False,
+                num_predict=8,
+                temperature=0.0,
+                keep_alive=self._settings.keep_alive,
+            )
             try:
                 from nemoguardrails.integrations.langchain.llm_adapter import LangChainLLMAdapter
 

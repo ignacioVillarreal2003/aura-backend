@@ -14,3 +14,12 @@ class GraphExtractionAlreadyRunningException(GraphExtractionServiceException):
 class GraphExtractionDocumentNotFoundException(GraphExtractionServiceException):
     def __init__(self, message: str) -> None:
         super().__init__(message, status_code=404)
+
+
+class GraphExtractionFailedException(GraphExtractionServiceException):
+    """Raised when too many fragments failed to extract, so the rebuild must
+    not be committed. The existing graph footprint is left untouched and the
+    document is marked as ``failed`` for later reprocessing."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=502)

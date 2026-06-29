@@ -305,6 +305,12 @@ class ChangePasswordView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        if user.check_password(serializer.validated_data['new_password']):
+            return Response(
+                {'detail': 'La nueva contraseña debe ser diferente a la actual.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         user.set_password(serializer.validated_data['new_password'])
         user.last_password_change = timezone.now()
         user.save(update_fields=['password', 'last_password_change'])

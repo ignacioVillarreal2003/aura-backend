@@ -7,6 +7,17 @@ services:
       POSTGRES_USER: aura_root
       POSTGRES_PASSWORD: aura_password
       POSTGRES_DB: aura_db
+    # Compartida por chat, document-processing, document-collection y notification
+    # (+ sus workers y consumers WebSocket). El default de Postgres (100) se agota
+    # bajo carga; subimos el techo. Cada backend cuesta ~5-10 MB de RAM.
+    # shared_preload_libraries=pg_search lo exige ParadeDB para el índice bm25;
+    # se reafirma acá para que el override de `command` no lo pierda.
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=300"
+      - "-c"
+      - "shared_preload_libraries=pg_search"
     volumes:
       - aura_db_data:/var/lib/postgresql/data
     ports:
@@ -30,6 +41,10 @@ services:
       POSTGRES_USER: aura_root
       POSTGRES_PASSWORD: aura_password
       POSTGRES_DB: auth_db
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=300"
     volumes:
       - auth_db_data:/var/lib/postgresql/data
     ports:

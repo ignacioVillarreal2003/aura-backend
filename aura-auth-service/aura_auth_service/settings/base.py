@@ -211,6 +211,12 @@ AUTHENTICATION_BACKENDS = [
 
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000,http://localhost:4200', cast=Csv())
 
+# Elevación temporal a superadmin desde el panel admin: la cuenta cuya contraseña
+# valida la elevación. Debe ser un usuario existente con el rol superadmin; por
+# defecto el superadmin sembrado en la base (gral.rodriguez).
+SUPERADMIN_USERNAME = config('SUPERADMIN_USERNAME', default='gral.rodriguez')
+ELEVATION_TIMEOUT_MINUTES = config('ELEVATION_TIMEOUT_MINUTES', default=60, cast=int)
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'apps.accounts.authentication.JWTAuthentication',
