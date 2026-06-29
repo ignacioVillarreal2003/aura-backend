@@ -18,20 +18,20 @@ _executor = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_pre
 
 
 class FeedbackEvaluationService:
-    def trigger_evaluation(self, feedback_id: int) -> None:
+    def trigger_evaluation(self, feedback_id: int, token: str | None = None) -> None:
         """Triggers the evaluation of negative feedback in a background thread."""
         logger.info(f"Triggering feedback evaluation in background for feedback_id: {feedback_id}")
-        _executor.submit(self._evaluate, feedback_id)
+        _executor.submit(self._evaluate, feedback_id, token)
 
-    def _evaluate(self, feedback_id: int) -> None:
+    def _evaluate(self, feedback_id: int, token: str | None) -> None:
         try:
-            self._execute_evaluation(feedback_id)
+            self._execute_evaluation(feedback_id, token)
         except Exception as e:
             logger.exception(f"Error evaluating feedback_id {feedback_id}: {e}")
         finally:
             close_old_connections()
 
-    def _execute_evaluation(self, feedback_id: int) -> None:
+    def _execute_evaluation(self, feedback_id: int, token: str | None) -> None:
         # Fetch feedback details
         try:
             feedback = ArtifactFeedback.objects.select_related("artifact").get(id=feedback_id)
@@ -101,15 +101,24 @@ class FeedbackEvaluationService:
         user = AuthenticatedUser(
             id=user_id,
             email=f"user_{user_id}@local.aura",
-            first_name="",
-            last_name="",
-            permissions=frozenset(),
-            roles=frozenset(),
+            username=f"user_{user_id}",
+            roles=(),
+            permissions=(),
         )
+
+        from core.authentication.request_token import set_request_token, reset_request_token
 
         import asyncio
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
+        
+        ctx = None
+        if token:
+            ctx = set_request_token(token)
+            
+        # Determine RAG mode based on retrieve_context flag
+        execution_mode = "rag" if getattr(artifact, "retrieve_context", False) else "direct"
+
         try:
             eval_result = loop.run_until_complete(
                 llm_client.evaluate_feedback(
@@ -120,10 +129,12 @@ class FeedbackEvaluationService:
                     fragments=artifact.fragments or [],
                     feedback_reason=feedback.reason,
                     feedback_comment=feedback.comment or "",
-                    mode=artifact.mode,
+                    mode=execution_mode,
                 )
             )
         finally:
+            if ctx:
+                reset_request_token(ctx)
             loop.close()
 
         # Parse evaluation response and persist
