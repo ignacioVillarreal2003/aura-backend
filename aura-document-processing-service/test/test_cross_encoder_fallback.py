@@ -1,6 +1,4 @@
-from unittest.mock import MagicMock
 
-import pytest
 
 from app.application.processors.rerankers.instances.cross_encoder_reranker import CrossEncoderReranker
 from app.application.processors.rerankers.reranker_settings import RerankerSettings
