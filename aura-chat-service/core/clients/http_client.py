@@ -21,6 +21,22 @@ class AsyncHttpClient:
         self._timeout = timeout
         self._max_retries = max_retries
         self._client = httpx.AsyncClient(timeout=self._timeout)
+        try:
+            self._loop = asyncio.get_event_loop()
+        except RuntimeError:
+            self._loop = None
+
+    @property
+    def client(self) -> httpx.AsyncClient:
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            current_loop = None
+
+        if self._client.is_closed or current_loop is not self._loop:
+            self._loop = current_loop
+            self._client = httpx.AsyncClient(timeout=self._timeout)
+        return self._client
 
     async def aclose(self) -> None:
         await self._client.aclose()
@@ -53,7 +69,7 @@ class AsyncHttpClient:
 
         for attempt in range(self._max_retries):
             try:
-                response = await self._client.request(method, url, json=json, headers=headers)
+                response = await self.client.request(method, url, json=json, headers=headers)
 
                 if response.status_code in retryable_codes and attempt < self._max_retries - 1:
                     delay = min(2.0, 0.1 * (2 ** attempt) + random.uniform(0, 0.05))

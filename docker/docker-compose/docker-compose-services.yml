@@ -31,9 +31,6 @@ services:
       context: ../../aura-document-processing-service
       dockerfile: Dockerfile
     container_name: aura-document-processing-service
-
-    ports:
-      - 8000:8000
     env_file:
       - ../../aura-document-processing-service/env/.env.docker
     environment:
@@ -70,9 +67,6 @@ services:
   aura-llm-service:
     build: ../../aura-llm-service
     container_name: aura-llm-service
-
-    ports:
-      - 8001:8000
     env_file:
       - ../../aura-llm-service/env/.env.docker
     depends_on:
@@ -93,9 +87,6 @@ services:
   aura-auth-service:
     build: ../../aura-auth-service
     container_name: aura-auth-service
-
-    ports:
-      - 8002:8000
     env_file:
       - ../../aura-auth-service/.env.docker
     depends_on:
@@ -120,9 +111,6 @@ services:
   aura-chat-service:
     build: ../../aura-chat-service
     container_name: aura-chat-service
-
-    ports:
-      - 8003:8000
     env_file:
       - ../../aura-chat-service/env/.env.docker
     environment:
@@ -151,9 +139,6 @@ services:
   aura-notification-service:
     build: ../../aura-notification-service
     container_name: aura-notification-service
-
-    ports:
-      - 8004:8000
     env_file:
       - ../../aura-notification-service/.env.docker
     depends_on:
@@ -211,9 +196,6 @@ services:
   aura-document-collection-service:
     build: ../../aura-document-collection-service
     container_name: aura-document-collection-service
-
-    ports:
-      - 8005:8000
     env_file:
       - ../../aura-document-collection-service/.env.docker
     depends_on:
@@ -235,6 +217,18 @@ services:
 
     ports:
       - 80:80
+      - 443:443
+    environment:
+      - SERVER_NAME=localhost
+      - SSL_CERT_PATH=/run/secrets/aura.crt
+      - SSL_KEY_PATH=/run/secrets/aura.key
+      - AUTH_RATE_LIMIT=10r/m
+      - API_RATE_LIMIT=60r/s
+    secrets:
+      - source: aura_crt
+        target: aura.crt
+      - source: aura_key
+        target: aura.key
     depends_on:
       aura-auth-service:
         condition: service_healthy
@@ -319,3 +313,14 @@ volumes:
   neo4j_data:
   neo4j_logs:
   huggingface_cache:
+
+networks:
+  default:
+    name: aura-network
+    external: true
+
+secrets:
+  aura_crt:
+    file: ./certs/aura.crt
+  aura_key:
+    file: ./certs/aura.key

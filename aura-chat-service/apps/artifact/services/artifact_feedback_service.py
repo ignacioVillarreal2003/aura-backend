@@ -40,8 +40,10 @@ class FeedbackService:
             comment=comment,
         )
         if value == -1:
+            from core.authentication.request_token import get_request_token
+            token = get_request_token()
             from apps.artifact.services.feedback_evaluation_service import feedback_evaluation_service
-            feedback_evaluation_service.trigger_evaluation(fb.id)
+            feedback_evaluation_service.trigger_evaluation(fb.id, token)
         return fb
 
 

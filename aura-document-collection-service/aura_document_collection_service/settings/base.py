@@ -86,6 +86,7 @@ AUTH_SERVICE_TIMEOUT = config("AUTH_SERVICE_TIMEOUT", default=10, cast=float)
 
 
 _redis_url = config("REDIS_URL").strip()
+REDIS_URL = _redis_url
 _cache_key_prefix = config("CACHE_KEY_PREFIX", default="aura-doc-collect:").strip()
 
 CACHES = {

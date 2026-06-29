@@ -113,3 +113,8 @@ volumes:
   prometheus_data:
   elasticsearch_data:
   grafana_data:
+
+networks:
+  default:
+    name: aura-network
+    external: true

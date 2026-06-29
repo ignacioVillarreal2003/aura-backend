@@ -22,3 +22,9 @@ services:
   aura-gateway:
     deploy:
       replicas: 2
+
+secrets:
+  aura_crt:
+    external: true
+  aura_key:
+    external: true
