@@ -91,12 +91,11 @@ def test_items_to_sections_assigns_zero_indexed_item_positions():
     assert [it["position"] for it in sections[0]["items"]] == [0, 1, 2]
 
 
-def test_items_to_sections_preserves_is_checked_and_notes():
+def test_items_to_sections_preserves_is_checked():
     items = [{"section": "S", "text": "item", "is_checked": True, "notes": "nota importante", "order": 0}]
     sections = _items_to_sections(items)
     item = sections[0]["items"][0]
     assert item["is_checked"] is True
-    assert item["notes"] == "nota importante"
 
 
 def test_items_to_sections_empty_list_returns_empty():

@@ -32,7 +32,7 @@ class TracingSettings(BaseSettings):
 
 
 def setup_tracing(settings: Optional[TracingSettings] = None) -> bool:
-    global _active
+    global _active  # noqa: PLW0603 — flag de inicialización única a nivel de módulo
     settings = settings or TracingSettings()
     if not settings.enabled:
         return False

@@ -134,3 +134,8 @@ volumes:
   storage_data:
   memory_db_data:
   queue_data:
+
+networks:
+  default:
+    name: aura-network
+    external: true

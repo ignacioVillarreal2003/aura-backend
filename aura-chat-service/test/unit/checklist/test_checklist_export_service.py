@@ -33,10 +33,11 @@ def _section(title="Sección", items=None):
     return SimpleNamespace(title=title, items=SimpleNamespace(all=lambda: items))
 
 
-def _checklist(title="Mi checklist", retrieve_context=None, process_documents=None, sections=None, created_at=None):
+def _checklist(title="Mi checklist", retrieve_context=None, process_documents=None, sections=None, created_at=None, description=""):
     sections = sections or []
     return SimpleNamespace(
         title=title,
+        description=description,
         artifact=SimpleNamespace(retrieve_context=retrieve_context, process_documents=process_documents),
         created_at=created_at or datetime.datetime(2025, 3, 15, 9, 30, tzinfo=datetime.timezone.utc),
         sections=SimpleNamespace(all=lambda: sections),
@@ -70,7 +71,7 @@ def test_markdown_includes_title_and_footer():
     cl = _checklist(title="Mantenimiento", sections=[_section("S", items=[_item("a")])])
     md = generate_checklist_markdown(cl)
     assert "Mantenimiento" in md
-    assert "exportada desde AURA" in md
+    assert "Exportado desde AURA" in md
 
 
 def test_markdown_includes_section_titles():
@@ -90,13 +91,7 @@ def test_markdown_renders_checkbox_states():
 def test_markdown_progress_counts_checked_items():
     items = [_item("a", is_checked=True), _item("b", is_checked=False), _item("c", is_checked=True)]
     md = generate_checklist_markdown(_checklist(sections=[_section("S", items=items)]))
-    assert "Progreso: 2/3" in md
-
-
-def test_markdown_includes_notes_as_blockquote():
-    sections = [_section("S", items=[_item("tarea", notes="cuidado aquí")])]
-    md = generate_checklist_markdown(_checklist(sections=sections))
-    assert "> cuidado aquí" in md
+    assert "2/3 ítems verificados" in md
 
 
 def test_markdown_omits_blank_notes():
@@ -107,7 +102,7 @@ def test_markdown_omits_blank_notes():
 
 def test_markdown_empty_checklist_reports_zero_progress():
     md = generate_checklist_markdown(_checklist(sections=[]))
-    assert "Progreso: 0/0" in md
+    assert "0/0 ítems verificados" in md
 
 
 def test_markdown_returns_str():

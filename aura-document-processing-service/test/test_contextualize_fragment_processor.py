@@ -1,7 +1,6 @@
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
 
 from app.application.services.fragment.contextualize_fragment_service.contextualize_fragment_processor import (
     ContextualizeFragmentProcessor,
@@ -113,7 +112,7 @@ class TestContextualizeDocumentFragments:
 
     async def test_falls_back_to_document_name_when_no_description(self):
         fragments = [_fragment(1, "Contenido.")]
-        processor, repo, llm, _ = _make_processor(
+        processor, _repo, llm, _ = _make_processor(
             description=None, name="Reglamento X", fragments=fragments
         )
 
@@ -137,7 +136,7 @@ class TestContextualizeDocumentFragments:
         assert kwargs["status"] == ProcessingStatus.failed.value
 
     async def test_no_fragments_is_noop(self):
-        processor, repo, llm, embedder = _make_processor(fragments=[])
+        processor, repo, llm, _embedder = _make_processor(fragments=[])
 
         await processor.contextualize_document_fragments(document_id=10, user=_user())
 
@@ -168,7 +167,7 @@ class TestIncrementalBackfill:
 
     async def test_reprocesses_when_identity_is_stale(self):
         fragments = [self._done_fragment(1, identity="old-model")]
-        processor, repo, llm, embedder = _make_processor(fragments=fragments)
+        processor, repo, llm, _embedder = _make_processor(fragments=fragments)
 
         await processor.contextualize_document_fragments(document_id=10, user=_user())
 
@@ -178,7 +177,7 @@ class TestIncrementalBackfill:
     async def test_processes_only_missing_fragments_in_mixed_doc(self):
         done = self._done_fragment(1)
         pending = _fragment(2, "Nuevo contenido.")
-        processor, repo, llm, embedder = _make_processor(fragments=[done, pending])
+        processor, repo, llm, _embedder = _make_processor(fragments=[done, pending])
 
         await processor.contextualize_document_fragments(document_id=10, user=_user())
 

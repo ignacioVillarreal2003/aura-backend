@@ -1,0 +1,126 @@
+name: aura-auth-service CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "aura-auth-service/**"
+      - ".github/workflows/aura-auth-service.yml"
+  pull_request:
+    paths:
+      - "aura-auth-service/**"
+      - ".github/workflows/aura-auth-service.yml"
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: aura-auth-service
+
+# django-auth-ldap (in requirements.txt) compiles python-ldap which needs
+# OpenLDAP headers. All jobs share a common install step that apt-installs them
+# before pip runs.
+env:
+  SECRET_KEY: ci-secret-key-not-for-production
+  SERVICE_API_KEY: ci-service-api-key
+  # Override the default port (5433) to match the GHA postgres service (5432).
+  DB_PORT: "5432"
+  DB_HOST: localhost
+  DB_USER: aura_root
+  DB_PASSWORD: aura_password
+  DB_NAME: auth_db
+
+jobs:
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    # PostgreSQL is needed because test_health.py marks tests with django_db
+    # (the /health/ready endpoint verifies DB connectivity).
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: aura_root
+          POSTGRES_PASSWORD: aura_password
+          # AuthDbCreation connects to the base DB (NAME=auth_db) to bootstrap
+          # test_auth_db; the container must create it on startup.
+          POSTGRES_DB: auth_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OpenLDAP system headers
+        run: sudo apt-get update -q && sudo apt-get install -y libldap2-dev libsasl2-dev
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: aura-auth-service/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-django pytest-mock
+
+      - name: Run unit tests
+        # DB setup is driven by the django_db_setup fixture (tests/conftest.py),
+        # which runs init.sql before migrating. The health tests are marked
+        # django_db (/health/ready checks DB connectivity).
+        run: python -m pytest tests/unitarios/ -q
+
+  integracion-tests:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: aura_root
+          POSTGRES_PASSWORD: aura_password
+          # AuthDbCreation connects to the base DB (NAME=auth_db) to bootstrap
+          # test_auth_db; the container must create it on startup.
+          POSTGRES_DB: auth_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OpenLDAP system headers
+        run: sudo apt-get update -q && sudo apt-get install -y libldap2-dev libsasl2-dev
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: aura-auth-service/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-django pytest-mock
+
+      - name: Run integration tests
+        # DB setup is driven by the django_db_setup fixture (tests/conftest.py),
+        # which swaps in AuthDbCreation to run docker/database/auth-db/init.sql
+        # before migrating, so the managed=False accounts tables (auth_user, ...)
+        # exist before contrib's django_admin_log FK is created.
+        run: python -m pytest tests/integracion/ -q

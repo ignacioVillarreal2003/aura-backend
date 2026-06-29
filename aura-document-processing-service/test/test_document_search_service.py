@@ -267,7 +267,7 @@ async def test_rerank_falls_back_to_vector_when_reranker_errors():
 async def test_inaccessible_hits_are_filtered_out():
     docs = [_document(1)]
     hits = [_hit(1, 0.9), _hit(999, 0.95)]
-    service, _, document_repo, _ = _build_service(
+    service, _, _document_repo, _ = _build_service(
         accessible_ids=[1], vector_hits=hits, documents=docs
     )
 

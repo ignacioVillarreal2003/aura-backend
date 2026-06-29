@@ -246,7 +246,7 @@ class HuggingFaceEmbedder(BaseEmbedder):
         batches: list[list[str]] = []
         current: list[str] = []
         current_max_tokens = 0
-        for text, tokens in zip(texts, token_lengths):
+        for text, tokens in zip(texts, token_lengths, strict=True):
             prospective_max = max(current_max_tokens, tokens)
             if current and (
                     len(current) + 1 > max_count

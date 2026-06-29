@@ -104,7 +104,7 @@ class DocumentRepository(DocumentRepositoryInterface):
                 .order_by(desc(Document.created_at), desc(Document.id))
             )
 
-            if paginate:
+            if page is not None and size is not None:
                 query = query.offset((page - 1) * size).limit(size)
             else:
                 query = query.limit(MAX_DOCUMENTS_IN_LIST)
@@ -221,7 +221,7 @@ class DocumentRepository(DocumentRepositoryInterface):
             if created_to is not None:
                 query = query.where(Document.created_at <= created_to)
 
-            if paginate:
+            if page is not None and size is not None:
                 query = query.offset((page - 1) * size).limit(size)
             else:
                 query = query.limit(MAX_DOCUMENTS_IN_LIST)
