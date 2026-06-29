@@ -217,8 +217,8 @@ def test_remove_compartment_no_permission_returns_403(api_client, mocker):
 
 
 def test_remove_compartment_unauthenticated(anon_client):
-    response = api_client.delete(_REMOVE_COMPARTMENT_URL)
-    assert response.status_code in (200, 204)
+    response = anon_client.delete(_REMOVE_COMPARTMENT_URL)
+    assert response.status_code == 401
 
 
 # ---------------------------------------------------------------------------

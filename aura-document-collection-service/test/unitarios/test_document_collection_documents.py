@@ -67,7 +67,8 @@ def test_list_documents_returns_correct_fields(api_client, mocker):
     assert len(response.data["results"]) == 1
     link_data = response.data["results"][0]
     assert "id" in link_data
-    assert "document_id" in link_data
+    assert "document" in link_data
+    assert link_data["document"]["id"] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -134,7 +135,7 @@ def test_add_document_returns_all_fields(api_client, mocker):
     response = api_client.post(_CREATE_URL, {"document_id": 5}, format="json")
     assert response.status_code == 201
     assert response.data["id"] == 20
-    assert response.data["document_id"] == 5
+    assert response.data["document"]["id"] == 5
 
 
 # ---------------------------------------------------------------------------

@@ -68,6 +68,44 @@ def make_user(id: int, **kwargs) -> AuthenticatedUser:
     )
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _create_unmanaged_tables(django_db_setup, django_db_blocker):
+    """Crea en el test DB las tablas de los modelos managed=False del servicio.
+
+    En producción esas tablas las crea docker/database/aura-db/document_collection.sql
+    (y la tabla `document`, otro servicio), no las migraciones de Django, así que
+    pytest-django nunca las arma. schema_editor genera el DDL desde el modelo
+    (matchea lo que el ORM inserta). Se crean en orden topológico de FKs.
+    """
+    from django.apps import apps as dj_apps
+    from django.db import connection
+
+    with django_db_blocker.unblock():
+        existing = set(connection.introspection.table_names())
+        pending = [
+            m for m in dj_apps.get_models()
+            if not m._meta.managed and m._meta.db_table not in existing
+        ]
+        created = set(existing)
+        with connection.schema_editor() as schema_editor:
+            progress = True
+            while pending and progress:
+                progress = False
+                for model in list(pending):
+                    deps = {
+                        f.related_model._meta.db_table
+                        for f in model._meta.get_fields()
+                        if getattr(f, "many_to_one", False) and f.related_model is not None
+                    }
+                    if deps <= created:
+                        schema_editor.create_model(model)
+                        created.add(model._meta.db_table)
+                        pending.remove(model)
+                        progress = True
+            for model in pending:  # fallback: ciclos o deps externas
+                schema_editor.create_model(model)
+
+
 @pytest.fixture
 def admin():
     return make_user(id=1000)
