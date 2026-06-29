@@ -279,7 +279,7 @@ class DocumentSearchService(DocumentSearchServiceInterface):
 
         candidates = [(f.content or "").strip() for f in fragments]
         try:
-            scored = await self._reranker_factory.reranker.rerank_with_scores(
+            scored = await self._reranker_factory.reranker.rerank_with_scores(  # type: ignore[union-attr]
                 query=query,
                 candidates=candidates,
                 top_n=len(candidates),

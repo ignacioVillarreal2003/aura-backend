@@ -2,7 +2,6 @@ from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
 
 from app.application.services.document.reembed_document_service.reembed_document_service import (
     ReembedDocumentService,

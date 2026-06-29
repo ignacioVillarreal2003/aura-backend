@@ -2,7 +2,6 @@ from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
 
 from app.application.services.fragment.fragment_query_service.fragment_query_service import FragmentQueryService
 from app.application.services.fragment.fragment_query_service.fragment_query_service_settings import (

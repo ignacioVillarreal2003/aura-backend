@@ -1,0 +1,68 @@
+name: aura-notification-service CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "aura-notification-service/**"
+      - ".github/workflows/aura-notification-service.yml"
+  pull_request:
+    paths:
+      - "aura-notification-service/**"
+      - ".github/workflows/aura-notification-service.yml"
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: aura-notification-service
+
+jobs:
+  # Test settings use SQLite in-memory + in-process Celery (CELERY_TASK_ALWAYS_EAGER),
+  # so no external services are required for any test tier.
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            aura-notification-service/requirements.txt
+            aura-notification-service/requirements-test.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-test.txt
+
+      - name: Run unit tests
+        run: python -m pytest tests/unitarios/ -q
+
+  integracion-tests:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            aura-notification-service/requirements.txt
+            aura-notification-service/requirements-test.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-test.txt
+
+      - name: Run integration tests
+        run: python -m pytest tests/integracion/ -q

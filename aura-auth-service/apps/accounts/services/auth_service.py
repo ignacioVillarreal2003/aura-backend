@@ -36,8 +36,8 @@ def _decode_and_fetch_user(token: str):
         return None
 
     iat = payload.get('iat')
-    valid_after = getattr(user, 'tokens_valid_after', None)
-    if iat is not None and valid_after is not None and iat < int(valid_after.timestamp()):
+    valid_after = getattr(user, 'force_logout_at', None)
+    if iat is not None and valid_after is not None and iat <= int(valid_after.timestamp()):
         return None
 
     return user
@@ -191,7 +191,7 @@ def rotate_refresh_token(refresh_token: uuid.UUID | str, request=None) -> dict |
 def revoke_all_sessions(user: User) -> None:
     """Invalida todas las sesiones activas del usuario.
 
-    Revoca los refresh tokens y adelanta tokens_valid_after para que tambien
+    Revoca los refresh tokens y adelanta force_logout_at para que tambien
     se rechacen los access tokens ya emitidos.
     """
     now = timezone.now()
@@ -200,8 +200,8 @@ def revoke_all_sessions(user: User) -> None:
         updated_by=user.pk,
         updated_at=now,
     )
-    user.tokens_valid_after = now
-    user.save(update_fields=['tokens_valid_after', 'updated_at'])
+    user.force_logout_at = now
+    user.save(update_fields=['force_logout_at', 'updated_at'])
 
 
 def revoke_refresh_token(refresh_token: uuid.UUID | str) -> bool:

@@ -206,7 +206,7 @@ class BulkDispatchService(BulkDispatchServiceInterface):
                 return
 
             try:
-                await publisher.publish(
+                await publisher.publish(  # type: ignore[attr-defined]
                     document_id=document_id,
                     user=user,
                     batch_id=job_id,

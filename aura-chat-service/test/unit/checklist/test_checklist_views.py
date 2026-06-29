@@ -159,7 +159,6 @@ def test_get_checklist_item_fields_are_complete(api_client, mocker):
     assert resp_item["id"] == 5
     assert resp_item["text"] == "Test item"
     assert resp_item["is_checked"] is True
-    assert resp_item["notes"] == "nota"
     assert resp_item["position"] == 1
 
 

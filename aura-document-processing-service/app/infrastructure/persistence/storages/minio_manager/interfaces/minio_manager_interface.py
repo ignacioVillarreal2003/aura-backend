@@ -77,13 +77,16 @@ class MinioManagerInterface(ABC):
         pass
 
     @abstractmethod
-    async def download_data_stream(
+    def download_data_stream(
             self,
             bucket_name: str,
             object_name: str,
             chunk_size: int,
     ) -> AsyncIterator[bytes]:
-        pass
+        # Implementado como async generator: se invoca sin await y se itera con
+        # `async for`. Por eso la firma NO es `async def` (mypy trataría el retorno
+        # como Coroutine[..., AsyncIterator] en vez del propio AsyncIterator).
+        ...
 
     @abstractmethod
     async def delete_object(

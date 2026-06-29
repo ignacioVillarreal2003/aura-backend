@@ -1,5 +1,3 @@
-import pytest
-
 from app.application.services.generation_shared.processors.section_context_processor.section_context_processor import (
     SectionContextProcessor,
 )

@@ -323,7 +323,7 @@ class RabbitMQManager(RabbitMQManagerInterface):
             queue_name: str,
             queue_args: dict[str, Any],
     ) -> None:
-        queue = await self._channel.declare_queue(
+        queue = await self._channel.declare_queue(  # type: ignore[union-attr]
             queue_name,
             durable=True,
             arguments=queue_args

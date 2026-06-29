@@ -336,7 +336,7 @@ class DatabaseManager(DatabaseManagerInterface):
         )
         async def _attempt() -> None:
             logger.info("Verifying connectivity to the database.")
-            async with self._engine.begin() as conn:
+            async with self._engine.begin() as conn:  # type: ignore[union-attr]
                 result = await conn.execute(text("SELECT 1 AS health"))
                 row = result.scalar()
                 if row != 1:

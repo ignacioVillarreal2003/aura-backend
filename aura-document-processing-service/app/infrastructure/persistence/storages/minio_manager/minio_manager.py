@@ -151,7 +151,7 @@ class MinioManager(MinioManagerInterface):
             self,
             bucket_name: str
     ) -> None:
-        await self._ensure_bucket_retried(bucket_name)
+        await self._ensure_bucket_retried(bucket_name)  # type: ignore[misc]
 
     async def upload_file(
             self,
@@ -161,7 +161,7 @@ class MinioManager(MinioManagerInterface):
             content_type: Optional[str] = None,
             metadata: Optional[dict[str, str]] = None
     ) -> None:
-        await self._upload_file_retried(bucket_name, object_name, file_path, content_type, metadata)
+        await self._upload_file_retried(bucket_name, object_name, file_path, content_type, metadata)  # type: ignore[misc]
 
     async def upload_data(
             self,
@@ -171,7 +171,7 @@ class MinioManager(MinioManagerInterface):
             content_type: Optional[str] = None,
             metadata: Optional[dict[str, str]] = None
     ) -> None:
-        await self._upload_data_retried(bucket_name, object_name, data, content_type, metadata)
+        await self._upload_data_retried(bucket_name, object_name, data, content_type, metadata)  # type: ignore[misc]
 
     async def download_file(
             self,
@@ -179,14 +179,14 @@ class MinioManager(MinioManagerInterface):
             object_name: str,
             file_path: str
     ) -> None:
-        await self._download_file_retried(bucket_name, object_name, file_path)
+        await self._download_file_retried(bucket_name, object_name, file_path)  # type: ignore[misc]
 
     async def download_data(
             self,
             bucket_name: str,
             object_name: str
     ) -> bytes:
-        return await self._download_data_retried(bucket_name, object_name)
+        return await self._download_data_retried(bucket_name, object_name)  # type: ignore[misc]
 
     async def download_data_stream(
             self,
@@ -236,7 +236,7 @@ class MinioManager(MinioManagerInterface):
             bucket_name: str,
             object_name: str
     ) -> None:
-        await self._delete_object_retried(bucket_name, object_name)
+        await self._delete_object_retried(bucket_name, object_name)  # type: ignore[misc]
 
     async def object_exists(
             self,
@@ -466,7 +466,7 @@ class MinioManager(MinioManagerInterface):
         )
         async def _attempt() -> None:
             logger.info("Verifying MinIO connection.")
-            await asyncio.to_thread(self._client.list_buckets)
+            await asyncio.to_thread(self._client.list_buckets)  # type: ignore[union-attr]
             logger.info("MinIO connection verified successfully.")
 
         await _attempt()
@@ -544,7 +544,7 @@ class MinioManager(MinioManagerInterface):
             )
 
             if self._settings.auto_create_bucket_if_missing:
-                await self._ensure_bucket_retried(bucket_name)
+                await self._ensure_bucket_retried(bucket_name)  # type: ignore[misc]
 
             result = await asyncio.to_thread(
                 client.fput_object,
@@ -618,7 +618,7 @@ class MinioManager(MinioManagerInterface):
             )
 
             if self._settings.auto_create_bucket_if_missing:
-                await self._ensure_bucket_retried(bucket_name)
+                await self._ensure_bucket_retried(bucket_name)  # type: ignore[misc]
 
             result = await asyncio.to_thread(
                 client.put_object,
