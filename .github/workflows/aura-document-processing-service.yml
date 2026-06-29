@@ -82,9 +82,13 @@ jobs:
           pip install mypy==1.13.0
 
       - name: mypy
-        # No args: picks up files=["app"], mypy_path, namespace_packages and the
-        # per-module strictness overrides from pyproject.toml.
-        run: mypy
+        # Picks up files=["app"], mypy_path, namespace_packages and the per-module
+        # strictness overrides from pyproject.toml. `--disable-error-code
+        # import-untyped` silences "Library stubs not installed" for third-party
+        # deps (redis, etc.) that are intentionally NOT installed in this job, so
+        # they resolve to Any (the config-file form of this option is not honored
+        # for import-untyped in mypy 1.13, only the CLI flag is).
+        run: mypy --disable-error-code import-untyped
 
   test:
     name: Unit tests (pytest)

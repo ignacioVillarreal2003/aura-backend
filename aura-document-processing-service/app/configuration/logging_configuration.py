@@ -31,7 +31,7 @@ class JSONFormatter(logging.Formatter):
             self,
             record: logging.LogRecord
     ) -> str:
-        log_record = {
+        log_record: dict[str, Any] = {
             "timestamp": self.formatTime(record),
             "level": record.levelname,
             "message": record.getMessage(),

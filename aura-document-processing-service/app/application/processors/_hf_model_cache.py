@@ -1,6 +1,6 @@
 import logging
 import threading
-from typing import Optional
+from typing import Any, Optional
 from langchain_huggingface import HuggingFaceEmbeddings
 
 logger = logging.getLogger(__name__)
@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 _lock = threading.Lock()
 
 
-def get_sentence_transformer(embeddings: HuggingFaceEmbeddings):
+def get_sentence_transformer(embeddings: HuggingFaceEmbeddings) -> Any:
     return getattr(embeddings, "client", None) or getattr(embeddings, "_client", None)
 
 _cache: dict[

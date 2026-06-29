@@ -207,7 +207,7 @@ class Neo4jManager(Neo4jManagerInterface):
         self._assert_started()
         params = parameters or {}
         try:
-            async with self._driver.session(database=self._settings.database) as session:
+            async with self._driver.session(database=self._settings.database) as session:  # type: ignore[union-attr]
                 return await session.execute_read(self._collect_records, cypher, params)
         except Neo4jError as e:
             logger.exception(
@@ -230,7 +230,7 @@ class Neo4jManager(Neo4jManagerInterface):
         self._assert_started()
         params = parameters or {}
         try:
-            async with self._driver.session(database=self._settings.database) as session:
+            async with self._driver.session(database=self._settings.database) as session:  # type: ignore[union-attr]
                 return await session.execute_write(self._collect_records, cypher, params)
         except Neo4jError as e:
             logger.exception(

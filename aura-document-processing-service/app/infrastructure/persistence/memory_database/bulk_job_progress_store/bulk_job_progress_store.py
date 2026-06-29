@@ -78,7 +78,7 @@ class BulkJobProgressStore(BulkJobProgressStoreInterface):
             total: int,
     ) -> None:
         now_iso = datetime.now(timezone.utc).isoformat()
-        snapshot = {
+        snapshot: dict[str, Any] = {
             "job_id": job_id,
             "operation": operation.value,
             "is_running": True,
