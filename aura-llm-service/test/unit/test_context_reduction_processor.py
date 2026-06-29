@@ -1,7 +1,5 @@
 import asyncio
 
-import pytest
-
 from app.application.services.generation_shared.processors.context_reduction_processor.context_reduction_processor import (
     ContextReductionProcessor,
     _ReductionPrompts,

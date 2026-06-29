@@ -98,7 +98,7 @@ class FeedbackEvaluationService(FeedbackEvaluationServiceInterface):
             data = json.loads(cleaned_text)
         except Exception as e:
             logger.exception("Failed to parse LLM response as JSON. Raw output: %s", response_text)
-            raise ValueError(f"El LLM juez retornó una respuesta inválida (no parseable como JSON): {e}")
+            raise ValueError(f"El LLM juez retornó una respuesta inválida (no parseable como JSON): {e}") from e
 
         # Inject model name in the response DTO
         judge_model = getattr(self._ollama_llm_facade._settings, "model_name", "judge-ollama")
