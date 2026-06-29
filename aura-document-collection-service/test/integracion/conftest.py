@@ -105,6 +105,25 @@ def _create_unmanaged_tables(django_db_setup, django_db_blocker):
             for model in pending:  # fallback: ciclos o deps externas
                 schema_editor.create_model(model)
 
+        # schema_editor crea las FK como DEFERRABLE INITIALLY DEFERRED, así que
+        # las violaciones se difieren al commit. En producción las FK son
+        # inmediatas (NOT DEFERRABLE), y los services dependen de que el DELETE
+        # de una fila referenciada levante IntegrityError al instante (p. ej.
+        # ClassificationLevelInUseException). Las hacemos inmediatas para igualar.
+        our_tables = {
+            m._meta.db_table for m in dj_apps.get_models() if not m._meta.managed
+        }
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT conrelid::regclass::text, conname "
+                "FROM pg_constraint WHERE contype = 'f' AND condeferrable"
+            )
+            for table, conname in cursor.fetchall():
+                if table.strip('"') in our_tables:
+                    cursor.execute(
+                        f'ALTER TABLE {table} ALTER CONSTRAINT "{conname}" NOT DEFERRABLE'
+                    )
+
 
 @pytest.fixture
 def admin():
