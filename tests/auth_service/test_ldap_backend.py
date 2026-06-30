@@ -471,6 +471,7 @@ class TestLDAPTC15:
         from accounts.services import auth_service
 
         mock_refresh = MagicMock()
+        mock_refresh.is_revoked = False
         mock_refresh.expires_at = timezone.now() + timedelta(hours=1)
         mock_refresh.user = _make_user()
 

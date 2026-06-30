@@ -366,7 +366,7 @@ LLM_STREAM_READ_TIMEOUT = config(
 LLM_CONTEXT_MESSAGE_LIMIT = config("LLM_CONTEXT_MESSAGE_LIMIT", default=10, cast=int)
 
 LANGUAGE_CODE = "en-us"
-TIME_ZONE = "UTC"
+TIME_ZONE = "America/Montevideo"
 USE_I18N = True
 USE_TZ = True
 

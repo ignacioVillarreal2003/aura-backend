@@ -132,8 +132,9 @@ def authenticate_user(username: str, password: str):
     user.lockout_until = None
     user.account_non_locked = True
     user.last_login = timezone.now()
+    user.force_logout_at = None
     user.save(update_fields=[
-        'failed_login_attempts', 'lockout_until', 'account_non_locked', 'last_login', 'updated_at',
+        'failed_login_attempts', 'lockout_until', 'account_non_locked', 'last_login', 'force_logout_at', 'updated_at',
     ])
 
     return user
@@ -180,12 +181,30 @@ def rotate_refresh_token(refresh_token: uuid.UUID | str, request=None) -> dict |
         return None
     if row.expires_at <= now:
         return None
+    _try_ldap_resync(row.user)
+
     new_refresh = _create_refresh_token(row.user, request=request)
     return {
         'access_token': _build_access_token(row.user),
         'refresh_token': new_refresh.token,
         'token_type': 'Bearer',
     }
+
+
+def _try_ldap_resync(user: User) -> None:
+    """Vuelve a sincronizar MAC desde LDAP al rotar el token."""
+    try:
+        from apps.accounts.ldap_backend import AuraLDAPBackend
+        backend = AuraLDAPBackend()
+        ldap_user_obj = backend.get_user(user.pk)
+        if ldap_user_obj and hasattr(ldap_user_obj, '_ldap_user'):
+            from apps.accounts.ldap_sync import _sync_mac_attributes
+            _sync_mac_attributes(sender=None, user=user, ldap_user=ldap_user_obj._ldap_user)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).debug(
+            "LDAP re-sync skipped for '%s': %s", user.username, exc
+        )
 
 
 def revoke_all_sessions(user: User) -> None:

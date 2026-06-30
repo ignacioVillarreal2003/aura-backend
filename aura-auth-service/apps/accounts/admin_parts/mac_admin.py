@@ -148,6 +148,9 @@ def _cl_create_view(request):
         description = request.POST.get('description', '').strip()
         new_user_ids = set(int(uid) for uid in request.POST.getlist('user_ids') if uid)
         new_doc_ids = set(int(d) for d in request.POST.getlist('doc_ids') if d)
+        if new_doc_ids and Document.objects.filter(pk__in=new_doc_ids, chat_id__isnull=False).exists():
+            messages.error(request, 'No se pueden asignar documentos privados de chat.')
+            return redirect(reverse('admin:mac_classification_levels_create'))
         result = None
         if not name:
             messages.error(request, 'El nombre es obligatorio.')
@@ -215,7 +218,7 @@ def _cl_create_view(request):
         return redirect(reverse('admin:mac_classification_levels_list'))
 
     all_users = list(AuthUser.objects.filter(deleted_at__isnull=True, status='active').order_by('username'))
-    all_docs = list(Document.objects.filter(deleted_at__isnull=True).order_by('name'))
+    all_docs = list(Document.objects.filter(deleted_at__isnull=True, chat_id__isnull=True).order_by('name'))
 
     try:
         with connections['aura_db'].cursor() as cursor:
@@ -268,6 +271,9 @@ def _cl_edit_view(request, level_id):
             description = request.POST.get('description', '').strip()
             new_user_ids = set(int(uid) for uid in request.POST.getlist('user_ids') if uid)
             new_doc_ids = set(int(d) for d in request.POST.getlist('doc_ids') if d)
+            if new_doc_ids and Document.objects.filter(pk__in=new_doc_ids, chat_id__isnull=False).exists():
+                messages.error(request, 'No se pueden asignar documentos privados de chat.')
+                return redirect(reverse('admin:mac_classification_levels_edit', args=[level_id]))
             errors = []
 
             if not name:
@@ -397,9 +403,13 @@ def _cl_edit_view(request, level_id):
     )
 
     assigned_doc_ids = _get_level_doc_ids(level_id)
+    if assigned_doc_ids:
+        assigned_doc_ids = set(Document.objects.filter(pk__in=assigned_doc_ids, chat_id__isnull=True).values_list('pk', flat=True))
     all_level_doc_ids = _get_all_level_doc_ids()
+    if all_level_doc_ids:
+        all_level_doc_ids = set(Document.objects.filter(pk__in=all_level_doc_ids, chat_id__isnull=True).values_list('pk', flat=True))
     blocked_doc_ids = all_level_doc_ids - assigned_doc_ids
-    all_docs = list(Document.objects.filter(deleted_at__isnull=True).order_by('name'))
+    all_docs = list(Document.objects.filter(deleted_at__isnull=True, chat_id__isnull=True).order_by('name'))
 
     ctx = _ctx(
         request,
@@ -452,6 +462,9 @@ def _comp_create_view(request):
         description = request.POST.get('description', '').strip()
         new_user_ids = set(int(uid) for uid in request.POST.getlist('user_ids') if uid)
         new_doc_ids = set(int(d) for d in request.POST.getlist('doc_ids') if d)
+        if new_doc_ids and Document.objects.filter(pk__in=new_doc_ids, chat_id__isnull=False).exists():
+            messages.error(request, 'No se pueden asignar documentos privados de chat.')
+            return redirect(reverse('admin:mac_compartments_create'))
         result = None
         if not name:
             messages.error(request, 'El nombre es obligatorio.')
@@ -516,7 +529,7 @@ def _comp_create_view(request):
         return redirect(reverse('admin:mac_compartments_list'))
 
     all_users = list(AuthUser.objects.filter(deleted_at__isnull=True, status='active').order_by('username'))
-    all_docs = list(Document.objects.filter(deleted_at__isnull=True).order_by('name'))
+    all_docs = list(Document.objects.filter(deleted_at__isnull=True, chat_id__isnull=True).order_by('name'))
 
     ctx = _ctx(
         request,
@@ -553,6 +566,9 @@ def _comp_edit_view(request, compartment_id):
             description = request.POST.get('description', '').strip()
             new_user_ids = set(int(uid) for uid in request.POST.getlist('user_ids') if uid)
             new_doc_ids = set(int(d) for d in request.POST.getlist('doc_ids') if d)
+            if new_doc_ids and Document.objects.filter(pk__in=new_doc_ids, chat_id__isnull=False).exists():
+                messages.error(request, 'No se pueden asignar documentos privados de chat.')
+                return redirect(reverse('admin:mac_compartments_edit', args=[compartment_id]))
             errors = []
 
             if not name:
@@ -671,7 +687,9 @@ def _comp_edit_view(request, compartment_id):
     )
 
     assigned_doc_ids = _get_comp_doc_ids(compartment_id)
-    all_docs = list(Document.objects.filter(deleted_at__isnull=True).order_by('name'))
+    if assigned_doc_ids:
+        assigned_doc_ids = set(Document.objects.filter(pk__in=assigned_doc_ids, chat_id__isnull=True).values_list('pk', flat=True))
+    all_docs = list(Document.objects.filter(deleted_at__isnull=True, chat_id__isnull=True).order_by('name'))
 
     ctx = _ctx(
         request,

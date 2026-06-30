@@ -6,8 +6,39 @@ _svc = os.path.normpath(
 )
 if _svc not in sys.path:
     sys.path.insert(0, _svc)
+_apps = os.path.join(_svc, "apps")
+if _apps not in sys.path:
+    sys.path.insert(0, _apps)
 
-from authservice.settings import *  # noqa: F401, F403
+# Stub out LDAP dependencies for local test execution on Windows
+import types
+from unittest.mock import MagicMock
+
+dummy_ldap = types.ModuleType('ldap')
+dummy_ldap.SCOPE_SUBTREE = 2
+sys.modules['ldap'] = dummy_ldap
+
+sys.modules['django_auth_ldap'] = MagicMock()
+
+class DummyLDAPBackend:
+    def authenticate(self, *args, **kwargs):
+        pass
+    def get_or_build_user(self, *args, **kwargs):
+        pass
+dummy_backend = types.ModuleType('django_auth_ldap.backend')
+dummy_backend.LDAPBackend = DummyLDAPBackend
+from django.dispatch import Signal
+dummy_backend.populate_user = Signal()
+sys.modules['django_auth_ldap.backend'] = dummy_backend
+
+class DummyLDAPSearch:
+    def __init__(self, *args, **kwargs):
+        pass
+dummy_config = types.ModuleType('django_auth_ldap.config')
+dummy_config.LDAPSearch = DummyLDAPSearch
+sys.modules['django_auth_ldap.config'] = dummy_config
+
+from aura_auth_service.settings.base import *  # noqa: F401, F403
 
 DATABASES = {
     "default": {
@@ -31,8 +62,8 @@ INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
     "django_filters",
-    "accounts.apps.AccountsConfig",
-    "documents.apps.DocumentsConfig",
+    "apps.accounts.apps.AccountsConfig",
+    "apps.documents.apps.DocumentsConfig",
 ]
 
 ROOT_URLCONF = "urls_test"

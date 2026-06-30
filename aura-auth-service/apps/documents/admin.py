@@ -313,6 +313,12 @@ class DocumentAdmin(admin.ModelAdmin):
 
         if object_id:
             doc_id = int(object_id)
+            try:
+                doc = Document.objects.get(pk=doc_id)
+                if doc.chat_id is not None:
+                    raise Http404("Documento no encontrado o es privado.")
+            except Document.DoesNotExist:
+                raise Http404("Documento no encontrado.")
 
             meta = _get_doc_meta(doc_id)
             if meta:
@@ -980,6 +986,13 @@ class DocumentAdmin(admin.ModelAdmin):
 
         if not self.has_view_permission(request):
             raise PermissionDenied
+
+        try:
+            doc = Document.objects.get(pk=object_id)
+            if doc.chat_id is not None:
+                raise Http404("Documento no encontrado o es privado.")
+        except Document.DoesNotExist:
+            raise Http404("Documento no encontrado.")
 
         try:
             obj = self.get_object(request, object_id)

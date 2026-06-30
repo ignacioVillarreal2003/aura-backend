@@ -51,6 +51,8 @@ services:
         condition: service_healthy
       neo4j:
         condition: service_healthy
+      aura-document-collection-service:
+        condition: service_healthy
     healthcheck:
       <<: *healthcheck-api-v1
       start_period: 600s
@@ -58,6 +60,12 @@ services:
     volumes:
       - huggingface_cache:/root/.cache/huggingface
     deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
       resources:
         reservations:
           devices:
@@ -78,6 +86,12 @@ services:
       start_period: 60s
     restart: unless-stopped
     deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
       resources:
         reservations:
           devices:
@@ -97,8 +111,19 @@ services:
         condition: service_healthy
       aura_db:
         condition: service_healthy
-    healthcheck: *healthcheck-metrics
+    healthcheck:
+      <<: *healthcheck-defaults
+      test:
+        - CMD-SHELL
+        - python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5)"
     restart: unless-stopped
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
 
   aura-chat-service:
     build: ../../aura-chat-service
@@ -120,6 +145,13 @@ services:
     restart: unless-stopped
     volumes:
       - huggingface_cache:/app/.cache/huggingface
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
 
   aura-notification-service:
     build: ../../aura-notification-service
@@ -137,6 +169,13 @@ services:
         condition: service_healthy
     healthcheck: *healthcheck-api-v1
     restart: unless-stopped
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
 
   aura-notification-worker:
     build: ../../aura-notification-service
@@ -162,6 +201,13 @@ services:
         condition: service_healthy
     healthcheck: *healthcheck-celery-worker
     restart: unless-stopped
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
 
   aura-document-collection-service:
     build: ../../aura-document-collection-service
@@ -173,6 +219,57 @@ services:
         condition: service_healthy
     healthcheck: *healthcheck-api-v1
     restart: unless-stopped
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
+
+  aura-gateway:
+    build: ../../aura-gateway
+    container_name: aura-gateway
+    ports:
+      - 80:80
+      - 443:443
+    environment:
+      - SERVER_NAME=localhost
+      - SSL_CERT_PATH=/run/secrets/aura.crt
+      - SSL_KEY_PATH=/run/secrets/aura.key
+      - AUTH_RATE_LIMIT=10r/m
+      - API_RATE_LIMIT=60r/s
+    secrets:
+      - source: aura_crt
+        target: aura.crt
+      - source: aura_key
+        target: aura.key
+    depends_on:
+      aura-auth-service:
+        condition: service_healthy
+      aura-chat-service:
+        condition: service_healthy
+      aura-llm-service:
+        condition: service_healthy
+      aura-document-processing-service:
+        condition: service_healthy
+      aura-document-collection-service:
+        condition: service_healthy
+      aura-notification-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 15s
+      timeout: 120s
+      retries: 3
+    restart: unless-stopped
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
 
   llm:
     build:
@@ -188,6 +285,9 @@ services:
       - llm_data:/root/.ollama
     restart: unless-stopped
     deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
       resources:
         reservations:
           devices:
@@ -226,8 +326,12 @@ services:
       interval: 15s
       timeout: 120s
       retries: 10
-      start_period: 30s
+      start_period: 600s
     restart: unless-stopped
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
 
 volumes:
   llm_data:
@@ -239,3 +343,9 @@ networks:
   default:
     name: aura-network
     external: true
+
+secrets:
+  aura_crt:
+    file: ./certs/aura.crt
+  aura_key:
+    file: ./certs/aura.key
