@@ -19,6 +19,9 @@ _svc = os.path.normpath(
 )
 if _svc not in sys.path:
     sys.path.insert(0, _svc)
+_apps = os.path.join(_svc, "apps")
+if _apps not in sys.path:
+    sys.path.insert(0, _apps)
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings_test")
 
@@ -54,6 +57,14 @@ USER_INFO = {
 def make_user(id=USER_ID, username="testuser", email="test@test.com"):
     return SimpleNamespace(id=id, pk=id, username=username, email=email)
 
+
+@pytest.fixture(autouse=True, scope="session")
+def alias_sys_modules():
+    import sys
+    for key in list(sys.modules.keys()):
+        if key.startswith('apps.'):
+            alias = key[5:]
+            sys.modules[alias] = sys.modules[key]
 
 @pytest.fixture
 def client():
