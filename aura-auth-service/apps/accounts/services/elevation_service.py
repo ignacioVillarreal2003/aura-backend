@@ -8,21 +8,16 @@ REAL_USER_SESSION_KEY = 'elevation_real_user_id'
 ELEVATION_START_KEY = 'elevation_started_at'
 
 
-def elevate_to_superadmin(request, superadmin_password: str) -> bool:
-    """Valida la contrasena de superadmin y marca la sesion como elevada."""
-    from apps.accounts.models import User
-    from django.contrib.auth.hashers import check_password as django_check_password
+def elevate_to_superadmin(request, elevation_password: str) -> bool:
+    """Valida la contrasena global de elevacion y marca la sesion como elevada."""
+    from django.utils.crypto import constant_time_compare
 
-    superadmin_username = getattr(settings, 'SUPERADMIN_USERNAME', 'superadmin')
-    try:
-        superadmin = User.objects.get(
-            username=superadmin_username,
-            deleted_at__isnull=True,
-        )
-    except User.DoesNotExist:
+    expected = getattr(settings, 'ELEVATION_PASSWORD', '') or ''
+    # Sin contrasena configurada en el entorno, la elevacion queda deshabilitada.
+    if not expected:
         return False
 
-    if not django_check_password(superadmin_password, superadmin.password):
+    if not constant_time_compare(elevation_password, expected):
         return False
 
     request.session[ELEVATION_SESSION_KEY] = True

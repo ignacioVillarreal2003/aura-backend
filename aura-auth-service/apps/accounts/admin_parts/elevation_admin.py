@@ -17,7 +17,7 @@ from apps.accounts.services.elevation_service import (
 
 class ElevateForm(forms.Form):
     password = forms.CharField(
-        label='Contraseña de Superadmin',
+        label='Contraseña de elevación',
         widget=forms.PasswordInput(render_value=False),
     )
 
