@@ -58,3 +58,29 @@ class TestAdminChatDocs:
 
             with pytest.raises(Http404):
                 doc_admin.history_view(request, object_id='999')
+
+    def test_get_actions_allows_admin_user(self):
+        from django.contrib.admin.sites import AdminSite
+        from django.test import RequestFactory
+
+        site = AdminSite()
+        doc_admin = DocumentAdmin(Document, site)
+
+        request = RequestFactory().get('/admin/documents/document/')
+        request.user = MagicMock()
+
+        # When requester is a regular admin
+        with patch('apps.documents.admin._is_admin_or_super_user', return_value=True):
+            actions = doc_admin.get_actions(request)
+            assert 'action_reprocess' in actions
+            assert 'action_reembed' in actions
+            assert 'action_enrich' in actions
+            assert 'action_graph_extract' in actions
+
+        # When requester is NOT even a regular admin
+        with patch('apps.documents.admin._is_admin_or_super_user', return_value=False):
+            actions = doc_admin.get_actions(request)
+            assert 'action_reprocess' not in actions
+            assert 'action_reembed' not in actions
+            assert 'action_enrich' not in actions
+            assert 'action_graph_extract' not in actions

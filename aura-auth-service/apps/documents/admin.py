@@ -186,7 +186,7 @@ class DocumentAdmin(admin.ModelAdmin):
     def get_actions(self, request):
         actions = super().get_actions(request)
         actions.pop('delete_selected', None)
-        if not _is_super_admin_user(request.user):
+        if not _is_admin_or_super_user(request.user):
             for name in ('action_reprocess', 'action_reembed', 'action_enrich', 'action_graph_extract'):
                 actions.pop(name, None)
         return actions
