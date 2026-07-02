@@ -1,6 +1,3 @@
-"""Unit tests for sse_response: normal framing, clean completion, and the
-defensive terminal error frame emitted when the event source raises or an event
-fails to serialize (so the client never sees a silently truncated stream)."""
 from collections.abc import AsyncIterator
 
 from pydantic import BaseModel

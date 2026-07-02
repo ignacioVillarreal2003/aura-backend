@@ -22,9 +22,6 @@ class NemoGuardrailsSettings(BaseSettings):
 
     check_timeout_seconds: float = Field(default=20.0, gt=0.0, le=60.0)
 
-    # Mantiene el modelo del self-check residente en Ollama para evitar el cold
-    # start que dispara el TimeoutError. Acepta duraciones ("30m", "1h") o -1
-    # para no descargarlo nunca.
     keep_alive: str = Field(default="30m")
 
     blocked_output_message: str = Field(

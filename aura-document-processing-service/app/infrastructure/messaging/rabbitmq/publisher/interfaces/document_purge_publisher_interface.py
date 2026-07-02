@@ -11,5 +11,6 @@ class DocumentPurgePublisherInterface(ABC):
             document_id: int,
             storage_url: str,
             user: AuthenticatedUser,
+            purge_storage: bool = True,
     ) -> str:
         pass

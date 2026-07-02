@@ -81,11 +81,6 @@ def _build_document_and_rag_block(
         max_context_chars: int,
         attached_reserve_ratio: float,
 ) -> str:
-    """Compone los dos flujos independientes: el documento del turno
-    (process_documents) como fuente prioritaria —su síntesis map-reduce si se
-    condensó, o sus fragmentos crudos— más el contexto recuperado
-    (retrieve_context): fragmentos relevantes y sus vecinos de sección.
-    """
     rag_primaries = state.rag_only_fragments
     secondary = [
         fragment
@@ -97,7 +92,6 @@ def _build_document_and_rag_block(
     parts: list[str] = []
     used = 0
 
-    # ── Documento del turno (process_documents) ──
     doc_budget = max_context_chars if not has_rag else int(max_context_chars * attached_reserve_ratio)
     if state.reduced_context:
         body = state.reduced_context[:doc_budget]
@@ -108,7 +102,6 @@ def _build_document_and_rag_block(
         parts.append("=== DOCUMENTO DEL TURNO (FUENTE PRIORITARIA) ===")
         used += _render_fragments(parts, state.attached_fragments, doc_budget, use_contextualized=False)
 
-    # ── Contexto recuperado (retrieve_context): fragmentos + vecinos ──
     if has_rag:
         if state.section_summary:
             remaining = max(0, max_context_chars - used)
@@ -133,13 +126,9 @@ def build_context_block(
         max_context_chars: int,
         attached_reserve_ratio: float = 0.6,
 ) -> str:
-    # Con documento del turno (process_documents) presente, componé ambos flujos:
-    # el documento como fuente prioritaria + el contexto recuperado con sus vecinos.
     if state.attached_fragments:
         return _build_document_and_rag_block(state, max_context_chars, attached_reserve_ratio)
 
-    # Solo RAG: secciones (fragmentos + vecinos) o, si no hay agrupación, síntesis
-    # reducida / fragmentos crudos.
     if state.section_groups:
         return _build_section_context_block(state, max_context_chars)
 

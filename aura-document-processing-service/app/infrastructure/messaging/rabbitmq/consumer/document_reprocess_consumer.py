@@ -19,14 +19,9 @@ from app.infrastructure.messaging.rabbitmq.interfaces.rabbitmq_manager_interface
 from app.infrastructure.persistence.memory_database.bulk_job_progress_store.interfaces.bulk_job_progress_store_interface import (
     BulkJobProgressStoreInterface,
 )
+from app.infrastructure.persistence.memory_database.redis_lock import refreshing_redis_lock
 
 logger = logging.getLogger(__name__)
-
-_RELEASE_LOCK_SCRIPT = (
-    "if redis.call('get', KEYS[1]) == ARGV[1] "
-    "then return redis.call('del', KEYS[1]) "
-    "else return 0 end"
-)
 
 
 class DocumentReprocessConsumer(
@@ -43,7 +38,7 @@ class DocumentReprocessConsumer(
             redis_client: aioredis.Redis,
             bulk_job_progress_store: Optional[BulkJobProgressStoreInterface] = None,
     ) -> None:
-        super().__init__(rabbitmq_manager)
+        super().__init__(rabbitmq_manager, dedup_redis=redis_client)
         self._service = reprocess_document_service
         self._redis = redis_client
         self._bulk_store = bulk_job_progress_store
@@ -66,22 +61,19 @@ class DocumentReprocessConsumer(
 
         lock_key = self._build_document_lock_key(document_id)
         lock_token = f"{envelope.message_id}:{uuid.uuid4().hex}"
-        lock_acquired = bool(
-            await self._redis.set(
-                lock_key,
-                lock_token,
-                nx=True,
-                ex=self._settings.document_ingestion_lock_ttl_seconds,
-            )
-        )
-        if not lock_acquired:
-            logger.info(
-                "Skipping reprocess; the document lock is held by another job.",
-                extra={"document_id": document_id, "message_id": envelope.message_id},
-            )
-            return
+        async with refreshing_redis_lock(
+            self._redis,
+            key=lock_key,
+            token=lock_token,
+            ttl_seconds=self._settings.document_ingestion_lock_ttl_seconds,
+        ) as lock_acquired:
+            if not lock_acquired:
+                logger.info(
+                    "Skipping reprocess; the document lock is held by another job.",
+                    extra={"document_id": document_id, "message_id": envelope.message_id},
+                )
+                return
 
-        try:
             await self._service.reprocess_document(
                 document_id=document_id,
                 user=user,
@@ -93,8 +85,6 @@ class DocumentReprocessConsumer(
                 "The document-reprocess message was processed.",
                 extra={"message_id": envelope.message_id, "document_id": document_id, "user_id": user.id},
             )
-        finally:
-            await self._redis.eval(_RELEASE_LOCK_SCRIPT, 1, lock_key, lock_token)  # type: ignore[misc]
 
     def _build_document_lock_key(self, document_id: int) -> str:
         return f"{self._settings.document_ingestion_lock_key_prefix}:document:{document_id}:lock"

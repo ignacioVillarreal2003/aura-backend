@@ -1,7 +1,9 @@
 import logging
 import tempfile
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
+
+from app.domain.time import APP_TIMEZONE
 from pathlib import Path
 from typing import Optional
 
@@ -157,7 +159,7 @@ class ReprocessDocumentService(ReprocessDocumentServiceInterface):
             document.status = DocumentStatus.uploaded
             document.processing_finished_at = None
             document.updated_by = user_id
-            document.updated_at = datetime.now(timezone.utc)
+            document.updated_at = datetime.now(APP_TIMEZONE)
             await self._document_repository.update_document(
                 document=document,
                 database_session=session,

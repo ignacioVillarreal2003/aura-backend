@@ -3,7 +3,9 @@ from fastapi.openapi.utils import get_openapi
 
 _PUBLIC_PATHS: frozenset[str] = frozenset(
     {
+        "/",
         "/api/v1/health",
+        "/api/v1/ready",
         "/metrics",
     }
 )

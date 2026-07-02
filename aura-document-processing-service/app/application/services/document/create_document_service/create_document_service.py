@@ -2,7 +2,9 @@ import asyncio
 import logging
 import tempfile
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
+
+from app.domain.time import APP_TIMEZONE
 from pathlib import Path
 from typing import Optional
 from fastapi import UploadFile
@@ -43,7 +45,6 @@ from app.infrastructure.messaging.rabbitmq.reliable_publish.redis_outbox_lite im
 from app.infrastructure.persistence.database.repositories.interfaces.document_repository_interface import (
     DocumentRepositoryInterface,
 )
-from app.infrastructure.persistence.database.repositories.exceptions.database_exceptions import DatabaseException
 from app.infrastructure.persistence.storages.document_storage.exceptions.document_storage_exception import (
     DocumentStorageException,
 )
@@ -62,12 +63,14 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             rabbitmq_manager: RabbitMQManagerInterface,
             outbox_lite: Optional[RedisOutboxLite] = None,
             create_document_service_settings: Optional[CreateDocumentServiceSettings] = None,
+            graph_extraction_enabled: bool = True,
     ) -> None:
         self._document_repository = document_repository
         self._document_storage = document_storage
         self._rabbitmq_manager = rabbitmq_manager
         self._settings = create_document_service_settings or CreateDocumentServiceSettings()
         self._outbox_lite = outbox_lite
+        self._graph_extraction_enabled = graph_extraction_enabled
         self._utils = CreateDocumentServiceUtils(
             create_document_service_settings=self._settings
         )
@@ -89,6 +92,17 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 "user_id": authenticated_user.id
             }
         )
+
+        effective_graph_extract = create_document_request.graph_extract and self._graph_extraction_enabled
+        if create_document_request.graph_extract and not self._graph_extraction_enabled:
+            logger.warning(
+                "Graph extraction was requested but the knowledge graph module is disabled; "
+                "the document will be created without graph extraction.",
+                extra={
+                    "document_filename": raw_document.filename,
+                    "user_id": authenticated_user.id,
+                },
+            )
 
         try:
             document_mime_type = await self._validate_and_resolve_mime(raw_document)
@@ -114,6 +128,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 document_mime_type=document_mime_type,
                 object_name=object_name,
                 file_size=file_size,
+                graph_extraction_enabled=self._graph_extraction_enabled,
             )
 
             database_document = await self._persist_document(
@@ -132,6 +147,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 database_document=database_document,
                 object_name=object_name,
                 database_session=database_session,
+                graph_extract=effective_graph_extract,
             )
 
             logger.info(
@@ -219,12 +235,13 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             document_mime_type: DocumentMimeType,
             object_name: str,
             file_size: int,
+            graph_extraction_enabled: bool = True,
     ) -> Document:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(APP_TIMEZONE)
+        graph_requested = create_document_request.graph_extract and graph_extraction_enabled
         return Document(
             chat_id=create_document_request.chat_id,
             name=create_document_request.name or raw_document.filename,
-            # Description is generated automatically by enrichment, never set at creation.
             description=None,
             mime_type=document_mime_type,
             status=DocumentStatus.uploaded,
@@ -237,7 +254,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             ),
             graph_status=(
                 ProcessingStatus.pending
-                if create_document_request.graph_extract
+                if graph_requested
                 else ProcessingStatus.not_required
             ),
             processing_started_at=now,
@@ -264,7 +281,11 @@ class CreateDocumentService(CreateDocumentServiceInterface):
                 }
             )
             return database_document
-        except DatabaseException as e:
+        except Exception as e:
+            try:
+                await database_session.rollback()
+            except Exception:
+                pass
             await self._cleanup_storage(object_name)
             raise CreateDocumentPersistenceException("Failed to save the document to the database.") from e
 
@@ -276,6 +297,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             database_document: Document,
             object_name: str,
             database_session: AsyncSession,
+            graph_extract: bool = False,
     ) -> str:
         command = DocumentIngestionCommand(
             document_id=database_document.id,
@@ -286,7 +308,7 @@ class CreateDocumentService(CreateDocumentServiceInterface):
             user=authenticated_user.model_dump(mode="json"),
             prefer_docling=create_document_request.prefer_docling,
             enrich=create_document_request.enrich,
-            graph_extract=create_document_request.graph_extract,
+            graph_extract=graph_extract,
             auth_token=get_request_token(),
         )
         envelope = MessageEnvelope.wrap(command)

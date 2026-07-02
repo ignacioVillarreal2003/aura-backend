@@ -1,5 +1,7 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
+
+from app.domain.time import APP_TIMEZONE
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -73,9 +75,10 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
 
             await self._require_document_access(document, authenticated_user)
 
-            deleted_at = datetime.now(timezone.utc)
+            deleted_at = datetime.now(APP_TIMEZONE)
             await self._soft_delete_fragments(document.id, authenticated_user.id, database_session, deleted_at)
             await self._soft_delete_document(document.id, authenticated_user.id, database_session, deleted_at)
+            await self._commit(database_session)
             await self._request_purge(document, authenticated_user)
 
             logger.info(
@@ -155,10 +158,14 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
                 )
                 return
 
+            deleted_at = datetime.now(APP_TIMEZONE)
             for document in documents:
-                deleted_at = datetime.now(timezone.utc)
                 await self._soft_delete_fragments(document.id, authenticated_user.id, database_session, deleted_at)
                 await self._soft_delete_document(document.id, authenticated_user.id, database_session, deleted_at)
+
+            await self._commit(database_session)
+
+            for document in documents:
                 await self._request_purge(document, authenticated_user)
 
             logger.info(
@@ -209,9 +216,10 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
 
             document = await self._get_document_or_raise(document_id, database_session)
 
-            deleted_at = datetime.now(timezone.utc)
+            deleted_at = datetime.now(APP_TIMEZONE)
             await self._soft_delete_fragments(document.id, authenticated_user.id, database_session, deleted_at)
             await self._soft_delete_document(document.id, authenticated_user.id, database_session, deleted_at)
+            await self._commit(database_session)
             await self._request_purge(document, authenticated_user)
 
             logger.info(
@@ -246,7 +254,10 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
             document: Document,
             authenticated_user: AuthenticatedUser,
     ) -> None:
-        if document.chat_id is not None:
+        if document.chat_id is None:
+            if int(document.created_by) == int(authenticated_user.id):
+                return
+        else:
             membership = await self._chat_membership_provider.get_membership(
                 chat_id=int(document.chat_id),
                 user_id=int(authenticated_user.id),
@@ -290,8 +301,23 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
     ) -> list[Document]:
         return await self._document_repository.get_documents_by_chat_id(
             chat_id=chat_id,
-            database_session=database_session
+            database_session=database_session,
+            page=1,
+            size=self._settings.max_ids_per_operation + 1,
         )
+
+    async def _commit(
+            self,
+            database_session: AsyncSession,
+    ) -> None:
+        try:
+            await database_session.commit()
+        except Exception as e:
+            try:
+                await database_session.rollback()
+            except Exception:
+                pass
+            raise DeleteDocumentFailedException("Failed to commit the soft delete.") from e
 
     async def _request_purge(
             self,
@@ -300,11 +326,13 @@ class DeleteDocumentService(DeleteDocumentServiceInterface):
     ) -> None:
         if self._document_purge_publisher is None:
             return
+        purge_storage = document.chat_id is not None
         try:
             await self._document_purge_publisher.publish(
                 document_id=int(document.id),
                 storage_url=document.storage_url,
                 user=authenticated_user,
+                purge_storage=purge_storage,
             )
         except Exception:
             logger.warning(

@@ -21,6 +21,7 @@ from app.domain.dtos.document.document_query.document_list_response import Docum
 from app.domain.dtos.document.document_query.document_response import DocumentResponse
 from app.domain.dtos.document.document_query.document_status_response import DocumentStatusResponse
 from app.domain.authentication.authenticated_user import AuthenticatedUser
+from app.domain.field_limits import MAX_DOCUMENTS_IN_LIST
 from app.infrastructure.http.chat_membership.interfaces.chat_membership_provider_interface import (
     ChatMembershipProviderInterface,
 )
@@ -248,6 +249,14 @@ class DocumentQueryService(DocumentQueryServiceInterface):
                 created_to=created_to,
             )
 
+            truncated = not paginate and len(documents) >= MAX_DOCUMENTS_IN_LIST
+            if truncated:
+                logger.warning(
+                    "The document list hit the safety cap and may be truncated; "
+                    "clients should paginate to retrieve all results.",
+                    extra={"count": len(documents), "cap": MAX_DOCUMENTS_IN_LIST}
+                )
+
             logger.info(
                 "The document list was fetched successfully.",
                 extra={
@@ -255,12 +264,14 @@ class DocumentQueryService(DocumentQueryServiceInterface):
                     "size": effective_size,
                     "paginated": paginate,
                     "count": len(documents),
+                    "truncated": truncated,
                     "user_id": authenticated_user.id
                 }
             )
 
             return DocumentListResponse(
-                documents=[DocumentResponse.model_validate(d) for d in documents]
+                documents=[DocumentResponse.model_validate(d) for d in documents],
+                truncated=truncated,
             )
 
 
@@ -341,6 +352,14 @@ class DocumentQueryService(DocumentQueryServiceInterface):
                 size=effective_size,
             )
 
+            truncated = not paginate and len(documents) >= MAX_DOCUMENTS_IN_LIST
+            if truncated:
+                logger.warning(
+                    "The documents-by-chat list hit the safety cap and may be truncated; "
+                    "clients should paginate to retrieve all results.",
+                    extra={"chat_id": chat_id, "count": len(documents), "cap": MAX_DOCUMENTS_IN_LIST}
+                )
+
             logger.info(
                 "Documents by chat were fetched successfully.",
                 extra={
@@ -349,12 +368,14 @@ class DocumentQueryService(DocumentQueryServiceInterface):
                     "size": effective_size,
                     "paginated": paginate,
                     "count": len(documents),
+                    "truncated": truncated,
                     "user_id": authenticated_user.id
                 }
             )
 
             return DocumentListResponse(
-                documents=[DocumentResponse.model_validate(d) for d in documents]
+                documents=[DocumentResponse.model_validate(d) for d in documents],
+                truncated=truncated,
             )
 
         except (

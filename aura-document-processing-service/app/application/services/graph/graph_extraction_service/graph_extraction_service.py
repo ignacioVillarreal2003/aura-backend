@@ -48,9 +48,6 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class _FragmentExtraction:
-    """In-memory result of extracting a single fragment, before it is written
-    to the graph. ``success`` is False only when the LLM extraction call itself
-    failed (a fragment that legitimately yields no entities is still a success)."""
 
     fragment_id: int
     success: bool
@@ -104,15 +101,13 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             job_id=job_id,
         )
         if not acquired:
-            # Another worker already holds the lock for this document, so this
-            # delivery is redundant. Skip cleanly (the message will be acked)
-            # instead of raising — raising would dead-letter a perfectly valid
-            # message to the terminal DLQ. The in-progress job owns the status.
             logger.info(
                 "Skipping knowledge graph extraction; another job is in progress.",
                 extra={"document_id": document_id, "user_id": user.id, "message_id": message_id},
             )
             return
+
+        await self._set_graph_status(document_id, ProcessingStatus.processing)
 
         try:
             await self._run_job(
@@ -169,8 +164,6 @@ class GraphExtractionService(GraphExtractionServiceInterface):
         fragments = await self._load_fragments(document_id)
 
         if not fragments:
-            # Nothing to rebuild: leave any existing footprint untouched and
-            # finish cleanly so the document is marked as processed.
             logger.info(
                 "No fragments were found for the document; finishing the extraction job.",
                 extra={"document_id": document_id, "job_id": job_id},
@@ -189,8 +182,6 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             )
             fragments = fragments[:max_fragments]
 
-        # Phase 1 — extract every fragment into memory WITHOUT touching the
-        # graph yet, so a failed run cannot destroy the existing footprint.
         extractions = await self._extract_all_fragments(
             job_id=job_id,
             document_id=document_id,
@@ -203,10 +194,6 @@ class GraphExtractionService(GraphExtractionServiceInterface):
         failed = total - succeeded
         ratio = (succeeded / total) if total else 1.0
 
-        # Gate — if extraction failed for too many fragments the result is not
-        # trustworthy (e.g. the LLM backend was down). Abort BEFORE purging so
-        # the existing graph is preserved and the document is flagged failed for
-        # reprocessing, instead of being silently marked processed-but-empty.
         if total and ratio < self._settings.extraction_min_success_ratio:
             raise GraphExtractionFailedException(
                 f"Graph extraction aborted: only {succeeded}/{total} fragments "
@@ -228,8 +215,6 @@ class GraphExtractionService(GraphExtractionServiceInterface):
                 },
             )
 
-        # Phase 2 — commit: clean-rebuild the footprint only now that we have a
-        # trustworthy result set.
         await self._commit_extractions(
             document_id=document_id,
             job_id=job_id,
@@ -262,7 +247,6 @@ class GraphExtractionService(GraphExtractionServiceInterface):
 
         window_chars = self._settings.extraction_sliding_window_chars
         if window_chars > 0:
-            # Sequential so each fragment can prepend the tail of the previous one.
             fragments.sort(key=lambda f: (f.fragment_index, int(f.id)))
             extractions: list[_FragmentExtraction] = []
             prev_tail = ""
@@ -303,8 +287,6 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             if isinstance(outcome, _FragmentExtraction):
                 extractions.append(outcome)
                 continue
-            # An unexpected error escaped _extract_fragment; count it as a failed
-            # fragment so it weighs on the success gate rather than being ignored.
             logger.exception(
                 "Unexpected unhandled exception in a concurrent fragment runner.",
                 extra={
@@ -324,10 +306,6 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             job_id: str,
             extractions: list[_FragmentExtraction],
     ) -> None:
-        # Clean rebuild: purge the old footprint and write the freshly extracted
-        # one. Reached only after the success gate, so we never purge for a run
-        # that produced nothing usable. A write failure here propagates and the
-        # document is marked failed (recoverable via reprocess).
         await self._purge_document_footprint(document_id)
 
         for extraction in extractions:
@@ -390,8 +368,6 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             allowed_relation_types: Optional[list[str]],
             prev_context_tail: str = "",
     ) -> _FragmentExtraction:
-        # Extraction only — no graph writes happen here. The resulting batches
-        # are committed later, after the whole document clears the success gate.
         fragment_id = int(fragment.id)
         tail = self._content_tail(fragment.content)
         content = self._build_fragment_content(fragment.content, prev_context_tail)

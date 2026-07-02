@@ -1,7 +1,3 @@
-"""Unit tests for RedisClient: the uninitialized guard, ping-on-init,
-idempotent initialization, resource cleanup on failed init, the health check,
-and credential redaction in the logged URL. The redis driver is mocked, so no
-real Redis server is required."""
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest

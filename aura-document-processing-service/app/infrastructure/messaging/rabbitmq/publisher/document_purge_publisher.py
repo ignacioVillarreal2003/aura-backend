@@ -32,12 +32,14 @@ class DocumentPurgePublisher(DocumentPurgePublisherInterface):
             document_id: int,
             storage_url: str,
             user: AuthenticatedUser,
+            purge_storage: bool = True,
     ) -> str:
         envelope = MessageEnvelope.wrap(
             DocumentPurgeCommand(
                 document_id=document_id,
                 storage_url=storage_url,
                 user=user.model_dump(mode="json"),
+                purge_storage=purge_storage,
                 auth_token=get_request_token(),
             )
         )

@@ -1,6 +1,8 @@
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.domain.field_limits import MAX_FRAGMENTS_IN_LIST
+
 
 class FragmentQueryServiceSettings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -26,3 +28,5 @@ class FragmentQueryServiceSettings(BaseSettings):
     max_retrieval_concurrency: int = Field(default=8, ge=1, le=64)
 
     rerank_candidate_pool_cap: int = Field(default=200, ge=1, le=1_000)
+
+    max_fragments_per_document: int = Field(default=50, ge=1, le=MAX_FRAGMENTS_IN_LIST)

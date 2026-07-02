@@ -1,21 +1,24 @@
-"""Unit tests for OllamaLLMFacade: connectivity probing, model availability
-matching, the initialization circuit breaker, and the call-time option override
-that couples to a langchain-ollama internal (_chat_params)."""
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
-from langchain_core.messages import HumanMessage
 
 from app.infrastructure.llm.ollama_llm.exceptions.ollama_llm_facade_exceptions import (
     LLMInitializationError,
     LLMNotConfiguredError,
 )
-from app.infrastructure.llm.ollama_llm.ollama_llm_facade import (
-    OllamaLLMFacade,
-    _ChatOllamaWithCallTimeOptions,
-)
+from app.infrastructure.llm.ollama_llm.ollama_llm_facade import OllamaLLMFacade
 from app.infrastructure.llm.ollama_llm.ollama_llm_facade_settings import OllamaLLMFacadeSettings
+
+
+class _RecordingLLM:
+
+    def __init__(self) -> None:
+        self.bound: dict | None = None
+
+    def bind(self, **kwargs):
+        self.bound = kwargs
+        return self
 
 
 def _facade(**setting_overrides) -> OllamaLLMFacade:
@@ -116,14 +119,31 @@ async def test_check_health_is_false_before_init_and_true_after():
         await facade.aclose()
 
 
-def test_chat_params_merges_call_time_options():
-    llm = _ChatOllamaWithCallTimeOptions(model="test-model", base_url="http://ollama.test")
-    params = llm._chat_params([HumanMessage(content="hola")], temperature=0.1, num_predict=8)
-    assert params["options"]["temperature"] == 0.1
-    assert params["options"]["num_predict"] == 8
+def test_apply_options_merges_overrides_over_configured_base():
+    facade = _facade(temperature=0.2, num_predict=100)
+    llm = _RecordingLLM()
+
+    result = facade.apply_options(llm, temperature=0.9)
+
+    assert result is llm
+    options = llm.bound["options"]
+    assert options["temperature"] == 0.9
+    assert options["num_ctx"] == facade._settings.num_ctx
+    assert options["num_predict"] == 100
 
 
-def test_chat_params_maps_max_tokens_alias_to_num_predict():
-    llm = _ChatOllamaWithCallTimeOptions(model="test-model", base_url="http://ollama.test")
-    params = llm._chat_params([HumanMessage(content="hola")], max_tokens=32)
-    assert params["options"]["num_predict"] == 32
+def test_apply_options_maps_max_tokens_alias_to_num_predict():
+    facade = _facade()
+    llm = _RecordingLLM()
+
+    facade.apply_options(llm, max_tokens=32)
+
+    assert llm.bound["options"]["num_predict"] == 32
+
+
+def test_apply_options_ignores_none_and_is_noop_without_overrides():
+    facade = _facade()
+    sentinel = object()
+
+    assert facade.apply_options(sentinel) is sentinel
+    assert facade.apply_options(sentinel, temperature=None) is sentinel

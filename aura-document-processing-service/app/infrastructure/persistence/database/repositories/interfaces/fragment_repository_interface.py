@@ -112,6 +112,22 @@ class FragmentRepositoryInterface(ABC):
         pass
 
     @abstractmethod
+    async def get_fragment_locators_by_document_ids(
+            self,
+            document_ids: list[int],
+            database_session: AsyncSession,
+    ) -> list[Fragment]:
+        pass
+
+    @abstractmethod
+    async def get_fragments_by_ids(
+            self,
+            fragment_ids: list[int],
+            database_session: AsyncSession,
+    ) -> list[Fragment]:
+        pass
+
+    @abstractmethod
     async def create_fragments(
             self,
             fragments: list[Fragment],

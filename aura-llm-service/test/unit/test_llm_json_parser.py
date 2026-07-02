@@ -1,6 +1,3 @@
-"""
-Unit tests for app.application.utils.llm_json_parser.parse_json_object.
-"""
 import json
 import pytest
 from app.application.utils.llm_json_parser import parse_json_object

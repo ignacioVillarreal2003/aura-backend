@@ -58,9 +58,6 @@ class DoclingReader(BaseReader):
 
             pipeline_options.do_ocr = reader_settings.docling_ocr_enabled
             if reader_settings.docling_ocr_enabled:
-                # EasyOCR en vez del auto-selector de Docling: el auto elige
-                # RapidOCR+torch, que pide PP-OCRv6 (inexistente para ese backend)
-                # y rompe al inicializar el pipeline de PDF/imagen.
                 pipeline_options.ocr_options = EasyOcrOptions(
                     lang=list(reader_settings.docling_ocr_languages),
                     use_gpu=self._easyocr_use_gpu(device),
@@ -101,7 +98,6 @@ class DoclingReader(BaseReader):
             return True
         if device == AcceleratorDevice.CPU:
             return False
-        # AUTO / MPS: que EasyOCR detecte la mejor opción disponible.
         return None
 
     def can_handle(self, file_path: Path) -> bool:

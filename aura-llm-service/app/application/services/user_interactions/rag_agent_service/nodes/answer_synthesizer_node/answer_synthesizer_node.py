@@ -5,10 +5,13 @@ from typing import Any, Dict, List, Optional
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
 
+from app.application.services.user_interactions.rag_agent_service.constants.rag_node_name import RagNodeName
 from app.application.services.user_interactions.rag_agent_service.interfaces.rag_node_interface import RagNodeInterface
+from app.application.services.user_interactions.rag_agent_service.node_failures import EXPECTED_LLM_ERRORS
 from app.application.services.user_interactions.rag_agent_service.rag_agent_settings import AnswerSynthesizerSettings
 from app.application.services.user_interactions.rag_agent_service.rag_agent_state.rag_agent_state import RagAgentState
 from app.application.services.generation_shared.prompts.prompt_augmentation import augment_system_prompt
+from app.configuration.metrics import record_rag_node_failure
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface import OllamaLLMInvokerInterface
 
@@ -60,9 +63,17 @@ class AnswerSynthesizerNode(RagNodeInterface):
 
             logger.info("Answer synthesized", extra={"answer_length": len(answer)})
             return {"answer": answer}
-        except Exception:
-            logger.error("Answer synthesis failed — returning fallback", exc_info=True)
+        except EXPECTED_LLM_ERRORS as exc:
+            record_rag_node_failure(RagNodeName.answer_synthesizer.value, "expected", exc)
+            logger.warning(
+                "Answer synthesis degraded (expected error) — returning fallback",
+                exc_info=True,
+            )
             return {"answer": _NO_ANSWER_RESPONSE}
+        except Exception as exc:
+            record_rag_node_failure(RagNodeName.answer_synthesizer.value, "unexpected", exc)
+            logger.exception("Answer synthesis failed with an unexpected error")
+            raise
 
     async def _synthesize(
             self,

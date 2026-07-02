@@ -23,6 +23,9 @@ from app.application.services.document.bulk_create_document_service.bulk_create_
     BulkCreateDocumentService,
 )
 from app.application.services.document.bulk_dispatch_service.bulk_dispatch_service import BulkDispatchService
+from app.infrastructure.persistence.database.schema_alignment.fragment_vector_schema_aligner import (
+    FragmentVectorSchemaAligner,
+)
 from app.application.services.document.delete_document_service.delete_document_service import DeleteDocumentService
 from app.application.services.document.restore_document_service.restore_document_service import RestoreDocumentService
 from app.application.services.document.update_document_service.update_document_service import UpdateDocumentService
@@ -290,7 +293,6 @@ async def _build_processors_and_read_services(c: DependencyContainer) -> None:
             fragment_repository=c.fragment_repository,
             embedder_factory=c.embedder_factory,
             document_collection_catalog_client=c.document_collection_catalog_client,
-            reranker_factory=reranker_factory,
         ),
     )
 
@@ -414,6 +416,7 @@ async def _build_document_services(c: DependencyContainer) -> None:
         rabbitmq_manager=rabbitmq_manager,
         document_enrichment_service=c.document_enrichment_service,
         bulk_job_progress_store=c.bulk_job_progress_store,
+        dedup_redis=c.redis_client.client,
     )
     await document_enrichment_consumer.start()
     c.register("document_enrichment_consumer", document_enrichment_consumer)
@@ -423,6 +426,8 @@ async def _build_document_services(c: DependencyContainer) -> None:
         database_manager=database_manager,
         document_repository=document_repository,
         rabbitmq_settings=rabbitmq_manager.settings,
+        enrichment_publisher=c.document_enrichment_publisher,
+        graph_extraction_publisher=c.get("graph_extraction_publisher"),
     )
     await outbox_lite_worker.start()
     c.register("outbox_lite_worker", outbox_lite_worker, cleanup=outbox_lite_worker.stop)
@@ -459,6 +464,7 @@ async def _build_document_services(c: DependencyContainer) -> None:
             document_storage=c.document_storage,
             rabbitmq_manager=rabbitmq_manager,
             outbox_lite=outbox_lite,
+            graph_extraction_enabled=c.knowledge_graph_settings.enabled,
         ),
     )
 
@@ -477,6 +483,7 @@ async def _build_document_services(c: DependencyContainer) -> None:
             document_storage=c.document_storage,
             document_collection_catalog_client=c.document_collection_catalog_client,
             chat_membership_provider=c.chat_membership_provider,
+            database_manager=database_manager,
         ),
     )
 
@@ -535,6 +542,14 @@ async def _build_maintenance_pipelines(c: DependencyContainer) -> None:
     c.register("document_reprocess_consumer", document_reprocess_consumer)
 
     c.register(
+        "fragment_vector_schema_aligner",
+        FragmentVectorSchemaAligner(
+            database_manager=c.db_manager,
+            embedder_factory=c.embedder_factory,
+        ),
+    )
+
+    c.register(
         "bulk_dispatch_service",
         BulkDispatchService(
             database_manager=c.db_manager,
@@ -544,6 +559,7 @@ async def _build_maintenance_pipelines(c: DependencyContainer) -> None:
             reprocess_publisher=c.document_reprocess_publisher,
             enrichment_publisher=c.document_enrichment_publisher,
             graph_extraction_publisher=c.get("graph_extraction_publisher"),
+            schema_aligner=c.get("fragment_vector_schema_aligner"),
         ),
     )
 
@@ -556,6 +572,7 @@ async def _build_purge_consumer(c: DependencyContainer) -> None:
         document_storage=c.document_storage,
         graph_entity_repository=c.get("graph_entity_repository"),
         graph_relation_repository=c.get("graph_relation_repository"),
+        dedup_redis=c.redis_client.client,
     )
     await document_purge_consumer.start()
     c.register("document_purge_consumer", document_purge_consumer)
@@ -648,6 +665,7 @@ async def _wire_knowledge_graph_module(c: DependencyContainer) -> None:
         rabbitmq_manager=c.rabbitmq_manager,
         graph_extraction_service=c.graph_extraction_service,
         bulk_job_progress_store=c.bulk_job_progress_store,
+        dedup_redis=c.redis_client.client,
     )
     await graph_extraction_consumer.start()
     c.register("graph_extraction_consumer", graph_extraction_consumer)
@@ -705,33 +723,53 @@ async def _wire_knowledge_graph_module(c: DependencyContainer) -> None:
     logger.info("The knowledge graph module was bootstrapped successfully.")
 
 
+async def _run_shutdown_step(name: str, step: Awaitable[Any]) -> None:
+    try:
+        await step
+    except Exception:
+        logger.exception(
+            "Shutdown step failed (continuing with remaining steps).",
+            extra={"resource": name},
+        )
+
+
+async def _cancel_reranker_warmup(app: FastAPI) -> None:
+    task = getattr(app.state, "reranker_warmup_task", None)
+    if task is None or task.done():
+        return
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+
 async def shutdown_dependencies(app: FastAPI) -> None:
     logger.info("Shutting down dependencies")
 
     state = app.state
 
+    await _run_shutdown_step("reranker_warmup_task", _cancel_reranker_warmup(app))
+
     if outbox_lite_worker := getattr(state, "outbox_lite_worker", None):
-        await outbox_lite_worker.stop()
+        await _run_shutdown_step("outbox_lite_worker", outbox_lite_worker.stop())
 
     if rabbitmq_manager := getattr(state, "rabbitmq_manager", None):
-        await rabbitmq_manager.stop()
+        await _run_shutdown_step("rabbitmq_manager", rabbitmq_manager.stop())
 
     if neo4j_manager := getattr(state, "neo4j_manager", None):
-        try:
-            await neo4j_manager.dispose()
-        except Exception:
-            logger.exception("Failed to dispose the Neo4j manager during shutdown.")
+        await _run_shutdown_step("neo4j_manager", neo4j_manager.dispose())
 
     if redis_client := getattr(state, "redis_client", None):
-        await redis_client.dispose()
+        await _run_shutdown_step("redis_client", redis_client.dispose())
 
     if http_client := getattr(state, "http_client", None):
-        await http_client.stop()
+        await _run_shutdown_step("http_client", http_client.stop())
 
     if minio_manager := getattr(state, "minio_manager", None):
-        await minio_manager.stop()
+        await _run_shutdown_step("minio_manager", minio_manager.stop())
 
     if db_manager := getattr(state, "db_manager", None):
-        await db_manager.dispose()
+        await _run_shutdown_step("db_manager", db_manager.dispose())
 
     logger.info("All dependencies shut down successfully")

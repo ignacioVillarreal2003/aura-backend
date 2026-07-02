@@ -141,7 +141,7 @@ class QueryReformulationProcessor:
     async def _build_llm(self) -> Runnable:
         llm = await self._ollama_llm_facade.get_llm_json()
         if self._settings.temperature is not None:
-            llm = llm.bind(temperature=self._settings.temperature)
+            llm = self._ollama_llm_facade.apply_options(llm, temperature=self._settings.temperature)
         return llm
 
     def _parse(self, raw: str, *, should_rewrite: bool, use_keywords: bool) -> QueryReformulation:

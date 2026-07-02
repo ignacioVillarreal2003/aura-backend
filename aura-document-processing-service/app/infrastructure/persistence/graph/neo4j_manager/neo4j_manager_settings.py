@@ -22,6 +22,7 @@ class Neo4jManagerSettings(BaseSettings):
     connection_acquisition_timeout_seconds: float = Field(default=60.0, gt=0, le=600.0)
     connection_timeout_seconds: float = Field(default=15.0, gt=0, le=120.0)
     max_transaction_retry_seconds: float = Field(default=30.0, gt=0, le=300.0)
+    query_timeout_seconds: float = Field(default=30.0, gt=0, le=300.0)
 
     encrypted: Optional[bool] = Field(default=None)
 

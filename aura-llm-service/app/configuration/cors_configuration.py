@@ -8,10 +8,17 @@ logger = logging.getLogger(__name__)
 
 
 def configure_cors(app: FastAPI) -> None:
-    origins = list(get_settings().cors_origins)
-    allow_credentials = not any((o or "").strip() == "*" for o in origins)
+    settings = get_settings()
+    origins = list(settings.cors_origins)
+    has_wildcard = any((o or "").strip() == "*" for o in origins)
+    allow_credentials = not has_wildcard
 
-    if not allow_credentials:
+    if has_wildcard:
+        if settings.is_production():
+            raise ValueError(
+                "CORS_ORIGINS contains a wildcard ('*') while ENVIRONMENT is production. "
+                "Set CORS_ORIGINS to the explicit frontend origins before deploying."
+            )
         logger.warning(
             "CORS is configured with a wildcard origin ('*'). Set CORS_ORIGINS to the "
             "real frontend origins before exposing this service in production."

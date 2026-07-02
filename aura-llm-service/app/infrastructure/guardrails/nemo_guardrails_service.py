@@ -157,10 +157,9 @@ class NemoGuardrailsService:
                 return None
 
             llm = await self._ollama_llm_facade.get_llm_base()
+            llm = self._ollama_llm_facade.apply_options(llm, temperature=0.0, num_predict=8)
             llm = llm.bind(
                 reasoning=False,
-                num_predict=8,
-                temperature=0.0,
                 keep_alive=self._settings.keep_alive,
             )
             try:

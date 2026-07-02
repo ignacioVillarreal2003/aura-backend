@@ -10,8 +10,6 @@ from app.domain.field_limits import (
 
 
 class FragmentSectionGroup(BaseModel):
-    """A matched (primary) fragment together with its surrounding section as
-    secondary context. Populated only for the ``"section"`` expansion mode."""
 
     primary: FragmentResponse
     section_fragments: list[FragmentResponse] = Field(

@@ -17,3 +17,8 @@ class BulkCreateDocumentServiceSettings(BaseSettings):
     )
 
     max_documents: int = Field(default=MAX_BULK_CREATE_DOCUMENTS, ge=1, le=MAX_BULK_CREATE_DOCUMENTS)
+    max_total_size_mb: int = Field(default=200, ge=1, le=5000)
+
+    @property
+    def max_total_size_bytes(self) -> int:
+        return self.max_total_size_mb * 1024 * 1024

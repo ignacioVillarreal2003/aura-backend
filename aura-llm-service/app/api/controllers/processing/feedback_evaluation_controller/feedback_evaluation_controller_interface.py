@@ -3,8 +3,8 @@ from app.application.services.processing.feedback_evaluation_service.interfaces.
     FeedbackEvaluationServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.dtos.user_interactions.feedback_evaluation.feedback_evaluation_request import FeedbackEvaluationRequest
-from app.domain.dtos.user_interactions.feedback_evaluation.feedback_evaluation_response import FeedbackEvaluationResponse
+from app.domain.dtos.processing.feedback_evaluation.feedback_evaluation_request import FeedbackEvaluationRequest
+from app.domain.dtos.processing.feedback_evaluation.feedback_evaluation_response import FeedbackEvaluationResponse
 
 
 class FeedbackEvaluationControllerInterface(ABC):

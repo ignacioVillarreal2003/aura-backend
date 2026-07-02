@@ -1,6 +1,8 @@
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime
+
+from app.domain.time import APP_TIMEZONE
 from typing import Literal, Optional
 from sqlalchemy import and_, or_, select, text, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -22,6 +24,9 @@ from app.infrastructure.persistence.database.repositories.repository_query_utils
 logger = logging.getLogger(__name__)
 
 _DOC_ID_FILTER_CLAUSE = "AND document_id = ANY(:doc_ids)"
+
+_HNSW_MAX_EF_SEARCH = 1000
+_HNSW_MIN_EF_SEARCH = 100
 
 
 def _sanitize_bm25_search_input(raw: str, max_chars: int) -> str:
@@ -193,6 +198,9 @@ class FragmentRepository(FragmentRepositoryInterface):
             if document_ids:
                 params["doc_ids"] = list(document_ids)
 
+            ef_search = min(max(int(k), _HNSW_MIN_EF_SEARCH), _HNSW_MAX_EF_SEARCH)
+            await database_session.execute(text(f"SET LOCAL hnsw.ef_search = {ef_search}"))
+
             result = await database_session.execute(sql, params)
             rows = result.fetchall()
 
@@ -334,6 +342,9 @@ class FragmentRepository(FragmentRepositoryInterface):
             }
             if document_ids:
                 params["doc_ids"] = list(document_ids)
+
+            ef_search = min(max(int(pool_size), int(k + offset)), _HNSW_MAX_EF_SEARCH)
+            await database_session.execute(text(f"SET LOCAL hnsw.ef_search = {ef_search}"))
 
             result = await database_session.execute(sql, params)
             rows = result.fetchall()
@@ -631,6 +642,71 @@ class FragmentRepository(FragmentRepositoryInterface):
             )
             raise DatabaseException("Failed to fetch fragments by document IDs.") from e
 
+    async def get_fragment_locators_by_document_ids(
+            self,
+            document_ids: list[int],
+            database_session: AsyncSession,
+    ) -> list[Fragment]:
+        if not document_ids:
+            return []
+        try:
+            locators: list[Fragment] = []
+            for chunk in chunked_ids(document_ids):
+                result = await database_session.execute(
+                    select(Fragment)
+                    .options(
+                        load_only(
+                            Fragment.id,
+                            Fragment.document_id,
+                            Fragment.fragment_index,
+                        )
+                    )
+                    .where(
+                        Fragment.document_id.in_(chunk),
+                        Fragment.deleted_at.is_(None),
+                    )
+                    .order_by(Fragment.document_id, Fragment.fragment_index)
+                )
+                locators.extend(list(result.scalars().all()))
+
+            locators.sort(key=lambda f: (int(f.document_id), int(f.fragment_index)))
+            return locators
+        except SQLAlchemyError as e:
+            logger.exception(
+                "Database error while fetching fragment locators by document IDs.",
+                extra={"document_ids_count": len(document_ids)},
+            )
+            raise DatabaseException("Failed to fetch fragment locators by document IDs.") from e
+
+    async def get_fragments_by_ids(
+            self,
+            fragment_ids: list[int],
+            database_session: AsyncSession,
+    ) -> list[Fragment]:
+        if not fragment_ids:
+            return []
+        try:
+            fragments: list[Fragment] = []
+            for chunk in chunked_ids(fragment_ids):
+                result = await database_session.execute(
+                    select(Fragment)
+                    .options(defer(Fragment.vector), defer(Fragment.contextualized_vector))
+                    .where(
+                        Fragment.id.in_(chunk),
+                        Fragment.deleted_at.is_(None),
+                    )
+                )
+                fragments.extend(list(result.scalars().all()))
+
+            fragments.sort(key=lambda f: (int(f.document_id), int(f.fragment_index)))
+            return fragments
+        except SQLAlchemyError as e:
+            logger.exception(
+                "Database error while fetching fragments by IDs.",
+                extra={"fragment_ids_count": len(fragment_ids)},
+            )
+            raise DatabaseException("Failed to fetch fragments by IDs.") from e
+
     async def get_adjacent_fragments(
             self,
             fragments: list[Fragment],
@@ -829,7 +905,7 @@ class FragmentRepository(FragmentRepositoryInterface):
                 }
             )
 
-            now = deleted_at or datetime.now(timezone.utc)
+            now = deleted_at or datetime.now(APP_TIMEZONE)
 
             result = await database_session.execute(
                 update(Fragment)
@@ -952,7 +1028,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             database_session: AsyncSession,
     ) -> None:
         try:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(APP_TIMEZONE)
             await database_session.execute(
                 update(Fragment)
                 .where(
@@ -986,7 +1062,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             database_session: AsyncSession,
     ) -> None:
         try:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(APP_TIMEZONE)
             await database_session.execute(
                 update(Fragment)
                 .where(
@@ -1020,7 +1096,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             database_session: AsyncSession,
     ) -> None:
         try:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(APP_TIMEZONE)
             await database_session.execute(
                 update(Fragment)
                 .where(
@@ -1053,7 +1129,7 @@ class FragmentRepository(FragmentRepositoryInterface):
             database_session: AsyncSession,
     ) -> None:
         try:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(APP_TIMEZONE)
             await database_session.execute(
                 update(Fragment)
                 .where(

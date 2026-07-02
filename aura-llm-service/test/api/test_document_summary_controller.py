@@ -1,6 +1,3 @@
-"""
-Tests for POST /api/v1/document-summary
-"""
 from app.domain.dtos.user_interactions.document_summary.document_summary_response import DocumentSummaryResponse
 
 URL = "/api/v1/document-summary"

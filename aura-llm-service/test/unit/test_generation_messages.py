@@ -120,8 +120,6 @@ class TestBuildContextBlock:
         assert "y" * 200 in block
 
     def test_attached_and_section_both_flows_contribute(self, make_fragment):
-        # process_documents (documento del turno) + retrieve_context (fragmentos
-        # + vecinos): ambos flujos deben aportar al contexto.
         state = _state()
         state.attached_fragments = [
             make_fragment(fragment_id=1, document_name="DocTurno", content="CONTENIDO DEL TURNO")
@@ -134,12 +132,11 @@ class TestBuildContextBlock:
         state.section_groups = [FragmentSectionGroup(primary=primary, section_fragments=[neighbor])]
         block = build_context_block(state, max_context_chars=5000)
         assert "FUENTE PRIORITARIA" in block
-        assert "CONTENIDO DEL TURNO" in block          # process_documents
-        assert "fragmento relevante" in block          # retrieve_context (primario)
-        assert "vecino adyacente" in block              # retrieve_context (vecino)
+        assert "CONTENIDO DEL TURNO" in block
+        assert "fragmento relevante" in block
+        assert "vecino adyacente" in block
 
     def test_attached_synthesis_and_section_both_present(self, make_fragment):
-        # Documento grande ya condensado (reduced_context) + secciones RAG.
         state = _state()
         state.attached_fragments = [make_fragment(fragment_id=1, content="doc crudo")]
         state.reduced_context = "SÍNTESIS DEL DOCUMENTO"

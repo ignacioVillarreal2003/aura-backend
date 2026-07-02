@@ -66,11 +66,6 @@ def _with_progress(node_name: str, fn: _NodeFn) -> _NodeFn:
 
 
 def _retrieve_context_enabled(state: RagAgentState) -> bool:
-    """¿Corre la recuperación RAG/grafo del knowledge base?
-
-    Tri-estado: si el operador fijó el flag se respeta; si viene en None se usa el
-    default del agente (recuperar salvo que el intent sea pedir un documento entero).
-    """
     flag = state.get("retrieve_context")
     if flag is not None:
         return flag
@@ -78,11 +73,6 @@ def _retrieve_context_enabled(state: RagAgentState) -> bool:
 
 
 def _process_documents_enabled(state: RagAgentState) -> bool:
-    """¿Corre la traída del contenido completo de los documentos más relevantes?
-
-    Tri-estado: respeta el flag del operador; en None usa el default del agente
-    (traer documentos completos solo cuando el intent es un pedido de documento).
-    """
     flag = state.get("process_documents")
     if flag is not None:
         return flag
@@ -90,12 +80,6 @@ def _process_documents_enabled(state: RagAgentState) -> bool:
 
 
 def _select_retrieval(state: RagAgentState) -> str:
-    """Primer nodo de recuperación a ejecutar según los flags (o el default por intent).
-
-    Si ambos están activos, se entra por `context_retriever` y luego se encadena al
-    `document_fetcher` (los fragmentos se mergean). Si ninguno aplica, se salta
-    directo a la síntesis.
-    """
     if _retrieve_context_enabled(state):
         return RagNodeName.context_retriever.value
     if _process_documents_enabled(state):
@@ -270,8 +254,6 @@ class RagAgentWorkflow:
             RagNodeName.graph_context_retriever.value,
         )
 
-        # Entrada a la recuperación según los flags del operador (o el default por
-        # intent). Si no aplica ninguno, se salta directo a la síntesis.
         self._graph.add_conditional_edges(
             RagNodeName.graph_context_retriever.value,
             _select_retrieval,
@@ -283,8 +265,6 @@ class RagAgentWorkflow:
         )
 
         if self._settings.use_context_grader:
-            # context_retriever encadena al document_fetcher si también se pidió
-            # procesar documentos; si no, pasa al grader.
             self._graph.add_conditional_edges(
                 RagNodeName.context_retriever.value,
                 _route_after_context_retriever_grader,
@@ -303,7 +283,6 @@ class RagAgentWorkflow:
                     RagNodeName.fallback.value: RagNodeName.fallback.value,
                 },
             )
-            # Tras refinar la consulta se re-entra a la recuperación honrando los flags.
             self._graph.add_conditional_edges(
                 RagNodeName.query_refiner.value,
                 _select_retrieval,
@@ -314,7 +293,6 @@ class RagAgentWorkflow:
                 },
             )
         else:
-            # context_retriever → document_fetcher (si se pidió) o directo a síntesis/fallback.
             self._graph.add_conditional_edges(
                 RagNodeName.context_retriever.value,
                 _route_after_context_retriever_plain,

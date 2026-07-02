@@ -1,5 +1,3 @@
-"""Unit tests for OllamaLLMInvoker: retry behaviour on transient transport
-errors, exception wrapping, response-type guarding and content extraction."""
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx

@@ -26,10 +26,10 @@ CREATE TABLE document
     split_overlap          INT,
     enrichment_status      VARCHAR(32)  NOT NULL DEFAULT 'pending'
         CONSTRAINT chk_document_enrichment_status
-            CHECK (enrichment_status IN ('pending', 'processed', 'failed', 'not_required')),
+            CHECK (enrichment_status IN ('pending', 'processing', 'processed', 'failed', 'not_required')),
     graph_status           VARCHAR(32)  NOT NULL DEFAULT 'pending'
         CONSTRAINT chk_document_graph_status
-            CHECK (graph_status IN ('pending', 'processed', 'failed', 'not_required')),
+            CHECK (graph_status IN ('pending', 'processing', 'processed', 'failed', 'not_required')),
     processing_started_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     processing_finished_at TIMESTAMPTZ,
     created_by             BIGINT       NOT NULL,
@@ -65,7 +65,7 @@ CREATE TABLE fragment
     contextualized_embedding_identity TEXT,
     contextualization_status VARCHAR(32) NOT NULL DEFAULT 'pending'
         CONSTRAINT chk_fragment_contextualization_status
-            CHECK (contextualization_status IN ('pending', 'processed', 'failed', 'not_required')),
+            CHECK (contextualization_status IN ('pending', 'processing', 'processed', 'failed', 'not_required')),
     created_by     BIGINT      NOT NULL,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_by     BIGINT,

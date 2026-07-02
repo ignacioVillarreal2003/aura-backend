@@ -39,3 +39,13 @@ scrape_configs:
     scrape_interval: 10s
     static_configs:
       - targets: ['aura-notification-service:8000']
+
+  # RabbitMQ broker metrics via the built-in rabbitmq_prometheus plugin
+  # (enabled by default on the -management image, listening on port 15692).
+  # The per-object endpoint exposes per-queue depth (ready/unacked), which is
+  # what makes queue backlog and the dead-letter queue observable.
+  - job_name: 'rabbitmq'
+    metrics_path: '/metrics/per-object'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['queue:15692']

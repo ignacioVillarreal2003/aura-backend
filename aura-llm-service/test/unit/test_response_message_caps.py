@@ -1,10 +1,3 @@
-"""Regression tests for response assembly caps:
-- #1: building the conversation 'assistant' turn must never exceed the Message
-  content cap (a large report/quiz output must not raise -> no 500); the response's
-  own content field stays full.
-- #2: the streaming char limit is enforced while streaming, so the deltas a client
-  receives never exceed what the complete event carries.
-"""
 import types
 
 from app.application.services.generation_shared.structured_generation_service import StructuredGenerationService
@@ -19,15 +12,12 @@ def test_conversation_turn_is_clamped_to_message_cap():
         messages=[Message(role=MessageRole.human, content="hola")]
     )
     huge = "x" * (MAX_MESSAGE_CONTENT_CHARS + 10_000)
-    # Must not raise even though the artifact exceeds the Message content cap.
     convo = StructuredGenerationService._conversation_with_answer(state, huge)
     assert convo[-1].role == MessageRole.assistant
     assert len(convo[-1].content) == MAX_MESSAGE_CONTENT_CHARS
 
 
 def test_default_response_limit_is_above_generation_ceiling():
-    # num_predict=6144 tokens ~= 24.5k chars; the answer cap (50k) sits above it,
-    # so the eager truncation never fires in normal operation -> deltas == complete.
     from app.application.services.user_interactions.general_chat_service.general_chat_settings import (
         GeneralChatSettings,
     )
@@ -40,8 +30,6 @@ def test_default_response_limit_is_above_generation_ceiling():
 
 
 class _LimitedService(StreamingGenerationService):
-    """Minimal concrete streaming service exposing a small char limit so we can
-    assert the streaming loop enforces it (deltas never exceed the cap)."""
 
     label = "test"
 
@@ -60,7 +48,6 @@ class _LimitedService(StreamingGenerationService):
 
 
 async def test_streaming_loop_trims_deltas_to_limit():
-    # Drive only the delta-accumulation logic the way generate_stream does.
     svc = _LimitedService(limit=10, chunks=["abcd", "efgh", "ijkl"])
     limit = svc._response_char_limit()
     answer = ""
@@ -79,7 +66,7 @@ async def test_streaming_loop_trims_deltas_to_limit():
         deltas.append(piece)
 
     assert "".join(deltas) == answer
-    assert len(answer) == 10  # trimmed exactly to the limit
+    assert len(answer) == 10
     assert answer == "abcdefghij"
 
 

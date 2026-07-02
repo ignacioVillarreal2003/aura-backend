@@ -1,9 +1,12 @@
 import logging
 from typing import Any, Dict, List, Optional
 
+from app.application.services.user_interactions.rag_agent_service.constants.rag_node_name import RagNodeName
 from app.application.services.user_interactions.rag_agent_service.context_formatting import build_document_context
 from app.application.services.user_interactions.rag_agent_service.interfaces.rag_node_interface import RagNodeInterface
+from app.application.services.user_interactions.rag_agent_service.node_failures import EXPECTED_RETRIEVAL_ERRORS
 from app.application.services.user_interactions.rag_agent_service.rag_agent_settings import RagAgentServiceSettings
+from app.configuration.metrics import record_rag_node_failure
 from app.application.services.user_interactions.rag_agent_service.rag_agent_state.rag_agent_state import RagAgentState
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.document_context_provider.dtos.fragment_response import FragmentResponse
@@ -49,9 +52,17 @@ class ContextRetrieverNode(RagNodeInterface):
                 extra={"fragments_count": len(fragments), "context_chars": len(context)},
             )
             return {"retrieved_fragments": fragments, "context": context}
-        except Exception:
-            logger.error("Context retrieval failed — returning empty context", exc_info=True)
+        except EXPECTED_RETRIEVAL_ERRORS as exc:
+            record_rag_node_failure(RagNodeName.context_retriever.value, "expected", exc)
+            logger.warning(
+                "Context retrieval degraded (expected error) — returning empty context",
+                exc_info=True,
+            )
             return {"retrieved_fragments": [], "context": ""}
+        except Exception as exc:
+            record_rag_node_failure(RagNodeName.context_retriever.value, "unexpected", exc)
+            logger.exception("Context retrieval failed with an unexpected error")
+            raise
 
     async def _retrieve(
             self,

@@ -79,8 +79,6 @@ class ContextReductionProcessor:
             reduce_human_prompt: Optional[str] = None,
             fragments: Optional[list[FragmentResponse]] = None,
     ) -> None:
-        # `fragments` permite reducir un subconjunto concreto (p. ej. solo el
-        # documento del turno de process_documents), en vez de todo el contexto.
         target = state.all_fragments if fragments is None else fragments
         if not self.is_needed(state, target):
             return
@@ -142,7 +140,7 @@ class ContextReductionProcessor:
     async def _build_llm(self) -> Runnable:
         llm = await self._ollama_llm_facade.get_llm_base()
         if self._settings.temperature is not None:
-            llm = llm.bind(temperature=self._settings.temperature)
+            llm = self._ollama_llm_facade.apply_options(llm, temperature=self._settings.temperature)
         return llm
 
     def _batch_char_budget(self) -> int:

@@ -1,6 +1,3 @@
-"""
-Tests for POST /api/v1/document-question
-"""
 from app.domain.dtos.user_interactions.document_question.document_question_response import DocumentQuestionResponse
 from app.domain.dtos.message import Message
 from app.domain.constants.message_role import MessageRole

@@ -1,12 +1,20 @@
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
+
+from app.domain.time import APP_TIMEZONE
 from typing import Optional
 
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.types import UserId
 from app.infrastructure.messaging.rabbitmq.dtos.commands.document_ingestion_command import DocumentIngestionCommand
 from app.infrastructure.messaging.rabbitmq.dtos.envelope.message_envelope import MessageEnvelope
+from app.infrastructure.messaging.rabbitmq.publisher.interfaces.document_enrichment_publisher_interface import (
+    DocumentEnrichmentPublisherInterface,
+)
+from app.infrastructure.messaging.rabbitmq.publisher.interfaces.graph_extraction_publisher_interface import (
+    GraphExtractionPublisherInterface,
+)
 from app.infrastructure.messaging.rabbitmq.rabbitmq_manager_settings import RabbitMQManagerSettings
 from app.infrastructure.messaging.rabbitmq.reliable_publish.redis_outbox_lite import RedisOutboxLite
 from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import DatabaseManagerInterface
@@ -27,12 +35,16 @@ class OutboxLiteWorker:
             document_repository: DocumentRepositoryInterface,
             rabbitmq_settings: RabbitMQManagerSettings,
             settings: Optional[RedisClientSettings] = None,
+            enrichment_publisher: Optional[DocumentEnrichmentPublisherInterface] = None,
+            graph_extraction_publisher: Optional[GraphExtractionPublisherInterface] = None,
     ) -> None:
         self._outbox = outbox
         self._database_manager = database_manager
         self._document_repository = document_repository
         self._rabbitmq_settings = rabbitmq_settings
         self._settings = settings or RedisClientSettings()
+        self._enrichment_publisher = enrichment_publisher
+        self._graph_extraction_publisher = graph_extraction_publisher
         self._task: Optional[asyncio.Task] = None
         self._stop_event = asyncio.Event()
 
@@ -60,12 +72,14 @@ class OutboxLiteWorker:
             try:
                 await self._outbox.drain_pending_batch(limit=self._settings.outbox_retry_batch_size)
                 await self._reconcile_document_ingestion()
+                await self._reconcile_document_enrichment()
+                await self._reconcile_document_graph()
             except Exception:
                 logger.exception("Outbox-lite worker loop iteration failed.")
             await asyncio.sleep(self._settings.outbox_worker_loop_interval_seconds)
 
     async def _reconcile_document_ingestion(self) -> None:
-        cutoff = datetime.now(timezone.utc) - timedelta(
+        cutoff = datetime.now(APP_TIMEZONE) - timedelta(
             seconds=self._settings.outbox_document_reconcile_age_seconds
         )
         async with self._database_manager.session() as session:
@@ -103,3 +117,79 @@ class OutboxLiteWorker:
                 body=envelope.to_bytes(),
                 headers={"message_id": envelope.message_id},
             )
+
+    async def _reconcile_document_enrichment(self) -> None:
+        if self._enrichment_publisher is None:
+            return
+        cooldown = self._settings.outbox_enrichment_reconcile_age_seconds
+        cutoff = datetime.now(APP_TIMEZONE) - timedelta(seconds=cooldown)
+        async with self._database_manager.session() as session:
+            documents = await self._document_repository.get_documents_pending_enrichment(
+                processed_before=cutoff,
+                limit=self._settings.outbox_document_reconcile_batch_size,
+                database_session=session,
+            )
+
+        for document in documents:
+            aggregate_id = str(document.id)
+            slot = await self._outbox.try_acquire_reconcile_slot(
+                kind="document_enrichment",
+                aggregate_id=aggregate_id,
+                cooldown_seconds=cooldown,
+            )
+            if not slot:
+                continue
+
+            system_principal = AuthenticatedUser(id=UserId(int(document.created_by)))
+            try:
+                await self._enrichment_publisher.publish(
+                    document_id=int(document.id),
+                    user=system_principal,
+                )
+                logger.info(
+                    "Reconciler re-published a stuck document-enrichment event.",
+                    extra={"document_id": document.id},
+                )
+            except Exception:
+                logger.warning(
+                    "Reconciler failed to re-publish a document-enrichment event.",
+                    extra={"document_id": document.id},
+                )
+
+    async def _reconcile_document_graph(self) -> None:
+        if self._graph_extraction_publisher is None:
+            return
+        cooldown = self._settings.outbox_graph_reconcile_age_seconds
+        cutoff = datetime.now(APP_TIMEZONE) - timedelta(seconds=cooldown)
+        async with self._database_manager.session() as session:
+            documents = await self._document_repository.get_documents_pending_graph(
+                processed_before=cutoff,
+                limit=self._settings.outbox_document_reconcile_batch_size,
+                database_session=session,
+            )
+
+        for document in documents:
+            aggregate_id = str(document.id)
+            slot = await self._outbox.try_acquire_reconcile_slot(
+                kind="graph_extraction",
+                aggregate_id=aggregate_id,
+                cooldown_seconds=cooldown,
+            )
+            if not slot:
+                continue
+
+            system_principal = AuthenticatedUser(id=UserId(int(document.created_by)))
+            try:
+                await self._graph_extraction_publisher.publish(
+                    document_id=int(document.id),
+                    user=system_principal,
+                )
+                logger.info(
+                    "Reconciler re-published a stuck graph-extraction event.",
+                    extra={"document_id": document.id},
+                )
+            except Exception:
+                logger.warning(
+                    "Reconciler failed to re-publish a graph-extraction event.",
+                    extra={"document_id": document.id},
+                )

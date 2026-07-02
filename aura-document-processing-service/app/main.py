@@ -1,10 +1,11 @@
 import logging
 from contextlib import asynccontextmanager
 import uvicorn
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.api.controllers import router
+from app.infrastructure.http.authentication_provider.request_token import bind_request_token
 from app.api.openapi.descriptions import openapi_tags_metadata, root_api_description
 from app.api.openapi.swagger_bearer import install_openapi_bearer
 from app.api.handlers.exception_handlers import register_exception_handlers
@@ -101,7 +102,7 @@ def _add_middlewares(app: FastAPI) -> None:
 
 
 def _include_routers(app: FastAPI) -> None:
-    app.include_router(router, prefix="/api/v1")
+    app.include_router(router, prefix="/api/v1", dependencies=[Depends(bind_request_token)])
 
 
 app = create_app()

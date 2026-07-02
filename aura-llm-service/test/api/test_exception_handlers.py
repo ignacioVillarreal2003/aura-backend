@@ -1,9 +1,3 @@
-"""
-Tests for exception handler response shapes (exception_handlers.py).
-
-Uses a dedicated mini-app with test-only routes so we can raise exceptions
-without touching production controllers.
-"""
 import pytest
 from fastapi import FastAPI, HTTPException
 from starlette.testclient import TestClient
@@ -100,8 +94,6 @@ class TestGeneralExceptionHandler:
 
 
 class TestRoutingErrorsUseAppEnvelope:
-    """Starlette raises the base HTTPException for unmatched routes/methods;
-    the handler must be registered for it so 404/405 share the app envelope."""
 
     def test_unknown_path_uses_app_envelope(self, handler_client):
         response = handler_client.get("/does-not-exist")

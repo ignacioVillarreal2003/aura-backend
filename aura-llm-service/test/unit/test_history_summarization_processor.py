@@ -13,6 +13,9 @@ class _Facade:
     async def get_llm_base(self):
         return _Llm()
 
+    def apply_options(self, llm, **overrides):
+        return llm
+
 
 class _Llm:
     def bind(self, **_):
@@ -93,7 +96,7 @@ class TestRun:
     async def test_skips_when_history_irrelevant(self):
         invoker = _Invoker()
         proc = _proc(invoker)
-        state = _state(turns=4, size=1_000)  # is_needed True
+        state = _state(turns=4, size=1_000)
         state.history_relevant = False
         await proc.run(state, history_window=4)
         assert invoker.calls == 0

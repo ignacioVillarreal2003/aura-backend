@@ -1,5 +1,6 @@
 import logging
 from typing import Optional
+import redis.asyncio as aioredis
 
 from app.application.services.graph.graph_extraction_service.interfaces.graph_extraction_service_interface import (
     GraphExtractionServiceInterface,
@@ -33,8 +34,9 @@ class GraphExtractionConsumer(
             rabbitmq_manager: RabbitMQManagerInterface,
             graph_extraction_service: GraphExtractionServiceInterface,
             bulk_job_progress_store: Optional[BulkJobProgressStoreInterface] = None,
+            dedup_redis: Optional[aioredis.Redis] = None,
     ) -> None:
-        super().__init__(rabbitmq_manager)
+        super().__init__(rabbitmq_manager, dedup_redis=dedup_redis)
         self._service = graph_extraction_service
         self._bulk_store = bulk_job_progress_store
 

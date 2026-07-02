@@ -1,6 +1,3 @@
-"""Config-level guarantees for the structured generation services: they process
-attached documents by default and only retrieve corpus context when asked, and
-they wire all four reduction prompts (map + reduce)."""
 
 import pytest
 

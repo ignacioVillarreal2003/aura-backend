@@ -1,6 +1,3 @@
-"""
-Tests for POST /api/v1/fragment-contextualize
-"""
 from app.domain.dtos.processing.fragment_contextualize.contextualize_fragment_response import (
     ContextualizeFragmentResponse,
 )

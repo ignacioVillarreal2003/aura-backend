@@ -1,6 +1,3 @@
-"""Unit tests for DocumentContextProvider: the newly added retry on
-transient/5xx POST failures (and that 4xx is NOT retried), response parsing,
-fragment-count limiting, and HTTP error mapping. The HttpClient is mocked."""
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest

@@ -100,3 +100,21 @@ class DocumentRepositoryInterface(ABC):
             database_session: AsyncSession,
     ) -> list[Document]:
         pass
+
+    @abstractmethod
+    async def get_documents_pending_enrichment(
+            self,
+            processed_before: datetime,
+            limit: int,
+            database_session: AsyncSession,
+    ) -> list[Document]:
+        pass
+
+    @abstractmethod
+    async def get_documents_pending_graph(
+            self,
+            processed_before: datetime,
+            limit: int,
+            database_session: AsyncSession,
+    ) -> list[Document]:
+        pass

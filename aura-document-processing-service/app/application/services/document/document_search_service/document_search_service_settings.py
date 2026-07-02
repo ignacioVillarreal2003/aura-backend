@@ -17,6 +17,3 @@ class DocumentSearchServiceSettings(BaseSettings):
     bm25_min_score: float = Field(default=0.0, ge=0.0)
     bm25_query_max_chars: int = Field(default=512, ge=1, le=4_000)
     bm25_relevance_saturation: float = Field(default=10.0, gt=0.0)
-
-    rerank_enabled: bool = Field(default=True)
-    rerank_candidate_pool: int = Field(default=80, ge=1, le=400)

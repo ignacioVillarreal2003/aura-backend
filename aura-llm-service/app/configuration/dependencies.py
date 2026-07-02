@@ -40,6 +40,9 @@ from app.application.services.generation_shared.generation_settings import Gener
 from app.configuration.context_budget import validate_context_budget
 from app.infrastructure.guardrails.nemo_guardrails_service import NemoGuardrailsService
 from app.infrastructure.http.authentication_provider.authentication_provider import AuthenticationProvider
+from app.infrastructure.http.authentication_provider.authentication_provider_settings import (
+    AuthenticationProviderSettings,
+)
 from app.infrastructure.http.document_context_provider.document_context_provider import DocumentContextProvider
 from app.infrastructure.http.graph_context_provider.graph_context_provider import GraphContextProvider
 from app.infrastructure.http.http_client.http_client import HttpClient
@@ -75,9 +78,15 @@ async def startup_dependencies(app: FastAPI) -> None:
                 exc_info=True,
             )
 
+        authentication_provider_settings = AuthenticationProviderSettings()
+        registry.register("authentication_provider_settings", authentication_provider_settings)
         registry.register(
             "authentication_provider",
-            AuthenticationProvider(http_client=http_client, redis_client=redis_cache_client),
+            AuthenticationProvider(
+                http_client=http_client,
+                authentication_provider_settings=authentication_provider_settings,
+                redis_client=redis_cache_client,
+            ),
         )
 
         document_context_provider = DocumentContextProvider(http_client=http_client)

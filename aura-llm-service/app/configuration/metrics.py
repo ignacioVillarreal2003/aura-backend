@@ -24,6 +24,13 @@ guardrails_blocked_total = Counter(
     labelnames=("stage",),
 )
 
+rag_node_failures_total = Counter(
+    "aura_rag_node_failures_total",
+    "RAG agent node failures by node and error type, split by whether the failure "
+    "was expected (agent degraded gracefully) or unexpected (propagated).",
+    labelnames=("node", "kind", "error_type"),
+)
+
 
 def model_name_of(llm: Any) -> str:
     for candidate in (llm, getattr(llm, "bound", None)):
@@ -63,6 +70,15 @@ def record_guardrails_block(stage: str) -> None:
         guardrails_blocked_total.labels(stage=stage).inc()
     except Exception:
         logger.debug("Failed to record guardrails block metric.", exc_info=True)
+
+
+def record_rag_node_failure(node: str, kind: str, error: BaseException) -> None:
+    try:
+        rag_node_failures_total.labels(
+            node=node, kind=kind, error_type=type(error).__name__
+        ).inc()
+    except Exception:
+        logger.debug("Failed to record RAG node failure metric.", exc_info=True)
 
 
 def patch_instrumentator_routing() -> None:

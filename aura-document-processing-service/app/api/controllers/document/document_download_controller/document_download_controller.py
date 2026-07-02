@@ -2,7 +2,6 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.controllers.document.document_download_controller.interfaces.download_document_controller_interface import (
     DocumentDownloadControllerInterface,
@@ -16,14 +15,10 @@ from app.application.services.document.document_download_service.interfaces.docu
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
-from app.infrastructure.persistence.database.database_manager.database_manager import get_database_session
 from app.api.dependencies.services import get_document_download_service
 
 
 def _content_disposition_attachment(filename: str) -> str:
-    # HTTP headers must be latin-1 encodable, but document names can carry
-    # arbitrary Unicode (smart quotes, em-dashes, emoji...). Per RFC 6266 we send
-    # an ASCII/latin-1 fallback plus a filename* field with the real UTF-8 name.
     safe_name = (filename or "").strip() or "download"
     ascii_fallback = (
         safe_name.encode("latin-1", "ignore")
@@ -44,7 +39,6 @@ class DocumentDownloadController(DocumentDownloadControllerInterface):
             self,
             document_id: int,
             document_download_service: DocumentDownloadServiceInterface = Depends(get_document_download_service),
-            database_session: AsyncSession = Depends(get_database_session),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
             _rl: None = Depends(default_rate_limit),
     ) -> StreamingResponse:
@@ -55,7 +49,6 @@ class DocumentDownloadController(DocumentDownloadControllerInterface):
 
         content_stream, filename, mime_type = await document_download_service.download_document(
             document_id=document_id,
-            database_session=database_session,
             authenticated_user=authenticated_user,
         )
         return StreamingResponse(
@@ -70,7 +63,6 @@ class DocumentDownloadController(DocumentDownloadControllerInterface):
             self,
             document_id: int,
             document_download_service: DocumentDownloadServiceInterface = Depends(get_document_download_service),
-            database_session: AsyncSession = Depends(get_database_session),
             authenticated_user: AuthenticatedUser = Depends(get_authenticated_user),
             _rl: None = Depends(default_rate_limit),
     ) -> StreamingResponse:
@@ -81,7 +73,6 @@ class DocumentDownloadController(DocumentDownloadControllerInterface):
 
         content_stream, filename, mime_type = await document_download_service.download_document_manage(
             document_id=document_id,
-            database_session=database_session,
             authenticated_user=authenticated_user,
         )
         return StreamingResponse(
@@ -97,7 +88,10 @@ router = APIRouter()
 document_download_controller = DocumentDownloadController()
 
 _error = default_error_responses(
+    include_400=True,
     include_404=True,
+    include_409=True,
+    include_502=True,
     include_503=True,
 )
 _response = {

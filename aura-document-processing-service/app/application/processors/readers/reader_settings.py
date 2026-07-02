@@ -29,9 +29,6 @@ class ReaderSettings(BaseSettings):
     docling_device: Literal["cpu", "cuda", "mps", "auto"] = "auto"
     docling_num_threads: int = Field(default=4, ge=1, le=16)
     docling_artifacts_path: Optional[str] = Field(default=None)
-    # Motor OCR de Docling para imágenes y PDF escaneado. EasyOCR aprovecha la
-    # GPU (torch/CUDA) ya instalada y descarga sus propios modelos, evitando el
-    # choque de versiones de RapidOCR (torch no soporta PP-OCRv6).
     docling_ocr_enabled: bool = Field(default=True)
     docling_ocr_languages: list[str] = Field(default_factory=lambda: ["es", "en"])
 

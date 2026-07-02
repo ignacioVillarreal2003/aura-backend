@@ -1,5 +1,7 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
+
+from app.domain.time import APP_TIMEZONE
 from typing import Optional
 from sqlalchemy import asc, desc, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -7,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.constants.document.document_status import DocumentStatus
 from app.domain.constants.document.document_type import DocumentType
+from app.domain.constants.processing_status import ProcessingStatus
 from app.domain.field_limits import MAX_DOCUMENTS_IN_LIST
 from app.infrastructure.persistence.database.orm.document import Document
 from app.infrastructure.persistence.database.repositories.interfaces.document_repository_interface import (
@@ -342,7 +345,7 @@ class DocumentRepository(DocumentRepositoryInterface):
                 return False
 
             document.deleted_by = user_id
-            document.deleted_at = deleted_at or datetime.now(timezone.utc)
+            document.deleted_at = deleted_at or datetime.now(APP_TIMEZONE)
 
             await database_session.flush()
             await database_session.refresh(document)
@@ -398,7 +401,7 @@ class DocumentRepository(DocumentRepositoryInterface):
             document.deleted_by = None
             document.deleted_at = None
             document.updated_by = user_id
-            document.updated_at = datetime.now(timezone.utc)
+            document.updated_at = datetime.now(APP_TIMEZONE)
 
             await database_session.flush()
             await database_session.refresh(document)
@@ -450,3 +453,53 @@ class DocumentRepository(DocumentRepositoryInterface):
         except SQLAlchemyError as e:
             logger.exception("Database error while fetching stale uploaded documents.")
             raise DatabaseException("Failed to fetch stale uploaded documents.") from e
+
+    async def get_documents_pending_enrichment(
+            self,
+            processed_before: datetime,
+            limit: int,
+            database_session: AsyncSession,
+    ) -> list[Document]:
+        try:
+            result = await database_session.execute(
+                select(Document)
+                .where(
+                    Document.deleted_at.is_(None),
+                    Document.status == DocumentStatus.processed.value,
+                    Document.enrichment_status == ProcessingStatus.pending.value,
+                    Document.processing_finished_at.isnot(None),
+                    Document.processing_finished_at <= processed_before,
+                )
+                .order_by(asc(Document.processing_finished_at))
+                .limit(limit)
+            )
+            return list(result.scalars().all())
+
+        except SQLAlchemyError as e:
+            logger.exception("Database error while fetching documents pending enrichment.")
+            raise DatabaseException("Failed to fetch documents pending enrichment.") from e
+
+    async def get_documents_pending_graph(
+            self,
+            processed_before: datetime,
+            limit: int,
+            database_session: AsyncSession,
+    ) -> list[Document]:
+        try:
+            result = await database_session.execute(
+                select(Document)
+                .where(
+                    Document.deleted_at.is_(None),
+                    Document.status == DocumentStatus.processed.value,
+                    Document.graph_status == ProcessingStatus.pending.value,
+                    Document.processing_finished_at.isnot(None),
+                    Document.processing_finished_at <= processed_before,
+                )
+                .order_by(asc(Document.processing_finished_at))
+                .limit(limit)
+            )
+            return list(result.scalars().all())
+
+        except SQLAlchemyError as e:
+            logger.exception("Database error while fetching documents pending graph extraction.")
+            raise DatabaseException("Failed to fetch documents pending graph extraction.") from e

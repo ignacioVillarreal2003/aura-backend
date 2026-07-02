@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from starlette.testclient import TestClient
 
 from app.api.controllers import router
@@ -15,6 +15,7 @@ from app.api.handlers.exception_handlers import register_exception_handlers
 from app.application.authorization.authorizer import Authorizer
 from app.configuration.cors_configuration import configure_cors
 from app.configuration.middlewares.authentication_middleware import add_authentication_middleware
+from app.infrastructure.http.authentication_provider.request_token import bind_request_token
 from app.infrastructure.http.authentication_provider.exceptions.authentication_provider_exception import (
     AuthenticationProviderInvalidTokenException,
 )
@@ -88,7 +89,7 @@ def create_test_app() -> FastAPI:
     test_app = FastAPI(lifespan=_noop_lifespan)
     add_authentication_middleware(test_app)
     configure_cors(test_app)
-    test_app.include_router(router, prefix="/api/v1")
+    test_app.include_router(router, prefix="/api/v1", dependencies=[Depends(bind_request_token)])
     register_exception_handlers(test_app)
 
     test_app.dependency_overrides[get_database_session] = _mock_db_session

@@ -1,7 +1,3 @@
-"""
-Unit tests for Pydantic request DTOs.
-Each model is tested in isolation — no HTTP layer, no mocks.
-"""
 import pytest
 from pydantic import ValidationError
 

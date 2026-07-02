@@ -24,9 +24,11 @@ class _FakeFacade:
     async def get_llm_base(self):
         return _FakeLLM()
 
+    def apply_options(self, llm, **overrides):
+        return llm
+
 
 class _Invoker:
-    """Configurable fake: transform(text) -> str, or raise when boom=True."""
 
     def __init__(self, transform=lambda t: "ok", boom=False, delay=0.0):
         self._transform = transform
@@ -99,7 +101,7 @@ class TestBudgetingHelpers:
         p = _processor(_Invoker(), max_context_chars=1_000)
         fit = p._fit_notes(["palabra " * 200])
         assert len(fit) <= 1_000
-        assert fit.split()[-1] == "palabra"  # no corta a mitad de palabra
+        assert fit.split()[-1] == "palabra"
 
 
 class TestIsNeeded:
@@ -156,8 +158,6 @@ class TestReduceOutcomes:
         assert r.outcome == "timeout" and r.degraded and r.text
 
     async def test_reduce_pass_hard_capped_by_deadline(self):
-        # El map (4 batches) corre rápido y completo; la pasada reduce cuelga y
-        # debe cortarse por el deadline, conservando lo extraído por el map.
         class _SlowReduceInvoker:
             def __init__(self, fast_calls: int):
                 self.calls = 0
@@ -166,14 +166,14 @@ class TestReduceOutcomes:
             async def call_llm_content(self, llm, llm_input):
                 self.calls += 1
                 if self.calls <= self._fast_calls:
-                    return llm_input[-1].content  # map: identidad, no entra en budget
-                await asyncio.sleep(10)  # reduce: se cuelga
+                    return llm_input[-1].content
+                await asyncio.sleep(10)
                 return "x"
 
         p = _processor(_SlowReduceInvoker(fast_calls=4), deadline_seconds=0.2)
         r = await p._reduce(llm=None, fragments=_units(4, 900), query="q", prompts=_PROMPTS)
         assert r.outcome == "timeout" and r.degraded
-        assert r.text  # best-so-far del map
+        assert r.text
         assert r.passes_used == 1
 
 

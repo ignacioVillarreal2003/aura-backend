@@ -350,6 +350,20 @@ class RabbitMQManager(RabbitMQManagerInterface):
                 durable=True
             )
 
+            retry_exchange = await self._channel.declare_exchange(
+                self._settings.retry_exchange,
+                aio_pika.ExchangeType.DIRECT,
+                durable=True
+            )
+            retry_queue = await self._channel.declare_queue(
+                self._settings.retry_queue,
+                durable=True,
+                arguments={
+                    "x-dead-letter-exchange": self._settings.exchange,
+                    "x-message-ttl": self._settings.retry_delay_ms,
+                },
+            )
+
             queue_args: dict[str, Any] = {
                 "x-dead-letter-exchange": self._settings.dlx_exchange,
                 "x-dead-letter-routing-key": self._settings.dlq_queue
@@ -357,15 +371,21 @@ class RabbitMQManager(RabbitMQManagerInterface):
             if self._settings.message_ttl_ms is not None:
                 queue_args["x-message-ttl"] = self._settings.message_ttl_ms
 
-            await self._declare_work_queue(exchange, self._settings.document_ingestion_queue, queue_args)
-            await self._declare_work_queue(exchange, self._settings.graph_extraction_queue, queue_args)
-            await self._declare_work_queue(exchange, self._settings.document_enrichment_queue, queue_args)
-            await self._declare_work_queue(exchange, self._settings.document_reembed_queue, queue_args)
-            await self._declare_work_queue(exchange, self._settings.document_reprocess_queue, queue_args)
-            await self._declare_work_queue(exchange, self._settings.document_purge_queue, queue_args)
+            work_queue_names = (
+                self._settings.document_ingestion_queue,
+                self._settings.graph_extraction_queue,
+                self._settings.document_enrichment_queue,
+                self._settings.document_reembed_queue,
+                self._settings.document_reprocess_queue,
+                self._settings.document_purge_queue,
+            )
+            for queue_name in work_queue_names:
+                await self._declare_work_queue(exchange, queue_name, queue_args)
+                await retry_queue.bind(retry_exchange, routing_key=queue_name)
 
             self._exchanges[self._settings.exchange] = exchange
             self._exchanges[self._settings.dlx_exchange] = dlx_exchange
+            self._exchanges[self._settings.retry_exchange] = retry_exchange
 
             logger.info(
                 "The RabbitMQ topology was declared successfully.",

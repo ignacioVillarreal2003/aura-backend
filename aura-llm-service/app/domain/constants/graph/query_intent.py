@@ -8,7 +8,3 @@ class QueryIntent(str, Enum):
     FILTER_BY_TYPE = "filter_by_type"
     LIST_BY_DOCUMENT = "list_by_document"
     UNKNOWN = "unknown"
-
-    @classmethod
-    def values(cls) -> list[str]:
-        return [member.value for member in cls]

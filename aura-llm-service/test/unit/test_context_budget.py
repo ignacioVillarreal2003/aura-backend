@@ -1,6 +1,3 @@
-"""Unit tests for context_budget: the ContextBudget arithmetic and
-validate_context_budget's warn-vs-raise behaviour driven by
-fail_on_insufficient_context. Settings use _env_file=None for determinism."""
 import pytest
 
 from app.application.services.generation_shared.generation_settings import GenerationSettings
@@ -58,7 +55,7 @@ class TestValidateBudget:
     def test_insufficient_budget_warns_by_default(self):
         facade = _facade(num_ctx=600, num_predict=None, output_reserve_tokens=500, prompt_overhead_tokens=0)
         budget = validate_context_budget(facade, _gen(max_context_tokens=256))
-        assert budget.fits is False  # warned, not raised
+        assert budget.fits is False
 
     def test_insufficient_budget_raises_when_configured(self):
         facade = _facade(

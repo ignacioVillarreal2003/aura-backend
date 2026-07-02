@@ -1,7 +1,9 @@
 import json
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
+
+from app.domain.time import APP_TIMEZONE
 from typing import Generic, TypeVar
 from pydantic import BaseModel
 
@@ -24,7 +26,7 @@ class MessageEnvelope(Generic[T]):
         return cls(
             message_id=str(uuid.uuid4()),
             command=command,
-            published_at=datetime.now(timezone.utc)
+            published_at=datetime.now(APP_TIMEZONE)
         )
 
     def to_bytes(

@@ -1,6 +1,3 @@
-"""Unit tests for the shared HttpClient: exception mapping, the not-started
-guard, and the per-host circuit breaker (trips after the configured number of
-failures; upstream 4xx responses do not trip it)."""
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
@@ -31,8 +28,6 @@ async def _started_client(**overrides) -> HttpClient:
 
 
 def _install_fake_transport(client: HttpClient, *, request_mock: AsyncMock) -> None:
-    """Replace the underlying httpx client with a mock whose ``request`` is
-    controlled by the test and whose ``aclose`` is awaitable (so ``stop()`` is clean)."""
     fake = MagicMock()
     fake.request = request_mock
     fake.aclose = AsyncMock()

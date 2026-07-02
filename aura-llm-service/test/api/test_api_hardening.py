@@ -1,5 +1,3 @@
-"""Tests for the cross-cutting API hardening pieces: request body size limit,
-SSE heartbeats and X-Request-ID propagation."""
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock

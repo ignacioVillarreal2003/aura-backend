@@ -11,8 +11,6 @@ class CreateDocumentRequest(BaseModel):
     enrich: bool = False
     graph_extract: bool = False
     name: Optional[str] = Field(default=None, max_length=MAX_NAME_CHARS)
-    # description is intentionally omitted: it is generated automatically by the
-    # enrichment pipeline and cannot be provided at creation.
 
     model_config = {
         "frozen": True,

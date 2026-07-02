@@ -94,6 +94,24 @@ class OllamaLLMFacadeSettings(BaseSettings):
             )
         return self
 
+    def get_ollama_options(self) -> dict:
+        options: dict = {"temperature": self.temperature}
+
+        if self.top_p is not None:
+            options["top_p"] = self.top_p
+        if self.top_k is not None:
+            options["top_k"] = self.top_k
+        if self.repeat_penalty is not None:
+            options["repeat_penalty"] = self.repeat_penalty
+        if self.seed is not None:
+            options["seed"] = self.seed
+        if self.num_ctx is not None:
+            options["num_ctx"] = self.num_ctx
+        if self.num_predict is not None:
+            options["num_predict"] = self.num_predict
+
+        return options
+
     def get_chat_ollama_kwargs(self) -> dict:
         kwargs: dict = {
             "model": self.model_name,

@@ -7,9 +7,12 @@ from typing import Any, Dict, Optional
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
 
+from app.application.services.user_interactions.rag_agent_service.constants.rag_node_name import RagNodeName
 from app.application.services.user_interactions.rag_agent_service.interfaces.rag_node_interface import RagNodeInterface
+from app.application.services.user_interactions.rag_agent_service.node_failures import EXPECTED_LLM_ERRORS
 from app.application.services.user_interactions.rag_agent_service.rag_agent_settings import ContextGraderSettings
 from app.application.services.user_interactions.rag_agent_service.rag_agent_state.rag_agent_state import RagAgentState
+from app.configuration.metrics import record_rag_node_failure
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface import OllamaLLMInvokerInterface
 
@@ -48,9 +51,17 @@ class ContextGraderNode(RagNodeInterface):
         try:
             await self._ensure_llm_initialized()
             sufficient, reason = await self._grade(query, context, graph_facts)
-        except Exception:
-            logger.error("Context grader failed — treating context as sufficient (fail-open)", exc_info=True)
+        except EXPECTED_LLM_ERRORS as exc:
+            record_rag_node_failure(RagNodeName.context_grader.value, "expected", exc)
+            logger.warning(
+                "Context grader degraded (expected error) — treating context as sufficient (fail-open)",
+                exc_info=True,
+            )
             return {"context_sufficient": True, "grade_reason": "grader error (fail-open)", "can_retry": False}
+        except Exception as exc:
+            record_rag_node_failure(RagNodeName.context_grader.value, "unexpected", exc)
+            logger.exception("Context grader failed with an unexpected error")
+            raise
 
         can_retry = (not sufficient) and (attempts < self._max_retrieval_attempts)
         logger.info(

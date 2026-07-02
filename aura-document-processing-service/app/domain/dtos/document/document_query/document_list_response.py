@@ -6,6 +6,7 @@ from app.domain.field_limits import MAX_DOCUMENTS_IN_LIST
 
 class DocumentListResponse(BaseModel):
     documents: list[DocumentResponse] = Field(default_factory=list, max_length=MAX_DOCUMENTS_IN_LIST)
+    truncated: bool = Field(default=False)
 
     model_config = {
         "from_attributes": True,

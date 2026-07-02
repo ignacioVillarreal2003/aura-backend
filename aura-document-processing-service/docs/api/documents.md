@@ -1,66 +1,105 @@
 # Documentos: ingesta, procesamiento y recuperación
 
-Este documento resume los **grupos de endpoints** relacionados con documentos. Los nombres de campos, modelos de respuesta y códigos exactos están en **OpenAPI** (`/api/openapi.json` o Swagger `/api/docs`).
+Este documento resume los **grupos de endpoints** relacionados con documentos. La
+referencia campo a campo está en [`endpoints.md`](endpoints.md) y en **OpenAPI**
+(`/api/openapi.json` o Swagger `/api/docs`). Base URL: `/api/v1`.
 
 ## Creación e ingesta
 
 ### Subir un documento
+- **Ruta:** `POST /api/v1/create-document` · `multipart/form-data`.
+- **Campos típicos:** `file` (parte multipart), `chat_id?`, `prefer_docling`, `enrich`, `graph_extract`, `name?`.
+- **Comportamiento:** valida el archivo (tipo, tamaño, magic-number), guarda el binario en
+  almacenamiento de objetos, persiste metadatos y **encola** la ingesta (extracción de
+  texto → limpieza → fragmentación → embeddings → persistencia). El estado del documento
+  evoluciona en base de datos (`uploaded` → `processed`/`failed`).
 
-- **Método y ruta:** `POST /api/create-document/`
-- **Tipo:** `multipart/form-data`.
-- **Campos de formulario típicos:** identificador de chat (`chat_id`), flag opcional de preferencia por pipeline (`prefer_docling`), y el archivo del documento como parte del multipart.
-- **Comportamiento esperado:** el servicio persiste metadatos, guarda el binario en almacenamiento de objetos y encola u orquesta el procesamiento (extracción de texto, fragmentación, embeddings, etc.) según la configuración del entorno.
+### Alta masiva
+- **Ruta:** `POST /api/v1/bulk-create-document` · `multipart/form-data` con `files[]`.
+- Cada archivo se procesa de forma independiente; la respuesta detalla el resultado por archivo.
 
-La ingesta suele ser el punto de entrada del **pipeline** asíncrono; el estado del documento evoluciona en base de datos mientras avanzan las etapas.
+### Post-procesado durante la ingesta
+No expone endpoints propios en la creación: se dispara con dos banderas del formulario:
 
-### Post-procesado en la creación
+- `enrich` (default `false`): clasifica el documento (tipo/categoría/descripción) y
+  **contextualiza** sus fragmentos (genera `contextualized_content` y su embedding).
+- `graph_extract` (default `false`): encola la extracción del grafo de conocimiento.
 
-El post-procesado (clasificación del documento + enriquecimiento de fragmentos y extracción del grafo de conocimiento) ya no expone endpoints propios: se dispara **durante la ingesta** a partir de dos banderas del formulario de creación:
+Ambas corren **best-effort** tras persistir los fragmentos; un fallo en el post-procesado
+no invalida la ingesta. También pueden reejecutarse después como jobs de mantenimiento
+(ver más abajo).
 
-- `enrich` (bool, default `false`): clasifica el documento (tipo/categoría/descripción) y enriquece sus fragmentos (resumen, entidades, temas).
-- `graph_extract` (bool, default `false`): encola la extracción del grafo de conocimiento.
+## Edición y restauración
 
-Ambas se ejecutan de forma **best-effort** tras persistir los fragmentos; un fallo en el post-procesado no invalida la ingesta.
+| Operación | Método y ruta |
+|---|---|
+| Actualizar título (manage) | `PATCH /api/v1/update-document/manage/document/{document_id}` |
+| Restaurar documento borrado (manage) | `POST /api/v1/restore-document/manage/document/{document_id}` |
 
 ## Recuperación (consulta y descarga)
 
-### Consulta de metadatos y listados
+Prefijo **`/api/v1/document-query`**:
 
-Prefijo **`/api/document-query`**:
+| Operación | Método y ruta |
+|---|---|
+| Detalle de un documento (manage) | `GET /manage/document/{document_id}` |
+| Estado de procesamiento | `GET /document/{document_id}/status` |
+| Estado de procesamiento (manage) | `GET /manage/document/{document_id}/status` |
+| Listado paginado/filtrado (manage) | `GET /manage/documents` |
+| Documentos de un chat | `GET /documents/chat/{chat_id}` |
 
-| Operación (resumen) | Método y ruta |
-|---------------------|---------------|
-| Detalle de un documento | `GET /api/document-query/document/{document_id}` |
-| Listado paginado/filtrado | `GET /api/document-query/documents` |
-| Documentos asociados a un chat | `GET /api/document-query/documents/chat/{chat_id}` |
+Descarga binaria — prefijo **`/api/v1/document-download`**:
 
-Los filtros de listado (nombre, descripción, categoría, tipo, rangos de fechas, paginación) se documentan como query parameters en OpenAPI.
+| Operación | Método y ruta |
+|---|---|
+| Descargar | `GET /document/{document_id}/download` |
+| Descargar (manage) | `GET /manage/document/{document_id}/download` |
 
-### Descarga del archivo
+## Búsqueda por contenido
 
-- **Método y ruta:** `GET /api/document-download/document/{document_id}/download`
-- **Respuesta:** cuerpo binario con cabeceras de contenido y disposición de descarga adecuadas al tipo MIME almacenado.
+- **Ruta:** `POST /api/v1/document-search/by-content`.
+- Similitud `vector` / `bm25` / `hybrid`, paginada. Contrato en [`endpoints.md`](endpoints.md).
 
-### Contexto vía fragmentos (solo referencia)
+## Contexto vía fragmentos (RAG)
 
-Bajo **`/api/fragment-query`** hay endpoints para obtener fragmentos de contexto (por pregunta o por conjunto de documentos), orientados a escenarios de RAG o recuperación semántica. **No** se detallan aquí los cuerpos ni límites; usar **Swagger/ReDoc** o el JSON de OpenAPI.
+Prefijo **`/api/v1/fragment-query`**: `POST /by-question` (consultas semánticas/BM25 con
+reranking opcional) y `POST /by-documents` (fragmentos de una lista de documentos, con
+submuestreo representativo por documento). Detalle en [`endpoints.md`](endpoints.md).
 
 ## Borrado
 
-Prefijo **`/api/delete-document`**:
+Prefijo **`/api/v1/delete-document`** — solo **borrado lógico** (soft delete):
 
-| Operación (resumen) | Método y ruta |
-|---------------------|---------------|
-| Borrado lógico de un documento | `DELETE /api/delete-document/soft/document/{document_id}` |
-| Borrado lógico de documentos de un chat | `DELETE /api/delete-document/soft/chat/{chat_id}` |
-| Borrado físico de un documento | `DELETE /api/delete-document/hard/document/{document_id}` |
-| Borrado físico de documentos de un chat | `DELETE /api/delete-document/hard/chat/{chat_id}` |
+| Operación | Método y ruta |
+|---|---|
+| Borrado lógico de un documento | `DELETE /soft/document/{document_id}` |
+| Borrado lógico de documentos de un chat | `DELETE /soft/chat/{chat_id}` |
+| Borrado lógico de un documento (manage) | `DELETE /manage/soft/document/{document_id}` |
 
-Las respuestas suelen ser **204** sin cuerpo cuando la operación concluye correctamente; las reglas de autorización y efectos en almacenamiento o colas dependen de la implementación del servicio (ver OpenAPI y código de aplicación).
+Responden **204** sin cuerpo. La purga física del binario y de la huella en el grafo se
+realiza de forma **asíncrona** tras el borrado lógico (vía cola de purga), no por un
+endpoint HTTP dedicado.
+
+## Mantenimiento (jobs asíncronos, manage)
+
+Reejecutan pipelines sobre uno, varios o todos los documentos, con estado y parada:
+
+| Pipeline | Prefijo |
+|---|---|
+| Re-embedding | `/api/v1/document-reembed/manage` |
+| Reprocesamiento | `/api/v1/document-reprocess/manage` |
+| Enriquecimiento | `/api/v1/document-enrich/manage` |
+| Extracción de grafo | `/api/v1/graph/extraction/manage` |
+
+Cada uno: `POST` (lanzar) → `202`, `GET /status`, `DELETE /stop`. Ver
+[`endpoints.md`](endpoints.md) para el selector y los modelos de estado.
 
 ## Resumen
 
-- **Ingesta:** `POST /api/create-document/` con banderas `enrich` y `graph_extract` (default `false`) que disparan el post-procesado durante la ingesta.
-- **Retrieve:** `GET /api/document-query/...` y `GET /api/document-download/...`.
-- **Fragmentos para contexto:** `/api/fragment-query/...` (contrato en OpenAPI).
-- **Borrado:** `/api/delete-document/...` (soft/hard, por documento o por chat).
+- **Ingesta:** `POST /create-document` y `POST /bulk-create-document`, con `enrich` y
+  `graph_extract` (default `false`).
+- **Edición:** `update-document`, `restore-document` (manage).
+- **Retrieve:** `document-query`, `document-download`, `document-search`.
+- **Fragmentos/RAG:** `fragment-query` (contrato en `endpoints.md` / OpenAPI).
+- **Borrado:** `delete-document` (solo lógico; purga física asíncrona).
+- **Mantenimiento:** `document-reembed`, `document-reprocess`, `document-enrich`, `graph/extraction` (jobs manage).

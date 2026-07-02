@@ -1,7 +1,9 @@
 import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
+
+from app.domain.time import APP_TIMEZONE
 from pathlib import Path
 from typing import Optional
 import asyncio
@@ -385,7 +387,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
             chunks: list[DocumentChunk],
             embeddings: list[list[float]]
     ) -> list[Fragment]:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(APP_TIMEZONE)
 
         embedding_model = self._embedder_factory.get_active_model_name()
         embedding_dim = self._embedder_factory.get_vector_dimension()
@@ -446,7 +448,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                 )
                 current_status.transition_to(DocumentStatus.processed)
                 document.status = DocumentStatus.processed
-                document.processing_finished_at = datetime.now(timezone.utc)
+                document.processing_finished_at = datetime.now(APP_TIMEZONE)
 
                 await self._document_repository.update_document(
                     document=document,
@@ -493,7 +495,7 @@ class DocumentIngestionService(DocumentIngestionServiceInterface):
                     )
                     st.transition_to(DocumentStatus.failed)
                     db_document.status = DocumentStatus.failed
-                    db_document.processing_finished_at = datetime.now(timezone.utc)
+                    db_document.processing_finished_at = datetime.now(APP_TIMEZONE)
                     await self._document_repository.update_document(
                         document=db_document,
                         database_session=database_session

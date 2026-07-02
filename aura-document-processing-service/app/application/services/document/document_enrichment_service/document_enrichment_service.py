@@ -48,6 +48,8 @@ class DocumentEnrichmentService(DocumentEnrichmentServiceInterface):
             extra={"document_id": document_id, "user_id": user.id},
         )
 
+        await self._set_enrichment_status(document_id, ProcessingStatus.processing)
+
         first_error: Optional[BaseException] = None
 
         try:

@@ -1,5 +1,7 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
+
+from app.domain.time import APP_TIMEZONE
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
@@ -65,7 +67,7 @@ class UpdateDocumentService(UpdateDocumentServiceInterface):
             for field, value in changes.items():
                 setattr(document, field, value)
             document.updated_by = int(authenticated_user.id)
-            document.updated_at = datetime.now(timezone.utc)
+            document.updated_at = datetime.now(APP_TIMEZONE)
 
             updated_document = await self._persist(document, database_session)
 

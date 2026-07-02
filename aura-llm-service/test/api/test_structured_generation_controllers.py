@@ -1,8 +1,3 @@
-"""
-Parametrized tests for the structured-generation controllers that share the
-StructuredGenerationService pipeline (plus general chat): auth, permissions,
-request validation, service-unavailable and happy path for each endpoint.
-"""
 from contextlib import suppress
 from dataclasses import dataclass, field
 from unittest.mock import AsyncMock

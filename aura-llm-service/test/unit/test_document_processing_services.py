@@ -1,7 +1,3 @@
-"""Tests for the document summary and action services after migration to the
-shared structured (JSON) base: default flags, synthetic instruction messages,
-JSON parsing into title/description/body, action guidance, Markdown fallback,
-and reduction-prompt wiring."""
 
 import types
 

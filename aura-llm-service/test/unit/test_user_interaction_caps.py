@@ -1,8 +1,3 @@
-"""Regression tests: structured user-interaction service settings must never
-allow more items than the domain response model accepts. A verbose LLM that
-returns more than the domain cap must be truncated at parse time (not raise a
-ValidationError that surfaces as a 500). Also covers the checklist defensive
-order parsing."""
 import json
 
 import pytest
@@ -38,7 +33,6 @@ class TestSettingsCapsWithinDomain:
         assert DecisionBriefSettings(_env_file=None).max_options <= MAX_DECISION_BRIEF_OPTIONS
 
     def test_env_override_cannot_exceed_domain(self, monkeypatch):
-        # le= bound rejects an override above the domain cap at construction time.
         monkeypatch.setenv("DECISION_BRIEF_MAX_OPTIONS", "999")
         with pytest.raises(ValidationError):
             DecisionBriefSettings()
@@ -54,8 +48,7 @@ class TestChecklistDefensiveOrder:
             ],
         })
         title, _desc, items = _parse_llm_output(raw, ChecklistSettings(_env_file=None))
-        # Structured parse survived (title kept, not the line-by-line fallback title).
         assert title == "Procedimiento"
         assert [i.text for i in items] == ["Paso uno", "Paso dos"]
-        assert items[0].order == 1  # bad order coerced to default
+        assert items[0].order == 1
         assert items[1].order == 2

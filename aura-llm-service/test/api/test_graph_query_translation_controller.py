@@ -1,6 +1,3 @@
-"""
-Tests for POST /api/v1/graph-query-translation
-"""
 from app.domain.constants.graph.query_intent import QueryIntent
 from app.domain.dtos.processing.graph_query_translation.translate_graph_query_response import TranslateGraphQueryResponse
 

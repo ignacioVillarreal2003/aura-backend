@@ -1,6 +1,3 @@
-"""
-Tests for POST /api/v1/rag-agent
-"""
 from app.domain.dtos.user_interactions.agent.agent_response import AgentResponse
 
 URL = "/api/v1/rag-agent"

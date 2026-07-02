@@ -1,0 +1,7 @@
+@dpsBase = http://localhost:8000/api/v1
+@authToken = user_token_123
+
+### Restaurar un documento borrado lógicamente (manage)
+POST {{dpsBase}}/restore-document/manage/document/38
+Accept: application/json
+Authorization: Bearer {{authToken}}

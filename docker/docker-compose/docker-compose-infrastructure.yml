@@ -92,7 +92,7 @@ services:
       - 6379:6379
     volumes:
       - memory_db_data:/data
-    command: [ "redis-server", "--save", "--appendonly", "no" ]
+    command: [ "redis-server", "--save", "--appendonly", "yes" ]
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s

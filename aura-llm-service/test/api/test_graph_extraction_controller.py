@@ -1,6 +1,3 @@
-"""
-Tests for POST /api/v1/graph-extraction
-"""
 from app.domain.dtos.processing.graph_extraction.extract_entities_relations_response import ExtractEntitiesRelationsResponse
 
 URL = "/api/v1/graph-extraction"

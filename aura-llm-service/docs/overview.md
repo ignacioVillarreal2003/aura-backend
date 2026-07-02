@@ -2,7 +2,7 @@
 
 ## What It Does
 
-`aura-llm-service` is an internal FastAPI microservice that wraps a locally-hosted Ollama LLM and exposes structured endpoints for language-model tasks: answering questions about documents, summarising, executing free-form instructions, classifying documents, enriching text fragments, extracting knowledge-graph entities, translating natural-language graph queries, and running agentic workflows.
+`aura-llm-service` is an internal FastAPI microservice that wraps a locally-hosted Ollama LLM and exposes structured endpoints for language-model tasks: answering questions about documents, summarising, executing free-form instructions, classifying documents, enriching text fragments, extracting knowledge-graph entities, translating natural-language graph queries, auditing negative feedback (LLM-as-a-judge), and running agentic workflows.
 
 All endpoints are **internal-only** — they require a validated Bearer token forwarded by the API gateway (see [authentication.md](authentication.md)).
 
@@ -85,6 +85,7 @@ requires the same permission as its base endpoint.
 | POST | `/api/v1/fragment-contextualize` | `LLM_FRAGMENT_CONTEXTUALIZE` | 60 / min |
 | POST | `/api/v1/graph-extraction` | `LLM_GRAPH_EXTRACTION` | 60 / min |
 | POST | `/api/v1/graph-query-translation` | `LLM_GRAPH_QUERY_TRANSLATION` | 60 / min |
+| POST | `/api/v1/feedback-evaluate` | `LLM_FEEDBACK_EVALUATION` | 60 / min |
 | POST | `/api/v1/general-chat` (`/stream`) | `LLM_GENERAL_CHAT` | 60 / min |
 | POST | `/api/v1/rag-agent` (`/stream`) | `LLM_AGENT` | 20 / min |
 | POST | `/api/v1/report-generate` (`/stream`) | `LLM_REPORT_GENERATE` | 60 / min |

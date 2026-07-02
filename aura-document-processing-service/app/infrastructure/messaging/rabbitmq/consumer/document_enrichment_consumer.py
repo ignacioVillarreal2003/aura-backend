@@ -1,5 +1,6 @@
 import logging
 from typing import Optional
+import redis.asyncio as aioredis
 
 from app.application.services.document.document_enrichment_service.interfaces.document_enrichment_service_interface import (
     DocumentEnrichmentServiceInterface,
@@ -33,8 +34,9 @@ class DocumentEnrichmentConsumer(
             rabbitmq_manager: RabbitMQManagerInterface,
             document_enrichment_service: DocumentEnrichmentServiceInterface,
             bulk_job_progress_store: Optional[BulkJobProgressStoreInterface] = None,
+            dedup_redis: Optional[aioredis.Redis] = None,
     ) -> None:
-        super().__init__(rabbitmq_manager)
+        super().__init__(rabbitmq_manager, dedup_redis=dedup_redis)
         self._service = document_enrichment_service
         self._bulk_store = bulk_job_progress_store
 

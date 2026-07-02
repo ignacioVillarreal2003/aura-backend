@@ -19,6 +19,9 @@ class _FakeFacade:
     async def get_llm_base(self):
         return _FakeLLM()
 
+    def apply_options(self, llm, **overrides):
+        return llm
+
 
 class _BoomFacade:
     async def get_llm_base(self):
@@ -152,9 +155,9 @@ class TestRun:
 
         p = SectionContextProcessor(_FakeFacade(), _CapturingInvoker(), _settings(summarize_threshold_chars=500))
         state = _state([_group(make_fragment, 1, [600])])
-        await p.run(state)  # sin map_system_prompt/map_human_prompt → usa defaults propios
+        await p.run(state)
         assert captured["system"] == SECTION_MAP_SYSTEM_PROMPT
-        assert "pregunta" in captured["human"]  # {query} formateado
+        assert "pregunta" in captured["human"]
 
     async def test_artifact_prompts_take_precedence(self, make_fragment):
         captured = {}

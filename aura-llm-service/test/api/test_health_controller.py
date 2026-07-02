@@ -1,8 +1,3 @@
-"""
-Tests for:
-  GET /api/v1/health  (liveness — always 200, no auth)
-  GET /api/v1/ready   (readiness — 200/503 depending on app.state)
-"""
 from unittest.mock import AsyncMock, MagicMock
 
 HEALTH_URL = "/api/v1/health"
