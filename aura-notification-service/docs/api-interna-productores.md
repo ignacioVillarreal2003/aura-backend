@@ -45,7 +45,7 @@ Throttle: **120 req/minuto** por IP (`scope = "internal"`).
 | Campo | Requerido | Tipo | Validación |
 | ----- | --------- | ---- | ---------- |
 | `event_type` | Sí | string | ≤ 128 chars · debe existir en el registro de eventos |
-| `recipient_ids` | Sí | lista de enteros | Cada ID ≥ 1 · entre 1 y **10 000** destinatarios por request |
+| `recipient_ids` | Sí | lista de enteros | Cada ID ≥ 1 · entre 1 y **500** destinatarios por request |
 | `actor_id` | No | entero \| null | ≥ 1 si se envía |
 | `actor_name` | No | string | ≤ 255 chars · puede ser vacío |
 | `context` | No | objeto | JSON libre para plantillas, links y texto |
@@ -175,4 +175,4 @@ El diccionario `context` se usa para:
 
 ## Broadcast administrativo
 
-Para enviar un anuncio masivo usar `event_type: "admin.broadcast"` con todos los `recipient_ids` requeridos. No existe un endpoint separado para broadcasts; el mismo endpoint soporta hasta **10 000 destinatarios por request**.
+Para enviar un anuncio masivo usar `event_type: "admin.broadcast"` con todos los `recipient_ids` requeridos. No existe un endpoint separado para broadcasts; el mismo endpoint soporta hasta **500 destinatarios por request**; para audiencias mayores, dividir en varios requests.

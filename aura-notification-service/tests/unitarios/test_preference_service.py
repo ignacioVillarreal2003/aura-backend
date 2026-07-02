@@ -1,6 +1,3 @@
-"""
-Tests unitarios para PreferenceService.
-"""
 import pytest
 from datetime import datetime, timezone
 from unittest.mock import patch, MagicMock
@@ -12,7 +9,7 @@ from apps.notification.services.preference_service import PreferenceService, Pre
 NOW = datetime(2024, 5, 10, 12, 0, 0, tzinfo=timezone.utc)
 FUTURE = datetime(2099, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
 PAST = datetime(2000, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-NOW_EXACT = NOW  # boundary alias
+NOW_EXACT = NOW
 
 
 def make_event(
@@ -116,7 +113,6 @@ class TestPreferenceDecide:
         assert decision.reason == "event_disabled"
 
     def test_mute_at_exact_boundary_does_not_suppress(self):
-        # mute_until == now: condition is now < mute_until, so NOT muted
         event = make_event(is_silenceable=True)
         prefs = make_prefs(mute_until=NOW)
 

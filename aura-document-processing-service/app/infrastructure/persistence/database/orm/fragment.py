@@ -1,7 +1,7 @@
 from datetime import datetime
 from functools import lru_cache
 from typing import Any
-from pgvector.sqlalchemy import VECTOR
+from pgvector.sqlalchemy import VECTOR, HALFVEC
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from sqlalchemy import Integer, DateTime, Text, ForeignKey, BigInteger, String
@@ -12,12 +12,22 @@ from app.domain.constants.processing_status import ProcessingStatus
 from app.infrastructure.persistence.database.orm.base import Base
 
 
+_VECTOR_HNSW_MAX_DIM = 2000
+
+
 @lru_cache(maxsize=1)
 def _get_vector_dimension() -> int:
     dimension = EmbedderSettings().vector_dimension
     if dimension is None:
         raise ValueError("The embedder vector dimension could not be resolved.")
     return dimension
+
+
+def _vector_column_type() -> Any:
+    dim = _get_vector_dimension()
+    if dim <= _VECTOR_HNSW_MAX_DIM:
+        return VECTOR(dim=dim)
+    return HALFVEC(dim=dim)
 
 
 class Fragment(Base):
@@ -36,7 +46,7 @@ class Fragment(Base):
 
     content: Mapped[str] = mapped_column(Text, nullable=False)
 
-    vector: Mapped[Any] = mapped_column(VECTOR(dim=_get_vector_dimension()), nullable=False)
+    vector: Mapped[Any] = mapped_column(_vector_column_type(), nullable=False)
 
     embedding_model: Mapped[str] = mapped_column(String(255), nullable=False)
     embedding_dim: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -54,7 +64,7 @@ class Fragment(Base):
 
     contextualized_content: Mapped[str | None] = mapped_column(Text, nullable=True)
     contextualized_vector: Mapped[Any | None] = mapped_column(
-        VECTOR(dim=_get_vector_dimension()), nullable=True
+        _vector_column_type(), nullable=True
     )
     contextualized_embedding_identity: Mapped[str | None] = mapped_column(Text, nullable=True)
 

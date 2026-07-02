@@ -42,8 +42,6 @@ class ServiceUnavailableException(ServiceException):
 
 
 class InsufficientPermissionsException(ServiceException):
-    """Authenticated caller lacks application-level permissions (HTTP 403, not 401)."""
-
     status_code = 403
     error_code = "insufficient_permissions"
     detail = "You do not have permission to perform this action"

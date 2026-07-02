@@ -26,8 +26,7 @@ ApiErrorBody = inline_serializer(
 def standard_error_responses(*status_codes: int) -> dict[int, OpenApiResponse]:
     descriptions = {
         400: (
-            "Request validation failed or service-to-service headers are malformed "
-            "(e.g. invalid X-User-Id)."
+            "Request validation failed (malformed body, query, or path parameters)."
         ),
         401: (
             "Caller is unauthenticated or credentials were rejected: missing Bearer token, "

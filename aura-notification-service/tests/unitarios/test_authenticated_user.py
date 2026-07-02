@@ -1,7 +1,3 @@
-"""
-Tests unitarios para AuthenticatedUser dataclass.
-Sin DB ni mocks — solo lógica pura.
-"""
 import pytest
 from core.authentication.authenticated_user import AuthenticatedUser
 
@@ -48,7 +44,3 @@ class TestAuthenticatedUser:
     def test_has_any_role_empty_set_false(self):
         user = make_user(roles=("admin",))
         assert user.has_any_role(frozenset()) is False
-
-    def test_is_service_false_by_default(self):
-        user = make_user()
-        assert user.is_service is False

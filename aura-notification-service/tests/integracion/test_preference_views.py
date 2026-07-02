@@ -1,7 +1,3 @@
-"""
-Tests de integración para endpoints de preferencias:
-  GET /PUT /api/v1/me/notification-preferences/
-"""
 import pytest
 from unittest.mock import patch
 

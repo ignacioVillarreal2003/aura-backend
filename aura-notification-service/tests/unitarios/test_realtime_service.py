@@ -1,7 +1,3 @@
-"""
-Tests unitarios para RealtimeService.
-Patchea publish_user_event para no tocar Redis.
-"""
 import pytest
 from unittest.mock import patch, call
 

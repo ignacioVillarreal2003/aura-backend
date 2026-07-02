@@ -1,7 +1,3 @@
-"""
-Tests unitarios para TemplateService.
-Patchea render_to_string de Django — sin sistema de templates real.
-"""
 import pytest
 from unittest.mock import patch, MagicMock
 from django.template import TemplateDoesNotExist

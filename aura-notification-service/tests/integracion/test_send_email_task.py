@@ -1,7 +1,3 @@
-"""
-Tests de integración para la tarea Celery send_email_dispatch.
-Usa CELERY_TASK_ALWAYS_EAGER=True y backend de email en memoria.
-"""
 import pytest
 from unittest.mock import patch, MagicMock
 from django.core import mail
@@ -27,7 +23,6 @@ def _rendered_email(subject="Subj", text="Body", html=None):
 
 
 _TEMPLATE_SVC = "apps.notification.tasks.send_email.template_service"
-_LOOKUP = "apps.notification.tasks.send_email.lookup_recipient"
 
 
 class TestSendEmailDispatchTask:
@@ -100,50 +95,19 @@ class TestSendEmailDispatchTask:
         dispatch.refresh_from_db()
         assert dispatch.sent_at is not None
 
-    def test_no_email_in_context_uses_auth_lookup(self):
-        dispatch = _make_dispatch()
-        dispatch.payload = {}
-        dispatch.save()
-        with (
-            patch(_LOOKUP, return_value={"email": "found@test.com", "username": "user"}),
-            patch(_TEMPLATE_SVC) as svc,
-        ):
-            svc.render_email.return_value = _rendered_email()
-            result = send_email_dispatch(
-                dispatch_id=dispatch.id,
-                event_type=dispatch.event_type,
-                receiver_id=dispatch.receiver_id,
-                context={},
-            )
-        assert result == "sent"
-
     def test_marks_failed_when_no_recipient_email(self):
         dispatch = _make_dispatch()
         dispatch.payload = {}
         dispatch.save()
-        with patch(_LOOKUP, return_value=None):
-            result = send_email_dispatch(
-                dispatch_id=dispatch.id,
-                event_type=dispatch.event_type,
-                receiver_id=dispatch.receiver_id,
-                context={},
-            )
+        result = send_email_dispatch(
+            dispatch_id=dispatch.id,
+            event_type=dispatch.event_type,
+            receiver_id=dispatch.receiver_id,
+            context={},
+        )
         assert result == "missing_recipient_email"
         dispatch.refresh_from_db()
         assert dispatch.status == EmailDispatchStatus.FAILED
-
-    def test_auth_lookup_returns_none_marks_failed(self):
-        dispatch = _make_dispatch()
-        dispatch.payload = {}
-        dispatch.save()
-        with patch(_LOOKUP, return_value={}):
-            result = send_email_dispatch(
-                dispatch_id=dispatch.id,
-                event_type=dispatch.event_type,
-                receiver_id=dispatch.receiver_id,
-                context={},
-            )
-        assert result == "missing_recipient_email"
 
     def test_increments_attempt_counter(self):
         dispatch = _make_dispatch()

@@ -67,7 +67,7 @@ Prefijo padre: **`/api/v1/document-collections/{document_collection_id}/document
 |----------|------|---------|-------------|
 | `GET`    | `.../documents/` | `LIST_DOCUMENT_COLLECTION_DOCUMENTS` | Inventario paginado de membresías: quién enlazó, cuándo, y una miniatura del documento (`id` + título visible). |
 | `POST`   | `.../documents/` | `ADD_DOCUMENT_COLLECTION_DOCUMENT` | “Meté este documento en la colección.” Si ya estaba, preparate para un 409 elegante (`duplicate_document_link`). |
-| `DELETE` | `.../documents/{id}/` | `REMOVE_DOCUMENT_COLLECTION_DOCUMENT` | Cortá el vínculo por el **id del enlace**, no por el document_id del mundo exterior — evitá borrar la colección entera por error. |
+| `DELETE` | `.../documents/{id}/` | `REMOVE_DOCUMENT_COLLECTION_DOCUMENT` | Cortá el vínculo por el **`document.id`** (la clave del documento del mundo exterior), **no** por el id de la fila join `document_in_document_collection`. Baja con **soft delete** del enlace. |
 
 **Ordenamiento**: `id`, `created_at`, `document_id`. Default tranquilo por `id`.
 
@@ -102,11 +102,11 @@ Base: **`/api/v1/classification-levels/`**
 
 **Filtros**: `name` (substring), `rank_gte`, `rank_lte` para recortar el espectro de sensibilidad.
 
-**Cuerpo `POST`**: `name` (≤100, no vacío post-trim), `rank` entre 1 y 32767.
+**Cuerpo `POST`**: `name` (≤100, no vacío post-trim), `rank` entre 1 y 32767, `description` opcional (vacío permitido).
 
-**Cuerpo `PATCH`**: al menos un campo (`name` o `rank`). Siempre mové algo si tocás PATCH.
+**Cuerpo `PATCH`**: al menos un campo (`name`, `rank` o `description`). Siempre mové algo si tocás PATCH.
 
-**Respuesta**: `id`, `name`, `rank`.
+**Respuesta**: `id`, `name`, `rank`, `description`.
 
 ---
 
@@ -151,6 +151,7 @@ No hay **`GET`** listando todos los usuarios del mundo: las rutas cuelgan de **`
 | `POST`   | `/api/v1/user-authorizations/{user_id}/compartments/` | `ADD_USER_COMPARTMENT` | Sumá otro cofre sin reescribir toda la matriz manualmente — duplicado genera conflicto ordenado (409). |
 | `DELETE` | `/api/v1/user-authorizations/{user_id}/compartments/{compartment_id}/` | `REMOVE_USER_COMPARTMENT` | Quitá ese compartimento puntual; el path lo deja clarísimo qué entrada basureás. |
 | `GET`    | `/api/v1/user-authorizations/{user_id}/accessible-collections/` | `GET_USER_ACCESSIBLE_COLLECTIONS` | Lista las **colecciones de documentos** que este usuario puede tocar vista la suma nivel + cofres — el endpoint que otros servicios pueden cachear antes de rutear trabajo pesado de documentos. |
+| `GET`    | `/api/v1/user-authorizations/{user_id}/accessible-documents/` | `GET_USER_ACCESSIBLE_DOCUMENTS` | Resuelve la intersección MAC completa (rank + compartimentos), junta todas las colecciones accesibles y devuelve **todos los documentos activos** enlazados a ellas. Un documento en varias colecciones accesibles aparece una vez por colección (conserva la trazabilidad). |
 
 **`PUT .../clearance/`**: `{ "classification_level_id": ≥ 1 }`.
 
@@ -159,6 +160,8 @@ No hay **`GET`** listando todos los usuarios del mundo: las rutas cuelgan de **`
 **Respuesta del resumen (`GET .../{user_id}/`)**: `user_id`, objeto `clearance` o `null`, y lista `compartments` donde cada entrada trae `compartment` resuelto.
 
 **Colecciones accesibles**: mismo sabor JSON que **`DocumentCollectionResponse`** en colección paginada — podés reusar parsers del cliente ya armados para “colecciones”.
+
+**Documentos accesibles**: cada ítem es una proyección plana (`document_id`, `document_name`, `mime_type`, `file_size_bytes`, `collection_id`) en colección paginada.
 
 ---
 

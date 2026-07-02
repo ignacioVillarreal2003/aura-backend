@@ -207,9 +207,17 @@ class RagAgentService(RagAgentServiceInterface):
                     yield AgentStreamComplete(result=result)
                     logger.info("RAG agent stream completed", extra={"user_id": authenticated_user.id})
                 elif event_type == "error":
-                    outcome = "error"
-                    logger.error("RAG workflow stream error", exc_info=data)
-                    yield AgentStreamError(message="Error procesando la consulta.", code="workflow_error")
+                    if isinstance(data, _KNOWN_EXCEPTIONS):
+                        outcome = "known_error"
+                        logger.warning(
+                            "Known error during RAG workflow stream",
+                            extra={"user_id": authenticated_user.id, "error_type": type(data).__name__},
+                        )
+                        yield AgentStreamError(message=str(data), code=type(data).__name__)
+                    else:
+                        outcome = "error"
+                        logger.error("RAG workflow stream error", exc_info=data)
+                        yield AgentStreamError(message="Error procesando la consulta.", code="workflow_error")
 
         except _KNOWN_EXCEPTIONS as e:
             outcome = "known_error"

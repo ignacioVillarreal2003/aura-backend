@@ -4,7 +4,7 @@ Implementación: `core/authentication/` · `core/authorization/` · `core/except
 
 ---
 
-## Los tres métodos de autenticación
+## Los dos métodos de autenticación
 
 ### 1. JWT de usuario — `Authorization: Bearer <token>`
 
@@ -30,34 +30,7 @@ El resultado se cachea en Redis durante `AUTH_TOKEN_CACHE_TTL_SECONDS` (por defe
 
 ---
 
-### 2. Service key con usuario — `X-Service-Api-Key`
-
-Para microservicios que ya validaron al usuario y reenvían la petición en su nombre (p. ej. un API gateway).
-
-```http
-GET /api/v1/notifications/ HTTP/1.1
-X-Service-Api-Key: <SERVICE_API_KEY>
-X-User-Id: 42
-X-User-Email: usuario@ejemplo.com
-X-User-Roles: user,premium
-X-User-Permissions: NOTIFICATION_INBOX_LIST,NOTIFICATION_UNREAD_COUNT_GET
-```
-
-Cabeceras requeridas y opcionales:
-
-| Cabecera | Requerida | Descripción |
-| -------- | --------- | ----------- |
-| `X-Service-Api-Key` | Sí | Debe coincidir con `SERVICE_API_KEY` (comparación en tiempo constante) |
-| `X-User-Id` | Sí | ID del usuario suplantado (entero positivo) |
-| `X-User-Email` | Sí | Email del usuario |
-| `X-User-Roles` | No | Roles separados por coma |
-| `X-User-Permissions` | No | Permisos separados por coma |
-
-Si la clave existe pero no coincide → **403**. Si la clave está presente pero `X-User-Id` o `X-User-Email` faltan → **400**.
-
----
-
-### 3. Token interno — `X-Internal-Token`
+### 2. Token interno — `X-Internal-Token`
 
 Exclusivamente para `POST /api/v1/internal/events/`. Las rutas bajo `/api/v1/internal/*` están excluidas del JWT en `AUTHENTICATION_EXCLUDED_PATHS`, pero cada vista valida este token manualmente con `hmac.compare_digest` para evitar timing attacks.
 
@@ -148,11 +121,6 @@ Errores específicos del middleware de autenticación:
 | `unauthorized` | 403 | Auth service devolvió 403 |
 | `user_not_found` | 404 | Auth service devolvió 404 |
 | `service_unavailable` | 503 | Auth service no responde o devuelve 5xx |
-| `missing_service_key` | 401 | `X-Service-Api-Key` presente pero vacío |
-| `invalid_service_key` | 403 | `X-Service-Api-Key` no coincide |
-| `missing_user_id` | 400 | Falta `X-User-Id` al usar service key |
-| `invalid_user_id` | 400 | `X-User-Id` no es entero |
-| `missing_user_email` | 400 | Falta `X-User-Email` al usar service key |
 
 ---
 

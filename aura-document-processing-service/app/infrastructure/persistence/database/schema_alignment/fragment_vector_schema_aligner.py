@@ -21,6 +21,9 @@ _HNSW_INDEX = "idx_fragment_vector_hnsw"
 _HNSW_CTX_INDEX = "idx_fragment_ctx_vector_hnsw"
 _DIM_CONSTRAINT = "chk_fragment_embedding_dim"
 
+_VECTOR_HNSW_MAX_DIM = 2000
+_HALFVEC_HNSW_MAX_DIM = 4000
+
 
 class FragmentVectorSchemaAligner(FragmentVectorSchemaAlignerInterface):
     def __init__(
@@ -90,6 +93,9 @@ class FragmentVectorSchemaAligner(FragmentVectorSchemaAlignerInterface):
 
     async def _migrate_dimension(self, *, target_dim: int) -> None:
         dim = int(target_dim)
+        column_type = "VECTOR" if dim <= _VECTOR_HNSW_MAX_DIM else "HALFVEC"
+        index_ops = "vector_cosine_ops" if dim <= _VECTOR_HNSW_MAX_DIM else "halfvec_cosine_ops"
+
         statements = [
             f"DROP INDEX IF EXISTS {_HNSW_INDEX}",
             f"DROP INDEX IF EXISTS {_HNSW_CTX_INDEX}",
@@ -101,25 +107,43 @@ class FragmentVectorSchemaAligner(FragmentVectorSchemaAlignerInterface):
                 f"WHERE embedding_dim <> {dim} OR vector IS NOT NULL "
                 "OR contextualized_vector IS NOT NULL"
             ),
-            f"ALTER TABLE fragment ALTER COLUMN vector TYPE VECTOR({dim})",
-            f"ALTER TABLE fragment ALTER COLUMN contextualized_vector TYPE VECTOR({dim})",
+            (
+                f"ALTER TABLE fragment ALTER COLUMN vector TYPE {column_type}({dim}) "
+                f"USING vector::{column_type}({dim})"
+            ),
+            (
+                f"ALTER TABLE fragment ALTER COLUMN contextualized_vector TYPE {column_type}({dim}) "
+                f"USING contextualized_vector::{column_type}({dim})"
+            ),
             (
                 f"ALTER TABLE fragment ADD CONSTRAINT {_DIM_CONSTRAINT} "
                 f"CHECK (embedding_dim = {dim})"
             ),
-            (
-                f"CREATE INDEX {_HNSW_INDEX} ON fragment "
-                "USING hnsw (vector vector_cosine_ops) "
-                "WITH (m = 16, ef_construction = 64) "
-                "WHERE (deleted_at IS NULL)"
-            ),
-            (
-                f"CREATE INDEX {_HNSW_CTX_INDEX} ON fragment "
-                "USING hnsw (contextualized_vector vector_cosine_ops) "
-                "WITH (m = 16, ef_construction = 64) "
-                "WHERE (deleted_at IS NULL AND contextualized_vector IS NOT NULL)"
-            ),
         ]
+
+        if dim <= _HALFVEC_HNSW_MAX_DIM:
+            statements.extend(
+                [
+                    (
+                        f"CREATE INDEX {_HNSW_INDEX} ON fragment "
+                        f"USING hnsw (vector {index_ops}) "
+                        "WITH (m = 16, ef_construction = 64) "
+                        "WHERE (deleted_at IS NULL)"
+                    ),
+                    (
+                        f"CREATE INDEX {_HNSW_CTX_INDEX} ON fragment "
+                        f"USING hnsw (contextualized_vector {index_ops}) "
+                        "WITH (m = 16, ef_construction = 64) "
+                        "WHERE (deleted_at IS NULL AND contextualized_vector IS NOT NULL)"
+                    ),
+                ]
+            )
+        else:
+            logger.warning(
+                "The active embedding dimension exceeds the HNSW indexable limit; "
+                "vector search will fall back to sequential scan.",
+                extra={"target_dimension": dim, "hnsw_max_dimension": _HALFVEC_HNSW_MAX_DIM},
+            )
 
         async def _operation(session: AsyncSession) -> None:
             for statement in statements:

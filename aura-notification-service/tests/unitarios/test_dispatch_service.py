@@ -1,7 +1,3 @@
-"""
-Tests unitarios para DispatchService y DispatchOutcome.
-Patchea ORM, preference_service, template_service, realtime_service y tarea Celery.
-"""
 import pytest
 from unittest.mock import patch, MagicMock, ANY
 

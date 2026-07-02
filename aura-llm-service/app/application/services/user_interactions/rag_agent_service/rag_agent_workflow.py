@@ -134,7 +134,7 @@ class RagAgentWorkflow:
         self._graph_context_provider = graph_context_provider
         self._settings = settings
 
-        self._graph = StateGraph(RagAgentState)
+        self._graph: Optional[StateGraph] = None
         self._compiled_workflow = None
 
         self._query_analyzer_node: Optional[QueryAnalyzerNode] = None
@@ -152,6 +152,7 @@ class RagAgentWorkflow:
     async def build(self) -> None:
         logger.info("Building RAG agent workflow")
         try:
+            self._graph = StateGraph(RagAgentState)
             self._add_nodes()
             self._add_edges()
             self._compiled_workflow = self._graph.compile()

@@ -25,7 +25,7 @@ Extended **Spanish** API guide (architecture, auth modes, endpoints, producers, 
   (`GET /api/v1/notifications/stream/`).
 - Auth aligned with the rest of the stack
   (`AuthenticationMiddleware` validating bearer JWTs against the central
-  authentication service + `X-Service-Api-Key` for service-to-service).
+  authentication service).
 
 ## Architecture
 
@@ -177,7 +177,6 @@ All configuration is via environment variables. See `.env` and
 | Variable | Purpose |
 | -------- | ------- |
 | `AUTHENTICATION_SERVICE_URL` | Base URL of the central auth (e.g. mock-auth on `:8080`) |
-| `SERVICE_API_KEY` | Shared secret for `X-Service-Api-Key` calls |
 | `NOTIFICATION_INTERNAL_API_TOKEN` | Token expected on `X-Internal-Token` |
 | `REDIS_URL` | Cache + SSE pub/sub (`redis://memory_db:6379/2` in docker) |
 | `CELERY_BROKER_URL` | RabbitMQ AMQP URL (`amqp://...@queue:5672//`) |

@@ -80,9 +80,9 @@ DATABASES = {
 }
 
 AUTHENTICATION_PROVIDER_URL = config("AUTHENTICATION_SERVICE_URL").strip()
-SERVICE_API_KEY = config("SERVICE_API_KEY", default="service_api_key").strip()
 AUTH_TOKEN_CACHE_TTL_SECONDS = config("AUTH_TOKEN_CACHE_TTL_SECONDS", default=60, cast=int)
-AUTH_SERVICE_TIMEOUT = config("AUTH_SERVICE_TIMEOUT", default=10, cast=float)
+AUTH_SERVICE_TIMEOUT = config("AUTH_SERVICE_TIMEOUT", default=5, cast=float)
+AUTH_SERVICE_CONNECT_TIMEOUT = config("AUTH_SERVICE_CONNECT_TIMEOUT", default=2, cast=float)
 
 
 _redis_url = config("REDIS_URL").strip()
@@ -180,8 +180,8 @@ SPECTACULAR_SETTINGS = {
         "### Authentication (this schema)\n\n"
         "**Interactive / client credentials**: send `Authorization: Bearer <JWT>`. Tokens are validated against "
         "`AUTHENTICATION_SERVICE_URL` and populate `AuthenticatedUser.permissions` alongside roles/email.\n\n"
-        "**Note:** server-to-server header authentication may still exist at runtime for internal gateways; "
-        "it is intentionally **excluded from this OpenAPI document** so public Swagger exposes only Bearer.\n\n"
+        "Inter-service calls forward the caller's Bearer token so the downstream service validates it and acts "
+        "with the real user's permissions; there is no API-key or trust-header authentication.\n\n"
         "**401** originates from middleware when Bearer material is absent or JWT validation fails. "
         "**403 insufficient_permissions** (JSON `error`) means identity resolved but lacked the granular "
         "permission constants documented per route (see tag descriptions).\n\n"

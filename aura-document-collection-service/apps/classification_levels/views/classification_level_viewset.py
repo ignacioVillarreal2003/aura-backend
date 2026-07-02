@@ -20,8 +20,8 @@ from core.pagination.pagination import StandardPagination
 
 _ERR_LIST = standard_error_responses(401, 403)
 _ERR_RETRIEVE = standard_error_responses(401, 403, 404)
-_ERR_WRITE = standard_error_responses(400, 401, 403, 404)
-_ERR_DESTROY = standard_error_responses(401, 403, 404)
+_ERR_WRITE = standard_error_responses(400, 401, 403, 404, 409)
+_ERR_DESTROY = standard_error_responses(401, 403, 404, 409)
 
 
 @extend_schema(

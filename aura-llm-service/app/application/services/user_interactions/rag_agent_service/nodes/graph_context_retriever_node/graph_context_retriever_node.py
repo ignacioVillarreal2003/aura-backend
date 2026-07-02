@@ -1,10 +1,12 @@
 import logging
 from typing import Any, Dict, List, Optional
 
+from app.application.services.user_interactions.rag_agent_service.constants.rag_node_name import RagNodeName
 from app.application.services.user_interactions.rag_agent_service.constants.rag_query_intent import RagQueryIntent
 from app.application.services.user_interactions.rag_agent_service.interfaces.rag_node_interface import RagNodeInterface
 from app.application.services.user_interactions.rag_agent_service.rag_agent_settings import RagAgentServiceSettings
 from app.application.services.user_interactions.rag_agent_service.rag_agent_state.rag_agent_state import RagAgentState
+from app.configuration.metrics import record_rag_node_failure
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.graph_context_provider.interfaces.graph_context_provider_interface import (
     GraphContextProviderInterface,
@@ -41,15 +43,23 @@ class GraphContextRetrieverNode(RagNodeInterface):
         parts: List[str] = []
 
         if self._settings.use_graph_context:
-            result = await self._provider.retrieve_graph_context(
-                authenticated_user=authenticated_user,
-                question=query or None,
-                terms=keywords[: self._settings.graph_max_terms],
-                chat_id=state.get("chat_id"),
-                max_entities=self._settings.graph_max_entities,
-                max_relations=self._settings.graph_max_relations,
-            )
-            if result.context_text:
+            try:
+                result = await self._provider.retrieve_graph_context(
+                    authenticated_user=authenticated_user,
+                    question=query or None,
+                    terms=keywords[: self._settings.graph_max_terms],
+                    chat_id=state.get("chat_id"),
+                    max_entities=self._settings.graph_max_entities,
+                    max_relations=self._settings.graph_max_relations,
+                )
+            except Exception as exc:
+                record_rag_node_failure(RagNodeName.graph_context_retriever.value, "expected", exc)
+                logger.warning(
+                    "Graph context retrieval degraded (provider error) — continuing without graph facts",
+                    exc_info=True,
+                )
+                result = None
+            if result is not None and result.context_text:
                 parts.append(result.context_text)
                 logger.info(
                     "Graph facts added to the RAG context.",
@@ -64,13 +74,21 @@ class GraphContextRetrieverNode(RagNodeInterface):
                 and intent == RagQueryIntent.relational.value
                 and query
         ):
-            structured = await self._provider.execute_graph_query(
-                authenticated_user=authenticated_user,
-                question=query,
-                max_results=self._settings.graph_query_max_results,
-                chat_id=state.get("chat_id"),
-            )
-            if structured.context_text:
+            try:
+                structured = await self._provider.execute_graph_query(
+                    authenticated_user=authenticated_user,
+                    question=query,
+                    max_results=self._settings.graph_query_max_results,
+                    chat_id=state.get("chat_id"),
+                )
+            except Exception as exc:
+                record_rag_node_failure(RagNodeName.graph_context_retriever.value, "expected", exc)
+                logger.warning(
+                    "Structured graph query degraded (provider error) — continuing without structured facts",
+                    exc_info=True,
+                )
+                structured = None
+            if structured is not None and structured.context_text:
                 parts.append(structured.context_text)
                 logger.info(
                     "Structured graph facts added to the RAG context.",

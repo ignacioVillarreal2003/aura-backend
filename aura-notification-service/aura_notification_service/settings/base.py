@@ -35,7 +35,6 @@ INSTALLED_APPS = [
     "apps.notification.apps.NotificationConfig",
 ]
 
-# Disable migrations for apps whose tables are not needed in this service.
 MIGRATION_MODULES = {
     "notification": None,
     "auth": None,
@@ -91,8 +90,6 @@ DATABASES = {
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 LANGUAGE_CODE = "en-us"
-# App/DB display timezone. USE_TZ=True keeps instants stored in UTC (timestamptz);
-# this only controls the offset shown when serializing/rendering. Default: Uruguay (UTC-3).
 TIME_ZONE = config("TIME_ZONE", default="America/Montevideo")
 USE_I18N = True
 USE_TZ = True
@@ -179,8 +176,6 @@ SPECTACULAR_SETTINGS = {
 }
 
 AUTHENTICATION_SERVICE_URL = config("AUTHENTICATION_SERVICE_URL").strip()
-AUTH_USER_LOOKUP_URL = config("AUTH_USER_LOOKUP_URL").strip()
-SERVICE_API_KEY = config("SERVICE_API_KEY")
 NOTIFICATION_INTERNAL_API_TOKEN = config("NOTIFICATION_INTERNAL_API_TOKEN")
 AUTH_TOKEN_CACHE_TTL_SECONDS = config(
     "AUTH_TOKEN_CACHE_TTL_SECONDS",

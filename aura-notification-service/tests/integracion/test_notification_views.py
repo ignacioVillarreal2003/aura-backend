@@ -1,12 +1,3 @@
-"""
-Tests de integración para endpoints de la bandeja de notificaciones:
-  GET    /api/v1/notifications/
-  GET    /api/v1/notifications/unread-count/
-  GET    /api/v1/notifications/<pk>/
-  PATCH  /api/v1/notifications/<pk>/
-  DELETE /api/v1/notifications/<pk>/
-  POST   /api/v1/notifications/mark-all-read/
-"""
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -24,7 +15,6 @@ _SVC = "apps.notification.api.views.notification_views.notification_service"
 
 
 class _FakeQuerySet:
-    """Minimal queryset substitute accepted by Django's Paginator."""
     def __init__(self, items=None):
         self._items = list(items or [])
 

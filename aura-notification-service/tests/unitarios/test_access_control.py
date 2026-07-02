@@ -1,7 +1,3 @@
-"""
-Tests unitarios para AccessControl.
-Sin DB — lógica pura.
-"""
 import pytest
 from unittest.mock import MagicMock
 
@@ -25,10 +21,6 @@ class TestRequirePermissions:
         user = make_user(permissions=("read",))
         with pytest.raises(InsufficientPermissionsException):
             AccessControl.require_permissions(user, frozenset({"read", "admin"}))
-
-    def test_service_user_bypasses_check(self):
-        user = make_user(permissions=(), is_service=True)
-        AccessControl.require_permissions(user, frozenset({"any.permission"}))
 
     def test_empty_required_always_passes(self):
         user = make_user(permissions=())
@@ -63,7 +55,3 @@ class TestRequireSuperAdmin:
             AccessControl.require_super_admin(user)
         except InsufficientPermissionsException as exc:
             assert exc.error_code == "superadmin_required"
-
-    def test_service_user_can_bypass(self):
-        user = make_user(is_service=True)
-        AccessControl.require_permissions(user, frozenset({"superadmin_action"}))

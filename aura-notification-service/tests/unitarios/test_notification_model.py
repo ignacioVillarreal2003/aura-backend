@@ -1,7 +1,3 @@
-"""
-Tests unitarios para el modelo Notification.
-Requiere la fixture django_db_setup del conftest de unitarios (managed=False → True).
-"""
 import pytest
 from unittest.mock import patch, MagicMock
 
