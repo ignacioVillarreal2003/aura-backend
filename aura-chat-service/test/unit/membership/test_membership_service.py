@@ -31,23 +31,17 @@ def _patch_chat_not_found(mocker):
 
 
 def _patch_atomic(mocker):
-    """Make @transaction.atomic a no-op so transactional service methods run without a real DB."""
     mocker.patch("django.db.transaction.Atomic.__enter__", return_value=None)
     mocker.patch("django.db.transaction.Atomic.__exit__", return_value=False)
     mocker.patch(f"{SVC}.on_commit", side_effect=lambda fn: None)
 
 
 def _patch_atomic_run_oncommit(mocker):
-    """Like _patch_atomic but runs on_commit callbacks immediately so post-commit
-    side effects (notifications, WS broadcasts) can be asserted."""
     mocker.patch("django.db.transaction.Atomic.__enter__", return_value=None)
     mocker.patch("django.db.transaction.Atomic.__exit__", return_value=False)
     mocker.patch(f"{SVC}.on_commit", side_effect=lambda fn: fn())
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# list_members
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_list_members_active_member_can_list(mocker):
     user = make_user(user_id=2)
@@ -113,9 +107,6 @@ def test_list_members_none_status_returns_all(mocker):
     repo.assert_called_once_with(1, status=None)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# list_members_admin
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_list_members_admin_succeeds(mocker):
     user = make_user(user_id=1)
@@ -152,13 +143,9 @@ def test_list_members_admin_no_ownership_check(mocker):
     _patch_perms(mocker)
     _patch_chat(mocker, chat)
     mocker.patch(f"{SVC}.membership_repository.list_by_chat", return_value=[])
-    # Should not raise even though user is not the chat owner
     service.list_members_admin(user, chat_id=1)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# list_my_memberships
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_list_my_memberships_returns_own_memberships(mocker):
     user = make_user(user_id=5)
@@ -185,9 +172,6 @@ def test_list_my_memberships_always_uses_own_user_id(mocker):
     assert kwargs["member_id"] == 7
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# add_members
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_add_members_creator_can_invite(mocker):
     user = make_user(user_id=1)
@@ -205,7 +189,6 @@ def test_add_members_creator_can_invite(mocker):
 
 
 def test_add_members_role_owner_can_invite(mocker):
-    """A non-creator user with role=owner in the membership should be able to invite."""
     user = make_user(user_id=5)
     chat = make_chat(chat_id=1, created_by=1)
     membership = make_membership(member_id=2, chat_id=1, status="pending")
@@ -220,7 +203,6 @@ def test_add_members_role_owner_can_invite(mocker):
 
 
 def test_add_members_regular_member_raises_403(mocker):
-    """A user who is neither creator nor role=owner cannot invite."""
     user = make_user(user_id=2)
     chat = make_chat(chat_id=1, created_by=1)
     _patch_perms(mocker)
@@ -282,9 +264,6 @@ def test_add_members_multiple_ids_creates_all(mocker):
     assert len(result) == 2
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# update_member (status)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_update_member_self_pending_to_active(mocker):
     user = make_user(user_id=2)
@@ -352,12 +331,8 @@ def test_update_member_chat_not_found_raises_404(mocker):
         service.update_member(user, chat_id=999, member_id=2, new_status="active")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# remove_member
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_remove_member_owner_role_can_remove(mocker):
-    """A user with role=owner in the membership can remove members."""
     user = make_user(user_id=1)
     chat = make_chat(chat_id=1, created_by=1)
     membership = make_membership(member_id=2, chat_id=1)
@@ -372,7 +347,6 @@ def test_remove_member_owner_role_can_remove(mocker):
 
 
 def test_remove_member_non_creator_with_owner_role_can_remove(mocker):
-    """A non-creator user who has role=owner can also remove members."""
     user = make_user(user_id=5)
     chat = make_chat(chat_id=1, created_by=1)
     membership = make_membership(member_id=2, chat_id=1)
@@ -387,7 +361,6 @@ def test_remove_member_non_creator_with_owner_role_can_remove(mocker):
 
 
 def test_remove_member_regular_member_raises_403(mocker):
-    """A user who is not role=owner cannot remove members."""
     user = make_user(user_id=2)
     chat = make_chat(chat_id=1, created_by=1)
     _patch_perms(mocker)
@@ -399,7 +372,6 @@ def test_remove_member_regular_member_raises_403(mocker):
 
 
 def test_remove_member_self_without_owner_role_raises_403(mocker):
-    """A member trying to remove themselves via DELETE should be denied — use /leave/ instead."""
     user = make_user(user_id=2)
     chat = make_chat(chat_id=1, created_by=1)
     _patch_perms(mocker)
@@ -411,7 +383,6 @@ def test_remove_member_self_without_owner_role_raises_403(mocker):
 
 
 def test_remove_member_cannot_remove_creator_raises_403(mocker):
-    """The chat creator (chat.created_by) can never be removed, even by another owner."""
     user = make_user(user_id=5)
     chat = make_chat(chat_id=1, created_by=1)
     _patch_perms(mocker)
@@ -442,9 +413,6 @@ def test_remove_member_chat_not_found_raises_404(mocker):
         service.remove_member(user, chat_id=999, member_id=2)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# leave_chat
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_leave_chat_member_can_leave(mocker):
     user = make_user(user_id=2)
@@ -505,12 +473,8 @@ def test_leave_chat_always_acts_on_own_user_id(mocker):
     get_membership.assert_called_once_with(1, 2)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# update_member_role
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_update_member_role_creator_can_update(mocker):
-    """The chat creator (chat.created_by) can update roles."""
     user = make_user(user_id=1)
     chat = make_chat(chat_id=1, created_by=1)
     updated = make_membership(member_id=2, chat_id=1, role="reader")
@@ -524,7 +488,6 @@ def test_update_member_role_creator_can_update(mocker):
 
 
 def test_update_member_role_role_owner_can_update(mocker):
-    """A non-creator user with role=owner can also update member roles."""
     user = make_user(user_id=5)
     chat = make_chat(chat_id=1, created_by=1)
     updated = make_membership(member_id=2, chat_id=1, role="reader")
@@ -538,7 +501,6 @@ def test_update_member_role_role_owner_can_update(mocker):
 
 
 def test_update_member_role_regular_member_raises_403(mocker):
-    """A user who is neither creator nor role=owner cannot update roles."""
     user = make_user(user_id=2)
     chat = make_chat(chat_id=1, created_by=1)
     _patch_perms(mocker)
@@ -550,7 +512,6 @@ def test_update_member_role_regular_member_raises_403(mocker):
 
 
 def test_update_member_role_cannot_update_creators_role(mocker):
-    """The creator's role is always protected and cannot be changed."""
     user = make_user(user_id=1)
     chat = make_chat(chat_id=1, created_by=1)
     _patch_perms(mocker)
@@ -595,13 +556,8 @@ def test_update_member_role_calls_repo_with_correct_args(mocker):
     repo.assert_called_once_with(1, 2, "reader", updated_by=1)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# add_members — IntegrityError fallback (TOCTOU race) + invite notification
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_add_members_create_integrity_error_raises_409(mocker):
-    """The precheck passes but a concurrent insert makes create() hit the unique
-    constraint — the IntegrityError is translated to a 409, not leaked."""
     user = make_user(user_id=1)
     chat = make_chat(chat_id=1, created_by=1)
     _patch_perms(mocker)
@@ -636,7 +592,6 @@ def test_add_members_emits_invite_notification(mocker):
 
 
 def test_add_members_no_one_created_skips_notification(mocker):
-    """An empty member_ids list creates nobody and emits no notification."""
     user = make_user(user_id=1)
     chat = make_chat(chat_id=1, created_by=1)
     _patch_perms(mocker)
@@ -650,9 +605,6 @@ def test_add_members_no_one_created_skips_notification(mocker):
     emit.assert_not_called()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# update_member — reactivation + WS broadcasts
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_update_member_active_status_broadcasts_member_joined(mocker):
     user = make_user(user_id=2)
@@ -669,9 +621,6 @@ def test_update_member_active_status_broadcasts_member_joined(mocker):
     broadcast.assert_called_once_with(1, 2)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# remove_member — removed notification + member_left broadcast
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_remove_member_emits_removed_notification_and_broadcast(mocker):
     user = make_user(user_id=1)

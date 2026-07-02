@@ -1,16 +1,3 @@
-"""
-Membership views — HTTP layer tests
-
-Endpoints covered:
-    GET    /api/v1/chats/{chat_id}/members/                  MemberListView.get
-    POST   /api/v1/chats/{chat_id}/members/                  MemberListView.post
-    GET    /api/v1/chats/{chat_id}/members/manage/           AdminMemberListView.get
-    PATCH  /api/v1/chats/{chat_id}/members/{member_id}/      MemberDetailView.patch
-    DELETE /api/v1/chats/{chat_id}/members/{member_id}/      MemberDetailView.delete
-    POST   /api/v1/chats/{chat_id}/members/leave/            LeaveChatView.post
-    PATCH  /api/v1/chats/{chat_id}/members/{member_id}/role/ RoleUpdateView.patch
-    GET    /api/v1/memberships/me/                           MyMembershipsView.get
-"""
 from apps.chat.exceptions import ChatNotFoundException
 from apps.membership.exceptions import (
     CannotRemoveOwnerException,
@@ -27,9 +14,6 @@ MEMBER_VIEW = "apps.membership.views.membership_view"
 ROLE_VIEW = "apps.membership.views.role_view"
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/chats/{chat_id}/members/
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_list_members_returns_200_paginated(api_client, mocker):
     mocker.patch(
@@ -119,9 +103,6 @@ def test_list_members_response_shape(api_client, mocker):
         assert field in result, f"Missing field: {field}"
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# POST /api/v1/chats/{chat_id}/members/
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_invite_members_returns_201(api_client, mocker):
     mocker.patch(
@@ -202,9 +183,6 @@ def test_invite_members_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/chats/{chat_id}/members/manage/
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_admin_list_members_returns_200_paginated(api_client, mocker):
     mocker.patch(
@@ -267,9 +245,6 @@ def test_admin_list_members_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# PATCH /api/v1/chats/{chat_id}/members/{member_id}/
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_update_member_status_returns_200(api_client, mocker):
     mocker.patch(
@@ -379,9 +354,6 @@ def test_update_member_status_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# DELETE /api/v1/chats/{chat_id}/members/{member_id}/
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_remove_member_returns_204(api_client, mocker):
     mocker.patch(f"{MEMBER_VIEW}.membership_service.remove_member")
@@ -442,9 +414,6 @@ def test_remove_member_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# POST /api/v1/chats/{chat_id}/members/leave/
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_leave_chat_returns_204(api_client, mocker):
     mocker.patch(f"{MEMBER_VIEW}.membership_service.leave_chat")
@@ -495,9 +464,6 @@ def test_leave_chat_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# PATCH /api/v1/chats/{chat_id}/members/{member_id}/role/
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_update_role_returns_200(api_client, mocker):
     mocker.patch(
@@ -620,9 +586,6 @@ def test_update_role_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/memberships/me/
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_my_memberships_returns_200_paginated(api_client, mocker):
     mocker.patch(

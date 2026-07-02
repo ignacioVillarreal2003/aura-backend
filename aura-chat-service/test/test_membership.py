@@ -13,9 +13,6 @@ MEMBER_VIEW = "apps.membership.views.membership_view"
 ROLE_VIEW = "apps.membership.views.role_view"
 
 
-# ---------------------------------------------------------------------------
-# List members  GET /api/v1/chats/{chat_id}/members/
-# ---------------------------------------------------------------------------
 
 def test_list_members_returns_200(api_client, mocker):
     mocker.patch(
@@ -79,9 +76,6 @@ def test_list_members_unauthenticated(anon_client):
     assert response.status_code == 401
 
 
-# ---------------------------------------------------------------------------
-# Invite members  POST /api/v1/chats/{chat_id}/members/
-# ---------------------------------------------------------------------------
 
 def test_invite_members_returns_201(api_client, mocker):
     mocker.patch(
@@ -176,9 +170,6 @@ def test_invite_members_unauthenticated(anon_client):
     assert response.status_code == 401
 
 
-# ---------------------------------------------------------------------------
-# Update member status  PATCH /api/v1/chats/{chat_id}/members/{member_id}/
-# ---------------------------------------------------------------------------
 
 def test_update_member_status_returns_200(api_client, mocker):
     mocker.patch(
@@ -231,9 +222,6 @@ def test_update_member_access_denied_returns_403(api_client, mocker):
     assert response.status_code == 403
 
 
-# ---------------------------------------------------------------------------
-# Remove member  DELETE /api/v1/chats/{chat_id}/members/{member_id}/
-# ---------------------------------------------------------------------------
 
 def test_remove_member_returns_204(api_client, mocker):
     mocker.patch(f"{MEMBER_VIEW}.membership_service.remove_member")
@@ -274,9 +262,6 @@ def test_remove_member_unauthenticated(anon_client):
     assert response.status_code == 401
 
 
-# ---------------------------------------------------------------------------
-# Leave chat  POST /api/v1/chats/{chat_id}/members/leave/
-# ---------------------------------------------------------------------------
 
 def test_leave_chat_returns_204(api_client, mocker):
     mocker.patch(f"{MEMBER_VIEW}.membership_service.leave_chat")
@@ -307,9 +292,6 @@ def test_leave_chat_unauthenticated(anon_client):
     assert response.status_code == 401
 
 
-# ---------------------------------------------------------------------------
-# Update member role  PATCH /api/v1/chats/{chat_id}/members/{member_id}/role/
-# ---------------------------------------------------------------------------
 
 def test_update_member_role_returns_200(api_client, mocker):
     mocker.patch(

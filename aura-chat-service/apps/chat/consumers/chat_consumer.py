@@ -30,21 +30,12 @@ logger = logging.getLogger(__name__)
 
 _MAX_MESSAGE_LENGTH = 10_000
 
-# Tope defensivo de documentos adjuntos por mensaje de chat (alineado con el
-# límite que valida el LLM service).
 _MAX_ATTACHED_DOCUMENT_IDS = 20
 
 _LOCK_REFRESH_INTERVAL_SECONDS = 30.0
 
-# Refresh the Redis connection/presence lease well within their TTL so that a
-# passive viewer (only receiving, never sending) does not have its slot reclaimed
-# while still connected.
 _LEASE_REFRESH_INTERVAL_SECONDS = 1800.0
 
-# Strong references to in-flight AI-reply tasks. asyncio only keeps weak refs to
-# tasks, so once the initiating consumer disconnects and drops its own handle the
-# task could be garbage-collected mid-stream. Keeping it here lets the reply
-# finish (and broadcast) for the remaining members of the chat.
 _BACKGROUND_AI_TASKS: set[asyncio.Task] = set()
 
 
@@ -89,9 +80,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             await self.close(code=4029)
             return
 
-        # Until accept() succeeds, disconnect() will not run, so any failure here
-        # must release the just-reserved connection slot to avoid leaking it for
-        # the whole lease TTL.
         try:
             await self.channel_layer.group_add(self.group_name, self.channel_name)
             await self.accept()
@@ -147,17 +135,11 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             )
 
     async def disconnect(self, close_code):
-        # Stop the heartbeat for this connection. The in-flight AI reply task is
-        # intentionally NOT cancelled here: it keeps streaming to the rest of the
-        # chat group and is held alive by _BACKGROUND_AI_TASKS.
         if self._heartbeat_task is not None:
             self._heartbeat_task.cancel()
             self._heartbeat_task = None
         self._ai_reply_task = None
 
-        # Presence is reference-counted: only announce the user left when this was
-        # their last open connection in the chat (avoids ghosting a user who just
-        # closed one of several tabs).
         if self.group_name and self.user is not None and self.chat_id is not None:
             try:
                 is_last_presence = await database_sync_to_async(presence.leave)(
@@ -269,12 +251,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     async def _validate_send_preconditions(
             self, content: dict
     ) -> tuple[str, str, bool | None, bool | None, list[int]] | None:
-        """Run all send guards. Returns (text, mode) or sends an error and returns None.
-
-        Validates membership/role BEFORE acquiring the AI lock so a reader (or a
-        member removed mid-session) gets a precise error and we don't broadcast a
-        spurious lock true->false flicker to the whole chat.
-        """
         chat_obj = await database_sync_to_async(chat_repository.get_by_id)(self.chat_id)
         if chat_obj is None:
             await self.send_json({
@@ -332,21 +308,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
     @staticmethod
     def _optional_bool(value: object) -> bool | None:
-        """Coerce a raw WS payload value to a tri-state flag (True/False/None).
-
-        Only genuine booleans are honoured; anything else (missing, null, string)
-        falls back to None so the LLM service applies its own default.
-        """
         return value if isinstance(value, bool) else None
 
     @staticmethod
     def _parse_document_ids(value: object) -> list[int]:
-        """Sanitiza los ids de documentos adjuntos del payload WS.
-
-        Conserva enteros positivos únicos (preservando el orden) y descarta todo
-        lo demás. Estos ids habilitan el procesamiento del documento completo
-        (map-reduce) en el LLM cuando `process_documents` está activo.
-        """
         if not isinstance(value, list):
             return []
         seen: set[int] = set()
@@ -384,8 +349,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 pass
 
     async def _acquire_ai_lock(self) -> str | None:
-        """Acquire the per-chat AI lock and broadcast the lock-on. Sends an error
-        and returns None when the lock can't be taken."""
         try:
             lock_token = await database_sync_to_async(try_acquire)(self.chat_id)
         except ServiceUnavailableException as e:
@@ -410,8 +373,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         return lock_token
 
     async def _persist_user_message(self, text: str, lock_token: str) -> bool:
-        """Persist the user message. On failure releases the lock, broadcasts
-        lock-off, sends an error and returns False."""
         try:
             await database_sync_to_async(message_service.send_message)(
                 self.user, self.chat_id, text
@@ -445,8 +406,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 mode, retrieve_context, process_documents, document_ids, lock_token
             )
         )
-        # Hold a process-level strong reference so the reply survives even if this
-        # consumer disconnects before the stream finishes.
         _BACKGROUND_AI_TASKS.add(task)
 
         def _on_ai_reply_done(t: asyncio.Task) -> None:
@@ -559,11 +518,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             },
         )
 
-    # ── Peer chat (human-to-human, no AI) ─────────────────────────────────────
     async def _run_peer_service(self, fn, *args) -> bool:
-        """Run a peer_message_service call off the event loop. On a known service
-        error, relays its detail/error_code to the caller; otherwise logs and
-        sends a generic error. The service broadcasts success to the group."""
         try:
             await database_sync_to_async(fn)(*args)
             return True
@@ -818,8 +773,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         })
 
     async def chat_deleted(self, event):
-        # The chat is gone; notify this client and close its socket so it stops
-        # listening on a dead group.
         await self.send_json({
             "type": "chat_deleted",
             "by": event.get("by"),
@@ -827,7 +780,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         await self.close(code=4004)
 
     async def membership_revoked(self, event):
-        # Only the member who lost access reacts; everyone else keeps the socket.
         if self.user is not None and event.get("member_id") == self.user.id:
             await self.send_json({
                 "type": "membership_revoked",

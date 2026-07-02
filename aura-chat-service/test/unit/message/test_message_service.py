@@ -1,9 +1,3 @@
-"""
-Service-layer unit tests for the message module.
-
-All dependencies (repositories, LLM client, channel layer) are mocked so tests
-run without a database or external services.
-"""
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -34,9 +28,6 @@ from apps.artifact.services.artifact_pin_service import PinService
 from apps.artifact.services.artifact_thread_service import ThreadService
 from test.conftest import make_artifact, make_chat, make_message, make_pin, make_user, make_feedback, make_thread_reply
 
-# ---------------------------------------------------------------------------
-# Module path constants used for patching
-# ---------------------------------------------------------------------------
 MSG_SVC = "apps.artifact_message.services.message_service"
 PIN_SVC = "apps.artifact.services.artifact_pin_service"
 BKM_SVC = "apps.artifact.services.artifact_bookmark_service"
@@ -44,12 +35,8 @@ FBK_SVC = "apps.artifact.services.artifact_feedback_service"
 THR_SVC = "apps.artifact.services.artifact_thread_service"
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 def _patch_atomic(mocker):
-    """Prevent @transaction.atomic from touching the database in unit tests."""
     mocker.patch("django.db.transaction.Atomic.__enter__", return_value=None)
     mocker.patch("django.db.transaction.Atomic.__exit__", return_value=False)
     mocker.patch(f"{MSG_SVC}.transaction.on_commit", side_effect=lambda fn: None)
@@ -69,9 +56,6 @@ def _msg(msg_id=1, chat_id=1, created_by=1, sender_type="user"):
     return m
 
 
-# ===========================================================================
-# MessageService
-# ===========================================================================
 
 class TestMessageServiceRunDocumentQuestion:
 
@@ -139,8 +123,8 @@ class TestMessageServiceRunDocumentQuestion:
         args, _ = llm.call_args
         history = args[0]
         roles = {h["content"]: h["role"] for h in history}
-        assert roles["pregunta"] == "human"       # USER → human
-        assert roles["respuesta"] == "assistant"  # SYSTEM → assistant
+        assert roles["pregunta"] == "human"
+        assert roles["respuesta"] == "assistant"
 
     @pytest.mark.asyncio
     async def test_no_regen_feedback_leaves_history_unchanged(self, mocker):
@@ -289,7 +273,6 @@ class TestMessageServiceDeleteMessage:
             svc.delete_message(_user(user_id=2), chat_id=1, message_id=1)
 
     def test_delete_message_author_non_owner_raises(self, mocker):
-        """Message author without owner role cannot delete — owner-only rule."""
         user = _user(user_id=5)
         msg = _msg(created_by=5)
         mocker.patch(f"{MSG_SVC}.chat_repository.get_by_id", return_value=_chat())
@@ -463,9 +446,6 @@ class TestMessageServiceRunAIModes:
         assert out is expected
         dispatched.assert_called_once()
 
-# ===========================================================================
-# PinService
-# ===========================================================================
 
 class TestPinService:
 
@@ -548,9 +528,6 @@ class TestPinService:
             svc.unpin_message(_user(user_id=2), chat_id=1, artifact_id=1)
 
 
-# ===========================================================================
-# BookmarkService
-# ===========================================================================
 
 class TestBookmarkService:
 
@@ -633,7 +610,6 @@ class TestBookmarkService:
             svc.list_bookmarked(_user(), chat_id=1)
 
     def test_bookmark_is_personal_uses_caller_user_id(self, mocker):
-        """Bookmarks always stored under the authenticated user's id, never another user's."""
         mocker.patch(f"{BKM_SVC}.membership_repository.is_active_member", return_value=True)
         mocker.patch(f"{BKM_SVC}.artifact_repository.get_by_id", return_value=make_artifact(source_chat_id=1))
         create = mocker.patch(f"{BKM_SVC}.bookmark_repository.create")
@@ -645,14 +621,10 @@ class TestBookmarkService:
         create.assert_called_once_with(artifact_id=1, user_id=42)
 
 
-# ===========================================================================
-# FeedbackService
-# ===========================================================================
 
 class TestFeedbackService:
 
     def _ai_artifact(self, sender_type="assistant"):
-        """Return an artifact SimpleNamespace whose message_content has the given sender_type."""
         artifact = make_artifact(source_chat_id=1)
         artifact.message_content = SimpleNamespace(sender_type=sender_type)
         return artifact
@@ -703,7 +675,6 @@ class TestFeedbackService:
         assert result.value == -1
 
     def test_set_feedback_is_personal_uses_caller_user_id(self, mocker):
-        """Feedback is always stored under the authenticated user's id."""
         mocker.patch(f"{FBK_SVC}.membership_repository.is_active_member", return_value=True)
         mocker.patch(f"{FBK_SVC}.artifact_repository.get_by_id", return_value=self._ai_artifact("system"))
         repo_set = mocker.patch(f"{FBK_SVC}.feedback_repository.set", return_value=make_feedback(value=1))
@@ -748,9 +719,6 @@ class TestFeedbackService:
             svc.delete_feedback(_user(), chat_id=1, artifact_id=1)
 
 
-# ===========================================================================
-# ThreadService
-# ===========================================================================
 
 class TestThreadService:
 

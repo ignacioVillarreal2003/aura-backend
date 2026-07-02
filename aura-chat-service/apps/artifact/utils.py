@@ -7,8 +7,6 @@ def safe_filename(title: str) -> str:
 
 
 def _fragment_document_key(fragment: Any) -> Any:
-    """Resolve the document identity of a fragment, preferring the nested
-    document id and falling back to a top-level ``document_id``."""
     if not isinstance(fragment, dict):
         return None
     document = fragment.get("document")
@@ -18,17 +16,6 @@ def _fragment_document_key(fragment: Any) -> Any:
 
 
 def deduplicate_fragments_by_document(fragments: Any) -> Any:
-    """Collapse a list of retrieved fragments into one entry per source document.
-
-    The assistant retrieval can return many fragments belonging to the same
-    document. For "sources" we only care about the unique documents, so we keep
-    the first (highest-ranked) fragment per document and annotate it with how
-    many fragments matched. Fragments without a resolvable document are kept
-    as-is so nothing is silently dropped.
-
-    Input that is not a list is returned untouched (e.g. ``None``), which keeps
-    callers that pass ``fragments or None`` working unchanged.
-    """
     if not isinstance(fragments, list):
         return fragments
 

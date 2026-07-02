@@ -15,12 +15,6 @@ _executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_pre
 
 
 class DocumentProcessingClient:
-    """Calls the document-processing service to clean up a chat's documents.
-
-    Used as a side effect of deleting a chat: the chat service owns chats, the
-    document-processing service owns the documents uploaded to them, so deleting
-    a chat must ask that service to soft-delete the documents that belong to it.
-    """
 
     def delete_documents_by_chat(self, chat_id: int, user: AuthenticatedUser) -> None:
         base = getattr(settings, "DOCUMENT_PROCESSING_SERVICE_URL", "").strip().rstrip("/")
@@ -32,9 +26,6 @@ class DocumentProcessingClient:
             )
             return
 
-        # Build the auth headers here, in the caller's request thread, so the
-        # user's bearer token (held in a ContextVar) is forwarded downstream.
-        # The worker thread that runs _dispatch would not see that ContextVar.
         headers = build_service_user_headers(user)
         headers["Accept"] = "application/json"
 

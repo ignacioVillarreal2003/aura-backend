@@ -13,7 +13,7 @@ from apps.artifact.exceptions import (
 )
 from apps.artifact.models import Artifact, ArtifactBookmark, ArtifactFeedback, ArtifactPin, ArtifactThreadReply
 from apps.artifact.registry import is_known_type
-from apps.artifact.repositories.artifact_repository import artifact_repository
+from apps.artifact.repositories.artifact_repository import annotate_user_summary, artifact_repository
 from apps.artifact.utils import deduplicate_fragments_by_document
 from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
@@ -109,12 +109,15 @@ class ArtifactService:
             raise ChatNotFoundException()
         if not membership_repository.is_active_member(chat_id, user.id):
             raise ChatAccessDeniedException()
-        return artifact_repository.list_by_chat_filtered(
-            source_chat_id=chat_id,
-            artifact_type=artifact_type,
-            created_by=created_by,
-            date_from=date_from,
-            date_to=date_to,
+        return annotate_user_summary(
+            artifact_repository.list_by_chat_filtered(
+                source_chat_id=chat_id,
+                artifact_type=artifact_type,
+                created_by=created_by,
+                date_from=date_from,
+                date_to=date_to,
+            ),
+            user.id,
         )
 
     def list_chat_artifacts_admin(
@@ -131,12 +134,15 @@ class ArtifactService:
             raise UnknownArtifactTypeException()
         if chat_repository.get_by_id(chat_id) is None:
             raise ChatNotFoundException()
-        return artifact_repository.list_all_for_chat_filtered(
-            source_chat_id=chat_id,
-            artifact_type=artifact_type,
-            created_by=created_by,
-            date_from=date_from,
-            date_to=date_to,
+        return annotate_user_summary(
+            artifact_repository.list_all_for_chat_filtered(
+                source_chat_id=chat_id,
+                artifact_type=artifact_type,
+                created_by=created_by,
+                date_from=date_from,
+                date_to=date_to,
+            ),
+            user.id,
         )
 
     def get_artifact(self, user: AuthenticatedUser, artifact_id: int) -> Artifact:

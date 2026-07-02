@@ -1,14 +1,3 @@
-"""Unit tests for artifact endpoints + message artifact serialization (services mocked).
-
-Endpoints covered:
-  GET    /api/v1/artifacts/                  list user artifacts
-  POST   /api/v1/artifacts/                  create artifact
-  GET    /api/v1/artifacts/{id}/             get artifact
-  PATCH  /api/v1/artifacts/{id}/             update artifact (bumps version)
-  DELETE /api/v1/artifacts/{id}/             delete artifact
-  GET    /api/v1/artifacts/{id}/versions/    list versions
-  GET    /api/v1/artifacts/manage/           list all (admin)
-"""
 from apps.artifact.exceptions import ArtifactNotFoundException
 from apps.message.serializers.response import MessageResponse
 from test.conftest import make_artifact, make_artifact_version, make_message
@@ -16,7 +5,6 @@ from test.conftest import make_artifact, make_artifact_version, make_message
 VIEW = "apps.artifact.views"
 
 
-# ── list / manage ─────────────────────────────────────────────────────────────
 
 def test_list_artifacts_returns_200_paginated(api_client, mocker):
     mocker.patch(f"{VIEW}.artifact_service.list_artifacts", return_value=[make_artifact()])
@@ -48,7 +36,6 @@ def test_manage_artifacts_returns_200(api_client, mocker):
     assert len(response.data["results"]) == 1
 
 
-# ── create ────────────────────────────────────────────────────────────────────
 
 def test_create_artifact_returns_201(api_client, mocker):
     art = make_artifact(artifact_id=9, type="COURSE", title="Curso")
@@ -72,7 +59,6 @@ def test_create_artifact_requires_title(api_client, mocker):
     assert response.status_code == 400
 
 
-# ── get / patch / delete ──────────────────────────────────────────────────────
 
 def test_get_artifact_returns_200(api_client, mocker):
     mocker.patch(f"{VIEW}.artifact_service.get_artifact", return_value=make_artifact(artifact_id=3))
@@ -120,7 +106,6 @@ def test_list_versions_returns_200(api_client, mocker):
     assert len(response.data["results"]) == 2
 
 
-# ── message artifact serialization ────────────────────────────────────────────
 
 def test_message_response_has_artifact_id_and_chat_id():
     msg = make_message(msg_id=1, artifact_id=5, chat_id=3)

@@ -1,6 +1,3 @@
-"""
-Integration tests for bookmarks, pinned messages, feedback, threads, and share links.
-"""
 import pytest
 from django.utils import timezone
 
@@ -12,7 +9,7 @@ from apps.chat.exceptions import (
 from apps.chat.models.chat_share_link import ChatShareLink
 from apps.chat.services.chat_service import chat_service
 from apps.chat.services.share_link_service import share_link_service
-from apps.message.models.chat_message import ChatMessage  # backward-compat alias → ArtifactMessage
+from apps.message.models.chat_message import ChatMessage
 from apps.message.repositories.message_repository import message_repository
 from apps.message.exceptions import MessageAccessDeniedException, MessageNotFoundException, NotAIMessageException
 from apps.message.models.message_bookmark import ArtifactBookmark
@@ -28,9 +25,6 @@ from apps.membership.services.membership_service import membership_service
 pytestmark = pytest.mark.django_db
 
 
-# ---------------------------------------------------------------------------
-# Bookmarks
-# ---------------------------------------------------------------------------
 
 def test_bookmark_creates_record(owner, chat, user_message):
     bookmark_service.bookmark(owner, chat.id, user_message.artifact_id)
@@ -67,9 +61,6 @@ def test_bookmark_unknown_message_raises(owner, chat):
         bookmark_service.bookmark(owner, chat.id, 999999)
 
 
-# ---------------------------------------------------------------------------
-# Pinned Messages
-# ---------------------------------------------------------------------------
 
 def test_pin_message_creates_record(owner, chat, user_message):
     pin = pinned_message_service.pin_message(owner, chat.id, user_message.artifact_id)
@@ -107,9 +98,6 @@ def test_pin_unknown_message_raises(owner, chat):
         pinned_message_service.pin_message(owner, chat.id, 999999)
 
 
-# ---------------------------------------------------------------------------
-# Feedback
-# ---------------------------------------------------------------------------
 
 def test_set_feedback_thumbs_up_persists(owner, chat, ai_message):
     feedback_service.set_feedback(owner, chat.id, ai_message.artifact_id, value=1)
@@ -147,9 +135,6 @@ def test_feedback_non_member_raises(chat, other_user, ai_message):
         feedback_service.set_feedback(other_user, chat.id, ai_message.artifact_id, value=1)
 
 
-# ---------------------------------------------------------------------------
-# Thread replies
-# ---------------------------------------------------------------------------
 
 def test_add_reply_persists_to_db(owner, chat, user_message):
     reply = thread_service.add_reply(owner, chat.id, user_message.artifact_id, message_text="My reply")
@@ -178,9 +163,6 @@ def test_add_reply_unknown_message_raises(owner, chat):
         thread_service.add_reply(owner, chat.id, 999999, message_text="Ghost")
 
 
-# ---------------------------------------------------------------------------
-# Share links
-# ---------------------------------------------------------------------------
 
 def test_create_share_link_persists(owner, chat):
     link = share_link_service.create_link(owner, chat.id)
@@ -234,7 +216,6 @@ def test_get_public_messages_via_future_expiry_link_works(owner, chat, user_mess
 
 
 def test_get_public_messages_only_returns_that_chats_messages(owner, chat, user_message):
-    """A share link must only expose messages from its own chat, never another chat's."""
     other_chat = chat_service.create_chat(owner, name="Otro chat")
     other_msg = message_repository.create(
         chat_id=other_chat.id,
@@ -248,7 +229,6 @@ def test_get_public_messages_only_returns_that_chats_messages(owner, chat, user_
     assert other_msg.id not in ids
 
 
-# ── list_links: active filter + ordering ─────────────────────────────────────
 
 def test_list_share_links_returns_active_links(owner, chat):
     link1 = share_link_service.create_link(owner, chat.id)
@@ -280,7 +260,6 @@ def test_list_share_links_ordered_by_created_at_desc(owner, chat):
     first = share_link_service.create_link(owner, chat.id)
     second = share_link_service.create_link(owner, chat.id)
     ids = [link.id for link in share_link_service.list_links(owner, chat.id)]
-    # newest first
     assert ids.index(second.id) < ids.index(first.id)
 
 
@@ -289,17 +268,14 @@ def test_list_share_links_non_owner_raises(chat, other_user):
         share_link_service.list_links(other_user, chat.id)
 
 
-# ── revoke: cross-chat isolation ─────────────────────────────────────────────
 
 def test_revoke_share_link_wrong_chat_raises_not_found(owner, chat):
-    """A link belongs to one chat; revoking it via a different chat_id must 404,
-    not silently deactivate it (prevents cross-chat tampering)."""
     other_chat = chat_service.create_chat(owner, name="Otro chat")
     link = share_link_service.create_link(owner, chat.id)
     with pytest.raises(ShareLinkNotFoundException):
         share_link_service.revoke_link(owner, other_chat.id, link.id)
     link.refresh_from_db()
-    assert link.is_active is True  # untouched
+    assert link.is_active is True
 
 
 def test_revoke_share_link_unknown_link_raises_not_found(owner, chat):

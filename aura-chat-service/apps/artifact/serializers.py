@@ -101,6 +101,8 @@ class ArtifactSummaryResponse(serializers.ModelSerializer):
 
     @extend_schema_field(serializers.BooleanField())
     def get_is_bookmarked(self, obj):
+        if hasattr(obj, "_is_bookmarked"):
+            return bool(obj._is_bookmarked)
         from apps.artifact.models.artifact_bookmark import ArtifactBookmark
         request = self.context.get('request')
         if not request:
@@ -109,6 +111,8 @@ class ArtifactSummaryResponse(serializers.ModelSerializer):
 
     @extend_schema_field(serializers.IntegerField(allow_null=True))
     def get_user_feedback(self, obj):
+        if hasattr(obj, "_user_feedback"):
+            return obj._user_feedback
         from apps.artifact.models.artifact_feedback import ArtifactFeedback
         request = self.context.get('request')
         if not request:
@@ -118,6 +122,8 @@ class ArtifactSummaryResponse(serializers.ModelSerializer):
 
     @extend_schema_field(serializers.IntegerField())
     def get_thread_reply_count(self, obj):
+        if hasattr(obj, "_thread_reply_count"):
+            return obj._thread_reply_count
         from apps.artifact.models.artifact_thread_reply import ArtifactThreadReply
         return ArtifactThreadReply.objects.filter(parent_artifact_id=obj.id).count()
 

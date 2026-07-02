@@ -53,10 +53,6 @@ def _cache_key(token: str) -> str:
 
 @lru_cache(maxsize=1)
 def _token_cache_redis() -> redis.Redis:
-    # Raw Redis client (literal key, JSON value) so the validated-token cache is
-    # shared cross-stack with the FastAPI services, which write the same
-    # `auth_token:<sha256>` key. Django's default cache would prepend a
-    # KEY_PREFIX/version and break sharing.
     url = getattr(settings, "AUTH_TOKEN_CACHE_REDIS_URL", "") or settings.REDIS_URL
     return redis.Redis.from_url(url, decode_responses=True)
 
@@ -97,15 +93,6 @@ def _cache_user(token: str, user: AuthenticatedUser) -> None:
 
 
 def build_service_user_headers(user: Optional["AuthenticatedUser"] = None) -> dict[str, str]:
-    """Auth headers for an outbound service-to-service call.
-
-    Inter-service calls forward the caller's own JWT (held in a ContextVar by the
-    auth middleware) so the downstream service validates it and acts with the real
-    user's identity and permissions. ``user`` is accepted only for call-site
-    compatibility and is unused — identity is derived downstream from the token.
-    Returns an empty mapping when no token is in context (e.g. a background job
-    with no originating request); the downstream then responds 401.
-    """
     from core.authentication.request_token import get_request_token
 
     token = get_request_token()

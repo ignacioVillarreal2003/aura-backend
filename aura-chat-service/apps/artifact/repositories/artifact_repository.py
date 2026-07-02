@@ -2,14 +2,13 @@ import logging
 from datetime import datetime
 from typing import Optional
 from django.db import transaction
+from django.db.models import Count, Exists, IntegerField, OuterRef, Subquery, Value
+from django.db.models.functions import Coalesce
 
 from apps.artifact.models import Artifact
 
 logger = logging.getLogger(__name__)
 
-# One-to-one type content relations the artifact list/summary serializers read
-# (title, linked_id, message preview). Joining them up front turns the per-row
-# "_content" lookups into a single query instead of an N+1 over the result set.
 _CONTENT_RELATIONS = (
     "report_content",
     "checklist_content",
@@ -25,6 +24,33 @@ _CONTENT_RELATIONS = (
 
 def _with_content(qs):
     return qs.select_related(*_CONTENT_RELATIONS)
+
+
+def annotate_user_summary(qs, user_id: int):
+    from apps.artifact.models.artifact_bookmark import ArtifactBookmark
+    from apps.artifact.models.artifact_feedback import ArtifactFeedback
+    from apps.artifact.models.artifact_thread_reply import ArtifactThreadReply
+
+    reply_count = (
+        ArtifactThreadReply.objects.filter(parent_artifact_id=OuterRef("pk"))
+        .order_by()
+        .values("parent_artifact_id")
+        .annotate(c=Count("id"))
+        .values("c")
+    )
+    return qs.annotate(
+        _is_bookmarked=Exists(
+            ArtifactBookmark.objects.filter(artifact_id=OuterRef("pk"), created_by=user_id)
+        ),
+        _user_feedback=Subquery(
+            ArtifactFeedback.objects.filter(
+                artifact_id=OuterRef("pk"), created_by=user_id
+            ).values("value")[:1]
+        ),
+        _thread_reply_count=Coalesce(
+            Subquery(reply_count, output_field=IntegerField()), Value(0)
+        ),
+    )
 
 
 class ArtifactRepository:

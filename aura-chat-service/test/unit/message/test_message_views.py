@@ -1,10 +1,3 @@
-"""
-HTTP-layer tests for the message module.
-
-All service and repository calls are mocked. Tests verify the correct HTTP
-status codes, error codes, and that the authenticated user's identity is passed
-correctly to the service layer.
-"""
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -24,9 +17,6 @@ from apps.artifact_message.exceptions import (
 )
 from test.conftest import make_feedback, make_message, make_pin, make_thread_reply, mock_cursor_pagination
 
-# ---------------------------------------------------------------------------
-# View module path constants for patching
-# ---------------------------------------------------------------------------
 MSG_VIEW = "apps.artifact_message.views.message_view"
 DEL_VIEW = "apps.artifact_message.views.message_delete_view"
 CLR_VIEW = "apps.artifact_message.views.clear_view"
@@ -39,9 +29,6 @@ FBK_VIEW = "apps.artifact_message.views.feedback_view"
 EXP_VIEW = "apps.artifact_message.views.export_view"
 
 
-# ===========================================================================
-# GET /api/v1/chats/{chat_id}/messages/  — List messages
-# ===========================================================================
 
 class TestListMessages:
 
@@ -75,9 +62,6 @@ class TestListMessages:
         assert response.status_code == 401
 
 
-# ===========================================================================
-# POST /api/v1/chats/{chat_id}/messages/  — Send message
-# ===========================================================================
 
 class TestSendMessage:
 
@@ -140,9 +124,6 @@ class TestSendMessage:
         assert response.status_code == 401
 
 
-# ===========================================================================
-# GET /api/v1/chats/{chat_id}/messages/manage/  — Admin list messages
-# ===========================================================================
 
 class TestAdminListMessages:
 
@@ -166,9 +147,6 @@ class TestAdminListMessages:
         assert response.status_code == 401
 
 
-# ===========================================================================
-# DELETE /api/v1/chats/{chat_id}/messages/clear/  — Clear chat history
-# ===========================================================================
 
 class TestClearHistory:
 
@@ -208,9 +186,6 @@ class TestClearHistory:
         assert response.status_code == 401
 
 
-# ===========================================================================
-# POST /api/v1/chats/{chat_id}/messages/read/  — Mark as read (personal)
-# ===========================================================================
 
 class TestMarkAsRead:
 
@@ -238,9 +213,6 @@ class TestMarkAsRead:
         assert response.status_code == 401
 
 
-# ===========================================================================
-# GET /api/v1/chats/{chat_id}/messages/pinned/  — List pinned (all members)
-# ===========================================================================
 
 class TestListPinned:
 
@@ -281,9 +253,6 @@ class TestListPinned:
         assert response.status_code == 401
 
 
-# ===========================================================================
-# POST /api/v1/chats/{chat_id}/messages/regenerate/  — Regenerate AI response
-# ===========================================================================
 
 class TestRegenerateResponse:
 
@@ -325,9 +294,6 @@ class TestRegenerateResponse:
         assert response.status_code == 401
 
 
-# ===========================================================================
-# GET /api/v1/chats/{chat_id}/messages/bookmarked/  — List bookmarked (personal)
-# ===========================================================================
 
 class TestListBookmarked:
 
@@ -361,9 +327,6 @@ class TestListBookmarked:
         assert response.status_code == 401
 
 
-# ===========================================================================
-# GET /api/v1/chats/{chat_id}/messages/export/pdf/ — Export chat PDF (member)
-# ===========================================================================
 
 class TestChatExportPDF:
 
@@ -396,9 +359,6 @@ class TestChatExportPDF:
         assert response.status_code == 401
 
 
-# ===========================================================================
-# GET /api/v1/chats/{chat_id}/messages/export/pdf/manage/ — Admin export PDF
-# ===========================================================================
 
 class TestAdminChatExportPDF:
 
@@ -422,9 +382,6 @@ class TestAdminChatExportPDF:
         assert response.status_code == 401
 
 
-# ===========================================================================
-# GET export/markdown/, export/json/, export/ai/ — Member-only exports
-# ===========================================================================
 
 class TestChatExports:
 
@@ -485,9 +442,6 @@ class TestChatExports:
         assert response.status_code == 401
 
 
-# ===========================================================================
-# DELETE /api/v1/chats/{chat_id}/messages/{message_id}/  — Delete message
-# ===========================================================================
 
 class TestDeleteMessage:
 
@@ -535,9 +489,6 @@ class TestDeleteMessage:
         assert response.status_code == 401
 
 
-# ===========================================================================
-# POST /DELETE /api/v1/chats/{chat_id}/messages/{message_id}/bookmark/
-# ===========================================================================
 
 class TestBookmark:
 
@@ -585,9 +536,6 @@ class TestBookmark:
         assert response.status_code == 401
 
 
-# ===========================================================================
-# POST /DELETE /api/v1/chats/{chat_id}/messages/{message_id}/pin/
-# ===========================================================================
 
 class TestPin:
 
@@ -658,9 +606,6 @@ class TestPin:
         assert response.status_code == 401
 
 
-# ===========================================================================
-# GET /POST /api/v1/chats/{chat_id}/messages/{message_id}/thread/
-# ===========================================================================
 
 class TestThread:
 
@@ -737,9 +682,6 @@ class TestThread:
         assert response.status_code == 401
 
 
-# ===========================================================================
-# POST /DELETE /api/v1/chats/{chat_id}/messages/{message_id}/feedback/
-# ===========================================================================
 
 class TestFeedback:
 
@@ -842,7 +784,6 @@ class TestFeedback:
         assert response.status_code == 404
 
     def test_feedback_is_personal_passes_caller_id(self, api_client, mocker):
-        """Feedback always stored for the authenticated user, not a passed user_id param."""
         svc = mocker.patch(
             f"{FBK_VIEW}.feedback_service.set_feedback",
             return_value=make_feedback(value=1),
@@ -860,9 +801,6 @@ class TestFeedback:
         assert response.status_code == 401
 
 
-# ===========================================================================
-# GET /api/v1/chats/{chat_id}/messages/{message_id}/export/pdf/ — Single msg
-# ===========================================================================
 
 class TestMessageExportPDF:
 

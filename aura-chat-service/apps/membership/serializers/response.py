@@ -5,10 +5,6 @@ from apps.membership.models.chat_membership import ChatMembership
 
 
 class ChatMembershipCheckResponse(serializers.Serializer):
-    """Typed response for the internal chat-membership check.
-
-    `role` is `null` exactly when `is_member` is `false`.
-    """
 
     chat_id = serializers.IntegerField()
     user_id = serializers.IntegerField()

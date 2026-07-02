@@ -26,23 +26,22 @@ Configuración referencial (`AUTHENTICATION_EXCLUDED_PATHS` en settings); incluy
 
 | Ruta (patrón) | Uso |
 |----------------|-----|
-| `/api/v1/health` | Health check (DB + Redis). |
+| `/api/v1/health*` | Health checks (liveness, readiness, startup). |
 | `/api/schema*`, `/api/docs*`, `/api/redoc*` | Documentación OpenAPI y UIs. |
-| `/api/v1/share*` | Lectura pública de mensajes vía **token** en la URL (sin Bearer de usuario). |
+| `/api/v1/share/*` | Lectura pública de mensajes vía **token** en la URL (sin Bearer de usuario). |
 | `/metrics` | Métricas Prometheus (operación). |
-| `/admin/*` | Django admin. |
 
 El **WebSocket** del chat usa otro mecanismo (middleware de Channels + scope); ver [websockets.md](websockets.md).
 
 ## Formato de datos
 
-- **Entrada y salida:** JSON (`Content-Type: application/json`), salvo exportaciones que devuelven PDF, Markdown, JSON archivo, etc., con los `Content-Type` adecuados.
+- **Entrada y salida:** JSON (`Content-Type: application/json`), salvo exportaciones que devuelven PDF (`application/pdf`) o Markdown (`text/markdown`), con los `Content-Type` adecuados.
 - **Errores:** cuerpo JSON coherente descrito en [errors-and-status-codes.md](errors-and-status-codes.md): campos `error`, `detail`, `status_code`; en validación 400 pueden aparecer `fields`.
 
 ## Paginación
 
-- **Paginación por página** (`StandardPagination`): parámetros `page` y opcionalmente `page_size` (máximo **100** por defecto), tamaño de página por defecto **20**. Se usa en listados de chats, miembros, webhooks, share links, mensajes fijados, etc., según la vista.
-- **Paginación por cursor** (`MessageCursorPagination`): usada en algunos listados de mensajes (historial con orden temporal); parámetros al estilo DRF `cursor` / `page_size` (máx. **100**), orden por defecto `-created_at`.
+- **Paginación por página** (`StandardPagination`): parámetros `page` y opcionalmente `page_size` (máximo **100** por defecto), tamaño de página por defecto **20**. Se usa en listados de chats, miembros, share links, artifacts (feed, fijados, marcados), etc., según la vista.
+- **Paginación por cursor** (`MessageCursorPagination`): usada en el historial de mensajes (`GET /api/v1/messages/`); parámetros al estilo DRF `cursor` / `page_size` (máx. **100**), orden por defecto `-id` (más recientes primero).
 
 Los detalles de cada lista están en el esquema OpenAPI y en [endpoints.md](endpoints.md).
 

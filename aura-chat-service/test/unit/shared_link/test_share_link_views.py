@@ -15,9 +15,6 @@ SHARE_VIEW = "apps.chat.views.share_link_view"
 PUBLIC_VIEW = "apps.chat.views.public_share_view"
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/chats/{chat_id}/share-links/
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_list_links_returns_200_paginated(api_client, mocker):
     link = make_share_link(link_id=1, chat_id=5)
@@ -37,7 +34,6 @@ def test_list_links_empty_returns_200(api_client, mocker):
 
 
 def test_list_links_default_active_only_true(api_client, mocker):
-    """Without ?active param, service is called with active_only=True."""
     svc = mocker.patch(f"{SHARE_VIEW}.share_link_service.list_links", return_value=[])
     api_client.get("/api/v1/chats/5/share-links/")
     _, kwargs = svc.call_args
@@ -59,7 +55,6 @@ def test_list_links_active_true_explicit(api_client, mocker):
 
 
 def test_list_links_active_uppercase_false_is_case_insensitive(api_client, mocker):
-    """The `active` flag is normalized with .lower(), so FALSE also disables the filter."""
     svc = mocker.patch(f"{SHARE_VIEW}.share_link_service.list_links", return_value=[])
     api_client.get("/api/v1/chats/5/share-links/?active=FALSE")
     _, kwargs = svc.call_args
@@ -110,9 +105,6 @@ def test_list_links_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# POST /api/v1/chats/{chat_id}/share-links/
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_create_link_returns_201_with_link_data(api_client, mocker):
     link = make_share_link(link_id=1, chat_id=5)
@@ -124,7 +116,6 @@ def test_create_link_returns_201_with_link_data(api_client, mocker):
 
 
 def test_create_link_without_body_returns_201(api_client, mocker):
-    """expires_at is optional — empty body is valid."""
     mocker.patch(f"{SHARE_VIEW}.share_link_service.create_link", return_value=make_share_link())
     response = api_client.post("/api/v1/chats/5/share-links/", {}, format="json")
     assert response.status_code == 201
@@ -142,7 +133,6 @@ def test_create_link_with_future_expires_at_returns_201(api_client, mocker):
 
 
 def test_create_link_explicit_null_expires_at_returns_201(api_client, mocker):
-    """expires_at is allow_null — an explicit null is accepted and forwarded as None."""
     svc = mocker.patch(f"{SHARE_VIEW}.share_link_service.create_link", return_value=make_share_link())
     response = api_client.post(
         "/api/v1/chats/5/share-links/", {"expires_at": None}, format="json"
@@ -153,7 +143,6 @@ def test_create_link_explicit_null_expires_at_returns_201(api_client, mocker):
 
 
 def test_create_link_past_expires_at_returns_400(api_client, mocker):
-    """expires_at in the past is rejected by the serializer validator."""
     mocker.patch(f"{SHARE_VIEW}.share_link_service.create_link")
     response = api_client.post(
         "/api/v1/chats/5/share-links/",
@@ -209,9 +198,6 @@ def test_create_link_passes_chat_id_and_expires_at_to_service(api_client, mocker
     assert kwargs["expires_at"] is not None
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# DELETE /api/v1/chats/{chat_id}/share-links/{link_id}/
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_revoke_link_returns_204(api_client, mocker):
     mocker.patch(f"{SHARE_VIEW}.share_link_service.revoke_link")
@@ -272,9 +258,6 @@ def test_revoke_link_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/share/{token}/messages/  — public, no auth required
-# ══════════════════════════════════════════════════════════════════════════════
 
 def _token_url(token=None):
     t = token or uuid.uuid4()
@@ -297,14 +280,12 @@ def test_public_messages_empty_chat_returns_200(anon_client, mocker):
 
 
 def test_public_messages_no_bearer_token_required(anon_client, mocker):
-    """Public endpoint must work without Authorization header."""
     mocker.patch(f"{PUBLIC_VIEW}.share_link_service.get_public_messages", return_value=[])
     response = anon_client.get(_token_url())
     assert response.status_code == 200
 
 
 def test_public_messages_authenticated_user_also_works(api_client, mocker):
-    """Even authenticated users can access public share links."""
     mocker.patch(f"{PUBLIC_VIEW}.share_link_service.get_public_messages", return_value=[])
     response = api_client.get(_token_url())
     assert response.status_code == 200
@@ -350,7 +331,6 @@ def test_public_messages_expired_link_returns_400(anon_client, mocker):
 
 
 def test_public_messages_invalid_uuid_returns_404(anon_client):
-    """A path that doesn't match <uuid:token> yields 404 from the URL router."""
     response = anon_client.get("/api/v1/share/not-a-uuid/messages/")
     assert response.status_code == 404
 

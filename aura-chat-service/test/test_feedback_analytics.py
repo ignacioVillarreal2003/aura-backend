@@ -43,9 +43,6 @@ def _sample_analytics():
     }
 
 
-# ---------------------------------------------------------------------------
-# View  GET /api/v1/feedback/analytics/
-# ---------------------------------------------------------------------------
 
 def test_analytics_returns_200(api_client, mocker):
     mocker.patch(
@@ -86,9 +83,6 @@ def test_analytics_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ---------------------------------------------------------------------------
-# Service (repository mocked)
-# ---------------------------------------------------------------------------
 
 def _user(user_id=1):
     from types import SimpleNamespace

@@ -67,7 +67,6 @@ class QuizQuestionResponse(serializers.ModelSerializer):
                   "selected_option_id", "correct_option_ids"]
 
     def get_correct_option_ids(self, obj) -> list[int]:
-        # Solo se revelan las opciones correctas si la pregunta ya fue respondida.
         if obj.selected_option_id is None:
             return []
         return [opt.id for opt in obj.options.all() if opt.is_correct]

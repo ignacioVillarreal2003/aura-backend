@@ -10,9 +10,6 @@ from rest_framework.test import APIClient
 from core.authentication.authenticated_user import AuthenticatedUser
 
 
-# ---------------------------------------------------------------------------
-# Object factories
-# ---------------------------------------------------------------------------
 
 def make_user(user_id=1, permissions=("*",), roles=("owner",), email=None):
     return AuthenticatedUser(
@@ -38,7 +35,6 @@ def make_chat(chat_id=1, created_by=1, **overrides):
         created_at=now,
         updated_by=None,
         updated_at=now,
-        # Annotated fields for ChatListResponse
         member_count=1,
         unread_count=0,
         pinned_at=None,
@@ -202,7 +198,6 @@ def make_report(report_id=1, title="Informe de prueba", report_type="SITREP",
                 retrieve_context=None, process_documents=None, document_ids=None,
                 source_chat_id=1, created_by=1, **overrides):
     now = timezone.now()
-    # generation params / source_chat_id now live on the linked Artifact, not the report row.
     artifact = make_artifact(
         artifact_id=report_id, type="REPORT",
         retrieve_context=retrieve_context, process_documents=process_documents, document_ids=document_ids,
@@ -311,12 +306,8 @@ def make_thread_reply(reply_id=1, parent_artifact_id=1, **overrides):
     return SimpleNamespace(**data)
 
 
-# ---------------------------------------------------------------------------
-# Pagination helpers
-# ---------------------------------------------------------------------------
 
 def mock_cursor_pagination(mocker, module_path, items=None):
-    """Replaces MessageCursorPagination in a view module with a predictable mock."""
     items = items or []
     MockPager = mocker.patch(f"{module_path}.MessageCursorPagination")
     instance = MagicMock()
@@ -328,9 +319,6 @@ def mock_cursor_pagination(mocker, module_path, items=None):
     return instance
 
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
 
 @pytest.fixture
 def user():

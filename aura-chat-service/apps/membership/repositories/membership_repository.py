@@ -124,7 +124,6 @@ class MembershipRepository:
 
     @staticmethod
     def get_existing_member_ids_in(chat_id: int, member_ids: list[int]) -> set[int]:
-        """Returns active/pending (non-soft-deleted) member IDs in the given set."""
         return set(
             ChatMembership.objects
             .filter(chat_id=chat_id, member_id__in=member_ids)
@@ -165,7 +164,6 @@ class MembershipRepository:
 
     @staticmethod
     def is_active_contributor(chat_id: int, member_id: int) -> bool:
-        """Returns True for active members with owner or editor role (can make changes)."""
         return ChatMembership.objects.filter(
             chat_id=chat_id,
             member_id=member_id,
