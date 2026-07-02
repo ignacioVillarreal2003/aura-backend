@@ -131,6 +131,24 @@ class RedisOutboxLite:
         marker_key = self._published_marker_key(event_type, aggregate_id)
         return bool(await self._redis.exists(marker_key))
 
+    async def try_acquire_reconcile_slot(
+            self,
+            *,
+            kind: str,
+            aggregate_id: str,
+            cooldown_seconds: int,
+    ) -> bool:
+        key = f"{self._key_prefix}:reconcile:{kind}:{aggregate_id}"
+        try:
+            acquired = await self._redis.set(key, "1", ex=cooldown_seconds, nx=True)
+        except Exception:
+            logger.warning(
+                "Reconcile-slot acquisition failed; skipping to avoid duplicate re-publish.",
+                extra={"kind": kind, "aggregate_id": aggregate_id},
+            )
+            return False
+        return bool(acquired)
+
     async def drain_pending_batch(
             self,
             *,

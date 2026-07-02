@@ -1,7 +1,3 @@
-"""
-Tests de integración para el endpoint de health check:
-  GET /api/v1/health
-"""
 import pytest
 from unittest.mock import MagicMock, patch
 from django.db import OperationalError

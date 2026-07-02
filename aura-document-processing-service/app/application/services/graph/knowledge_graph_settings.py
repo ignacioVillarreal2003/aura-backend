@@ -22,6 +22,8 @@ class KnowledgeGraphSettings(BaseSettings):
     extraction_sliding_window_chars: int = Field(default=500, ge=0, le=2000)
     extraction_lock_ttl_seconds: int = Field(default=1800, ge=60, le=86_400)
 
+    extraction_min_success_ratio: float = Field(default=0.5, ge=0.0, le=1.0)
+
     query_default_results: int = Field(default=20, ge=1, le=200)
     query_max_results: int = Field(default=200, ge=1, le=1000)
     query_default_neighbor_depth: int = Field(default=1, ge=1, le=4)

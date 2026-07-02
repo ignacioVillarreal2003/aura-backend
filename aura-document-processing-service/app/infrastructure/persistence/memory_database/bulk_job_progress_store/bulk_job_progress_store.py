@@ -1,6 +1,8 @@
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
+
+from app.domain.time import APP_TIMEZONE
 from typing import Any, Optional
 import redis.asyncio as aioredis
 
@@ -77,7 +79,7 @@ class BulkJobProgressStore(BulkJobProgressStoreInterface):
             job_id: str,
             total: int,
     ) -> None:
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(APP_TIMEZONE).isoformat()
         snapshot: dict[str, Any] = {
             "job_id": job_id,
             "operation": operation.value,
@@ -112,7 +114,7 @@ class BulkJobProgressStore(BulkJobProgressStoreInterface):
             job_id,
             str(int(processed_increment)),
             str(int(failed_increment)),
-            datetime.now(timezone.utc).isoformat(),
+            datetime.now(APP_TIMEZONE).isoformat(),
             str(self._snapshot_ttl_seconds),
         )
 

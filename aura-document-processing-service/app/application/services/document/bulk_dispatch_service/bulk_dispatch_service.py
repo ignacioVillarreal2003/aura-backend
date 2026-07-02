@@ -13,6 +13,7 @@ from app.application.services.document.bulk_dispatch_service.interfaces.bulk_dis
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.domain.constants.document.bulk_operation import BulkOperation
+from app.domain.time import APP_TIMEZONE
 from app.domain.dtos.document.bulk.bulk_responses import (
     BulkJobError,
     BulkJobStatusResponse,
@@ -45,6 +46,9 @@ from app.infrastructure.persistence.database.database_manager.interfaces.databas
 from app.infrastructure.persistence.database.repositories.interfaces.document_repository_interface import (
     DocumentRepositoryInterface,
 )
+from app.infrastructure.persistence.database.schema_alignment.interfaces.fragment_vector_schema_aligner_interface import (
+    FragmentVectorSchemaAlignerInterface,
+)
 from app.infrastructure.persistence.memory_database.bulk_job_progress_store.interfaces.bulk_job_progress_store_interface import (
     BulkJobProgressStoreInterface,
 )
@@ -52,6 +56,8 @@ from app.infrastructure.persistence.memory_database.bulk_job_progress_store.inte
 logger = logging.getLogger(__name__)
 
 _DEFAULT_STALE_JOB_AFTER_SECONDS = 3600
+
+_DIMENSION_ALIGNING_OPERATIONS = frozenset({BulkOperation.reembed, BulkOperation.reprocess})
 
 
 class BulkDispatchService(BulkDispatchServiceInterface):
@@ -65,6 +71,7 @@ class BulkDispatchService(BulkDispatchServiceInterface):
             reprocess_publisher: Optional[DocumentReprocessPublisherInterface] = None,
             enrichment_publisher: Optional[DocumentEnrichmentPublisherInterface] = None,
             graph_extraction_publisher: Optional[GraphExtractionPublisherInterface] = None,
+            schema_aligner: Optional[FragmentVectorSchemaAlignerInterface] = None,
             stale_job_after_seconds: int = _DEFAULT_STALE_JOB_AFTER_SECONDS,
     ) -> None:
         self._database_manager = database_manager
@@ -74,6 +81,7 @@ class BulkDispatchService(BulkDispatchServiceInterface):
         self._reprocess_publisher = reprocess_publisher
         self._enrichment_publisher = enrichment_publisher
         self._graph_extraction_publisher = graph_extraction_publisher
+        self._schema_aligner = schema_aligner
         self._stale_job_after_seconds = stale_job_after_seconds
         self._tasks: set[asyncio.Task[None]] = set()
 
@@ -106,6 +114,8 @@ class BulkDispatchService(BulkDispatchServiceInterface):
                     "heartbeat_at": existing.get("heartbeat_at") or existing.get("started_at"),
                 },
             )
+
+        selector = await self._align_schema_and_expand_selector(operation, selector)
 
         document_ids = await self._resolve_target_ids(selector)
         job_id = uuid.uuid4().hex
@@ -168,6 +178,28 @@ class BulkDispatchService(BulkDispatchServiceInterface):
         logger.info("A bulk operation stop was requested.", extra={"operation": operation.value})
         snapshot = await self._store.get_snapshot(operation=operation)
         return self._to_status_response(operation, snapshot)
+
+    async def _align_schema_and_expand_selector(
+            self,
+            operation: BulkOperation,
+            selector: DocumentSelector,
+    ) -> DocumentSelector:
+        if self._schema_aligner is None or operation not in _DIMENSION_ALIGNING_OPERATIONS:
+            return selector
+
+        migrated = await self._schema_aligner.align_to_active_dimension()
+        if not migrated:
+            return selector
+
+        if selector.all_documents:
+            return selector
+
+        logger.warning(
+            "The fragment vector dimension changed; expanding the selector to all documents "
+            "so every fragment is re-embedded.",
+            extra={"operation": operation.value},
+        )
+        return DocumentSelector(all_documents=True)
 
     async def _resolve_target_ids(self, selector: DocumentSelector) -> list[int]:
         if selector.document_ids is not None:
@@ -242,7 +274,7 @@ class BulkDispatchService(BulkDispatchServiceInterface):
             return False
         if parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=timezone.utc)
-        age_seconds = (datetime.now(timezone.utc) - parsed).total_seconds()
+        age_seconds = (datetime.now(APP_TIMEZONE) - parsed).total_seconds()
         return age_seconds > self._stale_job_after_seconds
 
     def _publisher_for(self, operation: BulkOperation) -> Optional[object]:

@@ -14,3 +14,9 @@ class GraphExtractionAlreadyRunningException(GraphExtractionServiceException):
 class GraphExtractionDocumentNotFoundException(GraphExtractionServiceException):
     def __init__(self, message: str) -> None:
         super().__init__(message, status_code=404)
+
+
+class GraphExtractionFailedException(GraphExtractionServiceException):
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=502)

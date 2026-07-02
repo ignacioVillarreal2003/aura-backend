@@ -14,34 +14,15 @@ Dos capas encadenadas:
 - El servicio llama al **proveedor configurado** (`AUTHENTICATION_SERVICE_URL`) para validar el token y obtener el usuario.
 - El JSON esperado incluye al menos **`id`** (usuario); opcionalmente `email`, `roles`, `permissions` (según respuesta real del proveedor; el código usa listas/tuple para roles y permissions).
 
-Las **permissions** efectivas contra el modelo `AuthenticatedUser.has_all_permissions` son los **strings** que exponga el proveedor (o los enviados en headers S2S, ver abajo).
+Las **permissions** efectivas contra el modelo `AuthenticatedUser.has_all_permissions` son los **strings** que exponga el proveedor.
 
----
-
-## Mecanismo 2: Service-to-service (API key + usuario actuante)
-
-Cabeceras **obligatorias** cuando se usa esta vía:
-
-| Cabecera | Descripción |
-|----------|-------------|
-| **`X-Service-Api-Key`** | Debe coincidir con `SERVICE_API_KEY` del despliegue. |
-| **`X-User-Id`** | Entero: usuario en cuyo nombre actúa el servicio. |
-| **`X-User-Email`** | Email del usuario actuante (texto no vacío tras trim). |
-
-Cabeceras **opcionales**:
-
-| Cabecera | Formato |
-|----------|---------|
-| **`X-User-Roles`** | Lista separada por comas. |
-| **`X-User-Permissions`** | Lista separada por comas de códigos de permiso (los mismos que en la tabla inferior). |
-
-**Orden de evaluación**: si está presente `X-Service-Api-Key` (no vacío), el middleware intenta autenticación S2S **antes** del Bearer. Si la clave no viene, se sigue con Bearer.
+Las llamadas entre servicios reenvían el **token Bearer del usuario** para que el servicio downstream lo valide y actúe con los permisos reales del usuario; no existe autenticación por API key ni trust-headers.
 
 ---
 
 ## Matriz permiso → endpoint
 
-Los valores son los **strings exactos** que deben aparecer en `AuthenticatedUser.permissions` (Bearer desde auth service o `X-User-Permissions` en S2S).
+Los valores son los **strings exactos** que deben aparecer en `AuthenticatedUser.permissions` (Bearer desde auth service).
 
 ### Document collections
 
@@ -92,6 +73,7 @@ Los valores son los **strings exactos** que deben aparecer en `AuthenticatedUser
 | Añadir compartimento | `ADD_USER_COMPARTMENT` |
 | Quitar compartimento | `REMOVE_USER_COMPARTMENT` |
 | Colecciones accesibles (MAC) | `GET_USER_ACCESSIBLE_COLLECTIONS` |
+| Documentos accesibles (MAC) | `GET_USER_ACCESSIBLE_DOCUMENTS` |
 
 ---
 
@@ -116,7 +98,7 @@ Configuradas en `AUTHENTICATION_EXCLUDED_PATHS` (ejemplos):
 - `/admin/*` (patrón prefijo)
 - `/api/schema*`, `/api/docs*`, `/api/redoc*`
 
-En esas rutas **no** se fuerza Bearer/S2S a nivel de middleware; las vistas de negocio bajo `/api/v1/` **sí** están protegidas excepto `health`.
+En esas rutas **no** se fuerza Bearer a nivel de middleware; las vistas de negocio bajo `/api/v1/` **sí** están protegidas excepto `health`.
 
 ---
 
@@ -125,11 +107,10 @@ En esas rutas **no** se fuerza Bearer/S2S a nivel de middleware; las vistas de n
 Los esquemas de seguridad documentados coinciden con:
 
 - **bearerAuth** (JWT)
-- **serviceApiKey** + **serviceUserId** + **serviceUserEmail** (y roles/permissions opcionales en cabeceras adicionales descritas en `SPECTACULAR_SETTINGS`).
 
 ---
 
 ## Notas para integradores
 
 - Un **gateway** o el **servicio de identidad** debe asegurar que los JWT incluyan el conjunto de `permissions` coherente con las operaciones que el cliente llamará.
-- En **llamadas entre microservicios**, es habitual usar la API key compartida y reenviar **`X-User-Id`** / **`X-User-Email`** y la lista **`X-User-Permissions`** del contexto del usuario final.
+- En **llamadas entre microservicios**, se reenvía el **token Bearer del usuario final**; el servicio downstream lo valida y actúa con sus permisos reales.

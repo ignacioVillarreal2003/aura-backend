@@ -1,6 +1,3 @@
-"""
-Tests for POST /api/v1/document-classify
-"""
 from app.domain.constants.document_type import DocumentType
 from app.domain.dtos.processing.document_classify.classify_document_response import ClassifyDocumentResponse
 

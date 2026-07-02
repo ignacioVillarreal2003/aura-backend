@@ -1,6 +1,3 @@
-"""Unit tests for OllamaLLMStreamingInvoker: chunk-to-text extraction,
-non-text block skipping, the response-size cap, retry while establishing the
-stream, and mid-stream failure handling."""
 from unittest.mock import MagicMock
 
 import httpx
@@ -24,8 +21,6 @@ class _Chunk:
 
 
 def _streaming_llm(chunk_contents, *, fail_times=0):
-    """Build a fake LLM whose ``astream`` raises ``fail_times`` times (before
-    yielding the first chunk) and then streams ``chunk_contents``."""
     calls = {"n": 0}
 
     def astream(_llm_input):

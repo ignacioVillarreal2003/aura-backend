@@ -16,7 +16,7 @@ _EXCLUDED_PATH_PREFIXES = (
     "/metrics",
 )
 
-_USER_TEXT_FIELDS = ("instruction", "question")
+_USER_TEXT_FIELDS = ("instruction", "question", "system_prompt", "response_style")
 
 
 def extract_user_texts(payload: object) -> list[str]:

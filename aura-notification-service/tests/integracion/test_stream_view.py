@@ -1,7 +1,3 @@
-"""
-Tests de integración para el SSE stream y función _format_sse:
-  GET /api/v1/notifications/stream/
-"""
 import json
 import pytest
 from unittest.mock import patch

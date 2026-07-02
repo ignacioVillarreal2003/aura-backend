@@ -164,9 +164,6 @@ WS_ARTIFACT_RATE_LIMIT_WINDOW = config("WS_ARTIFACT_RATE_LIMIT_WINDOW", default=
 WS_TRANSCRIBE_RATE_LIMIT_MAX = config("WS_TRANSCRIBE_RATE_LIMIT_MAX", default=5, cast=int)
 WS_TRANSCRIBE_RATE_LIMIT_WINDOW = config("WS_TRANSCRIBE_RATE_LIMIT_WINDOW", default=60, cast=int)
 
-# When Redis is unreachable the rate-limit checks fall back to this decision.
-# True (default) favours availability (let traffic through); set False to fail
-# closed and block on Redis errors instead (favours abuse protection).
 WS_RATE_LIMIT_FAIL_OPEN = config("WS_RATE_LIMIT_FAIL_OPEN", default=True, cast=bool)
 
 AUTHENTICATION_EXCLUDED_PATHS = [
@@ -366,7 +363,7 @@ LLM_STREAM_READ_TIMEOUT = config(
 LLM_CONTEXT_MESSAGE_LIMIT = config("LLM_CONTEXT_MESSAGE_LIMIT", default=10, cast=int)
 
 LANGUAGE_CODE = "en-us"
-TIME_ZONE = "America/Montevideo"
+TIME_ZONE = config("TIME_ZONE", default="America/Montevideo")
 USE_I18N = True
 USE_TZ = True
 

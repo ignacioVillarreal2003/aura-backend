@@ -29,6 +29,8 @@ class ReaderSettings(BaseSettings):
     docling_device: Literal["cpu", "cuda", "mps", "auto"] = "auto"
     docling_num_threads: int = Field(default=4, ge=1, le=16)
     docling_artifacts_path: Optional[str] = Field(default=None)
+    docling_ocr_enabled: bool = Field(default=True)
+    docling_ocr_languages: list[str] = Field(default_factory=lambda: ["es", "en"])
 
     @model_validator(
         mode="after"

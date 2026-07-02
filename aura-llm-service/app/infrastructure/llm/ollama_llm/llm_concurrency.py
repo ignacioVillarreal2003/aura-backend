@@ -34,14 +34,14 @@ _semaphore_loop: Optional[asyncio.AbstractEventLoop] = None
 
 
 def _get_settings() -> LLMConcurrencySettings:
-    global _settings  # noqa: PLW0603 — singleton lazy de settings a nivel de módulo
+    global _settings  # noqa: PLW0603
     if _settings is None:
         _settings = LLMConcurrencySettings()
     return _settings
 
 
 def _get_semaphore() -> asyncio.Semaphore:
-    global _semaphore, _semaphore_loop  # noqa: PLW0603 — semáforo lazy rebindeado por event loop
+    global _semaphore, _semaphore_loop  # noqa: PLW0603
     loop = asyncio.get_running_loop()
     if _semaphore is None or _semaphore_loop is not loop:
         max_concurrency = _get_settings().max_concurrency

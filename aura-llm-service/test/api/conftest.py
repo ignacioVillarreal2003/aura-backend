@@ -60,7 +60,6 @@ def client(app):
 
 @pytest.fixture
 def mock_authentication_provider(app):
-    """Replace the app's authentication provider with an AsyncMock for one test."""
     original = app.state.authentication_provider
     provider = AsyncMock()
     app.state.authentication_provider = provider
@@ -70,13 +69,6 @@ def mock_authentication_provider(app):
 
 @pytest.fixture
 def make_auth_headers(mock_authentication_provider):
-    """
-    Factory for JWT auth headers. The mocked provider resolves the bearer token
-    to a user with the requested permissions.
-
-    Usage:
-        response = client.post(url, json=body, headers=make_auth_headers(permissions=["PERM"]))
-    """
 
     def _make(user_id=TEST_USER_ID, email=TEST_USER_EMAIL, permissions=None):
         mock_authentication_provider.validate_token.return_value = AuthenticatedUserResponse(
@@ -93,7 +85,6 @@ def make_auth_headers(mock_authentication_provider):
 
 @pytest.fixture
 def auth_headers(make_auth_headers):
-    """JWT headers resolved to a user holding every LLM permission."""
     return make_auth_headers(permissions=ALL_PERMISSIONS)
 
 
@@ -144,3 +135,8 @@ def mock_graph_query_translation_service(app):
 @pytest.fixture
 def mock_rag_agent_service(app):
     yield from _mock_service(app, "rag_agent_service")
+
+
+@pytest.fixture
+def mock_feedback_evaluation_service(app):
+    yield from _mock_service(app, "feedback_evaluation_service")

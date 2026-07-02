@@ -137,7 +137,8 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LANGUAGE_CODE = 'es-es'
-TIME_ZONE = 'America/Montevideo'
+
+TIME_ZONE = config('TIME_ZONE', default='America/Montevideo')
 USE_I18N = True
 USE_TZ = True
 
@@ -210,6 +211,14 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000,http://localhost:4200', cast=Csv())
+
+# Elevación temporal a superadmin desde el panel admin.
+# La elevación se valida contra una contraseña global definida en el entorno
+# (ELEVATION_PASSWORD), no contra la contraseña de ninguna cuenta. Si está vacía,
+# la elevación queda deshabilitada.
+SUPERADMIN_USERNAME = config('SUPERADMIN_USERNAME', default='gral.rodriguez')
+ELEVATION_PASSWORD = config('ELEVATION_PASSWORD', default='')
+ELEVATION_TIMEOUT_MINUTES = config('ELEVATION_TIMEOUT_MINUTES', default=60, cast=int)
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [

@@ -1,9 +1,3 @@
-"""Unit tests for the DI startup registry and its rollback semantics.
-
-Critical path: if any startup step fails, already-started resources must be
-cleaned up in reverse order and removed from app.state, and a failing cleanup
-step must not abort the remaining rollback.
-"""
 from unittest.mock import AsyncMock
 
 import pytest

@@ -5,9 +5,12 @@ from typing import Any, Dict, Optional
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
 
+from app.application.services.user_interactions.rag_agent_service.constants.rag_node_name import RagNodeName
 from app.application.services.user_interactions.rag_agent_service.interfaces.rag_node_interface import RagNodeInterface
+from app.application.services.user_interactions.rag_agent_service.node_failures import EXPECTED_LLM_ERRORS
 from app.application.services.user_interactions.rag_agent_service.rag_agent_settings import QueryRefinerSettings
 from app.application.services.user_interactions.rag_agent_service.rag_agent_state.rag_agent_state import RagAgentState
+from app.configuration.metrics import record_rag_node_failure
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface import OllamaLLMInvokerInterface
 
@@ -41,9 +44,17 @@ class QueryRefinerNode(RagNodeInterface):
             await self._ensure_llm_initialized()
             refined = await self._refine(original, state.get("grade_reason", ""))
             refined = (refined or "").strip()[:_MAX_REFINED_QUERY_CHARS] or original
-        except Exception:
-            logger.error("Query refinement failed — retrying with the original query", exc_info=True)
+        except EXPECTED_LLM_ERRORS as exc:
+            record_rag_node_failure(RagNodeName.query_refiner.value, "expected", exc)
+            logger.warning(
+                "Query refinement degraded (expected error) — retrying with the original query",
+                exc_info=True,
+            )
             refined = original
+        except Exception as exc:
+            record_rag_node_failure(RagNodeName.query_refiner.value, "unexpected", exc)
+            logger.exception("Query refinement failed with an unexpected error")
+            raise
 
         logger.info(
             "Query refined for corrective retrieval",

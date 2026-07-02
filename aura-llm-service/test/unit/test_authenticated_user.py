@@ -1,6 +1,3 @@
-"""
-Unit tests for AuthenticatedUser domain model.
-"""
 import pytest
 from pydantic import ValidationError
 

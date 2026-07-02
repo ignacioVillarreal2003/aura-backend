@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from fastapi.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.services.document.document_download_service.interfaces.document_download_service_interface import (
     DocumentDownloadServiceInterface,
@@ -14,7 +13,6 @@ class DocumentDownloadControllerInterface(ABC):
             self,
             document_id: int,
             document_download_service: DocumentDownloadServiceInterface,
-            database_session: AsyncSession,
             authenticated_user: AuthenticatedUser,
     ) -> StreamingResponse:
         pass
@@ -24,7 +22,6 @@ class DocumentDownloadControllerInterface(ABC):
             self,
             document_id: int,
             document_download_service: DocumentDownloadServiceInterface,
-            database_session: AsyncSession,
             authenticated_user: AuthenticatedUser,
     ) -> StreamingResponse:
         pass

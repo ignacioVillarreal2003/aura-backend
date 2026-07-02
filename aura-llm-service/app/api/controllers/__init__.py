@@ -12,13 +12,13 @@ from app.api.controllers.user_interactions import (
     quiz_controller,
     lessons_learned_controller,
     decision_brief_controller,
-    feedback_evaluation_controller,
 )
 from app.api.controllers.processing import (
     document_classify_controller,
     fragment_contextualize_controller,
     graph_extraction_controller,
     graph_query_translation_controller,
+    feedback_evaluation_controller,
 )
 from app.api.controllers import health_controller
 

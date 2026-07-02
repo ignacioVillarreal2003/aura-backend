@@ -1,7 +1,3 @@
-"""
-Tests unitarios para SoftDeleteQuerySet y SoftDeleteManager.
-Usa Notification como modelo concreto — requiere fixture django_db_setup.
-"""
 import pytest
 from unittest.mock import patch, MagicMock
 

@@ -1,9 +1,12 @@
 import logging
 from typing import Any, Dict, List
 
+from app.application.services.user_interactions.rag_agent_service.constants.rag_node_name import RagNodeName
 from app.application.services.user_interactions.rag_agent_service.context_formatting import build_document_context
 from app.application.services.user_interactions.rag_agent_service.interfaces.rag_node_interface import RagNodeInterface
+from app.application.services.user_interactions.rag_agent_service.node_failures import EXPECTED_RETRIEVAL_ERRORS
 from app.application.services.user_interactions.rag_agent_service.rag_agent_settings import RagAgentServiceSettings
+from app.configuration.metrics import record_rag_node_failure
 from app.application.services.user_interactions.rag_agent_service.rag_agent_state.rag_agent_state import RagAgentState
 from app.domain.authentication.authenticated_user import AuthenticatedUser
 from app.infrastructure.http.document_context_provider.dtos.fragment_response import FragmentResponse
@@ -37,8 +40,6 @@ class DocumentFetcherNode(RagNodeInterface):
         keywords: List[str] = state.get("keywords", [])
         authenticated_user: AuthenticatedUser = state["authenticated_user"]
 
-        # Puede encadenarse después del context_retriever cuando el operador pide
-        # ambos: en ese caso se preservan y mergean los fragmentos ya recuperados.
         existing: List[FragmentResponse] = list(state.get("retrieved_fragments") or [])
 
         if not query:
@@ -58,9 +59,17 @@ class DocumentFetcherNode(RagNodeInterface):
                 },
             )
             return {"retrieved_fragments": combined, "context": context}
-        except Exception:
-            logger.error("Document fetch failed — keeping existing context", exc_info=True)
+        except EXPECTED_RETRIEVAL_ERRORS as exc:
+            record_rag_node_failure(RagNodeName.document_fetcher.value, "expected", exc)
+            logger.warning(
+                "Document fetch degraded (expected error) — keeping existing context",
+                exc_info=True,
+            )
             return {"retrieved_fragments": existing, "context": state.get("context", "")}
+        except Exception as exc:
+            record_rag_node_failure(RagNodeName.document_fetcher.value, "unexpected", exc)
+            logger.exception("Document fetch failed with an unexpected error")
+            raise
 
     @staticmethod
     def _merge_fragments(

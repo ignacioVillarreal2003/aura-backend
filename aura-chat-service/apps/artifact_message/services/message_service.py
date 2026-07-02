@@ -44,7 +44,6 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class _AiStreamState:
-    """Mutable accumulation state for a single AI SSE stream."""
 
     accumulated_answer: str = ""
     received_complete: bool = False
@@ -148,9 +147,6 @@ class MessageService:
             chat_id, limit=limit
         )
         ordered = list(reversed(recent))
-        # In a shared chat several people speak as "human". Tag each human turn
-        # with its author so the model can tell participants apart; keep
-        # single-user chats clean (no tagging) to avoid polluting the prompt.
         human_senders = {
             m.created_by
             for m in ordered
@@ -361,8 +357,6 @@ class MessageService:
                 user, chat_id, document_ids=document_ids, **flags
             )
         if mode == ChatAIMode.RAG_AGENT:
-            # El agente RAG resuelve por sí mismo qué documentos usar; su request
-            # no admite `document_ids`, así que no se reenvían.
             return self.iter_rag_agent_stream_group_payloads(user, chat_id, **flags)
         return self.iter_document_question_stream_group_payloads(
             user, chat_id, document_ids=document_ids, **flags

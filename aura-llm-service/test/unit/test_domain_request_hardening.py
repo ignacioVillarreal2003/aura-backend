@@ -1,10 +1,3 @@
-"""Unit tests locking in the domain-request hardening:
-- optional operator prompts (system_prompt/response_style) are normalized
-  (control chars stripped, blank -> None);
-- requests reject unknown fields (extra="forbid");
-- attached document_ids share the MAX_DOCUMENT_IDS_PER_REQUEST (50) ceiling;
-- graph DTOs validate type lengths via field validators.
-"""
 import pytest
 from pydantic import ValidationError
 

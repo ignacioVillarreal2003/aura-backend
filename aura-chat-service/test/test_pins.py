@@ -6,9 +6,6 @@ from test.conftest import make_pin
 PIN_VIEW = "apps.message.views.pin_view"
 
 
-# ---------------------------------------------------------------------------
-# List pinned  GET /api/v1/chats/{chat_id}/messages/pinned/
-# ---------------------------------------------------------------------------
 
 def test_list_pinned_returns_200(api_client, mocker):
     mocker.patch(
@@ -55,9 +52,6 @@ def test_list_pinned_unauthenticated(anon_client):
     assert response.status_code == 401
 
 
-# ---------------------------------------------------------------------------
-# Pin message  POST /api/v1/chats/{chat_id}/messages/{message_id}/pin/
-# ---------------------------------------------------------------------------
 
 def test_pin_message_returns_201(api_client, mocker):
     mocker.patch(
@@ -93,9 +87,6 @@ def test_pin_message_unauthenticated(anon_client):
     assert response.status_code == 401
 
 
-# ---------------------------------------------------------------------------
-# Unpin message  DELETE /api/v1/chats/{chat_id}/messages/{message_id}/pin/
-# ---------------------------------------------------------------------------
 
 def test_unpin_message_returns_204(api_client, mocker):
     mocker.patch(f"{PIN_VIEW}.pinned_message_service.unpin_message")

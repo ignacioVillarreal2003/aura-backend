@@ -446,6 +446,54 @@ Translates a natural-language question into a structured graph query intent.
 
 ---
 
+## Feedback Evaluation
+
+### POST /feedback-evaluate
+
+Audits a negatively-rated interaction with an LLM-as-a-judge: classifies where the
+assistant failed and proposes the corrected answer.
+
+**Permission:** `LLM_FEEDBACK_EVALUATION`  
+**Rate limit:** 60 / min  
+**Request body**
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `user_query` | `string` | yes | Original user query that produced the rated message |
+| `assistant_response` | `string` | yes | Assistant answer that was rated |
+| `chat_history` | `array<object>` | no | Recent conversation messages (default `[]`) |
+| `fragments` | `array<object>` | no | RAG context fragments tied to the answer (default `[]`) |
+| `feedback_reason` | `string` | no | User-reported reason (e.g. `incorrect`, `incomplete`, `tone`) |
+| `feedback_comment` | `string` | no | Free-text user comment (default `""`) |
+| `mode` | `string` | no | Chat mode: `direct`, `rag` (default `direct`) |
+
+**Example request**
+```json
+{
+  "user_query": "¿Cuál es el procedimiento de evacuación?",
+  "assistant_response": "No tengo información sobre eso.",
+  "chat_history": [{"role": "human", "content": "¿Cuál es el procedimiento de evacuación?"}],
+  "fragments": [],
+  "feedback_reason": "incomplete",
+  "feedback_comment": "Faltó detalle operativo.",
+  "mode": "rag"
+}
+```
+
+**Response 200**
+
+| Field | Type | Description |
+|---|---|---|
+| `failure_category` | `string` | Classified failure (see values below) |
+| `failure_explanation` | `string` | Where and why the model failed |
+| `expected_output` | `string` | The corrected answer the assistant should have given |
+| `confidence_score` | `float` | Judge confidence, `0.0`–`1.0` |
+| `judge_model` | `string` | Model used as the judge |
+
+**failure_category values:** `retrieval_miss`, `hallucination`, `reasoning`, `style`, `incomplete`, `other`, `no_failure`
+
+---
+
 ## General Chat
 
 ### POST /general-chat

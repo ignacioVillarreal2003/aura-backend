@@ -1,5 +1,3 @@
-"""Dependency probes for readiness/startup, kept out of the HTTP layer so they
-can be reused and unit-tested without a request."""
 import logging
 from dataclasses import dataclass
 
@@ -34,5 +32,4 @@ def check_redis() -> CheckResult:
 
 
 def dependency_checks() -> list[CheckResult]:
-    """Every external dependency this service needs to serve traffic."""
     return [check_database(), check_redis()]

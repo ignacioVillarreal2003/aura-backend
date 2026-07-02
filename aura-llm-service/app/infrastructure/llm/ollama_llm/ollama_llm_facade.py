@@ -25,37 +25,10 @@ _PROBE_TIMEOUT: float = 10.0
 _RUNTIME_PROBE_TIMEOUT: float = 1.5
 
 
-_OLLAMA_OPTION_KEYS = frozenset({
-    "temperature", "top_p", "top_k", "seed", "repeat_penalty", "repeat_last_n",
-    "num_ctx", "num_predict", "num_gpu", "num_thread",
-    "mirostat", "mirostat_eta", "mirostat_tau", "tfs_z",
-})
-
 _OLLAMA_OPTION_ALIASES = {
     "max_tokens": "num_predict",
     "max_output_tokens": "num_predict",
 }
-
-
-class _ChatOllamaWithCallTimeOptions(ChatOllama):
-    def _chat_params(
-            self,
-            messages: Any,
-            stop: Optional[List[str]] = None,
-            **kwargs: Any,
-    ) -> dict:
-        overrides = {
-            key: kwargs.pop(key)
-            for key in list(kwargs)
-            if key in _OLLAMA_OPTION_KEYS
-        }
-        for alias, option_key in _OLLAMA_OPTION_ALIASES.items():
-            if alias in kwargs:
-                overrides.setdefault(option_key, kwargs.pop(alias))
-        params = super()._chat_params(messages, stop=stop, **kwargs)
-        if overrides:
-            params["options"].update(overrides)
-        return params
 
 
 class _CircuitState(enum.Enum):
@@ -82,6 +55,7 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
     ) -> None:
         self._settings = ollama_llm_facade_settings or OllamaLLMFacadeSettings()
         self._tool_manager = OllamaToolManager(tool_factories)
+        self._base_options: dict[str, Any] = self._settings.get_ollama_options()
 
         self._initialized: bool = False
         self._circuit_state: _CircuitState = _CircuitState.CLOSED
@@ -204,6 +178,10 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
             return False
 
     @property
+    def model_name(self) -> str:
+        return self._settings.model_name
+
+    @property
     def tools_bound(self) -> bool:
         return self._tools_bound
 
@@ -239,11 +217,24 @@ class OllamaLLMFacade(OllamaLLMFacadeInterface):
         try:
             logger.debug("Building base LLM")
             kwargs = self._settings.get_chat_ollama_kwargs()
-            self._llm_base = _ChatOllamaWithCallTimeOptions(**kwargs)
-            self._llm_json = _ChatOllamaWithCallTimeOptions(**kwargs, format="json")
+            self._llm_base = ChatOllama(**kwargs)
+            self._llm_json = ChatOllama(**kwargs, format="json")
             logger.info("Base LLM built successfully")
         except Exception as e:
             raise LLMInitializationError(f"Failed to build ChatOllama: {e}") from e
+
+    def apply_options(self, llm: Runnable, **overrides: Any) -> Runnable:
+        normalized: dict[str, Any] = {}
+        for key, value in overrides.items():
+            if value is None:
+                continue
+            normalized[_OLLAMA_OPTION_ALIASES.get(key, key)] = value
+
+        if not normalized:
+            return llm
+
+        merged = {**self._base_options, **normalized}
+        return llm.bind(options=merged)
 
     def _bind_tools(self) -> bool:
         if self._llm_base is None:

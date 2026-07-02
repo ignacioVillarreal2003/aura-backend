@@ -23,17 +23,12 @@ from app.infrastructure.persistence.database.database_manager.interfaces.databas
 from app.infrastructure.persistence.database.repositories.interfaces.document_repository_interface import (
     DocumentRepositoryInterface,
 )
+from app.infrastructure.persistence.memory_database.redis_lock import refreshing_redis_lock
 from app.infrastructure.persistence.storages.document_storage.interfaces.document_storage_interface import (
     DocumentStorageInterface,
 )
 
 logger = logging.getLogger(__name__)
-
-_RELEASE_LOCK_SCRIPT = (
-    "if redis.call('get', KEYS[1]) == ARGV[1] "
-    "then return redis.call('del', KEYS[1]) "
-    "else return 0 end"
-)
 
 
 class DocumentIngestionConsumer(BaseConsumer[DocumentIngestionCommand], DocumentIngestionConsumerInterface):
@@ -46,7 +41,7 @@ class DocumentIngestionConsumer(BaseConsumer[DocumentIngestionCommand], Document
             document_ingestion_service: DocumentIngestionServiceInterface,
             redis_client: aioredis.Redis,
     ) -> None:
-        super().__init__(rabbitmq_manager)
+        super().__init__(rabbitmq_manager, dedup_redis=redis_client)
         self._document_storage = document_storage
         self._database_manager = database_manager
         self._document_repository = document_repository
@@ -71,7 +66,6 @@ class DocumentIngestionConsumer(BaseConsumer[DocumentIngestionCommand], Document
         document_id = document_ingestion_command.document_id
         lock_key = self._build_document_lock_key(document_id)
         lock_token = f"{message_envelope.message_id}:{uuid.uuid4().hex}"
-        lock_acquired = False
         temp_path: Optional[Path] = None
 
         logger.info(
@@ -82,102 +76,95 @@ class DocumentIngestionConsumer(BaseConsumer[DocumentIngestionCommand], Document
             }
         )
 
-        lock_acquired = bool(
-            await self._redis.set(
-                lock_key,
-                lock_token,
-                nx=True,
-                ex=self._settings.document_ingestion_lock_ttl_seconds,
-            )
-        )
-        if not lock_acquired:
-            logger.info(
-                "Skipping duplicate/redelivered ingestion message because document lock is active.",
-                extra={
-                    "document_id": document_id,
-                    "message_id": message_envelope.message_id,
-                },
-            )
-            return
-
-        try:
-            temp_dir = Path(tempfile.gettempdir()) / self._settings.document_ingestion_temp_dir_name
-            temp_dir.mkdir(parents=True, exist_ok=True)
-            safe_name = Path(document_ingestion_command.filename).name
-            temp_path = temp_dir / f"{uuid.uuid4().hex}_{safe_name}"
-
-            await self._document_storage.download_document_to_file(
-                object_name=document_ingestion_command.storage_url,
-                file_path=str(temp_path)
-            )
-
-            logger.info(
-                "The document file was downloaded from object storage for ingestion.",
-                extra={
-                    "document_id": document_id
-                }
-            )
-
-            async with self._database_manager.session() as db_session:
-                document = await self._document_repository.get_document_by_id(
-                    document_id=document_id,
-                    database_session=db_session
-                )
-                if document is not None:
-                    await db_session.refresh(document)
-                    db_session.expunge(document)
-
-            if document is None:
-                logger.error(
-                    "No document row was found for the given id; acknowledging to drop a poison message.",
-                    extra={
-                        "document_id": document_id
-                    }
-                )
-                return
-
-            status = document.status if isinstance(document.status, DocumentStatus) else DocumentStatus(document.status)
-            if status in {DocumentStatus.processed, DocumentStatus.failed}:
+        async with refreshing_redis_lock(
+            self._redis,
+            key=lock_key,
+            token=lock_token,
+            ttl_seconds=self._settings.document_ingestion_lock_ttl_seconds,
+        ) as lock_acquired:
+            if not lock_acquired:
                 logger.info(
-                    "Skipping ingestion because document is already in a terminal status.",
+                    "Skipping duplicate/redelivered ingestion message because document lock is active.",
                     extra={
                         "document_id": document_id,
-                        "status": status.value,
+                        "message_id": message_envelope.message_id,
                     },
                 )
                 return
 
-            user = AuthenticatedUser.model_validate(document_ingestion_command.user)
-            await self._document_ingestion_service.process_document(
-                document=document,
-                local_file_path=temp_path,
-                user=user,
-                prefer_docling=document_ingestion_command.prefer_docling,
-                enrich=document_ingestion_command.enrich,
-                graph_extract=document_ingestion_command.graph_extract,
-            )
+            try:
+                temp_dir = Path(tempfile.gettempdir()) / self._settings.document_ingestion_temp_dir_name
+                temp_dir.mkdir(parents=True, exist_ok=True)
+                safe_name = Path(document_ingestion_command.filename).name
+                temp_path = temp_dir / f"{uuid.uuid4().hex}_{safe_name}"
 
-            logger.info(
-                "The document ingestion pipeline finished successfully.",
-                extra={
-                    "document_id": document_id
-                }
-            )
-        finally:
-            if temp_path is not None:
-                try:
-                    if temp_path.exists():
-                        temp_path.unlink()
-                except Exception:
-                    logger.warning(
-                        "Failed to cleanup ingestion temporary file in consumer finally block.",
-                        extra={"document_id": document_id, "path": str(temp_path)},
+                await self._document_storage.download_document_to_file(
+                    object_name=document_ingestion_command.storage_url,
+                    file_path=str(temp_path)
+                )
+
+                logger.info(
+                    "The document file was downloaded from object storage for ingestion.",
+                    extra={
+                        "document_id": document_id
+                    }
+                )
+
+                async with self._database_manager.session() as db_session:
+                    document = await self._document_repository.get_document_by_id(
+                        document_id=document_id,
+                        database_session=db_session
                     )
-            if lock_acquired:
-                await self._release_document_lock(lock_key, lock_token)
+                    if document is not None:
+                        await db_session.refresh(document)
+                        db_session.expunge(document)
+
+                if document is None:
+                    logger.error(
+                        "No document row was found for the given id; acknowledging to drop a poison message.",
+                        extra={
+                            "document_id": document_id
+                        }
+                    )
+                    return
+
+                status = document.status if isinstance(document.status, DocumentStatus) else DocumentStatus(document.status)
+                if status in {DocumentStatus.processed, DocumentStatus.failed}:
+                    logger.info(
+                        "Skipping ingestion because document is already in a terminal status.",
+                        extra={
+                            "document_id": document_id,
+                            "status": status.value,
+                        },
+                    )
+                    return
+
+                user = AuthenticatedUser.model_validate(document_ingestion_command.user)
+                await self._document_ingestion_service.process_document(
+                    document=document,
+                    local_file_path=temp_path,
+                    user=user,
+                    prefer_docling=document_ingestion_command.prefer_docling,
+                    enrich=document_ingestion_command.enrich,
+                    graph_extract=document_ingestion_command.graph_extract,
+                )
+
+                logger.info(
+                    "The document ingestion pipeline finished successfully.",
+                    extra={
+                        "document_id": document_id
+                    }
+                )
+            finally:
+                if temp_path is not None:
+                    try:
+                        if temp_path.exists():
+                            temp_path.unlink()
+                    except Exception:
+                        logger.warning(
+                            "Failed to cleanup ingestion temporary file in consumer finally block.",
+                            extra={"document_id": document_id, "path": str(temp_path)},
+                        )
 
     def _build_document_lock_key(self, document_id: int) -> str:
         return f"{self._settings.document_ingestion_lock_key_prefix}:document:{document_id}:lock"
-
-    async def _release_document_lock(self, lock_key: str, lock_token: str) -> None:
-        await self._redis.eval(_RELEASE_LOCK_SCRIPT, 1, lock_key, lock_token)

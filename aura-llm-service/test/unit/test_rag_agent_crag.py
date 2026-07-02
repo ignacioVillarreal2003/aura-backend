@@ -1,8 +1,6 @@
-"""Tests for the Corrective-RAG additions to the RAG agent: the grader node
-verdict + fail-open behaviour, the refiner's bounded-loop counter, the grader
-routing, and an end-to-end workflow run that exercises the refine→re-retrieve
-loop with fakes (no real LLM/HTTP)."""
 import types
+
+import pytest
 
 from app.application.services.user_interactions.rag_agent_service.constants.rag_node_name import RagNodeName
 from app.application.services.user_interactions.rag_agent_service.nodes.context_grader_node.context_grader_node import (
@@ -31,7 +29,6 @@ class _FakeFacade:
 
 
 class _ScriptedInvoker:
-    """Returns queued responses in order; repeats the last once exhausted."""
 
     def __init__(self, responses):
         self._responses = list(responses)
@@ -42,7 +39,6 @@ class _ScriptedInvoker:
         return self._responses[min(self.calls - 1, len(self._responses) - 1)]
 
 
-# --------------------------- grader routing ---------------------------
 
 class TestGraderRouting:
     def test_sufficient_goes_to_synthesizer(self):
@@ -62,7 +58,6 @@ class TestGraderRouting:
         assert _route_after_grader(state) == RagNodeName.fallback.value
 
 
-# --------------------------- grader node ---------------------------
 
 class TestContextGraderNode:
     def _node(self, invoker, max_attempts=1):
@@ -91,17 +86,27 @@ class TestContextGraderNode:
         assert out["context_sufficient"] is False
 
     async def test_llm_error_fails_open(self):
+        from app.infrastructure.llm.ollama_llm.exceptions.ollama_llm_invoker_exceptions import LLMInvocationError
+
         class _Boom:
             async def call_llm_content(self, llm, llm_input):
-                raise RuntimeError("down")
+                raise LLMInvocationError("down")
 
         node = self._node(_Boom())
         out = await node.process({"query": "q", "context": "ctx", "retrieval_attempts": 0})
         assert out["context_sufficient"] is True
         assert out["can_retry"] is False
 
+    async def test_unexpected_error_propagates(self):
+        class _Boom:
+            async def call_llm_content(self, llm, llm_input):
+                raise RuntimeError("bug")
 
-# --------------------------- refiner node ---------------------------
+        node = self._node(_Boom())
+        with pytest.raises(RuntimeError):
+            await node.process({"query": "q", "context": "ctx", "retrieval_attempts": 0})
+
+
 
 class TestQueryRefinerNode:
     def _node(self, invoker):
@@ -114,9 +119,11 @@ class TestQueryRefinerNode:
         assert out["query"] == "consulta reformulada"
 
     async def test_failure_keeps_original_but_still_counts(self):
+        from app.infrastructure.llm.ollama_llm.exceptions.ollama_llm_invoker_exceptions import LLMInvocationError
+
         class _Boom:
             async def call_llm_content(self, llm, llm_input):
-                raise RuntimeError("down")
+                raise LLMInvocationError("down")
 
         node = self._node(_Boom())
         out = await node.process({"query": "original", "retrieval_attempts": 0})
@@ -124,11 +131,8 @@ class TestQueryRefinerNode:
         assert out["retrieval_attempts"] == 1
 
 
-# --------------------------- end-to-end loop ---------------------------
 
 class _FakeDocsProvider:
-    """First retrieval returns nothing relevant; after one refinement it returns
-    a fragment. Lets us prove the corrective loop actually re-retrieves."""
 
     def __init__(self, make_fragment):
         self._make_fragment = make_fragment
@@ -136,7 +140,6 @@ class _FakeDocsProvider:
 
     async def retrieve_context_fragments_by_question_request(self, *, authenticated_user, request):
         self.retrieve_calls += 1
-        # Pass 1: an irrelevant fragment (graded insufficient). Pass 2: the answer.
         if self.retrieve_calls == 1:
             return types.SimpleNamespace(fragments=[self._make_fragment(content="texto irrelevante")])
         return types.SimpleNamespace(fragments=[self._make_fragment(content="respuesta encontrada")])
@@ -156,14 +159,12 @@ async def test_corrective_loop_reretrieves_then_answers(make_fragment):
 
     docs = _FakeDocsProvider(make_fragment)
 
-    # query_analyzer (1), grader pass1 -> insufficient (1), refiner (1),
-    # grader pass2 -> sufficient (1), answer_synthesizer (1).
     invoker = _ScriptedInvoker([
-        '{"query": "consulta", "keywords": ["a"], "intent": "question"}',  # analyzer
-        '{"sufficient": false, "reason": "vacío"}',                          # grade pass 1
-        "consulta mejor",                                                    # refiner
-        '{"sufficient": true, "reason": "ok"}',                              # grade pass 2
-        "Respuesta final basada en el contexto.",                           # synthesizer
+        '{"query": "consulta", "keywords": ["a"], "intent": "question"}',
+        '{"sufficient": false, "reason": "vacío"}',
+        "consulta mejor",
+        '{"sufficient": true, "reason": "ok"}',
+        "Respuesta final basada en el contexto.",
     ])
 
     settings = RagAgentServiceSettings(
@@ -192,7 +193,7 @@ async def test_corrective_loop_reretrieves_then_answers(make_fragment):
     )
     final = await workflow.invoke(state)
 
-    assert docs.retrieve_calls == 2  # initial + one corrective retry
+    assert docs.retrieve_calls == 2
     assert final["answer"] == "Respuesta final basada en el contexto."
     assert len(final["retrieved_fragments"]) == 1
 
@@ -216,9 +217,9 @@ async def test_stream_emits_initial_and_per_node_spanish_progress(make_fragment)
             return types.SimpleNamespace(fragments=[make_fragment(content="ctx")])
 
     invoker = _ScriptedInvoker([
-        '{"query": "q", "keywords": ["a"], "intent": "question"}',  # analyzer
-        '{"sufficient": true, "reason": "ok"}',                      # grader
-        "Respuesta final.",                                         # synthesizer
+        '{"query": "q", "keywords": ["a"], "intent": "question"}',
+        '{"sufficient": true, "reason": "ok"}',
+        "Respuesta final.",
     ])
     settings = RagAgentServiceSettings(
         use_guardrails=False, use_graph_context=False, use_graph_structured_query=False
@@ -232,10 +233,8 @@ async def test_stream_emits_initial_and_per_node_spanish_progress(make_fragment)
     events = [e async for e in svc.execute_stream(request, user)]
     progress = [e for e in events if isinstance(e, AgentStreamProgress)]
 
-    # The first event is always the initial "processing" status (Spanish, eager).
     assert progress[0].step == "processing"
     assert progress[0].message == "Procesando tu consulta..."
-    # Node progress is emitted before each node runs, in pipeline order.
     steps = [p.step for p in progress]
     assert steps[:4] == [
         "processing",
@@ -243,7 +242,6 @@ async def test_stream_emits_initial_and_per_node_spanish_progress(make_fragment)
         RagNodeName.graph_context_retriever.value,
         RagNodeName.context_retriever.value,
     ]
-    # Every progress event carries a non-empty Spanish message for the frontend.
     assert all(p.message and p.message.strip() for p in progress)
     assert any(isinstance(e, AgentStreamComplete) for e in events)
 

@@ -14,8 +14,6 @@ from core.clients.llm_client import ReportGenerateResult
 from test.conftest import make_message, make_report, make_user
 
 SVC = "apps.artifact_report.services.report_service"
-# get/list/delete now delegate to ArtifactCrudService; access checks live in the
-# shared base + artifact_access, so patch permissions/membership there.
 ACCESS = "apps.artifact.services.artifact_access"
 CRUD = "apps.artifact.services.artifact_crud_service"
 
@@ -24,13 +22,11 @@ service = ReportService()
 
 @pytest.fixture(autouse=True)
 def _patch_atomic(mocker):
-    """delete/generate wrap writes in transaction.atomic(); no-op it for mock-only tests."""
     mocker.patch("django.db.transaction.Atomic.__enter__", return_value=None)
     mocker.patch("django.db.transaction.Atomic.__exit__", return_value=False)
 
 
 def _patch_delete_extras(mocker):
-    """The shared _delete also cleans up interactions and soft-deletes the artifact."""
     mocker.patch(f"{CRUD}._cleanup_artifact_interactions")
     mocker.patch(f"{CRUD}.artifact_repository.soft_delete")
 
@@ -43,9 +39,6 @@ def _patch_access(mocker, *, report, is_member=False, is_contributor=False):
     mocker.patch(f"{ACCESS}.membership_repository.is_active_contributor", return_value=is_contributor)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# get_report — any active member (reader OK)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_get_report_creator_always_has_access(mocker):
     user = make_user(user_id=1)
@@ -64,7 +57,6 @@ def test_get_report_active_member_has_access(mocker):
 
 
 def test_get_report_reader_member_has_access(mocker):
-    """Reader role is still an active member — can read."""
     user = make_user(user_id=2)
     rp = make_report(report_id=1, created_by=1, source_chat_id=10)
     _patch_access(mocker, report=rp, is_member=True, is_contributor=False)
@@ -81,7 +73,6 @@ def test_get_report_non_member_raises_403(mocker):
 
 
 def test_get_report_no_source_chat_non_creator_raises_403(mocker):
-    """Report with no chat: only the creator can access it."""
     user = make_user(user_id=2)
     rp = make_report(report_id=1, created_by=1, source_chat_id=None)
     _patch_access(mocker, report=rp)
@@ -97,9 +88,6 @@ def test_get_report_not_found_raises_404(mocker):
         service.get_report(user, 999)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# delete_report — owner or editor only; reader cannot delete
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_delete_creator_can_delete_own_report(mocker):
     user = make_user(user_id=1)
@@ -112,7 +100,6 @@ def test_delete_creator_can_delete_own_report(mocker):
 
 
 def test_delete_contributor_member_can_delete(mocker):
-    """Owner or editor role can delete someone else's report."""
     user = make_user(user_id=2)
     rp = make_report(report_id=1, created_by=1, source_chat_id=10)
     _patch_access(mocker, report=rp, is_contributor=True)
@@ -123,7 +110,6 @@ def test_delete_contributor_member_can_delete(mocker):
 
 
 def test_delete_reader_member_raises_403(mocker):
-    """Reader is an active member but NOT a contributor — cannot delete."""
     user = make_user(user_id=2)
     rp = make_report(report_id=1, created_by=1, source_chat_id=10)
     _patch_access(mocker, report=rp, is_member=True, is_contributor=False)
@@ -147,9 +133,6 @@ def test_delete_not_found_raises_404(mocker):
         service.delete_report(user, 999)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# list_reports — chat filter validation (always scoped to a chat)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_list_reports_with_chat_id_checks_membership(mocker):
     user = make_user(user_id=1)
@@ -162,7 +145,6 @@ def test_list_reports_with_chat_id_checks_membership(mocker):
 
 
 def test_list_reports_reader_can_list_chat_reports(mocker):
-    """Reader role can list reports in a chat (read-only operation)."""
     user = make_user(user_id=2)
     mocker.patch("core.authorization.access.AccessControl.require_permissions")
     mocker.patch(f"{CRUD}.chat_repository.get_by_id", return_value=object())
@@ -199,9 +181,6 @@ def test_list_reports_with_type_filter(mocker):
     repo.assert_called_once_with(source_chat_id=5, report_type="SITREP")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# get_own_report — any active member (used for export)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_get_own_report_creator_has_access(mocker):
     user = make_user(user_id=1)
@@ -212,7 +191,6 @@ def test_get_own_report_creator_has_access(mocker):
 
 
 def test_get_own_report_reader_member_has_access(mocker):
-    """Any active member can export (read operation)."""
     user = make_user(user_id=2)
     rp = make_report(report_id=1, created_by=1, source_chat_id=10)
     _patch_access(mocker, report=rp, is_member=True)
@@ -236,9 +214,6 @@ def test_get_own_report_not_found_raises_404(mocker):
         service.get_own_report(user, 999)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# list_all_reports (admin)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_list_all_reports_passes_type_to_repo(mocker):
     user = make_user(user_id=1)
@@ -256,13 +231,9 @@ def test_list_all_reports_no_type_passes_none(mocker):
     repo.assert_called_once_with(report_type=None)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# get_report_admin_export — bypasses access checks (admin only)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_get_report_admin_export_returns_report_without_access_check(mocker):
-    """Admin export bypasses creator/membership checks entirely."""
-    user = make_user(user_id=999)  # neither creator nor member
+    user = make_user(user_id=999)
     rp = make_report(report_id=1, created_by=1, source_chat_id=10)
     mocker.patch("core.authorization.access.AccessControl.require_permissions")
     mocker.patch(f"{SVC}.report_repository.get_by_id", return_value=rp)
@@ -280,9 +251,6 @@ def test_get_report_admin_export_not_found_raises_404(mocker):
         service.get_report_admin_export(user, 999)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# _derive_title_and_description helper
-# ══════════════════════════════════════════════════════════════════════════════
 
 _SITREP_SAMPLE = """CLASIFICACIÓN: RESERVADO
 
@@ -309,7 +277,6 @@ def test_derive_title_uses_mission_first_sentence():
 
 
 def test_derive_title_ignores_classification_header():
-    # La línea de clasificación nunca debe convertirse en el título (bug original).
     title, _ = _derive_title_and_description("SITREP", _SITREP_SAMPLE)
     assert not title.upper().startswith("CLASIFICACIÓN")
 
@@ -334,9 +301,6 @@ def test_derive_title_truncates_long_mission():
     assert len(description) <= 240
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# generate_report (async)
-# ══════════════════════════════════════════════════════════════════════════════
 
 @pytest.mark.asyncio
 async def test_generate_report_chat_not_found_raises_404(mocker):

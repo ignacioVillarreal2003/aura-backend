@@ -68,9 +68,12 @@ def download_docling_models(output_dir: str) -> None:
 
     from docling.utils.model_downloader import download_models
 
+    # EasyOCR no se baja por defecto (with_easyocr=False), pero el reader lo
+    # fuerza (RapidOCR auto rompe con torch/PP-OCRv6). Sin esto, en runtime
+    # offline falla con "Missing craft_mlt_25k.pth and downloads disabled".
     _with_retries(
         f"docling models -> '{output_dir}'",
-        lambda: download_models(output_dir=Path(output_dir)),
+        lambda: download_models(output_dir=Path(output_dir), with_easyocr=True),
     )
 
 

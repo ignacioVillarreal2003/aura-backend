@@ -1,12 +1,13 @@
 import asyncio
 import logging
 import uuid
+from dataclasses import dataclass, field
 from typing import Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.services.graph.graph_extraction_service.exceptions.graph_extraction_service_exception import (
-    GraphExtractionAlreadyRunningException,
     GraphExtractionDocumentNotFoundException,
+    GraphExtractionFailedException,
 )
 from app.application.services.graph.graph_extraction_service.interfaces.graph_extraction_service_interface import (
     GraphExtractionServiceInterface,
@@ -43,6 +44,16 @@ from app.infrastructure.persistence.memory_database.graph_extraction_lock_store.
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _FragmentExtraction:
+
+    fragment_id: int
+    success: bool
+    tail: str = ""
+    entity_items: list[EntityUpsertItem] = field(default_factory=list)
+    relation_items: list[RelationUpsertItem] = field(default_factory=list)
 
 
 class GraphExtractionService(GraphExtractionServiceInterface):
@@ -92,11 +103,11 @@ class GraphExtractionService(GraphExtractionServiceInterface):
         if not acquired:
             logger.info(
                 "Skipping knowledge graph extraction; another job is in progress.",
-                extra={"document_id": document_id, "user_id": user.id},
+                extra={"document_id": document_id, "user_id": user.id, "message_id": message_id},
             )
-            raise GraphExtractionAlreadyRunningException(
-                "A graph extraction job is already running for this document."
-            )
+            return
+
+        await self._set_graph_status(document_id, ProcessingStatus.processing)
 
         try:
             await self._run_job(
@@ -150,8 +161,6 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             document_id: int,
             user: AuthenticatedUser,
     ) -> None:
-        await self._purge_document_footprint(document_id)
-
         fragments = await self._load_fragments(document_id)
 
         if not fragments:
@@ -173,15 +182,76 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             )
             fragments = fragments[:max_fragments]
 
+        extractions = await self._extract_all_fragments(
+            job_id=job_id,
+            document_id=document_id,
+            user=user,
+            fragments=fragments,
+        )
+
+        total = len(extractions)
+        succeeded = sum(1 for extraction in extractions if extraction.success)
+        failed = total - succeeded
+        ratio = (succeeded / total) if total else 1.0
+
+        if total and ratio < self._settings.extraction_min_success_ratio:
+            raise GraphExtractionFailedException(
+                f"Graph extraction aborted: only {succeeded}/{total} fragments "
+                f"extracted successfully (min ratio "
+                f"{self._settings.extraction_min_success_ratio:.2f}). "
+                "The existing graph was left untouched."
+            )
+
+        if failed:
+            logger.warning(
+                "Some fragments failed during extraction but the run is within "
+                "the accepted threshold; committing the partial rebuild.",
+                extra={
+                    "document_id": document_id,
+                    "job_id": job_id,
+                    "succeeded": succeeded,
+                    "failed": failed,
+                    "total": total,
+                },
+            )
+
+        await self._commit_extractions(
+            document_id=document_id,
+            job_id=job_id,
+            extractions=extractions,
+        )
+
+        logger.info(
+            "Knowledge graph extraction finished for the document.",
+            extra={
+                "document_id": document_id,
+                "job_id": job_id,
+                "fragment_count": total,
+                "fragments_succeeded": succeeded,
+                "fragments_failed": failed,
+                "entities_written": sum(len(e.entity_items) for e in extractions),
+                "relations_written": sum(len(e.relation_items) for e in extractions),
+            },
+        )
+
+    async def _extract_all_fragments(
+            self,
+            *,
+            job_id: str,
+            document_id: int,
+            user: AuthenticatedUser,
+            fragments: list[Fragment],
+    ) -> list[_FragmentExtraction]:
         allowed_entity_types = self._settings.resolve_allowed_entity_types()
         allowed_relation_types = self._settings.resolve_allowed_relation_types() or None
 
         window_chars = self._settings.extraction_sliding_window_chars
         if window_chars > 0:
             fragments.sort(key=lambda f: (f.fragment_index, int(f.id)))
+            extractions: list[_FragmentExtraction] = []
             prev_tail = ""
             for fragment in fragments:
-                prev_tail = await self._process_single_fragment(
+                result = await self._extract_fragment(
                     job_id=job_id,
                     document_id=document_id,
                     fragment=fragment,
@@ -190,40 +260,67 @@ class GraphExtractionService(GraphExtractionServiceInterface):
                     allowed_relation_types=allowed_relation_types,
                     prev_context_tail=prev_tail,
                 )
-        else:
-            semaphore = asyncio.Semaphore(self._settings.extraction_concurrency)
+                extractions.append(result)
+                prev_tail = result.tail
+            return extractions
 
-            async def _runner(fragment: Fragment) -> None:
-                async with semaphore:
-                    await self._process_single_fragment(
-                        job_id=job_id,
-                        document_id=document_id,
-                        fragment=fragment,
-                        user=user,
-                        allowed_entity_types=allowed_entity_types,
-                        allowed_relation_types=allowed_relation_types,
-                    )
+        semaphore = asyncio.Semaphore(self._settings.extraction_concurrency)
 
-            results = await asyncio.gather(
-                *(_runner(fragment) for fragment in fragments),
-                return_exceptions=True,
-            )
-            for outcome in results:
-                if isinstance(outcome, BaseException):
-                    logger.exception(
-                        "Unexpected unhandled exception in a concurrent fragment runner.",
-                        extra={"document_id": document_id, "job_id": job_id},
-                        exc_info=outcome,
-                    )
+        async def _runner(fragment: Fragment) -> _FragmentExtraction:
+            async with semaphore:
+                return await self._extract_fragment(
+                    job_id=job_id,
+                    document_id=document_id,
+                    fragment=fragment,
+                    user=user,
+                    allowed_entity_types=allowed_entity_types,
+                    allowed_relation_types=allowed_relation_types,
+                )
 
-        logger.info(
-            "Knowledge graph extraction finished for the document.",
-            extra={
-                "document_id": document_id,
-                "job_id": job_id,
-                "fragment_count": len(fragments),
-            },
+        results = await asyncio.gather(
+            *(_runner(fragment) for fragment in fragments),
+            return_exceptions=True,
         )
+
+        extractions = []
+        for fragment, outcome in zip(fragments, results):
+            if isinstance(outcome, _FragmentExtraction):
+                extractions.append(outcome)
+                continue
+            logger.exception(
+                "Unexpected unhandled exception in a concurrent fragment runner.",
+                extra={
+                    "document_id": document_id,
+                    "job_id": job_id,
+                    "fragment_id": int(fragment.id),
+                },
+                exc_info=outcome if isinstance(outcome, BaseException) else None,
+            )
+            extractions.append(_FragmentExtraction(fragment_id=int(fragment.id), success=False))
+        return extractions
+
+    async def _commit_extractions(
+            self,
+            *,
+            document_id: int,
+            job_id: str,
+            extractions: list[_FragmentExtraction],
+    ) -> None:
+        await self._purge_document_footprint(document_id)
+
+        for extraction in extractions:
+            if extraction.entity_items:
+                await self._entity_repository.upsert_entities(
+                    entities=extraction.entity_items,
+                    document_id=document_id,
+                    fragment_id=extraction.fragment_id,
+                )
+            if extraction.relation_items:
+                await self._relation_repository.upsert_relations(
+                    relations=extraction.relation_items,
+                    document_id=document_id,
+                    fragment_id=extraction.fragment_id,
+                )
 
     async def _purge_document_footprint(self, document_id: int) -> None:
         relations_deleted = await self._relation_repository.delete_document_relations(
@@ -260,7 +357,7 @@ class GraphExtractionService(GraphExtractionServiceInterface):
                 database_session=session,
             )
 
-    async def _process_single_fragment(
+    async def _extract_fragment(
             self,
             *,
             job_id: str,
@@ -270,8 +367,9 @@ class GraphExtractionService(GraphExtractionServiceInterface):
             allowed_entity_types: list[str],
             allowed_relation_types: Optional[list[str]],
             prev_context_tail: str = "",
-    ) -> str:
+    ) -> _FragmentExtraction:
         fragment_id = int(fragment.id)
+        tail = self._content_tail(fragment.content)
         content = self._build_fragment_content(fragment.content, prev_context_tail)
 
         try:
@@ -291,59 +389,30 @@ class GraphExtractionService(GraphExtractionServiceInterface):
                 error=e,
                 stage="llm",
             )
-            return self._content_tail(fragment.content)
+            return _FragmentExtraction(fragment_id=fragment_id, success=False, tail=tail)
 
         entity_items, relation_items = self._build_upsert_batches(
             entities=response.entities,
             relations=response.relations,
         )
 
-        try:
-            await self._entity_repository.upsert_entities(
-                entities=entity_items,
-                document_id=document_id,
-                fragment_id=fragment_id,
-            )
-        except Exception as e:
-            await self._record_fragment_error(
-                job_id=job_id,
-                document_id=document_id,
-                fragment_id=fragment_id,
-                error=e,
-                stage="upsert_entity",
-            )
-            return self._content_tail(fragment.content)
-
-        try:
-            await self._relation_repository.upsert_relations(
-                relations=relation_items,
-                document_id=document_id,
-                fragment_id=fragment_id,
-            )
-        except Exception as e:
-            await self._record_fragment_error(
-                job_id=job_id,
-                document_id=document_id,
-                fragment_id=fragment_id,
-                error=e,
-                stage="upsert_relation",
-            )
-            return self._content_tail(fragment.content)
-
-        entities_count = len(entity_items)
-        relations_count = len(relation_items)
-
         logger.debug(
-            "Fragment was extracted into the knowledge graph.",
+            "Fragment was extracted into in-memory batches.",
             extra={
                 "job_id": job_id,
                 "document_id": document_id,
                 "fragment_id": fragment_id,
-                "entities_count": entities_count,
-                "relations_count": relations_count,
+                "entities_count": len(entity_items),
+                "relations_count": len(relation_items),
             },
         )
-        return self._content_tail(fragment.content)
+        return _FragmentExtraction(
+            fragment_id=fragment_id,
+            success=True,
+            tail=tail,
+            entity_items=entity_items,
+            relation_items=relation_items,
+        )
 
     def _build_fragment_content(self, content: str, prev_tail: str) -> str:
         if not prev_tail:

@@ -44,6 +44,9 @@ class RabbitMQManagerSettings(BaseSettings):
 
     max_delivery_attempts: int = Field(default=3, ge=1, le=20)
 
+    consumed_marker_key_prefix: str = Field(default="aura:consumed", max_length=128)
+    consumed_dedup_ttl_seconds: int = Field(default=86_400, ge=60, le=604_800)
+
     consumer_reconnect_delay_seconds: float = Field(default=5.0, gt=0, le=60.0)
 
     max_message_body_bytes: int = Field(
@@ -58,6 +61,18 @@ class RabbitMQManagerSettings(BaseSettings):
     exchange: str = Field(default="aura")
     dlx_exchange: str = Field(default="aura.dlx")
     dlq_queue: str = Field(default="aura.dead")
+
+    retry_exchange: str = Field(default="aura.retry.ex")
+    retry_queue: str = Field(default="aura.retry")
+    retry_delay_ms: int = Field(
+        default=30_000,
+        ge=1000,
+        le=3_600_000,
+        description=(
+            "Delay a failed message waits in the retry queue before being "
+            "dead-lettered back to its original work queue for another attempt."
+        ),
+    )
 
     document_ingestion_queue: str = Field(default="document.ingestion")
     graph_extraction_queue: str = Field(default="graph.extraction")
@@ -102,6 +117,8 @@ class RabbitMQManagerSettings(BaseSettings):
         "document_reprocess_queue",
         "dlx_exchange",
         "dlq_queue",
+        "retry_exchange",
+        "retry_queue",
         mode="before"
     )
     @classmethod

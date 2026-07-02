@@ -2,7 +2,9 @@ import logging
 import re
 import unicodedata
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
+
+from app.domain.time import APP_TIMEZONE
 from pathlib import Path
 from typing import Optional
 from pydantic import Field, field_validator, model_validator
@@ -206,7 +208,7 @@ class DocumentStorageSettings(BaseSettings):
             parts.append(self.object_key_prefix)
 
         if self.organize_objects_by_date:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(APP_TIMEZONE)
             parts += [str(now.year), f"{now.month:02d}", f"{now.day:02d}"]
 
         unique_suffix = uuid.uuid4().hex

@@ -52,7 +52,8 @@ Otros códigos pueden aparecer según excepciones concretas de cada app (`error_
 
 ## Health check
 
-- **`GET /api/v1/health`:** **`200`** si todas las comprobaciones reportan `ok`; **`503`** con `"status": "degraded"` si alguna dependencia (p. ej. base de datos o Redis) falla.
+- **`GET /api/v1/health`** (alias de readiness): **`200`** con `"status": "ready"` si todas las comprobaciones reportan `ok`; **`503`** con `"status": "not_ready"` si alguna dependencia (base de datos o Redis) falla. El cuerpo incluye `checks` por dependencia (`ok`/`error`).
+- **`GET /api/v1/health/live`:** liveness, siempre **`200`** mientras el proceso responde (sin tocar dependencias). **`/health/ready`** y **`/health/startup`** comparten la lógica de readiness.
 
 ## Documentación de códigos en OpenAPI
 

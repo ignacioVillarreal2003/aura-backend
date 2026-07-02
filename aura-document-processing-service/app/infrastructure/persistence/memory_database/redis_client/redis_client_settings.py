@@ -26,6 +26,8 @@ class RedisClientSettings(BaseSettings):
     outbox_worker_loop_interval_seconds: int = Field(default=15, ge=1, le=3600)
     outbox_document_reconcile_age_seconds: int = Field(default=60, ge=1, le=3600)
     outbox_document_reconcile_batch_size: int = Field(default=100, ge=1, le=1000)
+    outbox_enrichment_reconcile_age_seconds: int = Field(default=600, ge=1, le=86_400)
+    outbox_graph_reconcile_age_seconds: int = Field(default=600, ge=1, le=86_400)
 
     @model_validator(mode="after")
     def validate_backoff_range(self) -> "RedisClientSettings":

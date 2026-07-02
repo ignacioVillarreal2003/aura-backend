@@ -1,6 +1,3 @@
-"""Unit tests for configure_logging: the root JSON handler is installed and
-uvicorn's own loggers are re-pointed at it (handlers cleared but propagation
-re-enabled) so their lifecycle lines are not silently dropped."""
 import logging
 
 import pytest
@@ -37,7 +34,6 @@ def test_root_has_single_json_handler(restore_logging):
 
 
 def test_uvicorn_loggers_propagate_with_no_handlers(restore_logging):
-    # Simulate uvicorn's default config (own handler, propagation disabled).
     for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
         lg = logging.getLogger(name)
         lg.handlers = [logging.NullHandler()]

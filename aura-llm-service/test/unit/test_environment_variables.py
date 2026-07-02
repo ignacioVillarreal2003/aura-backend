@@ -1,6 +1,3 @@
-"""Unit tests for EnvironmentVariables: the log-level and CORS validators, the
-production/development flags, and the numeric field bounds. Settings are built
-with _env_file=None so the repo .env never leaks into assertions."""
 import pytest
 from pydantic import ValidationError
 

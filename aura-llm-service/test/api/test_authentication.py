@@ -1,10 +1,3 @@
-"""
-Tests for the AuthenticationProviderMiddleware behaviour on protected routes.
-
-Authentication is JWT-only: the middleware extracts the bearer token and asks
-the AuthenticationProvider to resolve it (Redis cache first, auth service on
-miss). Uses /api/v1/document-classify as a representative protected endpoint.
-"""
 from app.infrastructure.http.authentication_provider.exceptions.authentication_provider_exception import (
     AuthenticationProviderInvalidTokenException,
     AuthenticationProviderServiceUnavailableException,

@@ -1,7 +1,3 @@
-"""
-Tests unitarios para los serializers del servicio de notificaciones.
-Sin DB — validación DRF directa sobre objetos en memoria.
-"""
 import pytest
 from datetime import datetime, timezone
 from unittest.mock import patch
@@ -114,7 +110,7 @@ class TestEventEmissionRequestSerializer:
         s = EventEmissionRequestSerializer(
             data={
                 "event_type": "chat.member.invited",
-                "recipient_ids": list(range(1, 10002)),
+                "recipient_ids": list(range(1, 502)),
             }
         )
         assert not s.is_valid()

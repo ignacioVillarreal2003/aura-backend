@@ -3,6 +3,7 @@ from typing import AsyncIterator, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.authorization.exceptions.autorization_exceptions import UnauthorizedException
+from app.application.exceptions.app_exception import AppException
 from app.application.services.document.document_download_service.document_download_service_settings import (
     DocumentDownloadServiceSettings,
 )
@@ -26,6 +27,9 @@ from app.infrastructure.http.chat_membership.interfaces.chat_membership_provider
 from app.infrastructure.http.document_collection_catalog.interfaces.document_collection_catalog_client_interface import (
     DocumentCollectionCatalogClientInterface,
 )
+from app.infrastructure.persistence.database.database_manager.interfaces.database_manager_interface import (
+    DatabaseManagerInterface,
+)
 from app.infrastructure.persistence.database.orm.document import Document
 from app.infrastructure.persistence.database.repositories.interfaces.document_repository_interface import (
     DocumentRepositoryInterface,
@@ -48,18 +52,19 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
             document_storage: DocumentStorageInterface,
             document_collection_catalog_client: DocumentCollectionCatalogClientInterface,
             chat_membership_provider: ChatMembershipProviderInterface,
+            database_manager: DatabaseManagerInterface,
             document_download_service_settings: Optional[DocumentDownloadServiceSettings] = None
     ) -> None:
         self._document_repository = document_repository
         self._document_storage = document_storage
         self._document_collection_catalog_client = document_collection_catalog_client
         self._chat_membership_provider = chat_membership_provider
+        self._database_manager = database_manager
         self._settings = document_download_service_settings or DocumentDownloadServiceSettings()
 
     async def download_document(
             self,
             document_id: int,
-            database_session: AsyncSession,
             authenticated_user: AuthenticatedUser,
     ) -> tuple[AsyncIterator[bytes], str, str]:
         logger.info(
@@ -74,19 +79,14 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
             if document_id <= 0:
                 raise DocumentDownloadInvalidRequestException("The document identifier must be a positive number.")
 
-            document = await self._get_document_or_raise(document_id, database_session)
+            async with self._database_manager.session() as database_session:
+                document = await self._get_document_or_raise(document_id, database_session)
 
             await self._require_document_access(document, authenticated_user)
 
             return await self._stream_document(document, authenticated_user.id)
 
-        except (
-                DocumentDownloadInvalidRequestException,
-                DocumentDownloadNotFoundException,
-                DocumentDownloadNotReadyException,
-                DocumentDownloadStorageException,
-                UnauthorizedException,
-        ):
+        except AppException:
             raise
         except Exception as e:
             logger.exception(
@@ -98,7 +98,6 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
     async def download_document_manage(
             self,
             document_id: int,
-            database_session: AsyncSession,
             authenticated_user: AuthenticatedUser,
     ) -> tuple[AsyncIterator[bytes], str, str]:
         logger.info(
@@ -113,17 +112,12 @@ class DocumentDownloadService(DocumentDownloadServiceInterface):
             if document_id <= 0:
                 raise DocumentDownloadInvalidRequestException("The document identifier must be a positive number.")
 
-            document = await self._get_document_or_raise(document_id, database_session)
+            async with self._database_manager.session() as database_session:
+                document = await self._get_document_or_raise(document_id, database_session)
 
             return await self._stream_document(document, authenticated_user.id)
 
-        except (
-                DocumentDownloadInvalidRequestException,
-                DocumentDownloadNotFoundException,
-                DocumentDownloadNotReadyException,
-                DocumentDownloadStorageException,
-                UnauthorizedException,
-        ):
+        except AppException:
             raise
         except Exception as e:
             logger.exception(

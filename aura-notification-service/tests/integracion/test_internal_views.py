@@ -1,7 +1,3 @@
-"""
-Tests de integración para el endpoint de emisión interna de eventos:
-  POST /api/v1/internal/events/
-"""
 import pytest
 from unittest.mock import patch, MagicMock
 
@@ -64,7 +60,7 @@ class TestInternalEventEmissionView:
         assert response.status_code == 400
 
     def test_too_many_recipients_returns_400(self, api_client, internal_token_header):
-        payload = {**VALID_PAYLOAD, "recipient_ids": list(range(1, 10002))}
+        payload = {**VALID_PAYLOAD, "recipient_ids": list(range(1, 502))}
         response = api_client.post(URL, payload, format="json", **internal_token_header)
         assert response.status_code == 400
 

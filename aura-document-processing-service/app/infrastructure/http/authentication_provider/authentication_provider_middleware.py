@@ -16,13 +16,31 @@ from app.infrastructure.http.authentication_provider.exceptions.authentication_p
 from app.infrastructure.http.authentication_provider.interfaces.authentication_provider_interface import (
     AuthenticationProviderInterface,
 )
-from app.infrastructure.http.authentication_provider.request_token import set_request_token
+from app.infrastructure.http.authentication_provider.request_token import REQUEST_TOKEN_STATE_ATTR
 
 logger = logging.getLogger(__name__)
 
 WWW_AUTH = {
     "WWW-Authenticate": "Bearer"
 }
+
+
+def _error_response(
+        request: Request,
+        *,
+        status_code: int,
+        error: str,
+        message: str,
+        headers: Optional[dict[str, str]] = None,
+) -> JSONResponse:
+    request_id = getattr(request.state, "request_id", None)
+    content: dict[str, str] = {"error": error, "message": message}
+    if request_id:
+        content["request_id"] = request_id
+    response_headers = dict(headers or {})
+    if request_id:
+        response_headers["X-Request-ID"] = request_id
+    return JSONResponse(status_code=status_code, content=content, headers=response_headers)
 
 
 class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
@@ -61,12 +79,11 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
                     "path": request.url.path
                 }
             )
-            return JSONResponse(
+            return _error_response(
+                request,
                 status_code=503,
-                content={
-                    "detail": "Authentication service not configured",
-                    "error": "service_not_configured"
-                }
+                error="service_not_configured",
+                message="Authentication service not configured",
             )
 
         token = self._extract_token(request)
@@ -78,13 +95,12 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
                     "path": request.url.path
                 }
             )
-            return JSONResponse(
+            return _error_response(
+                request,
                 status_code=401,
-                content={
-                    "detail": "Authentication required",
-                    "error": "missing_token"
-                },
-                headers=WWW_AUTH
+                error="missing_token",
+                message="Authentication required",
+                headers=WWW_AUTH,
             )
 
         return await self._validate_jwt(request, call_next, token, provider)
@@ -100,7 +116,7 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
             authenticated_user = await authentication_provider.validate_token(token)
             request.state.authenticated_user = AuthenticatedUser.model_validate(authenticated_user)
             bearer = token if token.lower().startswith("bearer ") else f"Bearer {token}"
-            set_request_token(bearer)
+            setattr(request.state, REQUEST_TOKEN_STATE_ATTR, bearer)
             logger.debug(
                 "Request authenticated with a valid bearer token.",
                 extra={
@@ -118,13 +134,12 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
                     "error_code": "invalid_token",
                 }
             )
-            return JSONResponse(
+            return _error_response(
+                request,
                 status_code=401,
-                content={
-                    "detail": "Invalid or expired token",
-                    "error": "invalid_token"
-                },
-                headers=WWW_AUTH
+                error="invalid_token",
+                message="Invalid or expired token",
+                headers=WWW_AUTH,
             )
         except AuthenticationProviderUnauthorizedException:
             logger.warning(
@@ -134,12 +149,11 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
                     "error_code": "unauthorized",
                 }
             )
-            return JSONResponse(
+            return _error_response(
+                request,
                 status_code=403,
-                content={
-                    "detail": "Access forbidden",
-                    "error": "unauthorized"
-                }
+                error="unauthorized",
+                message="Access forbidden",
             )
         except AuthenticationProviderUserNotFoundException:
             logger.warning(
@@ -149,12 +163,11 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
                     "error_code": "user_not_found",
                 }
             )
-            return JSONResponse(
+            return _error_response(
+                request,
                 status_code=404,
-                content={
-                    "detail": "User not found",
-                    "error": "user_not_found"
-                }
+                error="user_not_found",
+                message="User not found",
             )
         except AuthenticationProviderServiceUnavailableException:
             logger.error(
@@ -164,12 +177,11 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
                     "error_code": "service_unavailable",
                 }
             )
-            return JSONResponse(
+            return _error_response(
+                request,
                 status_code=503,
-                content={
-                    "detail": "Authentication service temporarily unavailable",
-                    "error": "service_unavailable"
-                }
+                error="service_unavailable",
+                message="Authentication service temporarily unavailable",
             )
         except AuthenticationProviderException:
             logger.exception(
@@ -179,12 +191,11 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
                     "error_code": "authentication_error",
                 }
             )
-            return JSONResponse(
+            return _error_response(
+                request,
                 status_code=500,
-                content={
-                    "detail": "Authentication error",
-                    "error": "authentication_error"
-                }
+                error="authentication_error",
+                message="Authentication error",
             )
         except Exception:
             logger.exception(
@@ -193,12 +204,11 @@ class AuthenticationProviderMiddleware(BaseHTTPMiddleware):
                     "path": request.url.path
                 }
             )
-            return JSONResponse(
+            return _error_response(
+                request,
                 status_code=500,
-                content={
-                    "detail": "Internal server error",
-                    "error": "internal_error"
-                }
+                error="internal_error",
+                message="Internal server error",
             )
 
     def _is_excluded(

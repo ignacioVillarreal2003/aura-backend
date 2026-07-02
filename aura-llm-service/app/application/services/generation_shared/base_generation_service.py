@@ -195,11 +195,6 @@ class BaseGenerationService(ABC):
         await self._context_processor.run(state)
 
     async def _reduce_context(self, state: GenerationState) -> None:
-        # Dos flujos independientes que pueden correr juntos:
-        #  • process_documents: condensá (map-reduce) SOLO el documento del turno,
-        #    para usarlo entero aunque exceda el presupuesto.
-        #  • retrieve_context: resumí/incluí los fragmentos recuperados y sus vecinos
-        #    (secciones), sobre todos los documentos accesibles.
         attached = state.attached_fragments
         if attached:
             await self._reduction_processor.run(
@@ -218,8 +213,6 @@ class BaseGenerationService(ABC):
             )
             return
         if not attached:
-            # RAG sin agrupación por secciones (y sin documento del turno): reducí
-            # los fragmentos recuperados.
             await self._reduction_processor.run(
                 state,
                 map_system_prompt=self.map_system_prompt,

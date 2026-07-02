@@ -89,6 +89,10 @@ Llamada clave para otros servicios: **`GET .../user-authorizations/{user_id}/acc
 
 Regla resumida en código (`list_accessible`): si el usuario **no tiene clearance**, o **no tiene ningún compartimento**, la lista es vacía. En caso contrario, una colección es accesible solo si (1) el **`rank`** de su nivel es **≤** el `rank` del nivel de clearance del usuario y (2) el usuario tiene asignación en **todos** los compartimentos que esa colección declara (no basta con cubrir un subconjunto). Otros servicios pueden apoyarse en este endpoint para no duplicar la lógica.
 
+### 5.5b "¿Qué documentos puede ver este usuario?"
+
+Variante directa: **`GET .../user-authorizations/{user_id}/accessible-documents/`**. Aplica la **misma intersección MAC** del punto anterior para resolver las colecciones accesibles y luego devuelve **todos los documentos activos** enlazados a ellas. Un documento presente en varias colecciones accesibles aparece **una vez por colección**, así el llamador conserva la trazabilidad de por dónde llega el acceso.
+
 ### 5.6 Usuario o front “ve documentos de una colección”
 
 Típicamente: primero se sabe (por el flujo anterior o por permisos de negocio) que el usuario puede operar sobre esa colección; luego se lista **`.../document-collections/{id}/documents/`** para ver los enlaces y el snippet `id` + `title` de cada documento.

@@ -10,7 +10,7 @@ Este microservicio responde a una familia de preguntas centrada en **conversacio
 
 **¿Qué chats existen, quién puede verlos y con qué rol, cómo evoluciona el historial de mensajes, y qué mecanismos hay para compartir de solo lectura, notificar sistemas externos o exportar contenido?**
 
-No sustituye al **servicio de identidad/autenticación** que firma JWT ni al catálogo **MAC / colecciones de documentos** de otros dominios; aquí viven el **chat** (metadatos, etiquetas, bloqueo global), las **membresías** (rol, estado, preferencias por usuario como fijación, archivo, silencio o cursor de lectura), el **mensaje** como línea persistida (`chat_message`) y artefactos de producto (**enlaces públicos**, **webhooks**, **hilos**, **marcadores**, **pins**, **feedback**). El envío típico de mensajes para la experiencia conversacional suele hacerse también por **WebSocket** ([websockets.md](websockets.md)), mientras que la API REST lista, borra, exporta y orquesta el ciclo de vida del chat.
+No sustituye al **servicio de identidad/autenticación** que firma JWT ni al catálogo **MAC / colecciones de documentos** de otros dominios; aquí viven el **chat** (metadatos, etiquetas, bloqueo global), las **membresías** (rol, estado, preferencias por usuario como fijación, archivo, silencio o cursor de lectura), el **mensaje** como línea persistida (`artifact_message`) y artefactos de producto (**enlaces públicos**, **hilos**, **marcadores**, **pins**, **feedback**). El envío típico de mensajes para la experiencia conversacional suele hacerse también por **WebSocket** ([websockets.md](websockets.md)), mientras que la API REST lista, borra, exporta y orquesta el ciclo de vida del chat.
 
 ---
 
@@ -30,7 +30,7 @@ Aquí hablamos de **roles de producto**. En la práctica son cuentas o servicios
 
 | Rol conceptual | Ejemplos de acciones |
 |----------------|---------------------|
-| **Creador / propietario de chat** | Crear chats, cerrar temporalmente la conversación con **lock/unlock**, invitar miembros, gestionar enlaces públicos y webhooks si tiene permiso. |
+| **Creador / propietario de chat** | Crear chats, cerrar temporalmente la conversación con **lock/unlock**, invitar miembros, gestionar enlaces públicos si tiene permiso. |
 | **Colaborador (editor)** | Ver mensajes, enviar contenido (**WS** habitualmente para envío fluido), marcar lectura, participar en hilos, usar exportaciones permitidas. |
 | **Lector** | Consumir historia y vistas de solo lectura según política del producto sobre ese rol. |
 | **Administración** | Permisos `MANAGE_*` para listados globales, exports admin y analytics de feedback. |
@@ -54,7 +54,7 @@ Los modelos están **gestionados por Django salvo donde se note lo contrario**; 
 
 Bookmarks, pins, feedback e hilos operan sobre **`artifact_id`** bajo `/api/v1/artifacts/`. Informes, checklists, timelines, quizzes y similares tienen tablas tipadas enlazadas a `artifact`.
 
-Orden mental: **chat** → **miembros** → **mensajes** y extensiones (**share**, **webhook**, hilos/export).
+Orden mental: **chat** → **miembros** → **mensajes** y extensiones (**share**, hilos, artifacts/export).
 
 ---
 
@@ -73,10 +73,10 @@ Orden mental: **chat** → **miembros** → **mensajes** y extensiones (**share*
 
 ### 5.3 Historial, lectura y conversación activa
 
-1. **`GET .../chats/{chat_id}/messages/`** pagina el historial (cursor) cuando basta REST.
-2. **Enviar con IA (REST):** **POST** `.../messages/generate/`. Para streaming en vivo, **WebSocket** ([websockets.md](websockets.md)).
+1. **`GET /api/v1/messages/?chat_id=`** pagina el historial (cursor) cuando basta REST.
+2. **Enviar con IA (REST):** **POST** `/api/v1/messages/generate/`. Para streaming en vivo, **WebSocket** ([websockets.md](websockets.md)).
 3. **Marcar leídos**: **POST** `.../chats/{chat_id}/read/`.
-4. **Borrar / exportar un mensaje:** **DELETE** o **GET** `.../messages/{message_id}/...` usando el campo **`id`** del listado (no `artifact_id`).
+4. **Borrar / exportar un mensaje:** **DELETE** o **GET** `/api/v1/messages/{message_id}/...` usando el campo **`id`** del listado (no `artifact_id`).
 5. **Bookmark, pin, feedback, thread:** `/api/v1/artifacts/{artifact_id}/...` y listas `pinned` / `bookmarked` con `?chat_id=`.
 
 ### 5.4 Hilos alrededor de un mensaje ancla
@@ -90,7 +90,7 @@ Los mensajes pueden tener respuestas en hilo (endpoints **`thread`** en REST): l
 ### 5.6 Exportaciones
 
 - Chat completo: **`GET .../chats/{chat_id}/export/pdf|markdown/`** (`EXPORT_CHAT`).
-- Un mensaje: **`GET .../messages/{message_id}/export/...`** (`message_id` = `id` del mensaje).
+- Un mensaje: **`GET /api/v1/messages/{message_id}/export/pdf|markdown/`** (`EXPORT_MESSAGE`; `message_id` = `id` del mensaje).
 - Artifacts tipados (informe, checklist, etc.): export bajo cada prefijo (`/api/v1/reports/`, etc.).
 
 ### 5.7 Salud operativa

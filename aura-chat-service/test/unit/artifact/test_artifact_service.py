@@ -1,4 +1,3 @@
-"""Unit tests for the artifact service — all repository calls are mocked."""
 import pytest
 
 from apps.artifact.exceptions import (
@@ -22,7 +21,6 @@ def _patch_access(mocker, *, artifact, is_member=False, is_contributor=False):
     mocker.patch(f"{SVC}.membership_repository.is_active_contributor", return_value=is_contributor)
 
 
-# ── get_artifact ──────────────────────────────────────────────────────────────
 
 def test_get_artifact_creator_has_access(mocker):
     user = make_user(user_id=1)
@@ -54,7 +52,6 @@ def test_get_artifact_not_found_raises_404(mocker):
         service.get_artifact(user, 99)
 
 
-# ── create_artifact ───────────────────────────────────────────────────────────
 
 def test_create_artifact_unknown_type_raises_400(mocker):
     user = make_user(user_id=1)
@@ -92,7 +89,6 @@ def test_create_artifact_missing_chat_raises_404(mocker):
         service.create_artifact(user, type="REPORT", title="x", source_chat_id=10)
 
 
-# ── update_artifact ───────────────────────────────────────────────────────────
 
 def test_update_artifact_creator_bumps_version(mocker):
     user = make_user(user_id=1)
@@ -110,7 +106,6 @@ def test_update_artifact_creator_bumps_version(mocker):
 def test_update_artifact_reader_member_forbidden(mocker):
     user = make_user(user_id=2)
     art = make_artifact(artifact_id=1, created_by=1, source_chat_id=10)
-    # member but not contributor -> mutations denied
     _patch_access(mocker, artifact=art, is_member=True, is_contributor=False)
     with pytest.raises(ArtifactAccessDeniedException):
         service.update_artifact(user, 1, title="x")
@@ -124,7 +119,6 @@ def test_update_artifact_not_found_raises_404(mocker):
         service.update_artifact(user, 99, title="x")
 
 
-# ── delete_artifact ───────────────────────────────────────────────────────────
 
 def test_delete_artifact_creator_success(mocker):
     user = make_user(user_id=1)
@@ -143,7 +137,6 @@ def test_delete_artifact_not_found_raises_404(mocker):
         service.delete_artifact(user, 99)
 
 
-# ── list_artifacts / versions ─────────────────────────────────────────────────
 
 def test_list_artifacts_unknown_type_raises_400(mocker):
     user = make_user(user_id=1)

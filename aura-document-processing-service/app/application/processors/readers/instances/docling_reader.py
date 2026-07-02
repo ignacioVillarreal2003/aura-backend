@@ -2,8 +2,13 @@ import logging
 from pathlib import Path
 from typing import Any
 from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import AcceleratorDevice, AcceleratorOptions, PdfPipelineOptions
-from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.pipeline_options import (
+    AcceleratorDevice,
+    AcceleratorOptions,
+    EasyOcrOptions,
+    PdfPipelineOptions,
+)
+from docling.document_converter import DocumentConverter, ImageFormatOption, PdfFormatOption
 
 from app.application.processors.readers.exceptions.reader_exception import (
     DoclingExtractionException,
@@ -51,6 +56,13 @@ class DoclingReader(BaseReader):
                 device=device,
             )
 
+            pipeline_options.do_ocr = reader_settings.docling_ocr_enabled
+            if reader_settings.docling_ocr_enabled:
+                pipeline_options.ocr_options = EasyOcrOptions(
+                    lang=list(reader_settings.docling_ocr_languages),
+                    use_gpu=self._easyocr_use_gpu(device),
+                )
+
             if reader_settings.docling_artifacts_path:
                 pipeline_options.artifacts_path = reader_settings.docling_artifacts_path
 
@@ -64,6 +76,7 @@ class DoclingReader(BaseReader):
                 ],
                 format_options={
                     InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options),
+                    InputFormat.IMAGE: ImageFormatOption(pipeline_options=pipeline_options),
                 },
             )
 
@@ -78,6 +91,14 @@ class DoclingReader(BaseReader):
         except Exception as e:
             logger.exception("Failed to initialize the Docling reader.")
             raise DoclingInitializationException("Failed to initialize the Docling reader.") from e
+
+    @staticmethod
+    def _easyocr_use_gpu(device: AcceleratorDevice) -> bool | None:
+        if device == AcceleratorDevice.CUDA:
+            return True
+        if device == AcceleratorDevice.CPU:
+            return False
+        return None
 
     def can_handle(self, file_path: Path) -> bool:
         return file_path.suffix.lower() in _DOCLING_SUPPORTED_EXTENSIONS

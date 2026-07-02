@@ -40,8 +40,6 @@ def _broadcast_member_left(chat_id: int, member_id: int) -> None:
 
 
 def _broadcast_membership_revoked(chat_id: int, member_id: int) -> None:
-    """Tell the chat group that ``member_id`` lost access so their own open
-    sockets can close instead of lingering subscribed to the group."""
     send_to_chat_group(chat_id, {"type": "membership_revoked", "member_id": member_id})
 
 
@@ -85,14 +83,6 @@ class MembershipService:
             chat_id: int,
             user_id: int,
     ) -> ChatMembershipCheck:
-        """Internal: report whether ``user_id`` belongs to ``chat_id`` and with
-        which role, so another service can authorize access to that chat's documents.
-
-        Read-only and idempotent. The role is resolved with a single indexed lookup
-        on ``(chat_id, member_id, status)``; the chat row is fetched by primary key
-        only to distinguish a missing/deleted chat (404) from a genuine non-member
-        (200, ``is_member=False``).
-        """
         self._authorize_membership_check(caller, user_id)
 
         chat = chat_repository.get_by_id(chat_id)
@@ -109,22 +99,17 @@ class MembershipService:
 
     @staticmethod
     def _authorize_membership_check(caller: AuthenticatedUser, user_id: int) -> None:
-        # Any user may always check their own membership.
         if caller.id == user_id:
             return
-        # Inspecting another user's membership is an administrative action.
         AccessControl.require_permissions(caller, frozenset({MANAGE_MEMBERS}))
 
     @staticmethod
     def _resolve_external_role(chat: Chat, user_id: int) -> str | None:
-        # The chat creator is an implicit owner, even without a membership row.
         if chat.created_by == user_id:
             return ROLE_OWNER
         role = membership_repository.get_role(chat.id, user_id)
         if role is None:
             return None
-        # Expose the granular role so callers can tell read-only readers apart
-        # from writers, not just ownership.
         if role == ChatMembership.Role.OWNER:
             return ROLE_OWNER
         if role == ChatMembership.Role.READER:

@@ -1,7 +1,3 @@
-"""
-Tests unitarios para el registro de eventos.
-Sin DB — lógica pura sobre estructuras de datos frozen.
-"""
 import pytest
 
 from apps.notification.events.registry import (

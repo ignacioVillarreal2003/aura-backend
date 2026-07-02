@@ -2,6 +2,7 @@
 
 from django import forms
 from apps.accounts.models import Role, User
+from apps.accounts.validators import validate_human_name
 
 
 class RoleRadioSelect(forms.RadioSelect):
@@ -70,6 +71,11 @@ class UserAdminForm(forms.ModelForm):
                     return 'user'
                 return role.name
             self.fields['roles'].label_from_instance = _role_label
+
+    def clean_name(self):
+        name = self.cleaned_data.get('name')
+        validate_human_name(name)
+        return name
 
     def clean(self):
         cleaned_data = super().clean()

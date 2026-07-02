@@ -134,11 +134,6 @@ class QuizService(ArtifactCrudService):
             question_id: int,
             option_id: int,
     ) -> dict:
-        """Guarda la opción seleccionada para una pregunta y devuelve la corrección.
-
-        Requiere permiso ``UPDATE_QUIZ`` y ser el creador del quiz o un miembro
-        activo (contributor) del chat de origen.
-        """
         AccessControl.require_permissions(user, frozenset({self.perm_update}))
         quiz = self.repository.get_by_id_for_update(quiz_id)
         if quiz is None:
@@ -170,7 +165,6 @@ class QuizService(ArtifactCrudService):
 
     @transaction.atomic
     def reset_quiz(self, user: AuthenticatedUser, quiz_id: int) -> ArtifactQuiz:
-        """Limpia todas las respuestas seleccionadas del quiz."""
         AccessControl.require_permissions(user, frozenset({self.perm_update}))
         quiz = self.repository.get_by_id_for_update(quiz_id)
         if quiz is None:

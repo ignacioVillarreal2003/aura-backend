@@ -1,4 +1,5 @@
-from pydantic import Field
+from urllib.parse import urlparse
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,3 +16,17 @@ class DocumentCollectionCatalogSettings(BaseSettings):
     request_timeout_seconds: float = Field(default=15.0, gt=0, le=120.0)
     page_size: int = Field(default=100, ge=1, le=100)
     max_pages: int = Field(default=500, ge=1, le=10000)
+
+    @field_validator("accessible_collections_url", mode="before")
+    @classmethod
+    def validate_url(cls, v: str) -> str:
+        v = str(v).strip().rstrip("/")
+        if not v.startswith(("http://", "https://")):
+            raise ValueError("The document collection service URL must start with http:// or https://.")
+        return v
+
+    @model_validator(mode="after")
+    def validate_url_host(self) -> "DocumentCollectionCatalogSettings":
+        if not urlparse(self.accessible_collections_url).netloc:
+            raise ValueError("The document collection service URL must include a valid host.")
+        return self

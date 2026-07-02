@@ -47,6 +47,8 @@ class DatabaseManagerSettings(BaseSettings):
     connection_lifecycle_logging_enabled: bool = Field(default=False)
     pg_application_name: str = Field(default="app")
 
+    session_time_zone: str = Field(default="America/Montevideo")
+
     ssl_enabled: bool = Field(default=False)
     ssl_verify_server_certificate: bool = Field(default=True)
     ssl_client_cert_path: Optional[Path] = Field(default=None)
@@ -152,7 +154,8 @@ class DatabaseManagerSettings(BaseSettings):
             "command_timeout": self.query_execution_timeout_seconds,
             "server_settings": {
                 "application_name": self.pg_application_name,
-                "jit": "off"
+                "jit": "off",
+                "timezone": self.session_time_zone
             }
         }
         if self.ssl_enabled:

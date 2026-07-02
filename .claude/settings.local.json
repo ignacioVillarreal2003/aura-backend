@@ -161,7 +161,26 @@
       "Bash(.venv/Scripts/python.exe -m pytest test/unit -q)",
       "Bash(.venv/Scripts/python.exe -m ruff check app/infrastructure/http/graph_context_provider/ app/application/services/user_interactions/rag_agent_service/nodes/graph_context_retriever_node/ app/application/services/user_interactions/rag_agent_service/rag_agent_settings.py app/application/services/user_interactions/rag_agent_service/constants/rag_query_intent.py test/unit/test_graph_context_retriever_node.py)",
       "Bash(grep -vE '^\\\\s|^$|Found|fixable')",
-      "Bash(python -m py_compile apps/documents/admin.py)"
+      "Bash(python -m py_compile apps/documents/admin.py)",
+      "Bash(cat .gitattributes)",
+      "Bash(cat aura-gateway/.gitattributes)",
+      "Bash(cat aura-gateway/Dockerfile)",
+      "Bash(docker build *)",
+      "Bash(ls docker-compose*.y*ml compose*.y*ml)",
+      "Bash(docker ps *)",
+      "Bash(docker inspect *)",
+      "Bash(docker restart *)",
+      "Bash(docker info *)",
+      "Bash(docker stats *)",
+      "Bash(nvidia-smi --query-gpu=name,memory.total,memory.used --format=csv)",
+      "Bash(nvidia-smi --query-compute-apps=pid,used_memory,process_name --format=csv)",
+      "Bash(grep -rnB2 -A2 -iE \"driver: nvidia|capabilities:|gpus:|count:\" docker/docker-compose/docker-compose-services.gpu.yml)",
+      "Bash(ls aura-chat-service/app/application)",
+      "Bash(ls aura-llm-service/app/application)",
+      "Bash(grep -nA4 \"aura-auth-service:\" docker/docker-compose/docker-compose-services.gpu.yml)",
+      "PowerShell(Get-CimInstance *)",
+      "PowerShell(Get-Process *)",
+      "PowerShell(nvidia-smi *)"
     ]
   }
 }

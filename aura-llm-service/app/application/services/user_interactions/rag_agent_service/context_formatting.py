@@ -5,8 +5,6 @@ from app.infrastructure.http.document_context_provider.dtos.fragment_response im
 
 
 def _format_fragment_source(fragment: FragmentResponse) -> str:
-    # Etiqueta citable por fuente real: documento · sección/título · página.
-    # Sin numeración de fragmento para no inducir citas tipo "Fragmento N".
     parts: List[str] = []
     if fragment.document and fragment.document.name:
         parts.append(fragment.document.name)

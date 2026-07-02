@@ -7,9 +7,12 @@ from typing import Any, Dict, List, Optional
 from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
 
+from app.application.services.user_interactions.rag_agent_service.constants.rag_node_name import RagNodeName
 from app.application.services.user_interactions.rag_agent_service.constants.rag_query_intent import RagQueryIntent
 from app.application.services.user_interactions.rag_agent_service.interfaces.rag_node_interface import RagNodeInterface
+from app.application.services.user_interactions.rag_agent_service.node_failures import EXPECTED_LLM_ERRORS
 from app.application.services.user_interactions.rag_agent_service.rag_agent_settings import QueryAnalyzerSettings
+from app.configuration.metrics import record_rag_node_failure
 from app.application.services.user_interactions.rag_agent_service.rag_agent_state.rag_agent_state import RagAgentState
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface import OllamaLLMInvokerInterface
@@ -57,9 +60,17 @@ class QueryAnalyzerNode(RagNodeInterface):
                 },
             )
             return result
-        except Exception:
-            logger.error("Query analysis failed — using raw message as fallback", exc_info=True)
+        except EXPECTED_LLM_ERRORS as exc:
+            record_rag_node_failure(RagNodeName.query_analyzer.value, "expected", exc)
+            logger.warning(
+                "Query analysis degraded (expected error) — using raw message as fallback",
+                exc_info=True,
+            )
             return {"query": last_human, "keywords": [], "intent": RagQueryIntent.question.value}
+        except Exception as exc:
+            record_rag_node_failure(RagNodeName.query_analyzer.value, "unexpected", exc)
+            logger.exception("Query analysis failed with an unexpected error")
+            raise
 
     async def _analyze(self, query: str, history: List[AnyMessage]) -> Dict[str, Any]:
         history_text = self._format_history(history)

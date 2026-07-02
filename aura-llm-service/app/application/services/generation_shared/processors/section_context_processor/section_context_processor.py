@@ -65,7 +65,6 @@ class SectionContextProcessor:
             state.section_summary = None
             return
 
-        # Prioridad: prompts del artefacto (servicio) → defaults propios de la sección.
         system_prompt = map_system_prompt or SECTION_MAP_SYSTEM_PROMPT
         human_prompt = map_human_prompt or SECTION_MAP_HUMAN_PROMPT
         query = state.current_message.content
@@ -173,5 +172,5 @@ class SectionContextProcessor:
     async def _build_llm(self) -> Runnable:
         llm = await self._ollama_llm_facade.get_llm_base()
         if self._settings.temperature is not None:
-            llm = llm.bind(temperature=self._settings.temperature)
+            llm = self._ollama_llm_facade.apply_options(llm, temperature=self._settings.temperature)
         return llm

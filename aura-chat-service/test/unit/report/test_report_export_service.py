@@ -1,10 +1,3 @@
-"""
-Unit tests for the report export service (PDF / Markdown rendering).
-
-These exercise the pure rendering helpers directly — they were previously
-untested because the view-layer tests mock `generate_report_pdf` /
-`generate_report_markdown` entirely.
-"""
 import datetime
 
 import pytest
@@ -23,9 +16,6 @@ from test.conftest import make_report
 EXPORT = "apps.artifact_report.services.export_service"
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# _fmt_dt
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_fmt_dt_none_returns_empty_string():
     assert _fmt_dt(None) == ""
@@ -38,13 +28,10 @@ def test_fmt_dt_formats_aware_datetime_as_utc():
 
 def test_fmt_dt_converts_other_timezone_to_utc():
     tz = datetime.timezone(datetime.timedelta(hours=3))
-    dt = datetime.datetime(2025, 3, 15, 12, 30, tzinfo=tz)  # 09:30 UTC
+    dt = datetime.datetime(2025, 3, 15, 12, 30, tzinfo=tz)
     assert _fmt_dt(dt) == "2025-03-15 09:30 UTC"
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# _render_markdown — rendering + dangerous-tag sanitization
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_render_markdown_renders_headings_and_bold():
     html = _render_markdown("# Título\n\ntexto **negrita**")
@@ -74,9 +61,6 @@ def test_render_markdown_strips_form_and_input_tags():
     assert "<input" not in html.lower()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# generate_report_markdown
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_generate_markdown_includes_title_and_content():
     report = make_report(title="Mi informe", content="Cuerpo del informe")
@@ -106,9 +90,6 @@ def test_generate_markdown_returns_str():
     assert isinstance(generate_report_markdown(make_report()), str)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# generate_report_pdf
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_generate_pdf_returns_pdf_bytes():
     report = make_report(title="Informe", content="# Sección\n\nContenido del informe.")
@@ -124,7 +105,6 @@ def test_generate_pdf_handles_rag_mode():
 
 
 def test_generate_pdf_raises_export_exception_on_pisa_error(mocker):
-    """When xhtml2pdf reports rendering errors, a ReportExportException is raised."""
     report = make_report()
     mocker.patch("core.export.pdf_export.pisa.CreatePDF", return_value=mocker.Mock(err=1))
     with pytest.raises(ReportExportException):

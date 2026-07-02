@@ -19,7 +19,6 @@ _executor = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_pre
 
 class FeedbackEvaluationService:
     def trigger_evaluation(self, feedback_id: int, token: str | None = None) -> None:
-        """Triggers the evaluation of negative feedback in a background thread."""
         logger.info(f"Triggering feedback evaluation in background for feedback_id: {feedback_id}")
         _executor.submit(self._evaluate, feedback_id, token)
 
@@ -32,7 +31,6 @@ class FeedbackEvaluationService:
             close_old_connections()
 
     def _execute_evaluation(self, feedback_id: int, token: str | None) -> None:
-        # Fetch feedback details
         try:
             feedback = ArtifactFeedback.objects.select_related("artifact").get(id=feedback_id)
         except ArtifactFeedback.DoesNotExist:
@@ -48,7 +46,6 @@ class FeedbackEvaluationService:
             logger.warning(f"Artifact {artifact.id} is not a MESSAGE, skipping evaluation.")
             return
 
-        # Fetch the assistant message content
         try:
             assistant_msg = ArtifactMessage.objects.get(artifact=artifact)
         except ArtifactMessage.DoesNotExist:
@@ -59,13 +56,10 @@ class FeedbackEvaluationService:
             logger.warning(f"ArtifactMessage for artifact {artifact.id} is not from ASSISTANT, skipping.")
             return
 
-        # Retrieve conversation history around this message
         chat_id = artifact.source_chat_id
         recent_msgs = message_repository.get_recent_messages(chat_id, limit=15)
-        # Sort chronologically (oldest first)
         ordered_msgs = list(reversed(recent_msgs))
 
-        # Find the index of our assistant message in the chronological order
         assistant_idx = -1
         for i, m in enumerate(ordered_msgs):
             if m.artifact_id == artifact.id:
@@ -76,28 +70,21 @@ class FeedbackEvaluationService:
             logger.error(f"Assistant message with artifact {artifact.id} not found in recent history of chat {chat_id}.")
             return
 
-        # User query is the user message immediately preceding the assistant message
         user_query = ""
         for i in range(assistant_idx - 1, -1, -1):
             if ordered_msgs[i].sender_type == ArtifactMessage.SenderType.USER:
                 user_query = ordered_msgs[i].message
                 break
 
-        # If no preceding user message is found, default to the one before assistant_idx if it exists, or empty
         if not user_query and assistant_idx > 0:
             user_query = ordered_msgs[assistant_idx - 1].message
 
-        # Build chat history up to (but not including) the assistant's message
         chat_history = []
         for m in ordered_msgs[:assistant_idx]:
             role = "user" if m.sender_type == ArtifactMessage.SenderType.USER else "assistant"
             chat_history.append({"role": role, "content": m.message})
 
-        # Build AuthenticatedUser dummy to forward authentication headers downstream
-        # We fetch the user details of the evaluator or the user who created the feedback
-        # In base, we use a service user or a dummy user representing the feedback creator.
         user_id = feedback.created_by
-        # Create a mock/dummy user representing the authenticated user who initiated this
         user = AuthenticatedUser(
             id=user_id,
             email=f"user_{user_id}@local.aura",
@@ -116,7 +103,6 @@ class FeedbackEvaluationService:
         if token:
             ctx = set_request_token(token)
             
-        # Determine RAG mode based on retrieve_context flag
         execution_mode = "rag" if getattr(artifact, "retrieve_context", False) else "direct"
 
         try:
@@ -137,14 +123,12 @@ class FeedbackEvaluationService:
                 reset_request_token(ctx)
             loop.close()
 
-        # Parse evaluation response and persist
         failure_category = eval_result.get("failure_category", "other")
         failure_explanation = eval_result.get("failure_explanation", "")
         expected_output = eval_result.get("expected_output", "")
         confidence_score = eval_result.get("confidence_score")
         judge_model = eval_result.get("judge_model", "judge-model")
 
-        # Save or update the evaluation
         with transaction.atomic():
             ArtifactFeedbackEvaluation.objects.update_or_create(
                 feedback=feedback,

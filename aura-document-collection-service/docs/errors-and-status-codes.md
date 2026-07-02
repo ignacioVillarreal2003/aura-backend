@@ -35,7 +35,7 @@ Cabeceras notables:
 | **200** | Éxito en lecturas y actualizaciones que devuelven cuerpo. |
 | **201** | Recurso creado. |
 | **204** | Éxito sin cuerpo (p. ej. `DELETE`). |
-| **400** | Entrada inválida (validación de serializer, cabeceras S2S mal formadas, etc.). |
+| **400** | Entrada inválida (validación de serializer, cuerpo/query/path mal formados, etc.). |
 | **401** | No autenticado: falta Bearer, token inválido/expirado, clave de servicio ausente/errónea en contextos que devuelven 401. |
 | **403** | Autenticado pero prohibido (permisos de aplicación insuficientes, o clave de servicio inválida donde se usa 403). |
 | **404** | Recurso de dominio no encontrado; en algunos flujos de auth middleware, usuario no encontrado para el token (**404** según configuración actual). |
@@ -47,7 +47,7 @@ Cabeceras notables:
 
 ---
 
-## Códigos `error` del middleware de autenticación (Bearer y S2S)
+## Códigos `error` del middleware de autenticación (Bearer)
 
 | `error` | HTTP | Contexto breve |
 |---------|------|----------------|
@@ -58,11 +58,6 @@ Cabeceras notables:
 | `service_unavailable` | 503 | Timeout/red/5xx hacia el proveedor. |
 | `authentication_error` | 500 | Error de proveedor no clasificado. |
 | `internal_error` | 500 | Excepción inesperada en el middleware de auth. |
-| `missing_service_key` | 401 | `X-Service-Api-Key` vacío cuando se intenta S2S. |
-| `invalid_service_key` | 403 | API key no coincide con `SERVICE_API_KEY`. |
-| `missing_user_id` | 400 | Falta `X-User-Id`. |
-| `invalid_user_id` | 400 | `X-User-Id` no es entero. |
-| `missing_user_email` | 400 | Falta `X-User-Email`. |
 
 ---
 

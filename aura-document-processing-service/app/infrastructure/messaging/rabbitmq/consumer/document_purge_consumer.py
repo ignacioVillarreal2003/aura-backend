@@ -1,5 +1,6 @@
 import logging
 from typing import Optional
+import redis.asyncio as aioredis
 
 from app.infrastructure.messaging.rabbitmq.consumer.base_consumer import BaseConsumer
 from app.infrastructure.messaging.rabbitmq.consumer.interfaces.document_purge_consumer_interface import (
@@ -39,8 +40,9 @@ class DocumentPurgeConsumer(BaseConsumer[DocumentPurgeCommand], DocumentPurgeCon
             document_storage: DocumentStorageInterface,
             graph_entity_repository: Optional[GraphEntityRepositoryInterface] = None,
             graph_relation_repository: Optional[GraphRelationRepositoryInterface] = None,
+            dedup_redis: Optional[aioredis.Redis] = None,
     ) -> None:
-        super().__init__(rabbitmq_manager)
+        super().__init__(rabbitmq_manager, dedup_redis=dedup_redis)
         self._database_manager = database_manager
         self._document_repository = document_repository
         self._document_storage = document_storage
@@ -68,10 +70,17 @@ class DocumentPurgeConsumer(BaseConsumer[DocumentPurgeCommand], DocumentPurgeCon
             )
             return
 
-        await self._purge_storage_object(
-            document_id=command.document_id,
-            storage_url=command.storage_url,
-        )
+        if command.purge_storage:
+            await self._purge_storage_object(
+                document_id=command.document_id,
+                storage_url=command.storage_url,
+            )
+        else:
+            logger.info(
+                "Skipping storage purge for this document; storage is retained by policy "
+                "(document has no chat association).",
+                extra={"message_id": envelope.message_id, "document_id": command.document_id},
+            )
         await self._purge_graph_footprint(document_id=command.document_id)
 
         logger.info(

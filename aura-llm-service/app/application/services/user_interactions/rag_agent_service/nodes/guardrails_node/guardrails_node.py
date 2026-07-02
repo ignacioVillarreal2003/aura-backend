@@ -5,9 +5,12 @@ from typing import Any, Dict, List, Optional
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
 
+from app.application.services.user_interactions.rag_agent_service.constants.rag_node_name import RagNodeName
 from app.application.services.user_interactions.rag_agent_service.interfaces.rag_node_interface import RagNodeInterface
+from app.application.services.user_interactions.rag_agent_service.node_failures import EXPECTED_LLM_ERRORS
 from app.application.services.user_interactions.rag_agent_service.rag_agent_settings import GuardrailsSettings
 from app.application.services.user_interactions.rag_agent_service.rag_agent_state.rag_agent_state import RagAgentState
+from app.configuration.metrics import record_rag_node_failure
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_facade_interface import OllamaLLMFacadeInterface
 from app.infrastructure.llm.ollama_llm.interfaces.ollama_llm_invoker_interface import OllamaLLMInvokerInterface
 
@@ -52,9 +55,17 @@ class GuardrailsNode(RagNodeInterface):
             passed = await self._llm_check(answer, context, query)
             logger.info("Guardrail LLM check completed", extra={"passed": passed})
             return {"answer": answer, "guardrail_passed": passed}
-        except Exception:
-            logger.error("LLM guardrail check failed — defaulting to approved", exc_info=True)
+        except EXPECTED_LLM_ERRORS as exc:
+            record_rag_node_failure(RagNodeName.guardrails.value, "expected", exc)
+            logger.warning(
+                "LLM guardrail check degraded (expected error) — defaulting to approved",
+                exc_info=True,
+            )
             return {"answer": answer, "guardrail_passed": True}
+        except Exception as exc:
+            record_rag_node_failure(RagNodeName.guardrails.value, "unexpected", exc)
+            logger.exception("LLM guardrail check failed with an unexpected error")
+            raise
 
     def _rule_based_check(self, answer: str) -> Dict[str, Any]:
         if not answer or len(answer.strip()) < self._settings.min_answer_length:

@@ -9,9 +9,6 @@ from test.conftest import make_feedback
 FEEDBACK_VIEW = "apps.message.views.feedback_view"
 
 
-# ---------------------------------------------------------------------------
-# Submit feedback  POST /api/v1/chats/{chat_id}/messages/{message_id}/feedback/
-# ---------------------------------------------------------------------------
 
 def test_submit_feedback_thumbs_up_returns_200(api_client, mocker):
     mocker.patch(
@@ -165,9 +162,6 @@ def test_submit_feedback_unauthenticated(anon_client):
     assert response.status_code == 401
 
 
-# ---------------------------------------------------------------------------
-# Delete feedback  DELETE /api/v1/chats/{chat_id}/messages/{message_id}/feedback/
-# ---------------------------------------------------------------------------
 
 def test_delete_feedback_returns_204(api_client, mocker):
     mocker.patch(f"{FEEDBACK_VIEW}.feedback_service.delete_feedback")

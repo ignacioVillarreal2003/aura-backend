@@ -269,14 +269,21 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 fragments = fragments[:self._settings.rerank_candidate_pool_cap]
                 rerank_query = self._build_rerank_query(question_context_fragments_request)
                 top_n = question_context_fragments_request.rerank.max_fragments or len(fragments)
-                scored = await self._reranker_factory.reranker.rerank_with_scores(
-                    query=rerank_query,
-                    candidates=[(f.contextualized_content or f.content) for f in fragments],
-                    top_n=top_n,
-                )
-                fragments = [fragments[i] for i, _ in scored if 0 <= i < len(fragments)]
-                self._record_top_rerank_score(scored)
-                rerank_applied = True
+                try:
+                    scored = await self._reranker_factory.reranker.rerank_with_scores(
+                        query=rerank_query,
+                        candidates=[(f.contextualized_content or f.content) for f in fragments],
+                        top_n=top_n,
+                    )
+                    fragments = [fragments[i] for i, _ in scored if 0 <= i < len(fragments)]
+                    self._record_top_rerank_score(scored)
+                    rerank_applied = True
+                except Exception:
+                    logger.warning(
+                        "Cross-encoder reranking failed; falling back to fusion (RRF) order.",
+                        exc_info=True,
+                    )
+                    fragments = fragments[:top_n]
 
             self._record_lane_contribution(fragments, lane_ids)
 
@@ -433,10 +440,20 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                 )
                 raise UnauthorizedException("You are not authorized to access one or more of these documents.")
 
-            fragments = await self._retrieve_documents_fragments(
+            fragments, total_before = await self._retrieve_documents_fragments(
                 database_session=database_session,
                 document_ids=requested_ids,
+                max_per_document=self._settings.max_fragments_per_document,
             )
+            if len(fragments) != total_before:
+                logger.info(
+                    "Fragments were downsampled to representative ones per document.",
+                    extra={
+                        "max_fragments_per_document": self._settings.max_fragments_per_document,
+                        "fragment_count_before": total_before,
+                        "fragment_count_after": len(fragments),
+                    },
+                )
 
             docs_by_id = {doc.id: doc for doc in documents}
             fragment_responses = self._assemble_fragment_responses(
@@ -812,20 +829,78 @@ class FragmentQueryService(FragmentQueryServiceInterface):
                     representation=representation,
                 )
 
+    @classmethod
+    def _downsample_representative_fragments(
+            cls,
+            *,
+            fragments: list[Fragment],
+            max_per_document: int,
+    ) -> list[Fragment]:
+        if max_per_document < 1 or not fragments:
+            return fragments
+
+        grouped: dict[int, list[Fragment]] = {}
+        order: list[int] = []
+        for fragment in fragments:
+            doc_id = int(fragment.document_id)
+            if doc_id not in grouped:
+                grouped[doc_id] = []
+                order.append(doc_id)
+            grouped[doc_id].append(fragment)
+
+        result: list[Fragment] = []
+        for doc_id in order:
+            doc_fragments = sorted(grouped[doc_id], key=lambda f: int(f.fragment_index))
+            result.extend(cls._evenly_spaced(doc_fragments, max_per_document))
+        return result
+
+    @staticmethod
+    def _evenly_spaced(items: list[Fragment], cap: int) -> list[Fragment]:
+        count = len(items)
+        if count <= cap:
+            return items
+        if cap == 1:
+            return [items[0]]
+        picked: list[Fragment] = []
+        seen: set[int] = set()
+        for i in range(cap):
+            idx = round(i * (count - 1) / (cap - 1))
+            if idx not in seen:
+                seen.add(idx)
+                picked.append(items[idx])
+        return picked
+
     async def _retrieve_documents_fragments(
             self,
             database_session: AsyncSession,
             document_ids: list[int],
-    ) -> list[Fragment]:
+            max_per_document: int,
+    ) -> tuple[list[Fragment], int]:
         try:
-            fragments = await self._fragment_repository.get_fragments_by_document_ids(
+            locators = await self._fragment_repository.get_fragment_locators_by_document_ids(
                 document_ids=document_ids,
+                database_session=database_session,
+            )
+            total_before = len(locators)
+            picked = self._downsample_representative_fragments(
+                fragments=locators,
+                max_per_document=max_per_document,
+            )
+            picked_ids = [int(f.id) for f in picked]
+            fragments = await self._fragment_repository.get_fragments_by_ids(
+                fragment_ids=picked_ids,
                 database_session=database_session,
             )
             logger.debug(
                 "Fragments retrieved for the documents.",
-                extra={"document_ids_count": len(document_ids), "fragment_count": len(fragments)},
+                extra={
+                    "document_ids_count": len(document_ids),
+                    "fragment_count_before": total_before,
+                    "fragment_count": len(fragments),
+                },
             )
-            return fragments
+            return fragments, total_before
+        except FragmentQueryRetrievalException:
+            raise
         except Exception as e:
             raise FragmentQueryRetrievalException("Failed to retrieve fragments for the documents.") from e

@@ -1,7 +1,3 @@
-"""
-Tests de integración para el catálogo público de tipos de eventos:
-  GET /api/v1/event-types/
-"""
 import pytest
 
 from apps.notification.events import iter_events

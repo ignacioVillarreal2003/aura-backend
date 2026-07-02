@@ -1,6 +1,3 @@
-"""
-Tests for POST /api/v1/document-action
-"""
 from app.domain.dtos.user_interactions.document_action.document_action_response import DocumentActionResponse
 
 URL = "/api/v1/document-action"

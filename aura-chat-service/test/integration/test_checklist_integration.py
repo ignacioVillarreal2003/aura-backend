@@ -34,9 +34,6 @@ def _make_checklist(creator, sections=None, **overrides):
     return checklist_repository.create(**params)
 
 
-# ---------------------------------------------------------------------------
-# create — checklist + sections + items persistence
-# ---------------------------------------------------------------------------
 
 def test_create_persists_checklist_sections_and_items(owner):
     checklist = _make_checklist(owner, title="Persistida")
@@ -58,9 +55,6 @@ def test_create_returns_prefetched_sections_and_items(owner):
     assert len(list(sections[0].items.all())) == 2
 
 
-# ---------------------------------------------------------------------------
-# get_checklist — access control with real memberships
-# ---------------------------------------------------------------------------
 
 def test_get_checklist_creator_has_access(owner):
     checklist = _make_checklist(owner)
@@ -89,12 +83,9 @@ def test_get_checklist_non_member_of_chat_denied(chat, owner, other_user):
         checklist_service.get_checklist(other_user, checklist.id)
 
 
-# ---------------------------------------------------------------------------
-# list_checklists / list_all_checklists — incl. count annotations
-# ---------------------------------------------------------------------------
 
 def test_list_checklists_returns_own_with_counts(owner):
-    checklist = _make_checklist(owner)  # 2 items, 1 checked
+    checklist = _make_checklist(owner)
     by_id = {c.id: c for c in checklist_service.list_checklists(owner)}
     assert checklist.id in by_id
     assert by_id[checklist.id].item_count == 2
@@ -135,9 +126,6 @@ def test_list_all_checklists_includes_other_users(owner, other_user):
     assert theirs.id in ids
 
 
-# ---------------------------------------------------------------------------
-# update_checklist — exercises the repository's replace-sections logic
-# ---------------------------------------------------------------------------
 
 def test_update_title_persists(owner):
     checklist = _make_checklist(owner, title="Viejo")
@@ -148,7 +136,7 @@ def test_update_title_persists(owner):
 
 
 def test_update_sections_replaces_old_sections_and_items(owner):
-    checklist = _make_checklist(owner)  # 1 section / 2 items
+    checklist = _make_checklist(owner)
     new_sections = [
         {
             "title": "Nueva Fase",
@@ -197,9 +185,6 @@ def test_update_non_member_denied(owner, other_user):
         checklist_service.update_checklist(other_user, checklist.id, title="Hack")
 
 
-# ---------------------------------------------------------------------------
-# delete_checklist — soft delete
-# ---------------------------------------------------------------------------
 
 def test_delete_soft_deletes(owner):
     checklist = _make_checklist(owner)

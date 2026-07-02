@@ -11,6 +11,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /application
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 \
+    libglib2.0-0 \
+    libxcb1 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN python -m venv /opt/venv
 
 COPY requirements/base.txt requirements/requirements.gpu.txt ./requirements/
@@ -54,6 +63,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     tesseract-ocr-spa \
     libgl1 \
+    libglib2.0-0 \
+    libxcb1 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --create-home --shell /usr/sbin/nologin appuser

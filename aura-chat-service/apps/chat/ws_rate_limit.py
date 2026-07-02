@@ -25,15 +25,9 @@ def _cfg(name: str, default: int) -> int:
 
 
 def _fail_open() -> bool:
-    """Decision used when Redis is unreachable. True lets traffic through
-    (availability); False blocks it (abuse protection). Configurable via
-    WS_RATE_LIMIT_FAIL_OPEN."""
     return bool(getattr(settings, "WS_RATE_LIMIT_FAIL_OPEN", True))
 
 
-# Atomically increment the window counter and set the TTL only on the first hit,
-# so the window does not slide (resetting EXPIRE on every call would let the
-# counter live forever under sustained traffic and over-block the user).
 _RATE_LIMIT_SCRIPT = """
 local current = redis.call('incr', KEYS[1])
 if current == 1 then

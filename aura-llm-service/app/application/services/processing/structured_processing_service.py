@@ -1,12 +1,15 @@
 import json
 import logging
+import time
 from abc import ABC, abstractmethod
-from typing import Any, ClassVar, Generic, TypeVar
+from contextlib import contextmanager
+from typing import Any, ClassVar, Generic, Iterator, TypeVar
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, ValidationError
 
 from app.application.authorization.exceptions.authorization_exceptions import UnauthorizedException
 from app.application.exceptions.app_exception import AppException, RequestValidationException
+from app.application.services.processing.processing_observability import processing_seconds, processing_total
 from app.application.utils.llm_json_parser import parse_json_object
 from app.configuration.tracing import trace_generation
 from app.domain.authentication.authenticated_user import AuthenticatedUser
@@ -74,29 +77,46 @@ class StructuredProcessingService(ABC, Generic[TRequest, TParsed, TResponse]):
     def _result_log_extra(self, result: TResponse) -> dict[str, Any]:
         return {}
 
+    @contextmanager
+    def _observe(self) -> Iterator[dict]:
+        holder = {"outcome": "error"}
+        start = time.perf_counter()
+        try:
+            yield holder
+        finally:
+            try:
+                processing_seconds.labels(label=self.label).observe(time.perf_counter() - start)
+                processing_total.labels(label=self.label, outcome=holder["outcome"]).inc()
+            except Exception:
+                self._logger.debug("Failed to record processing metrics.", exc_info=True)
+
     @trace_generation()
     async def _generate(self, request: TRequest, authenticated_user: AuthenticatedUser) -> TResponse:
         log_extra = self._request_log_extra(request, authenticated_user)
         self._logger.info("%s initiated", self.label.capitalize(), extra=log_extra)
-        try:
-            messages = self._build_messages(request, authenticated_user)
-            parsed = await self._run_with_repair(messages, request, authenticated_user.id)
-            result = self._postprocess(parsed, request, authenticated_user)
-            self._logger.info(
-                "%s completed",
-                self.label.capitalize(),
-                extra={**log_extra, **self._result_log_extra(result)},
-            )
-            return result
-        except self._known_exceptions:
-            raise
-        except Exception as e:
-            self._logger.exception(
-                "Unexpected error during %s",
-                self.label,
-                extra={"user_id": authenticated_user.id, "error_type": type(e).__name__},
-            )
-            raise self.exception_cls(self.unexpected_error_message, status_code=500) from e
+        with self._observe() as obs:
+            try:
+                messages = self._build_messages(request, authenticated_user)
+                parsed = await self._run_with_repair(messages, request, authenticated_user.id)
+                result = self._postprocess(parsed, request, authenticated_user)
+                obs["outcome"] = "success"
+                self._logger.info(
+                    "%s completed",
+                    self.label.capitalize(),
+                    extra={**log_extra, **self._result_log_extra(result)},
+                )
+                return result
+            except self._known_exceptions:
+                obs["outcome"] = "known_error"
+                raise
+            except Exception as e:
+                obs["outcome"] = "error"
+                self._logger.exception(
+                    "Unexpected error during %s",
+                    self.label,
+                    extra={"user_id": authenticated_user.id, "error_type": type(e).__name__},
+                )
+                raise self.exception_cls(self.unexpected_error_message, status_code=500) from e
 
     async def _run_with_repair(
             self,

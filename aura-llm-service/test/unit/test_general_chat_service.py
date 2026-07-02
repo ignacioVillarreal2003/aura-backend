@@ -23,9 +23,11 @@ class _Facade:
     async def get_llm_json(self):
         return _LLM()
 
+    def apply_options(self, llm, **overrides):
+        return llm
+
 
 class _Invoker:
-    """Returns reformulation JSON for the reformulation step, plain text otherwise."""
 
     async def call_llm_content(self, llm, llm_input):
         system = llm_input[0].content

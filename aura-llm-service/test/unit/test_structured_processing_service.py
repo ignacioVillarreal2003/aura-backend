@@ -1,6 +1,3 @@
-"""Tests for the shared StructuredProcessingService base and its subclasses:
-orchestration, JSON parsing, error mapping, JSON-repair loop and post-filtering.
-Uses fakes so no real LLM is required."""
 
 import json
 import types
@@ -50,7 +47,6 @@ class _Facade:
 
 
 class _Invoker:
-    """Returns successive responses from a list; repeats the last one."""
 
     def __init__(self, responses):
         self._responses = list(responses)

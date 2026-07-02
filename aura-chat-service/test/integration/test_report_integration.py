@@ -22,9 +22,6 @@ def _make_report(creator, **overrides):
     return report_repository.create(**params)
 
 
-# ---------------------------------------------------------------------------
-# create / persistence
-# ---------------------------------------------------------------------------
 
 def test_create_report_persists_to_db(owner):
     report = _make_report(owner, title="Persistido")
@@ -36,9 +33,6 @@ def test_create_report_sets_created_by(owner):
     assert report.created_by == owner.id
 
 
-# ---------------------------------------------------------------------------
-# get_report — access control with real memberships
-# ---------------------------------------------------------------------------
 
 def test_get_report_creator_has_access(owner):
     report = _make_report(owner)
@@ -67,9 +61,6 @@ def test_get_report_non_member_of_chat_denied(chat, owner, other_user):
         report_service.get_report(other_user, report.id)
 
 
-# ---------------------------------------------------------------------------
-# list_reports / list_all_reports
-# ---------------------------------------------------------------------------
 
 def test_list_reports_returns_own(owner):
     r1 = _make_report(owner, title="A")
@@ -99,7 +90,7 @@ def test_list_reports_by_chat_returns_all_members_reports(chat_with_member, owne
     r_owner = _make_report(owner, source_chat_id=chat_with_member.id)
     r_member = _make_report(member_user, source_chat_id=chat_with_member.id)
     ids = [r.id for r in report_service.list_reports(member_user, chat_id=chat_with_member.id)]
-    assert r_owner.id in ids   # a member sees reports created by others in the chat
+    assert r_owner.id in ids
     assert r_member.id in ids
 
 
@@ -121,9 +112,6 @@ def test_list_all_reports_includes_other_users(owner, other_user):
     assert theirs.id in ids
 
 
-# ---------------------------------------------------------------------------
-# update_report — exercises the repository's field-by-field update logic
-# ---------------------------------------------------------------------------
 
 def test_update_report_persists_title(owner):
     report = _make_report(owner, title="Viejo")
@@ -144,11 +132,10 @@ def test_update_report_partial_only_changes_provided_field(owner):
     report_service.update_report(owner, report.id, content="Nuevo contenido")
     report.refresh_from_db()
     assert report.content == "Nuevo contenido"
-    assert report.title == "Titulo"  # untouched
+    assert report.title == "Titulo"
 
 
 def test_update_report_no_fields_is_noop(owner):
-    """Both fields None → repository performs no write and leaves updated_by unset."""
     report = _make_report(owner, title="Intacto")
     report_service.update_report(owner, report.id)
     report.refresh_from_db()
@@ -169,9 +156,6 @@ def test_update_report_non_member_denied(owner, other_user):
         report_service.update_report(other_user, report.id, title="Hack")
 
 
-# ---------------------------------------------------------------------------
-# delete_report — soft delete
-# ---------------------------------------------------------------------------
 
 def test_delete_report_soft_deletes(owner):
     report = _make_report(owner)

@@ -16,7 +16,10 @@ Salvo rutas explícitas (health, schema/docs, share público), se asume **`Autho
 
 | Método y ruta | Permiso | Qué hace |
 |---------------|---------|----------|
-| `GET /api/v1/health` | N/A (`AllowAny`) | Comprueba PostgreSQL y Redis; `200` si todo OK, `503` si degradado. |
+| `GET /api/v1/health` | N/A (`AllowAny`) | Alias de readiness: comprueba PostgreSQL y Redis; `200` si todo OK, `503` si alguna dependencia falla. |
+| `GET /api/v1/health/live` | N/A (`AllowAny`) | Liveness: `200` mientras el proceso responde (sin I/O a dependencias). |
+| `GET /api/v1/health/ready` | N/A (`AllowAny`) | Readiness: `200`/`503` según DB + Redis. |
+| `GET /api/v1/health/startup` | N/A (`AllowAny`) | Startup: mismos checks que readiness; gatea liveness/readiness en el arranque. |
 
 ---
 
@@ -31,6 +34,7 @@ Prefijo: **`/api/v1/chats/`**
 | `GET /api/v1/chats/{chat_id}/` | `GET_CHAT` | Detalle del chat. |
 | `PATCH /api/v1/chats/{chat_id}/` | `UPDATE_CHAT` | Actualiza metadatos (owner/creador). |
 | `DELETE /api/v1/chats/{chat_id}/` | `DELETE_CHAT` | Borrado lógico del chat. |
+| `POST /api/v1/chats/delete/` | `DELETE_CHAT` | Borrado lógico masivo por ids en el cuerpo. |
 | `GET /api/v1/chats/me/` | `LIST_MY_CHATS` | Chats creados por el usuario. |
 | `GET /api/v1/chats/manage/` | `MANAGE_CHATS` | Todos los chats (admin). |
 | `GET /api/v1/chats/archived/` | `LIST_ARCHIVED_CHATS` | Chats archivados por el usuario. |
@@ -62,19 +66,34 @@ Prefijo: **`/api/v1/chats/{chat_id}/share-links/`**
 
 ## Mensajes (REST)
 
-Prefijo: **`/api/v1/chats/{chat_id}/messages/`**
+Prefijo: **`/api/v1/messages/`** — el chat se indica con **`?chat_id=`** en los listados (no cuelga de `/chats/{id}/`).
 
 | Método y ruta | Permiso | Qué hace |
 |---------------|---------|----------|
-| `GET .../messages/` | `LIST_MESSAGES` | Historial con paginación **cursor**; anotaciones bookmark/feedback/thread. |
-| `POST .../messages/generate/` | `SEND_MESSAGE` | Envía texto o audio, persiste mensaje usuario y ejecuta respuesta IA (modo opcional). |
-| `GET .../messages/manage/` | `MANAGE_CHATS` | Historial admin sin exigir membresía. |
-| `DELETE .../messages/{message_id}/` | `DELETE_MESSAGE` | Borrado lógico (`message_id` = campo **`id`**). |
-| `GET .../messages/{message_id}/export/pdf/` | `EXPORT_CHAT` | PDF de un mensaje. |
-| `GET .../messages/{message_id}/export/markdown/` | `EXPORT_CHAT` | Markdown de un mensaje. |
-| `GET .../messages/manage/{message_id}/export/...` | `MANAGE_CHATS` | Export admin de un mensaje. |
+| `GET /api/v1/messages/?chat_id=` | `LIST_MESSAGES` | Historial del chat con paginación **cursor** (orden `-id`); anotaciones bookmark/feedback/thread. Requiere membresía activa. |
+| `POST /api/v1/messages/generate/` | `SEND_MESSAGE` | Envía texto o audio (multipart), persiste el mensaje del usuario y ejecuta la respuesta IA (modo opcional). `409` si ya hay una respuesta IA en curso. |
+| `GET /api/v1/messages/manage/?chat_id=` | `MANAGE_MESSAGES` | Historial admin sin exigir membresía. |
+| `GET /api/v1/messages/{message_id}/` | `GET_MESSAGE` | Detalle de un mensaje (`message_id` = campo **`id`**). |
+| `DELETE /api/v1/messages/{message_id}/` | `DELETE_MESSAGE` | Borrado lógico (solo el dueño del chat). |
+| `GET /api/v1/messages/{message_id}/export/pdf/` | `EXPORT_MESSAGE` | PDF de un mensaje. |
+| `GET /api/v1/messages/{message_id}/export/markdown/` | `EXPORT_MESSAGE` | Markdown de un mensaje. |
+| `GET /api/v1/messages/manage/{message_id}/export/pdf\|markdown/` | `MANAGE_EXPORT_MESSAGE` | Export admin de un mensaje. |
 
 **Tiempo real:** envío y streaming IA vía **WebSocket** (ver `docs/websockets.md`), no sustituye a `generate/` REST.
+
+---
+
+## Mensajes entre personas (peer messages)
+
+Prefijo: **`/api/v1/chats/{chat_id}/peer-messages/`** — canal directo persona↔persona dentro del chat, separado de la conversación con IA (`artifact_message`). Gated por **membresía activa** (sin constante de permiso dedicada).
+
+| Método y ruta | Qué hace |
+|---------------|----------|
+| `GET .../peer-messages/` | Lista los mensajes entre personas del chat. |
+| `POST .../peer-messages/` | Envía un mensaje. |
+| `GET .../peer-messages/{message_id}/` | Detalle. |
+| `PATCH .../peer-messages/{message_id}/` | Edita (autor). |
+| `DELETE .../peer-messages/{message_id}/` | Borra (autor). |
 
 ---
 
@@ -84,12 +103,10 @@ Prefijo: **`/api/v1/artifacts/`**
 
 | Método y ruta | Permiso | Qué hace |
 |---------------|---------|----------|
-| `GET /api/v1/artifacts/` | `LIST_ARTIFACTS` | Lista artifacts del usuario (`type`, `chat_id` query). |
-| `GET /api/v1/artifacts/manage/` | `MANAGE_ARTIFACTS` | Lista global admin. |
+| `GET /api/v1/artifacts/chats/{chat_id}/` | miembro activo | Feed de artifacts del chat (`type`, `created_by`, `date_from`, `date_to`). |
+| `GET /api/v1/artifacts/chats/{chat_id}/manage/` | `MANAGE_CHAT_ARTIFACTS` | Feed admin sin requerir membresía. |
 | `GET /api/v1/artifacts/{artifact_id}/` | `GET_ARTIFACT` | Detalle cabecera artifact. |
-| `PATCH /api/v1/artifacts/{artifact_id}/` | `UPDATE_ARTIFACT` | Actualiza título/descripción/estado (versionado). |
-| `DELETE /api/v1/artifacts/{artifact_id}/` | `DELETE_ARTIFACT` | Borrado lógico. |
-| `GET /api/v1/artifacts/{artifact_id}/versions/` | `LIST_ARTIFACT_VERSIONS` | Historial de versiones. |
+| `DELETE /api/v1/artifacts/{artifact_id}/` | `DELETE_ARTIFACT` | Borrado lógico (creador o owner/editor del chat). |
 | `POST /api/v1/artifacts/{artifact_id}/feedback/` | `SET_MESSAGE_FEEDBACK` | Pulgar arriba/abajo (solo respuestas IA). |
 | `DELETE /api/v1/artifacts/{artifact_id}/feedback/` | `SET_MESSAGE_FEEDBACK` | Quita feedback. |
 | `POST /api/v1/artifacts/{artifact_id}/bookmark/` | `BOOKMARK_MESSAGE` | Marca artifact. |
@@ -98,8 +115,10 @@ Prefijo: **`/api/v1/artifacts/`**
 | `DELETE /api/v1/artifacts/{artifact_id}/pin/` | `PIN_MESSAGE` | Desfija. |
 | `GET /api/v1/artifacts/{artifact_id}/thread/` | `LIST_THREAD_REPLIES` | Lista replies del hilo. |
 | `POST /api/v1/artifacts/{artifact_id}/thread/` | `ADD_THREAD_REPLY` | Añade reply. |
-| `GET /api/v1/artifacts/pinned/?chat_id=` | — | Lista fijados del chat (query `chat_id` obligatorio). |
-| `GET /api/v1/artifacts/bookmarked/?chat_id=` | `LIST_BOOKMARKS` | Lista marcados del usuario en el chat. |
+| `PATCH /api/v1/artifacts/{artifact_id}/thread/{reply_id}/` | `EDIT_THREAD_REPLY` | Edita reply del hilo (autor). |
+| `DELETE /api/v1/artifacts/{artifact_id}/thread/{reply_id}/` | `DELETE_THREAD_REPLY` | Elimina reply del hilo (autor). |
+| `GET /api/v1/artifacts/pinned/?chat_id=` | `LIST_PINNED_MESSAGES` | Lista fijados del chat (query `chat_id` obligatorio). |
+| `GET /api/v1/artifacts/bookmarked/?chat_id=` | `LIST_BOOKMARKS` | Lista marcados del usuario en el chat (`chat_id` obligatorio). |
 | `GET /api/v1/artifacts/feedback/analytics/` | `VIEW_FEEDBACK_ANALYTICS` | Dashboard admin de feedback. |
 
 ---
@@ -114,6 +133,8 @@ Cada tipo sigue el mismo patrón bajo su prefijo:
 - **`/api/v1/quizzes/`** — cuestionarios (`LLM_QUIZ_GENERATE_URL`)
 - **`/api/v1/lessons-learned/`** — lecciones aprendidas (`LLM_LESSONS_LEARNED_GENERATE_URL`)
 - **`/api/v1/decision-briefs/`** — briefs de decisión (`LLM_DECISION_BRIEF_GENERATE_URL`)
+- **`/api/v1/document-summaries/`** — resúmenes de documentos (`LLM_DOCUMENT_SUMMARY_URL`)
+- **`/api/v1/document-actions/`** — acciones sobre documentos (`LLM_DOCUMENT_ACTION_URL`)
 
 Por prefijo, en general:
 
@@ -121,10 +142,18 @@ Por prefijo, en general:
 |---------------|----------|-------|
 | `GET /` | `LIST_*` | Lista del usuario; filtro `chat_id` opcional. |
 | `GET /manage/` | `MANAGE_*` | Lista admin. |
-| `POST /generate/` | `LLM_*_GENERATE` | Generación IA; `chat_id` requerido en body (salvo donde el serializer lo indique). |
-| `GET|PATCH|DELETE /{id}/` | `GET_*`, `UPDATE_*`, `DELETE_*` | CRUD del cuerpo tipado. |
-| `GET /{id}/export/pdf|markdown/` | `EXPORT_*` | Descarga. |
-| `GET /manage/{id}/export/...` | `MANAGE_EXPORT_*` | Export admin. |
+| `POST /generate/` | `LLM_*_GENERATE` | Generación IA. Los tipos de documento (summary/action) reciben `document_ids`; el resto usa el chat/mensaje. |
+| `GET /{id}/` | `GET_*` | Detalle del cuerpo tipado. |
+| `DELETE /{id}/` | `DELETE_*` | Borrado lógico. |
+| `GET /{id}/export/pdf\|markdown/` | `EXPORT_*` | Descarga. |
+| `GET /manage/{id}/export/pdf\|markdown/` | `MANAGE_EXPORT_*` | Export admin. |
+
+**No hay un `PATCH /{id}/` genérico del cuerpo.** Solo hay edición vía sub-recursos específicos:
+
+- **Checklists:** `PATCH /api/v1/checklists/{id}/items/{item_id}/` (`UPDATE_CHECKLIST`) para marcar/actualizar un ítem.
+- **Quizzes:** `POST /api/v1/quizzes/{id}/questions/{question_id}/answer/` y `POST /api/v1/quizzes/{id}/reset/` (`UPDATE_QUIZ`).
+
+El resto de tipos son solo `GET` / `DELETE` / export.
 
 Si la variable de entorno del endpoint LLM correspondiente está vacía, la API responde **502/503** con error de servicio LLM no configurado (no intenta llamar a URL vacía).
 

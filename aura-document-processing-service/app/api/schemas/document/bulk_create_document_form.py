@@ -13,11 +13,6 @@ def parse_bulk_create_document_request(
         enrich: bool = Form(False),
         graph_extract: bool = Form(False),
 ) -> CreateDocumentRequest:
-    # The same processing options apply to every file in the batch. ``name`` is
-    # intentionally not accepted: with multiple files a single name is
-    # ambiguous, so each document keeps its own filename. Description is
-    # generated automatically downstream (enrichment), as in the single-create
-    # flow.
     try:
         return CreateDocumentRequest(
             chat_id=ChatId(chat_id) if chat_id is not None else None,

@@ -12,10 +12,6 @@ class EntityType(str, Enum):
     OTHER = "other"
 
     @classmethod
-    def values(cls) -> list[str]:
-        return [member.value for member in cls]
-
-    @classmethod
     def parse(cls, value: str) -> "EntityType":
         normalized = (value or "").strip().lower()
         for member in cls:

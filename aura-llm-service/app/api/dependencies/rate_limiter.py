@@ -81,9 +81,6 @@ async def _check_rate_limit(request: Request, limit: int) -> None:
 
 
 def make_rate_limiter(kind: str) -> Callable:
-    """Build a FastAPI dependency that enforces the ``kind`` ("strict"/"default")
-    rate limit. The numeric limit and window are read from settings per-request
-    (not bound at import time), so configuration stays overridable in tests."""
 
     async def _limiter(request: Request) -> None:
         settings = get_settings()

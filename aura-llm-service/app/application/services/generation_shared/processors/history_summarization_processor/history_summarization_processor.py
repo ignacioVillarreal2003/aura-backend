@@ -57,7 +57,7 @@ class HistorySummarizationProcessor:
                 history_text = format_history_messages(history_window, state.history_messages)
                 llm = await self._ollama_llm_facade.get_llm_base()
                 if self._settings.temperature is not None:
-                    llm = llm.bind(temperature=self._settings.temperature)
+                    llm = self._ollama_llm_facade.apply_options(llm, temperature=self._settings.temperature)
                 llm_input = [
                     SystemMessage(content=SYSTEM_PROMPT),
                     HumanMessage(content=HUMAN_PROMPT.format(

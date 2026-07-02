@@ -28,6 +28,9 @@ class _Facade:
     async def get_llm_json(self):
         return _FakeLLM()
 
+    def apply_options(self, llm, **overrides):
+        return llm
+
 
 class _Invoker:
     async def call_llm_content(self, llm, llm_input):

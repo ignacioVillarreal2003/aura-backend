@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from app.api.dependencies.rate_limiter import default_rate_limit
-from app.api.controllers.user_interactions.feedback_evaluation_controller.feedback_evaluation_controller_interface import (
+from app.api.controllers.processing.feedback_evaluation_controller.feedback_evaluation_controller_interface import (
     FeedbackEvaluationControllerInterface,
 )
 from app.api.openapi.common import default_error_responses
@@ -12,8 +12,8 @@ from app.application.services.processing.feedback_evaluation_service.interfaces.
     FeedbackEvaluationServiceInterface,
 )
 from app.domain.authentication.authenticated_user import AuthenticatedUser
-from app.domain.dtos.user_interactions.feedback_evaluation.feedback_evaluation_request import FeedbackEvaluationRequest
-from app.domain.dtos.user_interactions.feedback_evaluation.feedback_evaluation_response import FeedbackEvaluationResponse
+from app.domain.dtos.processing.feedback_evaluation.feedback_evaluation_request import FeedbackEvaluationRequest
+from app.domain.dtos.processing.feedback_evaluation.feedback_evaluation_response import FeedbackEvaluationResponse
 from app.infrastructure.http.authentication_provider.authentication_provider import get_authenticated_user
 
 

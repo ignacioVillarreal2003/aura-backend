@@ -37,14 +37,6 @@ _STATUS_FAILED = "failed"
 
 
 class BulkCreateDocumentService(BulkCreateDocumentServiceInterface):
-    """Uploads several documents in a single request by reusing the existing
-    single-document creation flow.
-
-    Each file is processed independently and inside its own database session, so
-    a failure on one file rolls back only that file and never aborts the rest of
-    the batch. The request as a whole succeeds and returns a per-file breakdown;
-    the caller inspects it to decide what to retry.
-    """
 
     def __init__(
             self,
@@ -92,9 +84,6 @@ class BulkCreateDocumentService(BulkCreateDocumentServiceInterface):
             "Bulk document creation completed.",
             extra={
                 "total": len(raw_documents),
-                # 'created'/'failed' are not used as keys: 'created' is a
-                # reserved LogRecord attribute (the record timestamp) and would
-                # raise KeyError on makeRecord.
                 "created_count": created,
                 "failed_count": failed,
                 "user_id": authenticated_user.id,
@@ -117,6 +106,15 @@ class BulkCreateDocumentService(BulkCreateDocumentServiceInterface):
                 f"The maximum is {self._settings.max_documents}.",
                 status_code=413,
             )
+        total_size = sum(
+            size for size in (getattr(f, "size", None) for f in raw_documents) if size is not None
+        )
+        if total_size > self._settings.max_total_size_bytes:
+            raise BulkCreateDocumentValidationException(
+                "The combined size of the files is too large. "
+                f"The maximum is {self._settings.max_total_size_mb} MB.",
+                status_code=413,
+            )
 
     async def _create_one(
             self,
@@ -125,9 +123,6 @@ class BulkCreateDocumentService(BulkCreateDocumentServiceInterface):
             authenticated_user: AuthenticatedUser,
     ) -> BulkCreateDocumentItem:
         try:
-            # A fresh session per file isolates each document in its own
-            # transaction; the context manager rolls it back on failure so a bad
-            # file never poisons the session used by the others.
             async with self._database_manager.session() as database_session:
                 response = await self._create_document_service.create_document(
                     create_document_request=create_document_request,
@@ -148,8 +143,6 @@ class BulkCreateDocumentService(BulkCreateDocumentServiceInterface):
             logger.warning(
                 "A file in a bulk-create request failed.",
                 extra={
-                    # 'filename' is a reserved LogRecord attribute; use a
-                    # non-colliding key.
                     "document_filename": raw_document.filename,
                     "exception_type": type(exc).__name__,
                 },

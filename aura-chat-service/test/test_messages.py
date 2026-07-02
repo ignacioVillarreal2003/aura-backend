@@ -36,9 +36,6 @@ def _setup_send_message_mocks(mocker, chat=None, msg=None, turn=None, acquired=T
     return msg, mock_run
 
 
-# ---------------------------------------------------------------------------
-# List messages  GET /api/v1/chats/{chat_id}/messages/
-# ---------------------------------------------------------------------------
 
 def test_list_messages_returns_200(api_client, mocker):
     mocker.patch(
@@ -74,9 +71,6 @@ def test_list_messages_unauthenticated(anon_client):
     assert response.status_code == 401
 
 
-# ---------------------------------------------------------------------------
-# Send message  POST /api/v1/chats/{chat_id}/messages/
-# ---------------------------------------------------------------------------
 
 def test_send_message_returns_201(api_client, mocker):
     msg, _ = _setup_send_message_mocks(mocker)
@@ -166,9 +160,6 @@ def test_send_message_unauthenticated(anon_client):
     assert response.status_code == 401
 
 
-# ---------------------------------------------------------------------------
-# Delete message  DELETE /api/v1/chats/{chat_id}/messages/{message_id}/
-# ---------------------------------------------------------------------------
 
 def test_delete_message_returns_204(api_client, mocker):
     mocker.patch("apps.message.views.message_delete_view.message_service.delete_message")
@@ -196,9 +187,6 @@ def test_delete_message_forbidden_returns_403(api_client, mocker):
     assert response.data["error"] == "message_delete_forbidden"
 
 
-# ---------------------------------------------------------------------------
-# Clear history  DELETE /api/v1/chats/{chat_id}/messages/clear/
-# ---------------------------------------------------------------------------
 
 def test_clear_history_returns_204(api_client, mocker):
     mocker.patch("apps.message.views.clear_view.message_service.clear_history")
@@ -226,9 +214,6 @@ def test_clear_history_chat_not_found_returns_404(api_client, mocker):
     assert response.status_code == 404
 
 
-# ---------------------------------------------------------------------------
-# Mark as read  POST /api/v1/chats/{chat_id}/messages/read/
-# ---------------------------------------------------------------------------
 
 def test_mark_as_read_returns_204(api_client, mocker):
     mocker.patch(
@@ -256,9 +241,6 @@ def test_mark_as_read_unauthenticated(anon_client):
     assert response.status_code == 401
 
 
-# ---------------------------------------------------------------------------
-# Regenerate  POST /api/v1/chats/{chat_id}/messages/regenerate/
-# ---------------------------------------------------------------------------
 
 REGEN_VIEW = "apps.message.views.regenerate_view"
 

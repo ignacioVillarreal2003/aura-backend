@@ -1,8 +1,8 @@
 # Visión general de la API — Aura Document Collection Service
 
-Servicio Django REST Framework (DRF) que expone colecciones de documentos, niveles de clasificación MAC, compartimientos y autorizaciones de usuario (clearance y compartimentos). Está pensado para integrarse con un **servicio de autenticación** externo y con llamadas **service-to-service** mediante API key.
+Servicio Django REST Framework (DRF) que expone colecciones de documentos, niveles de clasificación MAC, compartimientos y autorizaciones de usuario (clearance y compartimentos). Está pensado para integrarse con un **servicio de autenticación** externo; las llamadas **service-to-service** reenvían el token Bearer del usuario final.
 
-Para una lectura **solo de dominio** (roles, tablas y flujos típicos, sin centrarse en rutas HTTP), ver [vision-general-api-y-datos.md](vision-general-api-y-datos.md).
+Para una lectura **solo de dominio** (roles, tablas y flujos típicos, sin centrarse en rutas HTTP), ver [api-summary.md](api-summary.md).
 
 ## Prefijo de la API REST
 

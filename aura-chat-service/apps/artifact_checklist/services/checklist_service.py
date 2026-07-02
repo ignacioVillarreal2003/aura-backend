@@ -116,11 +116,6 @@ class ChecklistService(ArtifactCrudService):
             item_id: int,
             is_checked: bool,
     ) -> ArtifactChecklistItem:
-        """Toggle a checklist item's ``is_checked`` flag.
-
-        Requires the ``UPDATE_CHECKLIST`` permission and ownership: the user must
-        be the checklist's creator or an active contributor of its source chat.
-        """
         AccessControl.require_permissions(user, frozenset({self.perm_update}))
         checklist = self.repository.get_by_id_for_update(checklist_id)
         if checklist is None:

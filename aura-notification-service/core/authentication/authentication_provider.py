@@ -1,13 +1,11 @@
 import hashlib
 import json
 import logging
-import secrets
 from functools import lru_cache
 from typing import Optional
 import redis
 import requests
 from django.conf import settings
-from django.http import HttpRequest
 
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authentication.authentication_exceptions import (
@@ -15,18 +13,11 @@ from core.authentication.authentication_exceptions import (
     AuthenticationProviderServiceUnavailableException,
     AuthenticationProviderUnauthorizedException,
     AuthenticationProviderUserNotFoundException,
-    ServiceAuthenticationRejected,
 )
 
 logger = logging.getLogger(__name__)
 
 _CACHE_PREFIX = "auth_token:"
-
-_HEADER_SERVICE_API_KEY = "X-Service-Api-Key"
-_HEADER_USER_ID = "X-User-Id"
-_HEADER_USER_EMAIL = "X-User-Email"
-_HEADER_USER_ROLES = "X-User-Roles"
-_HEADER_USER_PERMISSIONS = "X-User-Permissions"
 
 
 def _token_cache_ttl() -> int:
@@ -39,10 +30,6 @@ def _cache_key(token: str) -> str:
 
 @lru_cache(maxsize=1)
 def _token_cache_redis() -> redis.Redis:
-    # Raw Redis client (literal key, JSON value) so the validated-token cache is
-    # shared cross-stack with the FastAPI services, which write the same
-    # `auth_token:<sha256>` key. Django's default cache would prepend a
-    # KEY_PREFIX/version and break sharing.
     url = getattr(settings, "AUTH_TOKEN_CACHE_REDIS_URL", "") or settings.REDIS_URL
     return redis.Redis.from_url(url, decode_responses=True)
 
@@ -91,52 +78,7 @@ def _format_bearer_token(token: str) -> str:
     return stripped if stripped.lower().startswith("bearer ") else f"Bearer {stripped}"
 
 
-def _parse_comma_list(value: Optional[str]) -> list[str]:
-    if not value:
-        return []
-    return [item.strip() for item in value.split(",") if item.strip()]
-
-
 class AuthenticationProvider:
-    def evaluate_service_auth(self, request: HttpRequest) -> Optional[AuthenticatedUser]:
-        raw_key = request.headers.get(_HEADER_SERVICE_API_KEY)
-        if raw_key is None:
-            return None
-
-        api_key = raw_key.strip()
-        if not api_key:
-            raise ServiceAuthenticationRejected(401, "missing_service_key", "Service API key required")
-
-        if not secrets.compare_digest(api_key, str(settings.SERVICE_API_KEY)):
-            raise ServiceAuthenticationRejected(403, "invalid_service_key", "Invalid service API key")
-
-        # Gateway "on-behalf-of-user" model: the service key authenticates the
-        # caller (a trusted internal service) and the X-User-* headers carry the
-        # impersonated end user, whose permissions are then enforced normally.
-        raw_user_id = request.headers.get(_HEADER_USER_ID)
-        if not raw_user_id or not raw_user_id.strip():
-            raise ServiceAuthenticationRejected(400, "missing_user_id", "X-User-Id header required")
-        try:
-            user_id = int(raw_user_id.strip())
-        except (TypeError, ValueError):
-            raise ServiceAuthenticationRejected(400, "invalid_user_id", "X-User-Id must be an integer")
-
-        email = request.headers.get(_HEADER_USER_EMAIL)
-        if not email or not email.strip():
-            raise ServiceAuthenticationRejected(400, "missing_user_email", "X-User-Email header required")
-
-        roles = tuple(_parse_comma_list(request.headers.get(_HEADER_USER_ROLES)))
-        permissions = tuple(_parse_comma_list(request.headers.get(_HEADER_USER_PERMISSIONS)))
-
-        logger.debug("Service-to-service request authenticated.", extra={"path": request.path})
-        return AuthenticatedUser(
-            id=user_id,
-            email=email.strip(),
-            roles=roles,
-            permissions=permissions,
-            is_service=False,
-        )
-
     def validate_token(self, token: str) -> AuthenticatedUser:
         cached = _get_cached_user(token)
         if cached is not None:

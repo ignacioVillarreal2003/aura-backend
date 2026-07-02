@@ -1,7 +1,3 @@
-"""
-Tests unitarios para NotificationService.
-Patchea el ORM y servicios externos — sin BD real.
-"""
 import pytest
 from unittest.mock import patch, MagicMock, call
 

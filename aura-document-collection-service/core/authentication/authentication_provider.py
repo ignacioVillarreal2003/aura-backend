@@ -1,13 +1,11 @@
 import hashlib
 import json
 import logging
-import secrets
 from functools import lru_cache
 from typing import Optional
 import httpx
 import redis
 from django.conf import settings
-from django.http import HttpRequest
 
 from core.authentication.authenticated_user import AuthenticatedUser
 from core.authentication.authentication_exceptions import (
@@ -15,7 +13,6 @@ from core.authentication.authentication_exceptions import (
     AuthenticationProviderServiceUnavailableException,
     AuthenticationProviderUnauthorizedException,
     AuthenticationProviderUserNotFoundException,
-    ServiceAuthenticationRejected,
 )
 
 logger = logging.getLogger(__name__)
@@ -76,41 +73,7 @@ def _cache_user(token: str, user: AuthenticatedUser) -> None:
         logger.warning("Redis token cache write failed; token will not be cached.", exc_info=True)
 
 
-_HEADER_SERVICE_API_KEY = "X-Service-Api-Key"
-
-
 class AuthenticationProvider:
-    def evaluate_service_auth(self, request: HttpRequest) -> Optional[AuthenticatedUser]:
-        raw_key = request.headers.get(_HEADER_SERVICE_API_KEY)
-        if raw_key is None:
-            return None
-
-        api_key = raw_key.strip()
-        if not api_key:
-            logger.warning(
-                "Service API key header was present but empty.",
-                extra={"path": request.path},
-            )
-            raise ServiceAuthenticationRejected(
-                401,
-                "missing_service_key",
-                "Service API key required",
-            )
-
-        if not secrets.compare_digest(api_key, settings.SERVICE_API_KEY):
-            logger.warning(
-                "Service API key does not match the configured value.",
-                extra={"path": request.path},
-            )
-            raise ServiceAuthenticationRejected(
-                403,
-                "invalid_service_key",
-                "Invalid service API key",
-            )
-
-        logger.debug("Service-to-service request authenticated.", extra={"path": request.path})
-        return AuthenticatedUser(id=0, email="service@internal", roles=(), permissions=(), is_service=True)
-
     def validate_token(self, token: str) -> AuthenticatedUser:
         cached = _get_cached_user(token)
         if cached is not None:
@@ -120,7 +83,14 @@ class AuthenticationProvider:
         logger.debug("Validating bearer token with the authentication service.")
         auth_header = _format_bearer_token(token)
 
-        timeout = float(getattr(settings, "AUTH_SERVICE_TIMEOUT", 10.0))
+        read_timeout = float(getattr(settings, "AUTH_SERVICE_TIMEOUT", 5.0))
+        connect_timeout = float(getattr(settings, "AUTH_SERVICE_CONNECT_TIMEOUT", 2.0))
+        timeout = httpx.Timeout(
+            read=read_timeout,
+            connect=connect_timeout,
+            write=read_timeout,
+            pool=connect_timeout,
+        )
         try:
             with httpx.Client(timeout=timeout) as client:
                 response = client.get(
@@ -194,12 +164,6 @@ class AuthenticationProvider:
 def _format_bearer_token(token: str) -> str:
     stripped = token.strip()
     return stripped if stripped.lower().startswith("bearer ") else f"Bearer {stripped}"
-
-
-def _parse_comma_list(value: Optional[str]) -> tuple[str, ...]:
-    if not value:
-        return ()
-    return tuple(item.strip() for item in value.split(",") if item.strip())
 
 
 authentication_provider = AuthenticationProvider()

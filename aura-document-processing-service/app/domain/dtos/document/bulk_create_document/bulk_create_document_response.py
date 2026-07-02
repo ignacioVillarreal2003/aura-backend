@@ -12,12 +12,6 @@ from app.domain.types import DocumentId
 
 
 class BulkCreateDocumentItem(BaseModel):
-    """Per-file outcome of a bulk-create request.
-
-    A file either succeeds (``status == "created"`` with the created document
-    fields populated) or fails (``status == "failed"`` with ``error`` set). The
-    ``filename`` is always echoed back so the caller can correlate each item
-    with the file it submitted, regardless of ordering."""
 
     status: str = Field(..., min_length=1, max_length=16)
     filename: Optional[str] = Field(default=None, max_length=MAX_NAME_CHARS)
@@ -34,11 +28,6 @@ class BulkCreateDocumentItem(BaseModel):
 
 
 class BulkCreateDocumentResponse(BaseModel):
-    """Aggregate result of a bulk-create request.
-
-    ``created + failed == total`` always holds. The request as a whole succeeds
-    (HTTP 201) even when some individual files fail, so callers must inspect
-    ``items`` to know which uploads to retry."""
 
     total: int = Field(..., ge=0, le=MAX_BULK_CREATE_DOCUMENTS)
     created: int = Field(..., ge=0, le=MAX_BULK_CREATE_DOCUMENTS)

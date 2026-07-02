@@ -1,0 +1,12 @@
+@dpsBase = http://localhost:8000/api/v1
+@authToken = user_token_123
+
+### Actualizar el título de un documento (manage)
+PATCH {{dpsBase}}/update-document/manage/document/38
+Accept: application/json
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "name": "contrato-actualizado.pdf"
+}

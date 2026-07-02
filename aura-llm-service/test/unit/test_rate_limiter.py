@@ -1,9 +1,3 @@
-"""Unit tests for the Redis-backed sliding-window rate limiter.
-
-Critical path: enforcement (allow vs. 429), graceful degradation when Redis is
-missing or unreachable (fail-open), and per-request resolution of the configured
-limits (strict vs. default) so settings stay overridable.
-"""
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -22,7 +16,6 @@ from app.configuration.environment_variables import get_settings
 
 
 def _make_request(eval_result=None, eval_error=None, with_redis=True, path="/api/v1/x"):
-    """Build a minimal Request-like object for the rate limiter."""
     request = MagicMock()
     request.url.path = path
     request.client.host = "203.0.113.5"

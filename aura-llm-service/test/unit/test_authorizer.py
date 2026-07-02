@@ -1,6 +1,3 @@
-"""
-Unit tests for Authorizer.require_permissions.
-"""
 import pytest
 from app.application.authorization.authorizer import Authorizer
 from app.application.authorization.exceptions.authorization_exceptions import UnauthorizedException

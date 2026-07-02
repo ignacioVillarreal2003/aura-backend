@@ -17,8 +17,6 @@ VIEW = "apps.artifact_checklist.views"
 
 
 def _patch_generate_deps(mocker, *, is_contributor=True, rate_ok=True):
-    """The generate view validates chat membership, rate limit and holds the AI
-    reply lock before calling the service. Patch those guards for happy-path tests."""
     mocker.patch(f"{VIEW}.chat_repository.get_by_id", return_value=object())
     mocker.patch(f"{VIEW}.membership_repository.is_active_contributor", return_value=is_contributor)
     mocker.patch(f"{VIEW}.check_artifact_rate_limit", return_value=rate_ok)
@@ -30,7 +28,6 @@ def _patch_generate_deps(mocker, *, is_contributor=True, rate_ok=True):
     mocker.patch(f"{VIEW}.ai_reply_lock_guard", _noop_lock)
 
 
-# ── Shared payload helpers ────────────────────────────────────────────────────
 
 _VALID_SECTIONS = [
     {
@@ -43,9 +40,6 @@ _VALID_SECTIONS = [
 ]
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/checklists/
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_list_checklists_returns_200_paginated(api_client, mocker):
     mocker.patch(f"{VIEW}.checklist_service.list_checklists", return_value=[make_checklist()])
@@ -116,16 +110,12 @@ def test_list_checklists_response_includes_item_and_checked_counts(api_client, m
 
 
 def test_list_checklists_no_sections_in_list_response(api_client, mocker):
-    """List endpoint returns summary — sections must NOT be included."""
     mocker.patch(f"{VIEW}.checklist_service.list_checklists", return_value=[make_checklist()])
     response = api_client.get("/api/v1/checklists/?chat_id=5")
     result = response.data["results"][0]
     assert "sections" not in result
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/checklists/{id}/
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_get_checklist_returns_200_with_nested_sections(api_client, mocker):
     section = make_checklist_section(items=[make_checklist_item(item_id=10, text="Verificar radio")])
@@ -187,9 +177,6 @@ def test_get_checklist_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# DELETE /api/v1/checklists/{id}/
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_delete_checklist_returns_204(api_client, mocker):
     mocker.patch(f"{VIEW}.checklist_service.delete_checklist")
@@ -206,7 +193,6 @@ def test_delete_checklist_not_found_returns_404(api_client, mocker):
 
 
 def test_delete_checklist_non_member_returns_403(api_client, mocker):
-    """User who is neither the creator nor an active chat member cannot delete."""
     mocker.patch(f"{VIEW}.checklist_service.delete_checklist", side_effect=ChecklistAccessDeniedException())
     response = api_client.delete("/api/v1/checklists/1/")
     assert response.status_code == 403
@@ -224,9 +210,6 @@ def test_delete_checklist_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/checklists/{id}/export/pdf/
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_export_pdf_returns_200_application_pdf(api_client, mocker):
     mocker.patch(f"{VIEW}.checklist_service.get_own_checklist", return_value=make_checklist())
@@ -266,7 +249,6 @@ def test_export_pdf_title_truncated_to_60_chars_in_filename(api_client, mocker):
     mocker.patch(f"{VIEW}.generate_checklist_pdf", return_value=b"%PDF fake")
     response = api_client.get("/api/v1/checklists/1/export/pdf/")
     disp = response["Content-Disposition"]
-    # After truncation and re-sub the filename slug is ≤60 chars
     filename = disp.split('filename="')[1].rstrip('"')
     slug = filename.replace("checklist_", "").replace(".pdf", "")
     assert len(slug) <= 60
@@ -303,9 +285,6 @@ def test_export_pdf_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/checklists/{id}/export/markdown/
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_export_markdown_returns_200_text_markdown(api_client, mocker):
     mocker.patch(f"{VIEW}.checklist_service.get_own_checklist", return_value=make_checklist())
@@ -347,9 +326,6 @@ def test_export_markdown_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# POST /api/v1/checklists/generate/
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_generate_returns_201_with_checklist_messages_fragments(api_client, mocker):
     messages = [{"role": "human", "content": "texto"}, {"role": "assistant", "content": "resp"}]
@@ -529,9 +505,6 @@ def test_generate_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/checklists/manage/  (admin)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_manage_list_returns_200_with_all_checklists(api_client, mocker):
     cls = [make_checklist(cl_id=1), make_checklist(cl_id=2, title="Otra", created_by=99)]
@@ -555,9 +528,6 @@ def test_manage_list_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/checklists/manage/{id}/export/pdf/  (admin)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_manage_export_pdf_returns_200(api_client, mocker):
     mocker.patch(f"{VIEW}.checklist_service.get_checklist_admin_export", return_value=make_checklist())
@@ -599,9 +569,6 @@ def test_manage_export_pdf_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/checklists/manage/{id}/export/markdown/  (admin)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_manage_export_markdown_returns_200(api_client, mocker):
     mocker.patch(f"{VIEW}.checklist_service.get_checklist_admin_export", return_value=make_checklist())

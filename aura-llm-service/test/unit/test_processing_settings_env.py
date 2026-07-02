@@ -1,7 +1,3 @@
-"""Regression test for the processing settings env_file fix: an env override
-with the right prefix must actually reach the setting. Before the fix the four
-classes pointed env_file at a non-existent app/.env, so overrides placed in the
-real .env were silently ignored. Here we assert OS-env overrides take effect."""
 from app.application.services.processing.document_classify_service.document_classify_settings import (
     DocumentClassifyServiceSettings,
 )

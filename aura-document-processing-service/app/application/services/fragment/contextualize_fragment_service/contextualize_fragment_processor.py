@@ -28,13 +28,6 @@ logger = logging.getLogger(__name__)
 
 
 class ContextualizeFragmentProcessor(ContextualizeFragmentProcessorInterface):
-    """Builds a second, document-aware representation of each fragment.
-
-    For every fragment it asks the LLM service for a short situating context based
-    on the document summary, prepends it to the raw content, embeds the result and
-    stores it in the dedicated contextualized columns. The original
-    ``content``/``vector`` are never modified.
-    """
 
     def __init__(
             self,

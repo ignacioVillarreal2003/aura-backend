@@ -8,7 +8,6 @@ from core.authentication.authentication_exceptions import (
     AuthenticationProviderServiceUnavailableException,
     AuthenticationProviderUnauthorizedException,
     AuthenticationProviderUserNotFoundException,
-    ServiceAuthenticationRejected,
 )
 from core.authentication.authentication_provider import authentication_provider
 
@@ -29,18 +28,6 @@ class AuthenticationMiddleware:
 
         if self._is_excluded(request.path, excluded_paths):
             request.authenticated_user = None
-            return self.get_response(request)
-
-        try:
-            service_user = authentication_provider.evaluate_service_auth(request)
-        except ServiceAuthenticationRejected as e:
-            return JsonResponse(
-                {"detail": e.detail, "error": e.error},
-                status=e.status_code,
-            )
-
-        if service_user is not None:
-            request.authenticated_user = service_user
             return self.get_response(request)
 
         token = self._extract_token(request)

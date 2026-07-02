@@ -1,7 +1,3 @@
-"""Unit tests for GraphContextProvider: inactive short-circuiting, fail-soft
-behaviour (errors degrade to empty results), the newly added retry on
-transient/5xx POST failures, query-URL derivation, and structured fact
-rendering. The HttpClient is mocked."""
 from unittest.mock import AsyncMock, MagicMock
 
 from app.domain.authentication.authenticated_user import AuthenticatedUser

@@ -1,7 +1,6 @@
 from __future__ import annotations
 import logging
 import smtplib
-import requests
 from celery import shared_task
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
@@ -9,12 +8,11 @@ from django.utils import timezone
 
 from apps.notification.events import get_event
 from apps.notification.models import EmailDispatch, EmailDispatchStatus
-from apps.notification.services.auth_lookup import lookup_recipient
 from apps.notification.services.template_service import template_service
 
 logger = logging.getLogger(__name__)
 
-_RETRYABLE_EXCEPTIONS = (OSError, smtplib.SMTPException, requests.RequestException)
+_RETRYABLE_EXCEPTIONS = (OSError, smtplib.SMTPException)
 
 
 @shared_task(
@@ -49,12 +47,6 @@ def send_email_dispatch(
 
     recipient_email = (context or {}).get("recipient_email")
     recipient_name = (context or {}).get("recipient_name")
-    if not recipient_email:
-        looked = lookup_recipient(receiver_id) or {}
-        recipient_email = looked.get("email")
-        if not recipient_name:
-            recipient_name = looked.get("username")
-
     if not recipient_email:
         _mark_failed(dispatch_id, "missing_recipient_email")
         return "missing_recipient_email"

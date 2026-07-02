@@ -32,7 +32,7 @@ class TracingSettings(BaseSettings):
 
 
 def setup_tracing(settings: Optional[TracingSettings] = None) -> bool:
-    global _active  # noqa: PLW0603 — flag de inicialización única a nivel de módulo
+    global _active  # noqa: PLW0603
     settings = settings or TracingSettings()
     if not settings.enabled:
         return False
@@ -106,11 +106,6 @@ def trace_generation(name: Optional[str] = None):
         if inspect.isasyncgenfunction(method):
             @functools.wraps(method)
             async def gen_wrapper(self, *args, **kwargs):
-                # Streaming: el async generator lo consume Starlette en otra Task,
-                # así que NO usamos start_as_current_span (el attach/detach de
-                # contextvars cruzaría de contexto y rompería con
-                # "Token was created in a different Context"). Creamos el span
-                # suelto y lo cerramos en finally.
                 if not _active:
                     async for item in method(self, *args, **kwargs):
                         yield item

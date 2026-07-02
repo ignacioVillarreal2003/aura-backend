@@ -102,17 +102,6 @@ class UserAuthorizationViewSet(GenericViewSet):
             classification_level_id=serializer.validated_data["classification_level_id"],
         )
         return Response(UserClearanceResponse(result).data)
-        if request.method == "PUT":
-            serializer = SetUserClearanceRequest(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            clearance = user_authorization_service.set_user_clearance(
-                request.user,
-                int(user_id),
-                classification_level_id=serializer.validated_data["classification_level_id"],
-            )
-            return Response(UserClearanceResponse(clearance).data)
-        user_authorization_service.delete_user_clearance(request.user, int(user_id))
-        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(
         methods=["get"],

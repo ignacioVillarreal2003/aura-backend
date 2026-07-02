@@ -71,15 +71,6 @@ class TextSplitterFactory:
     def warmup(
             self
     ) -> None:
-        """Eagerly build the splitters needed at runtime so the first ingest does
-        not pay the model-load cost.
-
-        Always warms the flat-text (classic) splitter, which backs both the active
-        flat-text type and the docling_hybrid fallback; a failure here is a real
-        startup error and propagates. Also warms the structure-aware splitter when
-        it is the active type, tolerant of Docling being unavailable (in which case
-        ingestion falls back to the flat-text splitter).
-        """
         self.get_classic_splitter()
         if self._active_type == TextSplitterType.docling_hybrid:
             self.get_structured_splitter()

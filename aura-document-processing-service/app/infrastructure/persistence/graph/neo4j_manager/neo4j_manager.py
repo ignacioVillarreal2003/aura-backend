@@ -208,7 +208,16 @@ class Neo4jManager(Neo4jManagerInterface):
         params = parameters or {}
         try:
             async with self._driver.session(database=self._settings.database) as session:  # type: ignore[union-attr]
-                return await session.execute_read(self._collect_records, cypher, params)
+                return await asyncio.wait_for(
+                    session.execute_read(self._collect_records, cypher, params),
+                    timeout=self._settings.query_timeout_seconds,
+                )
+        except asyncio.TimeoutError as e:
+            logger.warning(
+                "A Neo4j read query exceeded the query timeout and was aborted.",
+                extra={"query_timeout_seconds": self._settings.query_timeout_seconds},
+            )
+            raise Neo4jManagerException("A Neo4j read query timed out.", status_code=504) from e
         except Neo4jError as e:
             logger.exception(
                 "A Neo4j read query failed.",
@@ -231,7 +240,16 @@ class Neo4jManager(Neo4jManagerInterface):
         params = parameters or {}
         try:
             async with self._driver.session(database=self._settings.database) as session:  # type: ignore[union-attr]
-                return await session.execute_write(self._collect_records, cypher, params)
+                return await asyncio.wait_for(
+                    session.execute_write(self._collect_records, cypher, params),
+                    timeout=self._settings.query_timeout_seconds,
+                )
+        except asyncio.TimeoutError as e:
+            logger.warning(
+                "A Neo4j write query exceeded the query timeout and was aborted.",
+                extra={"query_timeout_seconds": self._settings.query_timeout_seconds},
+            )
+            raise Neo4jManagerException("A Neo4j write query timed out.", status_code=504) from e
         except Neo4jError as e:
             logger.exception(
                 "A Neo4j write query failed.",

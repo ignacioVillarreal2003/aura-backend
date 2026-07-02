@@ -67,9 +67,10 @@ router.add_api_route(
     summary="Buscar documentos por contenido",
     description=(
         "Busca los fragmentos más relevantes a la consulta y devuelve los documentos "
-        "a los que pertenecen, ordenados por relevancia y paginados. Admite dos modos: "
-        "`vector` (similitud semántica por embeddings, coseno) y `bm25` (relevancia "
-        "léxica por palabras clave). Solo considera documentos accesibles para el usuario."
+        "a los que pertenecen, ordenados por relevancia y paginados. Admite dos modos "
+        "independientes: `vector` (similitud semántica por embeddings, coseno) y `bm25` "
+        "(relevancia léxica por palabras clave). Solo considera documentos accesibles "
+        "para el usuario."
     ),
     responses=_response,
 )

@@ -8,6 +8,7 @@ class DocumentPurgeCommand(BaseModel):
     document_id: int = Field(..., ge=1, le=MAX_ID)
     storage_url: str = Field(..., max_length=MAX_STORAGE_URL_CHARS)
     user: dict[str, Any] = Field(...)
+    purge_storage: bool = Field(default=True)
     auth_token: Optional[str] = Field(default=None, repr=False)
 
     model_config = {"frozen": True}

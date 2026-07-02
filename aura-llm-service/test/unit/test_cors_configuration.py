@@ -1,5 +1,4 @@
-"""Unit tests for configure_cors: a wildcard origin must disable credentials
-(browsers reject `*` + credentials), while explicit origins enable them."""
+import pytest
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
@@ -7,8 +6,12 @@ import app.configuration.cors_configuration as cors_module
 
 
 class _FakeSettings:
-    def __init__(self, origins: list[str]) -> None:
+    def __init__(self, origins: list[str], production: bool = False) -> None:
         self.cors_origins = origins
+        self._production = production
+
+    def is_production(self) -> bool:
+        return self._production
 
 
 def _cors_kwargs(app: FastAPI) -> dict:
@@ -39,3 +42,24 @@ def test_wildcard_mixed_with_real_origin_still_disables_credentials(monkeypatch)
     app = FastAPI()
     cors_module.configure_cors(app)
     assert _cors_kwargs(app)["allow_credentials"] is False
+
+
+def test_wildcard_in_production_raises(monkeypatch):
+    monkeypatch.setattr(
+        cors_module, "get_settings", lambda: _FakeSettings(["*"], production=True)
+    )
+    with pytest.raises(ValueError, match="wildcard"):
+        cors_module.configure_cors(FastAPI())
+
+
+def test_explicit_origins_in_production_are_allowed(monkeypatch):
+    monkeypatch.setattr(
+        cors_module,
+        "get_settings",
+        lambda: _FakeSettings(["https://app.example.com"], production=True),
+    )
+    app = FastAPI()
+    cors_module.configure_cors(app)
+    kwargs = _cors_kwargs(app)
+    assert kwargs["allow_credentials"] is True
+    assert kwargs["allow_origins"] == ["https://app.example.com"]

@@ -21,7 +21,6 @@ class PeerMessageRepository:
 
     @staticmethod
     def list_by_chat(chat_id: int) -> QuerySet[PeerMessage]:
-        # ``objects`` already filters out soft-deleted rows (SoftDeleteManager).
         return PeerMessage.objects.filter(chat_id=chat_id)
 
     @staticmethod
