@@ -13,9 +13,6 @@ from apps.chat.exceptions import (
 from test.conftest import make_message, make_share_link
 
 
-# ---------------------------------------------------------------------------
-# List share links  GET /api/v1/chats/{chat_id}/share-links/
-# ---------------------------------------------------------------------------
 
 def test_list_share_links_returns_200(api_client, mocker):
     link = make_share_link()
@@ -51,9 +48,6 @@ def test_list_share_links_unauthenticated(anon_client):
     assert response.status_code == 401
 
 
-# ---------------------------------------------------------------------------
-# Create share link  POST /api/v1/chats/{chat_id}/share-links/
-# ---------------------------------------------------------------------------
 
 def test_create_share_link_returns_201(api_client, mocker):
     link = make_share_link()
@@ -110,9 +104,6 @@ def test_create_share_link_access_denied_returns_403(api_client, mocker):
     assert response.status_code == 403
 
 
-# ---------------------------------------------------------------------------
-# Revoke share link  DELETE /api/v1/chats/{chat_id}/share-links/{link_id}/
-# ---------------------------------------------------------------------------
 
 def test_revoke_share_link_returns_204(api_client, mocker):
     mocker.patch("apps.chat.views.share_link_view.share_link_service.revoke_link")
@@ -148,9 +139,6 @@ def test_revoke_share_link_access_denied_returns_403(api_client, mocker):
     assert response.status_code == 403
 
 
-# ---------------------------------------------------------------------------
-# Public share messages  GET /api/v1/share/{token}/messages/
-# ---------------------------------------------------------------------------
 
 def test_public_share_messages_returns_200(anon_client, mocker):
     mocker.patch(

@@ -1,18 +1,3 @@
-"""
-Unit tests for report endpoints — all service calls are mocked.
-
-Endpoints covered:
-  GET    /api/v1/reports/                               list user reports
-  GET    /api/v1/reports/{id}/                          get report
-  PATCH  /api/v1/reports/{id}/                          update report
-  DELETE /api/v1/reports/{id}/                          delete report
-  GET    /api/v1/reports/{id}/export/pdf/               export PDF
-  GET    /api/v1/reports/{id}/export/markdown/          export Markdown
-  POST   /api/v1/reports/generate/                      generate with LLM
-  GET    /api/v1/reports/manage/                        list all (admin)
-  GET    /api/v1/reports/manage/{id}/export/pdf/        export any PDF (admin)
-  GET    /api/v1/reports/manage/{id}/export/markdown/   export any Markdown (admin)
-"""
 import contextlib
 from unittest.mock import AsyncMock
 
@@ -32,8 +17,6 @@ VIEW = "apps.artifact_report.views"
 
 
 def _patch_generate_deps(mocker, *, is_contributor=True, rate_ok=True):
-    """The generate view now validates chat membership, rate limit and holds the AI
-    reply lock before calling the service. Patch those guards for happy-path tests."""
     mocker.patch(f"{VIEW}.chat_repository.get_by_id", return_value=object())
     mocker.patch(f"{VIEW}.membership_repository.is_active_contributor", return_value=is_contributor)
     mocker.patch(f"{VIEW}.check_artifact_rate_limit", return_value=rate_ok)
@@ -45,9 +28,6 @@ def _patch_generate_deps(mocker, *, is_contributor=True, rate_ok=True):
     mocker.patch(f"{VIEW}.ai_reply_lock_guard", _noop_lock)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/reports/
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_list_reports_returns_200_paginated(api_client, mocker):
     mocker.patch(f"{VIEW}.report_service.list_reports", return_value=[make_report()])
@@ -123,16 +103,12 @@ def test_list_reports_unauthenticated_returns_401(anon_client):
 
 
 def test_list_reports_no_content_in_list_response(api_client, mocker):
-    """List endpoint returns summary — content must NOT be included."""
     mocker.patch(f"{VIEW}.report_service.list_reports", return_value=[make_report()])
     response = api_client.get("/api/v1/reports/?chat_id=5")
     result = response.data["results"][0]
     assert "content" not in result
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/reports/{id}/
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_get_report_returns_200_with_all_fields(api_client, mocker):
     rp = make_report(report_id=1, report_type="SITREP", content="Contenido detallado", source_chat_id=42)
@@ -179,9 +155,6 @@ def test_get_report_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# DELETE /api/v1/reports/{id}/
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_delete_report_returns_204(api_client, mocker):
     mocker.patch(f"{VIEW}.report_service.delete_report")
@@ -215,9 +188,6 @@ def test_delete_report_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/reports/{id}/export/pdf/
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_export_pdf_returns_200_application_pdf(api_client, mocker):
     mocker.patch(f"{VIEW}.report_service.get_own_report", return_value=make_report())
@@ -300,9 +270,6 @@ def test_export_pdf_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/reports/{id}/export/markdown/
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_export_markdown_returns_200_text_markdown(api_client, mocker):
     mocker.patch(f"{VIEW}.report_service.get_own_report", return_value=make_report())
@@ -352,9 +319,6 @@ def test_export_markdown_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# POST /api/v1/reports/generate/
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_generate_returns_201_with_report_messages_fragments(api_client, mocker):
     messages = [{"role": "human", "content": "texto"}, {"role": "assistant", "content": "resp"}]
@@ -511,7 +475,6 @@ def test_generate_message_exactly_4000_chars_is_valid(api_client, mocker):
 
 
 def test_generate_chat_not_found_returns_404(api_client, mocker):
-    # The view looks the chat up itself before calling the service.
     mocker.patch(f"{VIEW}.chat_repository.get_by_id", return_value=None)
     response = api_client.post(
         "/api/v1/reports/generate/",
@@ -522,7 +485,6 @@ def test_generate_chat_not_found_returns_404(api_client, mocker):
 
 
 def test_generate_not_chat_contributor_returns_403(api_client, mocker):
-    """Reader role cannot generate reports with a chat_id."""
     _patch_generate_deps(mocker, is_contributor=False)
     response = api_client.post(
         "/api/v1/reports/generate/",
@@ -572,9 +534,6 @@ def test_generate_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/reports/manage/  (admin)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_manage_list_returns_200_with_all_reports(api_client, mocker):
     reports = [make_report(report_id=1), make_report(report_id=2, created_by=99)]
@@ -605,9 +564,6 @@ def test_manage_list_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/reports/manage/{id}/export/pdf/  (admin)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_manage_export_pdf_returns_200(api_client, mocker):
     mocker.patch(f"{VIEW}.report_service.get_report_admin_export", return_value=make_report())
@@ -649,9 +605,6 @@ def test_manage_export_pdf_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/reports/manage/{id}/export/markdown/  (admin)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_manage_export_markdown_returns_200(api_client, mocker):
     mocker.patch(f"{VIEW}.report_service.get_report_admin_export", return_value=make_report())

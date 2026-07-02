@@ -12,8 +12,6 @@ logger = logging.getLogger(__name__)
 
 PDF_TIMEOUT_SECONDS = 30
 
-# Shared CSS for the "classified document" style artifact exports (everything from
-# the page setup through the H1). Each artifact appends its own extra rules.
 DOC_BASE_CSS = """
 @page {
     size: A4;
@@ -79,11 +77,6 @@ def fmt_dt(dt) -> str:
 
 
 def build_pdf(html_content: str, *, exc_factory: Callable[[], Exception], label: str) -> bytes:
-    """Render html_content to PDF bytes off the event loop.
-
-    exc_factory builds the artifact-specific export exception; label is used only
-    in log messages (e.g. "checklist", "report").
-    """
 
     def _sync() -> bytes:
         buf = io.BytesIO()

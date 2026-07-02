@@ -1,12 +1,3 @@
-"""
-Internal chat-membership check — HTTP layer
-
-Endpoint:
-    GET /api/v1/internal/chats/{chat_id}/members/{user_id}/   InternalChatMembershipView.get
-
-Verifies URL wiring, response serialization, error-status mapping and that the
-endpoint requires authentication.
-"""
 from apps.chat.exceptions import ChatNotFoundException
 from apps.membership.dtos import ChatMembershipCheck
 from core.exceptions.base import InsufficientPermissionsException
@@ -45,7 +36,7 @@ def test_forwards_path_params_and_token_identity(api_client, mocker):
     _, kwargs = svc.call_args
     assert kwargs["chat_id"] == 1
     assert kwargs["user_id"] == 5
-    assert kwargs["caller"].id == 1  # identity derived from the forwarded bearer token
+    assert kwargs["caller"].id == 1
 
 
 def test_missing_chat_returns_404(api_client, mocker):

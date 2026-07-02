@@ -1,13 +1,3 @@
-"""Kubernetes-style health probes.
-
-Three distinct endpoints with different failure semantics:
-
-* **liveness**  — is the process up and able to answer? No dependency I/O, so a
-  transient DB/Redis blip never triggers a pod restart.
-* **readiness** — are all dependencies reachable? Returns 503 when not, so the
-  orchestrator removes the pod from the load balancer without restarting it.
-* **startup**   — gates liveness/readiness until dependencies are reachable on boot.
-"""
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes

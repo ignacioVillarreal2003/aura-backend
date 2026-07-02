@@ -17,9 +17,6 @@ from .conftest import make_user
 pytestmark = pytest.mark.django_db
 
 
-# ---------------------------------------------------------------------------
-# add_members
-# ---------------------------------------------------------------------------
 
 def test_add_members_creates_pending_memberships(owner, chat, member_user):
     memberships = membership_service.add_members(owner, chat.id, member_ids=[member_user.id])
@@ -47,9 +44,6 @@ def test_add_members_non_owner_raises(chat, member_user, other_user):
         membership_service.add_members(member_user, chat.id, member_ids=[other_user.id])
 
 
-# ---------------------------------------------------------------------------
-# update_member (status transitions)
-# ---------------------------------------------------------------------------
 
 def test_update_member_pending_to_active(owner, chat, member_user):
     membership_service.add_members(owner, chat.id, member_ids=[member_user.id])
@@ -86,9 +80,6 @@ def test_update_member_stranger_cannot_update(chat, member_user, other_user):
         membership_service.update_member(other_user, chat.id, member_user.id, new_status="active")
 
 
-# ---------------------------------------------------------------------------
-# remove_member
-# ---------------------------------------------------------------------------
 
 def test_remove_member_soft_deletes_membership(owner, chat, member_user):
     membership_service.add_members(owner, chat.id, member_ids=[member_user.id])
@@ -113,9 +104,6 @@ def test_remove_member_stranger_raises(chat, member_user, other_user):
         membership_service.remove_member(other_user, chat.id, member_user.id)
 
 
-# ---------------------------------------------------------------------------
-# leave_chat
-# ---------------------------------------------------------------------------
 
 def test_leave_chat_soft_deletes_membership(owner, chat, member_user):
     membership_service.add_members(owner, chat.id, member_ids=[member_user.id])
@@ -134,9 +122,6 @@ def test_leave_chat_non_member_raises(chat, other_user):
         membership_service.leave_chat(other_user, chat.id)
 
 
-# ---------------------------------------------------------------------------
-# update_member_role
-# ---------------------------------------------------------------------------
 
 def test_update_member_role_persists(owner, chat, member_user):
     membership_service.add_members(owner, chat.id, member_ids=[member_user.id])
@@ -159,9 +144,6 @@ def test_update_role_non_owner_raises(chat, member_user, other_user):
         membership_service.update_member_role(other_user, chat.id, member_user.id, role="reader")
 
 
-# ---------------------------------------------------------------------------
-# list_members
-# ---------------------------------------------------------------------------
 
 def test_list_members_returns_active_by_default(owner, chat, member_user):
     membership_service.add_members(owner, chat.id, member_ids=[member_user.id])
@@ -191,12 +173,8 @@ def test_list_members_non_member_raises(chat, other_user):
         membership_service.list_members(other_user, chat.id)
 
 
-# ---------------------------------------------------------------------------
-# list_members_admin (no ownership / membership check)
-# ---------------------------------------------------------------------------
 
 def test_list_members_admin_returns_all_without_membership_check(chat, owner, member_user, other_user):
-    """Admin listing returns every member and does not require the caller to be a member."""
     membership_service.add_members(owner, chat.id, member_ids=[member_user.id])
     members = list(membership_service.list_members_admin(other_user, chat.id))
     member_ids = [m.member_id for m in members]
@@ -205,16 +183,13 @@ def test_list_members_admin_returns_all_without_membership_check(chat, owner, me
 
 
 def test_list_members_admin_status_filter(chat, owner, member_user):
-    membership_service.add_members(owner, chat.id, member_ids=[member_user.id])  # pending
+    membership_service.add_members(owner, chat.id, member_ids=[member_user.id])
     pending = list(membership_service.list_members_admin(owner, chat.id, status="pending"))
     pending_ids = [m.member_id for m in pending]
     assert member_user.id in pending_ids
-    assert owner.id not in pending_ids  # owner is active, not pending
+    assert owner.id not in pending_ids
 
 
-# ---------------------------------------------------------------------------
-# list_my_memberships
-# ---------------------------------------------------------------------------
 
 def test_list_my_memberships_returns_own_across_chats(owner, member_user):
     c1 = chat_service.create_chat(owner, name="Chat Uno")
@@ -228,7 +203,7 @@ def test_list_my_memberships_returns_own_across_chats(owner, member_user):
 
 
 def test_list_my_memberships_status_filter(owner, chat, member_user):
-    membership_service.add_members(owner, chat.id, member_ids=[member_user.id])  # pending
+    membership_service.add_members(owner, chat.id, member_ids=[member_user.id])
     pending_ids = [m.chat_id for m in membership_service.list_my_memberships(member_user, status="pending")]
     active_ids = [m.chat_id for m in membership_service.list_my_memberships(member_user, status="active")]
     assert chat.id in pending_ids
@@ -240,9 +215,6 @@ def test_list_my_memberships_owner_sees_own_chat(owner, chat):
     assert chat.id in chat_ids
 
 
-# ---------------------------------------------------------------------------
-# reactivation + re-add after removal (soft-delete / partial-unique interaction)
-# ---------------------------------------------------------------------------
 
 def test_update_member_inactive_to_active_reactivates(owner, chat, member_user):
     membership_service.add_members(owner, chat.id, member_ids=[member_user.id])
@@ -254,12 +226,9 @@ def test_update_member_inactive_to_active_reactivates(owner, chat, member_user):
 
 
 def test_member_can_be_readded_after_removal(owner, chat, member_user):
-    """After a soft-delete removal the partial unique constraint (deleted_at IS NULL)
-    allows the same user to be invited again."""
     membership_service.add_members(owner, chat.id, member_ids=[member_user.id])
     membership_service.update_member(member_user, chat.id, member_user.id, new_status="active")
     membership_service.remove_member(owner, chat.id, member_user.id)
     again = membership_service.add_members(owner, chat.id, member_ids=[member_user.id])
     assert len(again) == 1
-    # exactly one live membership remains
     assert ChatMembership.objects.filter(chat_id=chat.id, member_id=member_user.id).count() == 1

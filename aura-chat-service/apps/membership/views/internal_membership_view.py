@@ -9,9 +9,6 @@ from core.openapi.common import standard_error_responses
 
 
 class InternalChatMembershipView(APIView):
-    # Service-to-service hot path: skip the per-user HTTP throttle. The caller is
-    # a trusted microservice (often sharing the service principal), so a per-user
-    # rate bucket would be both wrong and a bottleneck on the authorization path.
     throttle_classes: list = []
 
     @extend_schema(

@@ -6,9 +6,6 @@ from test.conftest import make_message, mock_cursor_pagination
 BOOKMARK_VIEW = "apps.message.views.bookmark_view"
 
 
-# ---------------------------------------------------------------------------
-# Bookmark  POST /api/v1/chats/{chat_id}/messages/{message_id}/bookmark/
-# ---------------------------------------------------------------------------
 
 def test_bookmark_message_returns_204(api_client, mocker):
     mocker.patch(f"{BOOKMARK_VIEW}.bookmark_service.bookmark")
@@ -41,9 +38,6 @@ def test_bookmark_message_unauthenticated(anon_client):
     assert response.status_code == 401
 
 
-# ---------------------------------------------------------------------------
-# Unbookmark  DELETE /api/v1/chats/{chat_id}/messages/{message_id}/bookmark/
-# ---------------------------------------------------------------------------
 
 def test_unbookmark_message_returns_204(api_client, mocker):
     mocker.patch(f"{BOOKMARK_VIEW}.bookmark_service.unbookmark")
@@ -74,9 +68,6 @@ def test_unbookmark_message_unauthenticated(anon_client):
     assert response.status_code == 401
 
 
-# ---------------------------------------------------------------------------
-# List bookmarked  GET /api/v1/chats/{chat_id}/messages/bookmarked/
-# ---------------------------------------------------------------------------
 
 def test_list_bookmarked_returns_200(api_client, mocker):
     from unittest.mock import MagicMock

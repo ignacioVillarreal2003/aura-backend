@@ -19,7 +19,6 @@ urlpatterns = [
         SpectacularRedocView.as_view(url_name="schema"),
         name="redoc",
     ),
-    # `/api/v1/health` kept as a backward-compatible alias of the readiness probe.
     path("api/v1/health", readiness, name="health-check"),
     path("api/v1/health/live", liveness, name="health-live"),
     path("api/v1/health/ready", readiness, name="health-ready"),

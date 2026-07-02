@@ -1,13 +1,3 @@
-"""
-Unit tests for the checklist export service (PDF / Markdown rendering).
-
-Previously untested: the view-layer tests mock `generate_checklist_pdf` /
-`generate_checklist_markdown` entirely.
-
-The export functions traverse the ORM relations (`checklist.sections.all()`,
-`section.items.all()`), so these tests build lightweight stand-ins that expose
-an `.all()` callable instead of reusing the list-based conftest factories.
-"""
 import datetime
 from types import SimpleNamespace
 
@@ -44,9 +34,6 @@ def _checklist(title="Mi checklist", retrieve_context=None, process_documents=No
     )
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# _fmt_dt
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_fmt_dt_none_returns_empty_string():
     assert _fmt_dt(None) == ""
@@ -59,13 +46,10 @@ def test_fmt_dt_formats_aware_datetime_as_utc():
 
 def test_fmt_dt_converts_other_timezone_to_utc():
     tz = datetime.timezone(datetime.timedelta(hours=3))
-    dt = datetime.datetime(2025, 3, 15, 12, 30, tzinfo=tz)  # 09:30 UTC
+    dt = datetime.datetime(2025, 3, 15, 12, 30, tzinfo=tz)
     assert _fmt_dt(dt) == "2025-03-15 09:30 UTC"
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# generate_checklist_markdown
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_markdown_includes_title_and_footer():
     cl = _checklist(title="Mantenimiento", sections=[_section("S", items=[_item("a")])])
@@ -109,9 +93,6 @@ def test_markdown_returns_str():
     assert isinstance(generate_checklist_markdown(_checklist()), str)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# generate_checklist_pdf
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_pdf_returns_pdf_bytes():
     sections = [_section("Fase 1", items=[_item("Revisar motor"), _item("Cargar combustible", is_checked=True)])]

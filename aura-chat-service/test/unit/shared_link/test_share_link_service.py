@@ -25,24 +25,17 @@ def _patch_chat(mocker, chat):
 
 
 def _patch_not_owner(mocker):
-    """Owner/creator gate now also consults membership; deny the membership path."""
     mocker.patch(f"{SVC}.membership_repository.is_chat_owner", return_value=False)
 
 
 def _ordered_qs(mocker, messages):
-    """get_public_messages applies .order_by('created_at') on the repo result;
-    return a queryset-like whose order_by yields the given messages."""
     qs = mocker.MagicMock()
     qs.order_by.return_value = messages
     return qs
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# create_link
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_create_link_owner_succeeds(mocker):
-    """Chat creator can create a share link."""
     user = make_user(user_id=1)
     chat = make_chat(chat_id=10, created_by=1)
     link = make_share_link(link_id=1, chat_id=10, created_by=1)
@@ -67,7 +60,6 @@ def test_create_link_passes_expires_at_to_repo(mocker):
 
 
 def test_create_link_non_creator_raises_403(mocker):
-    """Only the chat creator can create share links — any other user is denied."""
     user = make_user(user_id=2)
     chat = make_chat(chat_id=10, created_by=1)
     _patch_perms(mocker)
@@ -97,9 +89,6 @@ def test_create_link_without_expires_at(mocker):
     assert kwargs["expires_at"] is None
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# list_links
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_list_links_owner_returns_active_links_by_default(mocker):
     user = make_user(user_id=1)
@@ -151,9 +140,6 @@ def test_list_links_empty_chat_returns_empty_list(mocker):
     assert list(result) == []
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# revoke_link
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_revoke_link_owner_succeeds(mocker):
     user = make_user(user_id=1)
@@ -186,7 +172,6 @@ def test_revoke_link_chat_not_found_raises_404(mocker):
 
 
 def test_revoke_link_link_not_found_raises_404(mocker):
-    """Link doesn't exist for the given chat_id and link_id."""
     user = make_user(user_id=1)
     chat = make_chat(chat_id=10, created_by=1)
     _patch_perms(mocker)
@@ -197,7 +182,6 @@ def test_revoke_link_link_not_found_raises_404(mocker):
 
 
 def test_revoke_link_calls_repo_with_correct_ids(mocker):
-    """Repo is called with the exact link_id and chat_id to prevent cross-chat access."""
     user = make_user(user_id=1)
     chat = make_chat(chat_id=10, created_by=1)
     link = make_share_link(link_id=5, chat_id=10)
@@ -210,7 +194,6 @@ def test_revoke_link_calls_repo_with_correct_ids(mocker):
 
 
 def test_revoke_link_already_inactive_still_deactivates(mocker):
-    """Revoking an already-inactive link should not raise — repo handles idempotency."""
     user = make_user(user_id=1)
     chat = make_chat(chat_id=10, created_by=1)
     link = make_share_link(link_id=5, chat_id=10, is_active=False)
@@ -222,9 +205,6 @@ def test_revoke_link_already_inactive_still_deactivates(mocker):
     deactivate.assert_called_once_with(link)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# get_public_messages — no authentication required
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_get_public_messages_valid_active_link_returns_messages(mocker):
     token = uuid.uuid4()
@@ -261,7 +241,6 @@ def test_get_public_messages_expired_link_raises_400(mocker):
 
 
 def test_get_public_messages_future_expiry_is_valid(mocker):
-    """A link with a future expiry must be treated as valid."""
     token = uuid.uuid4()
     future = timezone.now().replace(year=2099)
     link = make_share_link(is_active=True, expires_at=future)
@@ -273,7 +252,6 @@ def test_get_public_messages_future_expiry_is_valid(mocker):
 
 
 def test_get_public_messages_no_expiry_is_valid(mocker):
-    """A link with no expires_at must never expire."""
     token = uuid.uuid4()
     link = make_share_link(is_active=True, expires_at=None)
     mocker.patch(f"{SVC}.share_link_repository.get_by_token", return_value=link)
@@ -284,7 +262,6 @@ def test_get_public_messages_no_expiry_is_valid(mocker):
 
 
 def test_get_public_messages_inactive_takes_precedence_over_expiry(mocker):
-    """An inactive link raises even if it hasn't expired yet."""
     token = uuid.uuid4()
     future = timezone.now().replace(year=2099)
     link = make_share_link(is_active=False, expires_at=future)

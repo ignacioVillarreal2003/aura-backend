@@ -2,6 +2,7 @@ from django.db.models import QuerySet
 
 from apps.artifact.models.artifact import Artifact
 from apps.artifact.repositories.artifact_bookmark_repository import bookmark_repository
+from apps.artifact.repositories.artifact_repository import annotate_user_summary
 from apps.artifact.services.artifact_access import require_interaction_access
 from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
 from apps.chat.repositories.chat_repository import chat_repository
@@ -29,7 +30,9 @@ class BookmarkService:
             raise ChatNotFoundException()
         if not membership_repository.is_active_member(chat_id, user.id):
             raise ChatAccessDeniedException()
-        return bookmark_repository.list_bookmarked_artifacts(chat_id, user.id)
+        return annotate_user_summary(
+            bookmark_repository.list_bookmarked_artifacts(chat_id, user.id), user.id
+        )
 
 
 bookmark_service = BookmarkService()

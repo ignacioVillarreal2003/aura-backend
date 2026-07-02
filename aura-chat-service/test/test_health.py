@@ -1,9 +1,3 @@
-"""Health probes — liveness / readiness / startup.
-
-Verifies failure semantics (liveness never touches dependencies; readiness/startup
-return 503 when a dependency is down), no-auth access, and the backward-compatible
-`/api/v1/health` alias.
-"""
 from core.health.checks import CheckResult
 
 HEALTH_VIEWS = "core.health.views"
@@ -18,7 +12,7 @@ def test_liveness_ok_without_auth_or_dependencies(anon_client, mocker):
     response = anon_client.get("/api/v1/health/live")
     assert response.status_code == 200
     assert response.data["status"] == "alive"
-    deps.assert_not_called()  # liveness must not perform dependency I/O
+    deps.assert_not_called()
 
 
 def test_readiness_200_when_all_dependencies_up(anon_client, mocker):

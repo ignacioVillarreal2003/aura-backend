@@ -5,9 +5,6 @@ from test.conftest import make_thread_reply
 THREAD_VIEW = "apps.message.views.thread_view"
 
 
-# ---------------------------------------------------------------------------
-# List thread replies  GET /api/v1/chats/{chat_id}/messages/{message_id}/thread/
-# ---------------------------------------------------------------------------
 
 def test_list_thread_replies_returns_200(api_client, mocker):
     mocker.patch(
@@ -53,9 +50,6 @@ def test_list_thread_replies_unauthenticated(anon_client):
     assert response.status_code == 401
 
 
-# ---------------------------------------------------------------------------
-# Add thread reply  POST /api/v1/chats/{chat_id}/messages/{message_id}/thread/
-# ---------------------------------------------------------------------------
 
 def test_add_thread_reply_returns_201(api_client, mocker):
     mocker.patch(

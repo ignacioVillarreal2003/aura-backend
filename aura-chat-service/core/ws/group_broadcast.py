@@ -20,11 +20,6 @@ def _log_failure(payload: dict, chat_id: int) -> None:
 
 
 def send_to_chat_group(chat_id: int, payload: dict) -> None:
-    """Best-effort sync broadcast of ``payload`` to a chat's WS group.
-
-    No-ops when no channel layer is configured and swallows transport errors
-    (a failed fan-out must never break the request that triggered it).
-    """
     channel_layer = get_channel_layer()
     if channel_layer is None:
         return
@@ -35,7 +30,6 @@ def send_to_chat_group(chat_id: int, payload: dict) -> None:
 
 
 async def asend_to_chat_group(chat_id: int, payload: dict) -> None:
-    """Async counterpart of :func:`send_to_chat_group`."""
     channel_layer = get_channel_layer()
     if channel_layer is None:
         return

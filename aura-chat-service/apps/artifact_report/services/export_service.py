@@ -103,18 +103,18 @@ def generate_report_pdf(report: ArtifactReport) -> bytes:
 
 def generate_report_markdown(report: ArtifactReport) -> str:
     type_label = _TYPE_LABELS.get(report.type, report.type)
-    lines = [
-        f"# {type_label}",
-        "",
-        f"**{report.title}**",
-        "",
-        f"*Generado: {_fmt_dt(report.created_at)}*",
+    lines = [f"# {type_label}", ""]
+    if (report.title or "").strip():
+        lines += [f"## {report.title.strip()}", ""]
+    lines += [
+        f"_Generado: {_fmt_dt(report.created_at)}_",
         "",
         "---",
         "",
         report.content,
         "",
         "---",
-        f"*{type_label} — Exportado desde AURA*",
+        "",
+        "_Exportado desde AURA_",
     ]
     return "\n".join(lines)

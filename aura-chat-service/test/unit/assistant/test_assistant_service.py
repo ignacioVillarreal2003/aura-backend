@@ -16,8 +16,6 @@ service = AssistantService()
 
 @pytest.fixture(autouse=True)
 def _patch_atomic(mocker):
-    """create/update/start_chat wrap repo writes in transaction.atomic(); make it
-    a no-op so the mock-only unit tests don't try to open a real DB connection."""
     mocker.patch("django.db.transaction.Atomic.__enter__", return_value=None)
     mocker.patch("django.db.transaction.Atomic.__exit__", return_value=False)
 
@@ -26,9 +24,6 @@ def _patch_perms(mocker):
     mocker.patch(f"{SVC}.AccessControl.require_permissions")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# create_assistant
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_create_assistant_success(mocker):
     user = make_user(user_id=1)
@@ -72,9 +67,6 @@ def test_create_assistant_calls_repo_with_all_fields(mocker):
     assert kwargs["user_id"] == 1
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# list_active_assistants / list_all_assistants
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_list_active_assistants_passes_search(mocker):
     user = make_user()
@@ -108,9 +100,6 @@ def test_list_all_assistants_no_search_passes_none(mocker):
     repo.assert_called_once_with(search=None)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# get_assistant
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_get_assistant_returns_active_assistant(mocker):
     user = make_user()
@@ -130,7 +119,6 @@ def test_get_assistant_not_found_raises_404(mocker):
 
 
 def test_get_assistant_inactive_raises_404(mocker):
-    """Inactive assistant is treated as not found for regular users."""
     user = make_user()
     assistant = make_assistant(is_active=False)
     _patch_perms(mocker)
@@ -139,9 +127,6 @@ def test_get_assistant_inactive_raises_404(mocker):
         service.get_assistant(user, 1)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# update_assistant
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_update_assistant_success(mocker):
     user = make_user()
@@ -156,14 +141,12 @@ def test_update_assistant_success(mocker):
 
 
 def test_update_assistant_same_name_skips_conflict_check(mocker):
-    """Updating to the same name should not trigger the uniqueness check."""
     user = make_user()
     assistant = make_assistant(name="Alfa")
     _patch_perms(mocker)
     mocker.patch(f"{SVC}.assistant_repository.get_by_id_for_update", return_value=assistant)
     exists = mocker.patch(f"{SVC}.assistant_repository.exists_with_name", return_value=True)
     mocker.patch(f"{SVC}.assistant_repository.update", return_value=assistant)
-    # Same name → condition `name != assistant.name` is False → no conflict check
     service.update_assistant(user, 1, name="Alfa")
     exists.assert_not_called()
 
@@ -199,7 +182,6 @@ def test_update_assistant_not_found_raises_404(mocker):
 
 
 def test_update_assistant_inactive_can_be_updated(mocker):
-    """Admins can update inactive assistants (no is_active check in update)."""
     user = make_user()
     inactive = make_assistant(is_active=False)
     reactivated = make_assistant(is_active=True)
@@ -212,7 +194,6 @@ def test_update_assistant_inactive_can_be_updated(mocker):
 
 
 def test_update_assistant_forwards_updated_by_to_repo(mocker):
-    """The acting user's id must be propagated to the repository as updated_by."""
     user = make_user(user_id=7)
     assistant = make_assistant(name="Alfa")
     _patch_perms(mocker)
@@ -224,9 +205,6 @@ def test_update_assistant_forwards_updated_by_to_repo(mocker):
     assert kwargs["updated_by"] == 7
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# delete_assistant
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_delete_assistant_success(mocker):
     user = make_user(user_id=1)
@@ -247,7 +225,6 @@ def test_delete_assistant_not_found_raises_404(mocker):
 
 
 def test_delete_inactive_assistant_succeeds(mocker):
-    """Admins can delete inactive assistants — no is_active check."""
     user = make_user(user_id=1)
     inactive = make_assistant(is_active=False)
     _patch_perms(mocker)
@@ -257,9 +234,6 @@ def test_delete_inactive_assistant_succeeds(mocker):
     soft_delete.assert_called_once()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# start_chat
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_start_chat_creates_new_chat_when_resume_false(mocker):
     user = make_user(user_id=1)
@@ -346,7 +320,6 @@ def test_start_chat_creates_chat_with_assistant_system_prompt(mocker):
 
 
 def test_start_chat_names_chat_after_assistant(mocker):
-    """The created chat name is prefixed with the assistant's name."""
     user = make_user(user_id=1)
     assistant = make_assistant(assistant_id=3, name="Experto en táctica")
     _patch_perms(mocker)
@@ -358,7 +331,6 @@ def test_start_chat_names_chat_after_assistant(mocker):
 
 
 def test_start_chat_does_not_check_existing_when_resume_false(mocker):
-    """With resume=False, never queries for existing chats."""
     user = make_user()
     assistant = make_assistant()
     _patch_perms(mocker)

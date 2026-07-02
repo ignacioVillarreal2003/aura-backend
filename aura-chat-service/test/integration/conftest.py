@@ -27,7 +27,6 @@ def _get_unmanaged_models():
     from apps.quiz.models import ArtifactQuiz, ArtifactQuizOption, ArtifactQuizQuestion
     from apps.report.models import ArtifactReport
     from apps.timeline.models import ArtifactTimeline, ArtifactTimelineEvent
-    # Order matters: parent tables before child tables (FK dependencies)
     return [
         Chat, Assistant,
         Artifact, ArtifactVersion,
@@ -44,7 +43,6 @@ def _get_unmanaged_models():
 
 @pytest.fixture(scope="session")
 def django_db_setup(django_db_setup, django_db_blocker):
-    """Create tables for all unmanaged models so integration tests can hit real DB rows."""
     models = _get_unmanaged_models()
     with django_db_blocker.unblock():
         for m in models:

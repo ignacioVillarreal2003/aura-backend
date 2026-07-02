@@ -12,9 +12,6 @@ from apps.chat.exceptions import ChatAiReplyInProgressException
 
 logger = logging.getLogger(__name__)
 
-# Keep the lock alive while a long generation runs. The lock TTL must outlive a
-# single generation; this periodic refresh guarantees it even if the worst-case
-# generation time grows beyond the configured TTL.
 _REFRESH_INTERVAL_SECONDS = 30.0
 
 
@@ -35,14 +32,6 @@ async def _refresh_loop(chat_id: int, token: str) -> None:
 
 @contextlib.asynccontextmanager
 async def ai_reply_lock_guard(chat_id: int) -> AsyncIterator[str]:
-    """Hold the per-chat AI reply lock for the duration of an async block.
-
-    Acquires the Redis lock (raising ChatAiReplyInProgressException if another
-    generation is running), broadcasts the lock state to the chat group, keeps
-    the lock refreshed in the background, and always releases + clears the lock
-    on exit. Use for REST artifact/message generation flows.
-    """
-    # Imported lazily to avoid a circular import at module load time.
     from apps.artifact_message.services.message_service import broadcast_chat_ai_lock_change
 
     token = await sync_to_async(try_acquire)(chat_id)

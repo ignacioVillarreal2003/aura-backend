@@ -17,9 +17,6 @@ from test.conftest import make_checklist, make_message, make_user
 SVC = "apps.artifact_checklist.services.checklist_service"
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# _items_to_sections
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_items_to_sections_groups_items_by_section():
     items = [
@@ -67,7 +64,6 @@ def test_items_to_sections_missing_order_defaults_to_zero():
         {"section": "S", "text": "b", "is_checked": False, "notes": ""},
     ]
     sections = _items_to_sections(items)
-    # Both order=0 → both present, no crash
     assert len(sections[0]["items"]) == 2
 
 
@@ -110,13 +106,9 @@ def test_items_to_sections_single_item_creates_one_section_one_item():
     assert sections[0]["items"][0]["text"] == "único"
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# Access control — get_checklist / get_own_checklist
-# ══════════════════════════════════════════════════════════════════════════════
 
 service = ChecklistService()
 
-# get/list/delete delegate to ArtifactCrudService; access lives in the shared base.
 ACCESS = "apps.artifact.services.artifact_access"
 CRUD = "apps.artifact.services.artifact_crud_service"
 
@@ -180,9 +172,6 @@ def test_get_checklist_not_found_raises_404(mocker):
         service.get_checklist(user, 999)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# Access control — delete_checklist (owner or editor; reader cannot delete)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_delete_creator_can_delete_own_checklist(mocker):
     user = make_user(user_id=1)
@@ -195,7 +184,6 @@ def test_delete_creator_can_delete_own_checklist(mocker):
 
 
 def test_delete_contributor_member_can_delete(mocker):
-    """Owner or editor role can delete someone else's checklist."""
     user = make_user(user_id=2)
     cl = make_checklist(cl_id=1, created_by=1, source_chat_id=10)
     _patch_access(mocker, checklist=cl, is_contributor=True)
@@ -206,7 +194,6 @@ def test_delete_contributor_member_can_delete(mocker):
 
 
 def test_delete_reader_member_raises_403(mocker):
-    """Reader role is active member but NOT a contributor — cannot delete."""
     user = make_user(user_id=2)
     cl = make_checklist(cl_id=1, created_by=1, source_chat_id=10)
     _patch_access(mocker, checklist=cl, is_member=True, is_contributor=False)
@@ -230,9 +217,6 @@ def test_delete_not_found_raises_404(mocker):
         service.delete_checklist(user, 999)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# list_checklists — chat filter validation (always scoped to a chat)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_list_checklists_with_chat_id_checks_membership(mocker):
     user = make_user(user_id=1)
@@ -261,9 +245,6 @@ def test_list_checklists_not_chat_member_raises_403(mocker):
         service.list_checklists(user, chat_id=5)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# list_all_checklists (admin)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_list_all_checklists_calls_repo(mocker):
     user = make_user(user_id=1)
@@ -273,9 +254,6 @@ def test_list_all_checklists_calls_repo(mocker):
     repo.assert_called_once_with()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# get_own_checklist (used for export — any active member)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_get_own_checklist_creator_has_access(mocker):
     user = make_user(user_id=1)
@@ -307,13 +285,9 @@ def test_get_own_checklist_not_found_raises_404(mocker):
         service.get_own_checklist(user, 999)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# get_checklist_admin_export — bypasses access checks (admin only)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_get_checklist_admin_export_returns_without_access_check(mocker):
-    """Admin export ignores creator/membership entirely."""
-    user = make_user(user_id=999)  # neither creator nor member
+    user = make_user(user_id=999)
     cl = make_checklist(cl_id=1, created_by=1, source_chat_id=10)
     mocker.patch("core.authorization.access.AccessControl.require_permissions")
     mocker.patch(f"{SVC}.checklist_repository.get_by_id", return_value=cl)
@@ -331,9 +305,6 @@ def test_get_checklist_admin_export_not_found_raises_404(mocker):
         service.get_checklist_admin_export(user, 999)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# generate_checklist (async)
-# ══════════════════════════════════════════════════════════════════════════════
 
 @pytest.mark.asyncio
 async def test_generate_checklist_chat_not_found_raises_404(mocker):

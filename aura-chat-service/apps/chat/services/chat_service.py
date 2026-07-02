@@ -166,14 +166,10 @@ class ChatService:
         membership_repository.soft_delete_by_chat(chat_id, deleted_by=user.id)
         clear_chat_artifacts(chat_id, deleted_by=user.id)
         chat_repository.soft_delete(chat, deleted_by=user.id)
-        # The documents uploaded to this chat live in the document-processing
-        # service; ask it to soft-delete them once our own deletion commits.
         transaction.on_commit(
             lambda: document_processing_client.delete_documents_by_chat(chat_id, user)
         )
         transaction.on_commit(lambda: _release_ai_lock(chat_id))
-        # Tell every connected member the chat is gone so their sockets can close
-        # instead of lingering subscribed to a dead group.
         transaction.on_commit(lambda: _broadcast_chat_deleted(chat_id, user.id))
         logger.info("Chat deleted.", extra={"chat_id": chat_id, "user_id": user.id})
 
@@ -290,8 +286,6 @@ class ChatService:
             from apps.artifact_message.exceptions import NotChatOwnerException
             raise NotChatOwnerException()
 
-        # Hold the per-chat AI reply lock while clearing so an in-flight
-        # generation cannot re-create a message right after we wipe the history.
         lock_token = _try_acquire_ai_lock(chat_id)
         if not lock_token:
             raise ChatAiReplyInProgressException(

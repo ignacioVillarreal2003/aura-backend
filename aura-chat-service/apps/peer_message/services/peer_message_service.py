@@ -22,8 +22,6 @@ def _broadcast_message(chat_id: int, event_type: str, msg: PeerMessage) -> None:
 
 
 class PeerMessageService:
-    """Human-to-human side channel for a chat. Access is gated only by active
-    membership in the parent chat (no AI, no permissions, no locks)."""
 
     def _require_member(self, chat_id: int, user_id: int):
         chat = chat_repository.get_by_id(chat_id)
@@ -63,12 +61,10 @@ class PeerMessageService:
         msg = peer_message_repository.get_by_id_and_chat(message_id, chat_id)
         if msg is None:
             raise PeerMessageNotFoundException()
-        # Only the author can edit their own message.
         if msg.created_by != user.id:
             raise PeerMessageForbiddenException()
         msg.message = text
         msg.updated_by = user.id
-        # AuditModel.save auto-stamps updated_at when it is not in update_fields.
         msg.save(update_fields=["message", "updated_by"])
         logger.info(
             "Peer message edited.",
@@ -82,7 +78,6 @@ class PeerMessageService:
         msg = peer_message_repository.get_by_id_and_chat(message_id, chat_id)
         if msg is None:
             raise PeerMessageNotFoundException()
-        # The author can delete their own message; the chat owner can moderate any.
         if msg.created_by != user.id and not membership_repository.is_chat_owner(
                 chat_id, user.id
         ):

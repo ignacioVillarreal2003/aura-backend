@@ -14,14 +14,7 @@ base_logger = logging.getLogger(__name__)
 
 
 class ArtifactCrudService:
-    """Shared list/get/delete + permission flow for artifact sub-services.
 
-    Subclasses declare the per-artifact configuration below and expose their
-    own public methods (e.g. ``get_report``) that delegate to the generic
-    ``_get`` / ``_delete`` helpers, keeping the existing call signatures intact.
-    """
-
-    # --- per-artifact configuration (override in subclasses) ---
     repository = None
     not_found_exc: type = None
     access_denied_exc: type = None

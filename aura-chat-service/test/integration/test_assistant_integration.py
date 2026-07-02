@@ -25,9 +25,6 @@ def _make_assistant(owner, **overrides):
     return assistant_service.create_assistant(owner, **params)
 
 
-# ---------------------------------------------------------------------------
-# create_assistant
-# ---------------------------------------------------------------------------
 
 def test_create_assistant_persists_to_db(owner):
     assistant = _make_assistant(owner, name="Nuevo")
@@ -63,9 +60,6 @@ def test_create_assistant_duplicate_name_raises(owner):
         _make_assistant(owner, name="Repetido")
 
 
-# ---------------------------------------------------------------------------
-# get_assistant
-# ---------------------------------------------------------------------------
 
 def test_get_assistant_returns_active(owner):
     assistant = _make_assistant(owner)
@@ -84,9 +78,6 @@ def test_get_assistant_inactive_raises_not_found(owner):
         assistant_service.get_assistant(owner, assistant.id)
 
 
-# ---------------------------------------------------------------------------
-# list_active_assistants / list_all_assistants
-# ---------------------------------------------------------------------------
 
 def test_list_active_excludes_inactive(owner):
     active = _make_assistant(owner, name="Activo")
@@ -110,9 +101,6 @@ def test_list_all_includes_inactive(owner):
     assert inactive.id in ids
 
 
-# ---------------------------------------------------------------------------
-# update_assistant  (exercises the repository's field-by-field update logic)
-# ---------------------------------------------------------------------------
 
 def test_update_assistant_persists_changes(owner):
     assistant = _make_assistant(owner, name="Viejo")
@@ -135,8 +123,8 @@ def test_update_assistant_partial_only_changes_provided_fields(owner):
     assistant_service.update_assistant(owner, assistant.id, description="DescNueva")
     assistant.refresh_from_db()
     assert assistant.description == "DescNueva"
-    assert assistant.name == "Original"          # untouched
-    assert assistant.system_prompt == "PromptOrig"  # untouched
+    assert assistant.name == "Original"
+    assert assistant.system_prompt == "PromptOrig"
 
 
 def test_update_assistant_reactivates(owner):
@@ -166,9 +154,6 @@ def test_update_assistant_not_found_raises(owner):
         assistant_service.update_assistant(owner, 999999, name="Fantasma")
 
 
-# ---------------------------------------------------------------------------
-# delete_assistant  (soft delete)
-# ---------------------------------------------------------------------------
 
 def test_delete_assistant_soft_deletes(owner):
     assistant = _make_assistant(owner)
@@ -193,9 +178,6 @@ def test_delete_assistant_not_found_raises(owner):
         assistant_service.delete_assistant(owner, 999999)
 
 
-# ---------------------------------------------------------------------------
-# start_chat  (assistant → chat wiring, end-to-end)
-# ---------------------------------------------------------------------------
 
 def test_start_chat_creates_persisted_chat(owner):
     assistant = _make_assistant(owner)

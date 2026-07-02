@@ -19,9 +19,6 @@ from .conftest import make_user
 pytestmark = pytest.mark.django_db
 
 
-# ---------------------------------------------------------------------------
-# send_message
-# ---------------------------------------------------------------------------
 
 def test_send_message_persists_to_db(owner, chat):
     msg = message_service.send_message(owner, chat.id, text="Hello!")
@@ -63,9 +60,6 @@ def test_send_message_locked_chat_raises(owner, chat):
         message_service.send_message(owner, chat.id, text="Blocked")
 
 
-# ---------------------------------------------------------------------------
-# get_messages
-# ---------------------------------------------------------------------------
 
 def test_get_messages_returns_messages_for_chat(owner, chat):
     message_service.send_message(owner, chat.id, text="Msg 1")
@@ -87,9 +81,6 @@ def test_get_messages_non_member_raises(chat, other_user):
         list(message_service.get_messages(other_user, chat.id))
 
 
-# ---------------------------------------------------------------------------
-# delete_message
-# ---------------------------------------------------------------------------
 
 def test_delete_message_by_author_soft_deletes(owner, chat, user_message):
     message_service.delete_message(owner, chat.id, user_message.id)
@@ -130,9 +121,6 @@ def test_delete_message_not_found_raises(owner, chat):
         message_service.delete_message(owner, chat.id, 999999)
 
 
-# ---------------------------------------------------------------------------
-# clear_history
-# ---------------------------------------------------------------------------
 
 def test_clear_history_soft_deletes_all_messages(owner, chat):
     message_service.send_message(owner, chat.id, text="Msg 1")

@@ -11,9 +11,6 @@ from test.conftest import make_assistant, make_chat
 VIEW = "apps.assistant.views"
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/assistants/  — list active (user)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_list_active_returns_200_paginated(api_client, mocker):
     mocker.patch(f"{VIEW}.assistant_service.list_active_assistants", return_value=[make_assistant()])
@@ -46,7 +43,6 @@ def test_list_active_empty_search_passes_none(api_client, mocker):
 
 
 def test_list_active_does_not_expose_system_prompt(api_client, mocker):
-    """User-facing list must NOT include system_prompt."""
     mocker.patch(f"{VIEW}.assistant_service.list_active_assistants", return_value=[make_assistant()])
     response = api_client.get("/api/v1/assistants/")
     result = response.data["results"][0]
@@ -76,9 +72,6 @@ def test_list_active_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# POST /api/v1/assistants/  — create (admin)
-# ══════════════════════════════════════════════════════════════════════════════
 
 _VALID_CREATE = {
     "name": "Asistente Nuevo",
@@ -197,7 +190,6 @@ def test_create_assistant_avatar_emoji_over_16_chars_returns_400(api_client, moc
 
 
 def test_create_assistant_is_active_defaults_true(api_client, mocker):
-    """When is_active is omitted, the serializer default (True) reaches the service."""
     svc = mocker.patch(f"{VIEW}.assistant_service.create_assistant", return_value=make_assistant())
     api_client.post("/api/v1/assistants/", {"name": "X", "system_prompt": "P"}, format="json")
     _, kwargs = svc.call_args
@@ -228,9 +220,6 @@ def test_create_assistant_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/assistants/manage/  — list all (admin)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_manage_list_returns_200_with_all_assistants(api_client, mocker):
     active = make_assistant(assistant_id=1, is_active=True)
@@ -242,7 +231,6 @@ def test_manage_list_returns_200_with_all_assistants(api_client, mocker):
 
 
 def test_manage_list_response_includes_system_prompt(api_client, mocker):
-    """Admin list must include system_prompt."""
     mocker.patch(
         f"{VIEW}.assistant_service.list_all_assistants",
         return_value=[make_assistant(system_prompt="Secreto")],
@@ -274,9 +262,6 @@ def test_manage_list_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/assistants/{id}/  — get detail (user)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_get_assistant_returns_200(api_client, mocker):
     assistant = make_assistant(assistant_id=3, name="Táctico")
@@ -325,9 +310,6 @@ def test_get_assistant_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# PATCH /api/v1/assistants/{id}/  — update (admin)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_patch_name_returns_200_with_admin_response(api_client, mocker):
     mocker.patch(
@@ -451,9 +433,6 @@ def test_patch_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# DELETE /api/v1/assistants/{id}/  — delete (admin)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_delete_assistant_returns_204(api_client, mocker):
     mocker.patch(f"{VIEW}.assistant_service.delete_assistant")
@@ -486,9 +465,6 @@ def test_delete_assistant_unauthenticated_returns_401(anon_client):
     assert response.status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# POST /api/v1/assistants/{id}/start-chat/  — start or resume chat (user)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_start_chat_new_returns_201_with_is_new_true(api_client, mocker):
     chat = make_chat(chat_id=10, name="Asistente Alfa — 01/01/2025 10:00")
@@ -551,7 +527,6 @@ def test_start_chat_passes_assistant_id_from_url(api_client, mocker):
 
 
 def test_start_chat_invalid_resume_returns_400(api_client, mocker):
-    """A non-boolean `resume` value is rejected by the serializer."""
     mocker.patch(f"{VIEW}.assistant_service.start_chat")
     response = api_client.post(
         "/api/v1/assistants/1/start-chat/", {"resume": "maybe"}, format="json"

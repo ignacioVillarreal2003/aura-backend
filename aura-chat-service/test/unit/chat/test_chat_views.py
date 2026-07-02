@@ -1,20 +1,3 @@
-"""
-Chat views — HTTP layer tests
-
-Endpoints covered:
-    GET    /api/v1/chats/                     ChatViewSet.list
-    POST   /api/v1/chats/                     ChatViewSet.create
-    GET    /api/v1/chats/{chat_id}/           ChatViewSet.retrieve
-    PATCH  /api/v1/chats/{chat_id}/           ChatViewSet.partial_update
-    DELETE /api/v1/chats/{chat_id}/           ChatViewSet.destroy
-    GET    /api/v1/chats/me/                  ChatViewSet.my_chats
-    GET    /api/v1/chats/manage/              ChatViewSet.manage
-    GET    /api/v1/chats/archived/            ChatViewSet.archived
-    POST   /api/v1/chats/archive/            ChatViewSet.archive
-    POST   /api/v1/chats/unarchive/          ChatViewSet.unarchive
-    POST   /DELETE /api/v1/chats/{chat_id}/pin/    ChatViewSet.pin
-    POST   /DELETE /api/v1/chats/{chat_id}/lock/   ChatViewSet.lock
-"""
 import pytest
 
 from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
@@ -24,9 +7,6 @@ from test.conftest import make_chat
 VIEW = "apps.chat.views.chat_view"
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/chats/  (list)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_list_returns_paginated_results(api_client, mocker):
     mocker.patch(f"{VIEW}.chat_service.list_chats", return_value=[make_chat()])
@@ -63,9 +43,6 @@ def test_list_unauthenticated_returns_401(anon_client):
     assert anon_client.get("/api/v1/chats/").status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# POST /api/v1/chats/  (create — permission only, no ownership)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_create_returns_201(api_client, mocker):
     mocker.patch(f"{VIEW}.chat_service.create_chat", return_value=make_chat())
@@ -111,9 +88,6 @@ def test_create_unauthenticated_returns_401(anon_client):
     assert anon_client.post("/api/v1/chats/", {"name": "C"}, format="json").status_code == 401
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/chats/{chat_id}/  (retrieve)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_retrieve_returns_200(api_client, mocker):
     mocker.patch(f"{VIEW}.chat_service.get_chat", return_value=make_chat())
@@ -136,9 +110,6 @@ def test_retrieve_access_denied_returns_403(api_client, mocker):
     assert response.data["error"] == "chat_access_denied"
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# PATCH /api/v1/chats/{chat_id}/  (update — global / owner-or-creator)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_update_returns_200(api_client, mocker):
     mocker.patch(f"{VIEW}.chat_service.update_chat", return_value=make_chat(name="Updated"))
@@ -171,9 +142,6 @@ def test_update_access_denied_returns_403(api_client, mocker):
     assert response.status_code == 403
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# DELETE /api/v1/chats/{chat_id}/  (delete — global / owner-or-creator)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_delete_returns_204(api_client, mocker):
     mocker.patch(f"{VIEW}.chat_service.delete_chat")
@@ -190,9 +158,6 @@ def test_delete_access_denied_returns_403(api_client, mocker):
     assert api_client.delete("/api/v1/chats/1/").status_code == 403
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/chats/me/  (my_chats)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_my_chats_returns_200(api_client, mocker):
     mocker.patch(f"{VIEW}.chat_service.list_own_chats", return_value=[make_chat()])
@@ -201,9 +166,6 @@ def test_my_chats_returns_200(api_client, mocker):
     assert len(response.data["results"]) == 1
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/chats/manage/  (admin)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_manage_returns_200(api_client, mocker):
     mocker.patch(f"{VIEW}.chat_service.list_all_chats", return_value=[make_chat()])
@@ -228,9 +190,6 @@ def test_manage_forwards_filters(api_client, mocker):
     assert kwargs["ordering"] == "-name"
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GET /api/v1/chats/archived/  +  POST archive / unarchive
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_archived_returns_200(api_client, mocker):
     mocker.patch(f"{VIEW}.chat_service.list_archived_chats", return_value=[])
@@ -264,9 +223,6 @@ def test_unarchive_returns_count(api_client, mocker):
     assert response.data["unarchived"] == 1
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# POST/DELETE /api/v1/chats/{chat_id}/pin/  (personal)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_pin_returns_204(api_client, mocker):
     mocker.patch(f"{VIEW}.chat_service.pin_chat")
@@ -288,9 +244,6 @@ def test_pin_non_member_returns_403(api_client, mocker):
     assert api_client.post("/api/v1/chats/1/pin/").status_code == 403
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# POST/DELETE /api/v1/chats/{chat_id}/lock/  (global / owner-or-creator)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_lock_returns_204(api_client, mocker):
     mocker.patch(f"{VIEW}.chat_service.lock_chat")

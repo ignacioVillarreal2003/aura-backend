@@ -1,15 +1,3 @@
-"""
-Chat service — business-logic tests
-
-Authorization model under test
-------------------------------
-* **Global / chat-wide mutations** (update, delete, lock, unlock): allowed for the
-  chat creator (``chat.created_by``) **or** any active member whose membership role
-  is ``owner``. Everyone else gets ``ChatAccessDeniedException`` (403).
-* **Personal actions** (get, pin/unpin, archive/unarchive): only require
-  the caller to be an *active member* of the chat.
-* **Create / list-mine / list-all (admin)**: gated by permissions only, no ownership.
-"""
 import pytest
 
 from apps.chat.exceptions import ChatAccessDeniedException, ChatNotFoundException
@@ -22,16 +10,12 @@ SVC = "apps.chat.services.chat_service"
 service = ChatService()
 
 
-# ---------------------------------------------------------------------------
-# Patch helpers
-# ---------------------------------------------------------------------------
 
 def _patch_perms(mocker):
     mocker.patch(f"{SVC}.AccessControl.require_permissions")
 
 
 def _patch_atomic(mocker):
-    """Make @transaction.atomic / `with transaction.atomic()` no-ops without a real DB."""
     mocker.patch("django.db.transaction.Atomic.__enter__", return_value=None)
     mocker.patch("django.db.transaction.Atomic.__exit__", return_value=False)
 
@@ -49,28 +33,17 @@ def _patch_no_broadcast(mocker):
 
 
 def _patch_lock_notifications(mocker):
-    """lock_chat notifies the other active members after locking. Stub the member
-    lookup (otherwise it hits the real DB) and the outbound notification client."""
     mocker.patch(f"{SVC}.membership_repository.get_active_member_ids", return_value=[])
     mocker.patch(f"{SVC}.notification_client.emit_event")
 
 
 def _patch_delete_side_effects(mocker):
-    """delete_chat fans out via ``transaction.on_commit``; run those callbacks
-    immediately and stub the ones that touch Redis / channels / other services.
-
-    Returns the mock for the cross-service document cleanup so callers can
-    assert the chat deletion forwards the right chat id and acting user.
-    """
     mocker.patch("django.db.transaction.on_commit", side_effect=lambda fn, *a, **k: fn())
     mocker.patch(f"{SVC}._release_ai_lock")
     mocker.patch(f"{SVC}._broadcast_chat_deleted")
     return mocker.patch(f"{SVC}.document_processing_client.delete_documents_by_chat")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# create_chat
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_create_chat_creates_chat_and_owner_membership(mocker):
     user = make_user(user_id=1)
@@ -87,7 +60,6 @@ def test_create_chat_creates_chat_and_owner_membership(mocker):
     _, ckwargs = create_chat.call_args
     assert ckwargs["created_by"] == 1
     assert ckwargs["name"] == "My Chat"
-    # The creator is registered as an active owner member of the new chat.
     _, mkwargs = create_member.call_args
     assert mkwargs["member_id"] == 1
     assert mkwargs["chat_id"] == 10
@@ -106,9 +78,6 @@ def test_create_chat_without_permission_raises_403(mocker):
         service.create_chat(user, name="Nope")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# get_chat  (personal — active membership required)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_get_chat_active_member_returns_chat_with_membership_fields(mocker):
     user = make_user(user_id=2)
@@ -160,9 +129,6 @@ def test_get_chat_inactive_member_raises_403(mocker):
         service.get_chat(user, chat_id=1)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# list_chats / list_own_chats / list_all_chats
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_list_chats_forwards_to_repository(mocker):
     user = make_user(user_id=3)
@@ -215,9 +181,6 @@ def test_list_archived_chats_forwards(mocker):
     assert kwargs["tags"] == ["work"]
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# update_chat  (global — creator OR membership owner)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_update_chat_creator_can_update(mocker):
     user = make_user(user_id=1)
@@ -233,12 +196,10 @@ def test_update_chat_creator_can_update(mocker):
 
     assert result.name == "Updated"
     repo.assert_called_once()
-    # Creator shortcut: no need to consult membership role.
     is_owner.assert_not_called()
 
 
 def test_update_chat_owner_member_can_update(mocker):
-    """A non-creator whose membership role is owner may update the chat."""
     user = make_user(user_id=5)
     chat = make_chat(chat_id=1, created_by=1)
     updated = make_chat(chat_id=1, created_by=1, name="Updated")
@@ -253,7 +214,6 @@ def test_update_chat_owner_member_can_update(mocker):
 
 
 def test_update_chat_regular_member_raises_403(mocker):
-    """An active member that is neither creator nor owner cannot update."""
     user = make_user(user_id=5)
     chat = make_chat(chat_id=1, created_by=1)
     _patch_perms(mocker)
@@ -286,9 +246,6 @@ def test_update_chat_passes_updated_by(mocker):
     assert kwargs["name"] == "X"
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# delete_chat  (global — creator OR membership owner)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_delete_chat_creator_soft_deletes_everything(mocker):
     user = make_user(user_id=1)
@@ -327,9 +284,6 @@ def test_delete_chat_owner_member_can_delete(mocker):
 
 
 def test_delete_chat_triggers_document_cleanup_in_other_service(mocker):
-    """Deleting a chat must ask the document-processing service to drop that
-    chat's documents, forwarding the acting user so its bearer token can be
-    used downstream."""
     user = make_user(user_id=1)
     chat = make_chat(chat_id=42, created_by=1)
     _patch_perms(mocker)
@@ -368,9 +322,6 @@ def test_delete_chat_not_found_raises_404(mocker):
         service.delete_chat(user, chat_id=999)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# lock_chat / unlock_chat  (global — creator OR membership owner)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_lock_chat_creator_can_lock(mocker):
     user = make_user(user_id=1)
@@ -497,9 +448,6 @@ def test_unlock_chat_not_found_raises_404(mocker):
         service.unlock_chat(user, chat_id=999)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# archive_chats / unarchive_chats  (personal — active membership on every id)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_archive_chats_returns_count(mocker):
     user = make_user(user_id=2)
@@ -547,9 +495,6 @@ def test_unarchive_chats_inaccessible_id_raises_403(mocker):
         service.unarchive_chats(user, chat_ids=[5])
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# pin_chat / unpin_chat  (personal — active membership)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def test_pin_chat_active_member_pins(mocker):
     user = make_user(user_id=2)

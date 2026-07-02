@@ -14,9 +14,6 @@ from .conftest import make_user
 pytestmark = pytest.mark.django_db
 
 
-# ---------------------------------------------------------------------------
-# create_chat
-# ---------------------------------------------------------------------------
 
 def test_create_chat_persists_to_db(owner):
     chat = chat_service.create_chat(owner, name="My Chat")
@@ -41,9 +38,6 @@ def test_create_chat_sets_created_by(owner):
     assert chat.created_by == owner.id
 
 
-# ---------------------------------------------------------------------------
-# update_chat
-# ---------------------------------------------------------------------------
 
 def test_update_chat_persists_changes(owner, chat):
     chat_service.update_chat(owner, chat.id, name="Renamed", system_prompt="Be concise.")
@@ -68,9 +62,6 @@ def test_update_chat_not_found_raises(owner):
         chat_service.update_chat(owner, 999999, name="Ghost")
 
 
-# ---------------------------------------------------------------------------
-# delete_chat
-# ---------------------------------------------------------------------------
 
 def test_delete_chat_soft_deletes_chat(owner, chat):
     chat_id = chat.id
@@ -102,9 +93,6 @@ def test_delete_chat_non_owner_raises(chat, other_user):
         chat_service.delete_chat(other_user, chat.id)
 
 
-# ---------------------------------------------------------------------------
-# list_chats
-# ---------------------------------------------------------------------------
 
 def test_list_chats_returns_own_active_chats(owner):
     c1 = chat_service.create_chat(owner, name="Chat A")
@@ -128,9 +116,6 @@ def test_list_chats_search_filters_by_name(owner):
     assert all("alpha" in n.lower() for n in results)
 
 
-# ---------------------------------------------------------------------------
-# archive / unarchive
-# ---------------------------------------------------------------------------
 
 def test_archive_chat_sets_archived_at(owner, chat):
     chat_service.archive_chats(owner, chat_ids=[chat.id])
@@ -153,9 +138,6 @@ def test_archived_chat_appears_in_archived_list(owner, chat):
     assert chat.id in archived_ids
 
 
-# ---------------------------------------------------------------------------
-# pin / unpin
-# ---------------------------------------------------------------------------
 
 def test_pin_chat_sets_pinned_at(owner, chat):
     chat_service.pin_chat(owner, chat.id)
@@ -170,9 +152,6 @@ def test_unpin_chat_clears_pinned_at(owner, chat):
     assert membership.pinned_at is None
 
 
-# ---------------------------------------------------------------------------
-# lock / unlock
-# ---------------------------------------------------------------------------
 
 def test_lock_chat_sets_is_locked(owner, chat):
     chat_service.lock_chat(owner, chat.id)
@@ -197,9 +176,6 @@ def _activate(owner, chat, member):
     membership_service.update_member(member, chat.id, member.id, new_status="active")
 
 
-# ---------------------------------------------------------------------------
-# get_chat
-# ---------------------------------------------------------------------------
 
 def test_get_chat_returns_chat_for_active_member(owner, chat):
     result = chat_service.get_chat(owner, chat.id)
@@ -219,7 +195,7 @@ def test_get_chat_non_member_raises(chat, other_user):
 
 
 def test_get_chat_pending_member_raises(owner, chat, member_user):
-    membership_service.add_members(owner, chat.id, member_ids=[member_user.id])  # pending
+    membership_service.add_members(owner, chat.id, member_ids=[member_user.id])
     with pytest.raises(ChatAccessDeniedException):
         chat_service.get_chat(member_user, chat.id)
 
@@ -229,9 +205,6 @@ def test_get_chat_not_found_raises(owner):
         chat_service.get_chat(owner, 999999)
 
 
-# ---------------------------------------------------------------------------
-# list_chats — membership scoping (active / archived / removed)
-# ---------------------------------------------------------------------------
 
 def test_list_chats_excludes_archived(owner, chat):
     chat_service.archive_chats(owner, chat_ids=[chat.id])
@@ -240,7 +213,7 @@ def test_list_chats_excludes_archived(owner, chat):
 
 
 def test_list_chats_excludes_pending_membership(owner, chat, member_user):
-    membership_service.add_members(owner, chat.id, member_ids=[member_user.id])  # pending
+    membership_service.add_members(owner, chat.id, member_ids=[member_user.id])
     ids = [c.id for c in chat_service.list_chats(member_user)]
     assert chat.id not in ids
 
@@ -258,9 +231,6 @@ def test_list_chats_excludes_removed_member(owner, chat, member_user):
     assert chat.id not in ids
 
 
-# ---------------------------------------------------------------------------
-# list_chats — annotations, ordering, tag filter
-# ---------------------------------------------------------------------------
 
 def test_list_chats_member_count_annotation(owner, chat, member_user):
     _activate(owner, chat, member_user)
@@ -295,9 +265,6 @@ def test_list_chats_filters_by_tags(owner):
     assert other.id not in ids
 
 
-# ---------------------------------------------------------------------------
-# list_own_chats / list_all_chats
-# ---------------------------------------------------------------------------
 
 def test_list_own_chats_returns_created_chats(owner, chat):
     ids = [c.id for c in chat_service.list_own_chats(owner)]
