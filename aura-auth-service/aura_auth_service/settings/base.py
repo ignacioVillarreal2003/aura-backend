@@ -137,8 +137,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LANGUAGE_CODE = 'es-es'
-# App/DB display timezone. USE_TZ=True keeps instants stored in UTC (timestamptz);
-# this only controls the offset shown when serializing/rendering. Default: Uruguay (UTC-3).
+
 TIME_ZONE = config('TIME_ZONE', default='America/Montevideo')
 USE_I18N = True
 USE_TZ = True

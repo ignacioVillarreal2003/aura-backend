@@ -74,7 +74,7 @@ class TestEventDefinition:
     def test_chat_link_builder_returns_url(self, settings):
         settings.NOTIFICATION_DEFAULT_LINK_BASE_URL = "http://example.com"
         result = _chat_link({"chat_id": 5})
-        assert result == "http://example.com/chats/5"
+        assert result == "http://example.com/main-container/chat/5"
 
     def test_chat_link_builder_returns_none_without_chat_id(self, settings):
         settings.NOTIFICATION_DEFAULT_LINK_BASE_URL = "http://example.com"

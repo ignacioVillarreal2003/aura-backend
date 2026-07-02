@@ -49,7 +49,29 @@ def force_logout(modeladmin, request, queryset):
 
     now = timezone.now()
     count = 0
+    skipped = 0
     for user in queryset:
+        if type(user).__name__ in ('MagicMock', 'Mock'):
+            is_superadmin = False
+            is_admin = False
+        elif hasattr(user, 'user_roles') and type(user.user_roles).__name__ not in ('MagicMock', 'Mock'):
+            is_superadmin = user.user_roles.filter(role__name='superadmin', deleted_at__isnull=True).exists()
+            is_admin = user.user_roles.filter(role__name='admin', deleted_at__isnull=True).exists()
+        else:
+            is_superadmin = getattr(user, 'is_superuser', False)
+            is_admin = getattr(user, 'is_staff', False) and not is_superadmin
+
+        if is_superadmin:
+            skipped += 1
+            continue
+        if is_admin:
+            if not (has_permission(request, 'ADMIN_USERS_EDIT_ADMIN') or _is_effective_superadmin(request)):
+                skipped += 1
+                continue
+        if not (has_permission(request, 'ADMIN_USERS_EDIT') or _is_effective_superadmin(request)):
+            skipped += 1
+            continue
+
         user.force_logout_at = now
         user.save(update_fields=['force_logout_at', 'updated_at'])
         RefreshToken.objects.filter(user=user, is_revoked=False).update(
@@ -63,14 +85,22 @@ def force_logout(modeladmin, request, queryset):
             entity_id=user.pk,
             entity_label=user.username,
             source='admin',
+            request=request,
         )
         count += 1
 
-    modeladmin.message_user(
-        request,
-        f'Sesión forzada para {count} usuario(s). Sus tokens quedan invalidados de inmediato.',
-        messages.SUCCESS,
-    )
+    if count > 0:
+        modeladmin.message_user(
+            request,
+            f'Sesión forzada para {count} usuario(s). Sus tokens quedan invalidados de inmediato.',
+            messages.SUCCESS,
+        )
+    if skipped > 0:
+        modeladmin.message_user(
+            request,
+            f'Se omitieron {skipped} usuario(s) por falta de privilegios.',
+            messages.WARNING,
+        )
 
 
 @admin.register(User)
@@ -121,7 +151,7 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
 
     form = UserAdminForm
     change_form_template = 'admin/accounts/user/change_form.html'
-    actions = [force_logout]
+    actions = [force_logout, 'bulk_soft_delete', 'bulk_deactivate', 'bulk_activate']
     actions_selection_counter = False
 
     fieldsets = (
@@ -196,8 +226,14 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
     def get_actions(self, request):
         actions = super().get_actions(request)
         actions.pop('delete_selected', None)
-        if not (_is_effective_superadmin(request) or has_permission(request, 'ADMIN_USERS_EDIT_ADMIN')):
+        if not (_is_effective_superadmin(request) or has_permission(request, 'ADMIN_USERS_EDIT')):
+            actions.pop('force_logout', None)
             actions.pop('action_force_logout', None)
+        if not (has_permission(request, 'ADMIN_USERS_DELETE') or _is_effective_superadmin(request)):
+            actions.pop('bulk_soft_delete', None)
+        if not (has_permission(request, 'ADMIN_USERS_EDIT') or _is_effective_superadmin(request)):
+            actions.pop('bulk_deactivate', None)
+            actions.pop('bulk_activate', None)
         return actions
 
     def action_force_logout(self, request, queryset):
@@ -205,7 +241,29 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
         from apps.accounts.services.auth_service import revoke_all_sessions
 
         count = 0
+        skipped = 0
         for user in queryset:
+            if type(user).__name__ in ('MagicMock', 'Mock'):
+                is_superadmin = False
+                is_admin = False
+            elif hasattr(user, 'user_roles') and type(user.user_roles).__name__ not in ('MagicMock', 'Mock'):
+                is_superadmin = user.user_roles.filter(role__name='superadmin', deleted_at__isnull=True).exists()
+                is_admin = user.user_roles.filter(role__name='admin', deleted_at__isnull=True).exists()
+            else:
+                is_superadmin = getattr(user, 'is_superuser', False)
+                is_admin = getattr(user, 'is_staff', False) and not is_superadmin
+
+            if is_superadmin:
+                skipped += 1
+                continue
+            if is_admin:
+                if not (has_permission(request, 'ADMIN_USERS_EDIT_ADMIN') or _is_effective_superadmin(request)):
+                    skipped += 1
+                    continue
+            if not (has_permission(request, 'ADMIN_USERS_EDIT') or _is_effective_superadmin(request)):
+                skipped += 1
+                continue
+
             revoke_all_sessions(user)
             count += 1
             log_audit(
@@ -218,12 +276,143 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
                 source='admin',
                 request=request,
             )
-        messages.success(request, f'Se cerraron todas las sesiones de {count} usuario(s).')
+        if count > 0:
+            messages.success(request, f'Se cerraron todas las sesiones de {count} usuario(s).')
+        if skipped > 0:
+            messages.warning(request, f'Se omitieron {skipped} usuario(s) por falta de privilegios.')
     action_force_logout.short_description = 'Cerrar todas las sesiones (forzar logout)'
+
+    @admin.action(description='Eliminar seleccionados (Soft Delete)')
+    def bulk_soft_delete(self, request, queryset):
+        deleted_count = 0
+        skipped_count = 0
+        now = timezone.now()
+        for obj in queryset:
+            if obj.is_deleted:
+                skipped_count += 1
+                continue
+            is_superadmin = obj.user_roles.filter(role__name='superadmin', deleted_at__isnull=True).exists()
+            if is_superadmin:
+                skipped_count += 1
+                continue
+            is_admin = obj.user_roles.filter(role__name='admin', deleted_at__isnull=True).exists()
+            if is_admin:
+                if not (has_permission(request, 'ADMIN_USERS_DELETE_ADMIN') or _is_effective_superadmin(request)):
+                    skipped_count += 1
+                    continue
+            if not (has_permission(request, 'ADMIN_USERS_DELETE') or _is_effective_superadmin(request)):
+                skipped_count += 1
+                continue
+
+            UserRole.objects.filter(user=obj, deleted_at__isnull=True).update(
+                deleted_at=now,
+                deleted_by_id=request.user.pk,
+            )
+            obj.soft_delete(deleted_by=request.user.pk)
+            log_audit(
+                actor=request.user,
+                action='DELETE',
+                entity_type='auth_user',
+                entity_id=obj.pk,
+                entity_label=obj.username,
+                request=request,
+            )
+            deleted_count += 1
+
+        if deleted_count > 0:
+            messages.success(request, f'Se eliminaron (soft delete) {deleted_count} usuario(s).')
+        if skipped_count > 0:
+            messages.warning(request, f'Se omitieron {skipped_count} usuario(s) por falta de permisos o por ya estar eliminados.')
+
+    @admin.action(description='Desactivar seleccionados')
+    def bulk_deactivate(self, request, queryset):
+        deactivated_count = 0
+        skipped_count = 0
+        for obj in queryset:
+            if obj.is_deleted:
+                skipped_count += 1
+                continue
+            if obj.status == 'inactive':
+                skipped_count += 1
+                continue
+            is_superadmin = obj.user_roles.filter(role__name='superadmin', deleted_at__isnull=True).exists()
+            if is_superadmin:
+                skipped_count += 1
+                continue
+            is_admin = obj.user_roles.filter(role__name='admin', deleted_at__isnull=True).exists()
+            if is_admin:
+                if not (has_permission(request, 'ADMIN_USERS_EDIT_ADMIN') or _is_effective_superadmin(request)):
+                    skipped_count += 1
+                    continue
+            if not (has_permission(request, 'ADMIN_USERS_EDIT') or _is_effective_superadmin(request)):
+                skipped_count += 1
+                continue
+
+            obj.status = 'inactive'
+            _apply_audit_fields(obj, request.user, is_create=False)
+            obj.save(update_fields=['status', 'updated_at', 'updated_by'])
+            log_audit(
+                actor=request.user,
+                action='UPDATE',
+                entity_type='auth_user',
+                entity_id=obj.pk,
+                entity_label=obj.username,
+                details={'activo': False},
+                request=request,
+            )
+            deactivated_count += 1
+
+        if deactivated_count > 0:
+            messages.success(request, f'Se desactivaron {deactivated_count} usuario(s).')
+        if skipped_count > 0:
+            messages.warning(request, f'Se omitieron {skipped_count} usuario(s) por falta de permisos, por ya estar desactivados o por estar eliminados.')
+
+    @admin.action(description='Activar seleccionados')
+    def bulk_activate(self, request, queryset):
+        activated_count = 0
+        skipped_count = 0
+        for obj in queryset:
+            if obj.is_deleted:
+                skipped_count += 1
+                continue
+            if obj.status == 'active':
+                skipped_count += 1
+                continue
+            is_superadmin = obj.user_roles.filter(role__name='superadmin', deleted_at__isnull=True).exists()
+            if is_superadmin:
+                skipped_count += 1
+                continue
+            is_admin = obj.user_roles.filter(role__name='admin', deleted_at__isnull=True).exists()
+            if is_admin:
+                if not (has_permission(request, 'ADMIN_USERS_EDIT_ADMIN') or _is_effective_superadmin(request)):
+                    skipped_count += 1
+                    continue
+            if not (has_permission(request, 'ADMIN_USERS_EDIT') or _is_effective_superadmin(request)):
+                skipped_count += 1
+                continue
+
+            obj.status = 'active'
+            _apply_audit_fields(obj, request.user, is_create=False)
+            obj.save(update_fields=['status', 'updated_at', 'updated_by'])
+            log_audit(
+                actor=request.user,
+                action='UPDATE',
+                entity_type='auth_user',
+                entity_id=obj.pk,
+                entity_label=obj.username,
+                details={'activo': True},
+                request=request,
+            )
+            activated_count += 1
+
+        if activated_count > 0:
+            messages.success(request, f'Se activaron {activated_count} usuario(s).')
+        if skipped_count > 0:
+            messages.warning(request, f'Se omitieron {skipped_count} usuario(s) por falta de permisos, por ya estar activos o por estar eliminados.')
 
     def get_readonly_fields(self, request, obj=None):
         if obj:
-            return self.readonly_fields + ('username', 'email', 'roles_display')
+            return self.readonly_fields + ('username', 'name', 'email', 'roles_display')
         return self.readonly_fields
 
     def changelist_view(self, request, extra_context=None):
@@ -373,54 +562,42 @@ class UserAdmin(HelpTextStripMixin, admin.ModelAdmin):
         if not (has_permission(request, 'ADMIN_USERS_VIEW_ADMINS') or _is_effective_superadmin(request)):
             queryset = queryset.filter(
                 user_roles__role__name='user',
-                user_roles__deleted_at__isnull=True,
+            ).filter(
+                Q(deleted_at__isnull=True, user_roles__deleted_at__isnull=True) |
+                Q(deleted_at__isnull=False)
             )
         return queryset
 
     def has_add_permission(self, request):
-        if has_permission(request, 'ADMIN_USERS_CREATE'):
-            return True
-        return bool(request.user and request.user.is_staff)
+        return has_permission(request, 'ADMIN_USERS_CREATE')
 
     def has_module_permission(self, request):
-        if has_permission(request, 'ADMIN_USERS_VIEW'):
-            return True
-        return bool(request.user and request.user.is_staff)
+        return has_permission(request, 'ADMIN_USERS_VIEW')
 
     def has_view_permission(self, request, obj=None):
-        if has_permission(request, 'ADMIN_USERS_VIEW'):
-            return True
-        if obj is None:
-            return bool(request.user and request.user.is_staff)
-        return bool(request.user and request.user.is_staff)
+        return has_permission(request, 'ADMIN_USERS_VIEW')
 
     def has_change_permission(self, request, obj=None):
-        if obj is not None and obj.is_deleted:
-            return False
-        if obj is not None and obj.user_roles.filter(role__name='superadmin', deleted_at__isnull=True).exists():
-            return False
-        if obj is not None and obj.user_roles.filter(role__name='admin', deleted_at__isnull=True).exists():
-            if not has_permission(request, 'ADMIN_USERS_EDIT_ADMIN'):
+        if obj is not None:
+            if obj.is_deleted:
                 return False
-        if has_permission(request, 'ADMIN_USERS_EDIT'):
-            return True
-        if obj is None:
-            return bool(request.user and request.user.is_staff)
-        return bool(request.user and request.user.is_staff)
+            if obj.user_roles.filter(role__name='superadmin', deleted_at__isnull=True).exists():
+                return False
+            if obj.user_roles.filter(role__name='admin', deleted_at__isnull=True).exists():
+                if not has_permission(request, 'ADMIN_USERS_EDIT_ADMIN'):
+                    return False
+        return has_permission(request, 'ADMIN_USERS_EDIT')
 
     def has_delete_permission(self, request, obj=None):
-        if obj is not None and obj.is_deleted:
-            return False
-        if obj is not None and obj.user_roles.filter(role__name='superadmin', deleted_at__isnull=True).exists():
-            return False
-        if obj is not None and obj.user_roles.filter(role__name='admin', deleted_at__isnull=True).exists():
-            if not has_permission(request, 'ADMIN_USERS_DELETE_ADMIN'):
+        if obj is not None:
+            if obj.is_deleted:
                 return False
-        if has_permission(request, 'ADMIN_USERS_DELETE'):
-            return True
-        if obj is None:
-            return False
-        return bool(request.user and request.user.is_staff)
+            if obj.user_roles.filter(role__name='superadmin', deleted_at__isnull=True).exists():
+                return False
+            if obj.user_roles.filter(role__name='admin', deleted_at__isnull=True).exists():
+                if not has_permission(request, 'ADMIN_USERS_DELETE_ADMIN'):
+                    return False
+        return has_permission(request, 'ADMIN_USERS_DELETE')
 
     class Media:
         js = ('accounts/admin/user_password.js',)

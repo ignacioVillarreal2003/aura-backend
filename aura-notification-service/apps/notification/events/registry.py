@@ -36,7 +36,7 @@ def _chat_link(context: dict) -> str | None:
     if not chat_id:
         return None
     base = settings.NOTIFICATION_DEFAULT_LINK_BASE_URL.rstrip("/")
-    return f"{base}/chats/{chat_id}"
+    return f"{base}/main-container/chat/{chat_id}"
 
 
 def _document_link(context: dict) -> str | None:

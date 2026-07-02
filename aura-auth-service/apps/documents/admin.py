@@ -186,7 +186,7 @@ class DocumentAdmin(admin.ModelAdmin):
     def get_actions(self, request):
         actions = super().get_actions(request)
         actions.pop('delete_selected', None)
-        if not _is_super_admin_user(request.user):
+        if not _is_admin_or_super_user(request.user):
             for name in ('action_reprocess', 'action_reembed', 'action_enrich', 'action_graph_extract'):
                 actions.pop(name, None)
         return actions
@@ -313,6 +313,12 @@ class DocumentAdmin(admin.ModelAdmin):
 
         if object_id:
             doc_id = int(object_id)
+            try:
+                doc = Document.objects.get(pk=doc_id)
+                if doc.chat_id is not None:
+                    raise Http404("Documento no encontrado o es privado.")
+            except Document.DoesNotExist:
+                raise Http404("Documento no encontrado.")
 
             meta = _get_doc_meta(doc_id)
             if meta:
@@ -980,6 +986,13 @@ class DocumentAdmin(admin.ModelAdmin):
 
         if not self.has_view_permission(request):
             raise PermissionDenied
+
+        try:
+            doc = Document.objects.get(pk=object_id)
+            if doc.chat_id is not None:
+                raise Http404("Documento no encontrado o es privado.")
+        except Document.DoesNotExist:
+            raise Http404("Documento no encontrado.")
 
         try:
             obj = self.get_object(request, object_id)

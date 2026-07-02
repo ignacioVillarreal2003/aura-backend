@@ -349,3 +349,9 @@ secrets:
     file: ./certs/aura.crt
   aura_key:
     file: ./certs/aura.key
+
+secrets:
+  aura_crt:
+    file: ./certs/aura.crt
+  aura_key:
+    file: ./certs/aura.key

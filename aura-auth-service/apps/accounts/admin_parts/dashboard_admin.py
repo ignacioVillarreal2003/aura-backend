@@ -284,7 +284,7 @@ def _dashboard_overview_view(request):
     total_storage_bytes = 0
     documents_available = True
     try:
-        document_qs = Document.objects.filter(deleted_at__isnull=True)
+        document_qs = Document.objects.filter(deleted_at__isnull=True, chat_id__isnull=True)
         documents_total = document_qs.count()
         documents_failed = document_qs.filter(status='failed').count()
         total_storage_bytes = document_qs.aggregate(
@@ -363,18 +363,18 @@ def _dashboard_overview_view(request):
     if documents_available:
         try:
             documents_by_status = list(
-                Document.objects.filter(deleted_at__isnull=True)
+                Document.objects.filter(deleted_at__isnull=True, chat_id__isnull=True)
                 .values('status')
                 .annotate(total=Count('id'))
                 .order_by('-total')
             )
             largest_docs_raw = list(
-                Document.objects.filter(deleted_at__isnull=True)
+                Document.objects.filter(deleted_at__isnull=True, chat_id__isnull=True)
                 .values('name', 'file_size_bytes', 'created_by')
                 .order_by('-file_size_bytes', 'name')[:8]
             )
             recent_docs_raw = list(
-                Document.objects.filter(deleted_at__isnull=True)
+                Document.objects.filter(deleted_at__isnull=True, chat_id__isnull=True)
                 .values('name', 'created_at', 'created_by', 'status')
                 .order_by('-created_at')[:8]
             )
